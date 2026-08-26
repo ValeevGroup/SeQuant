@@ -1950,3 +1950,59 @@ TEST_CASE("build_ordered_schedule records home_mode_depth in the value frame",
     }
   }
 }
+
+// Pillar 1 / B-full (Task 6): each value's DIRECT operand value_ids are
+// persisted on the schedule, so the value-driven ordered executor can fetch
+// each operand by its OWN home-colored key. The persisted edges are exactly the
+// dep graph the topo-sort used (derived from every OccurrenceRec's
+// consumer_point), and only computed (non-leaf) values carry operands.
+TEST_CASE(
+    "build_ordered_schedule persists operand_vids (value/occurrence DAG edges)",
+    "[ordered-schedule][value-id]") {
+  auto ctx = sequant::get_default_context().clone();
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto B = orderedsched_2axis_forest_root();
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"\x39a";  // Kappa
+  };
+  policy.is_batchable_external_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8u}, {L"\x39a", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{B};
+  sequant::stamp_lifetime_masks(forest);
+  auto const block_of = [](Index const&) -> std::size_t { return 4; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+
+  // Persisted edges == the dep graph the topo-sort consumes (its documented
+  // source), and there is at least one computed value with operands.
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  REQUIRE(!sched.operand_vids.empty());
+  CHECK(sched.operand_vids == g.depends_on);
+
+  for (auto const& [vid, ops] : sched.operand_vids) {
+    REQUIRE(vid < rich.cells.size());
+    CHECK_FALSE(rich.cells[vid].is_leaf);  // only computed values have operands
+    CHECK_FALSE(ops.empty());
+    for (auto const op : ops) {
+      CHECK(op < rich.cells.size());
+      CHECK(op != vid);  // no self-dependency
+    }
+  }
+}

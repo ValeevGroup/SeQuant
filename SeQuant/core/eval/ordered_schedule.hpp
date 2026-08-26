@@ -161,6 +161,15 @@ struct OrderedSchedule {
   /// node-id). Distinct from Pillar-2 `occ_facts` (use-scope, per consumer).
   std::unordered_map<std::size_t, container::svector<std::pair<Index, int>>>
       home_mode_depth{};
+  /// Pillar 1 / B-full: per value_id, the value_ids of its DIRECT operands --
+  /// the value/occurrence DAG edges the value-driven ordered executor consumes
+  /// to fetch each operand by its OWN home-colored key. Recorded here from
+  /// `ordered_schedule_dep_graph(rich).depends_on`, whose edges come from every
+  /// `OccurrenceRec`'s `consumer_point` (so split operands resolve to the
+  /// specific consumed value, not an ambiguous node hash). A leaf value (no
+  /// operands) has no entry.
+  std::unordered_map<std::size_t, container::svector<std::size_t>>
+      operand_vids{};
 };
 
 namespace detail {
@@ -1436,6 +1445,13 @@ forced_split_demotions(RichSchedule const& rich,
         };
     walk(out.root, {});
   }
+
+  // Pillar 1 / B-full: persist the value/occurrence DAG edges (each value's
+  // direct operand value_ids) the value-driven ordered executor consumes. `g`
+  // is the same dep graph the topo-sort used above; its `depends_on` edges are
+  // derived from every OccurrenceRec's consumer_point, so a split operand
+  // resolves to the specific consumed value (not an ambiguous node hash).
+  out.operand_vids = g.depends_on;
 
   SEQUANT_ASSERT(well_formed(out));
   return out;
