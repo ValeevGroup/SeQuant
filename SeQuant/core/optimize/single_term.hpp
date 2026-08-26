@@ -230,8 +230,9 @@ EvalSequence single_term_opt(
 ///        the same left-first post-order the nested Product below is built
 ///        in (so \c (*out_axes)[j] annotates the j-th Product node formed by
 ///        the \c -1-handling arm of the loop below). Left empty if \p prod
-///        has fewer than 3 factors (no factorization is performed) or if
-///        \p Metric != DensePeakSizeBatched.
+///        has fewer than 2 tensor factors (no contraction) or if \p Metric
+///        is not a batched objective; a two-tensor product IS priced and
+///        annotated (its single contraction may need to batch).
 ///
 template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
           has_index_extent IdxToSz>
@@ -243,11 +244,22 @@ ExprPtr single_term_opt(
   using ranges::views::reverse;
 
   if (out_axes) out_axes->clear();
-  if (prod.factors().size() < 3)
-    return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
-                               prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
+  // Fewer than 3 factors: nothing to factorize -- except that a two-tensor
+  // product still has ONE contraction to price and annotate when per-node
+  // batch axes are requested (batched metric + out_axes). Without this a
+  // two-factor product contracting a batchable index (e.g. the DF driver
+  // (Σ g·C)·(Σ g·C) over the aux index, whose Sum factors the mixed-product
+  // path stands placeholders in for) would never batch, however far over the
+  // peak budget it is.
+  constexpr bool batched_metric =
+      Metric == ObjectiveFunction::DenseSpaceTimeBatched ||
+      Metric == ObjectiveFunction::DenseTimeSpaceBatched;
+  bool const annotate_pair = batched_metric && out_axes && tensors.size() == 2;
+  if (prod.factors().size() < 3 && !annotate_pair)
+    return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
+                               prod.factors().end(), Product::Flatten::No});
   auto seq = detail::single_term_opt<Metric>(TensorNetwork{tensors},
                                              std::forward<IdxToSz>(idxsz),
                                              subnet_cse, cost, out_axes);

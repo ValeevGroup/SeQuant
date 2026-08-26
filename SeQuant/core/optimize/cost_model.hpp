@@ -81,18 +81,18 @@ EvalSequence run_single_term_opt(Model const& m, TensorNetwork const& network,
 /// \return The optimal EvalSequence, paired with one \c container::svector
 ///         of sliced \c Index per \c -1 token of that sequence, in the same
 ///         left-first post-order the sequence itself was emitted in. For the
-///         nt==1 shortcut (no contractions) the modes vector is empty; for the
-///         nt==2 shortcut (single contraction, no DP context is built) the
-///         modes vector holds one empty entry (no batching info available).
+///         nt==1 shortcut (no contractions) the modes vector is empty. Unlike
+///         \ref run_single_term_opt, nt==2 takes NO shortcut here: its single
+///         contraction is priced and annotated by the model like any other
+///         (a two-factor product that contracts a batchable index -- e.g. a DF
+///         driver (Σ g·C)·(Σ g·C) over the aux index -- would otherwise never
+///         batch, however far over the peak budget it is).
 template <class Model, typename TIdxs>
 std::pair<EvalSequence, container::vector<NodeBatchAnnotation>>
 run_single_term_opt_axes(Model const& m, TensorNetwork const& network,
                          TIdxs const& tidxs) {
   auto const nt = network.tensors().size();
   if (nt == 1) return {EvalSequence{0}, {}};
-  if (nt == 2)
-    return {EvalSequence{0, 1, -1},
-            container::vector<NodeBatchAnnotation>{NodeBatchAnnotation{}}};
   typename Model::Context ctx = m.build_context(network, tidxs);
   auto st = solve_single_term(m, network, tidxs, ctx);
   return m.reconstruct_batched_modes(ctx, st, network, tidxs);
