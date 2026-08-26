@@ -327,32 +327,9 @@ TEST_CASE("value-id: value_id_hash distinguishes slot slicing; null == node-id",
   // Null coloring: byte-identical to the plain node-id TreeNodeHasher uses.
   CHECK(sequant::eval::value_id_hash(nA, nullptr) == sequant::hash::value(*nA));
   CHECK(sequant::eval::value_id_hash(nB, nullptr) == sequant::hash::value(*nB));
-
-  // The coloring-aware TreeNodeHasher honours the id_override.
-  sequant::TreeNodeHasher<node_t> h;
-  CHECK(h(nA) == sequant::hash::value(*nA));  // null override => node-id
-  h.id_override = [&](node_t const& n) {
-    return sequant::eval::value_id_hash(n, &col);
-  };
-  CHECK(h(nA) == sequant::eval::value_id_hash(nA, &col));
-  CHECK(h(nA) != h(nB));
-
-  // The comparator's colored override distinguishes them (both sliced ->
-  // unequal by colored graph), and returns nullopt (=> structural) when neither
-  // is.
-  sequant::TreeNodeEqualityComparator<node_t> eq;
-  eq.colored_eq_override = [&](node_t const& a,
-                               node_t const& b) -> std::optional<bool> {
-    bool const as =
-        !sequant::eval::in_scope_batched_on_node(a, col.ctx_modes).empty();
-    bool const bs =
-        !sequant::eval::in_scope_batched_on_node(b, col.ctx_modes).empty();
-    if (!as && !bs) return std::nullopt;
-    if (as != bs) return false;
-    return RouterKeyEqual{}(occurrence_key(a, col.ctx_modes, &col.colors),
-                            occurrence_key(b, col.ctx_modes, &col.colors));
-  };
-  CHECK_FALSE(eq(nA, nB));  // sliced on different slots -> unequal
+  // (The colored value-id keying itself is exercised via CachedValueHasher /
+  // CachedValueEqual in the "CachedValue keys a map ..." test above; the
+  // runtime cache keys by CachedValue, not by a hasher override.)
 }
 
 // Pillar 1 (value identity), Task 3: CachedValue is the value-keyed cache key.
