@@ -134,7 +134,8 @@
 							"name": "BasisMp2Fit",
 							"tag": "F"
 						}
-					}
+					},
+					"min_index_id": 1
 				}
 			}
 		}

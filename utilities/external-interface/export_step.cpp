@@ -35,7 +35,9 @@ namespace sequant::util::extint {
 
 class MetaAwareIftContext : public ItfContext {
  public:
-  MetaAwareIftContext(const ExportStep::ItfMeta &meta) : meta_(&meta) {}
+  MetaAwareIftContext(const ExportStep::ItfMeta &meta) : meta_(&meta) {
+    set_index_id_offset(meta.idx_id_offset);
+  }
 
   std::string get_tag(const IndexSpace &space) const override {
     SEQUANT_ASSERT(meta_);
@@ -356,6 +358,15 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
               ItfMeta::IndexSpaceMeta{.name = info.value("name", std::string{}),
                                       .tag = info.value("tag", std::string{})});
         }
+      } else if (key == "min_index_id") {
+        if (!value.is_number_integer()) {
+          throw Exception("Expected '" + key + "' to be an integer");
+        }
+        if (!value.is_number_unsigned()) {
+          throw Exception("Expected '" + key + "' to be non-negative");
+        }
+
+        data.idx_id_offset = value.get<std::size_t>();
       } else {
         throw Exception("Unknown meta data type '" + key + "' for language '" +
                         std::string(language) + "'");

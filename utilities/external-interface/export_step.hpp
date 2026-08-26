@@ -38,6 +38,7 @@ class ExportStep : public ProcessingStep {
     };
 
     std::map<IndexSpace, IndexSpaceMeta> index_spaces;
+    std::size_t idx_id_offset = 0;
   };
 
   using meta_type = std::variant<std::monostate, ItfMeta>;
