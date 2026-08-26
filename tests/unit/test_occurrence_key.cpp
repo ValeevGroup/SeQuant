@@ -26,6 +26,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <optional>
+#include <unordered_map>
 
 namespace {
 namespace container = sequant::container;
@@ -352,4 +353,73 @@ TEST_CASE("value-id: value_id_hash distinguishes slot slicing; null == node-id",
                             occurrence_key(b, col.ctx_modes, &col.colors));
   };
   CHECK_FALSE(eq(nA, nB));  // sliced on different slots -> unequal
+}
+
+// Pillar 1 (value identity), Task 3: CachedValue is the value-keyed cache key.
+// Its hash is value_id_hash(node, coloring) and its equality is the colored
+// occurrence_key graph compare (sliced) or the structural comparator
+// (unsliced). Two values of one node sliced on DIFFERENT slots occupy DISTINCT
+// map entries; with an EMPTY coloring a CachedValue is byte-identical to its
+// plain node (same hash, structural fold preserved, distinct nodes NOT folded);
+// a slot-symmetric node folds the two slot slicings to one entry.
+TEST_CASE("value-id: CachedValue keys a map by home-slice-colored value-id",
+          "[value-id][cache]") {
+  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
+  using sequant::eval::CachedValue;
+  using sequant::eval::CachedValueEqual;
+  using sequant::eval::CachedValueHasher;
+  auto mk = [](Index const& a, Index const& b, Symmetry sym) {
+    return ex<sequant::Tensor>(
+        L"B", bra(sequant::container::svector<Index>{a, b}), ket{}, sym,
+        std::nullopt,
+        sym == Symmetry::Symm ? ColumnSymmetry::Symm : ColumnSymmetry::Nonsymm);
+  };
+  Index i1{L"i_1"}, i2{L"i_2"};
+
+  sequant::eval::ValueIdColoring col;  // loop var i_1 sliced at depth 0
+  col.ctx_modes = sequant::container::svector<Index>{i1};
+  col.colors.emplace(i1, 0);
+
+  using Map =
+      std::unordered_map<CachedValue<node_t>, int, CachedValueHasher<node_t>,
+                         CachedValueEqual<node_t>>;
+
+  // (a) non-symmetric: B(i_1,_) and B(_,i_1) are DIFFERENT values -> two
+  // entries.
+  {
+    node_t nA = leaf_node(mk(i1, i2, Symmetry::Nonsymm));  // i_1 in slot 0
+    node_t nB = leaf_node(mk(i2, i1, Symmetry::Nonsymm));  // i_1 in slot 1
+    Map m;
+    m[CachedValue<node_t>{nA, col}] = 1;
+    m[CachedValue<node_t>{nB, col}] = 2;
+    CHECK(m.size() == 2);
+  }
+
+  // (b) empty coloring == plain node keying (the #1 non-regression anchor).
+  // The SAME two nodes as (a): at node-id level B(i_1,i_2) and B(i_2,i_1)
+  // genericize to ONE node (bound labels don't distinguish) -- so with an empty
+  // coloring they FOLD to one entry, exactly as today's node keying does. It is
+  // precisely this collapse that coloring in (a) rescues. The hash is
+  // byte-identical to the plain node-id.
+  {
+    sequant::eval::ValueIdColoring empty;  // no ctx_modes -> unsliced
+    node_t nA = leaf_node(mk(i1, i2, Symmetry::Nonsymm));
+    node_t nB = leaf_node(mk(i2, i1, Symmetry::Nonsymm));
+    CHECK(CachedValueHasher<node_t>{}(CachedValue<node_t>{nA, empty}) ==
+          sequant::hash::value(*nA));
+    Map m;
+    m[CachedValue<node_t>{nA, empty}] = 1;
+    m[CachedValue<node_t>{nB, empty}] = 2;
+    CHECK(m.size() == 1);  // node-id folds them (as today)
+  }
+
+  // (c) slot-symmetric: the two slot slicings FOLD -> ONE entry.
+  {
+    node_t nA = leaf_node(mk(i1, i2, Symmetry::Symm));
+    node_t nB = leaf_node(mk(i2, i1, Symmetry::Symm));
+    Map m;
+    m[CachedValue<node_t>{nA, col}] = 1;
+    m[CachedValue<node_t>{nB, col}] = 2;
+    CHECK(m.size() == 1);
+  }
 }
