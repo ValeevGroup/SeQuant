@@ -625,6 +625,16 @@ class CacheManager {
   /// as before; only the ordered executor passes a genuinely colored key.
   using cache_key_type = eval::CachedValue<TreeNode>;
 
+  /// Pillar 1 / Task 7: a per-build coloring context -- node hash -> the
+  /// home-slice coloring of the VALUE that node represents in the current
+  /// build. The ordered executor sets one (RAII) before each `evaluate_impl`
+  /// build, from `operand_vids` + `home_mode_depth`; the map-keying methods
+  /// re-color an EMPTY-coloring key from it so `evaluate_impl`'s bare-node
+  /// store/access build the right home-colored `CachedValue`. Per-build =>
+  /// node->coloring is 1:1.
+  using ValueColoringCtx =
+      std::unordered_map<std::size_t, eval::ValueIdColoring>;
+
   /// A custom evaluator type. `evaluate()` consults the cache's custom
   /// evaluator (if set) before applying its standard recursive scheme to each
   /// *non-leaf* node, invoking it as `custom_evaluator(node, cache)`:
@@ -1044,6 +1054,30 @@ class CacheManager {
   /// outlive this cache.
   eval::PlacementRouter<TreeNode> const* placement_router_ = nullptr;
 
+  /// Pillar 1 / Task 7: the LOCAL per-build coloring context (see \c
+  /// ValueColoringCtx). Non-owning, set by the ordered executor around an
+  /// `evaluate_impl` build. LOCAL only (NOT inherited through the parent
+  /// chain): a map-keying method builds its key using THIS cache's context, and
+  /// access_at then walks parents with that already-built key. Null (default)
+  /// => no re-color => byte-identical.
+  ValueColoringCtx const* value_coloring_ctx_ = nullptr;
+
+  /// Pillar 1 / Task 7: re-color an EMPTY-coloring key from the local per-build
+  /// coloring context, so a bare-node key (`evaluate_impl` passes nodes, which
+  /// implicit-convert to an empty-coloring `CachedValue`) picks up the home
+  /// coloring of the value that node represents in this build. A key that
+  /// already carries a coloring (the executor's own `value_of(vid)` calls) is
+  /// respected as-is; a node absent from the context, or a null context,
+  /// returns the key unchanged => byte-identical without a context.
+  [[nodiscard]] cache_key_type recolor(cache_key_type const& key) const {
+    if (value_coloring_ctx_ && key.coloring.empty()) {
+      auto const it = value_coloring_ctx_->find(key.node->hash_value());
+      if (it != value_coloring_ctx_->end() && !it->second.empty())
+        return cache_key_type{key.node, it->second};
+    }
+    return key;
+  }
+
   /// Non-owning hierarchy-wide co-resident high-water tracker (see
   /// \c eval::PeakMonitor). Null (default) => \c note_working_set() only
   /// updates this cache's own \c working_set_hwmark_; \c peak_monitor() falls
@@ -1150,6 +1184,35 @@ class CacheManager {
   /// to detach. Non-owning; the pointee must outlive this cache.
   void set_placement_router(eval::PlacementRouter<TreeNode> const* r) noexcept {
     placement_router_ = r;
+  }
+
+  /// Sets the local per-build coloring context (see value_coloring_ctx_). Pass
+  /// nullptr to detach. Non-owning; the pointee must outlive the build. LOCAL
+  /// (not inherited): the RAII guard is the ordered executor's.
+  void set_value_coloring_ctx(ValueColoringCtx const* ctx) noexcept {
+    value_coloring_ctx_ = ctx;
+  }
+
+  /// \return the LOCAL per-build coloring context (or null). No parent
+  /// fall-through: keys are colored using the cache that builds them.
+  [[nodiscard]] ValueColoringCtx const* value_coloring_ctx() const noexcept {
+    return value_coloring_ctx_;
+  }
+
+  /// Pillar 1 / Task 7: re-key every registered entry through the current
+  /// coloring context, so a scratch whose members were registered by bare
+  /// (uncolored) node becomes genuinely VALUE-keyed -- each member entry keyed
+  /// by its home-slice-colored value-id, matching the colored store/access.
+  /// Call once, right after construction, with the per-scope context set. A
+  /// null context (or a scope with nothing sliced) leaves every key unchanged
+  /// => byte-identical.
+  void recolor_registered_entries() {
+    if (!value_coloring_ctx_) return;
+    std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
+        rekeyed;
+    rekeyed.reserve(cache_map_.size());
+    for (auto& [k, e] : cache_map_) rekeyed.emplace(recolor(k), std::move(e));
+    cache_map_ = std::move(rekeyed);
   }
 
   /// Takes OWNERSHIP of a placement router (see owned_router_) and wires it as
@@ -1558,8 +1621,14 @@ class CacheManager {
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
   [[nodiscard]] AccessResult access_at(cache_key_type const& key) noexcept {
+    // Task 7: color the key from THIS cache's per-build context (no-op without
+    // one), then look up AND walk parents with the ALREADY-colored key. The
+    // cache genuinely keys by VALUE: two values of one node coexist as distinct
+    // colored entries (a home value found by its own home identity, never a
+    // same-node sibling), which is the whole point of the value-keyed cache.
+    cache_key_type const rk = recolor(key);
     if (auto found =
-            eval::LookupMeter::timed([&] { return cache_map_.find(key); });
+            eval::LookupMeter::timed([&] { return cache_map_.find(rk); });
         found != cache_map_.end()) {
       if (auto data = found->second.access(); data) {
         // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
@@ -1575,7 +1644,7 @@ class CacheManager {
       }
     }
     if (!parent_) return {nullptr, 0};
-    auto up = parent_->access_at(key);
+    auto up = parent_->access_at(rk);
     return {up.ptr, up.hops + 1};  // count the link we just crossed
   }
 
@@ -1601,11 +1670,12 @@ class CacheManager {
   ///         scope does not currently hold @p key.
   [[nodiscard]] ResultPtr access_at_hops(cache_key_type const& key,
                                          std::size_t hops) noexcept {
+    cache_key_type const rk = recolor(key);  // Task 7: color at THIS cache
     CacheManager* c = this;
     for (std::size_t i = 0; i < hops && c; ++i) c = c->parent_;
     if (!c) return nullptr;
     if (auto found =
-            eval::LookupMeter::timed([&] { return c->cache_map_.find(key); });
+            eval::LookupMeter::timed([&] { return c->cache_map_.find(rk); });
         found != c->cache_map_.end()) {
       auto data = found->second.access();
       // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine
@@ -1633,8 +1703,9 @@ class CacheManager {
   // NOT noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
   [[nodiscard]] ResultPtr store(cache_key_type const& key, ResultPtr data) {
+    cache_key_type const rk = recolor(key);  // Task 7: color at this cache
     if (auto found =
-            eval::LookupMeter::timed([&] { return cache_map_.find(key); });
+            eval::LookupMeter::timed([&] { return cache_map_.find(rk); });
         found != cache_map_.end()) {
       // INSTRUMENTATION (SEQUANT_REBUILD_TRACE, analysis-only): a store onto an
       // entry that is ALREADY alive means the value was still resident in cache
@@ -1658,7 +1729,7 @@ class CacheManager {
   ///        exists
   ///
   [[nodiscard]] bool exists(cache_key_type const& key) const noexcept {
-    return cache_map_.find(key) != cache_map_.end();
+    return cache_map_.find(recolor(key)) != cache_map_.end();
   }
 
   ///

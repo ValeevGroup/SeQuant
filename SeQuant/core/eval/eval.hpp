@@ -1986,7 +1986,9 @@ struct BatchedScratch {
 template <typename TreeNode, bool FHC, typename Members>
 [[nodiscard]] BatchedScratch<TreeNode, FHC> make_batched_scratch(
     Members const& members, CacheManager<TreeNode, FHC> const& real,
-    bool read_from_home = false) {
+    bool read_from_home = false,
+    typename CacheManager<TreeNode, FHC>::ValueColoringCtx const* coloring =
+        nullptr) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -2114,6 +2116,16 @@ template <typename TreeNode, bool FHC, typename Members>
     return seed_keys.contains(n);
   };
   CacheManager<TreeNode, FHC> scratch{std::move(reg), std::move(is_persistent)};
+  // Pillar 1 / Task 7: this sub-top scratch is VALUE-keyed. `reg` above
+  // registered its members by bare node; re-key them through the per-scope
+  // coloring context so each becomes its home-slice-colored value-id --
+  // matching the colored store/access. Set the context so runtime store/access
+  // recolor through it too. Null context => unchanged (byte-identical top-level
+  // path).
+  if (coloring) {
+    scratch.set_value_coloring_ctx(coloring);
+    scratch.recolor_registered_entries();
+  }
   // Read-from-home scratches statically pre-schedule every value and read
   // batch-invariant operands from home each batch (no seeding); a miss on such
   // an operand is a real defect (premature eviction / under-predicted use

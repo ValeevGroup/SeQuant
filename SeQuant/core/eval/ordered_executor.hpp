@@ -230,12 +230,22 @@ template <typename node_t>
 /// own recursion (the nested \c ScopeBlock call below) so it reaches every
 /// level, but not yet CONSULTED here -- a later task's job.
 ///
+/// Task 7 (Pillar 1): value \p vid's home-slice coloring (empty if the value is
+/// unsliced / top-homed => byte-identical node-id keying).
+[[nodiscard]] inline eval::ValueIdColoring ordered_value_home_coloring(
+    OrderedSchedule const& ordered, std::size_t vid) {
+  auto const it = ordered.home_mode_depth.find(vid);
+  return it == ordered.home_mode_depth.end()
+             ? eval::ValueIdColoring{}
+             : eval::value_id_coloring(it->second);
+}
+
 template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
 void run_ordered_contracted_block(
     ScopeBlock const& block,
     std::unordered_map<std::size_t, node_t> const& vmap,
-    RichSchedule const& rich, F const& leaf_evaluator,
-    CacheManager<N, FHC>& parent_cache,
+    RichSchedule const& rich, OrderedSchedule const& ordered,
+    F const& leaf_evaluator, CacheManager<N, FHC>& parent_cache,
     std::function<std::size_t(Index const&)> const& target,
     typename CacheManager<N, FHC>::BatchContext const& ectx,
     container::vector<ResultPtr>& value_results, container::vector<char>& built,
@@ -282,6 +292,14 @@ void run_ordered_contracted_block(
                    "evaluate_ordered_schedule: a loop-block value_id was not "
                    "found in the forest's value-node map");
     return it->second;
+  };
+
+  // Task 7 (Pillar 1): the home-colored cache key for value `vid` -- what the
+  // executor's OWN explicit cache calls (output/escape access/store/home) pass,
+  // so a sliced value keys by its distinct home coloring. Unsliced => empty
+  // coloring => byte-identical to node keying.
+  auto const value_of = [&](std::size_t vid) -> typename Cache::cache_key_type {
+    return {resolve(vid), ordered_value_home_coloring(ordered, vid)};
   };
 
   // members co-evaluated within one batch pass: this block's own direct
@@ -343,10 +361,38 @@ void run_ordered_contracted_block(
     }
   }
 
+  // Task 7 (Pillar 1): the per-SCOPE coloring context for this block's scratch
+  // -- every value this block builds/reads (its BuildSteps and escape outputs,
+  // plus their direct operands), keyed by node hash -> home-slice coloring. The
+  // scratch is VALUE-keyed by it (make_batched_scratch recolors its member
+  // registration, and store/access recolor through it), so a sliced value in
+  // the scratch is keyed by its distinct home identity. It must OUTLIVE `bs`
+  // (the scratch holds a non-owning pointer). Empty (nothing sliced) =>
+  // byte-identical.
+  typename Cache::ValueColoringCtx scope_ctx;
+  {
+    auto add_v = [&](std::size_t vid) {
+      if (vid >= rich.cells.size()) return;
+      auto col = ordered_value_home_coloring(ordered, vid);
+      if (!col.empty()) scope_ctx.emplace(rich.cells[vid].hash, std::move(col));
+    };
+    auto add_with_ops = [&](std::size_t vid) {
+      add_v(vid);
+      if (auto const it = ordered.operand_vids.find(vid);
+          it != ordered.operand_vids.end())
+        for (auto const op : it->second) add_v(op);
+    };
+    for (Step const& s : block.steps)
+      if (auto const* b = std::get_if<BuildStep>(&s.value))
+        add_with_ops(b->value_id);
+    for (auto const& [ovid, okind] : block.outputs) add_with_ops(ovid);
+  }
+
   auto bs = [&]() {
     PhaseTimer::Scope _pt("A.make_scratch");
-    return sequant::detail::make_batched_scratch(members, parent_cache,
-                                                 /*read_from_home=*/true);
+    return sequant::detail::make_batched_scratch(
+        members, parent_cache, /*read_from_home=*/true,
+        scope_ctx.empty() ? nullptr : &scope_ctx);
   }();
   bs.cache.set_parent(&parent_cache);
 
@@ -397,8 +443,9 @@ void run_ordered_contracted_block(
   // so every output is accumulated normally.
   container::vector<char> reuse(block.outputs.size(), 0);
   for (std::size_t k = 0; k != block.outputs.size(); ++k)
-    reuse[k] =
-        parent_cache.resident_in_chain(resolve(block.outputs[k].first)) ? 1 : 0;
+    reuse[k] = parent_cache.resident_in_chain(value_of(block.outputs[k].first))
+                   ? 1
+                   : 0;
 
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
@@ -440,6 +487,10 @@ void run_ordered_contracted_block(
           CurrentConsumerGuard const consumer_guard{
               bs.cache, bs.cache.current_consumer()};
           bs.cache.set_current_consumer(build_node->hash_value());
+          // Task 7 (Pillar 1): the block's per-scope coloring context is
+          // already set on bs.cache (make_batched_scratch), so evaluate_impl's
+          // bare-node self-store of V and its operand fetches are colored by
+          // home identity.
           (void)evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
         }
         // R3: record this loop-local Transient as produced (it is built fresh
@@ -448,7 +499,7 @@ void run_ordered_contracted_block(
         built[build->value_id] = 1;
       } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
         run_ordered_contracted_block<EvalTrace>(
-            *child, vmap, rich, leaf_evaluator, bs.cache, target, ctx,
+            *child, vmap, rich, ordered, leaf_evaluator, bs.cache, target, ctx,
             value_results, built, is_volatile, n_blocks, home_reads,
             needed_build);
       } else {
@@ -485,6 +536,8 @@ void run_ordered_contracted_block(
         CurrentConsumerGuard const consumer_guard{bs.cache,
                                                   bs.cache.current_consumer()};
         bs.cache.set_current_consumer(out_eval_node->hash_value());
+        // Task 7 (Pillar 1): the block's per-scope coloring context is already
+        // set on bs.cache, coloring this escape output's self-store + operands.
         part =
             evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
       }
@@ -518,7 +571,7 @@ void run_ordered_contracted_block(
     // iterations -- rather than re-home/re-store it. It was NOT re-accumulated
     // in the loop, so acc[k]/dest[k] are null here.
     if (reuse[k]) {
-      value_results[vid] = parent_cache.access(resolve(vid));
+      value_results[vid] = parent_cache.access(value_of(vid));
       if (!value_results[vid])
         throw Exception(
             "evaluate_ordered_schedule: a resident output vanished from its "
@@ -559,12 +612,12 @@ void run_ordered_contracted_block(
       if (is_volatile) {
         bool const vol = subtree_any(out_node, is_volatile);
         std::size_t const life = home_reads ? home_reads(vid) : 1;
-        parent_cache.ensure_home_slot(out_node, life, /*persistent=*/!vol);
+        parent_cache.ensure_home_slot(value_of(vid), life, /*persistent=*/!vol);
       } else {
-        parent_cache.ensure_home_slot(out_node);
+        parent_cache.ensure_home_slot(value_of(vid));
       }
     }
-    (void)parent_cache.store(out_node, std::move(out));
+    (void)parent_cache.store(value_of(vid), std::move(out));
     // Escape-output homing stores directly through CacheManager::store (not
     // evaluate_impl's store_after path), so without this it would land in the
     // top-level cache with NO Cache|... trace line -- making a homed value look
@@ -854,11 +907,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       // holder now -- consumers (and, for a root, the combine) read it back
       // from the cache. Retaining it in value_results is exactly the dead
       // reference that kept every intermediate alive past its cache drain.
+      // Task 7 (Pillar 1): a root value is top-homed (empty coloring), but its
+      // operands may be sliced below scope -- set the per-build coloring
+      // context The root (top-level) cache is uncolored: a root value and its
+      // operands are unsliced (sliced values live in sub-scopes and escape
+      // unsliced), so node-id == value-id here -- no coloring context is
+      // needed.
       (void)evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
       built[vid] = 1;  // R3: this root-scope value is produced.
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(
-          *block, vmap, rich, leaf_evaluator, cache, target, root_ectx,
+          *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
           value_results, built, is_volatile, n_blocks, home_reads,
           &needed_build);
     } else {
