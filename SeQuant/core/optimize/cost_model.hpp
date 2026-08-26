@@ -181,6 +181,17 @@ struct AdditiveModel {
             ? footprint_weight * footprint_fn(ctx.results[n].indices)
             : 0.0;
 
+    // The cost hooks return numeric_limits<double>::max() as an "unevaluable
+    // contraction" sentinel (see flops_counter). Keep that sentinel SATURATING:
+    // w * max and max + max overflow to +inf, which no split can ever accept
+    // (init is max, the test below is <=), leaving lp/rp at the 0/0 sentinel
+    // and reconstruct emitting an empty child sequence. A max-cost split must
+    // stay acceptable (it is chosen only when no finite split exists).
+    constexpr double kUnevaluable = std::numeric_limits<double>::max();
+    auto const saturate = [](double c) {
+      constexpr double m = std::numeric_limits<double>::max();
+      return (c >= m || std::isinf(c)) ? m : c;
+    };
     double new_cost = 0;
     container::vector<size_t> combined_subnets;
     if (subnet_cse) {
@@ -189,18 +200,19 @@ struct AdditiveModel {
       std::set_union(lp_st.subnets.begin(), lp_st.subnets.end(),
                      rp_st.subnets.begin(), rp_st.subnets.end(),
                      std::back_inserter(combined_subnets));
-      new_cost = w * cost_fn(ctx.results[lp].indices,  //
-                             ctx.results[rp].indices,  //
-                             ctx.results[n].indices)   //
-                 + fp;
+      double const c = cost_fn(ctx.results[lp].indices,  //
+                               ctx.results[rp].indices,  //
+                               ctx.results[n].indices);
+      new_cost = c >= kUnevaluable ? kUnevaluable : w * c + fp;
       for (auto id : combined_subnets) {
-        new_cost += ctx.unique_meta_costs[id];
+        new_cost = saturate(new_cost + ctx.unique_meta_costs[id]);
       }
     } else {
-      new_cost = w * cost_fn(ctx.results[lp].indices,  //
-                             ctx.results[rp].indices,  //
-                             ctx.results[n].indices)   //
-                 + fp + lp_st.ops + rp_st.ops;
+      double const c = cost_fn(ctx.results[lp].indices,  //
+                               ctx.results[rp].indices,  //
+                               ctx.results[n].indices);
+      new_cost = c >= kUnevaluable ? kUnevaluable : w * c + fp;
+      new_cost = saturate(new_cost + lp_st.ops + rp_st.ops);
     }
 
     if (new_cost <= acc.ops) {
@@ -222,12 +234,18 @@ struct AdditiveModel {
     // Recompute w exactly as relax does: a subset is volatile iff it contains
     // any volatile leaf, so the stored cost must use the same scaling.
     double const w = (volatile_mask & n) ? volatile_weight : 1.0;
-    ctx.unique_meta_costs[mid] =
-        w * cost_fn(ctx.results[st[n].lp].indices,
-                    ctx.results[st[n].rp].indices, ctx.results[n].indices) +
-        (footprint_weight != 0.0
-             ? footprint_weight * footprint_fn(ctx.results[n].indices)
-             : 0.0);
+    {
+      double const c =
+          cost_fn(ctx.results[st[n].lp].indices, ctx.results[st[n].rp].indices,
+                  ctx.results[n].indices);
+      ctx.unique_meta_costs[mid] =
+          c >= std::numeric_limits<double>::max()
+              ? std::numeric_limits<double>::max()
+              : w * c + (footprint_weight != 0.0
+                             ? footprint_weight *
+                                   footprint_fn(ctx.results[n].indices)
+                             : 0.0);
+    }
     auto it = std::lower_bound(st[n].subnets.begin(), st[n].subnets.end(), mid);
     if (it == st[n].subnets.end() || *it != mid) {
       st[n].subnets.insert(it, mid);
