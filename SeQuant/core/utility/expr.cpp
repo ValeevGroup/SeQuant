@@ -363,9 +363,25 @@ bool is_valid(const Expr &expr, std::string *msg) {
     const IndexGroups<> ref = extractor(sum.summand(0));
 
     auto compare = [&ref](const IndexGroups<> &grps) {
-      return std::ranges::is_permutation(ref.bra, grps.bra) &&
-             std::ranges::is_permutation(ref.ket, grps.ket) &&
-             std::ranges::is_permutation(ref.aux, grps.aux);
+      const bool bra_ok = std::ranges::is_permutation(ref.bra, grps.bra);
+      const bool ket_ok = std::ranges::is_permutation(ref.ket, grps.ket);
+      const bool aux_ok = std::ranges::is_permutation(ref.aux, grps.aux);
+
+      if (bra_ok && ket_ok && aux_ok) {
+        return true;
+      }
+
+      if (aux_ok && !bra_ok && !ket_ok) {
+        // Bra and ket indices might have been swapped in case of braket
+        // symmetry Let's just allow for that here without explicitly checking
+        // the summand's symmetry
+        auto combined_ref = ranges::views::concat(ref.bra, ref.ket);
+        auto combined_cmp = ranges::views::concat(grps.bra, grps.ket);
+
+        return std::ranges::is_permutation(combined_ref, combined_cmp);
+      }
+
+      return false;
     };
 
     bool consistent = std::ranges::all_of(sum.summands(), compare, extractor);
@@ -393,11 +409,27 @@ bool is_valid(const ResultExpr &expr, std::string *msg) {
 
   IndexGroups<> externals = get_unique_indices(rhs);
 
-  if (!std::ranges::is_permutation(expr.bra(), externals.bra)) {
+  const bool bra_ok = std::ranges::is_permutation(expr.bra(), externals.bra);
+  const bool ket_ok = std::ranges::is_permutation(expr.ket(), externals.ket);
+  const bool braket_ok = [&]() -> bool {
+    if (!bra_ok && !ket_ok) {
+      // Allow for potential braket symmetry having changed position of
+      // bra and ket indices. For simplicity's sake, be lenient and don't
+      // try to explicitly check for expression symmetry
+      auto combined_expr = ranges::views::concat(expr.bra(), expr.ket());
+      auto combined_ext = ranges::views::concat(externals.bra, externals.ket);
+
+      return std::ranges::is_permutation(combined_expr, combined_ext);
+    }
+
+    return bra_ok && ket_ok;
+  }();
+
+  if (!braket_ok && !bra_ok) {
     SEQUANT_EXPR_INVALID(
         "Bra indices of result are inconsistent with the rhs expression");
   }
-  if (!std::ranges::is_permutation(expr.ket(), externals.ket)) {
+  if (!braket_ok && !ket_ok) {
     SEQUANT_EXPR_INVALID(
         "Ket indices of result are inconsistent with the rhs expression");
   }

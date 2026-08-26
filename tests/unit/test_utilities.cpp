@@ -632,6 +632,8 @@ TEST_CASE("utilities", "[utilities]") {
                {L"1 + t{a1} t{a1} t{a1}",
                 "Index a_1 appears more than 2 times"},
                {L"1 + t{a1}", "Inconsistent external indices in sum"},
+               // Allow bra/ket inconsistencies in external indices
+               {L"t{;a1} + t{a1}", ""},
            }) {
         CAPTURE(toUtf8(expr_str));
 
@@ -674,9 +676,8 @@ TEST_CASE("utilities", "[utilities]") {
                {L"R{;;a1} = Var",
                 "Aux indices of result are inconsistent with the rhs "
                 "expression"},
-               {L"R{a2;a1} = t{a1;i1} t{i1;a2}",
-                "Bra indices of result are inconsistent with the rhs "
-                "expression"},
+               // Allow bra/ket inconsistencies in external indices
+               {L"R{a2;a1} = t{a1;i1} t{i1;a2}", ""},
            }) {
         CAPTURE(toUtf8(expr_str));
 
