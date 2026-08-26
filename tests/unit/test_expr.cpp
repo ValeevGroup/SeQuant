@@ -38,6 +38,7 @@ struct Dummy : public sequant::Expr {
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
+  void adjoint() override {}
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
@@ -69,30 +70,41 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
 
   type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
 
- private:
-  cursor begin_cursor() const override {
+  void adjoint() override {}
+
+  sequant::ConstExprIterator begin_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
-      return base_type::empty() ? Expr::begin_cursor()
-                                : cursor{&base_type::at(0)};
+      return sequant::ConstExprIterator{base_type::data()};
     } else {
-      return Expr::begin_cursor();
+      return Expr::begin_subexpr();
     }
-  };
-  cursor end_cursor() const override {
+  }
+
+  sequant::ConstExprIterator end_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
-      return base_type::empty() ? Expr::end_cursor()
-                                : cursor{&base_type::at(0) + base_type::size()};
+      return sequant::ConstExprIterator{base_type::data() + base_type::size()};
     } else {
-      return Expr::end_cursor();
+      return Expr::end_subexpr();
     }
-  };
-  cursor begin_cursor() override {
-    return const_cast<const VecExpr &>(*this).begin_cursor();
-  };
-  cursor end_cursor() override {
-    return const_cast<const VecExpr &>(*this).end_cursor();
+  }
+
+  sequant::ExprIterator begin_subexpr() override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ExprIterator{base_type::data()};
+    } else {
+      return Expr::begin_subexpr();
+    }
+  }
+
+  sequant::ExprIterator end_subexpr() override {
+    if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
+      return sequant::ExprIterator{base_type::data() + base_type::size()};
+    } else {
+      return Expr::end_subexpr();
+    }
   };
 
+ private:
   bool static_equal(const sequant::Expr &that) const override {
     return static_cast<const base_type &>(*this) ==
            static_cast<const base_type &>(static_cast<const VecExpr &>(that));
@@ -404,10 +416,6 @@ TEST_CASE("expr", "[elements]") {
   }
 
   SECTION("adjoint") {
-    {  // not implemented by default
-      const auto e = std::make_shared<Dummy>();
-      REQUIRE_THROWS_AS(e->adjoint(), Exception);
-    }
     {  // implemented in Adjointable
       const auto e = std::make_shared<Adjointable>();
       REQUIRE_NOTHROW(e->adjoint());
@@ -500,6 +508,27 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE(e_clone.is<Variable>());
       REQUIRE(e->label() == e_clone.as<Variable>().label());
       REQUIRE(e->conjugated() == e_clone.as<Variable>().conjugated());
+    }
+    {  // CProduct must not be sliced down to Product by clone(): a plain
+       // Product reverses its factors in adjoint(), a CProduct does not
+      const auto e = std::make_shared<CProduct>();
+      e->append(1, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      const auto e_adj = adjoint(e);  // free adjoint() == clone() + adjoint()
+      REQUIRE(e_adj.as<Product>().factors()[0]->as<Adjointable>().v == -1);
+      REQUIRE(e_adj.as<Product>().factors()[1]->as<Adjointable>().v == 2);
+      // the original is left untouched
+      REQUIRE(e->factors()[0]->as<Adjointable>().v == 1);
+    }
+    {  // NCProduct must not be sliced down to Product by clone(): a plain
+       // Product decides commutativity by a recursive pairwise check, which
+       // for c-number factors reports the product as commutative
+      const auto e = std::make_shared<NCProduct>();
+      e->append(1, ex<Adjointable>());
+      e->append(1, ex<Adjointable>(-2));
+      REQUIRE_FALSE(e->is_commutative());
+      const auto e_clone = e->clone();
+      REQUIRE_FALSE(e_clone.as<Product>().is_commutative());
     }
   }  // SECTION("clone")
 

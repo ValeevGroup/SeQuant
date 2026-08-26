@@ -196,7 +196,7 @@ std::wstring to_string(Sum const& sum, const SerializationOptions& options) {
   std::wstring serialized;
 
   for (std::size_t i = 0; i < sum.size(); ++i) {
-    ExprPtr& current = sum[i];
+    const ExprPtr& current = sum[i];
 
     const bool parenthesize = current->is<Sum>();
 

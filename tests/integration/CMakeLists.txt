@@ -13,6 +13,8 @@ if (NOT !SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         "osstcc.cpp"
         # Equation-of-motion Coupled-Cluster
         "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R|2 1h3p R|2 4h2p R|3 3h3p R"
+        # Unitary Coupled-Cluster, both H̄ expansions (BCH and Bernoulli).
+        "ucc.cpp -> 2 bch 2|2 bch 3|2 bernoulli 2|2 bernoulli 3"
             "os_eom.cpp"
             "singletCSeom.cpp -> 2 2h2p R"
             "tripletCSeom.cpp -> 2 2h2p R|3 3h3p R"
@@ -31,6 +33,8 @@ else()
         "srcc.cpp ->  |2 t csv sf"
         # Equation-of-motion Coupled-Cluster (reduced test set)
         "eomcc.cpp -> 2 2h1p R"
+        # Unitary Coupled-Cluster (reduced test set: one variant per expansion)
+        "ucc.cpp -> 2 bch 2|2 bernoulli 2"
     )
     if (TARGET Eigen3::Eigen)
         # these examples require Eigen for full functionality
