@@ -50,9 +50,17 @@
 				"ecc": "1",
 				"en": "0-1",
 				"res1": "2-5",
-				"res1_s1": "5",
+				"res1_i1": "2",
+				"res1_s0": "3",
 				"res2_s1_singles": "4",
+				"res1_s1": "5",
 				"res2": "6-11",
+				"res2_p0": "6",
+				"res2_p2": "7",
+				"res2_i2": "8",
+				"res2_p1": "9",
+				"res2_s1": "10",
+				"res2_s2": "11",
 				"res": "2-11"
 			}
 		},
@@ -110,8 +118,18 @@
 					"Residual": "res"
 				},
 				"relative_order": [
+					"ecc0",
+					"ecc",
+					"res1_i1",
+					"res1_s0",
 					"res2_s1_singles",
-					"res1_s1"
+					"res1_s1",
+					"res2_p0",
+					"res2_p2",
+					"res2_i2",
+					"res2_p1",
+					"res2_s1",
+					"res2_s2"
 				],
 				"imports": {
 					"R2{a1;i1}": "TestImport"
