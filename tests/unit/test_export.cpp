@@ -531,7 +531,8 @@ TEST_CASE("export", "[export]") {
       SECTION("multiple") {
         export_expression(to_export_tree(deserialize<ResultExpr>(
                               L"ECC = 2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} "
-                              "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}")),
+                              "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}",
+                              {.def_braket_symm = Hermiticity::NonHermitian})),
                           generator, ctx);
 
         REQUIRE_THAT(

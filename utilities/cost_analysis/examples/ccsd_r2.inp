@@ -1,1 +1,1 @@
-R{a1,a2;i1,i2} = g{a1,a2;i1,i2} + g{a3,a4;i1,i2} t{i3,i4;a3,a4} R{a1,a2;i3,i4} + g{a3,a4;i1,i2} t{i3,i4;a3,a4} t{a1,a2;i3,i4}
+R{a1,a2;i1,i2}:N-N-S = g{a1,a2;i1,i2} + g{a3,a4;i1,i2} t{i3,i4;a3,a4}:N-N-S R{a1,a2;i3,i4}:N-N-S + g{a3,a4;i1,i2} t{i3,i4;a3,a4}:N-N-S t{a1,a2;i3,i4}:N-N-S

@@ -282,6 +282,17 @@ class TensorNetworkV3 {
     /// reports the phase change due to permutation of slots relative to their
     /// input order
     std::int8_t phase = +1;  // +1 or -1
+
+    /// antilinear byproduct of canonicalization: the PARITY of the
+    /// bra<->ket-bundle swaps the canonical labeling applied to the network's
+    /// BraKetSymmetry::Conjugate tensors. A Hermitian (Conjugate) tensor
+    /// satisfies T{bra;ket} = conj(T{ket;bra}), so each such swap carries a
+    /// conjugation (cf. `phase`, which carries the ±1 linear byproduct of
+    /// antisymmetric slot reorderings). A single bit is exact only when at
+    /// most one tensor can have swapped; its sole consumer is EvalExpr's
+    /// single-tensor leaf constructor -- see the invariant note at the
+    /// detection site in canonicalize_slots (v3.cpp).
+    bool conj = false;
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -348,6 +359,12 @@ class TensorNetworkV3 {
     /// to be treated as topologically distinct (e.g. in WickTheorem) need to
     /// set this to true
     bool distinct_named_indices = false;
+
+    /// if true, a tensor's elementwise-conjugation marker
+    /// (Tensor::conjugated()) enters its core-vertex color, so that `T` and
+    /// `T*` are distinguishable (default: false, since canonicalize() toggles
+    /// the marker while re-orienting Conjugate tensors)
+    bool color_conjugation = false;
 
     /// if false, will not generate the labels
     bool make_labels = true;

@@ -1,11 +1,11 @@
-R2{a1,u1;i1,i2} =
+R2{a1,u1;i1,i2}:A-N-S =
   + Â{i1,i2;} g{a1,u1;i1,i2}:A-H-S
-  - Â{i1,i2;} Ym1{u1;u2} g{a1,u2;i1,i2}:A-H-S
-  - 2 Â{i1,i2;} g{i3;i2}:A-H-S T2{a1,u1;i1,i3}
-  - 2 Â{i1,i2;} g{i3;i1}:A-H-S Ym1{u1;u2} T2{a1,u2;i2,i3}
-  + Â{i1,i2;} g{a1;a3}:A-H-S T2{a3,u1;i1,i2}
-  - Â{i1,i2;} g{a1;a3}:A-H-S Ym1{u1;u2} T2{a3,u2;i1,i2}
-  + Â{i1,i2;} f{u1;u2}:A-H-S T2{a1,u2;i1,i2}
-  - Â{i1,i2;} Ym1{u1;u2} f{u2;u3}:A-H-S T2{a1,u3;i1,i2}
-  + Â{i1,i2;} Ym1{u4;u2} g{u1,u2;u3,u4}:A-H-S T2{a1,u3;i1,i2}
-  - 1/2 Â{i1,i2;} Ym2{u1,u5;u2,u3} g{u2,u3;u4,u5}:A-H-S T2{a1,u4;i1,i2}
+  - Â{i1,i2;} Ym1{u1;u2}:A-N-S g{a1,u2;i1,i2}:A-H-S
+  - 2 Â{i1,i2;} g{i3;i2}:A-H-S T2{a1,u1;i1,i3}:A-N-S
+  - 2 Â{i1,i2;} g{i3;i1}:A-H-S Ym1{u1;u2}:A-N-S T2{a1,u2;i2,i3}:A-N-S
+  + Â{i1,i2;} g{a1;a3}:A-H-S T2{a3,u1;i1,i2}:A-N-S
+  - Â{i1,i2;} g{a1;a3}:A-H-S Ym1{u1;u2}:A-N-S T2{a3,u2;i1,i2}:A-N-S
+  + Â{i1,i2;} f{u1;u2}:A-H-S T2{a1,u2;i1,i2}:A-N-S
+  - Â{i1,i2;} Ym1{u1;u2}:A-N-S f{u2;u3}:A-H-S T2{a1,u3;i1,i2}:A-N-S
+  + Â{i1,i2;} Ym1{u4;u2}:A-N-S g{u1,u2;u3,u4}:A-H-S T2{a1,u3;i1,i2}:A-N-S
+  - 1/2 Â{i1,i2;} Ym2{u1,u5;u2,u3}:A-N-S g{u2,u3;u4,u5}:A-H-S T2{a1,u4;i1,i2}:A-N-S

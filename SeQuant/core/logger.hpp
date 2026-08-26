@@ -51,7 +51,28 @@ struct Logger : public Singleton<Logger> {
     /// (printing() is level>0, identical across ranks), so a collective reducer
     /// here is matched across ranks. Empty = report this rank's RSS unchanged.
     std::function<std::size_t(std::size_t)> rss_reduce = {};
-  } eval = {0, nullptr, {}};
+
+    /// Optional supplier of an extra, backend-defined suffix appended to each
+    /// eval-trace line (after the rss field). Injected by the tensor-algebra
+    /// backend to report allocator-level memory that RSS alone cannot
+    /// distinguish -- e.g. glibc all-arena in-use vs system bytes, so one can
+    /// tell live heap from retained-free heap right at an RSS jump. Runs on
+    /// EVERY rank on the eval log path (printing() is level>0, identical across
+    /// ranks), so an injected collective reduction here is matched across
+    /// ranks. Returns a preformatted, already-reduced string (e.g.
+    /// "heap_inuse=...B | heap_sys=...B"); empty function = omit the suffix.
+    std::function<std::string()> heap_stats = {};
+
+    /// Optional post-op memory-release hook, invoked after each freshly
+    /// evaluated op (leaf/product/sum) regardless of trace level -- so a large
+    /// transient's freed pages can be returned to the OS before the next op
+    /// allocates, rather than lingering as allocator-retained free heap. The
+    /// injected hook is expected to self-throttle (a cheap no-op when little is
+    /// reclaimable) since it runs per op. Local/non-collective by contract
+    /// (e.g. glibc malloc_trim), so it needs no cross-rank matching. Empty
+    /// function = no release (default).
+    std::function<void()> release_memory = {};
+  } eval = {0, nullptr, {}, {}, {}};
 
  private:
   friend class Singleton<Logger>;

@@ -13,6 +13,7 @@
 #include <range/v3/range/access.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <functional>
 #include <string>
 
 namespace sequant {
@@ -142,6 +143,41 @@ ResultExpr& canonicalize(
 [[nodiscard]] ResultExpr& canonicalize(
     ResultExpr&& expr,
     CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+
+/// Folds complex-conjugate-related summand pairs of a sum whose VALUE the
+/// caller asserts to be real.
+///
+/// For a real-valued sum, Re(s + s*) = Re(2 s). The complex conjugate of a
+/// scalar (fully contracted) summand is its adjoint (conjugated scalar,
+/// reversed adjoint factors; a BraKetSymmetry::Conjugate tensor's adjoint is
+/// its bra<->ket-swapped orientation), so every summand pair {s, adjoint(s)}
+/// collapses to 2*s without changing the sum's (real) value. This is the
+/// symbolic-layer exploitation of conjugate braket symmetry: the eval-layer
+/// Conjugate fold folds conjugate-related LEAVES onto one cache
+/// slot, while this folds conjugate-related TERMS out of the sum entirely.
+/// Summands whose adjoint is not present among the other summands --
+/// including self-adjoint (manifestly real) summands -- are left untouched.
+///
+/// @warning The caller asserts the sum's VALUE is real (e.g. an expectation
+/// value consumed through its real part); the folded expression's imaginary
+/// part differs from the input's (both are discarded by that assertion).
+///
+/// @param[in] expr the sum to fold; returned unchanged if not a Sum
+/// @param[in] opts canonicalization options used to identify pairs (named
+///            index labels are always treated as meaningful, as in
+///            Sum::canonicalize_impl)
+/// @param[in] conjugate_op optional map from a summand to an expression the
+///            caller asserts to EQUAL the summand's complex conjugate in
+///            value. Defaults to the algebraic adjoint. Supply a custom map
+///            when a domain identity relates the conjugate to a different
+///            symbolic form than the adjoint (e.g. a symmetry of the leaf
+///            tensors expressed as an index relabeling), so conjugate pairs
+///            written in that form can be recognized.
+/// @return the folded expression
+ExprPtr fold_conjugate_pairs_of_real_sum(
+    ExprPtr const& expr,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options(),
+    std::function<ExprPtr(ExprPtr const&)> conjugate_op = {});
 
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded

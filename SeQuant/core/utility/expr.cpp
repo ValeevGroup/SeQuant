@@ -373,6 +373,11 @@ bool is_valid(const Expr &expr, std::string *msg) {
     if (!consistent) {
       SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
     }
+  } else if (expr.is<Power>()) {
+    // A Power (base^exponent) is valid iff its base is valid; the exponent is a
+    // rational and is always well-formed. Power is atomic (it exposes no
+    // subexpressions to the children loop above), so validate the base here.
+    if (!is_valid(expr.as<Power>().base(), msg)) return false;
   } else {
     SEQUANT_ASSERT(false, "Unsupported expression type in is_valid");
   }
