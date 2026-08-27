@@ -177,10 +177,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   }
 
   // canonize the graph
-  bliss::Stats stats;
-  graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-  const unsigned int *canonize_perm =
-      graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
+  const unsigned int *canonize_perm = canonicalize_graph(graph);
 
   if (Logger::instance().canonicalize_dot) {
     std::wcout << "Canonicalization permutation:\n";
@@ -562,11 +559,7 @@ TensorNetworkV2::canonicalize_slots(
         {.labels = graph.vertex_labels, .texlabels = graph.vertex_texlabels});
   }
 
-  // canonize the graph
-  bliss::Stats stats;
-  graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-  const unsigned int *canonize_perm =
-      graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
+  const unsigned int *canonize_perm = canonicalize_graph(graph);
 
   metadata.graph =
       std::shared_ptr<bliss::Graph>(graph.bliss_graph->permute(canonize_perm));
@@ -1082,6 +1075,13 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   return graph;
+}
+
+const unsigned int *TensorNetworkV2::canonicalize_graph(
+    const TensorNetworkV2::Graph &graph) {
+  bliss::Stats stats;
+  graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+  return graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
 }
 
 void TensorNetworkV2::init_edges() {
