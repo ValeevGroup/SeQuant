@@ -55,8 +55,6 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
 TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   using namespace sequant;
 
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   Index::reset_tmp_index();
 
   SECTION("Op contractions") {
@@ -992,8 +990,6 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       wick.reset_indices();
       wick.reduce(wick_result_2);
       rapid_simplify(wick_result_2);
-      TensorCanonicalizer::register_instance(
-          std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2, {.method = CanonicalizationMethod::Complete});
       rapid_simplify(wick_result_2);
 
@@ -1026,8 +1022,6 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         wick.reset_indices();
         wick.reduce(wick_result_2);
         rapid_simplify(wick_result_2);
-        TensorCanonicalizer::register_instance(
-            std::make_shared<DefaultTensorCanonicalizer>());
         canonicalize(wick_result_2);
         rapid_simplify(wick_result_2);
         REQUIRE(wick_result_2->size() == 2);  // now 2 terms
@@ -1075,9 +1069,6 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
           wick.reset_indices();
           wick.reduce(wick_result_2);
           rapid_simplify(wick_result_2);
-          TensorCanonicalizer::register_instance(
-              std::make_shared<DefaultTensorCanonicalizer>(
-                  std::vector<Index>{}));
           canonicalize(wick_result_2,
                        {.method = CanonicalizationMethod::Complete});
           rapid_simplify(wick_result_2);
@@ -1127,8 +1118,6 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       wick.reset_indices();
       wick.reduce(wick_result_2);
       rapid_simplify(wick_result_2);
-      TensorCanonicalizer::register_instance(
-          std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
       rapid_simplify(wick_result_2);
     }
@@ -1195,8 +1184,6 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
           expand(wick_result_2);
           wick.reduce(wick_result_2);
           rapid_simplify(wick_result_2);
-          TensorCanonicalizer::register_instance(
-              std::make_shared<DefaultTensorCanonicalizer>());
           canonicalize(wick_result_2);
           canonicalize(wick_result_2);
           canonicalize(wick_result_2);

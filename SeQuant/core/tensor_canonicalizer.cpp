@@ -9,8 +9,8 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
-#include <algorithm>
-#include <regex>
+#include <memory>
+#include <mutex>
 #include <type_traits>
 #include <vector>
 
@@ -175,7 +175,17 @@ TensorCanonicalizer::instance_map_accessor() {
   static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
       map_;
   static std::recursive_mutex mtx_;
-  return std::make_pair(&map_, std::unique_lock<std::recursive_mutex>{mtx_});
+  static bool initialized_ = false;
+
+  std::unique_lock lock(mtx_);
+  if (!initialized_) {
+    // Ensure DefaultTensorCanonicalizer is installed as the default
+    // canonicalizer by default
+    map_.emplace(L"", std::make_shared<DefaultTensorCanonicalizer>());
+    initialized_ = true;
+  }
+
+  return std::make_pair(&map_, std::move(lock));
 }
 
 container::vector<std::wstring>&

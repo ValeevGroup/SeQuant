@@ -1273,4 +1273,15 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
     }
   }
+
+  SECTION("single-tensor-simplify") {
+    SECTION("perm-symmetry") {
+      auto expr =
+          deserialize<ResultExpr>("R1{a1;i1} = t{a1,i1}:A - t{i1,a1}:A");
+
+      simplify(expr);
+
+      REQUIRE_THAT(expr, EquivalentTo("R1{a1;i1} = 2 t{a1,i1}:A"));
+    }
+  }
 }
