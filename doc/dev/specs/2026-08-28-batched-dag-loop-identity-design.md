@@ -58,50 +58,80 @@ compute_dag_boulevard      -> batched DAG: trees fused by structure; each value
 rematerialize_to_budget    -> peak-driven placement (shrink/split); may break a
    (remat)                    group into subgroups/singletons. Peak only.
 build_ordered_schedule     -> the realized loop nest + the per-occurrence
-   (nest realization)         mode↔loop map. Assigns absolute loop numbering.
+   (nest realization)         (depth,loop_slot)->position map. Assigns the
+                              layout (altitude/latitude).
 evaluate_ordered_multiroot -> execution; consumes the map via the slice seam.
    (runtime)
 ```
 
 ---
 
-## 3. Loop identity: three orthogonal axes
+## 3. Loop coordinates: identity vs. layout
 
-A realized loop is identified by **`(depth, altitude_ordinal, latitude_ordinal)`**.
-`space` is carried for diagnostics and abstract-color matching **only**; it is
-never part of identity.
+A batch loop has an **identity** (stable across scheduling choices) and a
+**layout** (where a schedule placed it). Separating them is what keeps value-ids
+stable and lets remat work before any nesting order is fixed. The `_ordinal`
+suffix is reserved for **layout** quantities; **identity** coordinates carry no
+`_ordinal`.
 
-- **`depth`** — cross-space-group nesting position: which space-group encloses
-  which. Fixed by the schedule's type order; one `depth` per space-group. (Two
-  loops of *different* spaces are ordered by `depth`.)
-- **`altitude_ordinal`** — which member *within* one same-space group of
-  interchangeable loops. This is the vertical nesting position inside the group.
-  The **order among members is free** (interchangeable); the ordinal fixes a
-  chosen order. **This axis does not exist in the code today** — it is the
-  missing piece.
-- **`latitude_ordinal`** — which sequential **pass** from the legality
-  producer→consumer (PROCON) split: one loop-nest re-traversed in sequence
-  (producer pass, then consumer pass). This is the current code's `ordinal`
-  (`emit_pass(0,…)`/`emit_pass(1,…)`, `ordered_schedule.hpp:1402-1405`), to be
-  **renamed** `latitude_ordinal`.
+**Identity — `(depth, loop_slot)`:**
+- **`depth`** — which loop-**group** in the nest. It distinguishes even two groups
+  of the *same* space (e.g. an "external" `o` group and a "contracted" `o` group
+  in a nest `{{o,o},{o,o},a}`) — `space` (a color) cannot. `depth` also fixes the
+  cross-group nesting order; because group order is fixed (not reordered) for now,
+  it serves as identity and order at once, without conflict.
+- **`loop_slot`** — which **member** of the group (0-based). Stable, order-free,
+  assigned by **fusion** (the union-find over connectivity, §4). It says *which*
+  member, not where it nests. **This coordinate does not exist in the code
+  today** — it is the missing piece.
 
-`depth` and `altitude_ordinal` are both *spatial* (loops live on the stack
-simultaneously); `latitude_ordinal` is *temporal* (one loop-nest, two passes in
-sequence). Keeping them as three named fields removes the ambiguity that sank the
-previous spec (which used one `ordinal` for two different jobs).
+**Layout — `(altitude_ordinal, latitude_ordinal)`** (decided at nest realization):
+- **`altitude_ordinal`** — the nesting *rank* a `loop_slot` is assigned within its
+  group (which slot is outer). Free/interchangeable; slots are *assigned*
+  altitudes when the nest is laid out.
+- **`latitude_ordinal`** — the legality producer→consumer (PROCON) **pass** index:
+  one group re-traversed in sequence (producer pass, then consumer pass). This is
+  the current code's `ordinal` (`emit_pass(0,…)`/`emit_pass(1,…)`,
+  `ordered_schedule.hpp:1402-1405`), to be **renamed** `latitude_ordinal`.
 
-### Proposed types
+**`space`** is an abstract **color** for matching groups across frames during
+fusion; it is never identity (two groups can share it — which is exactly why
+`depth` is needed, not `space`, as the group identity).
+
+**What keys on what.** The runtime **slice seam**, the **value-id / sliced-mode
+coloring**, and the **per-occurrence atlas** all key on **`(depth, loop_slot)`** —
+never on altitude or latitude. Consequences:
+- **Value-ids are stable** under the free altitude ordering (and a future
+  group-reordering optimization) and computable by **remat before any order is
+  fixed**, because `loop_slot` is settled at fusion. This is the requirement:
+  distinguish values by *which member-slot* their mode binds to, without knowing
+  altitude.
+- **The two PROCON passes share one `LoopId`** (identical `(depth, loop_slot)`):
+  both passes slice the same slot, so slot resolution is pass-independent; the
+  pass is known from block-tree structure, not from loop identity.
+- **Altitude and latitude are materialized as block-tree structure** (nesting
+  order and pass sequence). They affect peak/time (a bad altitude order costs
+  split recompute), **not slicing correctness** — every member's mode is sliced
+  regardless of which is outer.
+
+### Types
 
 ```cpp
 // dag_scope.hpp
-struct DagScopeLevel {
-  std::size_t depth;            // cross-space-group nest position
-  int         altitude_ordinal; // member within a same-space group
-  int         latitude_ordinal; // PROCON pass index (was: ordinal)
-  std::wstring space;           // COLOR ONLY -- never identity
-  // identity/hash/== over (depth, altitude_ordinal, latitude_ordinal) only.
+// The STABLE identity of a batch loop; seam, coloring, and atlas key on this.
+struct LoopKey {
+  std::size_t depth;   // which group (identity + fixed cross-group order)
+  int loop_slot;       // which member-slot within the group (stable, order-free)
+  // ==/hash over (depth, loop_slot).
 };
-using LoopId = std::size_t;     // index into the schedule's canonical level list
+// A loop's realized LAYOUT in one schedule (its block-tree placement).
+struct DagScopeLevel {
+  LoopKey key;             // (depth, loop_slot) -- the identity
+  int altitude_ordinal;    // nesting rank of loop_slot within its group (layout)
+  int latitude_ordinal;    // PROCON pass index (layout)
+  std::wstring space;      // color only, for fusion matching; not identity
+};
+using LoopId = std::size_t; // index into the schedule's list of distinct LoopKeys
 ```
 
 ---
@@ -109,13 +139,13 @@ using LoopId = std::size_t;     // index into the schedule's canonical level lis
 ## 4. The per-occurrence mode↔loop atlas
 
 For each **occurrence** (a use of a value in the DAG), the runtime needs a map
-**`loop-id → position`**: given an enclosing loop, which physical slot of this
-occurrence's result it slices. `position` is the slot index in the occurrence's
+**`(depth, loop_slot) → position`**: given an enclosing loop, which physical slot
+of this occurrence's result it slices. `position` is the slot index in the occurrence's
 own `canon_indices()` frame (what `LoopColoredSliceSeam::by_hash` already stores,
 `dag_scope.hpp:90-97`) — **frame-local, always available**.
 
 The only quantity that must be *decided* is, per batched slot, **which group
-member** (which altitude) it binds to. Two facts make this per-**occurrence**, not
+member (`loop_slot`)** it binds to. Two facts make this per-**occurrence**, not
 per-value, and not a within-frame rank:
 
 **(a) The map is not a rank.** Different occurrences of one loop assign it to
@@ -166,20 +196,21 @@ for {A@o, B@o}   // consumer pass, latitude 1
   E[B,A] = C[A,B] * D[B,A]
 ```
 
-The atlas the runtime consumes, per occurrence (position → member; absolute
-altitude numbering applied at §5.4):
+The atlas the runtime consumes, per occurrence (position → `loop_slot`; members
+A, B are slots 0, 1):
 - `C` build: `0→A, 1→B`
 - `D` build: `0→A, 1→B`; `D` **as consumed by E**: `0→B, 1→A` (transposed)
 - `E` build: `0→B, 1→A`
 
 ### The tracked datum
 
-Per occurrence, per batched slot, a **group-member id** (a small integer local to
-the `(scope, space)` group), shared across occurrences that bind the same member.
-This is the load-bearing data. Fusion assigns it by unifying occurrences over the
-DAG's producer→consumer slot connectivity (a union-find), resolving conflicts by
-a recorded choice. The **absolute `altitude_ordinal` numbering** (member-id →
-0,1,…) is applied later (§5.4), so fusion commits to *no* order.
+Per occurrence, per batched slot, a **`loop_slot`** (a small integer local to the
+`(depth, space)` group), shared across occurrences that bind the same member. This
+is the load-bearing identity data. Fusion assigns it by unifying occurrences over
+the DAG's producer→consumer slot connectivity (a union-find), resolving conflicts
+by a recorded choice. `loop_slot` is a stable *identity*, not an order — the
+**`altitude_ordinal` layout** (which slot nests outer) is decided later, at nest
+realization (§5), so fusion commits to *no* nesting order.
 
 ---
 
@@ -187,31 +218,31 @@ a recorded choice. The **absolute `altitude_ordinal` numbering** (member-id →
 
 | Stage | Produces | On the loop group |
 |---|---|---|
-| **Factorizer** (per tree) | per-node batched modes in the tree's own frame; same-space modes as an **unordered group** | order undecided |
-| **Fusion** (`compute_dag_boulevard`) | per-occurrence `position → group-member-id`, unified over slot connectivity, conflicts resolved by a tracked choice | members identified; **order still free** |
-| **Remat** (`rematerialize_to_budget`) | peak-driven shrink/split; **may break a group into subgroups/singletons**; peak only, prices no time | order still free; group *membership* may change |
-| **Nest realization** (`build_ordered_schedule`) | the realized nest; assigns **absolute `altitude_ordinal`** + `depth`; realizes **`latitude`** PROCON passes → full `loop-id`; the per-occurrence `loop-id → position` map | order fixed here |
-| **Runtime** | consumes `loop-id → position` per occurrence via the seam | — |
+| **Factorizer** (per tree) | per-node batched modes in the tree's own frame; same-space modes as an **unordered group** | slots undecided |
+| **Fusion** (`compute_dag_boulevard`) | per-occurrence `position → loop_slot`, unified over slot connectivity, conflicts resolved by a tracked choice | **`loop_slot` identity fixed**; layout still free |
+| **Remat** (`rematerialize_to_budget`) | peak-driven shrink/split; **may break a group into subgroups/singletons**; peak only, prices no time | layout still free; group *membership* may change |
+| **Nest realization** (`build_ordered_schedule`) | the realized nest; assigns `depth` and the **layout** (`altitude_ordinal` per slot, `latitude_ordinal` PROCON passes); the per-occurrence `(depth, loop_slot) → position` map | layout fixed here |
+| **Runtime** | consumes `(depth, loop_slot) → position` per occurrence via the seam | — |
 
-**Timing rule.** The *correspondence* (member identity, incl. transpositions)
-is established at **fusion** and tracked through. The *absolute numbering*
-(`altitude_ordinal`) is deferred to **nest realization** — because it is free
-until then and remat may still change group membership. Remat does **not** need
-the absolute numbering: it distinguishes values homed in different members by
-their own home-mode positions (frame-local), which suffices for the peak sweep's
-distinctness requirement.
+**Timing rule.** The *identity* — `loop_slot` (and the per-occurrence
+correspondence incl. transpositions) — is fixed at **fusion** and tracked
+through. The *layout* (`altitude_ordinal`, `latitude_ordinal`) is deferred to
+**nest realization**, because it is free until then and remat may still change
+group membership. Remat does **not** need the layout: it distinguishes values
+homed on different slots by `(depth, loop_slot)` (available from fusion), which
+suffices for the peak sweep's distinctness requirement.
 
 ### 5.4 Value-id coloring
 
-A value is cache-/remat-keyed by **sliced-mode-id = space + loop-id** for each of
-its home-sliced modes (`CachedValue{node, coloring}`, `value_id.hpp`). The
-coloring must key by the **full `loop-id`** (`depth, altitude_ordinal,
-latitude_ordinal`). Today it keys by **`depth` only**
-(`value_id.hpp:42`, `colors.emplace(m, depth)`), and `home_mode_depth` stores
-`pair<Index,int depth>` — dropping altitude *and* latitude. So two values homed
-in different members of one group are colored identically today. Keying by the
-full loop-id (available once §5's numbering is done, on the post-remat cells the
-schedule is built from) makes storage (producer frame) and lookup (consumer loop)
+A value is cache-/remat-keyed by **sliced-mode-id = space + `(depth, loop_slot)`**
+for each of its home-sliced modes (`CachedValue{node, coloring}`, `value_id.hpp`).
+The coloring keys on the **identity** `(depth, loop_slot)` — **never** on the
+layout (`altitude_ordinal`/`latitude_ordinal`) — so it is invariant under the free
+nesting order and computable by remat before any layout exists. Today it keys by
+**`depth` only** (`value_id.hpp:42`, `colors.emplace(m, depth)`), and
+`home_mode_depth` stores `pair<Index,int depth>` — with no `loop_slot`, so two
+values homed on different slots of one group are colored identically. Keying by
+`(depth, loop_slot)` makes storage (producer frame) and lookup (consumer loop)
 agree on one identity.
 
 ---
@@ -220,15 +251,15 @@ agree on one identity.
 
 1. **Loop identity is incomplete.** `DagScopeLevel = {depth, space, ordinal}`
    (`dag_scope.hpp:34-47`); the level enumeration keys `(depth, space, ordinal)`
-   (`ordered_schedule.hpp:1745`); `ordinal` is **latitude** only
-   (`emit_pass 0/1`, `1402-1405`). **No `altitude`** → same-space group members
-   collide on `(depth, space, latitude=0)`.
+   (`ordered_schedule.hpp:1745`); `ordinal` is the **latitude** (PROCON pass)
+   only (`emit_pass 0/1`, `1402-1405`). **No `loop_slot`** → same-space group
+   members collide on one identity.
 2. **The nest collapses the group.** `types` dedups by space
    (`ordered_schedule.hpp:992-999`); `depth_of_type` is space→depth
    (`1017-1023`); the escape loop folds a value's multiple same-space non-local
    modes into **one** escape per space-depth (`1049-1068`).
-3. **Coloring is depth-only** (`value_id.hpp:42`; `home_mode_depth` drops the
-   ordinal).
+3. **Coloring is depth-only** (`value_id.hpp:42`; `home_mode_depth` stores no
+   `loop_slot`).
 4. **Fusion tracks the correspondence by label set-arithmetic**
    (`compute_dag_boulevard` `home/enclosing/divergent_modes` folds,
    `peak_profile.hpp` ~490-513), which cannot represent the per-occurrence
@@ -237,33 +268,35 @@ agree on one identity.
    uses `rich = compute_dag_boulevard(roots)` (pre-remat) (`cck.ipp:2222-2244`);
    remat's result (`res.cells`) only builds a router overlay
    (`sequant.h:269-276`). So the schedule never sees remat's split/placement.
-6. **The consumer-disambiguation seam is a workaround for missing altitude.**
+6. **The consumer-disambiguation seam is a workaround for missing `loop_slot`.**
    `LoopColoredSliceSeam::by_hash_consumer` / `mode_of`'s consumer arm
    (`dag_scope.hpp:102-186`) disambiguates "two modes under one loop" by
-   consumer. With a real `altitude_ordinal`, each member is its own `LoopId` and
-   each mode binds directly; this machinery can retire (or shrink to the
+   consumer. With a real `loop_slot`, each member is its own `LoopId` and each
+   mode binds directly; this machinery can retire (or shrink to the
    genuinely-divergent case).
 
 ---
 
 ## 7. Design
 
-1. **Complete the loop identity.** Add `altitude_ordinal`; rename `ordinal` →
-   `latitude_ordinal` (§3). Identity/hash over the three fields.
-2. **Track the per-occurrence member map through fusion** (§4). Fusion assigns
-   per-occurrence `position → group-member-id` by unifying occurrences over the
+1. **Complete the loop identity.** Add `loop_slot` (identity); rename `ordinal` →
+   `latitude_ordinal` (layout); add `altitude_ordinal` (layout) (§3). Identity/hash
+   over `(depth, loop_slot)`.
+2. **Track the per-occurrence `loop_slot` map through fusion** (§4). Fusion assigns
+   per-occurrence `position → loop_slot` by unifying occurrences over the
    producer→consumer slot connectivity, resolving conflicts by a recorded choice
    (any valid choice for now, §10). This is a **new first-class datum**, not
    label set-arithmetic.
-3. **Realize per-member loops in `build_ordered_schedule`.** Stop collapsing:
-   emit one loop per group member at its space-depth, assign `altitude_ordinal`
-   (a canonical numbering of the members), and realize `latitude` PROCON passes
-   as today. Build from **post-remat cells** so the numbering and map reflect the
-   real placement.
-4. **Color value-ids by the full `loop-id`** (§5.4).
-5. **The seam consumes per-occurrence `loop-id → position` maps.** With altitude
-   present, `mode_of` resolves each member directly; retire the consumer-arm
-   workaround where altitude now suffices.
+3. **Realize per-slot loops in `build_ordered_schedule`.** Stop collapsing: emit
+   one loop per `loop_slot` of the group, assign the **layout** — an
+   `altitude_ordinal` (a canonical nesting order of the slots) and the `latitude`
+   PROCON passes as today. Build from **post-remat cells** so the map and layout
+   reflect the real placement.
+4. **Color value-ids by `(depth, loop_slot)`** (§5.4) — the identity, not the
+   layout.
+5. **The seam consumes per-occurrence `(depth, loop_slot) → position` maps.** With
+   `loop_slot` present, `mode_of` resolves each member directly; retire the
+   consumer-arm workaround where `loop_slot` now suffices.
 
 Roles (`per_axis`, `classify_axis`) are **kept as-is** — measured correct
 per-instance (§1). This design changes *loop identity and the mode↔loop map*, not
@@ -281,10 +314,11 @@ role classification.
   occurrences carries per-occurrence transpositions (§4b), never a single
   per-value rank.
 - **Identity completeness.** Every realized loop has a distinct
-  `(depth, altitude_ordinal, latitude_ordinal)`; no two same-space group members
-  share a loop-id.
-- **Numbering freedom.** `altitude_ordinal` is a free canonical choice; the
-  schedule must be correct for *any* consistent numbering.
+  `(depth, loop_slot)`; no two same-space group members share it. (The two PROCON
+  passes of one slot deliberately share it — same slot, different layout.)
+- **Layout freedom.** `altitude_ordinal` is a free canonical choice; the schedule
+  must be correct for *any* consistent nesting order, and value-ids — keyed on
+  `(depth, loop_slot)` — must be invariant to it.
 
 ---
 
@@ -296,8 +330,8 @@ role classification.
   unbatched/aux-only reference.
 - Existing `[ordered-schedule]` unit tests stay green.
 - A schedule-level dump shows, for a two-member-group value, **two distinct
-  loop-ids** with distinct `altitude_ordinal`, and the per-occurrence map
-  reproduces the §4 transposition.
+  `(depth, loop_slot)` loops**, and the per-occurrence map reproduces the §4
+  transposition.
 
 ---
 
