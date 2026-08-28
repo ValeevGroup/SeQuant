@@ -4465,7 +4465,7 @@ TEST_CASE("batched cached intermediate is sliced to the batch block on use",
   // `.axis` / `.range`-driven path this test was written against.
   inner.set_batch_context(
       {{mode,
-        sequant::DagScopeLevel{1, std::wstring(mode.space().base_key()), 0},
+        sequant::DagScopeLevel{1, std::wstring(mode.space().base_key())},
         {blk_lo, blk_hi},
         mode}});
 

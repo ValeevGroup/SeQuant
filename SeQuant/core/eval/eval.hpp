@@ -739,7 +739,7 @@ ResultPtr evaluate_impl(Node const& node,         //
                 << " home_d=" << (d - hops) << " scope=[";
       for (std::size_t j = 0; j < d; ++j)
         std::cerr << toUtf8(std::wstring(ctx[j].axis.space().base_key()))
-                  << "@o" << ctx[j].level.ordinal
+                  << "@o" << ctx[j].level.latitude_ordinal
                   << (j < d - hops ? "(home) " : "(x) ");
       std::cerr << "] canon=[";
       for (auto const& ix : nd->canon_indices())
@@ -824,7 +824,7 @@ ResultPtr evaluate_impl(Node const& node,         //
         std::cerr << "  [HOME-SLICE] node#" << (nd->hash_value() % 100000u)
                   << " crossed-axis="
                   << toUtf8(std::wstring(ctx[i].axis.space().base_key()))
-                  << "@o" << ctx[i].level.ordinal
+                  << "@o" << ctx[i].level.latitude_ordinal
                   << " -> p_new=" << (p_new ? std::to_string(*p_new) : "none")
                   << " blk=[" << blk.first << "," << blk.second << ")"
                   << std::endl;
@@ -833,7 +833,7 @@ ResultPtr evaluate_impl(Node const& node,         //
         // no-op unless an observer is installed.
         if (auto const& obs = cache.slice_observer(); obs)
           obs(nd->hash_value(), cache.current_consumer(), *p_new,
-              ctx[i].level.ordinal);
+              ctx[i].level.latitude_ordinal);
         value = value->slice_mode(*p_new, blk.first, blk.second);
       }
     }
@@ -2210,8 +2210,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
     // (`exact_axis`, filled at each push site below), which Task 7 will
     // consult instead.
     auto const synth_level = [&cache](Index const& ax) -> DagScopeLevel {
-      return DagScopeLevel{cache.batch_context().size() + 1,
-                           std::wstring(ax.space().base_key()), 0};
+      return DagScopeLevel{.depth = cache.batch_context().size() + 1,
+                           .space = std::wstring(ax.space().base_key())};
     };
     // Mode selection is SLICEABILITY-AWARE and realizes the optimizer's
     // multi-mode nesting one mode per depth level. candidate_axes lists this

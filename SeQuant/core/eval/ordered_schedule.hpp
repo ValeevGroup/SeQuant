@@ -83,10 +83,12 @@ struct Step;        // fwd; see immediately below.
 /// that leave this block (and how) when it closes.
 ///
 struct ScopeBlock {
-  Index axis{};     //!< the loop axis; default (sentinel) on the root block.
-  int ordinal = 0;  //!< disambiguates recurring sibling blocks realizing the
-                    //!< same axis (e.g. two disjoint passes over the same
-                    //!< axis TYPE at one nesting level).
+  Index axis{};  //!< the loop axis; default (sentinel) on the root block.
+  int latitude_ordinal =
+      0;                  //!< layout: PROCON pass index (was: ordinal) --
+                          //!< disambiguates recurring sibling blocks
+                          //!< realizing the same axis (e.g. producer/consumer
+                          //!< passes over the same axis TYPE at one level).
   DagScopeLevel level{};  //!< this block's DAG-scope nest position (mirrors
                           //!< \c axis/\c ordinal; see \c DagScopeLevel's doc
                           //!< comment). Default-valued (depth 0, empty
@@ -200,7 +202,7 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
       auto const* cj = std::get_if<ScopeBlock>(&block.steps[j].value);
       if (!cj) continue;
       if (ci->axis.space().base_key() == cj->axis.space().base_key() &&
-          ci->ordinal == cj->ordinal)
+          ci->latitude_ordinal == cj->latitude_ordinal)
         return false;
     }
   }
@@ -733,7 +735,7 @@ inline ForkedSubchain fork_subchain(
       if (side_steps.empty()) return;  // no steps => no escape outputs either
       ScopeBlock fb;
       fb.axis = block.axis;
-      fb.ordinal = block.ordinal;
+      fb.latitude_ordinal = block.latitude_ordinal;
       fb.level = block.level;
       fb.kind = block.kind;
       fb.steps = std::move(side_steps);
@@ -1013,6 +1015,16 @@ forced_split_demotions(RichSchedule const& rich,
     return a.space().base_key() < b.space().base_key();
   });
 
+  // TEMP instrumentation (P1 Task 2 "before"): the realized loop chain is one
+  // representative per SPACE (the collapse). Guarded by SEQUANT_DUMP_SCHEDULE.
+  if (std::getenv("SEQUANT_DUMP_SCHEDULE")) {
+    std::wcerr << L"[sched] loop chain (one loop per space): ";
+    for (std::size_t d = 0; d < types.size(); ++d)
+      std::wcerr << L"d" << d << L"=" << types[d].space().base_key() << L"("
+                 << types[d].full_label() << L") ";
+    std::wcerr << L"\n";
+  }
+
   std::size_t const n = types.size();
   auto const depth_of_type =
       [&](Index const& ix) -> std::optional<std::size_t> {
@@ -1065,6 +1077,46 @@ forced_split_demotions(RichSchedule const& rich,
         escapes.push_back({*d, kind});
       else if (kind == OutputKind::AccumulateScatter)
         it->second = OutputKind::AccumulateScatter;
+    }
+
+    // TEMP instrumentation (P1 Task 2 "before"): a value with >1 non-local mode
+    // of ONE space (a doubles amplitude / PPL product carrying two occ
+    // externals) has its distinct per-instance escapes COLLAPSED to fewer
+    // escapes (one per depth == one per space). Dump those cells to expose the
+    // collapse. Guarded by SEQUANT_DUMP_SCHEDULE.
+    if (std::getenv("SEQUANT_DUMP_SCHEDULE")) {
+      container::svector<Index> nonlocal;
+      for (AxisClass const& ac : cl.per_axis)
+        if (ac.role != LoopRole::LoopLocal) nonlocal.push_back(ac.axis);
+      bool collapse = false;
+      for (std::size_t a = 0; a < nonlocal.size() && !collapse; ++a)
+        for (std::size_t b = a + 1; b < nonlocal.size(); ++b)
+          if (nonlocal[a].space().base_key() ==
+              nonlocal[b].space().base_key()) {
+            collapse = true;
+            break;
+          }
+      if (collapse) {
+        std::wcerr << L"[sched-collapse] hash=" << cl.hash << L" nonlocal={";
+        for (Index const& ix : nonlocal)
+          std::wcerr << ix.full_label() << L":"
+                     << (std::find_if(
+                             cl.per_axis.begin(), cl.per_axis.end(),
+                             [&](AxisClass const& ac) {
+                               return ac.axis == ix;
+                             })->role == LoopRole::Reduction
+                             ? L"R"
+                             : L"C")
+                     << L" ";
+        std::wcerr << L"} -> " << nonlocal.size() << L" modes COLLAPSE to "
+                   << escapes.size() << L" escapes(depth:kind)={";
+        for (auto const& [d, k] : escapes)
+          std::wcerr << d << L":"
+                     << (k == OutputKind::AccumulateScatter ? L"Scatter"
+                                                            : L"Sum")
+                     << L" ";
+        std::wcerr << L"}\n";
+      }
     }
 
     if (!escapes.empty()) {
@@ -1186,7 +1238,7 @@ forced_split_demotions(RichSchedule const& rich,
     return k == std::numeric_limits<std::size_t>::max() ? std::size_t{0} : k;
   };
   auto const make_block =
-      [&](Index const& axis, int ordinal, std::size_t depth,
+      [&](Index const& axis, int latitude_ordinal, std::size_t depth,
           container::svector<std::size_t> const& build_ids,
           container::svector<std::pair<std::size_t, OutputKind>> const& outputs,
           container::vector<Step>&& child_steps,
@@ -1208,9 +1260,10 @@ forced_split_demotions(RichSchedule const& rich,
     }
     ScopeBlock block;
     block.axis = axis;
-    block.ordinal = ordinal;
-    block.level =
-        DagScopeLevel{depth, std::wstring{axis.space().base_key()}, ordinal};
+    block.latitude_ordinal = latitude_ordinal;
+    block.level = DagScopeLevel{.depth = depth,
+                                .space = std::wstring{axis.space().base_key()},
+                                .latitude_ordinal = latitude_ordinal};
     block.kind = detail::mode_is_external(rich, axis)
                      ? BatchModeType::External
                      : BatchModeType::Contracted;
@@ -1315,7 +1368,8 @@ forced_split_demotions(RichSchedule const& rich,
       };
 
       auto const emit_pass =
-          [&](int ordinal, container::svector<std::size_t> const& builds,
+          [&](int latitude_ordinal,
+              container::svector<std::size_t> const& builds,
               container::svector<std::pair<std::size_t, OutputKind>> const&
                   outs,
               container::vector<Step>&& child_steps,
@@ -1330,7 +1384,7 @@ forced_split_demotions(RichSchedule const& rich,
                 collect_rec(std::get<ScopeBlock>(s.value), pass_produced);
             }
             next_steps.push_back(Step{
-                make_block(types[d], ordinal, d + 1, builds, outs,
+                make_block(types[d], latitude_ordinal, d + 1, builds, outs,
                            std::move(child_steps), std::move(child_metas))});
             detail::OrderedScheduleStepMeta m;
             for (auto const& o : outs) m.produced.push_back(o.first);
@@ -1523,17 +1577,18 @@ inline void populate_build_scope_walk(
 /// fixture.
 inline void assert_global_level_axis_uniqueness(
     ScopeBlock const& block,
-    std::map<std::tuple<std::size_t, std::wstring, int>, Index>& seen) {
+    std::map<std::tuple<std::size_t, std::wstring, int, int>, Index>& seen) {
   for (Step const& step : block.steps) {
     auto const* child = std::get_if<ScopeBlock>(&step.value);
     if (!child) continue;
-    auto const key = std::make_tuple(child->level.depth, child->level.space,
-                                     child->level.ordinal);
+    auto const key =
+        std::make_tuple(child->level.depth, child->level.space,
+                        child->level.loop_slot, child->level.latitude_ordinal);
     auto const [it, inserted] = seen.try_emplace(key, child->axis);
     SEQUANT_ASSERT(
         (inserted || it->second == child->axis) &&
         "assert_global_level_axis_uniqueness: two blocks at the same "
-        "DAG-scope level (depth, space, ordinal) realize DIFFERENT "
+        "DAG-scope level (depth, space, loop_slot, latitude) realize DIFFERENT "
         "representative axes -- the canonical level enumeration assumes "
         "this triple names one axis globally, not just among a block's own "
         "direct siblings");
@@ -1682,20 +1737,22 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   // Debug safety net: the global (depth, space, ordinal) -> axis uniqueness
   // this construction (and the canonical level enumeration below) relies on.
   {
-    std::map<std::tuple<std::size_t, std::wstring, int>, Index> seen;
+    std::map<std::tuple<std::size_t, std::wstring, int, int>, Index> seen;
     detail::assert_global_level_axis_uniqueness(ordered.root, seen);
   }
 
   SlicedModeAssignment result;
   detail::enumerate_realized_levels(ordered.root, result.levels);
 
-  std::map<std::tuple<std::size_t, std::wstring, int>, LoopId> level_id;
+  std::map<std::tuple<std::size_t, std::wstring, int, int>, LoopId> level_id;
   for (std::size_t i = 0; i < result.levels.size(); ++i) {
     DagScopeLevel const& L = result.levels[i];
-    level_id.emplace(std::make_tuple(L.depth, L.space, L.ordinal), i);
+    level_id.emplace(
+        std::make_tuple(L.depth, L.space, L.loop_slot, L.latitude_ordinal), i);
   }
   auto const id_of = [&](DagScopeLevel const& L) -> LoopId {
-    auto const it = level_id.find(std::make_tuple(L.depth, L.space, L.ordinal));
+    auto const it = level_id.find(
+        std::make_tuple(L.depth, L.space, L.loop_slot, L.latitude_ordinal));
     SEQUANT_ASSERT(it != level_id.end());
     return it->second;
   };

@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
 #include <functional>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -434,6 +436,42 @@ template <meta::eval_node_range R>
         // unbroken pass around this value.
         if (ac.role == LoopRole::LoopCarried)
           cl.forced_split_axes.push_back(ac.axis);
+      }
+
+      // TEMP instrumentation (Task 1): dump the per-instance role source so we
+      // can confirm on the w8 forced-occ repro (a) whether external-occ batched
+      // modes appear in sliced_modes()/site at all, and (b) the role each
+      // build-site instance gets. Guarded by SEQUANT_DUMP_PER_AXIS (off by
+      // default); remove before shipping.
+      if (std::getenv("SEQUANT_DUMP_PER_AXIS")) {
+        auto const role_ch = [](LoopRole r) -> char {
+          switch (r) {
+            case LoopRole::LoopLocal:
+              return 'L';
+            case LoopRole::Reduction:
+              return 'R';
+            case LoopRole::LoopCarried:
+              return 'C';
+            case LoopRole::LoopInvariant:
+              return 'I';
+          }
+          return '?';
+        };
+        std::wcerr << L"[per_axis] hash=" << vc.hash << L" carried={";
+        for (Index const& ix : vc.carried)
+          std::wcerr << ix.full_label() << L" ";
+        std::wcerr << L"} sliced_modes={";
+        for (Index const& ix : dp_sliced) std::wcerr << ix.full_label() << L" ";
+        std::wcerr << L"} node_slice_mask={";
+        for (auto const& p : dp_stamps)
+          std::wcerr << p.first.full_label() << L":"
+                     << (p.second == BatchModeType::Contracted ? L"C" : L"E")
+                     << L" ";
+        std::wcerr << L"} per_axis={";
+        for (AxisClass const& ac : cl.per_axis)
+          std::wcerr << ac.axis.full_label() << L":" << role_ch(ac.role)
+                     << L" ";
+        std::wcerr << L"}\n";
       }
 
       cl.build_site = std::move(site);

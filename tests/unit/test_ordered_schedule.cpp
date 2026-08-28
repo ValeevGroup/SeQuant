@@ -69,7 +69,7 @@ TEST_CASE(
   // single-producer invariant below correctly rejects.
   ScopeBlock child;
   child.axis = i1;
-  child.ordinal = 0;
+  child.latitude_ordinal = 0;
   child.steps.push_back(Step{BuildStep{1}});
   child.outputs.push_back({2, OutputKind::AccumulateSum});
 
@@ -96,7 +96,7 @@ TEST_CASE("fork_subchain forks an inner sub-chain by consumer-pass membership",
   // likewise straddle it (3 producer, 4 consumer), then BuildStep{5}.
   ScopeBlock inner;
   inner.axis = ax;
-  inner.ordinal = 0;
+  inner.latitude_ordinal = 0;
   inner.kind = sequant::BatchModeType::Contracted;
   inner.steps.push_back(Step{BuildStep{1}});
   inner.steps.push_back(Step{BuildStep{2}});
@@ -125,7 +125,7 @@ TEST_CASE("fork_subchain forks an inner sub-chain by consumer-pass membership",
   CHECK(build_id(forked.producer[0]) == 0);
   auto const& p_loop = std::get<ScopeBlock>(forked.producer[1].value);
   CHECK(p_loop.axis == ax);
-  CHECK(p_loop.ordinal == 0);
+  CHECK(p_loop.latitude_ordinal == 0);
   REQUIRE(p_loop.steps.size() == 1);
   CHECK(build_id(p_loop.steps[0]) == 1);
   REQUIRE(p_loop.outputs.size() == 1);
@@ -185,13 +185,13 @@ TEST_CASE("well_formed accepts a nested multi-level escape chain",
   // accumulator), then AccumulateScatter on the outer block's close (-> full).
   ScopeBlock inner_block;
   inner_block.axis = inner;
-  inner_block.ordinal = 0;
+  inner_block.latitude_ordinal = 0;
   inner_block.steps.push_back(Step{BuildStep{1}});  // per-iteration partial
   inner_block.outputs.push_back({2, OutputKind::AccumulateSum});
 
   ScopeBlock outer_block;
   outer_block.axis = outer;
-  outer_block.ordinal = 0;
+  outer_block.latitude_ordinal = 0;
   outer_block.steps.push_back(Step{std::move(inner_block)});
   outer_block.outputs.push_back({2, OutputKind::AccumulateScatter});
 
@@ -210,13 +210,13 @@ TEST_CASE("well_formed rejects the same escape in two sibling blocks",
 
   ScopeBlock a;
   a.axis = ax;
-  a.ordinal = 0;
+  a.latitude_ordinal = 0;
   a.steps.push_back(Step{BuildStep{1}});
   a.outputs.push_back({2, OutputKind::AccumulateSum});
 
   ScopeBlock b;
   b.axis = ax;
-  b.ordinal =
+  b.latitude_ordinal =
       1;  // distinct ordinal: passes the same-axis-sibling ordinal check
   b.steps.push_back(Step{BuildStep{3}});
   b.outputs.push_back({2, OutputKind::AccumulateScatter});  // same value_id 2
@@ -246,12 +246,13 @@ TEST_CASE(
 
   ScopeBlock child_a;
   child_a.axis = i1;
-  child_a.ordinal = 0;
+  child_a.latitude_ordinal = 0;
   child_a.steps.push_back(Step{BuildStep{0}});
 
   ScopeBlock child_b;
   child_b.axis = i2;
-  child_b.ordinal = 0;  // duplicate ordinal at the same axis TYPE as child_a
+  child_b.latitude_ordinal =
+      0;  // duplicate ordinal at the same axis TYPE as child_a
   child_b.steps.push_back(Step{BuildStep{1}});
 
   OrderedSchedule sched;
@@ -814,14 +815,15 @@ TEST_CASE(
     if (auto const* c = std::get_if<ScopeBlock>(&step.value))
       if (c->axis.space().base_key() == L"i") occ_blocks.push_back(c);
   REQUIRE(occ_blocks.size() == 2);
-  std::vector<int> ordinals{occ_blocks[0]->ordinal, occ_blocks[1]->ordinal};
+  std::vector<int> ordinals{occ_blocks[0]->latitude_ordinal,
+                            occ_blocks[1]->latitude_ordinal};
   std::sort(ordinals.begin(), ordinals.end());
   CHECK(ordinals == std::vector<int>{0, 1});
 
   ScopeBlock const* producer = nullptr;
   ScopeBlock const* consumer = nullptr;
   for (auto const* blk : occ_blocks)
-    (blk->ordinal == 0 ? producer : consumer) = blk;
+    (blk->latitude_ordinal == 0 ? producer : consumer) = blk;
   REQUIRE(producer != nullptr);
   REQUIRE(consumer != nullptr);
 
@@ -859,7 +861,7 @@ TEST_CASE(
   for (std::size_t i = 0; i < sched.root.steps.size(); ++i)
     if (auto const* c = std::get_if<ScopeBlock>(&sched.root.steps[i].value))
       if (c->axis.space().base_key() == L"i")
-        (c->ordinal == 0 ? prod_pos : cons_pos) = i;
+        (c->latitude_ordinal == 0 ? prod_pos : cons_pos) = i;
   REQUIRE(prod_pos.has_value());
   REQUIRE(cons_pos.has_value());
   CHECK(*prod_pos < *cons_pos);
@@ -1048,7 +1050,7 @@ void orderedsched_check_levels(
     auto const* block = std::get_if<ScopeBlock>(&step.value);
     if (!block) continue;
     CHECK(block->level.space == block->axis.space().base_key());
-    CHECK(block->level.ordinal == block->ordinal);
+    CHECK(block->level.latitude_ordinal == block->latitude_ordinal);
     CHECK(block->level.depth == depth);
     orderedsched_check_levels(block->steps, depth + 1);
   }
@@ -1474,7 +1476,8 @@ TEST_CASE(
       if (auto const* c = std::get_if<ScopeBlock>(&step.value))
         if (c->axis.space().base_key() == L"i") occ_blocks.push_back(c);
     REQUIRE(occ_blocks.size() == 2);
-    std::vector<int> ordinals{occ_blocks[0]->ordinal, occ_blocks[1]->ordinal};
+    std::vector<int> ordinals{occ_blocks[0]->latitude_ordinal,
+                              occ_blocks[1]->latitude_ordinal};
     std::sort(ordinals.begin(), ordinals.end());
     CHECK(ordinals == std::vector<int>{0, 1});
 
@@ -1541,7 +1544,8 @@ TEST_CASE(
     if (auto const* c = std::get_if<ScopeBlock>(&step.value))
       root_children.push_back(c);
   REQUIRE(root_children.size() == 2);  // the split producer/consumer siblings
-  CHECK(root_children[0]->ordinal != root_children[1]->ordinal);
+  CHECK(root_children[0]->latitude_ordinal !=
+        root_children[1]->latitude_ordinal);
   CHECK(root_children[0]->axis.space().base_key() ==
         root_children[1]->axis.space().base_key());  // same axis TYPE ("i")
 

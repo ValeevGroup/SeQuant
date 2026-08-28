@@ -21,24 +21,58 @@ namespace sequant {
 ///        in the schedule machinery.
 using LoopId = std::size_t;
 
-/// \brief A DAG-scope loop's nest position, the value a \c ModeToLevel map
-///        keys by mode to answer "which loop (if any) does mode m of this
-///        node's result run under".
+/// \brief The STABLE identity of a batch loop: which loop-GROUP (\c depth) and
+///        which member-SLOT within that group (\c loop_slot).
 ///
-/// \details Mirrors \c ScopeBlock{axis.space, ordinal}: \c depth is the
-/// nest position (outer loops have smaller \c depth), \c space is the
-/// base_key of the space the loop iterates over (kept for diagnostics only,
-/// not part of loop identity beyond what \c ordinal disambiguates), and
-/// \c ordinal disambiguates sibling loops over the same space at the same
-/// depth.
+/// \details The seam, value-id / occurrence-id coloring, and the per-occurrence
+/// mode<->loop atlas all key on this identity; the layout (\c altitude_ordinal
+/// /
+/// \c latitude_ordinal on \c DagScopeLevel) never enters it. \c depth
+/// distinguishes even two groups of the SAME space (an "external" and a
+/// "contracted" group of one space); \c loop_slot distinguishes the members of
+/// one group. See doc/dev/specs/2026-08-28-batched-dag-loop-identity-design.md.
+struct LoopKey {
+  std::size_t depth;  //!< which loop-group
+  int loop_slot;      //!< which member-slot within the group (0-based)
+
+  friend bool operator==(LoopKey const& a, LoopKey const& b) {
+    return a.depth == b.depth && a.loop_slot == b.loop_slot;
+  }
+  friend bool operator!=(LoopKey const& a, LoopKey const& b) {
+    return !(a == b);
+  }
+};
+
+/// \brief A batch loop's realized placement: its identity (\c depth, \c
+///        loop_slot) plus its LAYOUT (\c altitude_ordinal, \c
+///        latitude_ordinal).
+///
+/// \details Identity coordinates (\c depth, \c loop_slot) name the loop; layout
+/// coordinates say where a schedule placed it. \c altitude_ordinal is the
+/// nesting rank the schedule assigned the slot within its group
+/// (free/interchangeable);
+/// \c latitude_ordinal is the legality producer/consumer (PROCON) pass index
+/// (formerly \c ordinal). \c space is a color for fusion group-matching, never
+/// identity. See doc/dev/specs/2026-08-28-batched-dag-loop-identity-design.md.
 struct DagScopeLevel {
-  std::size_t depth;
-  std::wstring space;
-  int ordinal;
+  std::size_t depth;   //!< which loop-group (identity)
+  std::wstring space;  //!< color only, NOT identity
+  int loop_slot = 0;   //!< which member-slot within the group (identity)
+  int altitude_ordinal =
+      0;  //!< layout: nesting rank of the slot within its group
+  int latitude_ordinal = 0;  //!< layout: PROCON pass index (was: ordinal)
+
+  [[nodiscard]] LoopKey key() const { return LoopKey{depth, loop_slot}; }
 
   friend bool operator==(DagScopeLevel const& lhs, DagScopeLevel const& rhs) {
+    // Task 1 (vocabulary landing): full-tuple comparison keeps behavior
+    // byte-identical (loop_slot == altitude_ordinal == 0 until Task 3; passes
+    // stay distinct via latitude_ordinal until Task 6). Identity migrates to
+    // key() in later tasks.
     return lhs.depth == rhs.depth && lhs.space == rhs.space &&
-           lhs.ordinal == rhs.ordinal;
+           lhs.loop_slot == rhs.loop_slot &&
+           lhs.altitude_ordinal == rhs.altitude_ordinal &&
+           lhs.latitude_ordinal == rhs.latitude_ordinal;
   }
 
   friend bool operator!=(DagScopeLevel const& lhs, DagScopeLevel const& rhs) {

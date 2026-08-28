@@ -138,7 +138,7 @@ BatchContextEntry remat_test_ctx_entry(Index const& ax, std::size_t lo,
                                        std::size_t hi, std::size_t depth) {
   return BatchContextEntry{
       ax,
-      DagScopeLevel{depth, std::wstring(ax.space().base_key()), 0},
+      DagScopeLevel{depth, std::wstring(ax.space().base_key())},
       {lo, hi},
       ax};
 }

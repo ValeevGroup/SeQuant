@@ -162,8 +162,8 @@ template <Trace EvalTrace, meta::eval_node node_t, typename F, bool FHC,
   // the whole-scope evaluator's OLD resolution is exact-axis (`exact_axis`,
   // filled at each push site below), which Task 7 will consult instead.
   auto const synth_level = [&ectx](Index const& ax) -> DagScopeLevel {
-    return DagScopeLevel{ectx.size() + 1, std::wstring(ax.space().base_key()),
-                         0};
+    return DagScopeLevel{.depth = ectx.size() + 1,
+                         .space = std::wstring(ax.space().base_key())};
   };
 
   container::svector<ResultPtr> out(members.size());
