@@ -62,6 +62,9 @@ function(target_set_warning_flags TARGET)
 endfunction()
 
 
+include(CheckIPOSupported)
+
+check_ipo_supported(RESULT SEQUANT_CAN_RELY_ON_CMAKE_LTO LANGUAGES CXX)
 
 function(target_set_optimization_flags TARGET)
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -76,9 +79,6 @@ function(target_set_optimization_flags TARGET)
 	endif()
 
 	include(CheckCXXCompilerFlag)
-	include(CheckIPOSupported)
-
-	check_ipo_supported(RESULT CMAKE_SUPPORTS_COMPILER_LTO LANGUAGES CXX)
 
 	set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 	check_cxx_compiler_flag("-flto" SEQUANT_LTO_FLAG_SUPPORTED)
@@ -93,7 +93,7 @@ function(target_set_optimization_flags TARGET)
 		# "fat" object files. Those can still be linked without LTO and hence shouldn't
 		# break any downstream use.
 		set(ENABLE_LTO ${SEQUANT_FAT_LTO_FLAG_SUPPORTED})
-	elseif(SEQUANT_LTO_FLAG_SUPPORTED OR CMAKE_SUPPORTS_COMPILER_LTO)
+	elseif(SEQUANT_LTO_FLAG_SUPPORTED OR SEQUANT_CAN_RELY_ON_CMAKE_LTO)
 		# Anything but static/object libraries is also linked by us and
 		# hence enabling LTO doesn't affect downstream compatibility
 		set(ENABLE_LTO ON)
@@ -119,6 +119,9 @@ function(target_set_optimization_flags TARGET)
 				target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
 			endif()
 		else()
+			if (NOT SEQUANT_CAN_RELY_ON_CMAKE_LTO)
+				message(FATAL_ERROR "Requested LTO but CMake doesn't know how to enable it for your compiler - Use SEQUANT_LTO=OFF")
+			endif()
 			set_target_properties("${TARGET}" PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
 		endif()
 	endif()
