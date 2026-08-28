@@ -309,6 +309,27 @@ container::svector<KramersBlock> kramers_external_blocks(
     bool use_T,
     const container::svector<container::svector<std::size_t>>& symm_perms = {});
 
+/// How closed_shell_kramers_CC_trace handles the residual's antisymmetrizer Â.
+enum class KramersAExpansion {
+  /// expand Â into all its signed external permutations (normalized
+  /// 1/(bra!ket!)): every emitted block is the fully antisymmetrized residual
+  /// and the external configs fold under the swap generators + T (doubles:
+  /// 5 blocks)
+  full,
+  /// strip Â: the emitted blocks are the bare residual configs, the caller
+  /// antisymmetrizes numerically ACROSS configs, and the configs fold under T
+  /// only (doubles: 8 blocks with use_T, 16 without)
+  none,
+  /// per representative block expand Â only over the external groups whose
+  /// members carry DIFFERENT Kramers flavours (the swaps that change the
+  /// config); a group whose members share one flavour is left to the caller,
+  /// which antisymmetrizes it numerically WITHIN the block (ket group =
+  /// occupied pair, bra group = virtual pair). Exact, same 5-orbit structure
+  /// as full, ~half the terms in the blocks with a same-flavour group. Rank 2
+  /// groups only (rank > 2 groups are expanded fully).
+  partial
+};
+
 // clang-format off
 /// @brief CC residual Kramers trace — external fold (stages 1-2).
 /// @details Given a CC residual expression carrying a leading antisymmetrizer Â
@@ -342,19 +363,14 @@ container::svector<KramersBlock> kramers_external_blocks(
 ///        carries a Fock element between opposite Kramers partners (see
 ///        drop_mixed_kramers_fock_terms). Default false: the reduction is a
 ///        property of the REFERENCE, not of the algebra, so callers opt in.
-/// @param expand_A if true (default) expand the antisymmetrizer Â into its
-///        explicit signed external permutations, so every emitted block is the
-///        fully antisymmetrized residual (external configs then fold under the
-///        external swap generators + T). If false, Â is REMOVED instead: the
-///        emitted blocks are the bare (un-antisymmetrized) residual configs,
-///        the
-///        caller applies Â numerically across configs, and — since the bare
-///        blocks carry no external antisymmetry — the configs fold only under T
-///        (doubles -> 8 blocks with use_T, 16 without) and each block carries
-///        ~bra!ket! fewer terms.
+/// @param a_expansion how the residual's antisymmetrizer Â is handled, see
+///        KramersAExpansion. Default: full (every emitted block is the
+///        antisymmetrized residual; external configs fold under the swap
+///        generators + T).
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(
     const ExprPtr& expr, bool expand_g = false, bool use_T = true,
-    bool drop_mixed_kramers_fock = false, bool expand_A = true);
+    bool drop_mixed_kramers_fock = false,
+    KramersAExpansion a_expansion = KramersAExpansion::full);
 
 // clang-format off
 /// @brief Drop every term containing a Fock (`f`) element between opposite

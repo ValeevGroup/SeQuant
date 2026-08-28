@@ -365,9 +365,56 @@ ExprPtr drop_mixed_kramers_fock_terms(const ExprPtr& expr) {
   return expr;
 }
 
+namespace {
+
+/// Rewrites every antisymmetrizer Â of @p expr so that it only carries the
+/// selected external group(s): keep_bra/keep_ket select Â's bra (virtual) /
+/// ket (occupied) group. Both kept -> unchanged; neither -> Â removed; one ->
+/// Â' with that group as its bra and an empty ket, so that expand_A_op expands
+/// (and normalizes by 1/r!) exactly that group. Sums are mapped summand-wise.
+ExprPtr restrict_antisymmetrizer(const ExprPtr& expr, bool keep_bra,
+                                 bool keep_ket) {
+  if (keep_bra && keep_ket) return expr;
+  if (!keep_bra && !keep_ket)
+    return remove_tensor(expr, reserved::antisymm_label());
+  if (expr->is<Sum>()) {
+    auto out = std::make_shared<Sum>();
+    for (const auto& s : *expr)
+      out->append(restrict_antisymmetrizer(s, keep_bra, keep_ket));
+    return out;
+  }
+  if (expr->is<Product>()) {
+    const auto& product = expr->as<Product>();
+    auto out = std::make_shared<Product>();
+    out->scale(product.scalar());
+    for (const auto& f : product) {
+      if (f->is<Tensor>() &&
+          f->as<Tensor>().label() == reserved::antisymm_label()) {
+        const auto& A = f->as<Tensor>();
+        container::svector<Index> sel;
+        if (keep_bra)
+          for (const auto& idx : A.bra()) sel.push_back(idx);
+        else
+          for (const auto& idx : A.ket()) sel.push_back(idx);
+        out->append(1,
+                    ex<Tensor>(A.label(), bra(std::move(sel)),
+                               ket(container::svector<Index>{}), A.aux(),
+                               A.symmetry(), A.braket_symmetry()),
+                    Product::Flatten::No);
+      } else {
+        out->append(1, f, Product::Flatten::No);
+      }
+    }
+    return out;
+  }
+  return expr;
+}
+
+}  // namespace
+
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(
     const ExprPtr& expr, bool expand_g, bool use_T,
-    bool drop_mixed_kramers_fock, bool expand_A) {
+    bool drop_mixed_kramers_fock, KramersAExpansion a_expansion) {
   // Stage 1: factor out the antisymmetrizer Â (kept, not expanded). Its bra/ket
   // are the external virtual/occupied index groups.
   auto A = find_antisymmetrizer(expr);
@@ -391,7 +438,7 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   // Without the A-expansion the bare blocks are not antisymmetric in their
   // external groups, so the external swap generators are not symmetries of
   // the emitted blocks: fold under T only (see expand_A in the header).
-  const auto gens = expand_A
+  const auto gens = a_expansion != KramersAExpansion::none
                         ? kramers_external_generators(n_bra)
                         : container::svector<container::svector<std::size_t>>{};
   const auto orbits = kramers_config_orbits(n, gens, use_T);
@@ -409,10 +456,20 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   // cancelling expand_A_op's 1/(bra!ket!) normalization.
   // expand_A: Â -> its signed external permutations (normalized 1/(bra!ket!));
   // otherwise strip Â and leave the antisymmetrization to the caller.
-  ExprPtr inner = expand_A ? expand_A_op(expr)
-                           : remove_tensor(expr, reserved::antisymm_label());
-  expand(inner);
-  rapid_simplify(inner);
+  // prepare: Â handling (full/none once here; partial per representative in
+  // the orbit loop), then the optional g expansion described below
+  auto prepare = [&](const ExprPtr& e) {
+    ExprPtr r = e;
+    expand(r);
+    rapid_simplify(r);
+    if (expand_g) r = expand_label_antisymm(r, L"g");
+    return r;
+  };
+  ExprPtr inner_common;
+  if (a_expansion == KramersAExpansion::full)
+    inner_common = prepare(expand_A_op(expr));
+  else if (a_expansion == KramersAExpansion::none)
+    inner_common = prepare(remove_tensor(expr, reserved::antisymm_label()));
 
   // Optional g-expansion (AFTER A-expand, while still Kramers-FREE so
   // expand_antisymm's Ms-conserving guard keeps every permutation): replace
@@ -420,9 +477,6 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   // cross- Kramers swap for any mixed-Kramers pair (INTERNAL pairs included),
   // so the [as] form is wrong there; raw-g leaves are each a correct direct
   // ⟨..|..⟩ fetch and the antisymmetrization becomes explicit config terms.
-  if (expand_g) {
-    inner = expand_label_antisymm(inner, L"g");
-  }
 
   // Emit one block per external representative.
   container::svector<ExprPtr> blocks;
@@ -467,6 +521,22 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   };
   for (const auto& orbit : orbits) {
     const std::uint64_t cfg = orbit.front();  // canonical (orbit-min)
+
+    ExprPtr inner = inner_common;
+    if (a_expansion == KramersAExpansion::partial) {
+      // expand Â only over the groups whose members carry different flavours
+      // in this representative; same-flavour groups are the caller's
+      // (within-block numerical antisymmetrization). Rank > 2 groups: full.
+      auto mixed = [&](std::size_t lo, std::size_t hi) {
+        if (hi - lo > 2) return true;
+        bool up = false, down = false;
+        for (std::size_t k = lo; k < hi; ++k)
+          ((cfg >> k) & 1u ? down : up) = true;
+        return up && down;
+      };
+      inner = prepare(expand_A_op(restrict_antisymmetrizer(
+          expr, /*keep_bra=*/mixed(0, n_bra), /*keep_ket=*/mixed(n_bra, n))));
+    }
 
     // Stage 2a: label the external indices for this block.
     container::map<Index, Index> ext_repl;
