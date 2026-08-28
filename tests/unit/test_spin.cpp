@@ -47,9 +47,6 @@ TEST_CASE("spin", "[spin]") {
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
 
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
-
   auto reset_idx_tags = [](ExprPtr& expr) {
     if (expr->is<AbstractTensor>())
       ranges::for_each(expr->as<AbstractTensor>()._slots(),

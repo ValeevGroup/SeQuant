@@ -164,8 +164,6 @@ int main(int argc, char* argv[]) {
                         .vacuum = Vacuum::SingleProduct}));
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print stats
   Logger::instance().wick_stats = false;

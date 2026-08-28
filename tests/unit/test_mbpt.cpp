@@ -1004,8 +1004,6 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     using namespace sequant::mbpt;
     namespace o = sequant::mbpt::op;
     namespace t = sequant::mbpt::tensor;
-    TensorCanonicalizer::register_instance(
-        std::make_shared<DefaultTensorCanonicalizer>());
 
     SECTION("SRSO"){
         // H**T12**T12 -> R2
