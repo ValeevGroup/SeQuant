@@ -13,7 +13,6 @@ endif()
 pybind11_add_module(python-sequant MODULE src/sequant/_sequant.cc)
 
 target_link_libraries(python-sequant PRIVATE SeQuant)
-target_set_optimization_flags(python-sequant)
 target_include_directories(python-sequant PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set_target_properties(
