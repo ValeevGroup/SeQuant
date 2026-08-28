@@ -232,18 +232,27 @@ group membership. Remat does **not** need the layout: it distinguishes values
 homed on different slots by `(depth, loop_slot)` (available from fusion), which
 suffices for the peak sweep's distinctness requirement.
 
-### 5.4 Value-id coloring
+### 5.4 Value-id and occurrence-id
 
-A value is cache-/remat-keyed by **sliced-mode-id = space + `(depth, loop_slot)`**
-for each of its home-sliced modes (`CachedValue{node, coloring}`, `value_id.hpp`).
-The coloring keys on the **identity** `(depth, loop_slot)` — **never** on the
-layout (`altitude_ordinal`/`latitude_ordinal`) — so it is invariant under the free
-nesting order and computable by remat before any layout exists. Today it keys by
-**`depth` only** (`value_id.hpp:42`, `colors.emplace(m, depth)`), and
-`home_mode_depth` stores `pair<Index,int depth>` — with no `loop_slot`, so two
-values homed on different slots of one group are colored identically. Keying by
-`(depth, loop_slot)` makes storage (producer frame) and lookup (consumer loop)
-agree on one identity.
+Both are cache/remat/router keys formed by coloring **sliced modes** by
+**`space + (depth, loop_slot)`** — the loop **identity**, **never** the layout
+(`altitude_ordinal`/`latitude_ordinal`). Keying on identity makes them invariant
+under the free nesting order and computable by remat before any layout exists.
+
+- **value-id** — colors the value's **home-sliced** modes (the modes sliced
+  inside a loop as part of the value's *own build*). It distinguishes two values
+  of one node that home on different slots (`CachedValue{node, coloring}`,
+  `value_id.hpp`).
+- **occurrence-id** — colors **all** modes sliced *at an occurrence* (a use): the
+  value's home-sliced modes **plus** the use-induced modes sliced on fetch when
+  the value is pulled into deeper enclosing loops. It distinguishes uses that
+  slice different loop sets (`occurrence_key`).
+
+Today the coloring keys by **`depth` only** (`value_id.hpp:42`,
+`colors.emplace(m, depth)`), and `home_mode_depth` stores `pair<Index,int depth>`
+— no `loop_slot`. So two values/occurrences slicing different slots of one group
+are colored identically. Keying by `space + (depth, loop_slot)` makes storage
+(producer frame) and lookup (consumer loop) agree on one identity.
 
 ---
 
