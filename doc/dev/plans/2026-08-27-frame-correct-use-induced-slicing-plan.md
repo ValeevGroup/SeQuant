@@ -1,5 +1,11 @@
 # Frame-correct use-induced sliced-mode map — implementation plan
 
+> **SUPERSEDED (2026-08-28).** Built on the withdrawn
+> `2026-08-27-…-design.md`, which conflated `ordinal`. A fresh plan will be
+> written from `2026-08-28-batched-dag-loop-identity-design.md`. Task 1 of this
+> plan (role source verified; `classify_axis` used as-is) still holds and carries
+> forward. Do not implement from this file.
+
 **Goal:** Make the ordered DAG evaluator's "which loop slices which mode of a
 value occurrence" map frame-correct and per-instance, so aux+occ (external-occ)
 CCSD wet evaluation runs crash-free and lossless (aux-only already works).

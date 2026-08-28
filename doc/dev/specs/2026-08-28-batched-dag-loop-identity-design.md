@@ -232,6 +232,11 @@ group membership. Remat does **not** need the layout: it distinguishes values
 homed on different slots by `(depth, loop_slot)` (available from fusion), which
 suffices for the peak sweep's distinctness requirement.
 
+`loop_slot` **stays fixed** across remat. When remat "breaks a group into
+subgroups/singletons" that is a **placement** decision — a value is homed in only
+*some* of its group's slots — not a relabeling of slots; each slot keeps the
+`loop_slot` identity fusion gave it.
+
 ### 5.4 Value-id and occurrence-id
 
 Both are cache/remat/router keys formed by coloring **sliced modes** by
