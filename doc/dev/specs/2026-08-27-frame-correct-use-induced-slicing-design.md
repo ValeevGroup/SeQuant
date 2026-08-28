@@ -1,6 +1,14 @@
 # Frame-correct use-induced sliced-mode map for the ordered DAG evaluator
 
-**Status:** design draft — 2026-08-27
+> **SUPERSEDED (2026-08-28)** by
+> `2026-08-28-batched-dag-loop-identity-design.md`. This draft conflated
+> `ordinal`: it reasoned about it as the within-group member selector (which is
+> actually **altitude**), while the code's `ordinal` is the PROCON pass index
+> (**latitude**). Its measured findings (§1a/§1b w20 trace, w8 losslessness,
+> per-instance role verification) are carried into §1 of the superseding spec.
+> Kept for history; do not implement from this.
+
+**Status:** SUPERSEDED — 2026-08-27
 **Area:** `SeQuant/core/eval` — `compute_sliced_mode_assignment`, `build_ordered_schedule`, `placement_remat`, the runtime slice seam.
 **Motivates:** aux+occ (external-occ) CCSD wet evaluation, which crashes today; aux-only works.
 
