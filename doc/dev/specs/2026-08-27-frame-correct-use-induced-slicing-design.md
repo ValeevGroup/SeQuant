@@ -51,9 +51,57 @@ report **both**, per occurrence, in the occurrence's own index-frame:
 
 Aux-only works because the aux (contracted) batch is decided by the single-term
 optimizer and lands in `batch_loops_opened_here` → `OccurrenceRec::ectx`, which
-`compute_sliced_mode_assignment` reads. External-occ batching is a **forest /
-DAG-scheduler** decision (not single-term), so it is absent from `ectx` and
-`node_slice_mask` and lives only in the ordered block tree.
+`compute_sliced_mode_assignment` reads.
+
+> **CORRECTION (measured 2026-08-27, superseding an earlier claim in this
+> spec).** An earlier draft asserted that external-occ batching is *absent* from
+> `node_slice_mask` and lives only in the ordered block tree. **That is false for
+> the perf-first ordered path.** Instrumenting `analyze_legality` and running
+> `w8-auxocc-ordered-7b` shows external-occ modes stamped `i_1:E i_2:E` in
+> `node_slice_mask`, present in `sliced_modes()`, and carried per-instance into
+> `per_axis` with correct roles (§1a). Whatever breaks in the aux+occ case, it is
+> **not** "external-occ never reaches `per_axis`."
+
+## 1a. Measured ground truth (2026-08-27, w8, instrumented cmake-build-release)
+
+An env-guarded dump in `analyze_legality` (prints, per cell: `carried`,
+`sliced_modes()`, `node_slice_mask`, and the resulting `per_axis` roles) was run
+on the w8 CSV-CCk repro under several batch configs. Findings that **must**
+anchor the rest of this design (they overturn premises the later sections were
+written on):
+
+1. **Basic aux+occ occ-slicing already works, losslessly.**
+   `w8-auxocc-ordered-7b` (scheduler=ordered, aux=64, **occ=16**, peak=1e9,
+   dense_time_space) exits 0 with occ externals `i_1,i_2` genuinely sliced, and
+   energy `-1.6028511154362268` vs the forest-descent reference
+   `-1.6028511154357699` (**Δ = 4.6e-13**, reorder noise). So the §5 "collapse"
+   — if it happens at all in `build_ordered_schedule` — does **not** corrupt this
+   result at w8 sizes.
+
+2. **`per_axis` carries external-occ per-instance with correct roles.** Across
+   all 36 sliced values: every occ external → `LoopCarried`; aux → `LoopLocal`
+   (homed) or `Reduction` (contracted). Both occ externals of a doubles amplitude
+   always appear as **two separate per-instance entries** (e.g.
+   `per_axis={i_2:C i_1:C}`, or `{i_2:C i_1:C Κ_2:R}` when the aux is contracted
+   here). No misclassification and no mixed same-space `L`/`C` case was observed.
+   `classify_axis`'s *mechanism* is still space/ectx/label-based (audit, §4) but
+   its *output* is verified correct for every tested config.
+
+3. **The reproducible w8 crash is a different bug.** Only the tighter
+   `w8-auxocc-ordered-p3` (occ=4, peak=50e6) crashes, and **not** in the occ
+   scatter path. It dies in `ordered_home_reads`:
+   `"a read-from-home value vanished before use (premature eviction -- likely
+   under-predicted use count in ordered_home_reads)"`, `canon=[μ̃_1097 μ̃_1095]`
+   — a **PAO home-read lifetime** failure with no occ indices involved. This is
+   *not* the `is_range_set_congruent` occ-scatter crash §5-§7 target.
+
+**Consequence for this spec:** §2 (frame-correctness principle) stands as a
+design invariant. But §5-§7 (the occ-external collapse and its scatter) are
+**not confirmed against any reproduced failure** — w8 either works (7b) or
+crashes elsewhere (p3). The original motivation, the **w20** aux+occ
+`is_range_set_congruent` crash, has not yet been re-measured on this build;
+until it is, treat §5-§7 as a *hypothesized* defect, not an established one, and
+see §11 for the re-scoped plan of record.
 
 ## 2. The governing principle
 
@@ -81,9 +129,13 @@ All measured on w8 with forced occ batching (`csv-cck-w8.json`); each crashed.
   (occ loop simply missing for a top-homed fetch). Not the enclosure authority.
 
 - **`node_slice_mask`**: a single-term *node* annotation (`eval_expr.cpp:612`,
-  from `binarize`). It "does not deal with values" — it is populated on some
-  forest nodes of a value and empty on others (empty on the `vid6` fetch
-  occurrences, present on `i@o1` ones). Not a per-occurrence value fact.
+  from `binarize`). It **does** stamp external-occ (measured: `i_1:E i_2:E` on
+  producer nodes, §1a) — so it is not "absent" as an earlier draft claimed — but
+  it is per *node*, not per *value/occurrence*: populated on a value's producer
+  nodes and empty on its fetch occurrences (a top-homed leaf pulled deep has an
+  empty `node_slice_mask` at the fetch). So it is a fine *build-site* role source
+  (that is exactly how `per_axis` reads it) but **not** a per-occurrence
+  use-induced fact.
 
 - **`home_mode_depth`**: correct, but records **home**-placement slicing only —
   a value homed *inside* a loop. Top-homed leaves and hoisted intermediates
@@ -127,18 +179,30 @@ by matching labels or spaces across frames.
   yield the correct role, but it is exactly the space/ectx/label machinery this
   design forbids, and it can misclassify when occurrences diverge. So the role
   is a *value* property that is well-defined in the value's own frame, but the
-  current mechanism computing it is suspect. **The plan therefore does not build
-  on `per_axis` blindly: Task 1 verifies (by measurement on the w8 repro) that
-  the roles `classify_axis` emits are correct per-instance before anything
-  downstream consumes them, and repairs the producer to a frame-pure derivation
-  if they are not.**
+  current mechanism computing it is suspect.
+
+  **Measurement update (§1a): the output is verified correct.** Task 1 ran the
+  dump on w8 aux+occ and found every occ external classified `LoopCarried`, every
+  aux `LoopLocal`/`Reduction`, both instances of a doubles amplitude present
+  separately — no misclassification, no mixed case, on any tested config. So
+  `classify_axis` is **used as-is**; it is *not* refactored in this change. The
+  space/ectx/label mechanism remains a latent hazard for genuinely divergent
+  occurrences (none arose at w8), noted for follow-up but out of scope here.
 
 - **`build_scope[occurrence's consumer]`** — the ordered block tree walk
   (`populate_build_scope_walk`) already records, per value, the enclosing blocks
   as `{axis, level}` with the **full `DagScopeLevel` including `ordinal`**. This
   is the per-occurrence enclosure, correct and available.
 
-## 5. The gap
+## 5. The gap (HYPOTHESIZED — not yet confirmed against a reproduced failure)
+
+> **Status after §1a:** the collapse described here is a *code reading* of
+> `build_ordered_schedule`, not something any reproduced w8 failure has been
+> traced to. w8 aux+occ (7b) is lossless *with* two occ externals sliced, which
+> means either the collapse does not occur on that path or it occurs without
+> corrupting the result. Confirm the collapse actually fires (and actually
+> harms) — by dumping the realized schedule levels and, above all, by
+> re-measuring the **w20** crash — before treating §6-§7 as the fix. See §11.
 
 `build_ordered_schedule`'s per-value placement (~lines 1053-1068) maps each
 `per_axis` mode to a **depth by space** (`depth_of_type(ac.axis)`) and
@@ -292,3 +356,33 @@ now-correct, per-instance `occ_facts`.
 - No change to the single-term optimizer, `binarize`, `node_slice_mask`, or the
   aux (contracted) batch path, which already works via `ectx`. (Whether the aux
   path should also migrate to this scheme is a follow-up, not this change.)
+
+## 11. Re-scoped plan of record (2026-08-27, after §1a)
+
+The §1a measurements invalidate the assumption that the aux+occ failure is the
+§5 occ-external collapse. Two concrete failures are now on the table, and the
+design target must be chosen from **measured** crashes, not code reading:
+
+- **P1 — the w20 `is_range_set_congruent` occ-scatter crash** (original
+  motivation, `w20.aux+occ.log`). NOT yet re-measured on this build. If it still
+  reproduces, instrument it exactly as w8 was (§1a) and trace whether it is the
+  §5 collapse (occ scatter destination restricting one mode where two are
+  batched) — the only evidence that would promote §5-§7 from hypothesis to fix.
+- **P2 — the w8 `ordered_home_reads` PAO premature-eviction crash**
+  (`w8-auxocc-ordered-p3`, occ=4, peak=50e6). Reproducible locally and fast. A
+  home-read *use-count* under-prediction (`ordered_home_reads`), a lifetime bug,
+  distinct from the sliced-mode map. Likely related to
+  `project_ordered_executor_memory_fix` (needed-gate / persistence) and the
+  `type_in` space-taint in `ordered_home_reads`.
+
+**Order of work (agreed):** (A) re-measure w20 on z820 to identify which crash is
+the real P1 and whether §5-§7 apply; (B) chase P2 (`ordered_home_reads`) on the
+fast w8 loop. Whichever is confirmed first becomes the concrete target; the
+per-instance loop rework (§6-§7) proceeds only if a measured crash is traced to
+the collapse. The frame-correctness invariant (§2) governs any fix to either.
+
+The Task-2-onward plan in
+`doc/dev/plans/2026-08-27-frame-correct-use-induced-slicing-plan.md` is
+therefore **paused at its Task 1 gate**: Task 1 is done (role source verified,
+`classify_axis` used as-is), and Tasks 2+ are on hold pending the P1/P2
+determination above.
