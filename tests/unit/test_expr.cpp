@@ -1291,5 +1291,14 @@ TEST_CASE("expr", "[elements]") {
 
       REQUIRE_THAT(expr, EquivalentTo("R1{a1;i1} = 2 f{a1;i1}:A-S-S"));
     }
+    SECTION("column-symmetry") {
+      auto expr = deserialize<ResultExpr>(
+          "R1{a1,a2;i1,i2} = t{a1,a2;i1,i2}:N-N-S + t{a2,a1;i2,i1}:N-N-S");
+
+      simplify(expr);
+
+      REQUIRE_THAT(expr,
+                   EquivalentTo("R1{a1,a2;i1,i2} = 2 t{a1,a2;i1,i2}:N-N-S"));
+    }
   }
 }
