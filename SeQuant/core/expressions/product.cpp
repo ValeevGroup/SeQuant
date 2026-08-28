@@ -242,6 +242,10 @@ ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
 
 bool Product::static_commutativity() const { return false; }
 
+std::unique_ptr<Expr> Product::unique_copy() const {
+  return std::make_unique<Product>(deep_copy());
+}
+
 std::wstring Product::to_latex() const { return to_latex(false); }
 
 std::wstring Product::to_latex(bool negate) const {
@@ -272,11 +276,6 @@ Product::type_id_type Product::type_id() const {
   return get_type_id<Product>();
 }
 
-/// @return an identical clone of this Product (a deep copy allocated on the
-///         heap)
-/// @note this does not flatten the product
-ExprPtr Product::clone() const { return ex<Product>(this->deep_copy()); }
-
 Product Product::deep_copy() const {
   auto cloned_factors =
       factors() | ranges::views::transform([](const ExprPtr &ptr) {
@@ -291,7 +290,7 @@ Product Product::deep_copy() const {
 
 Product &Product::operator*=(const Expr &that) {
   if (!that.is<Constant>()) {
-    this->append(1, const_cast<Expr &>(that).shared_from_this());
+    this->append(1, that.clone());
   } else {
     scalar_ *= that.as<Constant>().value();
   }
@@ -393,7 +392,9 @@ CProduct::CProduct(Product &&other) : Product(std::move(other)) {}
 
 bool CProduct::is_commutative() const { return true; }
 
-ExprPtr CProduct::clone() const { return ex<CProduct>(this->deep_copy()); }
+std::unique_ptr<Expr> CProduct::unique_copy() const {
+  return std::make_unique<CProduct>(this->deep_copy());
+}
 
 void CProduct::adjoint() {
   auto adj_scalar = conj(scalar());
@@ -413,7 +414,9 @@ NCProduct::NCProduct(Product &&other) : Product(std::move(other)) {}
 
 bool NCProduct::is_commutative() const { return false; }
 
-ExprPtr NCProduct::clone() const { return ex<NCProduct>(this->deep_copy()); }
+std::unique_ptr<Expr> NCProduct::unique_copy() const {
+  return std::make_unique<NCProduct>(this->deep_copy());
+}
 
 void NCProduct::adjoint() {
   auto adj_scalar = conj(scalar());

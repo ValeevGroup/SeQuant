@@ -5,6 +5,8 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <memory>
+
 namespace sequant {
 
 std::wstring Constant::to_latex() const {
@@ -15,19 +17,29 @@ Expr::type_id_type Constant::type_id() const { return get_type_id<Constant>(); }
 
 bool Constant::is_scalar() const { return true; }
 
-ExprPtr Constant::clone() const { return ex<Constant>(this->value()); }
-
 void Constant::adjoint() {
   value_ = conj(value_);
   reset_hash_value();
 }
 
+Constant &Constant::operator*=(const Constant &that) {
+  value_ *= that.value();
+
+  reset_hash_value();
+
+  return *this;
+}
+
 Constant &Constant::operator*=(const Expr &that) {
-  if (that.is<Constant>()) {
-    value_ *= that.as<Constant>().value();
-  } else {
+  if (!that.is<Constant>()) {
     throw Exception("Constant::operator*=(that): not valid for that");
   }
+
+  return *this *= that.as<Constant>();
+}
+
+Constant &Constant::operator+=(const Constant &that) {
+  value_ += that.value();
 
   reset_hash_value();
 
@@ -35,11 +47,15 @@ Constant &Constant::operator*=(const Expr &that) {
 }
 
 Constant &Constant::operator+=(const Expr &that) {
-  if (that.is<Constant>()) {
-    value_ += that.as<Constant>().value();
-  } else {
+  if (!that.is<Constant>()) {
     throw Exception("Constant::operator+=(that): not valid for that");
   }
+
+  return *this += that.as<Constant>();
+}
+
+Constant &Constant::operator-=(const Constant &that) {
+  value_ -= that.value();
 
   reset_hash_value();
 
@@ -47,20 +63,20 @@ Constant &Constant::operator+=(const Expr &that) {
 }
 
 Constant &Constant::operator-=(const Expr &that) {
-  if (that.is<Constant>()) {
-    value_ -= that.as<Constant>().value();
-  } else {
+  if (!that.is<Constant>()) {
     throw Exception("Constant::operator-=(that): not valid for that");
   }
 
-  reset_hash_value();
-
-  return *this;
+  return *this -= that.as<Constant>();
 }
 
 bool Constant::is_zero(scalar_type v) { return v.is_zero(); }
 
 bool Constant::is_zero() const { return is_zero(this->value()); }
+
+std::unique_ptr<Expr> Constant::unique_copy() const {
+  return std::make_unique<Constant>(this->value());
+}
 
 Expr::hash_type Constant::memoizing_hash() const {
   if (!hash_value_) {
@@ -73,6 +89,30 @@ Expr::hash_type Constant::memoizing_hash() const {
 
 bool Constant::static_equal(const Expr &that) const {
   return value() == static_cast<const Constant &>(that).value();
+}
+
+Constant operator*(const Constant &lhs, const Constant &rhs) {
+  Constant result(lhs);
+
+  result *= rhs;
+
+  return result;
+}
+
+Constant operator+(const Constant &lhs, const Constant &rhs) {
+  Constant result(lhs);
+
+  result += rhs;
+
+  return result;
+}
+
+Constant operator-(const Constant &lhs, const Constant &rhs) {
+  Constant result(lhs);
+
+  result -= rhs;
+
+  return result;
 }
 
 }  // namespace sequant

@@ -11,6 +11,7 @@
 
 #include <range/v3/view/filter.hpp>
 
+#include <memory>
 #include <string>
 #include <type_traits>
 
@@ -60,7 +61,7 @@ class Product : public Expr {
     if constexpr (rng_is_expr || rng_is_exprptr) {
       ExprPtr rng_as_exprptr;
       if constexpr (rng_is_expr) {
-        rng_as_exprptr = rng.exprptr_from_this();
+        rng_as_exprptr = rng.clone();
       } else {
         rng_as_exprptr = rng;
       }
@@ -179,10 +180,10 @@ class Product : public Expr {
             typename = std::enable_if_t<is_an_expr_v<Factor>>>
   Product &append(T scalar, Factor &&factor,
                   Flatten flatten_tag = Flatten::Yes) {
-    return this->append(scalar,
-                        std::static_pointer_cast<Expr>(
-                            std::forward<Factor>(factor).shared_from_this()),
-                        flatten_tag);
+    return this->append(
+        scalar,
+        std::static_pointer_cast<Expr>(std::forward<Factor>(factor).clone()),
+        flatten_tag);
   }
 
   /// (post-)multiplies the product by@c factor
@@ -198,9 +199,9 @@ class Product : public Expr {
   /// @warning if @p factor is a Product, it is flattened recursively
   template <typename Factor, typename = std::enable_if_t<is_an_expr_v<Factor>>>
   Product &append(Factor &&factor, Flatten flatten_tag = Flatten::Yes) {
-    return this->append(std::static_pointer_cast<Expr>(
-                            std::forward<Factor>(factor).shared_from_this()),
-                        flatten_tag);
+    return this->append(
+        std::static_pointer_cast<Expr>(std::forward<Factor>(factor).clone()),
+        flatten_tag);
   }
 
   /// (pre-)multiplies the product by @c scalar times @c factor
@@ -251,10 +252,10 @@ class Product : public Expr {
             typename = std::enable_if_t<is_an_expr_v<Factor>>>
   Product &prepend(T scalar, Factor &&factor,
                    Flatten flatten_tag = Flatten::Yes) {
-    return this->prepend(scalar,
-                         std::static_pointer_cast<Expr>(
-                             std::forward<Factor>(factor).shared_from_this()),
-                         flatten_tag);
+    return this->prepend(
+        scalar,
+        std::static_pointer_cast<Expr>(std::forward<Factor>(factor).clone()),
+        flatten_tag);
   }
 
   const scalar_type &scalar() const;
@@ -306,11 +307,6 @@ class Product : public Expr {
 
   type_id_type type_id() const override;
 
-  /// @return an identical clone of this Product (a deep copy allocated on the
-  ///         heap)
-  /// @note this does not flatten the product
-  ExprPtr clone() const override;
-
   Product deep_copy() const;
 
   Product &operator*=(const Expr &that);
@@ -337,6 +333,9 @@ class Product : public Expr {
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   scalar_type scalar_ = {1, 0};
@@ -366,16 +365,17 @@ class CProduct : public Product {
 
   bool is_commutative() const override;
 
-  /// @return an identical clone of this CProduct
-  /// @note without this override Product::clone() would slice this down to a
-  ///       plain Product, whose adjoint() reverses the factors and whose
-  ///       commutativity is only decided by a recursive pairwise check
-  ExprPtr clone() const override;
-
   /// @brief adjoint of a CProduct is a product of adjoints of its factors, with
   /// complex-conjugated scalar
   /// @note factors are not reversed since the factors commute
   virtual void adjoint() override;
+
+ protected:
+  /// @return an identical clone of this CProduct
+  /// @note without this override Product::clone() would slice this down to a
+  ///       plain Product, whose adjoint() reverses the factors and whose
+  ///       commutativity is only decided by a recursive pairwise check
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   bool static_commutativity() const override;
@@ -389,15 +389,16 @@ class NCProduct : public Product {
 
   bool is_commutative() const override;
 
+  /// @brief adjoint of a NCProduct is a reversed product of adjoints of its
+  /// factors, with complex-conjugated scalar
+  virtual void adjoint() override;
+
+ protected:
   /// @return an identical clone of this NCProduct
   /// @note without this override Product::clone() would slice this down to a
   ///       plain Product, which is no longer unconditionally non-commutative
   ///       and hence may have its factors reordered by canonicalization
-  ExprPtr clone() const override;
-
-  /// @brief adjoint of a NCProduct is a reversed product of adjoints of its
-  /// factors, with complex-conjugated scalar
-  virtual void adjoint() override;
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   bool static_commutativity() const override;

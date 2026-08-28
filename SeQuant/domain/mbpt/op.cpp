@@ -580,14 +580,14 @@ ExprPtr OpMaker<S>::operator()(
   if (!dep && csv) {
     if (opclass == OpClass::Ex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : cre_spaces_) {
+        for ([[maybe_unused]] const auto& s : cre_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
       dep = UseDepIdx::Bra;
     } else if (opclass == OpClass::Deex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : ann_spaces_) {
+        for ([[maybe_unused]] const auto& s : ann_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }

@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_container.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
@@ -17,7 +18,10 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <concepts>
+#include <memory>
 #include <optional>
+#include <ranges>
 #include <type_traits>
 
 namespace sequant {
@@ -53,19 +57,18 @@ class Sum : public Expr {
 
   /// construct a Sum out of a range of summands
   /// @param rng a range
-  template <typename Range>
-    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
-             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
+  template <std::ranges::range Range>
+    requires(!std::same_as<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Sum(Range &&rng) {
     // N.B. use append to flatten out Sum summands
-    constexpr auto rng_is_expr =
-        meta::is_base_of_v<Expr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_expr = is_an_expr_v<std::remove_cvref_t<Range>>;
     constexpr auto rng_is_exprptr =
-        meta::is_same_v<ExprPtr, std::remove_cvref_t<Range>>;
+        std::same_as<ExprPtr, std::remove_cvref_t<Range>>;
+
     if constexpr (rng_is_expr || rng_is_exprptr) {
       ExprPtr rng_as_exprptr;
       if constexpr (rng_is_expr) {
-        rng_as_exprptr = rng.exprptr_from_this();
+        rng_as_exprptr = rng.clone();
       } else {
         rng_as_exprptr = rng;
       }
@@ -108,13 +111,13 @@ class Sum : public Expr {
   /// offset
   ExprPtr take_n(size_t offset, size_t count) const;
 
-  /// @tparam Filter a boolean predicate type, such `Filter(const ExprPtr&)`
-  /// evaluates to true
-  /// @param f an object of Filter type
-  /// Selects elements {`e`} for which `f(e)` is true
-  template <typename Filter>
+  /// @param f Boolean predicate
+  /// @returns A sum containing only the summands for which f was true.
+  template <std::predicate<const Expr &> Filter>
   ExprPtr filter(Filter &&f) const {
-    return ex<Sum>(summands_ | ranges::views::filter(f));
+    return ex<Sum>(summands_ |
+                   ranges::views::transform([](const auto &e) { return *e; }) |
+                   ranges::views::filter(f));
   }
 
   /// @return true if the number of factors is zero
@@ -126,8 +129,6 @@ class Sum : public Expr {
   std::wstring to_latex() const override;
 
   Expr::type_id_type type_id() const override;
-
-  ExprPtr clone() const override;
 
   /// @brief adjoint of a Sum is a sum of adjoints of its factors
   virtual void adjoint() override;
@@ -143,6 +144,9 @@ class Sum : public Expr {
   ConstExprIterator begin_subexpr() const override;
 
   ConstExprIterator end_subexpr() const override;
+
+ protected:
+  std::unique_ptr<Expr> unique_copy() const override;
 
  private:
   summands_type summands_{};

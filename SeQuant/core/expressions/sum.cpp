@@ -5,6 +5,8 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <memory>
+
 namespace sequant {
 
 Sum::Sum(ExprPtrList summands) {
@@ -145,13 +147,6 @@ std::wstring Sum::to_latex() const {
 
 Expr::type_id_type Sum::type_id() const { return Expr::get_type_id<Sum>(); }
 
-ExprPtr Sum::clone() const {
-  auto cloned_summands =
-      summands() |
-      ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-  return ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
-}
-
 void Sum::adjoint() {
   using namespace ranges;
   auto adj_summands = summands() | views::transform([](auto &&expr) {
@@ -162,8 +157,8 @@ void Sum::adjoint() {
 
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
-    std::wcout << "Sum::canonicalize_impl: input = "
-               << to_latex_align(shared_from_this()) << std::endl;
+    std::wcout << "Sum::canonicalize_impl: input = " << to_latex_align(*this)
+               << std::endl;
 
   const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
@@ -197,7 +192,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+                 << to_latex_align(*this) << std::endl;
 
     HashingAccumulator acc;
     for (auto &summand : summands_) {
@@ -214,15 +209,15 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after reducing summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
+                 << "): after reducing summands = " << to_latex_align(*this)
+                 << std::endl;
   }
 
   return {};  // side effects are absorbed into summands
 }
 
 Sum &Sum::operator+=(const Expr &that) {
-  this->append(const_cast<Expr &>(that).shared_from_this());
+  this->append(that.clone());
   return *this;
 }
 
@@ -230,8 +225,7 @@ Sum &Sum::operator-=(const Expr &that) {
   if (that.is<Constant>())
     this->append(ex<Constant>(-that.as<Constant>().value()));
   else
-    this->append(ex<Product>(
-        -1, ExprPtrList{const_cast<Expr &>(that).shared_from_this()}));
+    this->append(ex<Product>(-1, ExprPtrList{that.clone()}));
   return *this;
 }
 
@@ -260,6 +254,14 @@ ConstExprIterator Sum::begin_subexpr() const {
 
 ConstExprIterator Sum::end_subexpr() const {
   return ConstExprIterator{summands_.data() + summands_.size()};
+}
+
+std::unique_ptr<Expr> Sum::unique_copy() const {
+  auto cloned_summands =
+      summands() |
+      ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
+  return std::make_unique<Sum>(ranges::begin(cloned_summands),
+                               ranges::end(cloned_summands));
 }
 
 Expr::hash_type Sum::memoizing_hash() const {

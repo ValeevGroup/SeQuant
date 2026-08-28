@@ -4,6 +4,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -60,7 +61,9 @@ std::wstring Variable::to_latex() const {
   return result;
 }
 
-ExprPtr Variable::clone() const { return ex<Variable>(*this); }
+std::unique_ptr<Expr> Variable::unique_copy() const {
+  return std::make_unique<Variable>(*this);
+}
 
 void Variable::adjoint() { conjugate(); }
 

@@ -19,10 +19,10 @@
 
 namespace sequant {
 
-std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
+std::wstring to_latex_align(const Expr& expr, size_t max_lines_per_align,
                             size_t max_terms_per_line) {
-  std::wstring result = io::latex::to_string(exprptr);
-  if (exprptr->is<Sum>()) {
+  std::wstring result = io::latex::to_string(expr);
+  if (expr.is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \bigl"
     result.replace(result.size() - 8, 8,
                    L")");  // replace trailing "\bigr) }" with ")"
@@ -77,6 +77,10 @@ std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
   }
   result += L"\n\\end{align}";
   return result;
+}
+std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
+                            size_t max_terms_per_line) {
+  return to_latex_align(*exprptr, max_lines_per_align, max_terms_per_line);
 }
 
 std::size_t size(const Expr& expr) { return ranges::size(expr); }
