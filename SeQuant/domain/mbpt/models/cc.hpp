@@ -116,26 +116,23 @@ class CC {
   /// the expansion; if not specified, will use the value of member
   /// `hbar_comm_rank`. If that is also not specified, will use 4 as the default
   /// value. If provided, will override all defaults.
-  /// @note For a non-unitary ansatz each commutator is represented as a
-  /// connected product, \f$ (\hat{A}\hat{B})_c \f$, equivalent to \f$
-  /// [\hat{A},\hat{B}] \f$ only once operator connectivity is supplied
-  /// downstream; this engine always supplies it, by handing `ref_av`
-  /// `default_op_connections()` or a superset thereof. A unitary ansatz uses
-  /// explicit commutators instead, and is handed empty connectivity.
-  /// @warning Because of the above, the expression returned for a non-unitary
-  /// ansatz is NOT self-contained: evaluating it with empty connectivity, e.g.
-  /// `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`, silently retains the
-  /// disconnected terms that the commutator would have cancelled. Pass
-  /// `default_op_connections()` (which `op::ref_av`/`op::vac_av` use when the
-  /// options argument is omitted -- note that passing `{}` instead gives empty
-  /// connections), or build H̄ yourself with `mbpt::lst(..., {})` if you need
-  /// the explicit form. For a unitary ansatz the reverse holds: H̄ is already
-  /// self-contained, so connectivity must be left empty. See the "Using H̄
-  /// outside the CC class" section of the user guide.
-  /// @note Under `HbarExpansion::Bernoulli` the result is tensor-level, so it
-  /// takes `op::tensor` projectors and `op::tensor::ref_av`, not their `op`
-  /// counterparts. That path never reaches `CC::ref_av`, so `screen` and
-  /// `use_topology` have no effect on it.
+  /// @note The returned expression depends on the ansatz and expansion:
+  ///   - A non-unitary ansatz represents each commutator as a connected
+  ///     product,
+  ///     \f$ (\hat{A}\hat{B})_c \f$. It is equivalent to \f$
+  ///     [\hat{A},\hat{B}] \f$ only when operator connectivity is supplied
+  ///     downstream.
+  ///   - A unitary BCH ansatz uses explicit commutators and empty connectivity.
+  ///   - `HbarExpansion::Bernoulli` returns a tensor-level expression for use
+  ///     with `op::tensor` projectors and `op::tensor::ref_av`. It never
+  ///     reaches `CC::ref_av`, so `screen` and `use_topology` have no effect.
+  /// @warning A non-unitary H̄ is not self-contained. Evaluating it with empty
+  ///   connectivity, e.g. `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
+  ///   retains disconnected terms. Pass `default_op_connections()` (the default
+  ///   when the options argument is omitted), or build H̄ with
+  ///   `mbpt::lst(..., {})` for an explicit form. A unitary H̄ is
+  ///   self-contained, so its connectivity must be empty. See the "Using H̄
+  ///   outside the CC class" section of the user guide.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -202,37 +199,37 @@ class CC {
   /// @brief derives right-side sigma equations for EOM-CC
   /// @param np number of particle creators in R operator
   /// @param nh number of hole creators in R operator
-  /// @param block_ranks optional per-block H̄ commutator truncation ranks: a
-  ///   different H̄ in each block of the secular matrix instead of one uniform
-  ///   H̄ everywhere. For singles+doubles the matrix is
+  /// @param block_ranks optional per-block H̄ truncation ranks:
+  ///   - A `K`×`K` matrix is read row by row in ascending manifold rank. For
+  ///     singles+doubles it is
   ///     | H_SS  H_SD |    e.g.  | 2  1 |
   ///     | H_DS  H_DD |          | 1  0 |
-  ///   read row by row, i.e. `{2,1,1,0}`: H_SS through the double commutator
-  ///   [[H,σ],σ], H_SD and H_DS through the single [H,σ], H_DD the bare
-  ///   Hamiltonian integrals (no commutators). Under `Bernoulli` a rank is the
-  ///   Bernoulli order H̄^k instead, whose commutators are in V alone. These are
-  ///   that paper's Bernoulli qUCCSD ranks, UCCSD[2|2,1,0] of 10.1063/5.0062090
-  ///   Eqs. (29), (41), (44), (48); its BCH scheme instead needs F one rank
-  ///   above V, which one number per block cannot express.
-  ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
-  ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
-  ///   1h/1p and D as 2h1p/1h2p; 10.1021/acs.jctc.5c01991 Fig. 1 carries the
-  ///   IP/EA ranks). For UCC, `Bernoulli` and non-empty `block_ranks` select
-  ///   projected-H̄ assembly; otherwise `BCH` selects commutator assembly. The
-  ///   two BCH assemblies differ by ground-state amplitude-equation residuals
-  ///   and agree when those vanish. Traditional CC always uses its connected
-  ///   H̄R product and does not support block ranks.
-  /// @param assembly optional explicit UCC assembly; when omitted, the default
-  ///   described above is used. Traditional CC accepts only `Commutator`.
+  ///     Thus `{2,1,1,0}` uses [[H,σ],σ] for H_SS, [H,σ] for H_SD and
+  ///     H_DS, and bare Hamiltonian integrals for H_DD.
+  ///   - The same ordering serves EE, IP, and EA: read S as 1h/1p and D as
+  ///     2h1p/1h2p (10.1021/acs.jctc.5c01991, Fig. 1).
+  ///   - Under `Bernoulli`, each rank is a Bernoulli order H̄^k whose
+  ///     commutators are in V alone. These are the Bernoulli qUCCSD ranks
+  ///     UCCSD[2|2,1,0] of 10.1063/5.0062090, Eqs. (29), (41), (44), (48). Its
+  ///     BCH scheme needs F one rank above V, which one rank per block cannot
+  ///     express.
+  /// @param assembly optional explicit UCC assembly:
+  ///   - If omitted, `Bernoulli` and non-empty `block_ranks` select
+  ///     `ProjectedHbar`; otherwise `BCH` selects `Commutator`.
+  ///   - The two BCH assemblies differ by ground-state amplitude-equation
+  ///     residuals and agree when those vanish.
+  ///   - Traditional CC accepts only `Commutator`, uses its connected H̄R
+  ///     product, and does not support block ranks.
   /// @throw Exception if `Commutator` is used with the Bernoulli expansion, if
   ///   `ProjectedHbar` or non-empty `block_ranks` is used with a traditional
   ///   ansatz, or if `block_ranks` is not `K`×`K`
   /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
-  ///   indexed by the smaller particle/hole count of each projection manifold.
-  ///   With projected-H̄ UCC assembly, each diagonal subtracts the scalar
-  ///   carried by the same temporary \f$ \bar{H}^{(k)} \f$ used for that block.
-  ///   This leaves the per-block normal-ordered components of Eq. (10), not
-  ///   distinct physical energy zeros. Element 0 is null iff `np == nh`
+  ///   indexed by the smaller particle/hole count of each projection manifold:
+  ///   - Element 0 is null iff `np == nh`.
+  ///   - With projected-H̄ UCC assembly, each diagonal subtracts the scalar
+  ///     carried by the same temporary \f$ \bar{H}^{(k)} \f$ used for that block,
+  ///     leaving the per-block normal-ordered components of Eq. (10), not
+  ///     distinct physical energy zeros.
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> eom_r(
       nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {},
