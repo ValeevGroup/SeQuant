@@ -10,6 +10,7 @@ add_executable(external_interface
     utils.cpp
 
     canonicalize_step.cpp
+    cse_step.cpp
     density_fitting_step.cpp
     execution_context.cpp
     executor.cpp

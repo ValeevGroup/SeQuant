@@ -106,8 +106,13 @@
 			"inputs": "opt"
 		},
 		{
+			"id": "cse",
+			"kind": "cse",
+			"inputs": "treeify"
+		},
+		{
 			"kind": "export",
-			"inputs": "treeify",
+			"inputs": "cse",
 			"options": {
 				"language": "itf",
 				"optimize": true,
