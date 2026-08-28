@@ -78,10 +78,15 @@ Equation-of-Motion Coupled-Cluster
 
 .. code-block:: cpp
 
-   std::vector<ExprPtr> eom_r(nₚ np, nₕ nh);
+   std::vector<ExprPtr> eom_r(
+       nₚ np, nₕ nh,
+       const std::vector<std::size_t>& block_ranks = {},
+       std::optional<UCCEOMAssembly> assembly = std::nullopt);
    std::vector<ExprPtr> eom_l(nₚ np, nₕ nh);
 
-Derives equation-of-motion coupled-cluster (EOM-CC) equations for excited states. The ``eom_r`` method generates equations for the right eigenvectors, while ``eom_l`` generates equations for the left eigenvectors.
+Derives equation-of-motion coupled-cluster (EOM-CC) equations for excited states. The ``eom_r`` method generates equations for the right eigenvectors, while ``eom_l`` generates equations for the left eigenvectors. Traditional CC always uses the connected H̄R product. For UCC, passing ``CC::UCCEOMAssembly::Commutator`` or ``CC::UCCEOMAssembly::ProjectedHbar`` explicitly selects the right-hand assembly. Without that argument, a Bernoulli expansion or non-empty ``block_ranks`` selects projected-H̄ assembly; otherwise, a BCH expansion selects commutator assembly.
+
+For UCC, the optional ``block_ranks`` argument gives the per-block truncation orders as a row-major matrix over the EOM manifolds: nested-commutator order for BCH and :math:`\bar{H}^{k}` order for Bernoulli. Traditional CC does not support block ranks or projected-H̄ assembly; Bernoulli does not support commutator assembly.
 
 Examples
 --------

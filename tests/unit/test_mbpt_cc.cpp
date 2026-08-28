@@ -281,7 +281,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // ... and the ansatz must be unitary
     REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
 
-    // Public API contract: under Bernoulli these are the same blocked request.
+    // Public API contract: under Bernoulli these are the same projected-H̄
+    // request.
     // Check both returned manifolds; this does not claim BCH equivalence, since
     // no matrix takes the commutator path instead.
     const auto uniform = cc.eom_r(nₚ(2), nₕ(2));
@@ -440,6 +441,45 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[0]) == 9);
     REQUIRE(size(eqs[1]) == 32);
+  }
+
+  SECTION("EOM assembly") {
+    const auto tcc = CC{2};
+    const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
+    const auto ee_np = nₚ(2);
+    const auto ee_nh = nₕ(2);
+    const std::vector<std::size_t> uniform_ranks = {2, 2, 2, 2};
+
+    REQUIRE_THAT(
+        tcc.eom_r(ee_np, ee_nh, {}, CC::UCCEOMAssembly::Commutator).at(2),
+        EquivalentTo(tcc.eom_r(ee_np, ee_nh).at(2)));
+    REQUIRE_THROWS_AS(
+        tcc.eom_r(ee_np, ee_nh, {}, CC::UCCEOMAssembly::ProjectedHbar),
+        Exception);
+
+    const auto ucc_commutator =
+        ucc.eom_r(ee_np, ee_nh, uniform_ranks, CC::UCCEOMAssembly::Commutator);
+    const auto ucc_projected = ucc.eom_r(ee_np, ee_nh, uniform_ranks,
+                                         CC::UCCEOMAssembly::ProjectedHbar);
+    REQUIRE_THAT(ucc_commutator.at(2),
+                 EquivalentTo(ucc.eom_r(ee_np, ee_nh).at(2)));
+    REQUIRE_THAT(ucc_projected.at(2),
+                 EquivalentTo(ucc.eom_r(ee_np, ee_nh, uniform_ranks).at(2)));
+    REQUIRE_THAT(ucc_commutator.at(2), !EquivalentTo(ucc_projected.at(2)));
+
+    // An asymmetric matrix pins the row-major mapping: lowering only H_SD
+    // changes the singles bra row, not the doubles row.
+    const auto ucc_row_mixed =
+        ucc.eom_r(ee_np, ee_nh, {2, 1, 2, 2}, CC::UCCEOMAssembly::Commutator);
+    REQUIRE_THAT(ucc_row_mixed.at(1), !EquivalentTo(ucc_commutator.at(1)));
+    REQUIRE_THAT(ucc_row_mixed.at(2), EquivalentTo(ucc_commutator.at(2)));
+
+    const auto bern = CC(2, {.ansatz = CC::Ansatz::U,
+                             .hbar_comm_rank = 2,
+                             .hbar_expansion = CC::HbarExpansion::Bernoulli});
+    REQUIRE_THROWS_AS(
+        bern.eom_r(nₚ(1), nₕ(1), {}, CC::UCCEOMAssembly::Commutator),
+        Exception);
   }
 
   SECTION("EE-EOM-CCSD L") {

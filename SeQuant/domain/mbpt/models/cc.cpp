@@ -411,34 +411,46 @@ container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
 }
 }  // namespace
 
-// Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
+// UCC EOM sigma equations. For the qUCCSD ranks see
 // 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for IP/EA,
 // 10.1021/acs.jctc.5c01991 Fig. 1.
 //
 // Eq. (10) splits the single physical E_gr from the normal-ordered components
-// that build the blocks of Eq. (7). Each cumulative H̄^(k) used below still
-// carries its rank-dependent scalar part, so remove that same scalar on the
-// diagonal before assembling the separately truncated components.
-std::vector<ExprPtr> CC::eom_r_blocked(
-    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
-  if (!unitary())
-    throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
+// that build the blocks of Eq. (7). In projected-H̄ UCC assembly, each
+// cumulative H̄^(k) still carries its rank-dependent scalar part, so remove
+// that same scalar on the diagonal.
+std::vector<ExprPtr> CC::assemble_ucc_eom(
+    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks,
+    UCCEOMAssembly assembly) const {
+  if (assembly == UCCEOMAssembly::Commutator &&
+      hbar_expansion_ == HbarExpansion::Bernoulli)
+    throw Exception("CC::eom_r: Bernoulli requires projected Hbar assembly");
+
+  using std::min;
+  if (assembly == UCCEOMAssembly::Commutator && block_ranks.empty()) {
+    const auto hbar_R = commutator(hbar(), R(np, nh, eom_norm));
+    std::vector<ExprPtr> result(min(np, nh) + 1);
+    for (const auto& [rp, rh] : eom_manifolds(np, nh))
+      result.at(min(rp, rh)) = ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, {});
+    return result;
+  }
 
   const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();
   // `block_ranks` is read at i * K + j, so the ascending order above is what
-  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty means uniform hbar_comm_rank
+  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty means the configured H̄ rank,
+  // or the fourth commutator when no rank is configured.
   const std::vector<size_t> ranks =
-      block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
-                          : block_ranks;
+      block_ranks.empty()
+          ? std::vector<size_t>(K * K, hbar_comm_rank().value_or(4))
+          : block_ranks;
   if (ranks.size() != K * K)
     throw Exception(
         "CC::eom_r: block_ranks must be a K x K row-major matrix, "
         "K = number of projection manifolds");
 
   // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
-  // below must match it. Connectivity is empty either way, as everywhere on the
-  // unitary path; only the operator-level vev forwards screen/use_topology.
+  // below must match it. UCC uses no connectivity.
   const bool tensor_level = hbar_expansion_ == HbarExpansion::Bernoulli;
 
   // One H̄ per distinct truncation order, reduced to its R part (Bernoulli only;
@@ -469,7 +481,6 @@ std::vector<ExprPtr> CC::eom_r_blocked(
                                          .use_topology = use_topology_});
   };
 
-  using std::min;
   std::vector<ExprPtr> result(min(np, nh) + 1);
   for (size_t i = 0; i < K; ++i) {
     const auto [bp, bh] = manifolds[i];
@@ -479,13 +490,17 @@ std::vector<ExprPtr> CC::eom_r_blocked(
       const auto [kp, kh] = manifolds[j];
       const auto& hbar_ij = hbars.at(ranks.at(i * K + j));
       const auto ket = ket_of(kp, kh);
-      acc->append(vev(bra * hbar_ij * ket));
-      // Remove the scalar part of this block's temporary H̄^(k_ii). This is
-      // not a block-dependent physical E_gr: it leaves the normal-ordered
-      // coefficients selected for this block in Eq. (10). Written as
-      // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the block's
-      // external ones.
-      if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
+      if (assembly == UCCEOMAssembly::Commutator) {
+        acc->append(vev(bra * commutator(hbar_ij, ket)));
+      } else {
+        acc->append(vev(bra * hbar_ij * ket));
+        // Remove the scalar part of this block's temporary H̄^(k_ii). This is
+        // not a block-dependent physical E_gr: it leaves the normal-ordered
+        // coefficients selected for this block in Eq. (10). Written as
+        // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the
+        // block's external ones.
+        if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
+      }
     }
     result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc});
   }
@@ -493,44 +508,36 @@ std::vector<ExprPtr> CC::eom_r_blocked(
 }
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
-                               const std::vector<size_t>& block_ranks) const {
+                               const std::vector<size_t>& block_ranks,
+                               std::optional<UCCEOMAssembly> assembly) const {
   SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
   if (np != nh)
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
 
-  // Bernoulli always takes the blocked path: the uniform one below commutes H̄
-  // with an operator-level R, which a tensor-level H̄ cannot take part in.
-  if (!block_ranks.empty() || hbar_expansion_ == HbarExpansion::Bernoulli)
-    return eom_r_blocked(np, nh, block_ranks);
+  const auto selected_assembly = assembly.value_or(
+      (!block_ranks.empty() || hbar_expansion_ == HbarExpansion::Bernoulli)
+          ? UCCEOMAssembly::ProjectedHbar
+          : UCCEOMAssembly::Commutator);
+  if (unitary())
+    return assemble_ucc_eom(np, nh, block_ranks, selected_assembly);
 
-  // construct hbar
+  if (!block_ranks.empty())
+    throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
+  if (selected_assembly == UCCEOMAssembly::ProjectedHbar)
+    throw Exception(
+        "CC::eom_r: projected Hbar assembly requires a unitary ansatz");
+
   const auto hbar = this->hbar();
+  const auto hbar_R = hbar * R(np, nh, eom_norm);
+  const auto op_connect = concat(default_op_connections(),
+                                 {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
 
-  // construct [hbar, R]
-  ExprPtr hbar_R;
-  // for unitary ansatz, we need to compute the commutator [hbar, R], otherwise
-  // just hbar * R is sufficient because ref_av uses connectivity
-  if (this->unitary()) {
-    hbar_R = commutator(hbar, R(np, nh, eom_norm));
-  } else {
-    hbar_R = hbar * R(np, nh, eom_norm);
-  }
-
-  // connectivity: empty for unitary ansatz, build otherwise
-  OpConnections<std::wstring> op_connect;
-  if (!this->unitary()) {
-    // default connections + connect R with {h,f,g}
-    op_connect = concat(default_op_connections(),
-                        {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
-  }
   using std::min;
-  std::vector<ExprPtr> result(min(np, nh) + 1);  // for EE element 0 stays null
-  // project with <rp, rh| (δl for consistent normalization) and compute VEV
+  std::vector<ExprPtr> result(min(np, nh) + 1);
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
-    result.at(min(rp, rh)) =
-        this->ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    result.at(min(rp, rh)) = ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
 
   return result;
 }

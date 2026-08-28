@@ -39,6 +39,14 @@ class CC {
     Bernoulli
   };
 
+  /// Assembly used for the right-hand UCC EOM equations.
+  enum class UCCEOMAssembly {
+    /// Project \f$ [\bar{H}, R] \f$.
+    Commutator,
+    /// Assemble the projected \f$ \bar{H} \f$ matrix.
+    ProjectedHbar
+  };
+
   /// Configuration options for CC class
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
@@ -209,23 +217,26 @@ class CC {
   ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
   ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
   ///   1h/1p and D as 2h1p/1h2p; 10.1021/acs.jctc.5c01991 Fig. 1 carries the
-  ///   IP/EA ranks). Empty (the default) fills every block with
-  ///   `hbar_comm_rank`. Which form gets built depends on the expansion:
-  ///   `Bernoulli` always uses the blocked form, `BCH` uses it only when a
-  ///   matrix is given and builds a commutator otherwise. The BCH forms differ
-  ///   by off-diagonal amplitude-residual terms unless those residuals vanish.
-  /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ terminates
-  ///   and has nothing to truncate.
-  /// @pre `block_ranks` is either empty or `K`×`K`
+  ///   IP/EA ranks). For UCC, `Bernoulli` and non-empty `block_ranks` select
+  ///   projected-H̄ assembly; otherwise `BCH` selects commutator assembly. The
+  ///   two BCH assemblies differ by ground-state amplitude-equation residuals
+  ///   and agree when those vanish. Traditional CC always uses its connected
+  ///   H̄R product and does not support block ranks.
+  /// @param assembly optional explicit UCC assembly; when omitted, the default
+  ///   described above is used. Traditional CC accepts only `Commutator`.
+  /// @throw Exception if `Commutator` is used with the Bernoulli expansion, if
+  ///   `ProjectedHbar` or non-empty `block_ranks` is used with a traditional
+  ///   ansatz, or if `block_ranks` is not `K`×`K`
   /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
   ///   indexed by the smaller particle/hole count of each projection manifold.
-  ///   With per-block truncation, each diagonal subtracts the scalar carried by
-  ///   the same temporary \f$ \bar{H}^{(k)} \f$ used for that block. This leaves
-  ///   the blockwise normal-ordered components of Eq. (10), not distinct
-  ///   physical energy zeros. Element 0 is null iff `np == nh`
+  ///   With projected-H̄ UCC assembly, each diagonal subtracts the scalar
+  ///   carried by the same temporary \f$ \bar{H}^{(k)} \f$ used for that block.
+  ///   This leaves the per-block normal-ordered components of Eq. (10), not
+  ///   distinct physical energy zeros. Element 0 is null iff `np == nh`
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> eom_r(
-      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {}) const;
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {},
+      std::optional<UCCEOMAssembly> assembly = std::nullopt) const;
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
@@ -271,16 +282,17 @@ class CC {
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
   HbarExpansion hbar_expansion_ = HbarExpansion::BCH;
 
-  /// @brief `eom_r`'s per-block-truncated path, taken whenever `block_ranks` is
-  /// non-empty or the expansion is Bernoulli
-  /// @param block_ranks see `eom_r`; empty means uniform `hbar_comm_rank`
+  /// @brief assembles the right-hand UCC EOM equations
+  /// @param block_ranks see `eom_r`; empty uses the configured H̄ rank, or 4
+  /// @param assembly assembly to use
   /// @pre a unitary ansatz
   /// @note under the Bernoulli expansion each block's H̄ has its N part removed.
   ///   Where a block's rank equals `hbar_comm_rank` the removed terms vanish at
   ///   converged amplitudes, so its equations change but its values do not;
   ///   below that rank the values change too. `BCH` keeps them.
-  [[nodiscard]] std::vector<ExprPtr> eom_r_blocked(
-      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks) const;
+  [[nodiscard]] std::vector<ExprPtr> assemble_ucc_eom(
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks,
+      UCCEOMAssembly assembly) const;
 
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note The choice of commutator representation is really a question of
