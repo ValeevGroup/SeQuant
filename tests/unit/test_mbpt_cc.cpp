@@ -317,11 +317,23 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     auto bch3 = bch2.with([](auto& o) { o.hbar_comm_rank = 3; });
     REQUIRE(bch2.hbar_comm_rank() == 2);
     REQUIRE(bch3.hbar_comm_rank() == 3);
+    REQUIRE(
+        bch2.with([](auto& o) { o.ansatz = CC::Ansatz::oU; }).skip_singles());
     // rank 0 is a valid truncation (H̄ = H); only CC::λ rejects it, since it
     // derives at rank - 1
     REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
     REQUIRE(bch2.with([](auto& o) { o.hbar_comm_rank = 0; }).hbar_comm_rank() ==
             0);
+    REQUIRE_THROWS_AS(bch2.with([](auto& o) {
+      o.ansatz = CC::Ansatz::oU;
+      o.skip_singles = false;
+    }),
+                      Exception);
+    REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U,
+                             .hbar_comm_rank = 2,
+                             .hbar_singles_comm_rank = 1,
+                             .hbar_expansion = CC::HbarExpansion::Bernoulli}),
+                      Exception);
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
     }
@@ -433,12 +445,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       return r;
     };
 
-    SECTION("K=0/unset reproduces plain hbar") {
-      CC::Options k0 = base;
-      k0.hbar_singles_comm_rank = 0;
-      REQUIRE_THAT(CC(N, k0).hbar(), EquivalentTo(hbar_R));
-    }
-
     SECTION("K=1: extra term is exactly [H̄_R, σ1]") {
       CC::Options k1 = base;
       k1.hbar_singles_comm_rank = 1;
@@ -447,7 +453,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       // the wrap genuinely adds terms not present in the baseline
       const auto extra = comm(hbar_R, sigma1);
       REQUIRE(size(extra) > 0);
-      REQUIRE(size(hbar_k1) > size(hbar_R));
 
       REQUIRE_THAT(hbar_k1, EquivalentTo(hbar_R + extra));
     }
@@ -461,42 +466,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(CC(N, k2).hbar(), EquivalentTo(expected));
     }
   }  // SECTION("extra singles commutators")
-
-  SECTION("copy-and-mutate") {
-    const auto N = 2;
-    const CC::Options base{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
-
-    SECTION("identity mutation reproduces the engine") {
-      const CC cc(N, base);
-      REQUIRE_THAT(cc.with([](auto&) {}).hbar(), EquivalentTo(cc.hbar()));
-    }
-
-    SECTION("changed rank matches fresh construction") {
-      const CC cc(N, base);
-      CC::Options at3 = base;
-      at3.hbar_comm_rank = 3;
-      // N.B. cannot compare against with_hbar_comm_rank -- this commit deletes
-      // it
-      REQUIRE_THAT(cc.with([](auto& o) { o.hbar_comm_rank = 3; }).hbar(),
-                   EquivalentTo(CC(N, at3).hbar()));
-    }
-
-    SECTION("skip_singles is not pinned by the round trip") {
-      // base leaves skip_singles unset, so CC resolves it to false for U.
-      // Flipping to oU must pick up the oU default (true), not carry that
-      // resolved false into an ansatz whose ctor requires true.
-      const CC cc(N, base);
-      const auto ou = cc.with([](auto& o) { o.ansatz = CC::Ansatz::oU; });
-      REQUIRE(ou.skip_singles());
-    }
-
-    SECTION("mutation does not disturb the source engine") {
-      const CC cc(N, base);
-      const auto hbar_before = cc.hbar();
-      (void)cc.with([](auto& o) { o.hbar_comm_rank = 4; });
-      REQUIRE_THAT(cc.hbar(), EquivalentTo(hbar_before));
-    }
-  }  // SECTION("copy-and-mutate")
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};

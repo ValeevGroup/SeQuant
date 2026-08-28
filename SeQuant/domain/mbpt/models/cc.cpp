@@ -41,12 +41,16 @@ CC::CC(size_t n, const Options& opts) : N(n), opts_(opts) {
   if (opts_.hbar_expansion == HbarExpansion::Bernoulli &&
       opts_.ansatz != Ansatz::U)
     throw Exception("CC: Bernoulli expansion requires the U ansatz");
+  if (opts_.hbar_expansion == HbarExpansion::Bernoulli &&
+      opts_.hbar_singles_comm_rank > 0)
+    throw Exception(
+        "CC: hbar_singles_comm_rank is not supported with Bernoulli");
   if (unitary() && !opts_.hbar_comm_rank)
     throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
-  if (opts_.ansatz == Ansatz::oT || opts_.ansatz == Ansatz::oU)
-    SEQUANT_ASSERT(skip_singles(),
-                   "CC: skip_singles must be true for orbital-optimized "
-                   "ansatz");
+  if ((opts_.ansatz == Ansatz::oT || opts_.ansatz == Ansatz::oU) &&
+      !skip_singles())
+    throw Exception(
+        "CC: skip_singles must be true for orbital-optimized ansatz");
 }
 
 CC::Ansatz CC::ansatz() const { return opts_.ansatz; }
@@ -61,8 +65,6 @@ std::optional<size_t> CC::hbar_comm_rank() const {
 
 CC::HbarExpansion CC::hbar_expansion() const { return opts_.hbar_expansion; }
 
-/// resolves the `skip_singles` default: on for orbital-optimized ansätze, off
-/// otherwise. Kept here rather than in the ctor so `Options` round-trips.
 bool CC::skip_singles() const {
   return opts_.skip_singles.value_or(opts_.ansatz == Ansatz::oT ||
                                      opts_.ansatz == Ansatz::oU);
@@ -84,13 +86,11 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   // connectivity to ref_av (see lst_options() and the @warning on hbar())
   auto result = mbpt::lst(H(), T(N, skip_singles()), truncation, lst_options());
 
-  // extra singles-only commutators: wrap H̄ with the t1 similarity transform
-  // to order K. Same commutator form as above, since the same connectivity is
-  // supplied downstream.
-  if (opts_.hbar_singles_comm_rank.value_or(0) > 0) {
+  // Apply the optional singles-only transform after the primary BCH series.
+  if (opts_.hbar_singles_comm_rank > 0) {
     auto opts = lst_options();
     opts.skip_clone = true;
-    result = mbpt::lst(result, op::t(1), *opts_.hbar_singles_comm_rank, opts);
+    result = mbpt::lst(result, op::t(1), opts_.hbar_singles_comm_rank, opts);
   }
   return result;
 }

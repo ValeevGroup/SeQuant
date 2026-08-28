@@ -66,12 +66,11 @@ class CC {
     /// maximum order of nested commutators in H̄; must be specified if unitary
     /// ansatz is used
     std::optional<size_t> hbar_comm_rank = std::nullopt;
-    /// order K of the additional singles-only (t1) similarity transform applied
-    /// on top of the standard hbar_comm_rank (R) commutator series. nullopt or
-    /// 0 disables it (default). Designed for the unitary ansatz; applied
-    /// generically. See docs/superpowers/specs/2026-07-07-ucc-extra-singles-
-    /// commutators-design.md
-    std::optional<size_t> hbar_singles_comm_rank = std::nullopt;
+    /// for BCH, maximum order of the additional singles-only similarity
+    /// transform applied after H̄; unitary ansätze use
+    /// \f$ \sigma_1 = T_1 - T_1^\dagger \f$, while non-unitary ansätze use
+    /// \f$ T_1 \f$. Zero disables the transform
+    size_t hbar_singles_comm_rank = 0;
     /// maximum order of nested commutators in the similarity transformed
     /// perturbation operator; must be specified if unitary ansatz is used in
     /// perturbed amplitude derivation
@@ -89,8 +88,10 @@ class CC {
   /// @brief constructs CC engine with custom options
   /// @param n coupled cluster excitation rank
   /// @param opts configuration options @see CC::Options
-  /// @throw Exception if a unitary ansatz has no `hbar_comm_rank`, or if the
-  /// Bernoulli expansion is requested with an ansatz other than `Ansatz::U`
+  /// @throw Exception if a unitary ansatz has no `hbar_comm_rank`, if an
+  /// orbital-optimized ansatz includes singles, or if the Bernoulli expansion
+  /// is requested with an ansatz other than `Ansatz::U` or with a positive
+  /// `hbar_singles_comm_rank`
   explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz
@@ -106,23 +107,9 @@ class CC {
   /// @return the choice of H̄ expansion
   [[nodiscard]] HbarExpansion hbar_expansion() const;
 
-  // clang-format off
-  /// @brief returns a copy of this engine with @p mutate applied to its options
-  /// @param mutate a callable taking `Options&`
+  /// @brief returns a validated copy with @p mutate applied to its options
+  /// @param mutate callable taking `Options&`
   /// @return the mutated copy
-  /// @note The copy is built through the normal constructor, so the *result* is
-  ///   validated; intermediate states are not, since there are none. This is why
-  ///   the options are mutated in one callable rather than by a chain of
-  ///   per-option setters: the ctor invariants couple the options (unitary needs
-  ///   `hbar_comm_rank`; `oT`/`oU` need `skip_singles`), so a chain would have
-  ///   to visit configurations that cannot be valid.
-  /// @code
-  ///   auto report = cc.with([](auto& o) {
-  ///     o.ansatz = Ansatz::U;
-  ///     o.hbar_comm_rank = 3;
-  ///   });
-  /// @endcode
-  // clang-format on
   template <typename F>
   [[nodiscard]] CC with(F&& mutate) const {
     auto o = opts_;
@@ -160,10 +147,10 @@ class CC {
   /// @warning A non-unitary H̄ is not self-contained. Evaluating it with empty
   ///   connectivity, e.g. `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
   ///   retains disconnected terms. Pass `default_op_connections()` (the default
-  ///   when the options argument is omitted), or build H̄ with
-  ///   `mbpt::lst(..., {})` for an explicit form. A unitary H̄ is
-  ///   self-contained, so its connectivity must be empty. See the "Using H̄
-  ///   outside the CC class" section of the user guide.
+  ///   when the options argument is omitted), or reproduce every configured BCH
+  ///   transform with explicit-commutator `mbpt::lst(..., {})` calls. A unitary
+  ///   H̄ is self-contained, so its connectivity must be empty. See the "Using
+  ///   H̄ outside the CC class" section of the user guide.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -302,14 +289,6 @@ class CC {
 
  private:
   size_t N;
-  /// @note Stored whole, rather than decomposed into one member per option, so
-  ///   that `with()` can round-trip it losslessly. In particular
-  ///   `Options::skip_singles` stays `std::optional<bool>` and is resolved on
-  ///   demand by `skip_singles()`. Were the resolved `bool` stored instead,
-  ///   `with()` would pin it, and `cc.with([](auto& o){ o.ansatz = Ansatz::oU;
-  ///   })` on a non-orbital-optimized engine would carry `false` into an ansatz
-  ///   whose ctor requires `true`, where fresh construction defaults it
-  ///   correctly.
   Options opts_;
 
   /// @brief assembles the right-hand UCC EOM equations

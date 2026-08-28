@@ -142,6 +142,8 @@ The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt
    :end-before: end-snippet-4
    :dedent: 2
 
+For BCH expansions, ``Options::hbar_singles_comm_rank`` applies an additional singles-only similarity transform after the primary expansion. Unitary ansätze use :math:`\sigma_1 = T_1 - T_1^\dagger`, while non-unitary ansätze use :math:`T_1`. A zero rank disables this transform; Bernoulli expansions reject a positive rank.
+
 .. _cc-hbar-connectivity:
 
 Using :math:`\bar{H}` outside the CC class
@@ -161,9 +163,11 @@ Using :math:`\bar{H}` outside the CC class
    // WRONG: empty connectivity keeps terms the commutator would have cancelled
    auto bad = op::ref_av(op::P(nₚ(2)) * cc.hbar(), {.connect = {}});
 
-   // also correct: ask lst for the explicit commutator form, which needs
-   // no connectivity
+   // also correct when no additional singles transform is configured: ask lst
+   // for the explicit commutator form, which needs no connectivity
    auto hbar = lst(op::H(), op::T(2), 4);
+
+When ``hbar_singles_comm_rank`` is positive, reproducing a non-unitary :math:`\bar{H}` explicitly requires a second ``lst`` call for the configured singles transform.
 
 Note that ``op::ref_av(expr)`` and ``op::ref_av(expr, {})`` are *not* the same call: the connectivity defaults to ``default_op_connections()`` only when the argument is omitted entirely, since ``EVOptions::connect`` is itself empty by default.
 
