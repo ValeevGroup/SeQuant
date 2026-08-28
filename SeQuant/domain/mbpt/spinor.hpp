@@ -342,9 +342,19 @@ container::svector<KramersBlock> kramers_external_blocks(
 ///        carries a Fock element between opposite Kramers partners (see
 ///        drop_mixed_kramers_fock_terms). Default false: the reduction is a
 ///        property of the REFERENCE, not of the algebra, so callers opt in.
+/// @param expand_A if true (default) expand the antisymmetrizer Â into its
+///        explicit signed external permutations, so every emitted block is the
+///        fully antisymmetrized residual (external configs then fold under the
+///        external swap generators + T). If false, Â is REMOVED instead: the
+///        emitted blocks are the bare (un-antisymmetrized) residual configs,
+///        the
+///        caller applies Â numerically across configs, and — since the bare
+///        blocks carry no external antisymmetry — the configs fold only under T
+///        (doubles -> 8 blocks with use_T, 16 without) and each block carries
+///        ~bra!ket! fewer terms.
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(
     const ExprPtr& expr, bool expand_g = false, bool use_T = true,
-    bool drop_mixed_kramers_fock = false);
+    bool drop_mixed_kramers_fock = false, bool expand_A = true);
 
 // clang-format off
 /// @brief Drop every term containing a Fock (`f`) element between opposite

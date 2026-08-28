@@ -367,7 +367,7 @@ ExprPtr drop_mixed_kramers_fock_terms(const ExprPtr& expr) {
 
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(
     const ExprPtr& expr, bool expand_g, bool use_T,
-    bool drop_mixed_kramers_fock) {
+    bool drop_mixed_kramers_fock, bool expand_A) {
   // Stage 1: factor out the antisymmetrizer Â (kept, not expanded). Its bra/ket
   // are the external virtual/occupied index groups.
   auto A = find_antisymmetrizer(expr);
@@ -388,7 +388,12 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   SEQUANT_ASSERT(n == 2 * n_bra &&
                  "closed_shell_kramers_CC_trace: expected equal-rank external "
                  "virtual/occupied groups");
-  const auto gens = kramers_external_generators(n_bra);
+  // Without the A-expansion the bare blocks are not antisymmetric in their
+  // external groups, so the external swap generators are not symmetries of
+  // the emitted blocks: fold under T only (see expand_A in the header).
+  const auto gens = expand_A
+                        ? kramers_external_generators(n_bra)
+                        : container::svector<container::svector<std::size_t>>{};
   const auto orbits = kramers_config_orbits(n, gens, use_T);
 
   // A-expand: expand the antisymmetrizer Â into its explicit signed external
@@ -402,7 +407,10 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
   // With ḡ still antisymmetric here, the driver Â[ḡ] reduces to ḡ: the bra!ket!
   // signed permutations of an antisymmetric tensor sum to bra!ket!·ḡ,
   // cancelling expand_A_op's 1/(bra!ket!) normalization.
-  ExprPtr inner = expand_A_op(expr);
+  // expand_A: Â -> its signed external permutations (normalized 1/(bra!ket!));
+  // otherwise strip Â and leave the antisymmetrization to the caller.
+  ExprPtr inner = expand_A ? expand_A_op(expr)
+                           : remove_tensor(expr, reserved::antisymm_label());
   expand(inner);
   rapid_simplify(inner);
 
