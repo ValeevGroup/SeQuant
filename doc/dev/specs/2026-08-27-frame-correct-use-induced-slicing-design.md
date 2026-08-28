@@ -103,6 +103,44 @@ crashes elsewhere (p3). The original motivation, the **w20** aux+occ
 until it is, treat §5-§7 as a *hypothesized* defect, not an established one, and
 see §11 for the re-scoped plan of record.
 
+## 1b. The w20 crash, traced (2026-08-27, from the existing failure log)
+
+The original motivation — w20 aux+occ (scheduler=ordered, aux=256, occ=16,
+peak=25e9, dense_time_space, 2 ranks) — was re-read from its recorded failure
+(`w20.aux+occ.log`, `diag.rank{0,1}.log`). Two events:
+
+1. **Non-fatal:** the remat pre-pass throws `SEQUANT_ASSERT(dag_scope == scope)`
+   at `placement_remat.hpp:569`, caught by the `remat placement pre-pass failed
+   (continuing)` guard — eval proceeds without the remat overlay.
+2. **Fatal:** `TA_ASSERT is_range_set_congruent` at TiledArray
+   `tensor/kernels.h:552`, on both ranks. The operation is the multi-occ product
+   ```
+   C(i_4,i_3,μ̃_1372;a_4i_3i_4) * I(i_2,i_1,μ̃_1372;a_1i_1i_2)
+       -> I(i_2,i_1,i_4,i_3; a_1i_1i_2, a_4i_3i_4)
+   ```
+   — **four distinct occ externals** (`i_1..i_4`) under a scope of a **single
+   occ loop `{i}`**. The runtime log shows each operand sliced on exactly ONE
+   occ mode to the current block:
+   ```
+   [SLICE]      node#64081 space=i pmode=1 via=exact idx@pmode=i_1 slice=[20,36)   # I: i_1 only
+   [HOME-SLICE] node#82316 crossed-axis=i@o0 -> p_new=1 blk=[20,36)                # C: i_3 only
+   ```
+   `i_2` and `i_4` stay full, so the result's occ ranges are inconsistent and the
+   congruence assert fires.
+
+**This is precisely §5 + §3.** The single `{i}` loop is the §5 collapse
+(one-loop-per-space where four distinct occ instances belong); `via=exact` is the
+§3 frame-dependent label match picking `pmode=1` per operand. The distinct
+per-instance loops of §6 (and the per-instance scatter of §7.3) are the direct
+fix: with `i_1,i_2,i_3,i_4` each on their own loop, each operand's occ modes are
+restricted consistently and the result is congruent. So **§5-§7 are confirmed as
+the w20 target** — established from the recorded crash, no rerun required.
+
+Note the contrast with w8: `w8-auxocc-ordered-7b` runs the same class of terms
+losslessly because its occ ranges are small enough that the multi-occ product
+never forms an incongruent block; the collapse is present but latent there. The
+defect scales in; that is why w8 masked it.
+
 ## 2. The governing principle
 
 **A DAG scope loop is identified by `DagScopeLevel = {space, depth, ordinal}`,
@@ -194,15 +232,12 @@ by matching labels or spaces across frames.
   as `{axis, level}` with the **full `DagScopeLevel` including `ordinal`**. This
   is the per-occurrence enclosure, correct and available.
 
-## 5. The gap (HYPOTHESIZED — not yet confirmed against a reproduced failure)
+## 5. The gap (CONFIRMED against the w20 crash — §1b)
 
-> **Status after §1a:** the collapse described here is a *code reading* of
-> `build_ordered_schedule`, not something any reproduced w8 failure has been
-> traced to. w8 aux+occ (7b) is lossless *with* two occ externals sliced, which
-> means either the collapse does not occur on that path or it occurs without
-> corrupting the result. Confirm the collapse actually fires (and actually
-> harms) — by dumping the realized schedule levels and, above all, by
-> re-measuring the **w20** crash — before treating §6-§7 as the fix. See §11.
+> **Status after §1b:** the w20 `is_range_set_congruent` crash has been traced
+> to exactly this collapse. w8 aux+occ (7b) stays lossless because its smaller
+> occ ranges never form the incongruent multi-occ product; w20 does. §6-§7 are
+> the fix for w20.
 
 `build_ordered_schedule`'s per-value placement (~lines 1053-1068) maps each
 `per_axis` mode to a **depth by space** (`depth_of_type(ac.axis)`) and
@@ -359,30 +394,27 @@ now-correct, per-instance `occ_facts`.
 
 ## 11. Re-scoped plan of record (2026-08-27, after §1a)
 
-The §1a measurements invalidate the assumption that the aux+occ failure is the
-§5 occ-external collapse. Two concrete failures are now on the table, and the
-design target must be chosen from **measured** crashes, not code reading:
+The §1a measurements ruled out "external-occ never reaches `per_axis`"; the §1b
+trace then **confirmed** the §5 collapse as the w20 target. Two concrete failures
+stand, both now measured:
 
-- **P1 — the w20 `is_range_set_congruent` occ-scatter crash** (original
-  motivation, `w20.aux+occ.log`). NOT yet re-measured on this build. If it still
-  reproduces, instrument it exactly as w8 was (§1a) and trace whether it is the
-  §5 collapse (occ scatter destination restricting one mode where two are
-  batched) — the only evidence that would promote §5-§7 from hypothesis to fix.
-- **P2 — the w8 `ordered_home_reads` PAO premature-eviction crash**
-  (`w8-auxocc-ordered-p3`, occ=4, peak=50e6). Reproducible locally and fast. A
-  home-read *use-count* under-prediction (`ordered_home_reads`), a lifetime bug,
-  distinct from the sliced-mode map. Likely related to
+- **P1 — the w20 `is_range_set_congruent` occ-scatter crash — CONFIRMED as the
+  §5 collapse (§1b).** The fix is §6-§7 (distinct per-instance occ loops +
+  per-instance scatter). This is the primary target of the implementation plan
+  (Tasks 2-3-5-6-7). Validation is necessarily on w20 (the collapse is latent at
+  w8 sizes), which makes the iteration loop slow — a schedule-level dump
+  (realized `DagScopeLevel`s per scope) is the cheap proxy to check the fix
+  produces distinct per-instance occ loops before paying for a full w20 run.
+- **P2 — the w8 `ordered_home_reads` PAO premature-eviction crash — a SEPARATE
+  bug** (`w8-auxocc-ordered-p3`, occ=4, peak=50e6). Reproducible locally and
+  fast. A home-read *use-count* under-prediction (`ordered_home_reads`), a
+  lifetime bug, distinct from the sliced-mode map. Likely related to
   `project_ordered_executor_memory_fix` (needed-gate / persistence) and the
-  `type_in` space-taint in `ordered_home_reads`.
+  `type_in` space-taint in `ordered_home_reads`. Independent of §6-§7; may be
+  fixed before or after, and gives a fast local signal that the ordered path is
+  healthy on tighter budgets.
 
-**Order of work (agreed):** (A) re-measure w20 on z820 to identify which crash is
-the real P1 and whether §5-§7 apply; (B) chase P2 (`ordered_home_reads`) on the
-fast w8 loop. Whichever is confirmed first becomes the concrete target; the
-per-instance loop rework (§6-§7) proceeds only if a measured crash is traced to
-the collapse. The frame-correctness invariant (§2) governs any fix to either.
-
-The Task-2-onward plan in
-`doc/dev/plans/2026-08-27-frame-correct-use-induced-slicing-plan.md` is
-therefore **paused at its Task 1 gate**: Task 1 is done (role source verified,
-`classify_axis` used as-is), and Tasks 2+ are on hold pending the P1/P2
-determination above.
+**Status:** §1a + §1b close the measurement gap. The implementation plan's Task 1
+is done (role source verified; `classify_axis` used as-is). Tasks 2+ are now
+**unblocked for P1** (§5-§7 confirmed). P2 is tracked separately. Frame purity
+(§2) governs both.
