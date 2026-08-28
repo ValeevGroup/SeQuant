@@ -338,8 +338,7 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
   // index labels -- so the result is label-independent. Bundles with identical
   // spaces (e.g. g{p,q;r,s}) compare equal and are left untouched; only
   // differing-color bundles are reoriented (so e.g. a half-tensor X{;a;x} folds
-  // into X{a;;x}). Mirrors the bra<->ket bundle swap in
-  // TensorNetworkV3::canonicalize_slots.
+  // into X{a;;x}).
   const TensorBlockIndexComparer cmp;
   auto space_less = [&cmp](const Index& a, const Index& b) {
     return cmp.compare_spaces(a, b) < 0;
