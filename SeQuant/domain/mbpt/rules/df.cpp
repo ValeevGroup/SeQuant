@@ -57,13 +57,15 @@ ExprPtr density_fit_impl(Tensor const& tnsr_in, Index const& aux_idx,
 
 ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
                     std::wstring_view tensor_label,
-                    std::wstring_view factor_label) {
+                    std::wstring_view factor_label,
+                    std::function<bool(Tensor const&)> const& should_split) {
   using ranges::views::transform;
 
   auto process_tensor = [&](const Tensor& tensor,
                             std::size_t idx_ordinal) -> ExprPtr {
     if (tensor.label() == tensor_label && tensor.bra_net_rank() == 2 &&
-        tensor.ket_net_rank() == 2 && tensor.aux_rank() == 0) {
+        tensor.ket_net_rank() == 2 && tensor.aux_rank() == 0 &&
+        (!should_split || should_split(tensor))) {
       return density_fit_impl(tensor, Index(aux_space, idx_ordinal),
                               factor_label);
     }
@@ -73,7 +75,8 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
 
   if (expr->is<Sum>()) {
     return ex<Sum>(*expr | transform([&](auto&& x) {
-      return density_fit(x, aux_space, tensor_label, factor_label);
+      return density_fit(x, aux_space, tensor_label, factor_label,
+                         should_split);
     }));
   } else if (expr->is<Tensor>()) {
     if (auto factorized = process_tensor(expr->as<Tensor>(), 1); factorized) {

@@ -1279,6 +1279,43 @@ SECTION("rules") {
     }
   }
 
+  SECTION("density-fit selective") {
+    // keep g as a 4-center leaf when its two electrons are (unocc,unocc) and
+    // (occ,occ); electron k = (bra[k], ket[k])
+    auto const& reg = get_default_context().index_space_registry();
+    auto split_unless_vvoo = [&reg](Tensor const& t) {
+      auto occ = [&reg](Index const& ix) {
+        return reg->is_pure_occupied(ix.space());
+      };
+      auto vir = [&reg](Index const& ix) {
+        return reg->is_pure_unoccupied(ix.space());
+      };
+      auto const& b = t.bra();
+      auto const& k = t.ket();
+      const bool e1_vv = vir(b[0]) && vir(k[0]), e1_oo = occ(b[0]) && occ(k[0]);
+      const bool e2_vv = vir(b[1]) && vir(k[1]), e2_oo = occ(b[1]) && occ(k[1]);
+      return !((e1_vv && e2_oo) || (e1_oo && e2_vv));
+    };
+    const std::vector<std::wstring> inputs = {
+        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",  // (ov|ov): still decomposed
+        L"t{a1,a2;i1,i2} g{a1,i1;a2,i2}",  // (vv|oo): kept as 4-center
+        L"t{a1,a2;i1,i2} g{i1,a1;i2,a2}",  // (oo|vv): kept as 4-center
+    };
+    const std::vector<std::wstring> expected = {
+        L"t{a1,a2;i1,i2} B{i1;a1;x_1} B{i2;a2;x_1}",
+        L"t{a1,a2;i1,i2} g{a1,i1;a2,i2}",
+        L"t{a1,a2;i1,i2} g{i1,a1;i2,a2}",
+    };
+    REQUIRE(inputs.size() == expected.size());
+    const IndexSpace aux_space = reg->retrieve(L"x");
+    for (std::size_t i = 0; i < inputs.size(); ++i) {
+      CAPTURE(inputs.at(i));
+      ExprPtr actual = mbpt::density_fit(deserialize(inputs.at(i)), aux_space,
+                                         L"g", L"B", split_unless_vvoo);
+      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
+    }
+  }
+
   SECTION("tensor-hypercontract") {
     const std::vector<std::wstring> inputs = {
         L"t{a1,a2;i1,i2} t{a3;i3}",
@@ -1456,7 +1493,8 @@ SECTION("manuscript-examples") {
         simplify(expr),
         EquivalentTo(
             L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S "
-            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
+            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 "
+            L"g{p3,p4;p1,p2}:A-C-S "
             L"x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S ã{p1,p2;p3,p4} "
             L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
