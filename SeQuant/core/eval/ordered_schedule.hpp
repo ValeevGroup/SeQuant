@@ -991,47 +991,80 @@ forced_split_demotions(RichSchedule const& rich,
   // 1. The canonical chain: one representative Index per distinct axis TYPE
   // present in ANY cell's per_axis (LoopLocal, Reduction, OR LoopCarried --
   // NOT just home_floor; see the function doc comment's part 1).
-  container::svector<Index> types;
-  for (CellLegality const& cl : legality.cells)
+  // Per-INSTANCE loop chain (2026-08-29 position-based de-collapse): for each
+  // space, m_s = the MAX over cells of the number of same-space per_axis modes
+  // in one cell; emit m_s consecutive depths, one per within-space SLOT
+  // (loop_slot 0..m_s-1). A value carrying two same-space batched modes (a
+  // doubles amplitude's two occ externals) thus gets TWO distinct loops instead
+  // of one -- the collapse fix. `types[d]` is a representative Index of the
+  // depth's space; `type_slot[d]` is its within-space slot (the DagScopeLevel
+  // loop_slot). NOTE: same-space slots occupy distinct DEPTHS here (the
+  // assembly is one loop per depth); depth carries both group and member
+  // nesting for now.
+  std::map<std::wstring, std::size_t> mult;  // space -> max same-space count
+  std::map<std::wstring, Index> rep;         // space -> representative axis
+  for (CellLegality const& cl : legality.cells) {
+    std::map<std::wstring, std::size_t> cnt;
     for (AxisClass const& ac : cl.per_axis) {
-      auto const& bk = ac.axis.space().base_key();
-      bool const seen = std::any_of(
-          types.begin(), types.end(),
-          [&](Index const& ix) { return ix.space().base_key() == bk; });
-      if (!seen) types.push_back(ac.axis);
+      std::wstring const bk{ac.axis.space().base_key()};
+      ++cnt[bk];
+      rep.emplace(bk, ac.axis);
     }
-
-  auto const rank_of = [&](Index const& ix) -> std::size_t {
+    for (auto const& [bk, c] : cnt) mult[bk] = std::max(mult[bk], c);
+  }
+  auto const rank_of = [&](std::wstring const& bk) -> std::size_t {
     std::size_t i = 0;
     for (auto const& key : mode_order) {
-      if (ix.space().base_key() == key) return i;
+      if (bk == key) return i;
       ++i;
     }
     return static_cast<std::size_t>(-1);
   };
-  std::sort(types.begin(), types.end(), [&](Index const& a, Index const& b) {
-    auto const ra = rank_of(a), rb = rank_of(b);
-    if (ra != rb) return ra < rb;
-    return a.space().base_key() < b.space().base_key();
-  });
+  container::svector<std::wstring> spaces;
+  for (auto const& [bk, m] : mult) spaces.push_back(bk);
+  std::sort(spaces.begin(), spaces.end(),
+            [&](std::wstring const& a, std::wstring const& b) {
+              auto const ra = rank_of(a), rb = rank_of(b);
+              if (ra != rb) return ra < rb;
+              return a < b;
+            });
+  container::svector<Index> types;
+  container::svector<int> type_slot;
+  for (auto const& bk : spaces)
+    for (std::size_t k = 0; k < mult[bk]; ++k) {
+      types.push_back(rep.at(bk));
+      type_slot.push_back(static_cast<int>(k));
+    }
 
   // TEMP instrumentation (P1 Task 2 "before"): the realized loop chain is one
   // representative per SPACE (the collapse). Guarded by SEQUANT_DUMP_SCHEDULE.
   if (std::getenv("SEQUANT_DUMP_SCHEDULE")) {
-    std::wcerr << L"[sched] loop chain (one loop per space): ";
+    std::wcerr << L"[sched] per-instance loop chain: ";
     for (std::size_t d = 0; d < types.size(); ++d)
-      std::wcerr << L"d" << d << L"=" << types[d].space().base_key() << L"("
-                 << types[d].full_label() << L") ";
+      std::wcerr << L"d" << d << L"=" << types[d].space().base_key() << L"#slot"
+                 << type_slot[d] << L" ";
     std::wcerr << L"\n";
   }
 
   std::size_t const n = types.size();
-  auto const depth_of_type =
-      [&](Index const& ix) -> std::optional<std::size_t> {
-    auto const& bk = ix.space().base_key();
+  // Depth of the loop for a given (space, within-space slot).
+  auto const depth_of_instance = [&](std::wstring const& bk,
+                                     int slot) -> std::optional<std::size_t> {
     for (std::size_t d = 0; d < n; ++d)
-      if (types[d].space().base_key() == bk) return d;
+      if (std::wstring(types[d].space().base_key()) == bk &&
+          type_slot[d] == slot)
+        return d;
     return std::nullopt;
+  };
+  // The within-space slot (loop_slot) of per_axis[pos] in `cl`: its position
+  // among same-space per_axis modes in per_axis order (the value's own-frame
+  // position). This is the position-based merge coordinate (2026-08-29).
+  auto const slot_of = [](CellLegality const& cl, std::size_t pos) -> int {
+    std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+    int slot = 0;
+    for (std::size_t i = 0; i < pos; ++i)
+      if (std::wstring(cl.per_axis[i].axis.space().base_key()) == bk) ++slot;
+    return slot;
   };
 
   // 2. Per-value placement: home BuildStep (root-level bucket uses index n
@@ -1063,14 +1096,19 @@ forced_split_demotions(RichSchedule const& rich,
     // with LoopCarried (AccumulateScatter) dominating Reduction: a carried axis
     // must materialize to full even if a same-type index reduces.
     container::svector<std::pair<std::size_t, OutputKind>> escapes;
-    for (AxisClass const& ac : cl.per_axis) {
+    for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
+      AxisClass const& ac = cl.per_axis[pos];
       if (ac.role == LoopRole::LoopLocal) continue;
-      auto const d = depth_of_type(ac.axis);
+      std::wstring const bk{ac.axis.space().base_key()};
+      auto const d = depth_of_instance(bk, slot_of(cl, pos));
       SEQUANT_ASSERT(d.has_value());  // types was built from this same union
       OutputKind const kind =
           (ac.role == LoopRole::Reduction)
               ? OutputKind::AccumulateSum
               : OutputKind::AccumulateScatter;  // LoopCarried
+      // Each per-instance mode escapes to its OWN depth (distinct loop_slot),
+      // so same-space modes no longer collapse to one escape; the dedup below
+      // only merges a genuine reduce+carry pair that lands at ONE depth.
       auto it = std::find_if(escapes.begin(), escapes.end(),
                              [&](auto const& e) { return e.first == *d; });
       if (it == escapes.end())
@@ -1128,23 +1166,33 @@ forced_split_demotions(RichSchedule const& rich,
     // Plain BuildStep: home depth by SET equality of the accumulated
     // (root-to-depth) TYPE set against home_floor's TYPE set (root if
     // home_floor is empty), mirroring build_scope_schedule's step 4.
+    // Keep MULTIPLICITY (per-instance): a value homing two same-space LoopLocal
+    // modes must be inside both their loops.
     container::svector<std::wstring> want;
-    for (Index const& m : cl.home_floor) {
-      auto const& bk = m.space().base_key();
-      if (std::find(want.begin(), want.end(), bk) == want.end())
-        want.push_back(bk);
-    }
+    for (Index const& m : cl.home_floor)
+      want.push_back(std::wstring{m.space().base_key()});
 
     std::optional<std::size_t> target;
     if (!want.empty()) {
-      container::svector<std::wstring> enclosing;
-      for (std::size_t d = 0; d < n; ++d) {
-        enclosing.push_back(types[d].space().base_key());
-        if (enclosing.size() == want.size() &&
-            std::is_permutation(enclosing.begin(), enclosing.end(),
-                                want.begin()))
+      // Home at the SHALLOWEST depth whose enclosed loops (multiset of spaces
+      // to that depth) COVER `want`. With one slot per space this reduces to
+      // the former exact permutation match; with multiple same-space slots it
+      // homes the value inside all its home loops (invariant to any non-home
+      // slot it happens to sit within -- correct, at most redundant).
+      auto const covers = [&](std::size_t d) {
+        std::map<std::wstring, int> need;
+        for (auto const& w : want) ++need[w];
+        for (std::size_t e = 0; e <= d; ++e)
+          --need[std::wstring{types[e].space().base_key()}];
+        for (auto const& [k, v] : need)
+          if (v > 0) return false;
+        return true;
+      };
+      for (std::size_t d = 0; d < n; ++d)
+        if (covers(d)) {
           target = d;
-      }
+          break;
+        }
     }
 
     if (target)
@@ -1189,8 +1237,16 @@ forced_split_demotions(RichSchedule const& rich,
   std::optional<detail::ForcedSplitPasses> split_passes;
   {
     std::size_t forced_count = 0;
+    container::svector<std::wstring> seen_split_spaces;
     for (std::size_t d = 0; d < n; ++d) {
       std::wstring const key{types[d].space().base_key()};
+      // A space now spans several per-instance slot depths; the PROCON split is
+      // per SPACE (base_key), so consider each space once, at its first (slot
+      // 0) depth. (Per-slot PROCON of a multi-member group is deferred.)
+      if (std::find(seen_split_spaces.begin(), seen_split_spaces.end(), key) !=
+          seen_split_spaces.end())
+        continue;
+      seen_split_spaces.push_back(key);
       bool const forced =
           std::any_of(legality.cells.begin(), legality.cells.end(),
                       [&](CellLegality const& cl) {
@@ -1239,7 +1295,7 @@ forced_split_demotions(RichSchedule const& rich,
   };
   auto const make_block =
       [&](Index const& axis, int latitude_ordinal, std::size_t depth,
-          container::svector<std::size_t> const& build_ids,
+          int loop_slot, container::svector<std::size_t> const& build_ids,
           container::svector<std::pair<std::size_t, OutputKind>> const& outputs,
           container::vector<Step>&& child_steps,
           container::vector<detail::OrderedScheduleStepMeta>&& child_metas)
@@ -1263,6 +1319,7 @@ forced_split_demotions(RichSchedule const& rich,
     block.latitude_ordinal = latitude_ordinal;
     block.level = DagScopeLevel{.depth = depth,
                                 .space = std::wstring{axis.space().base_key()},
+                                .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
     block.kind = detail::mode_is_external(rich, axis)
                      ? BatchModeType::External
@@ -1383,9 +1440,9 @@ forced_split_demotions(RichSchedule const& rich,
               else
                 collect_rec(std::get<ScopeBlock>(s.value), pass_produced);
             }
-            next_steps.push_back(Step{
-                make_block(types[d], latitude_ordinal, d + 1, builds, outs,
-                           std::move(child_steps), std::move(child_metas))});
+            next_steps.push_back(Step{make_block(
+                types[d], latitude_ordinal, d + 1, type_slot[d], builds, outs,
+                std::move(child_steps), std::move(child_metas))});
             detail::OrderedScheduleStepMeta m;
             for (auto const& o : outs) m.produced.push_back(o.first);
             m.requires_ = external_needs(pass_produced);
@@ -1408,9 +1465,9 @@ forced_split_demotions(RichSchedule const& rich,
       emit_pass(1, cons_builds, cons_outs, std::move(forked.consumer),
                 std::move(cons_metas));
     } else {
-      ScopeBlock block =
-          make_block(types[d], 0, d + 1, bucket.build_ids, bucket.outputs,
-                     std::move(pending_steps), std::move(pending_metas));
+      ScopeBlock block = make_block(
+          types[d], 0, d + 1, type_slot[d], bucket.build_ids, bucket.outputs,
+          std::move(pending_steps), std::move(pending_metas));
       next_steps.push_back(Step{std::move(block)});
       detail::OrderedScheduleStepMeta m;
       for (auto const& out_entry : bucket.outputs)

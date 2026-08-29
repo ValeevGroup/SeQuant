@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
+#include <iostream>
 #include <unordered_map>
 #include <utility>
 
@@ -378,6 +380,22 @@ RichSchedule compute_dag_boulevard(R const& forest,
         child_ectx.push_back({m, {std::size_t{0}, block_of(m)}});
         own_modes.push_back(m);
       }
+    }
+
+    // TEMP instrumentation (Task 2 verify): dump this node's opened_here (the
+    // group nest structure the factorizer emits) -- which same-space modes open
+    // at ONE node (a multi-loop group) vs at different nodes (separate groups).
+    // Guarded by SEQUANT_DUMP_OPENS.
+    if (std::getenv("SEQUANT_DUMP_OPENS") &&
+        !n->batch_loops_opened_here().empty()) {
+      std::wcerr << L"[opens] hash=" << n->hash_value() << L" opened_here={";
+      for (auto const& [ix, kind] : n->batch_loops_opened_here())
+        std::wcerr << ix.full_label() << L":" << ix.space().base_key() << L":"
+                   << (kind == BatchModeType::Contracted ? L"C" : L"E") << L" ";
+      std::wcerr << L"} carried={";
+      for (auto const& c : n->canon_indices())
+        std::wcerr << c.full_label() << L" ";
+      std::wcerr << L"}\n";
     }
 
     container::svector<std::size_t> child_recs;
