@@ -232,6 +232,12 @@ struct OccurrenceRec {
   container::svector<Index> carried;  //!< this occurrence's canon_indices
   container::svector<Index> home;     //!< proto-expanded home_scope
   detail::BatchContext ectx;  //!< ENCLOSING loops (excludes this node's own)
+  //!< Task 2 (loop identity): per \c carried position, the \c loop_slot of the
+  //!< batch loop that slices it (which MEMBER of its same-space group), or -1
+  //!< where the position is not a batched (loop-sliced) mode. Assigned by the
+  //!< union-find over producer->consumer slot connectivity in \c
+  //!< compute_dag_boulevard (spec 2026-08-28 sec.4-5). Parallel to \c carried.
+  container::svector<int> loop_slot;
 };
 
 ///
@@ -530,6 +536,178 @@ RichSchedule compute_dag_boulevard(R const& forest,
       c.occurrences.push_back(make_occ());
     }
   }
+
+  // Task 2 (loop identity, spec 2026-08-28 sec.4-5): assign a per-occurrence
+  // `loop_slot` -- which MEMBER of a same-space loop group slices each batched
+  // carried mode.
+  //
+  // A loop's identity comes from PHYSICAL producer->consumer connectivity,
+  // never from the loop-colored value-id (that would be circular -- the
+  // value-id needs `loop_slot`). Loops are grouped by connected components; a
+  // component is one physical loop and its `loop_slot` numbers the components
+  // of each space.
+  //
+  // A component is a set of (value_id, STRUCTURAL slot) nodes, where the slot
+  // is a mode's position in `canon_indices`. That order is invariant across a
+  // value's occurrences (same structure => same canonical order; only the
+  // LABELS differ between terms), so keying by position folds the occurrences
+  // across trees. Edges connect a child value's slot to its parent's slot for
+  // the SAME physical mode, matched by `Index ==` in the PARENT OCCURRENCE's
+  // own frame -- the child and its parent are in one tree, so labels agree
+  // there (eval.hpp `contracted_indices` relies on exactly this). A same-space
+  // transposition between two occurrences (spec sec.4(b)) surfaces as a
+  // rejected union (below), not as a relabeling of the position key; recording
+  // it is deferred.
+  //
+  // Symmetry stays OUT of this pass: a symmetric tensor's two modes are still
+  // two distinct physical loops; folding `A(_,i)` with `A(i,_)` is a downstream
+  // VALUE-ID decision (Task 4) via the existing loop-colored occurrence_key.
+  // Where connectivity is contradictory (spec sec.4 C/D) or symmetry leaves the
+  // mapping free, the safe direction is to KEEP loops distinct (reject the
+  // merge): an over-split loop is a missed fusion (still correct), a collapse
+  // is the crash.
+  {
+    std::unordered_map<std::size_t, std::size_t>
+        point_value;  // point->value_id
+    std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
+    for (ValueCell const& c : out.cells)
+      for (OccurrenceRec const& o : c.occurrences) {
+        point_value[o.point] = c.value_id;
+        point_occ[o.point] = &o;
+      }
+
+    std::size_t constexpr POS_BITS = 20;  // a value's index count is tiny
+    auto const encode = [](std::size_t vid, std::size_t pos) -> std::size_t {
+      return (vid << POS_BITS) | pos;
+    };
+    auto const dec_vid = [](std::size_t n) { return n >> POS_BITS; };
+    auto const dec_pos = [](std::size_t n) {
+      return n & ((std::size_t{1} << POS_BITS) - 1);
+    };
+
+    std::unordered_map<std::size_t, std::size_t>
+        uf;  // node -> parent (self=root)
+    // CONFLICT-AWARE union-find: a component is one physical loop, so it must
+    // never hold two DISTINCT slots of one value. members[root] maps value_id
+    // -> the single slot that value contributes; a union that would violate
+    // this is REJECTED (keep loops distinct -- the safe direction) rather than
+    // merged, which otherwise cascades a single transposition into a per-space
+    // collapse.
+    std::unordered_map<std::size_t, std::map<std::size_t, std::size_t>> members;
+    auto find = [&](std::size_t x) -> std::size_t {
+      auto it = uf.find(x);
+      if (it == uf.end()) {
+        uf.emplace(x, x);
+        members[x][dec_vid(x)] = dec_pos(x);
+        return x;
+      }
+      std::size_t root = x;
+      while (uf[root] != root) root = uf[root];
+      while (uf[x] != root) {  // path-compress
+        std::size_t const nxt = uf[x];
+        uf[x] = root;
+        x = nxt;
+      }
+      return root;
+    };
+    auto try_unite = [&](std::size_t a, std::size_t b) -> bool {
+      std::size_t const ra = find(a), rb = find(b);
+      if (ra == rb) return true;
+      auto& ma = members[ra];
+      auto& mb = members[rb];
+      for (auto const& [vid, pos] : ma) {
+        auto const jt = mb.find(vid);
+        if (jt != mb.end() && jt->second != pos) return false;  // conflict
+      }
+      for (auto const& [vid, pos] : ma) mb[vid] = pos;  // merge ma -> mb
+      members.erase(ra);
+      uf[ra] = rb;
+      return true;
+    };
+
+    auto const is_batched = [](OccurrenceRec const& occ,
+                               Index const& m) -> bool {
+      for (auto const& e : occ.ectx)
+        if (e.first == m) return true;
+      return false;
+    };
+
+    bool const conflict_dump = std::getenv("SEQUANT_DUMP_LOOP_SLOT") != nullptr;
+    // Edges + node creation, keyed by CANONICAL slot (occurrence-invariant).
+    for (ValueCell const& c : out.cells)
+      for (OccurrenceRec const& occ : c.occurrences) {
+        OccurrenceRec const* par = nullptr;
+        std::size_t par_vid = 0;
+        if (occ.consumer_point != occ.point) {
+          auto const pit = point_occ.find(occ.consumer_point);
+          auto const vit = point_value.find(occ.consumer_point);
+          if (pit != point_occ.end() && vit != point_value.end()) {
+            par = pit->second;
+            par_vid = vit->second;
+          }
+        }
+        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
+          Index const& m = occ.carried[pV];
+          if (!is_batched(occ, m)) continue;
+          (void)find(encode(c.value_id, pV));  // seed the node
+          if (!par) continue;
+          // Match the SAME physical mode in the parent OCCURRENCE's own frame
+          // (same tree as the child, so labels agree -- contracted_indices
+          // relies on this). NOT cell.carried, whose labels come from a
+          // possibly- different tree. Node keys use STRUCTURAL position
+          // (canon_indices order is invariant across a value's occurrences;
+          // only the labels differ), which folds the value's occurrences across
+          // trees.
+          auto const pj =
+              std::find(par->carried.begin(), par->carried.end(), m);
+          if (pj == par->carried.end()) continue;  // contracted at parent
+          std::size_t const pC =
+              static_cast<std::size_t>(pj - par->carried.begin());
+          if (!try_unite(encode(c.value_id, pV), encode(par_vid, pC)) &&
+              conflict_dump)
+            std::wcerr << L"[loop_slot] REJECTED edge (value " << c.value_id
+                       << L" pos " << pV << L") ~ (value " << par_vid
+                       << L" pos " << pC << L") mode " << m.full_label()
+                       << L" -- would collapse two members; kept distinct\n";
+        }
+      }
+
+    // Number the components: one loop_slot per component, ranked per SPACE in
+    // first-seen order over each value's canonical frame. A component is
+    // single-space (edges join only identical physical modes).
+    std::unordered_map<std::size_t, int> root_slot;  // root -> loop_slot
+    std::map<std::wstring, int> next_slot;           // space -> next slot #
+    for (ValueCell const& c : out.cells)
+      for (OccurrenceRec const& occ : c.occurrences)
+        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
+          if (!is_batched(occ, occ.carried[pV])) continue;
+          std::size_t const root = find(encode(c.value_id, pV));
+          if (root_slot.find(root) != root_slot.end()) continue;
+          std::wstring const sp{occ.carried[pV].space().base_key()};
+          root_slot.emplace(root, next_slot[sp]++);
+        }
+
+    // Stamp each occurrence's per-position loop_slot (structural position keys
+    // fold occurrences of one value across trees).
+    bool const dump = conflict_dump;
+    for (ValueCell& c : out.cells)
+      for (OccurrenceRec& occ : c.occurrences) {
+        occ.loop_slot.assign(occ.carried.size(), -1);
+        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
+          if (!is_batched(occ, occ.carried[pV])) continue;
+          occ.loop_slot[pV] = root_slot.at(find(encode(c.value_id, pV)));
+        }
+        if (dump) {
+          std::wcerr << L"[loop_slot] value_id=" << c.value_id << L" point="
+                     << occ.point << L" carried={";
+          for (std::size_t k = 0; k < occ.carried.size(); ++k)
+            std::wcerr << occ.carried[k].full_label() << L":"
+                       << occ.loop_slot[k] << L" ";
+          std::wcerr << L"}\n";
+        }
+      }
+  }
+
   return out;
 }
 

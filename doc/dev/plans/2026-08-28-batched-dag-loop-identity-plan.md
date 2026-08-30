@@ -94,6 +94,56 @@ latitude_ordinal}`; the vocabulary, behavior unchanged.
 
 ### Task 2: Assign per-occurrence `loop_slot` at fusion
 
+> **Micro-design (2026-08-29), connectivity components (spec §4-§5).**
+> Supersedes an earlier position-based note (deleted): position-in-own-frame was
+> a mid-session shortcut, is exactly what e8bcee766's `slot_of` did, and it does
+> NOT establish cross-frame member identity (spec §3: `loop_slot` "assigned by
+> fusion").
+>
+> **Key decoupling (settled 2026-08-29):** `loop_slot` comes from PHYSICAL
+> producer→consumer connectivity ONLY -- never the loop-colored value-id (which
+> needs `loop_slot`; using it would be circular). The value graph is a DAG, so a
+> single pass suffices -- no fixed point. **Symmetry stays OUT of this pass:** a
+> symmetric tensor's two modes are still two distinct physical loops; folding
+> `A(_,i)` with `A(i,_)` is a downstream VALUE-ID decision (Task 4) via the
+> existing loop-colored `occurrence_key`/TNv3 graph path. So NO graph
+> canonicalization here. Where connectivity is contradictory (§4 C/D) or symmetry
+> leaves the mapping free, the **safe direction is to keep loops distinct**
+> (reject the merge): an over-split loop is a missed fusion (still correct), a
+> collapse is the crash. The design:
+> - **Component nodes:** `(value_id, STRUCTURAL slot)` = a mode's position in
+>   `canon_indices`. That order is invariant across a value's occurrences (same
+>   structure => same canonical order; only the LABELS differ between terms), so
+>   keying by position folds the occurrences across trees. (Keying by `cell.carried`
+>   label lookup was tried and REJECTED -- it matches against the first
+>   occurrence's labels, which come from a different term, so it strands every
+>   relabeled mode; measured 4311 spurious skips on w8.)
+> - **Edges:** per `OccurrenceRec` of value V with consumer C (`consumer_point`),
+>   for each batched mode both carry, unite `(V, posV)`-`(C, posC)`. Mode
+>   correspondence is a `Index ==` match in the **parent OCCURRENCE's own frame**
+>   (child and parent share one tree, so labels agree there --
+>   `contracted_indices` eval.hpp:549 relies on this). **Batched** = the mode is
+>   sliced by an enclosing loop (in the occurrence's `ectx`); a carried-but-not-
+>   enclosed mode is correctly left -1.
+> - **Conflict = keep distinct (safe):** if a union would place two DISTINCT slots
+>   of one value in one component, REJECT it (over-split, never collapse). This is
+>   the §4 tracked choice; recording the loser's transposition so the transposed
+>   occurrence reads the swapped slot is DEFERRED (improvement 2). w8 measures 36
+>   such rejections (safe over-splits, e.g. `i` gets 3 global members not 2).
+> - **Numbering:** each component -> one `loop_slot`, ranked per space (first-seen
+>   over occurrences -- deterministic).
+> - **Storage:** per-`carried`-position `loop_slot` (`svector<int>`, -1 where not
+>   batched) on `OccurrenceRec`; additive, nothing consumes it yet.
+>
+> **Status (2026-08-29): position-based LOCKED, lossless on w8, within-value slots
+> distinct.** Cross-occurrence consolidation (canonical-frame refinement) + the
+> §4 transposition recording are deferred to be settled by Task 3's actual
+> consumption (does w8 stay lossless / w20 stop crashing) rather than in isolation.
+> The C/D/E transposition unit fixture (Step 3) is deferred with it.
+> - The seam is already wired per-occurrence (`slice_to_use` ->
+>   `loop_of_level(level) -> mode_of(hash, LoopId, consumer)`); the missing piece
+>   is distinct `LoopId`s per slot, which `loop_slot` in the level provides.
+
 **Why:** `loop_slot` is the missing identity. Fusion is where the correspondence
 across frames is established (spec §4-§5).
 
