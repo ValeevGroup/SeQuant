@@ -47,7 +47,7 @@ struct CacheConfig {
   /// cached. 0 (default) disables the gate.
   double max_footprint = 0.;
   /// Minimum non-persistent repeats to cache an internal node (CSE rule).
-  std::size_t min_repeats = 2;
+  std::size_t min_repeats = 1;
   /// `bool(EvalNodeDryRun const&)`: true if the node is intrinsically volatile
   /// (typically the amplitude leaves). Empty => nothing is volatile.
   std::function<bool(EvalNodeDryRun const&)> is_volatile;

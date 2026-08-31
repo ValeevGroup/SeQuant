@@ -692,7 +692,9 @@ TEST_CASE(
       int const lf = meas_cache.life(vit->second);
       if (ml <= 0) continue;  // never homed non-persistently (persistent path)
       std::size_t const measured = std::size_t(ml - lf);
-      std::size_t const pred = predicted(vc.value_id);
+      // Root-level BuildStep home scope is ROOT (empty key); per-cell
+      // ordered_home_reads takes the home-scope key.
+      std::size_t const pred = predicted(vc.value_id, {});
       ++n_checked;
       if (pred != measured) {
         ++n_mismatch;

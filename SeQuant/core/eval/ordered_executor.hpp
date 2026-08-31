@@ -251,7 +251,8 @@ void run_ordered_contracted_block(
     container::vector<ResultPtr>& value_results, container::vector<char>& built,
     std::function<bool(node_t const&)> const& is_volatile = {},
     std::function<std::size_t(Index const&)> const& n_blocks = {},
-    std::function<std::size_t(std::size_t)> const& home_reads = {},
+    std::function<std::size_t(std::size_t, HomeScopeKey const&)> const&
+        home_reads = {},
     container::set<std::size_t> const* needed_build = nullptr) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
@@ -298,8 +299,43 @@ void run_ordered_contracted_block(
   // executor's OWN explicit cache calls (output/escape access/store/home) pass,
   // so a sliced value keys by its distinct home coloring. Unsliced => empty
   // coloring => byte-identical to node keying.
+  //
+  // SCOPE-CONSISTENT coloring (2026-08-31): a value's home coloring must
+  // reflect only the modes SLICED WITHIN THIS BLOCK'S HOME SCOPE (`ectx`, one
+  // level out
+  // -- where an escape output lands), NOT the value's full `home_mode_depth`.
+  // A MULTI-LEVEL escape homes ONE value at several scopes: the OUTER
+  // (shallower) level is LESS sliced than the deepest home. At ROOT (`ectx`
+  // empty) the value is the COMPLETE form and must key by PLAIN node-id (empty
+  // coloring) -- exactly how a root consumer keys it (`value_is_sliced` is
+  // false when the mode is out of the batch context). Storing the full under
+  // the per-vid coloring `{i}` while a root reader keys it `∅` is a silent
+  // store-vs-read key mismatch -> the consumer misses a value that WAS stored.
+  // Filter the per-vid coloring to the (depth,slot) identities present in
+  // `ectx`.
   auto const value_of = [&](std::size_t vid) -> typename Cache::cache_key_type {
-    return {resolve(vid), ordered_value_home_coloring(ordered, vid)};
+    node_t const& nd = resolve(vid);
+    auto const it = ordered.home_mode_depth.find(vid);
+    if (it == ordered.home_mode_depth.end())
+      return {nd, eval::ValueIdColoring{}};
+    eval::ValueIdColoring col;
+    for (auto const& [m, dc] : it->second) {
+      // `dc` is the mode's home LOOP color (LoopKey::color -- depth AND
+      // loop_slot, stored by home_mode_depth). A mode is sliced WITHIN this
+      // home scope iff its loop is one of the enclosing loops (`ectx`), matched
+      // by FULL loop identity, not depth alone (one cache per loop).
+      bool in_scope = false;
+      for (auto const& lvl : ectx)
+        if (static_cast<std::size_t>(dc) == lvl.level.key().color()) {
+          in_scope = true;
+          break;
+        }
+      if (in_scope) {
+        col.ctx_modes.push_back(m);
+        col.colors.emplace(m, static_cast<std::size_t>(dc));
+      }
+    }
+    return {nd, std::move(col)};
   };
 
   // members co-evaluated within one batch pass: this block's own direct
@@ -388,11 +424,52 @@ void run_ordered_contracted_block(
     for (auto const& [ovid, okind] : block.outputs) add_with_ops(ovid);
   }
 
+  // A block-internal homed value's home slot must EXIST (store() is a no-op
+  // for an unregistered key) with the SCHEDULED life -- its home_reads over the
+  // ordered scopes (build store + every direct-DAG-parent read, nested-block
+  // consumers included) -- NOT the scratch's within-block CSE encounter count.
+  // Map each BuildStep member's node to its home_reads life so
+  // make_batched_scratch registers it unconditionally (see the member-root
+  // registration there). Root-level BuildSteps already get this via
+  // ensure_home_slot; block-internal ones had no such call, so a homed value
+  // consumed only by a nested block (within-block count 1) or read by a
+  // co-member under a different frame's label (inconsistent signature) got no
+  // slot and every consumer missed.
+  std::function<std::size_t(node_t const&)> member_life;
+  if (home_reads) {
+    std::unordered_map<std::size_t, std::size_t> life_by_hash;
+    for (Step const& s : block.steps)
+      if (auto const* b = std::get_if<BuildStep>(&s.value)) {
+        node_t const& nd = resolve(b->value_id);
+        if (!nd.leaf())
+          // A block-member BuildStep is single-cell (not an escape output), so
+          // its home key never matches an intermediate-escape cell -- pass the
+          // block's own scope; home_reads falls through to the collapsed count.
+          life_by_hash[nd->hash_value()] =
+              home_reads(b->value_id, HomeScopeKey{});
+      }
+    member_life =
+        [lh = std::move(life_by_hash)](node_t const& n) -> std::size_t {
+      auto const it = lh.find(n->hash_value());
+      return it == lh.end() ? std::size_t{0} : it->second;
+    };
+  }
+
+  // This block's ESCAPE OUTPUT hashes: they are homed at block CLOSE (one level
+  // out), NOT built into the scratch each batch, so make_batched_scratch must
+  // not give them a scratch slot (an empty slot the assembly probes then falls
+  // through to the value's real home, draining it -- the 75735 class of crash).
+  std::unordered_set<std::size_t> escape_output_hashes;
+  for (auto const& [ovid, okind] : block.outputs) {
+    (void)okind;
+    escape_output_hashes.insert(rich.cells[ovid].hash);
+  }
   auto bs = [&]() {
     PhaseTimer::Scope _pt("A.make_scratch");
     return sequant::detail::make_batched_scratch(
         members, parent_cache, /*read_from_home=*/true,
-        scope_ctx.empty() ? nullptr : &scope_ctx);
+        scope_ctx.empty() ? nullptr : &scope_ctx, member_life,
+        &escape_output_hashes);
   }();
   bs.cache.set_parent(&parent_cache);
 
@@ -418,13 +495,25 @@ void run_ordered_contracted_block(
   }
   {
     static bool const sched_dump = std::getenv("SEQUANT_SCHED_DUMP") != nullptr;
-    if (sched_dump)
+    if (sched_dump) {
       std::cerr << "ORDERED_RUN_BLOCK {\"kind\":\""
                 << (block.kind == BatchModeType::External ? "external"
                                                           : "contracted")
                 << "\",\"mode\":\"" << toUtf8(block.axis.full_label())
-                << "\",\"blocks\":" << batches.size()
-                << ",\"members\":" << members.size() << "}\n";
+                << "\",\"depth\":" << block.level.depth
+                << ",\"slot\":" << block.level.loop_slot
+                << ",\"lat\":" << block.latitude_ordinal
+                << ",\"blocks\":" << batches.size()
+                << ",\"members\":" << members.size() << ",\"outs\":[";
+      for (std::size_t k = 0; k != block.outputs.size(); ++k) {
+        auto const ovid = block.outputs[k].first;
+        std::cerr << (k ? "," : "")
+                  << "{\"h\":" << (rich.cells[ovid].hash % 100000)
+                  << ",\"reuse\":"
+                  << (int)parent_cache.resident_in_chain(value_of(ovid)) << "}";
+      }
+      std::cerr << "]}\n";
+    }
   }
 
   container::vector<ResultPtr> acc(block.outputs.size());
@@ -611,11 +700,51 @@ void run_ordered_contracted_block(
     if (!out_node.leaf()) {
       if (is_volatile) {
         bool const vol = subtree_any(out_node, is_volatile);
-        std::size_t const life = home_reads ? home_reads(vid) : 1;
+        // Per-cell home key: this escape homes ONE LEVEL OUT, at `ectx` (the
+        // enclosing scope; block.axis is not in ectx). Its (depth, slot,
+        // latitude) signature selects THIS cell's use count -- an inner
+        // (partial) escape level gets its own structural count, distinct from
+        // the collapsed full count the outermost level falls through to.
+        HomeScopeKey esc_home_key;
+        for (auto const& lvl : ectx)
+          esc_home_key.push_back({lvl.level.depth, lvl.level.loop_slot,
+                                  lvl.level.latitude_ordinal});
+        std::size_t const life = home_reads ? home_reads(vid, esc_home_key) : 1;
+        if (char const* dh = std::getenv("SEQUANT_DUMP_ESCAPE_HOME");
+            dh && (out_node->hash_value() % 100000u) ==
+                      std::strtoul(dh, nullptr, 10)) {
+          std::cerr << "[esc-home] hash=" << (out_node->hash_value() % 100000u)
+                    << " life=" << life << " vol=" << (int)vol << " kind="
+                    << (kind == OutputKind::AccumulateSum ? "SUM" : "SCATTER")
+                    << " block(depth=" << block.level.depth
+                    << " slot=" << block.level.loop_slot
+                    << " lat=" << block.latitude_ordinal
+                    << ") ectx.size=" << ectx.size() << std::endl;
+        }
         parent_cache.ensure_home_slot(value_of(vid), life, /*persistent=*/!vol);
       } else {
         parent_cache.ensure_home_slot(value_of(vid));
       }
+    }
+    // (a) key instrumentation: the coloring this store keys under, so a
+    // store-vs-read key mismatch (a value-id split across slots) is visible.
+    if (char const* dh = std::getenv("SEQUANT_DUMP_KEY");
+        dh &&
+        (out_node->hash_value() % 100000u) == std::strtoul(dh, nullptr, 10)) {
+      auto const full_col = ordered_value_home_coloring(ordered, vid);
+      auto const key = value_of(vid);  // FILTERED (scope-consistent) coloring
+      std::cerr << "[store-key] hash=" << (out_node->hash_value() % 100000u)
+                << " block(depth=" << block.level.depth
+                << " slot=" << block.level.loop_slot
+                << ") ectx.size=" << ectx.size() << " ectx_depths={";
+      for (auto const& lvl : ectx) std::cerr << lvl.level.depth << " ";
+      std::cerr << "} full_modes={";
+      for (auto const& m : full_col.ctx_modes)
+        std::cerr << toUtf8(m.full_label()) << " ";
+      std::cerr << "} filtered_modes={";
+      for (auto const& m : key.coloring.ctx_modes)
+        std::cerr << toUtf8(m.full_label()) << " ";
+      std::cerr << "}" << std::endl;
     }
     (void)parent_cache.store(value_of(vid), std::move(out));
     // Escape-output homing stores directly through CacheManager::store (not
@@ -766,11 +895,22 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // of being pinned resident. A test may inject home_life_override (a
   // non-evicting life) to MEASURE the actual home reads and assert them equal
   // to home_reads -- the "predicted == measured" gate.
-  std::function<std::size_t(std::size_t)> const home_reads =
-      home_life_override ? home_life_override : [&]() {
-        PhaseTimer::Scope _pt("B.sched_setup");
-        return ordered_home_reads<node_t>(ordered, rich, vmap, n_blocks);
-      }();
+  // Per-cell home use-count (vid + home-scope key). A test's home_life_override
+  // is the legacy 1-arg (vid-only) form -- wrap it to ignore the home key so a
+  // MEASURE test keeps injecting a non-evicting life per value.
+  std::function<std::size_t(std::size_t, HomeScopeKey const&)> const
+      home_reads =
+          home_life_override
+              ? std::function<std::size_t(std::size_t, HomeScopeKey const&)>(
+                    [ov = home_life_override](
+                        std::size_t vid, HomeScopeKey const&) -> std::size_t {
+                      return ov(vid);
+                    })
+              : [&]() {
+                  PhaseTimer::Scope _pt("B.sched_setup");
+                  return ordered_home_reads<node_t>(ordered, rich, vmap,
+                                                    n_blocks);
+                }();
 
   // Per-value results, indexed by value_id (== a ValueCell's own slot in
   // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),
@@ -843,6 +983,24 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     }
   }
 
+  // DAG-eval invariant: EVERY value must be homed and RESIDENT when read. A
+  // non-top, non-leaf value that misses the cache must NOT be silently rebuilt
+  // inline -- an inline rebuild re-reads that value's own operands, so those
+  // reads never appear in ordered_home_reads' direct-DAG-parent count, which
+  // then under-provisions the operands' home life and evicts them early (the
+  // 83845 class of crash). Enforce residency at the ROOT scope too (blocks
+  // already do via make_batched_scratch's read_from_home): a miss becomes the
+  // hard "vanished before use" error, surfacing the real homing/ordering bug
+  // instead of hiding it behind a recompute. RAII-restored so the caller's
+  // (persistent, cross-iteration, also-used-for-the-energy-observable) cache
+  // is left as it was found.
+  struct ResidentReadsGuard {
+    CacheManager<N, FHC>& c;
+    bool const prev;
+    ~ResidentReadsGuard() { c.set_require_resident_reads(prev); }
+  } const resident_reads_guard{cache, cache.require_resident_reads()};
+  cache.set_require_resident_reads(true);
+
   for (Step const& step : ordered.root.steps) {
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
       std::size_t const vid = build->value_id;
@@ -893,7 +1051,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           bool const persistent = cache.entry_is_persistent(it->second);
           // +1 for the pre_results combine read of a forest root (see the block
           // comment above); non-roots carry only their DAG consumers' reads.
-          std::size_t const life = home_reads(vid) + (is_root ? 1u : 0u);
+          // Root BuildStep: homed at the root cache, home-scope = {} (empty).
+          std::size_t const life =
+              home_reads(vid, HomeScopeKey{}) + (is_root ? 1u : 0u);
           cache.ensure_home_slot(it->second, life, persistent);
         } else {
           // No volatility policy: the root-homed value is pinned resident until
@@ -913,7 +1073,18 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       // operands are unsliced (sliced values live in sub-scopes and escape
       // unsliced), so node-id == value-id here -- no coloring context is
       // needed.
-      (void)evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
+      // Name this root build as the current consumer while it fetches its
+      // operands (mirrors the block path's CurrentConsumerGuard): a root
+      // BuildStep's operand reads were otherwise anonymous (current_consumer
+      // unset), which both hid them from diagnostics and left slice_to_use
+      // without a consumer identity for a symmetric operand at root. RAII-
+      // restored so a throwing evaluate_impl cannot leak a stale consumer.
+      {
+        auto const prev_consumer = cache.current_consumer();
+        cache.set_current_consumer(it->second->hash_value());
+        (void)evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
+        cache.set_current_consumer(prev_consumer);
+      }
       built[vid] = 1;  // R3: this root-scope value is produced.
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(

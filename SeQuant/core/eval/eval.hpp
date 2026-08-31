@@ -388,13 +388,18 @@ inline void release_after_op() {
 }
 
 [[nodiscard]] auto label(meta::eval_node auto const& node) {
-  return node->is_primary()
-             ? node->label()
-             : std::format("{} {} {} -> {}", node.left()->label(),
-                           (node->is_product() ? "*"
-                            : node->is_sum()   ? "+"
-                                               : "??"),  //
-                           node.right()->label(), node->label());
+  // Guard on the STRUCTURAL leaf() (no children), NOT the semantic
+  // node->is_primary(): a non-primary LEAF (a constant/variable leaf, or any
+  // leaf whose expr is not a primary tensor) is is_primary()==false yet has no
+  // children, so the else branch's node.left()/node.right() would throw
+  // (checked_ptr_access) -- the trace-only crash that fails every eval test
+  // under SEQUANT_EVAL_TRACE.
+  return node.leaf() ? node->label()
+                     : std::format("{} {} {} -> {}", node.left()->label(),
+                                   (node->is_product() ? "*"
+                                    : node->is_sum()   ? "+"
+                                                       : "??"),  //
+                                   node.right()->label(), node->label());
 }
 
 /// Scope annotation for the batch-loop enter/leave markers (and reused by
@@ -1070,12 +1075,30 @@ ResultPtr evaluate_impl(Node const& node,         //
               lbl += toUtf8(ix.full_label()) + " ";
             std::cerr << "[evict] vanished hash="
                       << (f.node->hash_value() % 100000u) << " canon=[" << lbl
-                      << "]" << std::endl;
+                      << "] consumer="
+                      << (cache.current_consumer()
+                              ? *cache.current_consumer() % 100000u
+                              : 0u)
+                      << " top=" << (node->hash_value() % 100000u)
+                      << " scope=[";
+            for (auto const& lvl : cache.batch_context())
+              std::cerr << toUtf8(std::wstring(lvl.axis.space().base_key()))
+                        << "#d" << lvl.level.depth << "s" << lvl.level.loop_slot
+                        << "o" << lvl.level.latitude_ordinal << " ";
+            std::cerr << "]" << std::endl;
             throw Exception(
-                "evaluate_impl: a read-from-home value vanished before use "
-                "(premature eviction -- likely an under-predicted use count in "
-                "ordered_home_reads); a missing value must never be served as "
-                "an empty array. canon=[" +
+                "evaluate_impl: a read-from-home value vanished before use. "
+                "The value must be RESIDENT here but is not -- one of: (a) "
+                "evicted early (under-predicted use count in "
+                "ordered_home_reads); "
+                "(b) never built (the schedule ordered a consumer before its "
+                "producer); or (c) homed full/OUT of a loop while this "
+                "consumer "
+                "reads it INSIDE that loop (an escape's full form is not yet "
+                "assembled in-loop; the in-loop consumer must read the sliced "
+                "inner form). A missing value must never be served as an empty "
+                "array (it would silently hang a downstream contraction). "
+                "canon=[" +
                 lbl + "]");
           }
           f.store_after = cache.exists(f.node);
@@ -2023,7 +2046,9 @@ template <typename TreeNode, bool FHC, typename Members>
     Members const& members, CacheManager<TreeNode, FHC> const& real,
     bool read_from_home = false,
     typename CacheManager<TreeNode, FHC>::ValueColoringCtx const* coloring =
-        nullptr) {
+        nullptr,
+    std::function<std::size_t(TreeNode const&)> member_life = nullptr,
+    std::unordered_set<std::size_t> const* escape_output_hashes = nullptr) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -2116,6 +2141,24 @@ template <typename TreeNode, bool FHC, typename Members>
   std::unordered_set<TreeNode, Hasher, Comp> seed_keys;
   std::vector<TreeNode const*> seeds;
   for (auto const& [ptr, e] : meta) {
+    if (char const* dh = std::getenv("SEQUANT_DUMP_REG");
+        dh &&
+        ((*ptr)->hash_value() % 100000u) == std::strtoul(dh, nullptr, 10)) {
+      bool const cext =
+          std::any_of(e.ext_sig.begin(), e.ext_sig.end(),
+                      [](auto const& p) { return p.has_value(); });
+      std::cerr << "[reg] hash=" << ((*ptr)->hash_value() % 100000u)
+                << " count=" << e.count << " consistent=" << e.consistent
+                << " sig=" << (e.sig ? static_cast<long>(*e.sig) : -1L)
+                << " carries_ext=" << cext
+                << " resident_in_chain=" << real.resident_in_chain(*ptr)
+                << " read_from_home=" << read_from_home << " -> registered="
+                << (e.consistent &&
+                    !(read_from_home && !e.sig && !cext &&
+                      real.resident_in_chain(*ptr)) &&
+                    e.count >= 2)
+                << std::endl;
+    }
     if (!e.consistent) continue;  // ambiguous slicing: never share
     // A node carrying ANY batched External mode has an external slice a
     // seeded/home-read full value would ignore -- so it is never
@@ -2130,7 +2173,26 @@ template <typename TreeNode, bool FHC, typename Members>
       // copied in. Single access discipline, no seeds. See the \p
       // read_from_home doc above.
       if (!e.sig && !carries_ext && real.resident_in_chain(*ptr)) continue;
-      if (e.count >= 2) reg.emplace(*ptr, e.count);
+      // Skip this block's ESCAPE OUTPUTS: an escape output is homed at block
+      // CLOSE (parent_cache.store, one level out) after the batch loop -- it is
+      // NOT built into the scratch each batch. Registering it here creates an
+      // empty scratch slot (life = within-block count) that the batch loop's
+      // assembly then PROBES (miss -- data absent, the escape has not closed
+      // yet) and, on the value-id chain, falls through UP to the value's real
+      // (outer/root) home, draining THAT before its true consumer reads it. So
+      // the escape output must not get a scratch slot; its residency is owned
+      // by the escape-home mechanism alone.
+      if (escape_output_hashes &&
+          escape_output_hashes->count((*ptr)->hash_value()))
+        continue;
+      // Cache EVERY read subnode (count >= 1), not only repeated ones: the
+      // recompute-vs-cache CSE threshold (was >= 2) leaves a once-used subnode
+      // un-homed, so it is built inline within its parent -- which makes the
+      // read-from-home use-count walk (ordered_home_reads, direct-DAG-parent
+      // based) miscount reads of a value the inline subnode consumes. With
+      // exact use-count tracking there is no cost to homing everything; the
+      // threshold was a hack papering over that miscount.
+      if (e.count >= 1) reg.emplace(*ptr, e.count);
     } else {
       // DEFAULT (whole-scope / forest-descent): seed an alive PERSISTENT
       // batch-invariant real entry into the scratch (persistent so it survives
@@ -2145,6 +2207,30 @@ template <typename TreeNode, bool FHC, typename Members>
       } else if (e.count >= 2) {
         reg.emplace(*ptr, e.count);
       }
+    }
+  }
+  // A block-internal HOMED value (a member ROOT that is built here, not read
+  // from an outer scope) must be materialized at its home REGARDLESS of the
+  // CSE sharing heuristic above -- that heuristic governs only whether a
+  // NON-homed, repeated SUBNODE is worth caching vs recomputing, not whether a
+  // scheduled homed value gets a slot. Its life is the SCHEDULED `home_reads`
+  // (build store + every direct-DAG-parent read over the ordered scopes,
+  // nested consumers included), NOT the within-block encounter count: a homed
+  // value consumed only by a NESTED block has within-block count 1, and a
+  // co-member reading it under a different frame's physical label trips the
+  // `consistent` guard, yet it is still homed here and its store()/reads must
+  // land in a slot. Without this, store() silently no-ops (it is a no-op for an
+  // unregistered key) and every consumer misses. `insert_or_assign` overrides
+  // any count-based life the loop above gave a member root with the scheduled
+  // one. A value already resident up the chain (homed at an OUTER scope, read
+  // from there each batch -- the read-from-home discipline) is skipped, exactly
+  // as the subnode branch skips it. recolor_registered_entries below colors
+  // these home slots the same as the rest.
+  if (read_from_home && member_life) {
+    for (auto const& [root, mode] : members) {
+      if (root->leaf() || real.resident_in_chain(*root)) continue;
+      if (std::size_t const life = member_life(*root); life > 0)
+        reg.insert_or_assign(*root, life);
     }
   }
   auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {

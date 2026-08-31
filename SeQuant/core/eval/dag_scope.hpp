@@ -35,6 +35,17 @@ struct LoopKey {
   std::size_t depth;  //!< which loop-group
   int loop_slot;      //!< which member-slot within the group (0-based)
 
+  /// \brief A single opaque color encoding the FULL loop identity (\c depth AND
+  /// \c loop_slot), for use where one \c std::size_t must distinguish loops:
+  /// the value-id coloring (one cache PER LOOP, not per loop-group -- two
+  /// members of one group are DISTINCT loops with distinct caches) and the
+  /// home-scope filter that matches a home-sliced mode's loop against the
+  /// enclosing scope. Keying on \c depth alone would conflate same-group
+  /// sibling loops. (\c loop_slot < 4096 in every realized schedule.)
+  [[nodiscard]] std::size_t color() const {
+    return (depth << 12) | static_cast<std::size_t>(loop_slot);
+  }
+
   friend bool operator==(LoopKey const& a, LoopKey const& b) {
     return a.depth == b.depth && a.loop_slot == b.loop_slot;
   }

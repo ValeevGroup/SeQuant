@@ -292,9 +292,9 @@ TEST_CASE(
 
         sequant::container::svector<sequant::Index> contracted_below(
             contracted.begin(), contracted.end());
-        CHECK(sequant::eval::classify_axis(vc.carried, contracted_below,
-                                           *k_axis, vc.occurrences) ==
-              sequant::eval::LoopRole::Reduction);
+        CHECK(sequant::eval::classify_axis(
+                  vc.carried, contracted_below, *k_axis, vc.occurrences,
+                  vc.carried) == sequant::eval::LoopRole::Reduction);
 
         // End-to-end wiring check: analyze_legality's own per_axis for this
         // cell (Κ IS in its at-node build site: contracted-here) must
@@ -364,9 +364,9 @@ TEST_CASE(
     // Also not reduced AGAIN at this node.
     REQUIRE_FALSE(carries_type(contracted_below, is_K));
 
-    CHECK(sequant::eval::classify_axis(cell_it->carried, contracted_below,
-                                       *k_axis, cell_it->occurrences) ==
-          sequant::eval::LoopRole::LoopInvariant);
+    CHECK(sequant::eval::classify_axis(
+              cell_it->carried, contracted_below, *k_axis, cell_it->occurrences,
+              cell_it->carried) == sequant::eval::LoopRole::LoopInvariant);
 
     // Illustrative signature check from the brief ([i i a a]); informational
     // -- the LoopInvariant assertion above is the load-bearing one.
@@ -412,7 +412,7 @@ TEST_CASE(
       sequant::container::svector<sequant::Index> contracted_below(
           contracted.begin(), contracted.end());
       auto const role = sequant::eval::classify_axis(
-          vc.carried, contracted_below, *k_axis, vc.occurrences);
+          vc.carried, contracted_below, *k_axis, vc.occurrences, vc.carried);
       if (role == sequant::eval::LoopRole::LoopLocal) {
         found_loop_local = true;
         // End-to-end wiring check for this cell too (Κ IS in its build
@@ -792,20 +792,69 @@ TEST_CASE(
 
   svector<OccurrenceRec> const occurrences{occ};
 
+  // Both i_1 and i_2 are BATCHED (sliced) modes here -- the genuine outer-
+  // product carry: each is a loop mode, but only i_1 has a realized enclosing
+  // loop, so i_2 is a cross-iteration read.
+  svector<Index> const sliced{i_1, i_2};
+
   // i_1 IS lockstep-bound to the enclosing loop, but i_2 -- the SECOND
   // same-space carried slot -- is free at this occurrence: it is not the
   // enclosing loop's own Index, so it is a cross-iteration read. The
   // uncorrected classify_axis (checking only the FIRST same-type carried
   // slot, i_1, which does match) would wrongly report LoopLocal here; the
   // corrected version must report LoopCarried.
-  CHECK(classify_axis(carried, contracted_below, i_1, occurrences) ==
+  CHECK(classify_axis(carried, contracted_below, i_1, occurrences, sliced) ==
         LoopRole::LoopCarried);
 
   // Sanity: probing with the OTHER same-space axis Index (i_2) must agree --
   // Q1/Q2b classify by axis SPACE TYPE (base_key()), not by which concrete
   // Index instance is passed as `axis`.
-  CHECK(classify_axis(carried, contracted_below, i_2, occurrences) ==
+  CHECK(classify_axis(carried, contracted_below, i_2, occurrences, sliced) ==
         LoopRole::LoopCarried);
+}
+
+// ===========================================================================
+// classify_axis (spectator): a value carrying a batched, lockstep-bound index
+// (i_1) BESIDE a same-space FULL spectator dimension (i_4 -- NOT batched, no
+// enclosing loop) must classify the batched axis LoopLocal. The spectator is
+// a retained full dimension, not a loop, so it must not drag the axis to
+// LoopCarried. (Regression: w8 aux+occ value [i_4 mu mu i_1], sliced only on
+// i_1, was wrongly escaped and evicted before an in-loop consumer read it.)
+// ===========================================================================
+TEST_CASE(
+    "classify_axis (spectator): a same-space FULL non-batched carried index "
+    "does not force LoopCarried on a lockstep-bound batched axis",
+    "[legality]") {
+  using sequant::Index;
+  using sequant::container::svector;
+  using sequant::eval::classify_axis;
+  using sequant::eval::LoopRole;
+  using sequant::eval::OccurrenceRec;
+
+  auto const i_1 = Index{L"i_1"};
+  auto const i_4 = Index{L"i_4"};
+
+  // Value carries i_4 (a full, un-batched occ dimension) and i_1 (batched).
+  svector<Index> const carried{i_4, i_1};
+  svector<Index> const contracted_below{};
+
+  OccurrenceRec occ;
+  occ.point = 0;
+  occ.consumer_point = 1;
+  occ.carried = carried;
+  occ.home = {};
+  occ.ectx.push_back({i_1, {0u, 4u}});  // only i_1 has a realized loop
+
+  svector<OccurrenceRec> const occurrences{occ};
+
+  // Only i_1 is a batched (sliced) mode; i_4 is a full spectator dimension.
+  svector<Index> const sliced{i_1};
+
+  // i_1 is lockstep with its enclosing loop and i_4 is a spectator (skipped),
+  // so the axis is LoopLocal -- the value is homed inside the i_1 loop,
+  // carrying full i_4 through.
+  CHECK(classify_axis(carried, contracted_below, i_1, occurrences, sliced) ==
+        LoopRole::LoopLocal);
 }
 
 // ===========================================================================
@@ -1022,8 +1071,8 @@ TEST_CASE(
       sequant::container::svector<sequant::Index> contracted_below(
           contracted.begin(), contracted.end());
       if (sequant::eval::classify_axis(vc.carried, contracted_below, k_axis,
-                                       vc.occurrences) ==
-          LoopRole::LoopInvariant) {
+                                       vc.occurrences,
+                                       vc.carried) == LoopRole::LoopInvariant) {
         saw_invariant = true;
         break;
       }

@@ -202,9 +202,25 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
     for (std::size_t j = i + 1; j < block.steps.size(); ++j) {
       auto const* cj = std::get_if<ScopeBlock>(&block.steps[j].value);
       if (!cj) continue;
-      if (ci->axis.space().base_key() == cj->axis.space().base_key() &&
-          ci->latitude_ordinal == cj->latitude_ordinal)
+      // Two sibling blocks are the SAME realized loop only when their FULL
+      // loop IDENTITY collides: (depth, loop_slot) AND the latitude (PROCON
+      // pass). Keying on the axis SPACE (a fusion color, not identity) wrongly
+      // rejected two DISTINCT same-space sibling loops the un-fuse legitimately
+      // emits at different (depth, loop_slot) -- the w20 aux+occ case: two occ
+      // (space "i") nests at (1,0) and (2,1), same latitude 0, are different
+      // loops, not a duplicate. (See LoopKey::color / the same
+      // space-vs-identity correction in the home-scope coloring.)
+      if (ci->level.depth == cj->level.depth &&
+          ci->level.loop_slot == cj->level.loop_slot &&
+          ci->latitude_ordinal == cj->latitude_ordinal) {
+        if (std::getenv("SEQUANT_DUMP_WF"))
+          std::cerr << "[wf-fail] sibling-identity-collision space="
+                    << toUtf8(std::wstring(ci->axis.space().base_key()))
+                    << " depth=" << ci->level.depth
+                    << " slot=" << ci->level.loop_slot
+                    << " lat=" << ci->latitude_ordinal << std::endl;
         return false;
+      }
     }
   }
 
@@ -313,14 +329,23 @@ inline void collect_productions(ScopeBlock const& block,
   {
     container::vector<std::size_t> b = builds;
     std::sort(b.begin(), b.end());
-    if (std::adjacent_find(b.begin(), b.end()) != b.end()) return false;
+    if (auto const it = std::adjacent_find(b.begin(), b.end()); it != b.end()) {
+      if (std::getenv("SEQUANT_DUMP_WF"))
+        std::cerr << "[wf-fail] double-build vid=" << *it << std::endl;
+      return false;
+    }
   }
   // (b) no value_id both built and escaped.
   {
     std::unordered_set<std::size_t> const build_set(builds.begin(),
                                                     builds.end());
     for (auto const& s : sites)
-      if (build_set.count(s.value_id)) return false;
+      if (build_set.count(s.value_id)) {
+        if (std::getenv("SEQUANT_DUMP_WF"))
+          std::cerr << "[wf-fail] built-and-escaped vid=" << s.value_id
+                    << std::endl;
+        return false;
+      }
   }
   // (c) a value_id's escape sites (>1 => a multi-level chain) must lie on ONE
   // root-to-node nesting path: distinct depths, and every shorter path a
@@ -337,11 +362,25 @@ inline void collect_productions(ScopeBlock const& block,
       for (auto const* s : ss)
         if (s->path.size() > deepest->path.size()) deepest = s;
       std::unordered_set<std::size_t> depths;
+      bool const wfdbg = std::getenv("SEQUANT_DUMP_WF") != nullptr;
       for (auto const* s : ss) {
-        if (!depths.insert(s->path.size()).second) return false;  // same depth
+        if (!depths.insert(s->path.size()).second) {  // same depth
+          if (wfdbg)
+            std::cerr << "[wf-fail] escape-chain same-depth vid=" << vid
+                      << " depth=" << s->path.size() << " nsites=" << ss.size()
+                      << std::endl;
+          return false;
+        }
         if (s->path.size() > deepest->path.size()) return false;
         for (std::size_t k = 0; k < s->path.size(); ++k)
-          if (s->path[k] != deepest->path[k]) return false;  // not an ancestor
+          if (s->path[k] != deepest->path[k]) {  // not an ancestor
+            if (wfdbg)
+              std::cerr << "[wf-fail] escape-chain not-ancestor vid=" << vid
+                        << " depth=" << s->path.size()
+                        << " deepest=" << deepest->path.size()
+                        << " diverge_at=" << k << std::endl;
+            return false;
+          }
       }
     }
   }
@@ -545,11 +584,19 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// The \c +1 is the homing store's own decaying access (\c CacheManager stores
 /// by access), matching the \c "+1" the seeded homing used.
 ///
+/// \brief A value's home-scope key, per-cell (see \c ordered_home_reads). One
+/// entry per enclosing loop of the home, as \c (depth, loop_slot,
+/// latitude_ordinal) -- IDENTITY (depth, loop_slot) plus the PROCON LAYOUT
+/// coordinate (latitude), so two cells of one value that differ ONLY by pass
+/// are distinct. The executor builds this from the scope at each home site.
+using HomeScopeKey = container::svector<std::tuple<std::size_t, int, int>>;
+
 template <typename node_t>
-[[nodiscard]] inline std::function<std::size_t(std::size_t)> ordered_home_reads(
-    OrderedSchedule const& ordered, RichSchedule const& rich,
-    std::unordered_map<std::size_t, node_t> const& vmap,
-    std::function<std::size_t(Index const&)> const& n_blocks) {
+[[nodiscard]] inline std::function<std::size_t(std::size_t,
+                                               HomeScopeKey const&)>
+ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
+                   std::unordered_map<std::size_t, node_t> const& vmap,
+                   std::function<std::size_t(Index const&)> const& n_blocks) {
   // Two scopes per value, both keyed off the ordered schedule's realized
   // nesting:
   //  - build_scope[vid]: the loops enclosing where vid is EVALUATED (reads its
@@ -650,6 +697,22 @@ template <typename node_t>
       for (auto const& [Lax, Lkey] : scopeW)
         if (!loop_in(homeC, Lkey)) prod *= n_blocks(Lax);
       (*reads)[cvid] += prod;
+      if (char const* dh = std::getenv("SEQUANT_DUMP_HOMEREADS");
+          dh &&
+          (child->hash_value() % 100000u) == std::strtoul(dh, nullptr, 10)) {
+        auto const bsC = scope_of(build_scope, cvid);
+        std::wcerr << L"[cons] consumed=" << (child->hash_value() % 100000u)
+                   << L" W_hash=" << (wc.hash % 100000u) << L" prod=" << prod
+                   << L" scopeW={";
+        for (auto const& [ax, k] : scopeW)
+          std::wcerr << ax.space().base_key() << L"#d" << k.depth << L"s"
+                     << k.loop_slot << L" ";
+        std::wcerr << L"} 36953.build={";
+        for (auto const& [ax, k] : bsC)
+          std::wcerr << ax.space().base_key() << L"#d" << k.depth << L"s"
+                     << k.loop_slot << L" ";
+        std::wcerr << L"}\n";
+      }
     };
     add_edge(wit->second.left());
     add_edge(wit->second.right());
@@ -674,9 +737,131 @@ template <typename node_t>
     }
   }
 
-  return [reads](std::size_t vid) -> std::size_t {
-    auto it = reads->find(vid);
-    return (it == reads->end() ? std::size_t{0} : it->second) + 1;
+  // --- Per-cell INTERMEDIATE escape homes (multi-level escape) ---
+  // A value carried on >1 nested axis escapes at EACH level, minting one CELL
+  // per level: the OUTERMOST (shallowest home) is the full value -- its reads
+  // are exactly `reads[vid]` above (external DAG consumers charged to the
+  // collapsed home). Each INNER (partial) cell, homed one level out of a DEEPER
+  // escape, is read by the NEXT-shallower escape once per that escape's own
+  // build batch -- a STRUCTURAL read that is NOT a DAG-parent edge, so it never
+  // appears in `reads` and the collapse (which keeps only the outermost home)
+  // drops it. Record each inner cell's own home-scope (WITH latitude, so PROCON
+  // passes stay distinct) and its structural read count, keyed by
+  // (vid, home-scope-signature), so the executor can home each escape level
+  // with its OWN cell's life instead of the collapsed full count. Single-home
+  // values and the outermost cell are untouched (fall through to `reads[vid]`).
+  using LatEntry = std::tuple<std::size_t, int, int>;  // depth, slot, latitude
+  using LatScope = container::svector<LatEntry>;
+  auto const sig_of = [](LatScope const& s) -> std::string {
+    std::string r;
+    for (auto const& [d, sl, lat] : s)
+      r += std::to_string(d) + ":" + std::to_string(sl) + ":" +
+           std::to_string(lat) + ";";
+    return r;
+  };
+  // All escape home-scopes (latitude-aware) per vid, plus each level's build.
+  struct LatCell {
+    LatScope home;
+    LatScope build;
+  };
+  std::unordered_map<std::size_t, container::svector<LatCell>> lat_homes;
+  std::function<void(ScopeBlock const&, LatScope const&)> lwalk =
+      [&](ScopeBlock const& b, LatScope const& enc) -> void {
+    for (Step const& s : b.steps)
+      if (auto const* child = std::get_if<ScopeBlock>(&s.value)) {
+        LatScope inner = enc;
+        inner.push_back({child->level.depth, child->level.loop_slot,
+                         child->level.latitude_ordinal});
+        lwalk(*child, inner);
+      }
+    for (auto const& [vid, kind] : b.outputs) {
+      (void)kind;
+      LatScope home = enc;
+      if (!home.empty()) home.pop_back();
+      lat_homes[vid].push_back({std::move(home), enc});
+    }
+  };
+  lwalk(ordered.root, {});
+
+  // Intermediate structural reads keyed by "vid|home_sig".
+  auto inter = std::make_shared<std::unordered_map<std::string, std::size_t>>();
+  for (auto& [vid, cells] : lat_homes) {
+    if (cells.size() < 2) continue;  // single-level escape: no intermediate
+    // Sort by home depth (shallowest = outermost = full, first).
+    std::sort(cells.begin(), cells.end(),
+              [](LatCell const& a, LatCell const& b) {
+                return a.home.size() < b.home.size();
+              });
+    // Adjacent (shallower produces & reads deeper): the shallower escape's
+    // build re-reads the deeper partial across the loops in shallower.build not
+    // in deeper.home. Charge that to the deeper (inner) cell.
+    for (std::size_t j = 1; j < cells.size(); ++j) {
+      LatCell const& deeper = cells[j];
+      LatCell const& shallower = cells[j - 1];
+      std::size_t prod = 1;
+      for (auto const& [d, sl, lat] : shallower.build) {
+        (void)lat;
+        bool in_home = false;
+        for (auto const& [hd, hsl, hlat] : deeper.home)
+          if (hd == d && hsl == sl) {
+            in_home = true;
+            break;
+          }
+        if (!in_home) {
+          // block factor for identity (d, sl): find its axis via the collapsed
+          // build_scope (any entry of matching identity carries a usable axis).
+          Index ax;
+          bool found = false;
+          for (auto const& [wvid, sc] : *build_scope)
+            for (auto const& [a, k] : sc)
+              if (k.depth == d && k.loop_slot == sl) {
+                ax = a;
+                found = true;
+                break;
+              }
+          prod *= found ? n_blocks(ax) : 1;
+        }
+      }
+      (*inter)[std::to_string(vid) + "|" + sig_of(deeper.home)] += prod;
+    }
+  }
+
+  if (std::getenv("SEQUANT_DUMP_HOMEREADS")) {
+    for (ValueCell const& c : rich.cells) {
+      auto const it = reads->find(c.value_id);
+      std::size_t const cnt = (it == reads->end() ? 0 : it->second) + 1;
+      auto const hs = scope_of(home_scope, c.value_id);
+      std::wcerr << L"[homereads-cell] hash=" << (c.hash % 100000u)
+                 << L" full_reads=" << cnt << L" ncells="
+                 << (lat_homes.count(c.value_id) ? lat_homes[c.value_id].size()
+                                                 : 0)
+                 << L" home={";
+      for (auto const& [ax, k] : hs)
+        std::wcerr << ax.space().base_key() << L"#d" << k.depth << L"s"
+                   << k.loop_slot << L" ";
+      std::wcerr << L"}";
+      if (auto const lit = lat_homes.find(c.value_id); lit != lat_homes.end())
+        for (auto const& cell : lit->second) {
+          auto const iit =
+              inter->find(std::to_string(c.value_id) + "|" + sig_of(cell.home));
+          std::string const s = sig_of(cell.home);
+          std::wcerr << L" cell[" << std::wstring(s.begin(), s.end()) << L"]="
+                     << (iit == inter->end() ? cnt : iit->second + 1);
+        }
+      std::wcerr << L"\n";
+    }
+  }
+
+  return [reads, inter, sig_of](std::size_t vid,
+                                HomeScopeKey const& home_key) -> std::size_t {
+    // Per-cell: an intermediate escape level matches by (vid, home signature).
+    std::string const ck = std::to_string(vid) + "|" + sig_of(home_key);
+    if (auto const it = inter->find(ck); it != inter->end())
+      return it->second + 1;
+    // Outermost cell / single-home value: the collapsed external-consumer
+    // count.
+    auto const rit = reads->find(vid);
+    return (rit == reads->end() ? std::size_t{0} : rit->second) + 1;
   };
 }
 
@@ -1063,7 +1248,18 @@ forced_split_demotions(RichSchedule const& rich,
     OccurrenceRec const& occ = hit->second->occurrences.front();
     Index const& m = cl.per_axis[pos].axis;
     auto const cit = std::find(occ.carried.begin(), occ.carried.end(), m);
-    if (cit == occ.carried.end()) return -1;
+    if (cit == occ.carried.end()) {
+      // Not a carried mode: a Reduction mode is contracted at this value and
+      // has no carried position. Its reduction loop shares loop identity with
+      // the operand that home-slices it (carried->reduced propagation, stamped
+      // by compute_dag_boulevard); read that slot so the reduction escape lands
+      // in the SAME same-space nest as the operand it reduces, not the slot-0
+      // default (a different nest -> the operand vanishes before the reduction
+      // reaches it).
+      for (auto const& [rm, rs] : occ.reduced_slot)
+        if (rm == m) return rs;
+      return -1;
+    }
     std::size_t const p = static_cast<std::size_t>(cit - occ.carried.begin());
     return p < occ.loop_slot.size() ? occ.loop_slot[p] : -1;
   };
@@ -1295,36 +1491,26 @@ forced_split_demotions(RichSchedule const& rich,
       continue;
     }
 
-    // Plain BuildStep: home depth by SET equality of the accumulated
-    // (root-to-depth) TYPE set against home_floor's TYPE set (root if
-    // home_floor is empty), mirroring build_scope_schedule's step 4.
-    // Keep MULTIPLICITY (per-instance): a value homing two same-space LoopLocal
-    // modes must be inside both their loops.
-    container::svector<std::wstring> want;
-    for (Index const& m : cl.home_floor)
-      want.push_back(std::wstring{m.space().base_key()});
-
+    // Plain BuildStep: home at the INNERMOST loop the value is LoopLocal on,
+    // resolved PER-INSTANCE by fusion loop_slot -- NOT by shallowest same-space
+    // count. A value local to occ slots 2,3 (its own fusion nest) homes in THAT
+    // nest, not the FIRST {i,i} nest a space-multiset cover would pick; picking
+    // the wrong same-space nest homes the value where its consumer's nest has
+    // not opened (or has already closed), so an in-consumer-nest read misses
+    // and the value vanishes. Resolve each LoopLocal mode's (space, fusion
+    // slot) to its realized depth (exactly as the escape placement above does),
+    // and home at the MAX such depth: within a co-occurrence cluster larger
+    // depth nests inside smaller, so the innermost of the value's own home
+    // slots is inside all of them. home_floor is the LoopLocal subset, but it
+    // drops the pos->slot map, so walk per_axis directly for the slot.
     std::optional<std::size_t> target;
-    if (!want.empty()) {
-      // Home at the SHALLOWEST depth whose enclosed loops (multiset of spaces
-      // to that depth) COVER `want`. With one slot per space this reduces to
-      // the former exact permutation match; with multiple same-space slots it
-      // homes the value inside all its home loops (invariant to any non-home
-      // slot it happens to sit within -- correct, at most redundant).
-      auto const covers = [&](std::size_t d) {
-        std::map<std::wstring, int> need;
-        for (auto const& w : want) ++need[w];
-        for (std::size_t e = 0; e <= d; ++e)
-          --need[std::wstring{types[e].space().base_key()}];
-        for (auto const& [k, v] : need)
-          if (v > 0) return false;
-        return true;
-      };
-      for (std::size_t d = 0; d < n; ++d)
-        if (covers(d)) {
-          target = d;
-          break;
-        }
+    for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
+      if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
+      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      int const fs = fusion_slot(cl, pos);
+      auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+      if (!d) continue;
+      if (!target || *d > *target) target = *d;
     }
 
     if (target)
@@ -1619,8 +1805,14 @@ forced_split_demotions(RichSchedule const& rich,
           std::move(pending_steps), std::move(pending_metas));
       next_steps.push_back(Step{std::move(block)});
       detail::OrderedScheduleStepMeta m;
-      for (auto const& out_entry : bucket.outputs)
-        m.produced.push_back(out_entry.first);
+      // RECURSIVE produced (not just this block's own outputs): a nest
+      // advertises EVERYTHING it produces so the topo sort can order a sibling
+      // nest that consumes a value produced by an INNER block of this one. With
+      // the single chain this never mattered (one block per level, no
+      // siblings); the un-fuse emits separate sibling nests at root, so an
+      // under-reported `produced` orders a consumer nest before its producer ->
+      // read-before-build.
+      m.produced = produced_all;
       m.requires_ = requires_all;
       m.tie_key = min_first_use(produced_all);
       next_metas.push_back(std::move(m));
@@ -1695,7 +1887,12 @@ forced_split_demotions(RichSchedule const& rich,
               record(build->value_id, enc);
             } else if (auto const* child = std::get_if<ScopeBlock>(&s.value)) {
               container::svector<std::pair<Index, int>> inner = enc;
-              inner.push_back({child->axis, child->level.depth});
+              // Store the FULL loop identity color (depth AND loop_slot), not
+              // depth alone: one cache per LOOP (LoopKey::color), so the value-
+              // id coloring and the home-scope filter distinguish same-group
+              // sibling loops.
+              inner.push_back(
+                  {child->axis, static_cast<int>(child->level.key().color())});
               walk(*child, inner);
             }
           }

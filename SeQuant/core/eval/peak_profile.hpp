@@ -11,6 +11,8 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <map>
+#include <set>
 #include <unordered_map>
 #include <utility>
 
@@ -238,6 +240,16 @@ struct OccurrenceRec {
   //!< union-find over producer->consumer slot connectivity in \c
   //!< compute_dag_boulevard (spec 2026-08-28 sec.4-5). Parallel to \c carried.
   container::svector<int> loop_slot;
+  //!< Loop identity for the modes this occurrence's value CONTRACTS (reduces)
+  //!< that a producing operand HOME-SLICES: the reduction loop and the
+  //!< operand's slice loop are one physical loop and must share \c loop_slot,
+  //!< but a reduced mode has no \c carried position, so its slot is recorded
+  //!< here as (mode, loop_slot). Assigned by the same union-find, which unites
+  //!< the operand's carried-mode node with a synthetic reduction node at this
+  //!< value (carried->reduced propagation). Read by \c ordered_schedule's \c
+  //!< fusion_slot when it places a Reduction escape (else the reduction would
+  //!< default to slot 0 and diverge from the operand's slice nest).
+  container::svector<std::pair<Index, int>> reduced_slot;
 };
 
 ///
@@ -584,6 +596,27 @@ RichSchedule compute_dag_boulevard(R const& forest,
     auto const dec_pos = [](std::size_t n) {
       return n & ((std::size_t{1} << POS_BITS) - 1);
     };
+    // Reduction-mode nodes live in the UPPER half of a value's position space
+    // (>= CONTRACTED_BASE) so they never collide with a carried position (the
+    // lower half). A value's index count is tiny, so both halves are ample. A
+    // (value, reduced-mode) pair maps to one stable synthetic position, keyed
+    // by the mode's canonical label in the PARENT's own frame (the same frame
+    // the carried-mode edge match uses), so two operands reducing the SAME
+    // physical mode at one parent resolve to ONE reduction node.
+    std::size_t constexpr CONTRACTED_BASE = std::size_t{1} << (POS_BITS - 1);
+    std::map<std::pair<std::size_t, std::wstring>, std::size_t> red_pos;
+    std::size_t red_next = CONTRACTED_BASE;
+    auto const reduction_node = [&](std::size_t par_vid,
+                                    Index const& m) -> std::size_t {
+      auto const key = std::make_pair(par_vid, std::wstring{m.full_label()});
+      auto const it = red_pos.find(key);
+      std::size_t const pos =
+          (it != red_pos.end()) ? it->second : (red_pos[key] = red_next++);
+      return encode(par_vid, pos);
+    };
+    // (parent value_id, reduced mode) pairs to stamp onto the parent's
+    // occurrences once components are numbered.
+    container::svector<std::pair<std::size_t, Index>> reduction_stamps;
 
     std::unordered_map<std::size_t, std::size_t>
         uf;  // node -> parent (self=root)
@@ -667,7 +700,22 @@ RichSchedule compute_dag_boulevard(R const& forest,
           // trees.
           auto const pj =
               std::find(par->carried.begin(), par->carried.end(), m);
-          if (pj == par->carried.end()) continue;  // contracted at parent
+          if (pj == par->carried.end()) {
+            // CONTRACTED at parent (m is home-sliced by this child but absent
+            // from the parent's result): the parent REDUCES m, and its
+            // reduction loop is the SAME physical loop as this child's slice
+            // loop -- they must share loop_slot. A reduced mode has no carried
+            // position at the parent, so unite the child's carried-mode node
+            // with a synthetic reduction node for (parent, m); the parent's
+            // reduction escape then inherits this slot instead of defaulting to
+            // 0 and landing in a different same-space nest than the operand it
+            // reads (the eviction this fixes). try_unite stays conflict-aware,
+            // so a genuine transposition is still kept distinct.
+            std::size_t const rn = reduction_node(par_vid, m);
+            if (try_unite(encode(c.value_id, pV), rn))
+              reduction_stamps.push_back({par_vid, m});
+            continue;
+          }
           std::size_t const pC =
               static_cast<std::size_t>(pj - par->carried.begin());
           if (!try_unite(encode(c.value_id, pV), encode(par_vid, pC)) &&
@@ -760,6 +808,21 @@ RichSchedule compute_dag_boulevard(R const& forest,
           std::wcerr << L"}\n";
         }
       }
+
+    // Stamp reduced-mode slots on the reducing parents: for each
+    // (parent, reduced-mode) whose reduction node was united with an operand's
+    // slice loop, record (mode, slot) on EVERY occurrence of that parent (the
+    // value reduces the mode consistently across its occurrences). Deduplicated
+    // so two operands reducing the same mode stamp it once.
+    std::set<std::pair<std::size_t, std::wstring>> stamped;
+    for (auto const& [par_vid, m] : reduction_stamps) {
+      auto const key = std::make_pair(par_vid, std::wstring{m.full_label()});
+      if (!stamped.insert(key).second) continue;
+      auto const rit = root_slot.find(find(reduction_node(par_vid, m)));
+      if (rit == root_slot.end()) continue;  // component never numbered
+      for (OccurrenceRec& occ : out.cells[par_vid].occurrences)
+        occ.reduced_slot.push_back({m, rit->second});
+    }
   }
 
   return out;

@@ -1620,17 +1620,41 @@ class CacheManager {
   /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
-  [[nodiscard]] AccessResult access_at(cache_key_type const& key) noexcept {
+  [[nodiscard]] AccessResult access_at(
+      cache_key_type const& key,
+      std::optional<std::size_t> origin_consumer = std::nullopt) noexcept {
     // Task 7: color the key from THIS cache's per-build context (no-op without
     // one), then look up AND walk parents with the ALREADY-colored key. The
     // cache genuinely keys by VALUE: two values of one node coexist as distinct
     // colored entries (a home value found by its own home identity, never a
     // same-node sibling), which is the whole point of the value-keyed cache.
+    // DIAGNOSTIC: capture the consuming value at the ORIGIN cache (where the
+    // fetch starts) and thread it through the parent recursion so a root-homed
+    // hit can name WHO read it.
+    if (!origin_consumer) origin_consumer = current_consumer();
     cache_key_type const rk = recolor(key);
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(rk); });
         found != cache_map_.end()) {
+      static long const _ax_target = [] {
+        char const* dh = std::getenv("SEQUANT_COUNT_ACCESS");
+        return dh ? std::strtol(dh, nullptr, 10) : -1L;
+      }();
+      bool const _ax_match =
+          _ax_target >= 0 && (found->first->hash_value() % 100000u) ==
+                                 static_cast<unsigned>(_ax_target);
       if (auto data = found->second.access(); data) {
+        if (_ax_match) {
+          static std::size_t _ax_n = 0;
+          std::cerr << "[axcount] hash="
+                    << (found->first->hash_value() % 100000u) << " read#"
+                    << (++_ax_n)
+                    << " remaining_life=" << found->second.life_count()
+                    << " max_life=" << found->second.max_life_count()
+                    << " consumer="
+                    << (origin_consumer ? *origin_consumer % 100000u : 0u)
+                    << std::endl;
+        }
         // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
         // read into the global access clock. No-op when the gate is off.
         eval::AccessClock::stamp(found->first->hash_value());
@@ -1641,10 +1665,18 @@ class CacheManager {
           eval::DefUseMeter::on_read(found->first->hash_value(),
                                      found->second.size_in_bytes());
         return {data, 0};
+      } else if (_ax_match) {
+        std::cerr << "[axcount] hash=" << (found->first->hash_value() % 100000u)
+                  << " MISS-DRAINED (data absent) remaining_life="
+                  << found->second.life_count()
+                  << " max_life=" << found->second.max_life_count()
+                  << " consumer="
+                  << (origin_consumer ? *origin_consumer % 100000u : 0u)
+                  << std::endl;
       }
     }
     if (!parent_) return {nullptr, 0};
-    auto up = parent_->access_at(rk);
+    auto up = parent_->access_at(rk, origin_consumer);
     return {up.ptr, up.hops + 1};  // count the link we just crossed
   }
 
@@ -1678,6 +1710,19 @@ class CacheManager {
             eval::LookupMeter::timed([&] { return c->cache_map_.find(rk); });
         found != c->cache_map_.end()) {
       auto data = found->second.access();
+      static long const _axh_target = [] {
+        char const* dh = std::getenv("SEQUANT_COUNT_ACCESS");
+        return dh ? std::strtol(dh, nullptr, 10) : -1L;
+      }();
+      if (_axh_target >= 0 && (found->first->hash_value() % 100000u) ==
+                                  static_cast<unsigned>(_axh_target)) {
+        std::cerr << "[axcount-hops] hash="
+                  << (found->first->hash_value() % 100000u) << " hops=" << hops
+                  << (data ? " HIT" : " MISS-DRAINED")
+                  << " remaining_life=" << found->second.life_count()
+                  << " max_life=" << found->second.max_life_count()
+                  << std::endl;
+      }
       // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine
       // router-directed read into the global access clock. No-op when the gate
       // is off.
@@ -1861,7 +1906,8 @@ class CacheManager {
 /// \param nodes An iterable of eval nodes.
 ///
 /// \param min_repeats Minimum number of repeats for a node to be cached. By
-///                    default anything repeated twice or more is cached.
+///                    default (1) everything is cached, so use-count tracking
+///                    is exact.
 ///
 /// \return A cache manager.
 ///
@@ -1869,7 +1915,7 @@ class CacheManager {
 ///
 template <bool force_hash_collisions = false>
 auto cache_manager(meta::eval_node_range auto const& nodes,
-                   size_t min_repeats = 2) noexcept {
+                   size_t min_repeats = 1) noexcept {
   using TreeNode =
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
@@ -1934,7 +1980,7 @@ struct zero_footprint {
 /// \param is_volatile `bool(TreeNode const&)`: true if the node is
 ///        intrinsically volatile. Only its value on leaves matters in practice
 ///        (volatility propagates up), but it is consulted on every node.
-/// \param min_repeats minimum NP repeats to cache (default 2).
+/// \param min_repeats minimum NP repeats to cache (default 1).
 /// \param footprint_of `double(TreeNode const&)`: the materialized storage
 ///        footprint of a node's result (e.g. its element count or byte size).
 ///        Consulted only when \p max_footprint > 0.
@@ -1959,7 +2005,7 @@ struct zero_footprint {
 template <bool force_hash_collisions = false,
           typename FootprintOf = zero_footprint>
 auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
-                   size_t min_repeats = 2, FootprintOf footprint_of = {},
+                   size_t min_repeats = 1, FootprintOf footprint_of = {},
                    double max_footprint = 0.)
   requires requires(
       std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&

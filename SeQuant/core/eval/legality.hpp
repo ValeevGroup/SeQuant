@@ -220,25 +220,39 @@ using DemotionSource =
 ///       otherwise the axis merely encloses the value without touching it
 ///       -> \c LoopInvariant.
 ///     - YES -> Q2b: for every occurrence that has an ENCLOSING loop of that
-///       axis type in its \c OccurrenceRec::ectx, compare (via the
-///       ordinal-and-proto-aware \c Index::operator==) that loop's own
-///       \c Index against EVERY one of the occurrence's own carried indices
-///       of the same type (an occurrence may carry more than one same-space
-///       index, e.g. an outer product carrying both a lockstep and a free
-///       slot of the same space). Bound to the SAME \c Index at EVERY such
-///       slot, at every such occurrence (lockstep with the enclosing loop)
-///       -> \c LoopLocal; bound to a DIFFERENT \c Index at ANY slot, at any
-///       occurrence (a free / cross-iteration read) -> \c LoopCarried. If no
-///       occurrence has an enclosing loop of that type at all, the axis is a
-///       plain free result index with nothing to lock it to a loop iteration
-///       -> \c LoopCarried.
+///       axis type in its \c OccurrenceRec::ectx, gather ALL same-type
+///       enclosing loops (there may be several NESTED loops of one space,
+///       each binding a distinct carried index) and check that EVERY one of
+///       the occurrence's own carried indices of that type is bound (via the
+///       ordinal-and-proto-aware \c Index::operator==) to SOME enclosing
+///       loop. An occurrence may carry more than one same-space index -- e.g.
+///       an outer product carrying two occ indices, each lockstep with its
+///       OWN nested loop, or a lockstep slot beside a free one. Every
+///       same-type carried slot lockstep with some enclosing loop, at every
+///       such occurrence -> \c LoopLocal; a carried slot with NO matching
+///       enclosing loop at any occurrence (a free / cross-iteration read) ->
+///       \c LoopCarried. If no occurrence has an enclosing loop of that type
+///       at all, the axis is a plain free result index with nothing to lock
+///       it to a loop iteration -> \c LoopCarried.
 ///
 [[nodiscard]] inline LoopRole classify_axis(
     container::svector<Index> const& carried,
     container::svector<Index> const& contracted_below, Index const& axis,
-    container::svector<OccurrenceRec> const& occurrences) {
+    container::svector<OccurrenceRec> const& occurrences,
+    container::svector<Index> const& sliced) {
   auto const same_type = [&](Index const& ix) {
     return ix.space().base_key() == axis.space().base_key();
+  };
+  // A carried same-space index is a BATCHED loop mode (subject to the lockstep
+  // test below) iff it is one of the value's sliced modes; otherwise it is a
+  // free FULL "spectator" dimension (e.g. a retained occ index the DP did not
+  // batch) that has no loop at all and must NOT make the axis LoopCarried --
+  // the value is still loop-local w.r.t. the axis's own loop, carrying the
+  // spectator dimension through as full. Compared by identity (same
+  // ordinal/proto), so a spectator i_4 beside a batched i_1 is skipped.
+  auto const is_batched = [&](Index const& ix) {
+    return std::any_of(sliced.begin(), sliced.end(),
+                       [&](Index const& s) { return s == ix; });
   };
 
   bool const carries_axis =
@@ -252,26 +266,34 @@ using DemotionSource =
 
   bool found_enclosing = false;
   for (OccurrenceRec const& occ : occurrences) {
-    auto const ectx_it =
-        std::find_if(occ.ectx.begin(), occ.ectx.end(),
-                     [&](auto const& e) { return same_type(e.first); });
-    if (ectx_it == occ.ectx.end())
-      continue;  // no enclosing loop of this
-                 // type at this occurrence
+    // ALL same-type enclosing loops at this occurrence, not just the first:
+    // nested same-space loops each bind a DISTINCT carried index of that
+    // type (i_1 under the outer loop, i_2 under the inner). Matching every
+    // carried slot against only the first enclosing loop mis-flags a value
+    // that carries two same-space indices, each lockstep with its OWN nested
+    // loop, as LoopCarried -- because the second carried index (i_2) never
+    // equals the first loop's Index (i_1). Collect the whole same-type
+    // enclosing set and let each carried slot lock to ANY member.
+    container::svector<Index> encl;
+    for (auto const& e : occ.ectx)
+      if (same_type(e.first)) encl.push_back(e.first);
+    if (encl.empty())
+      continue;  // no enclosing loop of this type at this occurrence
     found_enclosing = true;
 
-    // Compare EVERY same-type carried slot at this occurrence against the
-    // enclosing loop's own Index, not just the first: a value can carry TWO
-    // indices of L's space (e.g. i_3 lockstep, i_4 free) under a realized L
-    // loop, and the free slot must not be shadowed by an earlier lockstep
-    // slot. Only an occurrence whose EVERY same-type carried slot equals the
-    // enclosing loop's own Index is truly lockstep; a single mismatched slot
-    // makes the whole occurrence a free / cross-iteration read.
+    // A carried slot is lockstep iff it equals SOME enclosing loop's Index
+    // (any nesting level). Only an occurrence whose EVERY same-type carried
+    // slot is lockstep with some enclosing loop is truly loop-local; a single
+    // carried slot with no matching enclosing loop (a free / cross-iteration
+    // read) makes the whole occurrence -- and thus the axis -- LoopCarried.
     bool matched_any_same_type = false;
     for (Index const& c : occ.carried) {
       if (!same_type(c)) continue;
+      if (!is_batched(c)) continue;  // free full spectator dim -- not a loop
       matched_any_same_type = true;
-      if (!(c == ectx_it->first))
+      bool const lockstep = std::any_of(encl.begin(), encl.end(),
+                                        [&](Index const& L) { return c == L; });
+      if (!lockstep)
         return LoopRole::LoopCarried;  // free / cross-iteration binding
     }
     if (!matched_any_same_type)
@@ -411,11 +433,25 @@ template <meta::eval_node_range R>
             }))
           add_if_new(ix);
 
+      if (char const* dh = std::getenv("SEQUANT_DUMP_ECTX");
+          dh && (vc.hash % 100000u) == std::strtoul(dh, nullptr, 10)) {
+        std::wcerr << L"[ectx] hash=" << (vc.hash % 100000u) << L" noccs="
+                   << vc.occurrences.size() << L"\n";
+        for (auto const& occ : vc.occurrences) {
+          std::wcerr << L"  occ.carried={";
+          for (Index const& c : occ.carried)
+            std::wcerr << c.full_label() << L" ";
+          std::wcerr << L"} occ.ectx={";
+          for (auto const& e : occ.ectx)
+            std::wcerr << e.first.full_label() << L" ";
+          std::wcerr << L"}\n";
+        }
+      }
       for (Index const& axis : site) {
         AxisClass ac;
         ac.axis = axis;
-        ac.role =
-            classify_axis(vc.carried, contracted_below, axis, vc.occurrences);
+        ac.role = classify_axis(vc.carried, contracted_below, axis,
+                                vc.occurrences, dp_sliced);
         // Monotone demotion (SP2 hook): a prior fixpoint round can force an
         // axis LoopLocal -> LoopCarried; roles only ever move toward
         // LoopCarried, never back, which is what makes the fixpoint monotone.
