@@ -3,6 +3,7 @@
 #include "processing_step_factory.hpp"
 #include "utils.hpp"
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
@@ -11,9 +12,9 @@
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
-#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/topological.hpp>
 
 #include <range/v3/view/concat.hpp>
 
@@ -388,30 +389,67 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
 std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
     ExecutionContext &exctx, const std::vector<std::string_view> &inputs,
     ExportContext &genctx) const {
-  std::vector<ExecutionContext::Data<ProcessingData>> data;
+  using CtxData = ExecutionContext::Data<ProcessingData>;
+
+  std::vector<CtxData> data;
   for (std::string_view current_input : inputs) {
-    for (ExecutionContext::Data<ProcessingData> current :
-         exctx.get_data(current_input)) {
+    for (CtxData current : exctx.get_data(current_input)) {
       data.push_back(std::move(current));
     }
   }
 
-  auto to_data_entry = [&](std::size_t idx) { return data.at(idx); };
-  auto to_export_data = [&](std::size_t idx) {
-    return convert_data<ExportTreeData>(to_data_entry(idx).data.get());
+  auto tree_data = data | std::views::transform([](const CtxData &dat) {
+                     return convert_data<ExportTreeData>(dat.data.get());
+                   });
+
+  // Pre-compute CtxData inter-dependencies
+  std::map<const CtxData *, container::svector<const CtxData *>> dependencies;
+  for (const CtxData &base : data) {
+    const ExportTreeData &current =
+        convert_data<ExportTreeData>(base.data.get());
+
+    container::svector<const CtxData *> deps;
+
+    auto all_dep_ids =
+        current.entries |
+        std::views::transform(&ExportTreeData::Entry::dependencies) |
+        std::views::join;
+
+    for (std::size_t id : all_dep_ids) {
+      auto it = std::ranges::find_if(
+          tree_data, [id](const ExportTreeData &tree_data) {
+            for (const auto &entry : tree_data.entries) {
+              if (entry.tree->id() == id) {
+                return true;
+              }
+            }
+            return false;
+          });
+
+      SEQUANT_ASSERT(it != end(tree_data));
+
+      deps.emplace_back(&(*it.base()));
+    }
+
+    dependencies.emplace(&base, std::move(deps));
+  }
+
+  auto to_deps = [&](const CtxData &ctxdata) {
+    auto it = dependencies.find(&ctxdata);
+    SEQUANT_ASSERT(it != end(dependencies));
+    return it->second | std::views::transform(
+                            [](auto ptr) -> decltype(auto) { return *ptr; });
   };
 
-  std::vector<std::size_t> access_order(data.size());
-  std::iota(access_order.begin(), access_order.end(), 0);
-
   // Sort inputs in partitions of contributions to the same result
-  std::ranges::stable_sort(access_order, ExportTreeDataCompare{relative_order_},
-                           to_data_entry);
+  // while respecting hard dependencies as well as requested relative order
+  std::vector<std::size_t> access_order =
+      topological_order(data, to_deps, ExportTreeDataCompare{relative_order_});
 
   std::vector<ExpressionGroup<>> groups;
   std::vector<std::vector<std::pair<Tensor, Tensor>>> required_symmetrizations;
   for (std::size_t idx : access_order) {
-    const ExportTreeData &current_data = to_export_data(idx);
+    const ExportTreeData &current_data = tree_data[idx];
 
     std::string name = [&]() -> std::string {
       for (std::string_view current :

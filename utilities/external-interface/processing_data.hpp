@@ -35,6 +35,12 @@ struct ExportTreeData {
     /// same result this defines whether we overwrite the previous result
     /// instead of adding to it.
     std::optional<bool> overwrite_previous = {};
+    /// List of root node IDs of other expression trees that this one depends
+    /// upon. This implies that these expressions need to have been computed
+    /// before this one can be calculated.
+    std::vector<std::size_t> dependencies = {};
+
+    bool operator==(const Entry &) const = default;
   };
 
   std::vector<Entry> entries;
