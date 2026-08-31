@@ -404,6 +404,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/swap.hpp
         SeQuant/core/utility/tensor.hpp
         SeQuant/core/utility/timer.hpp
+        SeQuant/core/utility/topological.hpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/reserved.hpp
         SeQuant/core/wick.hpp

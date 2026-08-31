@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
+#include <SeQuant/core/utility/topological.hpp>
 
 #include <range/v3/view/transform.hpp>
 
@@ -51,6 +52,29 @@ class S : public sequant::Singleton<S<T>> {
 };
 
 }  // namespace sequant::singleton
+
+struct Entry {
+  std::size_t id;
+  std::vector<std::size_t> deps;
+
+  bool operator==(const Entry& other) const { return id == other.id; }
+
+  std::strong_ordering operator<=>(const Entry& other) const {
+    return id <=> other.id;
+  }
+
+  friend std::ostream& operator<<(std::ostream& stream, const Entry& e) {
+    stream << "{.id=" << e.id << ", .deps={";
+    for (std::size_t i = 0; i < e.deps.size(); ++i) {
+      stream << e.deps[i];
+      if (i + 1 < e.deps.size()) {
+        stream << ", ";
+      }
+    }
+    stream << "}}";
+    return stream;
+  };
+};
 
 sequant::Tensor parse_tensor(std::wstring_view str) {
   return sequant::deserialize<sequant::ExprPtr>(str)->as<sequant::Tensor>();
@@ -953,6 +977,94 @@ TEST_CASE("utilities", "[utilities]") {
 
         if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
           REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
+        }
+      }
+    }
+  }
+
+  SECTION("topological") {
+    std::vector<std::pair<std::vector<Entry>, std::vector<std::size_t>>> tests;
+    // Tests with unique topological order
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 2, .deps = {1}},
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {0}},
+        },
+        std::vector<std::size_t>{1, 2, 0});
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 2, .deps = {0}},
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {0, 2}},
+        },
+        std::vector<std::size_t>{1, 0, 2});
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 2, .deps = {0}},
+            {.id = 3, .deps = {1}},
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {0, 2}},
+        },
+        std::vector<std::size_t>{2, 0, 3, 1});
+
+    // Tests with ambiguous topological order
+    const std::size_t ambiguous_start = tests.size();
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {}},
+            {.id = 2, .deps = {1}},
+            {.id = 3, .deps = {0}},
+        },
+        std::vector<std::size_t>{0, 1, 2, 3});
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {}},
+            {.id = 2, .deps = {0, 1, 3}},
+            {.id = 3, .deps = {0}},
+        },
+        std::vector<std::size_t>{0, 1, 3, 2});
+
+    SECTION("order") {
+      for (std::size_t i = 0; i < tests.size(); ++i) {
+        const auto& [entries, expected_order] = tests.at(i);
+        CAPTURE(entries);
+
+        auto get_deps = [&](const Entry& entry) {
+          return entry.deps |
+                 std::ranges::views::transform(
+                     [&](std::size_t idx) -> decltype(auto) {
+                       return *std::ranges::find(entries, idx, &Entry::id);
+                     });
+        };
+
+        if (i < ambiguous_start) {
+          REQUIRE(topological_order(entries, get_deps) == expected_order);
+        }
+
+        // Our tests are set up such that in case of ambiguity the entries
+        // are listed in increasing order
+        REQUIRE(topological_order(entries, get_deps, std::less<>{}) ==
+                expected_order);
+
+        if (i >= ambiguous_start) {
+          // Test validity of order by simulating an execution
+          std::set<std::size_t> processed;
+          const auto order =
+              topological_order(entries, get_deps, std::greater<>{});
+          REQUIRE(order != expected_order);
+
+          for (std::size_t current_idx : order) {
+            const Entry& current = entries.at(current_idx);
+            REQUIRE(processed.find(current.id) == processed.end());
+            for (std::size_t dep : current.deps) {
+              REQUIRE(processed.find(dep) != processed.end());
+            }
+
+            processed.emplace(current.id);
+          }
         }
       }
     }
