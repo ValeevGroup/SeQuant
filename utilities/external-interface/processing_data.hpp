@@ -18,6 +18,8 @@ struct ExpressionData {
   static constexpr std::string_view name{"ExpressionData"};
 
   std::vector<ResultExpr> expressions;
+
+  bool operator==(const ExpressionData &) const = default;
 };
 
 struct ExportTreeData {
@@ -36,6 +38,8 @@ struct ExportTreeData {
   };
 
   std::vector<Entry> entries;
+
+  bool operator==(const ExportTreeData &) const = default;
 };
 
 using ProcessingData = std::variant<ExpressionData, ExportTreeData>;

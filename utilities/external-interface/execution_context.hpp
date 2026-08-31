@@ -33,6 +33,10 @@ class ExecutionContext {
 
     operator DataT &() { return data.get(); }
     operator std::add_const_t<DataT> &() const { return data.get(); }
+
+    bool operator==(const Data &other) const {
+      return data.get() == other.data.get();
+    }
   };
 
   ExecutionContext() = default;
