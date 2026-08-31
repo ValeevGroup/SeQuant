@@ -33,8 +33,6 @@
 TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
 
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr, mbpt::Spin::null);
   auto ctx = get_default_context();
@@ -311,8 +309,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
       TensorNetworkV3 tnB(exB);
       TensorNetworkV3::NamedIndexSet named{Index(L"i_1"), Index(L"i_2"),
                                            Index(L"a_1"), Index(L"a_2")};
-      auto mdA = tnA.canonicalize_slots({}, &named);
-      auto mdB = tnB.canonicalize_slots({}, &named);
+      auto mdA = tnA.canonicalize_slots({.named_indices = &named});
+      auto mdB = tnB.canonicalize_slots({.named_indices = &named});
       REQUIRE(mdA.graph);
       REQUIRE(mdB.graph);
       const int cmpAB = mdA.graph->cmp(*mdB.graph);
@@ -344,8 +342,10 @@ TEST_CASE("canonicalization", "[algorithms]") {
         REQUIRE(exA);
         REQUIRE(exB);
         TensorNetworkV3 tnA(exA), tnB(exB);
-        auto mdA = tnA.canonicalize_slots();
-        auto mdB = tnB.canonicalize_slots();
+        auto mdA =
+            tnA.canonicalize_slots(TensorNetworkV3::CanonicalizeSlotsOptions{});
+        auto mdB =
+            tnB.canonicalize_slots(TensorNetworkV3::CanonicalizeSlotsOptions{});
         REQUIRE(mdA.graph);
         REQUIRE(mdB.graph);
         return mdA.graph->cmp(*mdB.graph);

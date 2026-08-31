@@ -255,17 +255,12 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
         //   h{bra;ket} = conj(h{ket;bra}),
         // so its two bra<->ket orientations fold onto a single canonical form
         // by default, carrying a recorded conjugation byproduct
-        // (SlotCanonicalizationMetadata::conj) that EvalExpr spells as the
-        // leaf tensor's elementwise-conjugation marker.
+        // (SlotCanonicalizationMetadata::conjugated_tensors) that EvalExpr
+        // spells as the leaf tensor's elementwise-conjugation marker.
         const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
-        // N.B. pass the declared-default comparator explicitly: a bare {}
-        // constructs an EMPTY std::function, which canonicalize_slots
-        // silently replaces with its space-only fallback ordering -- a
-        // different code path than real callers exercise.
         auto canonicalize_slots_metadata = [&cardinal](const std::wstring& s) {
           TN tn(deserialize(s));
-          return tn.canonicalize_slots(cardinal, nullptr,
-                                       default_idxptr_slottype_lesscompare{});
+          return tn.canonicalize_slots({.cardinal_tensor_labels = cardinal});
         };
 
         // Conjugate: orientations fold onto one canonical graph, and exactly
@@ -276,6 +271,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           REQUIRE(a.graph->cmp(*b.graph) == 0);
           REQUIRE(a.hash_value() == b.hash_value());
           REQUIRE(a.conj != b.conj);
+          REQUIRE(a.conjugated_tensors.size() + b.conjugated_tensors.size() ==
+                  1);
         }
 
         // Symm braket also folds and never sets conj.
@@ -285,6 +282,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           REQUIRE(a.graph->cmp(*b.graph) == 0);
           REQUIRE(!a.conj);
           REQUIRE(!b.conj);
+          REQUIRE(a.conjugated_tensors.empty());
+          REQUIRE(b.conjugated_tensors.empty());
         }
       }
     }
@@ -1086,8 +1085,9 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
         // std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                 L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
+        // the Hermitian F canonicalizes to its swapped+starred spelling
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{F^{{i_{17}}}_{{i_1}}}");
+                L"{{F^*}^{{i_1}}_{{i_{17}}}}");
       }
 
       // with explicit named indices
@@ -1110,15 +1110,16 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
         //        << std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                 L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+        // the Hermitian F canonicalizes to its swapped+starred spelling
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{F^{{i_{17}}}_{{i_2}}}");
+                L"{{F^*}^{{i_2}}_{{i_{17}}}}");
       }
     }
 
     SECTION("particle non-conserving") {
       const auto input1 = deserialize(L"P{;a1,a3}");
       const auto input2 = deserialize(L"P{a1,a3;}");
-      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
+      const std::wstring expected1 = L"{{{P^*}^{}_{{a_1}{a_3}}}}";
       const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
@@ -1139,7 +1140,8 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
               .as<Product>()
               .factors();
       const std::wstring expected =
-          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
+          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * "
+          L"I2^*{i_1,i_2;;x_1}:N";
 
       for (bool fast : {true, false}) {
         TensorNetworkV2 tn(input);
@@ -1206,14 +1208,14 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
     SECTION("miscellaneous") {
       const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
           {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+           L"g{i_1,a_1;i_2,i_3}:A * I^*{i_1,a_1;i_2,i_3}:A"},
           {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+           L"-1 g{i_1,a_1;i_2,i_3}:A * I^*{i_1,a_1;i_2,i_3}:A"},
 
           {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I^*{i_1,a_1;i_2,i_3}:N"},
           {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I^*{i_1,a_1;i_3,i_2}:N"},
       };
 
       for (const auto& [input, expected] : inputs) {
@@ -1260,7 +1262,8 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           deserialize(
-              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              L"Â{i1,i2;a1,a2} g^*{a3,a4;i3,i4} t{a1,a3;i1,i2} "
+              L"t{a2,a4;i3,i4}",
               {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 

@@ -286,8 +286,6 @@ int main(int argc, char* argv[]) {
                         .vacuum = Vacuum::SingleProduct,
                         .spbasis = spbasis})
           .set(strict));
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print stats
   Logger::instance().wick_stats = false;

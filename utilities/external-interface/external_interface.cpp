@@ -318,8 +318,13 @@ void generateITF(const json &blocks, std::string_view out_file,
       std::ifstream in(input_file);
       const std::string input(std::istreambuf_iterator<char>(in), {});
 
-      sequant::ResultExpr result = sequant::deserialize<sequant::ResultExpr>(
-          input, {.def_perm_symm = Symmetry::Antisymm});
+      const io::serialization::DeserializationOptions deserialize_opts{
+          .def_perm_symm = Symmetry::Antisymm,
+          .def_braket_symm = BraKetSymmetry::Nonsymm,
+          .def_col_symm = ColumnSymmetry::Symm};
+
+      sequant::ResultExpr result =
+          sequant::deserialize<sequant::ResultExpr>(input, deserialize_opts);
 
       if (current_result.contains("name")) {
         result.set_label(toUtf16(current_result.at("name").get<std::string>()));
@@ -327,12 +332,10 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       if (current_result.contains("replace")) {
         for (const nlohmann::json &sub : current_result.at("replace")) {
-          ExprPtr target =
-              deserialize<ExprPtr>(sub.at("target").get<std::string>(),
-                                   {.def_perm_symm = Symmetry::Antisymm});
-          ExprPtr replacement =
-              deserialize<ExprPtr>(sub.at("replacement").get<std::string>(),
-                                   {.def_perm_symm = Symmetry::Antisymm});
+          ExprPtr target = deserialize<ExprPtr>(
+              sub.at("target").get<std::string>(), deserialize_opts);
+          ExprPtr replacement = deserialize<ExprPtr>(
+              sub.at("replacement").get<std::string>(), deserialize_opts);
 
           std::string equality_method =
               sub.value("tensor_equality", "identity");

@@ -67,4 +67,10 @@ SimplifyOptions SimplifyOptions::default_options() {
 SimplifyOptions::SimplifyOptions(CanonicalizeOptions opts)
     : CanonicalizeOptions(opts) {}
 
+SimplifyOptions SimplifyOptions::copy_and_set(FoldConjugatePairs arg) const {
+  auto result = *this;
+  result.fold_conjugate_pairs = arg;
+  return result;
+}
+
 }  // namespace sequant

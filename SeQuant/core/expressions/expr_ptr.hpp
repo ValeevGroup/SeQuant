@@ -157,6 +157,15 @@ using ExprPtrVector = container::svector<ExprPtr>;
 /// @return the adjoint of @p expr
 ExprPtr adjoint(const ExprPtr &expr);
 
+ExprPtr operator*(const ExprPtr &left, const ExprPtr &right);
+
+/// Unlike @code operator*(const ExprPtr&, const ExprPtr&) @endcode this
+/// produces a non-commutative product (i.e. NCProduct)
+ExprPtr operator^(const ExprPtr &left, const ExprPtr &right);
+
+ExprPtr operator+(const ExprPtr &left, const ExprPtr &right);
+ExprPtr operator-(const ExprPtr &left, const ExprPtr &right);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_EXPR_PTR_HPP

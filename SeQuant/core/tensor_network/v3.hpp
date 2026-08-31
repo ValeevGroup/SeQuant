@@ -283,15 +283,22 @@ class TensorNetworkV3 {
     /// input order
     std::int8_t phase = +1;  // +1 or -1
 
-    /// antilinear byproduct of canonicalization: the PARITY of the
-    /// bra<->ket-bundle swaps the canonical labeling applied to the network's
-    /// BraKetSymmetry::Conjugate tensors. A Hermitian (Conjugate) tensor
-    /// satisfies T{bra;ket} = conj(T{ket;bra}), so each such swap carries a
-    /// conjugation (cf. `phase`, which carries the ±1 linear byproduct of
-    /// antisymmetric slot reorderings). A single bit is exact only when at
-    /// most one tensor can have swapped; its sole consumer is EvalExpr's
-    /// single-tensor leaf constructor -- see the invariant note at the
-    /// detection site in canonicalize_slots (v3.cpp).
+    /// antilinear byproduct of canonicalization: the input ordinals of the
+    /// network's BraKetSymmetry::Conjugate tensors whose canonical labeling
+    /// spells them in the bra<->ket-swapped orientation. A Hermitian
+    /// (Conjugate) tensor satisfies T{bra;ket} = conj(T{ket;bra}), so each
+    /// such swap carries an elementwise conjugation of that tensor (cf.
+    /// `phase`, which carries the ±1 linear byproduct of antisymmetric slot
+    /// reorderings). NOTE: flat input ordinals suffice for the flat networks
+    /// canonicalize_slots consumes today; this field is to be replaced
+    /// by/dissolved into the maintainer's TreeIndex-based reporting when
+    /// that lands, so it survives nested expressions.
+    container::svector<std::size_t> conjugated_tensors;
+
+    /// the PARITY of the swaps recorded in `conjugated_tensors`. A single
+    /// bit is exact only when at most one tensor can have swapped; its sole
+    /// consumer is EvalExpr's single-tensor leaf constructor
+    /// -- prefer `conjugated_tensors`
     bool conj = false;
   };
 
@@ -309,11 +316,38 @@ class TensorNetworkV3 {
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
   /// @return the computed canonicalization metadata
-  SlotCanonicalizationMetadata canonicalize_slots(
+  [[deprecated(
+      "use the CanonicalizeSlotsOptions "
+      "overload")]] SlotCanonicalizationMetadata
+  canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{});
+
+  /// @brief options controlling canonicalize_slots()
+  struct CanonicalizeSlotsOptions {
+    SEQUANT_DESIGNATED_INIT_ONLY;
+    /// move all tensors with these labels to the front before canonicalizing
+    /// indices
+    container::vector<std::wstring> cardinal_tensor_labels = {};
+    /// the indices that cannot be renamed, i.e. their labels are meaningful;
+    /// nullptr = use the external indices
+    const NamedIndexSet *named_indices = nullptr;
+    /// less-than comparison for coarse-grained sorting of named indices
+    /// before sorting to canonical order. N.B. defaulted to the DECLARED
+    /// default (default_idxptr_slottype_lesscompare), so a value-initialized
+    /// options object exercises the same code path as explicit callers -- a
+    /// default-constructed (empty) std::function is replaced by an internal
+    /// space-only fallback, a different path
+    SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+        default_idxptr_slottype_lesscompare{};
+  };
+
+  /// @sa canonicalize_slots(const container::vector<std::wstring>&, const
+  ///     NamedIndexSet*, SlotCanonicalizationMetadata::named_index_compare_t)
+  SlotCanonicalizationMetadata canonicalize_slots(
+      CanonicalizeSlotsOptions options);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to

@@ -1,8 +1,10 @@
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/bernoulli.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
@@ -16,6 +18,7 @@
 #include <new>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace {
 // alias reserved labels for readability
@@ -42,10 +45,12 @@ CC::CC(size_t n, const Options& opts)
       screen_(opts.screen),
       use_topology_(opts.use_topology),
       hbar_comm_rank_(opts.hbar_comm_rank),
-      pertbar_comm_rank_(opts.pertbar_comm_rank) {
-  if (unitary())
-    SEQUANT_ASSERT(hbar_comm_rank_,
-                   "CC: hbar_comm_rank is required for unitary ansatz");
+      pertbar_comm_rank_(opts.pertbar_comm_rank),
+      hbar_expansion_(opts.hbar_expansion) {
+  if (hbar_expansion_ == HbarExpansion::Bernoulli && ansatz_ != Ansatz::U)
+    throw Exception("CC: Bernoulli expansion requires the U ansatz");
+  if (unitary() && !hbar_comm_rank_)
+    throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
   if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
     SEQUANT_ASSERT(skip_singles_,
                    "CC: skip_singles must be true for orbital-optimized "
@@ -60,6 +65,8 @@ bool CC::unitary() const {
 
 std::optional<size_t> CC::hbar_comm_rank() const { return hbar_comm_rank_; }
 
+CC::HbarExpansion CC::hbar_expansion() const { return hbar_expansion_; }
+
 bool CC::skip_singles() const { return skip_singles_; }
 
 bool CC::screen() const { return screen_; }
@@ -69,6 +76,9 @@ bool CC::use_topology() const { return use_topology_; }
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
 
+  if (hbar_expansion_ == HbarExpansion::Bernoulli)
+    return bernoulli::hbar(N, truncation, skip_singles());
+
   // for a non-unitary ansatz this is the cheaper connected-product form, which
   // is only equivalent to the commutator once the caller supplies operator
   // connectivity to ref_av (see lst_options() and the @warning on hbar())
@@ -76,6 +86,12 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
 }
 
 ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
+  // Bernoulli: the hbar expansion is at tensor level, call the tensor level
+  // ref_av directly. No connectivity or screening.
+  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
+    const auto erank = comm_rank.value_or(hbar_comm_rank_.value());
+    return op::tensor::ref_av(this->hbar(erank));
+  }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
   // truncation. No projector ⇒ this is the energy. ref_av applies the
   // connectivity (empty for unitary, default otherwise).
@@ -86,7 +102,19 @@ ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
 
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
-  SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
+  SEQUANT_ASSERT(pmax >= pmin, "pmax should be >= pmin");
+
+  // Bernoulli: the hbar expansion is at tensor level, project and call the
+  // tensor level ref_av directly.
+  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
+    const auto hbar = this->hbar();
+    std::vector<ExprPtr> result(pmax + 1);
+    for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
+      const auto projected = (p != 0) ? op::tensor::P(nₚ(p)) * hbar : hbar;
+      result.at(p) = op::tensor::ref_av(projected);
+    }
+    return result;
+  }
 
   // 1. construct hbar(op) in canonical form
   auto hbar = this->hbar();
@@ -137,11 +165,11 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
 }
 
 std::vector<ExprPtr> CC::λ() const {
-  SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
+  SEQUANT_ASSERT(!unitary(), "there is no need for CC::λ for unitary ansatz");
 
   // construct hbar
   const auto commutator_rank = hbar_comm_rank_.value_or(4);
-  SEQUANT_ASSERT(commutator_rank >= 1 && "CC::λ: hbar_comm_rank must be >= 1");
+  SEQUANT_ASSERT(commutator_rank >= 1, "CC::λ: hbar_comm_rank must be >= 1");
   auto hbar = this->hbar(commutator_rank -
                          1);  // -1 because of the connection with the projector
 
@@ -205,6 +233,9 @@ std::vector<ExprPtr> CC::λ() const {
 }
 
 ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
+  SEQUANT_ASSERT(hbar_expansion_ != HbarExpansion::Bernoulli,
+                 "CC::rdm: the Bernoulli expansion is not supported yet");
+
   // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
   // indices are free, so they become the free indices of γ.
   auto replacer = op::ã(rank);
@@ -237,15 +268,17 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
 
 std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
-  SEQUANT_ASSERT(order == 1 &&
+  SEQUANT_ASSERT(order == 1,
                  "sequant::mbpt::CC::tʼ(): only first-order perturbation is "
                  "supported now");
-  SEQUANT_ASSERT(rank == 1 &&
+  SEQUANT_ASSERT(rank == 1,
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
   if (unitary())
     SEQUANT_ASSERT(pertbar_comm_rank_,
                    "pertbar_comm_rank must be specified for unitary ansatz");
+  SEQUANT_ASSERT(hbar_expansion_ != HbarExpansion::Bernoulli,
+                 "CC::tʼ: the Bernoulli expansion is not supported yet");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
@@ -297,15 +330,14 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
 
 std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
-  SEQUANT_ASSERT(order == 1 &&
+  SEQUANT_ASSERT(order == 1,
                  "sequant::mbpt::CC::λʼ(): only first-order perturbation is "
                  "supported now");
-  SEQUANT_ASSERT(rank == 1 &&
+  SEQUANT_ASSERT(rank == 1,
                  "sequant::mbpt::CC::λʼ(): only one-body perturbation "
                  "operator is supported now");
-  SEQUANT_ASSERT(!unitary() &&
-                 "there is no need for CC::λʼ for unitary ansatz");
-  SEQUANT_ASSERT(ansatz_ == Ansatz::T &&
+  SEQUANT_ASSERT(!unitary(), "there is no need for CC::λʼ for unitary ansatz");
+  SEQUANT_ASSERT(ansatz_ == Ansatz::T,
                  "CC::λʼ: only traditional ansatz is supported");
 
   // construct hbar
@@ -362,14 +394,116 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 namespace {
 // EOM eigenvector operators R and L use SquareRoot normalization
 constexpr Normalization eom_norm = Normalization::SquareRoot;
+
+/// Projection manifolds for an EOM operator with @p np particle and @p nh hole
+/// counts, lowest rank first. Descends (np, nh) together, stopping before the
+/// reference and, for IP/EA, once either count reaches zero.
+container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
+                                                                        nₕ nh) {
+  container::svector<std::pair<std::int64_t, std::int64_t>> manifolds;
+  for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
+    if (rp == 0 && rh == 0) break;
+    manifolds.emplace_back(rp, rh);
+    if (rp == 0 || rh == 0) break;
+  }
+  std::ranges::reverse(manifolds);
+  return manifolds;
+}
 }  // namespace
 
-std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
-  SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
+// Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
+// 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for IP/EA,
+// 10.1021/acs.jctc.5c01991 Fig. 1.
+//
+// Eq. (10) splits the single physical E_gr from the normal-ordered components
+// that build the blocks of Eq. (7). Each cumulative H̄^(k) used below still
+// carries its rank-dependent scalar part, so remove that same scalar on the
+// diagonal before assembling the separately truncated components.
+std::vector<ExprPtr> CC::eom_r_blocked(
+    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
+  if (!unitary())
+    throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
+
+  const auto manifolds = eom_manifolds(np, nh);
+  const auto K = manifolds.size();
+  // `block_ranks` is read at i * K + j, so the ascending order above is what
+  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty means uniform hbar_comm_rank
+  const std::vector<size_t> ranks =
+      block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
+                          : block_ranks;
+  if (ranks.size() != K * K)
+    throw Exception(
+        "CC::eom_r: block_ranks must be a K x K row-major matrix, "
+        "K = number of projection manifolds");
+
+  // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
+  // below must match it. Connectivity is empty either way, as everywhere on the
+  // unitary path; only the operator-level vev forwards screen/use_topology.
+  const bool tensor_level = hbar_expansion_ == HbarExpansion::Bernoulli;
+
+  // One H̄ per distinct truncation order, reduced to its R part (Bernoulli only;
+  // BCH H̄ is operator-level and has no N/R split). The N part is the amplitude
+  // residual <Φl|H̄|Φ0>, which Eq. (6) zeroes only at the amplitude rank and
+  // Eqs. (41)-(47) carry nowhere. It shifts the manifold rank, so removing it
+  // leaves diagonal blocks untouched.
+  container::map<size_t, ExprPtr> hbars;
+  for (const auto k : ranks) {
+    auto [it, fresh] = hbars.try_emplace(k);
+    if (!fresh) continue;  // deriving H̄ twice for one rank is not cheap
+    it->second = hbar(k);
+    if (tensor_level)
+      it->second =
+          bernoulli::detail::R_part(it->second, N, skip_singles() ? 2 : 1);
+  }
+  auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
+    return tensor_level ? op::tensor::δl(nₚ(p), nₕ(h)) : op::δl(nₚ(p), nₕ(h));
+  };
+  auto ket_of = [tensor_level](std::int64_t p, std::int64_t h) {
+    return tensor_level ? op::tensor::r(nₚ(p), nₕ(h), eom_norm)
+                        : op::r(nₚ(p), nₕ(h), eom_norm);
+  };
+  auto vev = [tensor_level, this](const ExprPtr& e) {
+    return tensor_level ? op::tensor::ref_av(e)
+                        : op::ref_av(e, {.connect = {},
+                                         .screen = screen_,
+                                         .use_topology = use_topology_});
+  };
+
+  using std::min;
+  std::vector<ExprPtr> result(min(np, nh) + 1);
+  for (size_t i = 0; i < K; ++i) {
+    const auto [bp, bh] = manifolds[i];
+    const auto bra = bra_of(bp, bh);
+    auto acc = std::make_shared<Sum>();
+    for (size_t j = 0; j < K; ++j) {
+      const auto [kp, kh] = manifolds[j];
+      const auto& hbar_ij = hbars.at(ranks.at(i * K + j));
+      const auto ket = ket_of(kp, kh);
+      acc->append(vev(bra * hbar_ij * ket));
+      // Remove the scalar part of this block's temporary H̄^(k_ii). This is
+      // not a block-dependent physical E_gr: it leaves the normal-ordered
+      // coefficients selected for this block in Eq. (10). Written as
+      // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the block's
+      // external ones.
+      if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
+    }
+    result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc});
+  }
+  return result;
+}
+
+std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
+                               const std::vector<size_t>& block_ranks) const {
+  SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
   if (np != nh)
     SEQUANT_ASSERT(
-        get_default_context().spbasis() != SPBasis::Spinfree &&
+        get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
+
+  // Bernoulli always takes the blocked path: the uniform one below commutes H̄
+  // with an operator-level R, which a tensor-level H̄ cannot take part in.
+  if (!block_ranks.empty() || hbar_expansion_ == HbarExpansion::Bernoulli)
+    return eom_r_blocked(np, nh, block_ranks);
 
   // construct hbar
   const auto hbar = this->hbar();
@@ -391,30 +525,20 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) const {
     op_connect = concat(default_op_connections(),
                         {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
   }
-  // initialize result vector
-  std::vector<ExprPtr> result;
   using std::min;
-  result.resize(min(np, nh) + 1);  // for EE first element will be empty
-
-  std::int64_t rp = np, rh = nh;
-  while (rp >= 0 && rh >= 0) {
-    if (rp == 0 && rh == 0) break;
-    // project with <rp, rh| (i.e., multiply δl(rp, rh)) and compute VEV
-    // use δl for consistent normalization
+  std::vector<ExprPtr> result(min(np, nh) + 1);  // for EE element 0 stays null
+  // project with <rp, rh| (δl for consistent normalization) and compute VEV
+  for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
         this->ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
-    if (rp == 0 || rh == 0) break;
-    rp--;
-    rh--;
-  }
 
   return result;
 }
 
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
-  SEQUANT_ASSERT(!unitary() &&
+  SEQUANT_ASSERT(!unitary(),
                  "there is no need for CC::eom_l for unitary ansatz");
-  SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
+  SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
 
   if (np != nh)
     SEQUANT_ASSERT(
@@ -436,21 +560,12 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
                                                             {L"f", symm},
                                                             {L"g", symm}});
 
-  // initialize result vector
-  std::vector<ExprPtr> result;
   using std::min;
-  result.resize(min(nh, np) + 1);  // for EE first element will be empty
-
-  std::int64_t rp = np, rh = nh;
-  while (rp >= 0 && rh >= 0) {
-    if (rp == 0 && rh == 0) break;
-    // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
+  std::vector<ExprPtr> result(min(np, nh) + 1);  // for EE element 0 stays null
+  // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
+  for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
         this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh)), op_connect);
-    if (rp == 0 || rh == 0) break;
-    rp--;
-    rh--;
-  }
 
   return result;
 }

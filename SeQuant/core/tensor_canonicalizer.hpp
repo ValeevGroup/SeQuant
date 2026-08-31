@@ -30,21 +30,6 @@ class AbstractTensor;
 ///         value symmetry.
 bool braket_orientation_pinned(const AbstractTensor& t);
 
-/// @return true if the canonical orientation of a braket-foldable tensor is
-///         the bra<->ket-swapped one. The decision is a pure function of the
-///         tensor's content, shared by the per-tensor
-///         (Default/TensorBlockCanonicalizer) and network (TensorNetworkV3)
-///         canonicalization routes so both spell one value one way:
-///         the space-lexicographically larger bundle belongs in the bra
-///         (historical convention, e.g. the half-tensor X{;a;x} folds into
-///         X{a;;x}); on a full space tie the label-lexicographically SMALLER
-///         bundle stays in the bra (label-ascending spellings like
-///         g{p1,p2;p3,p4} remain canonical as written). Bundles are compared
-///         sorted, so the decision is independent of within-bundle slot
-///         order; identical bundles (e.g. the diagonal trace T{p,q;p,q})
-///         never prefer the swap.
-bool prefer_swapped_braket(const AbstractTensor& t);
-
 /// @brief Base class for Tensor canonicalizers
 /// To make custom canonicalizer make a derived class and register an instance
 /// of that class with TensorCanonicalizer::register_instance
@@ -140,13 +125,13 @@ class TensorCanonicalizer {
   static void index_pair_comparer(index_pair_comparer_t comparer);
 
  protected:
-  inline auto mutable_bra_range(AbstractTensor& t) const {
+  static inline auto mutable_bra_range(AbstractTensor& t) {
     return t._bra_mutable();
   }
-  inline auto mutable_ket_range(AbstractTensor& t) const {
+  static inline auto mutable_ket_range(AbstractTensor& t) {
     return t._ket_mutable();
   }
-  inline auto mutable_aux_range(AbstractTensor& t) const {
+  static inline auto mutable_aux_range(AbstractTensor& t) {
     return t._aux_mutable();
   }
 
@@ -173,6 +158,29 @@ class NullTensorCanonicalizer : public TensorCanonicalizer {
   ExprPtr apply(AbstractTensor&) const override;
 };
 
+/// @return whether @p t 's braket orientation is pinned: the reserved
+///         (anti)symmetrization/transposition bookkeeping operators, whose
+///         bra<->ket orientation defines/extracts external indices and must
+///         never be reoriented
+bool braket_orientation_pinned(const AbstractTensor& t);
+
+/// @return whether the BraKetSymmetry::Conjugate bra<->ket VALUE fold applies
+///         to @p t: Conjugate braket symmetry (`T{p;q} = conj(T{q;p})`) AND
+///         c-number (reorienting an operator-valued tensor would exchange
+///         creators and annihilators) AND not orientation-pinned. Every fold
+///         site must gate on this predicate (never on the marker alone).
+/// @note a future anti-conjugate braket symmetry (`T{p;q} = -conj(T{q;p})`,
+///       the complex-field image of Hermiticity::AntiHermitian) would extend
+///       this predicate with a sign; the time-reversal work will need it.
+bool braket_conjugate_foldable(const AbstractTensor& t);
+
+/// @return whether ANY braket orientation fold applies to @p t: Symm braket
+///         symmetry (free swap; reserved operators cannot be Symm -- the
+///         Tensor constructors demote them to Conjugate -- so no extra gates
+///         are needed) or the Conjugate value fold
+///         (braket_conjugate_foldable())
+bool braket_foldable(const AbstractTensor& t);
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;
@@ -190,6 +198,9 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     });
   }
   virtual ~DefaultTensorCanonicalizer() = default;
+
+  /// Canonicalizes the assignment of indices to bra and ket
+  static void canonicalize_braket(AbstractTensor& t);
 
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c

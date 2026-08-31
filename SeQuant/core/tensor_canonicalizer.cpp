@@ -9,8 +9,8 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
-#include <algorithm>
-#include <regex>
+#include <memory>
+#include <mutex>
 #include <type_traits>
 #include <vector>
 
@@ -184,7 +184,17 @@ TensorCanonicalizer::instance_map_accessor() {
         return m;
       }();
   static std::recursive_mutex mtx_;
-  return std::make_pair(&map_, std::unique_lock<std::recursive_mutex>{mtx_});
+  static bool initialized_ = false;
+
+  std::unique_lock lock(mtx_);
+  if (!initialized_) {
+    // Ensure DefaultTensorCanonicalizer is installed as the default
+    // canonicalizer by default
+    map_.emplace(L"", std::make_shared<DefaultTensorCanonicalizer>());
+    initialized_ = true;
+  }
+
+  return std::make_pair(&map_, std::move(lock));
 }
 
 container::vector<std::wstring>&
@@ -332,67 +342,94 @@ bool braket_orientation_pinned(const AbstractTensor& t) {
          lbl == reserved::transposition_label();
 }
 
-bool prefer_swapped_braket(const AbstractTensor& t) {
-  const TensorBlockIndexComparer space_cmp;
-  auto space_less = [&space_cmp](const Index& a, const Index& b) {
-    return space_cmp.compare_spaces(a, b) < 0;
-  };
-  auto sorted = [](auto&& rng, auto&& less) {
-    std::vector<Index> v;
-    for (const auto& idx : rng) v.push_back(idx);
-    ranges::sort(v, less);
-    return v;
-  };
-
-  // Space level: the space-lexicographically larger bundle belongs in the
-  // bra (the historical convention: e.g. the half-tensor X{;a;x} folds into
-  // X{a;;x}).
-  const auto bra_by_space = sorted(t._bra(), space_less);
-  const auto ket_by_space = sorted(t._ket(), space_less);
-  if (ranges::lexicographical_compare(bra_by_space, ket_by_space, space_less))
-    return true;
-  if (ranges::lexicographical_compare(ket_by_space, bra_by_space, space_less))
-    return false;
-
-  // Full space tie: break it on the index labels, keeping the
-  // label-lexicographically SMALLER bundle in the bra, so label-ascending
-  // spellings (e.g. g{p1,p2;p3,p4}) remain canonical as written. Identical
-  // bundles (diagonal trace T{p,q;p,q}) compare equal and never swap.
-  const auto bra_full = sorted(t._bra(), std::less<Index>{});
-  const auto ket_full = sorted(t._ket(), std::less<Index>{});
-  return ranges::lexicographical_compare(ket_full, bra_full);
+bool braket_conjugate_foldable(const AbstractTensor& t) {
+  return t._braket_symmetry() == BraKetSymmetry::Conjugate && t._is_cnumber() &&
+         !braket_orientation_pinned(t);
 }
 
-namespace {
+bool braket_foldable(const AbstractTensor& t) {
+  return t._braket_symmetry() == BraKetSymmetry::Symm ||
+         braket_conjugate_foldable(t);
+}
 
-/// applies the canonical braket orientation (prefer_swapped_braket) to a
-/// braket-foldable tensor: Symm braket swaps freely, Conjugate braket swaps
-/// with the elementwise-conjugation marker toggled (T{q;p} = conj(T{p;q})).
-/// Operator-valued tensors (swap exchanges creators/annihilators) and the
-/// reserved bookkeeping operators (orientation defines/extracts external
-/// indices) are left untouched.
-/// @return true if bra and ket were swapped
-bool apply_canonical_braket_orientation(AbstractTensor& t) {
+void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
+  if (!braket_foldable(t)) {
+    return;
+  }
   const auto bks = t._braket_symmetry();
-  const bool foldable =
-      (bks == BraKetSymmetry::Symm || bks == BraKetSymmetry::Conjugate) &&
-      t._is_cnumber() && !braket_orientation_pinned(t);
-  if (!foldable || !prefer_swapped_braket(t)) return false;
-  t._swap_bra_ket();
-  if (bks == BraKetSymmetry::Conjugate) t._conjugate();
-  return true;
-}
 
-}  // namespace
+  // Normalize to the VALUE orientation first: a marked Conjugate tensor's
+  // starred spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has
+  // TWO spellings. Deciding on the current spelling is not marker-convergent
+  // (both spellings can satisfy "no swap"), which would let different
+  // canonicalization routes (graph vs content) end on different members of
+  // the pair. Unfold, then decide -- one canonical spelling per VALUE.
+  if (bks == BraKetSymmetry::Conjugate && t._conjugated()) {
+    t._conjugate();
+    t._swap_bra_ket();
+  }
+
+  // bra<->ket exchange is a symmetry for braket-foldable tensors, so pick a
+  // canonical orientation: freely for Symm braket symmetry, and combined with
+  // the elementwise-conjugation marker for Conjugate braket symmetry (the
+  // value identity T{q;p} = conj(T{p;q})). The choice is governed by the
+  // canonical "colors" of the bra and ket bundles -- i.e. their index spaces,
+  // not the index labels -- so the result is label-independent. Bundles with
+  // identical spaces (e.g. g{p,q;r,s}) compare equal and are left untouched
+  // for Symm; for Conjugate a full space tie is broken on the index labels
+  // (below), because the two orientations denote DIFFERENT (conjugate) values
+  // that must nevertheless land on one canonical spelling.
+  const TensorBlockIndexComparer cmp;
+  auto space_less = [&cmp](const Index& a, const Index& b) {
+    return cmp.compare_spaces(a, b) < 0;
+  };
+
+  auto bra = mutable_bra_range(t);
+  auto ket = mutable_ket_range(t);
+
+  // Compare the bundles by their space sequences *sorted by color*, so the
+  // decision is independent of the within-bundle index order. Column/perm
+  // symmetry can permute the bra (and ket) order without changing the tensor,
+  // and a comparison over the as-given order could otherwise pick different
+  // orientations for equivalent inputs.
+  std::vector<Index> bra_spaces, ket_spaces;
+  for (auto&& idx : bra) bra_spaces.push_back(idx);
+  for (auto&& idx : ket) ket_spaces.push_back(idx);
+
+  ranges::sort(bra_spaces, space_less);
+  ranges::sort(ket_spaces, space_less);
+
+  // canonical orientation: the bundle whose spaces are lexicographically
+  // larger goes to bra.
+  bool swap =
+      ranges::lexicographical_compare(bra_spaces, ket_spaces, space_less);
+
+  // Full space tie, Conjugate braket symmetry: break on the index labels,
+  // keeping the label-lexicographically SMALLER bundle in the bra, so
+  // label-ascending spellings (e.g. g{p_1,p_2;p_3,p_4}) remain canonical as
+  // written. Identical bundles (diagonal T{p,q;p,q}) compare equal and never
+  // swap. (Symm ties stay untouched: both orientations denote the SAME value
+  // there, so no fold is required.)
+  if (!swap && bks == BraKetSymmetry::Conjugate &&
+      !ranges::lexicographical_compare(ket_spaces, bra_spaces, space_less)) {
+    std::vector<Index> bra_full(bra_spaces), ket_full(ket_spaces);
+    ranges::sort(bra_full, std::less<Index>{});
+    ranges::sort(ket_full, std::less<Index>{});
+    swap =
+        ranges::lexicographical_compare(ket_full, bra_full, std::less<Index>{});
+  }
+
+  if (swap) {
+    t._swap_bra_ket();
+    // preserve the represented value: T{q;p} = conj(T{p;q})
+    if (bks == BraKetSymmetry::Conjugate) t._conjugate();
+  }
+}
 
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  // pick the canonical braket orientation of braket-foldable tensors (same
-  // fold as TensorBlockCanonicalizer::apply and
-  // TensorNetworkV3::canonicalize_graph): a bare tensor's canonicalization
-  // must spell one value one way regardless of the route it took
-  apply_canonical_braket_orientation(t);
+  canonicalize_braket(t);
 
   auto result =
       this->apply(t, this->index_comparer_, this->index_pair_comparer_);
@@ -409,10 +446,7 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  // pick the canonical braket orientation (shared with
-  // DefaultTensorCanonicalizer::apply and
-  // TensorNetworkV3::canonicalize_graph)
-  apply_canonical_braket_orientation(t);
+  canonicalize_braket(t);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});

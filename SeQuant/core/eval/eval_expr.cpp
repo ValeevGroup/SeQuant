@@ -152,25 +152,19 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
-    // N.B. pass default_idxptr_slottype_lesscompare{} explicitly, NOT {}: an
-    // empty named_index_compare selects canonicalize_slots' internal fallback,
-    // which orders named indices by space() ALONE, whereas the declared default
-    // (default_idxptr_slottype_lesscompare) orders by proto-index count first.
-    // The latter is what makes a proto-indexed (ToT) leaf's canon_indices
-    // put occupieds first (canonicals.hpp) -- a layout downstream
-    // coefficient-shape detectors rely on. Passing {} here silently broke
-    // that, so name it explicitly.
-    auto md =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels(),
-                              nullptr, default_idxptr_slottype_lesscompare{});
+    auto md = tn.canonicalize_slots(
+        {.cardinal_tensor_labels =
+             TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
-    // The graph hash is orientation-shared (bra/ket of a Conjugate tensor are
-    // colored identically), so both orientations land on one cache slot. When
-    // the canonical orientation is the swapped one (md.conj), rewrite expr_
-    // to the canonical spelling: swap (the Conjugate adjoint) + toggle the
-    // elementwise-conjugation marker; binarize(Tensor) serves the marker via
-    // an EvalOp::Adjoint wrapper over the shared operand.
+    // The graph hash is orientation-shared (bra/ket of a foldable Conjugate
+    // tensor are colored identically), so both orientations land on one cache
+    // slot. When the canonical orientation is the swapped one (md.conj; for
+    // this single-tensor network the parity IS the tensor's own swap),
+    // rewrite expr_ to the canonical spelling: swap (the Conjugate adjoint)
+    // + toggle the elementwise-conjugation marker;
+    // binarize(Tensor) serves the marker via an EvalOp::Adjoint wrapper
+    // over the shared operand.
     if (md.conj) {
       auto& tt = expr_->as<Tensor>();
       tt.adjoint();
@@ -188,7 +182,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // apply() folds the two bra<->ket orientations of a flat Conjugate
     // tensor onto the canonical one, toggling the tensor's
     // elementwise-conjugation marker when it swaps
-    // (apply_canonical_braket_orientation);
+    // (canonicalize_braket);
     // the hash below is that of the unconjugated spelling so both
     // orientations share a cache slot, and binarize(Tensor) serves the
     // marker via an EvalOp::Adjoint on retrieval.
@@ -724,7 +718,9 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
 
       auto canon = tn.canonicalize_slots(
-          TensorCanonicalizer::cardinal_tensor_labels(), &named_indices);
+          {.cardinal_tensor_labels =
+               TensorCanonicalizer::cardinal_tensor_labels(),
+           .named_indices = &named_indices});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       EvalExpr result =
