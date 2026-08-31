@@ -320,3 +320,39 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
     REQUIRE(unfolded->as<Sum>().summands().size() == 2);
   }
 }
+
+TEST_CASE("hermitian_network_recognition", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // closed |C|^2 network: C conj(C), fully contracted -> real
+  REQUIRE(is_hermitian_network(
+      deserialize(L"C{a_1;i_1}:N-C-S C^*{a_1;i_1}:N-C-S")));
+  // closed C*C without the conjugation: a generically complex scalar
+  REQUIRE_FALSE(
+      is_hermitian_network(deserialize(L"C{a_1;i_1}:N-N-S C{a_1;i_1}:N-N-S")));
+  // a declared-Hermitian energy-like scalar: h t + t* h* is self-adjoint
+  auto term = deserialize(L"h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+  auto sum = term->clone() + conjugate(term);
+  REQUIRE(is_hermitian_network(sum));
+}
+
+TEST_CASE("swap_bra_ket_carries_marker_and_aux", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto t = deserialize(L"C{a_1;i_1;p_5}:N-C-S");
+  t->as<Tensor>().conjugate();
+  auto sw = mbpt::swap_bra_ket(t);
+  auto const& st = sw->as<Tensor>();
+  REQUIRE(st.conjugated());
+  REQUIRE(st.aux().size() == 1);
+  REQUIRE(st.bra()[0].label() == L"i_1");
+  REQUIRE(st.ket()[0].label() == L"a_1");
+}

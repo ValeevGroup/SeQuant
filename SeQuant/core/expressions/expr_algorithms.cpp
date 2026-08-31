@@ -612,6 +612,17 @@ ResultExpr& non_canon_simplify(ResultExpr& expr) {
   return expr;
 }
 
+bool is_hermitian_network(ExprPtr const& expr, CanonicalizeOptions opts) {
+  SEQUANT_ASSERT(expr && expr->is_cnumber());
+  // cross-expression identity requires meaningful named (external) labels
+  opts = opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);
+  auto lhs = canonicalize(expr->clone(), opts);
+  auto adj = expr->clone();
+  adj->adjoint();
+  auto rhs = canonicalize(std::move(adj), opts);
+  return lhs->hash_value() == rhs->hash_value() && *lhs == *rhs;
+}
+
 ExprPtr conjugate(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr);
   auto conj_scalar = [](const auto& z) {

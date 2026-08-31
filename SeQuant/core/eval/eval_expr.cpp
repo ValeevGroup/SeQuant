@@ -141,8 +141,9 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
-    auto md =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+    auto md = tn.canonicalize_slots(
+        {.cardinal_tensor_labels =
+             TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
     // The graph hash is orientation-shared (bra/ket of a foldable Conjugate
@@ -597,7 +598,9 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
 
       auto canon = tn.canonicalize_slots(
-          TensorCanonicalizer::cardinal_tensor_labels(), &named_indices);
+          {.cardinal_tensor_labels =
+               TensorCanonicalizer::cardinal_tensor_labels(),
+           .named_indices = &named_indices});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {

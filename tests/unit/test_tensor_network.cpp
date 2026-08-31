@@ -258,7 +258,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
         const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
         auto canonicalize_slots_metadata = [&cardinal](const std::wstring& s) {
           TN tn(deserialize(s));
-          return tn.canonicalize_slots(cardinal, nullptr);
+          return tn.canonicalize_slots({.cardinal_tensor_labels = cardinal});
         };
 
         // Conjugate: orientations fold onto one canonical graph, and exactly

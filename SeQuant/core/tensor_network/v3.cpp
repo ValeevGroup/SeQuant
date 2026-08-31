@@ -680,9 +680,20 @@ ExprPtr TensorNetworkV3::canonicalize(
 TensorNetworkV3::SlotCanonicalizationMetadata
 TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
-    const NamedIndexSet *named_indices_ptr,
+    const NamedIndexSet *named_indices,
     TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
         named_index_compare) {
+  return canonicalize_slots(CanonicalizeSlotsOptions{
+      .cardinal_tensor_labels = cardinal_tensor_labels,
+      .named_indices = named_indices,
+      .named_index_compare = std::move(named_index_compare)});
+}
+
+TensorNetworkV3::SlotCanonicalizationMetadata
+TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
+  const auto &cardinal_tensor_labels = options.cardinal_tensor_labels;
+  const NamedIndexSet *named_indices_ptr = options.named_indices;
+  auto named_index_compare = std::move(options.named_index_compare);
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
                              const auto &idxptr_slottype_2) -> bool {

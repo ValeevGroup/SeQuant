@@ -344,6 +344,23 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
     CanonicalizeOptions opts = CanonicalizeOptions::default_options(),
     std::function<ExprPtr(ExprPtr const&)> conjugate_op = {});
 
+/// @return whether the c-number expression @p expr denotes a Hermitian
+///         network: its VALUE equals that of its adjoint (conjugate
+///         transpose), decided by comparing canonical forms. For a closed
+///         (fully contracted, scalar-valued) network this is reality
+///         recognition: N == conj(N). This derived recognition is what the
+///         time-reversal-symmetry folding builds on; subexpressions carry no
+///         first-class hermiticity tag today (a cached tag on subnetworks is
+///         a possible later extension). For an OPEN network the comparison
+///         answers the strict expression-level question (adjoint exchanges
+///         the named bra/ket slots), not block hermiticity under a slot
+///         pairing -- that refinement also belongs to the time-reversal
+///         work.
+/// @pre `expr->is_cnumber()`
+[[nodiscard]] bool is_hermitian_network(
+    ExprPtr const& expr,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_ALGORITHMS_HPP

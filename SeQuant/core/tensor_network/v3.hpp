@@ -316,11 +316,38 @@ class TensorNetworkV3 {
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
   /// @return the computed canonicalization metadata
-  SlotCanonicalizationMetadata canonicalize_slots(
+  [[deprecated(
+      "use the CanonicalizeSlotsOptions "
+      "overload")]] SlotCanonicalizationMetadata
+  canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{});
+
+  /// @brief options controlling canonicalize_slots()
+  struct CanonicalizeSlotsOptions {
+    SEQUANT_DESIGNATED_INIT_ONLY;
+    /// move all tensors with these labels to the front before canonicalizing
+    /// indices
+    container::vector<std::wstring> cardinal_tensor_labels = {};
+    /// the indices that cannot be renamed, i.e. their labels are meaningful;
+    /// nullptr = use the external indices
+    const NamedIndexSet *named_indices = nullptr;
+    /// less-than comparison for coarse-grained sorting of named indices
+    /// before sorting to canonical order. N.B. defaulted to the DECLARED
+    /// default (default_idxptr_slottype_lesscompare), so a value-initialized
+    /// options object exercises the same code path as explicit callers -- a
+    /// default-constructed (empty) std::function is replaced by an internal
+    /// space-only fallback, a different path
+    SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+        default_idxptr_slottype_lesscompare{};
+  };
+
+  /// @sa canonicalize_slots(const container::vector<std::wstring>&, const
+  ///     NamedIndexSet*, SlotCanonicalizationMetadata::named_index_compare_t)
+  SlotCanonicalizationMetadata canonicalize_slots(
+      CanonicalizeSlotsOptions options);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
