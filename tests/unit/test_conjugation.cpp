@@ -11,6 +11,7 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
@@ -20,6 +21,7 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network/v3.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -355,4 +357,185 @@ TEST_CASE("swap_bra_ket_carries_marker_and_aux", "[conjugation]") {
   REQUIRE(st.aux().size() == 1);
   REQUIRE(st.bra()[0].label() == L"i_1");
   REQUIRE(st.ket()[0].label() == L"a_1");
+}
+
+TEST_CASE("re_im_scalar_rules", "[conjugation]") {
+  auto x = ex<Variable>(L"x");
+  auto E = ex<Variable>(L"E");
+
+  // real scalar hoists: Re(2E) = 2 Re(E), Im(2E) = 2 Im(E)
+  {
+    auto re = real_part(ex<Constant>(2) * E->clone());
+    REQUIRE(re->is<Product>());
+    REQUIRE(re->as<Product>().scalar() == (C{2, 0}));
+    REQUIRE(re->as<Product>().factors()[0]->is<RealPart>());
+  }
+  // i-rotation: Re(i A) = -Im(A), Im(i A) = Re(A)
+  {
+    auto re = real_part(ex<Constant>(i_unit) * x->clone());
+    REQUIRE(re->is<Product>());
+    REQUIRE(re->as<Product>().scalar() == (C{-1, 0}));
+    REQUIRE(re->as<Product>().factors()[0]->is<ImagPart>());
+    auto im = imaginary_part(ex<Constant>(i_unit) * x->clone());
+    REQUIRE(im->as<Product>().scalar() == (C{1, 0}));
+    REQUIRE(im->as<Product>().factors()[0]->is<RealPart>());
+  }
+  // general complex scalar stays wrapped (recognized, not auto-expanded)
+  {
+    auto re = real_part(ex<Constant>(C{1, 1}) * x->clone());
+    REQUIRE(re->is<RealPart>());
+  }
+}
+
+TEST_CASE("adjoint_conjugate_transpose_relations", "[conjugation]") {
+  // the Klein four-group {id, conj, swap, adjoint}: each op is an involution
+  // and adjoint = swap o conj = conj o swap
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto t0 = deserialize(L"t{a_1;i_1}:N-N-S");
+  // adjoint is an involution (incl. the Nonsymm label marker)
+  auto t = t0->clone();
+  t->adjoint();
+  t->adjoint();
+  REQUIRE(*t == *t0);
+  // conj is an involution
+  REQUIRE(*conjugate(conjugate(t0)) == *t0);
+  // adjoint and conj commute
+  auto ca = t0->clone();
+  ca->adjoint();
+  ca = conjugate(ca);
+  auto ac = conjugate(t0);
+  ac->adjoint();
+  REQUIRE(*ca == *ac);
+}
+
+TEST_CASE("conj_serialization_roundtrip", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto t = deserialize(L"g{i_1,i_2;a_1,a_2}:A-C-S");
+  t->as<Tensor>().conjugate();
+  auto rt = deserialize(serialize(t));
+  REQUIRE(rt->as<Tensor>().conjugated());
+  REQUIRE(*rt == *t);
+}
+
+TEST_CASE("conj_power_roundtrip", "[conjugation]") {
+  auto p = ex<Power>(ex<Variable>(L"x"), 2);
+  auto pc = conjugate(p);
+  REQUIRE(pc->hash_value() != p->hash_value());
+  REQUIRE(*conjugate(pc) == *p);
+}
+
+TEST_CASE("tn_slots_determinism", "[conjugation]") {
+  // T17: canonicalize_slots is presentation-independent for a
+  // conjugate-marked network -- both factor orders and both conj
+  // placements of C(x;m) C*(y;m) land on one graph/hash family with a
+  // consistent per-tensor conj report
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto C = [](const wchar_t* ext) {
+    return ex<Tensor>(L"C", bra{Index{ext}}, ket{Index{L"p_1"}},
+                      Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                      ColumnSymmetry::Symm);
+  };
+  auto Cstar = [&](const wchar_t* ext) {
+    auto t = C(ext);
+    t->as<Tensor>().conjugate();
+    return t;
+  };
+  auto md = [](ExprPtr e) {
+    TensorNetworkV3 tn(e);
+    return tn.canonicalize_slots(TensorNetworkV3::CanonicalizeSlotsOptions{});
+  };
+  auto m1 = md(C(L"a_1") * Cstar(L"a_2"));
+  auto m2 = md(Cstar(L"a_2") * C(L"a_1"));  // factor order flipped
+  REQUIRE(m1.hash_value() == m2.hash_value());
+  REQUIRE(m1.graph->cmp(*m2.graph) == 0);
+  // the conj-swapped spelling is a DIFFERENT value and keeps its own slot
+  auto m3 = md(Cstar(L"a_1") * C(L"a_2"));
+  REQUIRE(m3.hash_value() == m1.hash_value());  // one shared graph family
+  // parity bit always equals the report's parity
+  for (auto* m : {&m1, &m2, &m3})
+    REQUIRE(m->conj == (m->conjugated_tensors.size() % 2 == 1));
+}
+
+TEST_CASE("conjugate_fold_skips_reserved", "[conjugation]") {
+  // reserved bookkeeping operators ((anti)symmetrizers) never reorient and
+  // never acquire the marker
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto e = deserialize(L"Â{i_1,i_2;a_1,a_2}:A g{a_1,a_2;i_1,i_2}:A-C-S");
+  canonicalize(e);
+  bool found_A = false;
+  e->visit(
+      [&](ExprPtr const& node) {
+        if (node->is<Tensor>() &&
+            node->as<Tensor>().label() == reserved::antisymm_label()) {
+          found_A = true;
+          REQUIRE_FALSE(node->as<Tensor>().conjugated());
+          REQUIRE(node->as<Tensor>().bra()[0].space() == Index(L"i_1").space());
+        }
+      },
+      /*atoms_only=*/true);
+  REQUIRE(found_A);
+}
+
+TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
+  // identically-marked summands merge; a marked and an unmarked spelling of
+  // DIFFERENT values do not
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto t = deserialize(L"t{a_1;i_1}:N-N-S");
+  auto tstar = conjugate(t);
+  auto sum = tstar->clone() + tstar->clone();
+  simplify(sum);
+  REQUIRE(sum->is<Product>());
+  REQUIRE(sum->as<Product>().scalar() == (C{2, 0}));
+
+  auto mixed = t->clone() + tstar->clone();
+  simplify(mixed);
+  REQUIRE(mixed->is<Sum>());
+  REQUIRE(mixed->as<Sum>().summands().size() == 2);
+}
+
+TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
+  // a proto-indexed (ToT) leaf's canon_indices puts occupieds first: the
+  // DECLARED default comparator (default_idxptr_slottype_lesscompare) orders
+  // by proto-index count before space -- the layout downstream
+  // coefficient-shape detectors rely on
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto C = deserialize(L"C{a_1<i_1>;i_2}:N-C-S")->as<Tensor>();
+  EvalExpr leaf{C};
+  auto const& ci = leaf.canon_indices();
+  // named indices: the proto i_1, the ket i_2, and the ToT virtual a_1<i_1>
+  REQUIRE(ci.size() == 3);
+  // proto-free indices precede proto-indexed ones (the comparator orders by
+  // proto-index count before space)
+  REQUIRE_FALSE(ci[0].has_proto_indices());
+  REQUIRE_FALSE(ci[1].has_proto_indices());
+  REQUIRE(ci[2].has_proto_indices());
 }

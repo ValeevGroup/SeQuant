@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/product.hpp>
 
 #include <utility>
 
@@ -122,27 +123,60 @@ class ImagPart : public Expr {
   }
 };
 
+[[nodiscard]] inline ExprPtr imaginary_part(ExprPtr expr);
+
+namespace detail {
+/// strips a Product's scalar: returns the same factors with scalar 1
+[[nodiscard]] inline ExprPtr strip_scalar(const Product& prod) {
+  auto rest = std::make_shared<Product>();
+  for (const auto& f : prod.factors()) rest->append(1, f, Product::Flatten::No);
+  return rest;
+}
+}  // namespace detail
+
 /// @brief Wraps @p expr as `Re(expr)`, applying the eager rules.
 ///
 /// `Re(Constant c)` evaluates to `Constant(c.real())`; `Re(Re x) = Re x` and
-/// `Re(Im x) = Im x` (both wrappers are real-valued).
+/// `Re(Im x) = Im x` (both wrappers are real-valued). Scalar prefactors:
+/// a real scalar hoists (`Re(c X) = c Re(X)`), a purely imaginary scalar
+/// rotates (`Re(i b X) = -b Im(X)`); a general complex scalar stays wrapped
+/// (`Re(c X) = Re(c) Re(X) - Im(c) Im(X)` is recognized, not auto-expanded).
 [[nodiscard]] inline ExprPtr real_part(ExprPtr expr) {
   SEQUANT_ASSERT(expr);
   if (expr->is<Constant>())
     return ex<Constant>(expr->as<Constant>().value().real());
   if (expr->is<RealPart>() || expr->is<ImagPart>()) return expr;
+  if (expr->is<Product>()) {
+    const auto& prod = expr->as<Product>();
+    const auto c = prod.scalar();
+    if (c.imag() == 0 && c.real() != 1)
+      return ex<Constant>(c) * real_part(detail::strip_scalar(prod));
+    if (c.real() == 0 && c.imag() != 0)
+      return ex<Constant>(-c.imag()) *
+             imaginary_part(detail::strip_scalar(prod));
+  }
   return ex<RealPart>(std::move(expr));
 }
 
 /// @brief Wraps @p expr as `Im(expr)`, applying the eager rules.
 ///
 /// `Im(Constant c)` evaluates to `Constant(c.imag())`; `Im(Re x) = 0` and
-/// `Im(Im x) = 0` (both wrappers are real-valued).
+/// `Im(Im x) = 0` (both wrappers are real-valued). Scalar prefactors:
+/// a real scalar hoists (`Im(c X) = c Im(X)`), a purely imaginary scalar
+/// rotates (`Im(i b X) = b Re(X)`); a general complex scalar stays wrapped.
 [[nodiscard]] inline ExprPtr imaginary_part(ExprPtr expr) {
   SEQUANT_ASSERT(expr);
   if (expr->is<Constant>())
     return ex<Constant>(expr->as<Constant>().value().imag());
   if (expr->is<RealPart>() || expr->is<ImagPart>()) return ex<Constant>(0);
+  if (expr->is<Product>()) {
+    const auto& prod = expr->as<Product>();
+    const auto c = prod.scalar();
+    if (c.imag() == 0 && c.real() != 1)
+      return ex<Constant>(c) * imaginary_part(detail::strip_scalar(prod));
+    if (c.real() == 0 && c.imag() != 0)
+      return ex<Constant>(c.imag()) * real_part(detail::strip_scalar(prod));
+  }
   return ex<ImagPart>(std::move(expr));
 }
 
