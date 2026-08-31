@@ -123,4 +123,6 @@ std::size_t CSEStep::process(std::string_view id_prefix, std::size_t id_start,
   return 1;
 }
 
+bool CSEStep::alias_unchanged_inputs() const { return true; }
+
 }  // namespace sequant::util::extint

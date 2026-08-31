@@ -27,6 +27,8 @@ class CSEStep : public OneByOneProcessingStep<ExportTreeData> {
                       ExecutionContext &ctx,
                       const ExportTreeData &data) override;
 
+  bool alias_unchanged_inputs() const override;
+
  private:
   std::size_t min_usage_ = 2;
 };
