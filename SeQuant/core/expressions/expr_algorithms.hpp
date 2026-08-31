@@ -283,6 +283,25 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// @return Simplified expression
 [[nodiscard]] ResultExpr non_canon_simplify(ResultExpr&& expr);
 
+/// @brief the complex conjugate of a scalar-valued expression
+///
+/// Total over the scalar expression kinds, applying the algebra of
+/// conjugation:
+/// - `Constant`, `Variable`, `Power`: value/marker conjugation
+/// - `Tensor`: the elementwise-conjugation marker is toggled (no slot
+///   motion; contrast adjoint())
+/// - `RealPart`/`ImagPart`: identity (both are real-valued)
+/// - `Sum`: summand-wise
+/// - `Product` (c-number): `(c A B)* = conj(c) A* B*` -- factor-wise, NO
+///   reversal (contrast Product::adjoint(), which reverses)
+/// Conjugation is an involution: `conjugate(conjugate(e))` equals `e`.
+///
+/// @param expr a scalar-valued expression
+/// @return a new expression denoting `conj(expr)`
+/// @throw std::logic_error for operator-valued content (a normal-ordered
+///        operator string has no elementwise conjugation here)
+[[nodiscard]] ExprPtr conjugate(const ExprPtr& expr);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_ALGORITHMS_HPP

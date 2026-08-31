@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
@@ -484,6 +485,51 @@ ResultExpr& non_canon_simplify(ResultExpr& expr) {
   expand(expr);
   rapid_simplify(expr);
   return expr;
+}
+
+ExprPtr conjugate(const ExprPtr& expr) {
+  SEQUANT_ASSERT(expr);
+  auto conj_scalar = [](const auto& z) {
+    using Z = std::decay_t<decltype(z)>;
+    return Z{z.real(), -z.imag()};
+  };
+  if (expr->is<Constant>())
+    return ex<Constant>(conj_scalar(expr->as<Constant>().value()));
+  if (expr->is<Variable>()) {
+    auto r = expr->clone();
+    r->as<Variable>().conjugate();
+    return r;
+  }
+  if (expr->is<Power>()) {
+    auto r = expr->clone();
+    r->as<Power>().conjugate();
+    return r;
+  }
+  if (expr->is<Tensor>()) {
+    auto r = expr->clone();
+    r->as<Tensor>().conjugate();
+    return r;
+  }
+  // Re/Im are real-valued by convention: conj is the identity
+  if (expr->is<RealPart>() || expr->is<ImagPart>()) return expr->clone();
+  if (expr->is<Sum>()) {
+    auto r = std::make_shared<Sum>();
+    for (const auto& s : *expr) r->append(conjugate(s));
+    return r;
+  }
+  if (expr->is<Product>()) {
+    // conjugation distributes over a c-number product WITHOUT factor
+    // reversal: (c A B)* = conj(c) A* B* (contrast adjoint, which reverses);
+    // the factor recursion rejects operator-valued content
+    const auto& p = expr->as<Product>();
+    auto r = std::make_shared<Product>();
+    r->scale(conj_scalar(p.scalar()));
+    for (const auto& f : p) r->append(1, conjugate(f), Product::Flatten::No);
+    return r;
+  }
+  throw std::logic_error(
+      "sequant::conjugate: unsupported expression kind (operator-valued "
+      "content has no elementwise conjugation here)");
 }
 
 }  // namespace sequant
