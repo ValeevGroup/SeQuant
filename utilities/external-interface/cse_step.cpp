@@ -100,17 +100,20 @@ std::size_t CSEStep::process(std::string_view id_prefix, std::size_t id_start,
   for (std::size_t i = 0; i < expressions.size(); ++i) {
     std::optional<Tensor> symm_target;
 
+    std::optional<bool> overwrite;
     if (cse_positions.empty() || cse_positions.back() != i) {
       SEQUANT_ASSERT(i >= offset);
       symm_target = input.entries.at(i - offset).symm_contribution_target;
     } else if (!cse_positions.empty()) {
       cse_positions.pop_back();
       ++offset;
+      overwrite = true;
     }
 
     ExportTreeData::Entry current{
         .tree = std::move(expressions.at(i)),
-        .symm_contribution_target = std::move(symm_target)};
+        .symm_contribution_target = std::move(symm_target),
+        .overwrite_previous = std::move(overwrite)};
 
     output.entries.emplace_back(std::move(current));
   }

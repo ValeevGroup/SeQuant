@@ -247,8 +247,6 @@ struct ExportTreeDataCompare {
 
 std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                             const std::vector<std::string_view> &inputs) {
-  std::vector<ExpressionGroup<>> groups = prepare_expressions(exctx, inputs);
-
   auto perform_export = [&](auto &&generator, auto &&genctx)
     requires(
         std::derived_from<std::remove_cvref_t<decltype(genctx)>,
@@ -257,6 +255,9 @@ std::size_t ExportStep::run(std::string_view, ExecutionContext &exctx,
                           Generator<std::remove_cvref_t<decltype(genctx)>>>)
   {
     // Setup load/store/create/import strategies
+    std::vector<ExpressionGroup<>> groups =
+        prepare_expressions(exctx, inputs, genctx);
+
     for (const ExpressionGroup<> &current_group : groups) {
       std::set<Tensor> created_tensors;
       std::set<Variable> created_variables;
@@ -385,8 +386,8 @@ ExportStep::meta_type ExportStep::parse_meta(std::string_view language,
 }
 
 std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
-    ExecutionContext &exctx,
-    const std::vector<std::string_view> &inputs) const {
+    ExecutionContext &exctx, const std::vector<std::string_view> &inputs,
+    ExportContext &genctx) const {
   std::vector<ExecutionContext::Data<ProcessingData>> data;
   for (std::string_view current_input : inputs) {
     for (ExecutionContext::Data<ProcessingData> current :
@@ -449,6 +450,19 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
 
     for (const ExportTreeData::Entry &current : current_data.entries) {
       group.add(current.tree);
+
+      if (current.overwrite_previous.has_value()) {
+        ZeroStrategy strategy =
+            current.overwrite_previous.value()
+                ? ZeroStrategy::ZeroOnReuse | ZeroStrategy::ZeroOnCreate
+                : ZeroStrategy::ZeroOnCreate;
+        if (current.tree->is_tensor()) {
+          genctx.setZeroStrategy(current.tree->as_tensor(), strategy);
+        } else {
+          SEQUANT_ASSERT(current.tree->is_variable());
+          genctx.setZeroStrategy(current.tree->as_variable(), strategy);
+        }
+      }
 
       if (current.symm_contribution_target.has_value()) {
         auto symm_it = std::ranges::find(

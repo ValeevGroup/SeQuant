@@ -4,6 +4,7 @@
 #include "execution_context.hpp"
 #include "processing_step.hpp"
 
+#include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
@@ -55,7 +56,8 @@ class ExportStep : public ProcessingStep {
                               const nlohmann::json &meta);
 
   std::vector<ExpressionGroup<>> prepare_expressions(
-      ExecutionContext &ctx, const std::vector<std::string_view> &inputs) const;
+      ExecutionContext &ctx, const std::vector<std::string_view> &inputs,
+      ExportContext &genctx) const;
 
   friend class MetaAwareIftContext;
 };

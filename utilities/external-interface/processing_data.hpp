@@ -29,6 +29,10 @@ struct ExportTreeData {
     /// external indices. This implies that if this is set, symmetrization is
     /// required.
     std::optional<Tensor> symm_contribution_target;
+    /// In case there has been another tree computing the
+    /// same result this defines whether we overwrite the previous result
+    /// instead of adding to it.
+    std::optional<bool> overwrite_previous = {};
   };
 
   std::vector<Entry> entries;
