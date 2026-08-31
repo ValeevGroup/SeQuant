@@ -81,6 +81,23 @@ struct CanonicalizeOptions {
 /// @brief options that control behavior of `simplify()`
 /// @note this is a superset of CanonicalizeOptions
 struct SimplifyOptions : public CanonicalizeOptions {
+  enum class FoldConjugatePairs : bool { Yes = true, No = false };
+
+  /// whether simplify() folds complex-conjugate-related summand pairs
+  /// (A + A* -> 2 Re(A), A - A* -> 2i Im(A)) after canonicalization;
+  /// engaged only when the default context's registry contains a
+  /// complex-field base space (in a real field conjugation is trivial and
+  /// plain canonicalization already merges such pairs).
+  /// @note default is No for now: consumers that predate RealPart/ImagPart
+  ///       (tensor-network construction, evaluation) cannot ingest the
+  ///       folded nodes yet; the default flips to Yes once the evaluation
+  ///       layer understands them (the eval follow-up work)
+  FoldConjugatePairs fold_conjugate_pairs = FoldConjugatePairs::No;
+
+  // the base overloads are hidden by the FoldConjugatePairs overload below
+  using CanonicalizeOptions::copy_and_set;
+  SimplifyOptions copy_and_set(FoldConjugatePairs) const;
+
   static SimplifyOptions default_options();
   SimplifyOptions(CanonicalizeOptions opts);
 

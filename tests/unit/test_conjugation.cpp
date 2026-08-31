@@ -22,6 +22,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 using namespace sequant;
 
@@ -211,4 +212,111 @@ TEST_CASE("with_slots_carries_attributes", "[conjugation]") {
   REQUIRE(r.column_symmetry() == t.column_symmetry());
   REQUIRE(r.conjugated());
   REQUIRE(r.bra()[0].label() == L"i_3");
+}
+
+TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // a fully-contracted (energy-like) summand of BraKetSymmetry::Conjugate
+  // tensors, and its conjugate written independently: real scalar kept,
+  // factor order reversed, bra<->ket swapped, dummies renamed
+  auto term = deserialize(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+  auto term_adj = deserialize(L"1/2 t{i_2;a_2}:N-C-S h{a_2;i_2}:N-C-S");
+  // a manifestly real (self-conjugate) summand: BraKetSymmetry::Symm tensors
+  auto self_adj = deserialize(L"1/4 f{i_1;a_1}:N-S-S u{a_1;i_1}:N-S-S");
+
+  SECTION("sum pair emits 2 Re(A)") {
+    auto folded = fold_conjugate_pairs(term->clone() + term_adj->clone());
+    auto expected = ex<Constant>(2) * real_part(term->clone());
+    REQUIRE(*folded == *expected);
+  }
+
+  SECTION("difference pair emits 2i Im(A)") {
+    auto folded = fold_conjugate_pairs(term->clone() +
+                                       ex<Constant>(-1) * term_adj->clone());
+    auto expected =
+        ex<Constant>(Complex<rational>(0, 2)) * imaginary_part(term->clone());
+    REQUIRE(*folded == *expected);
+  }
+
+  SECTION("self-conjugate and unpaired summands stay untouched") {
+    auto folded = fold_conjugate_pairs(self_adj->clone() + term->clone());
+    auto expected = self_adj->clone() + term->clone();
+    simplify(folded, SimplifyOptions::default_options().copy_and_set(
+                         SimplifyOptions::FoldConjugatePairs::No));
+    simplify(expected, SimplifyOptions::default_options().copy_and_set(
+                           SimplifyOptions::FoldConjugatePairs::No));
+    REQUIRE(*folded == *expected);
+  }
+
+  SECTION("mixed sum: pair folds, bystander survives") {
+    auto folded = fold_conjugate_pairs(term->clone() + self_adj->clone() +
+                                       term_adj->clone());
+    REQUIRE(folded->is<Sum>());
+    REQUIRE(folded->as<Sum>().summands().size() == 2);
+    bool have_re = false;
+    for (auto&& sm : *folded)
+      if (sm->is<Product>())
+        for (auto&& f : sm->as<Product>().factors())
+          if (f->is<RealPart>()) have_re = true;
+    REQUIRE(have_re);
+  }
+
+  SECTION("back-compat real-sum fold emits 2 A") {
+    auto folded =
+        fold_conjugate_pairs_of_real_sum(term->clone() + term_adj->clone());
+    auto expected = ex<Constant>(2) * term->clone();
+    simplify(folded);
+    simplify(expected);
+    REQUIRE(*folded == *expected);
+  }
+
+  SECTION("custom conjugate_op recognizes relabeling-based pairs") {
+    // spin-annotated spaces for the ↑/↓ labels
+    auto spin_ctx = get_default_context();
+    spin_ctx.set(mbpt::make_min_sr_spaces());
+    auto spin_resetter = set_scoped_default_context(spin_ctx);
+
+    auto term_up = deserialize(L"1/2 h{i↑_1;a↑_1}:N-C-S t{a↑_1;i↑_1}:N-C-S");
+    auto term_dn = deserialize(L"1/2 h{i↓_1;a↓_1}:N-C-S t{a↓_1;i↓_1}:N-C-S");
+    {  // default (adjoint) pairing finds nothing: label flip, not swap
+      auto folded = fold_conjugate_pairs(term_up->clone() + term_dn->clone());
+      REQUIRE(folded->is<Sum>());
+      REQUIRE(folded->as<Sum>().summands().size() == 2);
+    }
+    {  // with the label-flip map the pair folds
+      auto folded = fold_conjugate_pairs(
+          term_up->clone() + term_dn->clone(),
+          CanonicalizeOptions::default_options(),
+          [](ExprPtr const& sm) { return mbpt::swap_spin(sm); });
+      auto expected = ex<Constant>(2) * real_part(term_up->clone());
+      REQUIRE(*folded == *expected);
+    }
+  }
+
+  SECTION("opt-in fold in simplify, complex field") {
+    auto sum = term->clone() + term_adj->clone();
+    auto folded = sum->clone();
+    simplify(folded, SimplifyOptions::default_options().copy_and_set(
+                         SimplifyOptions::FoldConjugatePairs::Yes));
+    // min_sr spaces are complex-field: the pair folds to 2 Re(...)
+    bool have_re = false;
+    folded->visit(
+        [&](ExprPtr const& node) {
+          if (node->is<RealPart>()) have_re = true;
+        },
+        /*atoms_only=*/false);
+    if (folded->is<RealPart>()) have_re = true;
+    REQUIRE(have_re);
+
+    // default is No until evaluation understands RealPart/ImagPart nodes
+    auto unfolded = sum->clone();
+    simplify(unfolded);
+    REQUIRE(unfolded->is<Sum>());
+    REQUIRE(unfolded->as<Sum>().summands().size() == 2);
+  }
 }
