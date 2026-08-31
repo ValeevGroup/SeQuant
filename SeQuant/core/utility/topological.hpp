@@ -8,8 +8,8 @@
 
 #include <algorithm>
 #include <limits>
-#include <ranges>
 #include <map>
+#include <ranges>
 #include <vector>
 
 namespace sequant {
@@ -60,7 +60,7 @@ std::vector<std::size_t> topological_order(Range &&range,
 
     num_deps.emplace(i, 0);
 
-    for (const auto &current_dep : deps) {
+    for (const Value &current_dep : deps) {
       auto it = std::ranges::find(range, current_dep);
       SEQUANT_ASSERT(it != end(range));
       std::size_t dep_idx = std::ranges::distance(begin(range), it);
@@ -81,10 +81,10 @@ std::vector<std::size_t> topological_order(Range &&range,
       if constexpr (std::same_as<Comp, std::identity>) {
         return begin(candidates);
       } else {
-        return std::ranges::min_element(
-            candidates, comp, [&](const auto &pair) -> decltype(auto) {
-              return *(begin(range) + pair.first);
-            });
+        return std::ranges::min_element(candidates, comp,
+                                        [&](const auto &pair) -> const Value & {
+                                          return *(begin(range) + pair.first);
+                                        });
       }
     }();
 
@@ -95,7 +95,7 @@ std::vector<std::size_t> topological_order(Range &&range,
 
     std::size_t idx = elem->first;
     // mark as used
-    elem->second = std::numeric_limits<std::size_t>::max();
+    num_deps.erase(elem.base());
 
     order.emplace_back(idx);
 
