@@ -753,6 +753,57 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     reset_hash_value();
   }
 
+  // clang-format off
+  /// @name conjugation / transposition / adjoint algebra
+  ///
+  /// Three involutions act on a tensor's VALUE, closed under composition
+  /// (together with the identity they form a Klein four-group):
+  ///
+  /// | operation | effect                                          | via               |
+  /// |-----------|-------------------------------------------------|-------------------|
+  /// | `conj`    | elementwise complex conjugation, slots kept     | `conjugate()`     |
+  /// | `swap`    | bra<->ket transposition, elements kept          | `_swap_bra_ket()` |
+  /// | `adjoint` | conjugate transpose = `swap∘conj` = `conj∘swap` | `adjoint()`       |
+  ///
+  /// Consequences per #BraKetSymmetry:
+  /// - `Conjugate` (Hermitian over a complex field): `adjoint(T) == T` in
+  ///   value, hence `swap(T) == conj(T)` -- the fold identity
+  ///   `T{q;p} = conj(T{p;q})` the canonicalizer uses to spell both
+  ///   orientations over one canonical slot order (the swapped spelling
+  ///   carrying the marker).
+  /// - `Symm` (Hermitian over a real field): `conj` and `swap` are both the
+  ///   identity in value; canonicalization never needs the marker.
+  /// - `Nonsymm`: `adjoint` is value-distinct and is tracked by the reserved
+  ///   adjoint label suffix (see adjoint()); the marker alone expresses pure
+  ///   elementwise conjugation.
+  // clang-format on
+
+  /// @brief rebuilds this tensor with new slot bundles, carrying every
+  /// non-slot attribute: label, #Symmetry, #BraKetSymmetry, #Hermiticity,
+  /// #ColumnSymmetry, and the elementwise-conjugation marker.
+  ///
+  /// The sanctioned rebuild API for transforms that rewrite a tensor's slots
+  /// (relabeling, expansion, factorization rules): rebuilding through a plain
+  /// constructor silently drops conjugated() (and can demote Hermiticity),
+  /// corrupting every complex-field workflow downstream. A transform that
+  /// instead REINTERPRETS the slots positionally must first normalize the
+  /// spelling to the value orientation (unstar + bra<->ket swap for a
+  /// #BraKetSymmetry::Conjugate tensor) before reading them.
+  // N.B. the slot bundle types are qualified because at this point in the
+  // class the bra()/ket()/aux() member accessors shadow the strong-type
+  // templates
+  [[nodiscard]] Tensor with_slots(
+      sequant::bra<index_container_type> new_bra,
+      sequant::ket<index_container_type> new_ket,
+      sequant::aux<index_container_type> new_aux) const {
+    Tensor t(label_, std::move(new_bra), std::move(new_ket), std::move(new_aux),
+             reserved_tag{}, symmetry_, braket_symmetry_, column_symmetry_);
+    t.hermiticity_ = hermiticity_;
+    t.conjugated_ = conjugated_;
+    t.reset_hash_value();
+    return t;
+  }
+
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
   /// @return true if one or more indices changed
