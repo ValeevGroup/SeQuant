@@ -625,10 +625,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
       return true;
     };
 
+    // A value's mode gets a loop component ONLY where the value is HOME-SLICED
+    // on it (materialized slice-by-slice), NOT merely USED inside a loop
+    // (occ.ectx). A full-homed value materializes nothing slice-by-slice, so it
+    // must contribute NO loop -- otherwise its varying use-sites (bound to i_1
+    // at one consumer, i_2 at another) force the union-find to invent a
+    // spurious extra member. Its per-consumer USE-site slices are a separate,
+    // derived fact.
     auto const is_batched = [](OccurrenceRec const& occ,
                                Index const& m) -> bool {
-      for (auto const& e : occ.ectx)
-        if (e.first == m) return true;
+      for (auto const& h : occ.home)
+        if (h == m) return true;
       return false;
     };
 
@@ -664,11 +671,27 @@ RichSchedule compute_dag_boulevard(R const& forest,
           std::size_t const pC =
               static_cast<std::size_t>(pj - par->carried.begin());
           if (!try_unite(encode(c.value_id, pV), encode(par_vid, pC)) &&
-              conflict_dump)
+              conflict_dump) {
             std::wcerr << L"[loop_slot] REJECTED edge (value " << c.value_id
                        << L" pos " << pV << L") ~ (value " << par_vid
                        << L" pos " << pC << L") mode " << m.full_label()
                        << L" -- would collapse two members; kept distinct\n";
+            auto lbls = [](container::svector<Index> const& v) {
+              std::wstring s;
+              for (auto const& ix : v) {
+                s += std::wstring(ix.full_label());
+                s += L" ";
+              }
+              return s;
+            };
+            std::wcerr << L"[loop_slot]   child hash=" << (c.hash % 100000u)
+                       << L" cell.carried=[" << lbls(c.carried)
+                       << L"] occ.carried=[" << lbls(occ.carried) << L"]\n";
+            std::wcerr << L"[loop_slot]   parent hash="
+                       << (out.cells[par_vid].hash % 100000u)
+                       << L" cell.carried=[" << lbls(out.cells[par_vid].carried)
+                       << L"] occ.carried=[" << lbls(par->carried) << L"]\n";
+          }
         }
       }
 
@@ -687,6 +710,31 @@ RichSchedule compute_dag_boulevard(R const& forest,
           root_slot.emplace(root, next_slot[sp]++);
         }
 
+    // Component-membership dump: per (space, slot), the distinct member values
+    // (hash:pos:mode). Two same-slot fragments of one physical loop appear as
+    // DIFFERENT slots here; this shows which values fragmented apart. Guarded
+    // by SEQUANT_DUMP_LOOP_SLOT.
+    if (conflict_dump) {
+      std::map<std::pair<std::wstring, int>, std::map<std::wstring, int>> comp;
+      for (ValueCell const& c : out.cells)
+        for (OccurrenceRec const& occ : c.occurrences)
+          for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
+            if (!is_batched(occ, occ.carried[pV])) continue;
+            std::size_t const root = find(encode(c.value_id, pV));
+            std::wstring const sp{occ.carried[pV].space().base_key()};
+            std::wstring const mem =
+                std::to_wstring(c.hash % 100000u) + L"(" +
+                std::wstring(occ.carried[pV].full_label()) + L")";
+            comp[{sp, root_slot.at(root)}][mem] = 1;
+          }
+      for (auto const& [key, members] : comp) {
+        std::wcerr << L"[comp] " << key.first << L"#slot" << key.second
+                   << L" members={ ";
+        for (auto const& [mem, _] : members) std::wcerr << mem << L" ";
+        std::wcerr << L"}\n";
+      }
+    }
+
     // Stamp each occurrence's per-position loop_slot (structural position keys
     // fold occurrences of one value across trees).
     bool const dump = conflict_dump;
@@ -698,11 +746,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
           occ.loop_slot[pV] = root_slot.at(find(encode(c.value_id, pV)));
         }
         if (dump) {
-          std::wcerr << L"[loop_slot] value_id=" << c.value_id << L" point="
-                     << occ.point << L" carried={";
+          std::wcerr << L"[loop_slot] value_id=" << c.value_id << L" hash="
+                     << (c.hash % 100000u) << L" point=" << occ.point
+                     << L" carried={";
           for (std::size_t k = 0; k < occ.carried.size(); ++k)
             std::wcerr << occ.carried[k].full_label() << L":"
                        << occ.loop_slot[k] << L" ";
+          std::wcerr << L"} home={";
+          for (auto const& h : occ.home) std::wcerr << h.full_label() << L" ";
+          std::wcerr << L"} ectx={";
+          for (auto const& e : occ.ectx)
+            std::wcerr << e.first.full_label() << L" ";
           std::wcerr << L"}\n";
         }
       }

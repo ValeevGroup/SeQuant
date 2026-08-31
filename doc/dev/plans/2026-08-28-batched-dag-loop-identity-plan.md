@@ -186,13 +186,37 @@ switches to post-remat.
 **Files:** `ordered_schedule.hpp` (`types`, `depth_of_type`, the escape loop,
 `make_block`, `compute_sliced_mode_assignment`).
 
-- [ ] **Step 1 — READ + micro-design.** Re-read `types` (992-999),
-  `depth_of_type` (1017-1023), the escape loop (1049-1068), `make_block`
-  (1188-1221), and the assembly loop (1238+). Micro-design: `types` becomes one
-  entry per `(space-group, loop_slot)`; `depth_of_type` becomes
-  `level_of(space-group, loop_slot)`; the escape loop emits one escape per
-  per-slot mode (no fold); `make_block` stamps `loop_slot` and `altitude_ordinal`
-  (the canonical nesting order among a group's slots).
+> **Micro-design (2026-08-29), corrected against e8bcee766's failure.** e8bcee766
+> realized one loop per member but gave each member its OWN DEPTH (own group) and
+> left `altitude_ordinal`=0 -- the distinct-depth shortcut. Two measured defects
+> that produced the persisting w20 crash:
+> 1. **`fork_subchain` drops all-escape inner blocks** (ordered_schedule.hpp
+>    :733-746 `make_side`): a forced split of the external-occ axis forks the inner
+>    sub-chain; the slot1 occ loop and the Κ aux loop are all-ESCAPE (no
+>    `BuildStep` -- their scatter values are contracted at the output step), so
+>    `make_side` returns early on empty forked STEPS and drops them WITH their
+>    outputs. Measured on w20: 41 values escape `{0 1}`, 6 to Κ, but the realized
+>    tree is only two `i#slot0` passes -- slot1 and Κ never emitted. This is the
+>    is_range_set_congruent root and is INDEPENDENT of depth-vs-group.
+> 2. The distinct-depth labeling is not the frozen design (one depth per GROUP).
+>
+> Concrete changes:
+> - **Consume Task 2 `loop_slot`.** Replace e8bcee766's local `slot_of`
+>   (position-in-per_axis) with the fusion-assigned `loop_slot` on
+>   `rich.cells[].occurrences[].loop_slot`, joined to a `legality` cell by hash
+>   (a representative occurrence; transposition deferred).
+> - **`types` = one depth per GROUP.** Each space-group -> ONE `depth`; its members
+>   carry `loop_slot` (identity, from Task 2) and `altitude_ordinal` (nesting rank
+>   within the group). The realized tree still nests the members (slot0 ⊃ slot1 ⊃
+>   Κ), but slot0/slot1 SHARE a depth (differ by `loop_slot`+`altitude`); `make_block`
+>   stamps depth=group, `loop_slot`, `altitude`.
+> - **Fix `fork_subchain`.** Emit a forked side that has surviving OUTPUTS even
+>   with no surviving child STEPS (an all-escape loop is legitimate -- the output
+>   step contracts the value), routing loop-carried scatter outputs to the side
+>   that owns them. This is the actual crash fix.
+> - **Router:** re-check whether the `placement_remat.hpp:569` cross-cell scope
+>   assert (non-fatal "continuing") is affected by the group labeling or is a
+>   separate remat-split concern -- do NOT assume; measure it during Step 4.
 - [ ] **Step 2 — IMPLEMENT the nest.** One loop per `loop_slot`; assign
   `altitude_ordinal`; remove the escape-collapse. Keep the level enumeration
   keyed on the full tuple (Task 1).

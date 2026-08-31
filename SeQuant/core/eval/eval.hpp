@@ -804,7 +804,38 @@ ResultPtr evaluate_impl(Node const& node,         //
           // silently instead of erroring. Fail loud. A value with NO fact under
           // `loop` (participates() == false) is genuinely invariant to it and
           // is correctly left unsliced -- the guard does not fire there.
-          if (!p_new && seam->participates(nd->hash_value(), *loop))
+          if (!p_new && seam->participates(nd->hash_value(), *loop)) {
+            std::cerr << "[gap] node canon=[";
+            for (auto const& ix : nd->canon_indices())
+              std::cerr << toUtf8(ix.full_label()) << " ";
+            std::cerr << "] loop(space=" << toUtf8(ctx[i].level.space)
+                      << " slot=" << ctx[i].level.loop_slot
+                      << " depth=" << ctx[i].level.depth
+                      << " lat=" << ctx[i].level.latitude_ordinal
+                      << ") consumer="
+                      << (cache.current_consumer()
+                              ? *cache.current_consumer() % 100000u
+                              : 0u)
+                      << " nodehash=" << (nd->hash_value() % 100000u)
+                      << std::endl;
+            std::cerr << "[gap]   queried LoopId=" << *loop
+                      << " level(space=" << toUtf8(seam->levels[*loop].space)
+                      << " slot=" << seam->levels[*loop].loop_slot
+                      << " depth=" << seam->levels[*loop].depth << ")\n";
+            if (auto const cit = seam->by_hash_consumer.find(nd->hash_value());
+                cit != seam->by_hash_consumer.end())
+              for (auto const& [pos, lid, ch] : cit->second)
+                std::cerr << "[gap]   by_hash_consumer pos=" << pos
+                          << " LoopId=" << lid
+                          << " (space=" << toUtf8(seam->levels[lid].space)
+                          << " slot=" << seam->levels[lid].loop_slot
+                          << ") consumer=" << (ch % 100000u) << "\n";
+            if (auto const bit = seam->by_hash.find(nd->hash_value());
+                bit != seam->by_hash.end())
+              for (auto const& [pos, lid] : bit->second)
+                std::cerr << "[gap]   by_hash pos=" << pos << " LoopId=" << lid
+                          << " (space=" << toUtf8(seam->levels[lid].space)
+                          << " slot=" << seam->levels[lid].loop_slot << ")\n";
             throw Exception(
                 "slice_to_use: value participates in a batch loop but this "
                 "fetch has no sliced-mode fact for the current consumer -- an "
@@ -812,6 +843,7 @@ ResultPtr evaluate_impl(Node const& node,         //
                 "leave the operand unsliced and mismatch its contraction "
                 "partner. The occurrence's slice fact must be recorded at "
                 "schedule time, never left to a silent unsliced fetch.");
+          }
         }
       }
       // Task 7-part-2 / Task 8: the transitional equivalence assert this used
@@ -1036,6 +1068,9 @@ ResultPtr evaluate_impl(Node const& node,         //
             std::string lbl;
             for (auto const& ix : f.node->canon_indices())
               lbl += toUtf8(ix.full_label()) + " ";
+            std::cerr << "[evict] vanished hash="
+                      << (f.node->hash_value() % 100000u) << " canon=[" << lbl
+                      << "]" << std::endl;
             throw Exception(
                 "evaluate_impl: a read-from-home value vanished before use "
                 "(premature eviction -- likely an under-predicted use count in "
