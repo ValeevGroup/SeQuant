@@ -1976,7 +1976,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           deserialize(
-              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              L"Â{i1,i2;a1,a2} g^*{a3,a4;i3,i4} t{a1,a3;i1,i2} "
+              L"t{a2,a4;i3,i4}",
               {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
