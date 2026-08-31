@@ -323,9 +323,13 @@ ExprPtr remove_spin(const ExprPtr& expr) {
         idx = make_spinfree(idx);
       }
     }
-    return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                      tensor.aux(), tensor.symmetry(),
-                      tensor.braket_symmetry());
+    // relabeling is slot-preserving, so it commutes with elementwise
+    // conjugation: rebuild via with_slots, which carries the label, the
+    // symmetries, and the conjugation marker (a canonicalized input may
+    // arrive in the marker-conjugated spelling)
+    container::svector<Index> a(tensor.aux().begin(), tensor.aux().end());
+    return ex<Tensor>(tensor.with_slots(bra(std::move(b)), ket(std::move(k)),
+                                        aux(std::move(a))));
   };
 
   auto remove_spin_from_product =
@@ -432,6 +436,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
                       Symmetry::Nonsymm, tensor.braket_symmetry(),
                       tensor.column_symmetry());
+    // slot-preserving rebuild: carry the elementwise-conjugation marker
+    if (tensor.conjugated()) new_tensor.conjugate();
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -465,6 +471,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
           Tensor(tensor.label(), bra(bra_list), ket(ket_list), tensor.aux(),
                  Symmetry::Nonsymm, tensor.braket_symmetry(),
                  tensor.column_symmetry());
+      // slot-preserving rebuild: carry the elementwise-conjugation marker
+      if (tensor.conjugated()) new_tensor.conjugate();
 
       if (ms_conserving_columns(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -1185,8 +1193,11 @@ Tensor swap_spin(const Tensor& t) {
     k.at(i) = spin_flipped_idx(t.ket().at(i));
   }
 
-  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),  t.aux(),
-          t.symmetry(), t.braket_symmetry(), t.column_symmetry()};
+  Tensor result{t.label(),    bra(std::move(b)),   ket(std::move(k)),  t.aux(),
+                t.symmetry(), t.braket_symmetry(), t.column_symmetry()};
+  // slot-preserving relabeling: carry the elementwise-conjugation marker
+  if (t.conjugated()) result.conjugate();
+  return result;
 }
 
 ExprPtr swap_spin(const ExprPtr& expr) {

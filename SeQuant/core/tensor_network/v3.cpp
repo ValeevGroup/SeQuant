@@ -25,6 +25,8 @@
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 
+#include <range/v3/algorithm/equal.hpp>
+
 #include <algorithm>
 #include <iostream>
 #include <iterator>
@@ -417,14 +419,33 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       }
     }
 
-    // lastly permute bra with ket bundles, if needed
-    // TODO extend to support conjugate case
-    if (braket_symmetry(tensor) != BraKetSymmetry::Symm) continue;
+    // lastly permute bra with ket bundles, if needed; reserved bookkeeping
+    // operators ((anti)symmetrizer, transposition) keep their orientation --
+    // it defines/extracts the external indices -- and operator-valued
+    // Conjugate "tensors" must not reorient (creators<->annihilators); both
+    // exclusions live in braket_foldable()
+    if (!braket_foldable(tensor)) continue;
 
-    // swap bra and ket bundles
+    // a Conjugate half-tensor (empty bra or ket bundle) has no vertex for the
+    // empty bundle, so its recorded canonical bundle position is a
+    // value-initialized sentinel -- the graph cannot decide its orientation;
+    // the content-based refold after the lexicographic relabel decides it
+    if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate &&
+        (bra_rank(tensor) == 0 || ket_rank(tensor) == 0))
+      continue;
+
+    // swap bra and ket bundles into the canonical (graph-dictated) order;
+    // identical bra and ket bundles (diagonal trace T{p,q;p,q}) make the
+    // swap an identity -- skip it so no spurious conjugation marker arises
     if (canonical_bra_ket_bundle_order[i][0] >
-        canonical_bra_ket_bundle_order[i][1]) {
+            canonical_bra_ket_bundle_order[i][1] &&
+        !ranges::equal(tensor._bra(), tensor._ket())) {
       tensor._swap_bra_ket();
+      // for a Conjugate tensor the swapped spelling denotes the conjugate
+      // value (T{q;p} = conj(T{p;q})): keep the represented value invariant
+      // by toggling the elementwise-conjugation marker
+      if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate)
+        tensor._conjugate();
     }
   }
 
@@ -627,6 +648,16 @@ ExprPtr TensorNetworkV3::canonicalize(
 
     apply_index_replacements(tensors_, idxrepl, true);
 
+    // Re-apply the per-tensor braket orientation fold now that indices carry
+    // their FINAL labels: the fold's full-space-tie decision is
+    // label-sensitive, and a decision taken on pre-relabel labels need not
+    // be a fixed point of the relabeled expression. The fold is convergent
+    // (it decides on the VALUE orientation), so this pass makes the whole
+    // canonicalization idempotent.
+    for (auto &tensor_ptr : tensors_) {
+      DefaultTensorCanonicalizer::canonicalize_braket(*tensor_ptr);
+    }
+
     byproduct *= canonicalize_individual_tensors(named_indices);
 
     // We assume that re-indexing did not change the canonical order of tensors
@@ -694,9 +725,18 @@ TensorNetworkV3::canonicalize_slots(
   // make the graph
   // only slots (hence, attr) of named indices define their color, so
   // distinct_named_indices = false
+  // color_conjugation = true: this is the value-identity canonicalization
+  // (eval-node hash, connectivity graph, canonical slot order). Every tensor
+  // is already in its canonical orientation here (its conjugation is carried
+  // solely by Tensor::conjugated()), and without the marker in the color a
+  // network like C(x;m) C*(y;m) has an automorphism exchanging the conjugated
+  // and unconjugated factors, so its canonical slot order is pinned by the
+  // named-index labels alone and C(x)C*(y) / C*(x)C(y) -- S and S^T* -- share
+  // one hash and one graph.
   Graph graph = create_graph(
       {.named_indices = &named_indices,
        .distinct_named_indices = false,
+       .color_conjugation = true,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
@@ -891,6 +931,53 @@ TensorNetworkV3::canonicalize_slots(
     }
   }
 
+  // Detect the antilinear byproduct: for each foldable Conjugate tensor whose
+  // {bra,ket} bundle vertices are ordered ket-before-bra in the canonical
+  // labeling, the canonical form is the bra<->ket-swapped (conjugated)
+  // orientation of the input -- report the tensor's input ordinal in
+  // metadata.conjugated_tensors and fold the parity into metadata.conj.
+  // Vertices are visited tensor-major (TensorCore precedes that tensor's
+  // bundle vertices, before the next TensorCore), mirroring the walk used by
+  // canonicalize_graph to build canonical_bra_ket_bundle_order.
+  {
+    // canonical position of each foldable Conjugate tensor's {bra,ket}
+    // bundle vertex
+    container::map<std::size_t, std::array<std::optional<std::size_t>, 2>>
+        bundle_pos;
+    std::size_t tensor_count = 0;
+    for (std::size_t v = 0; v < graph.vertex_types.size(); ++v) {
+      const auto vt = graph.vertex_types[v];
+      if (vt == VertexType::TensorCore) {
+        ++tensor_count;
+      } else if (vt == VertexType::TensorBraBundle ||
+                 vt == VertexType::TensorKetBundle) {
+        SEQUANT_ASSERT(tensor_count > 0);
+        const std::size_t tensor_ord = tensor_count - 1;
+        // same guard as the fold itself: only a c-number Conjugate tensor
+        // that is not orientation-pinned participates (an operator-valued
+        // Conjugate "tensor" has differently colored bra/ket bundles, so its
+        // bundle positions must not feed the detection)
+        if (braket_conjugate_foldable(*tensors_[tensor_ord])) {
+          const bool bra = vt == VertexType::TensorBraBundle;
+          bundle_pos[tensor_ord][bra ? 0 : 1] = canonize_perm[v];
+        }
+      }
+    }
+    for (const auto &[tensor_ord, bk] : bundle_pos) {
+      // bra bundle canonically after ket bundle => canonical form is the
+      // bra<->ket-swapped (conjugated) orientation of the input. Identical
+      // bra and ket bundles (diagonal trace T{p,q;p,q}): the swap is an
+      // identity -- no conjugation byproduct (mirrors the identity-swap skip
+      // in canonicalize_graph).
+      if (bk[0] && bk[1] && *bk[0] > *bk[1] &&
+          !ranges::equal(tensors_[tensor_ord]->_bra(),
+                         tensors_[tensor_ord]->_ket())) {
+        metadata.conjugated_tensors.push_back(tensor_ord);
+        metadata.conj = !metadata.conj;
+      }
+    }
+  }
+
   return metadata;
 }
 
@@ -903,8 +990,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter<TensorNetworkV3> colorizer(named_indices,
-                                           options.distinct_named_indices);
+  VertexPainter<TensorNetworkV3> colorizer(
+      named_indices, options.distinct_named_indices, options.color_conjugation);
 
   // results
   Graph graph;
@@ -1021,7 +1108,14 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // 2-index columns
     const std::size_t num_paired_cols =
         std::max(bra_rank(tensor), ket_rank(tensor));
-    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::Symm;
+    // Symm and foldable-Conjugate bra/ket both fold onto one canonical
+    // orientation (for Conjugate the fold carries the elementwise-conjugation
+    // marker), so both get symmetric bra/ket bundle colors; the Conjugate
+    // fold is a VALUE identity (T{q;p} = conj(T{p;q})) and hence applies only
+    // to c-number tensors -- for an operator-valued "tensor" (e.g.
+    // NormalOperator) reorienting bra and ket would exchange creators and
+    // annihilators (see braket_foldable())
+    const bool is_braket_symm = braket_foldable(tensor);
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
@@ -1280,7 +1374,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             [[maybe_unused]] std::size_t nbra = 0;
             [[maybe_unused]] std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;
-            [[maybe_unused]] BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
+            [[maybe_unused]] bool orientation_free = false;
             for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
               const Vertex &vertex = current_edge.vertex(v);
               switch (vertex.getOrigin()) {
@@ -1297,20 +1391,22 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                   SEQUANT_UNREACHABLE;
               }
 
-              if (symm != BraKetSymmetry::Symm) {
-                // We only care if at least one of the vertices has symmetric
-                // braket symm
-                symm = braket_symmetry(*tensors_[vertex.getTerminalIndex()]);
+              if (!orientation_free) {
+                // bra/ket slots are interchangeable on a braket-Symm tensor
+                // and on a foldable Conjugate tensor: the canonical braket
+                // orientation fold (canonicalize_braket / canonicalize_graph)
+                // may spell such a tensor bra<->ket swapped (for Conjugate
+                // carrying the conjugation on the tensor), so a dummy may
+                // legally connect bra-bra or ket-ket
+                orientation_free =
+                    braket_foldable(*tensors_[vertex.getTerminalIndex()]);
               }
             }
 
-            // if braket symmetry == BraKetSymmetry::Symm there is no
-            // distinction between bra and ket, but still can have at most 2 of
-            // them total if braket symmetry != BraKetSymmetry::Symm at most 1
-            // bra and 1 ket can connect to aux
-            SEQUANT_ASSERT(symm == BraKetSymmetry::Symm
-                               ? (nbra + nket <= 2)
-                               : (nbra <= 1 && nket <= 1));
+            // an orientation-free incident tensor permits any bra/ket mix of
+            // up to 2 slots; rigid orientations allow at most 1 bra and 1 ket
+            SEQUANT_ASSERT(orientation_free ? (nbra + nket <= 2)
+                                            : (nbra <= 1 && nket <= 1));
           }
         }
       }

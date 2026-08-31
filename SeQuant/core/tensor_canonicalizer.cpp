@@ -327,18 +327,49 @@ void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
   });
 }
 
+bool braket_orientation_pinned(const AbstractTensor& t) {
+  const auto lbl = t._label();
+  return lbl == reserved::antisymm_label() || lbl == reserved::symm_label() ||
+         lbl == reserved::transposition_label();
+}
+
+bool braket_conjugate_foldable(const AbstractTensor& t) {
+  return t._braket_symmetry() == BraKetSymmetry::Conjugate && t._is_cnumber() &&
+         !braket_orientation_pinned(t);
+}
+
+bool braket_foldable(const AbstractTensor& t) {
+  return t._braket_symmetry() == BraKetSymmetry::Symm ||
+         braket_conjugate_foldable(t);
+}
+
 void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
-  if (t._braket_symmetry() != BraKetSymmetry::Symm) {
+  if (!braket_foldable(t)) {
     return;
   }
+  const auto bks = t._braket_symmetry();
 
-  // bra<->ket exchange is a symmetry for braket-symmetric tensors, so pick a
-  // canonical orientation. The choice is governed solely by the canonical
-  // "colors" of the bra and ket bundles -- i.e. their index spaces, not the
-  // index labels -- so the result is label-independent. Bundles with identical
-  // spaces (e.g. g{p,q;r,s}) compare equal and are left untouched; only
-  // differing-color bundles are reoriented (so e.g. a half-tensor X{;a;x} folds
-  // into X{a;;x}).
+  // Normalize to the VALUE orientation first: a marked Conjugate tensor's
+  // starred spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has
+  // TWO spellings. Deciding on the current spelling is not marker-convergent
+  // (both spellings can satisfy "no swap"), which would let different
+  // canonicalization routes (graph vs content) end on different members of
+  // the pair. Unfold, then decide -- one canonical spelling per VALUE.
+  if (bks == BraKetSymmetry::Conjugate && t._conjugated()) {
+    t._conjugate();
+    t._swap_bra_ket();
+  }
+
+  // bra<->ket exchange is a symmetry for braket-foldable tensors, so pick a
+  // canonical orientation: freely for Symm braket symmetry, and combined with
+  // the elementwise-conjugation marker for Conjugate braket symmetry (the
+  // value identity T{q;p} = conj(T{p;q})). The choice is governed by the
+  // canonical "colors" of the bra and ket bundles -- i.e. their index spaces,
+  // not the index labels -- so the result is label-independent. Bundles with
+  // identical spaces (e.g. g{p,q;r,s}) compare equal and are left untouched
+  // for Symm; for Conjugate a full space tie is broken on the index labels
+  // (below), because the two orientations denote DIFFERENT (conjugate) values
+  // that must nevertheless land on one canonical spelling.
   const TensorBlockIndexComparer cmp;
   auto space_less = [&cmp](const Index& a, const Index& b) {
     return cmp.compare_spaces(a, b) < 0;
@@ -361,8 +392,28 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
 
   // canonical orientation: the bundle whose spaces are lexicographically
   // larger goes to bra.
-  if (ranges::lexicographical_compare(bra_spaces, ket_spaces, space_less)) {
+  bool swap =
+      ranges::lexicographical_compare(bra_spaces, ket_spaces, space_less);
+
+  // Full space tie, Conjugate braket symmetry: break on the index labels,
+  // keeping the label-lexicographically SMALLER bundle in the bra, so
+  // label-ascending spellings (e.g. g{p_1,p_2;p_3,p_4}) remain canonical as
+  // written. Identical bundles (diagonal T{p,q;p,q}) compare equal and never
+  // swap. (Symm ties stay untouched: both orientations denote the SAME value
+  // there, so no fold is required.)
+  if (!swap && bks == BraKetSymmetry::Conjugate &&
+      !ranges::lexicographical_compare(ket_spaces, bra_spaces, space_less)) {
+    std::vector<Index> bra_full(bra_spaces), ket_full(ket_spaces);
+    ranges::sort(bra_full, std::less<Index>{});
+    ranges::sort(ket_full, std::less<Index>{});
+    swap =
+        ranges::lexicographical_compare(ket_full, bra_full, std::less<Index>{});
+  }
+
+  if (swap) {
     t._swap_bra_ket();
+    // preserve the represented value: T{q;p} = conj(T{p;q})
+    if (bks == BraKetSymmetry::Conjugate) t._conjugate();
   }
 }
 

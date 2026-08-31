@@ -145,6 +145,17 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
+    // The graph hash is orientation-shared (bra/ket of a foldable Conjugate
+    // tensor are colored identically), so both orientations land on one cache
+    // slot. When the canonical orientation is the swapped one (md.conj; for
+    // this single-tensor network the parity IS the tensor's own swap),
+    // rewrite expr_ to the canonical spelling: swap (the Conjugate adjoint)
+    // + toggle the elementwise-conjugation marker.
+    if (md.conj) {
+      auto& tt = expr_->as<Tensor>();
+      tt.adjoint();
+      tt.conjugate();
+    }
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
@@ -154,9 +165,21 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // and it normalizes bra<->ket orientation for braket-symmetric tensors so
     // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
     auto& t = expr_->as<Tensor>();
+    // apply() folds the two bra<->ket orientations of a flat Conjugate
+    // tensor onto the canonical one, toggling the tensor's
+    // elementwise-conjugation marker when it swaps (canonicalize_braket)
     auto phase = TensorBlockCanonicalizer{}.apply(t);
     canon_phase_ = phase ? -1 : 1;
-    hash_value_ = hash_terminal_tensor(t);
+    // Leaf-hash invariant: the hash is always that of the UNSTARRED spelling,
+    // so the two orientations of a Conjugate tensor share one cache slot; the
+    // conjugation marker stays on expr_ (its symbolic spelling)
+    if (t.conjugated()) {
+      Tensor bare{t};
+      bare.conjugate();
+      hash_value_ = hash_terminal_tensor(bare);
+    } else {
+      hash_value_ = hash_terminal_tensor(t);
+    }
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
 }
@@ -455,7 +478,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
-      auto const& t = left.as_tensor();
+      auto const t = value_oriented(left.as_tensor());
       return {
           EvalOp::Sum,         //
           ResultType::Tensor,  //
@@ -524,7 +547,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
-      auto const& t = tl->as_tensor();
+      auto const t = value_oriented(tl->as_tensor());
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
@@ -540,12 +563,22 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      IndexGroups<IndexVec> const target_indices = [prod = ex<Product>(ts),
-                                                    &uncontracted_idxs]() {
+      IndexGroups<IndexVec> const target_indices = [&ts, &uncontracted_idxs]() {
         // route each surviving hyperindex to its correct slot
         // (bra, ket, or aux) based on which slot it occupies in
         // the factor tensors .. if appears in multiple slots put into aux
-        auto counts = get_used_indices_with_counts(prod);
+        //
+        // count on the value orientation of each factor: a folded Conjugate
+        // leaf is spelled swapped+starred but its indices occupy the authored
+        // slots by value; counting the folded spelling would migrate its ket
+        // group into bra and merge the intermediate's partition
+        auto unfolded = ts | transform([](ExprPtr const& x) -> ExprPtr {
+                          if (x->is<Tensor>() && x->as<Tensor>().conjugated())
+                            return ex<Tensor>(value_oriented(x->as<Tensor>()));
+                          return x;
+                        }) |
+                        ranges::to_vector;
+        auto counts = get_used_indices_with_counts(ex<Product>(unfolded));
         IndexGroups<IndexVec> result;
         for (auto&& [k, v] : counts) {
           if (v.nonproto() == 0) continue;
@@ -596,7 +629,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto right = binarize(Constant{prod.scalar()});
 
     auto expr = left->is_tensor()
-                    ? detail::make_tensor(left->as_tensor(), false, opts)
+                    ? detail::make_tensor(value_oriented(left->as_tensor()),
+                                          false, opts)
                 : left->is_constant() ? (left->expr() * right->expr())
                                       : detail::make_variable();
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;

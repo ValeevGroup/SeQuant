@@ -19,6 +19,7 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -120,6 +121,71 @@ TEST_CASE("re_im_constant_evaluation", "[conjugation]") {
   auto c = ex<Constant>(C{3, -4});
   REQUIRE(real_part(c->clone())->as<Constant>().value() == (C{3, 0}));
   REQUIRE(imaginary_part(c->clone())->as<Constant>().value() == (C{-4, 0}));
+}
+
+TEST_CASE("braket_foldable_predicates", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // Conjugate c-number: value fold applies
+  Tensor h(L"h", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  REQUIRE(braket_conjugate_foldable(h));
+  REQUIRE(braket_foldable(h));
+
+  // Nonsymm: no fold of any kind
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  REQUIRE_FALSE(braket_conjugate_foldable(t));
+  REQUIRE_FALSE(braket_foldable(t));
+
+  // Symm: free swap, not the Conjugate value fold
+  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  REQUIRE_FALSE(braket_conjugate_foldable(s));
+  REQUIRE(braket_foldable(s));
+}
+
+TEST_CASE("conjugate_braket_fold_per_tensor", "[conjugation]") {
+  // The Conjugate bra<->ket fold engages in per-tensor canonicalization:
+  // both orientations of a c-number Conjugate tensor land on ONE canonical
+  // spelling, the originally-swapped input acquiring the
+  // elementwise-conjugation marker so the represented value is unchanged.
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // occ (i) vs virt (a) bundles: space-decidable orientation
+  Tensor A(L"h", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  Tensor B(L"h", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  DefaultTensorCanonicalizer::canonicalize_braket(A);
+  DefaultTensorCanonicalizer::canonicalize_braket(B);
+  // both spell the same slot order; exactly one carries the marker
+  REQUIRE(A.bra()[0].label() == B.bra()[0].label());
+  REQUIRE(A.conjugated() != B.conjugated());
+
+  // full space tie (same-space named indices): label tie-break folds too
+  Tensor C1(L"T", bra{L"p_1"}, ket{L"p_2"}, Symmetry::Nonsymm,
+            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  Tensor C2(L"T", bra{L"p_2"}, ket{L"p_1"}, Symmetry::Nonsymm,
+            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  DefaultTensorCanonicalizer::canonicalize_braket(C1);
+  DefaultTensorCanonicalizer::canonicalize_braket(C2);
+  REQUIRE(C1.bra()[0].label() == C2.bra()[0].label());
+  REQUIRE(C1.conjugated() != C2.conjugated());
+
+  // identical bundles (diagonal): never swapped, never marked
+  Tensor D(L"T", bra{L"p_1"}, ket{L"p_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  DefaultTensorCanonicalizer::canonicalize_braket(D);
+  REQUIRE_FALSE(D.conjugated());
 }
 
 TEST_CASE("with_slots_carries_attributes", "[conjugation]") {
