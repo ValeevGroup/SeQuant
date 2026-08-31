@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <limits>
 #include <ranges>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace sequant {
@@ -51,10 +51,8 @@ std::vector<std::size_t> topological_order(Range &&range,
   std::vector<std::size_t> order;
   order.reserve(size(range));
 
-  std::unordered_map<std::size_t, std::size_t> num_deps;
-  num_deps.reserve(size(range));
-  std::unordered_map<std::size_t, std::vector<std::size_t>> dependents;
-  dependents.reserve(size(range));
+  std::map<std::size_t, std::size_t> num_deps;
+  std::map<std::size_t, std::vector<std::size_t>> dependents;
 
   // Pre-compute dependencies between elements in range
   for (const auto &[i, current] : ranges::views::enumerate(range)) {
