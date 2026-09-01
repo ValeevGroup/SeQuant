@@ -589,11 +589,8 @@ template <meta::eval_node_range R>
     // Children see this node's OWN realized loops on top of ctx_modes; the node
     // itself is keyed with the enclosing ctx_modes (excludes its own loops).
     container::svector<Index> child_ctx = ctx_modes;
-    for (auto const& [ix, kind] : n->node_slice_mask()) {
-      container::svector<Index> expanded;
-      sequant::detail::proto_expand_into(expanded, ix);
-      for (auto const& m : expanded) child_ctx.push_back(m);
-    }
+    // Sliced modes are plain occ/aux loop modes -- each taken as itself.
+    for (auto const& [ix, kind] : n->node_slice_mask()) child_ctx.push_back(ix);
     self(self, n.left(), child_ctx);
     self(self, n.right(), child_ctx);
   };

@@ -17,22 +17,18 @@
 
 namespace sequant::eval {
 
-/// \brief Batched modes (proto-expanded) that actually appear on \p node's own
-///        slots, drawn from the ambient batch-loop modes \p ctx_modes.
+/// \brief The ambient batch-loop modes \p ctx_modes that actually appear on
+///        \p node's own result slots.
 ///
-/// \details A mode \c m in \p ctx_modes is proto-expanded first: if
-/// \c m.has_proto_indices() its protoindices stand in for it (a composite
-/// batched mode is domain-tied to its proto pair), else \c m stands for
-/// itself. An expanded mode is included in the result iff it also appears
-/// among \p node's own canonical slots (\c node->canon_indices()),
-/// proto-expanded the same way on the slot side -- i.e. iff the mode actually
-/// lives on \p node's result. This filters ALL in-scope batched modes (any
-/// \c BatchModeType the caller's \p ctx_modes happens to carry -- the
-/// function never inspects the kind) to \p node's own slots, matching the
-/// unified all-batched-modes selector of \c stamp_lifetime_masks / \c
-/// slot_modes_of in \c lifetime_mask.hpp. It reuses that file's \c
-/// detail::proto_expand_into (ambient side) and \c detail::slot_modes_of
-/// (slot side).
+/// \details A mode \c m in \p ctx_modes is included iff it appears among
+/// \p node's own slots (\c detail::slot_modes_of, i.e. \c canon_indices() taken
+/// as-is). Both sides are plain modes: batch loops are always over plain
+/// occ/aux modes, and a composite slot \c a<i,j> contributes only mode \c a
+/// (see
+/// \c slot_modes_of for why the \c i,j proto pair is NOT exposed). This is the
+/// same "which in-scope batch modes live on this node's result" filter the
+/// residency meet applies in \c stamp_lifetime_masks / \c stamp_residency_impl.
+/// The kind (\c BatchModeType) is never inspected.
 ///
 /// Site-invariant: the result is identical whether computed at a read site
 /// (a consumer's \c cache.batch_context()) or a store site (the producer's
@@ -43,26 +39,20 @@ namespace sequant::eval {
 /// \param node the (sub-expression) node whose in-scope batched modes are
 ///        wanted.
 /// \param ctx_modes the ambient batch-loop modes in scope at the call site.
-/// \return the subset of \p ctx_modes (proto-expanded) that lives on \p
-///         node's own slots.
+/// \return the subset of \p ctx_modes that lives on \p node's own slots.
 template <meta::eval_node Node>
 TensorNetwork::NamedIndexSet in_scope_batched_on_node(
     Node const& node, container::svector<Index> const& ctx_modes) {
-  // proto-expand the ambient batch-loop modes. Fully qualified: this file's
-  // enclosing namespace is sequant::eval, which (via schedule_dump.hpp, in
-  // some inclusion orders) can ALSO have its own sequant::eval::detail --
-  // an unqualified `detail::` here would silently resolve to the wrong one.
-  container::svector<Index> ctx_expanded;
-  for (auto const& m : ctx_modes)
-    sequant::detail::proto_expand_into(ctx_expanded, m);
-
-  // proto-expand node's own canonical slots
+  // node's own result slots. Fully qualified: this file's enclosing namespace
+  // is sequant::eval, which (via schedule_dump.hpp, in some inclusion orders)
+  // can ALSO have its own sequant::eval::detail -- an unqualified `detail::`
+  // here would silently resolve to the wrong one.
   auto const slots = sequant::detail::slot_modes_of(node);
 
   TensorNetwork::NamedIndexSet named;
-  for (auto const& ix : ctx_expanded)
-    if (std::find(slots.begin(), slots.end(), ix) != slots.end())
-      named.insert(ix);
+  for (auto const& m : ctx_modes)
+    if (std::find(slots.begin(), slots.end(), m) != slots.end())
+      named.insert(m);
   return named;
 }
 

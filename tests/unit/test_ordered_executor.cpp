@@ -979,6 +979,211 @@ TEST_CASE(
 }
 
 // ===========================================================================
+// AUX+OCC dry-run WALK reproducer (KNOWN-FAILING, opt-in [.] tag): the MPQC w20
+// CSV-CCk residual with occ batched as an EXTERNAL index (plus Κ aux
+// contracted, spectator batching, and node-level placement -- the exact
+// make_csv_batch_policy(occ_target>0) config) builds a well_formed schedule,
+// but WALKING it with the zero-data DryRun backend trips the SAME failure class
+// the wet w20 run aborts on. The dry-run walk exercises the identical
+// run_ordered_contracted_block / evaluate_impl home-read + scatter logic as the
+// wet run -- only the TA tile math is stubbed -- so it reproduces the
+// schedule/slice defect LOCALLY in seconds (no cluster round-trip). This is the
+// vehicle for the frame-correct-slicing / multi-level-escape design work; see
+// doc/dev/specs/2026-08-31-occ-use-induced-slicing-and-escape-chain-design.md.
+//
+// It FAILS today by design (REQUIRE_NOTHROW reproduces the open bug), so it is
+// tagged [.] (hidden -- run by name, e.g. `unit_tests-sequant
+// [w20-auxocc-walk]`) to keep it out of the default suite until the design fix
+// lands, at which point the [.] is dropped and REQUIRE_NOTHROW becomes the
+// acceptance. The distinct sliced_modes-duplication defect this reproducer
+// first surfaced IS already fixed (lifetime_mask.hpp acc-dedup, w8-lossless);
+// what remains here is the use-induced slicing of whole-produced shared
+// operands and the multi-level escape chain -- both left to the design pass.
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: water-20 aux+occ residual dry-run walk completes "
+    "without "
+    "a vanished home value",
+    "[.][ordered][w20-auxocc-walk]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  // FULL residual (all summands) to match the MPQC w20 run; overridable for
+  // bisecting which term first breaks the walk.
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // AUX+OCC: Κ batchable-contracted (aux), occ batchable-EXTERNAL; spectator
+  // batching + node-level placement ON (make_csv_batch_policy, occ_target>0).
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedexec_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  // MPQC passes an EMPTY mode_order (build_ordered_schedule derives the forced
+  // split axes from the legality) -- match that.
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  if (std::getenv("SEQUANT_UT_SCHED_TREE")) {
+    auto carried_str = [&](std::size_t vid) {
+      std::string s;
+      if (vid < rich.cells.size())
+        for (auto const& x : rich.cells[vid].carried)
+          s += sequant::toUtf8(x.full_label()) + " ";
+      return s;
+    };
+    std::function<void(sequant::eval::ScopeBlock const&, int)> dump =
+        [&](sequant::eval::ScopeBlock const& b, int d) {
+          std::string ind(2 * d, ' ');
+          if (d > 0)
+            std::cerr << ind << "BLOCK axis="
+                      << sequant::toUtf8(b.axis.space().base_key()) << " kind="
+                      << (b.kind == sequant::BatchModeType::External ? "EXT"
+                                                                     : "CON")
+                      << " depth=" << b.level.depth
+                      << " slot=" << b.level.loop_slot
+                      << " lat=" << b.latitude_ordinal << "\n";
+          for (auto const& s : b.steps) {
+            if (auto const* bs =
+                    std::get_if<sequant::eval::BuildStep>(&s.value))
+              std::cerr << ind << "  build vid=" << bs->value_id
+                        << " h=" << (rich.cells[bs->value_id].hash % 100000)
+                        << " carried=[" << carried_str(bs->value_id) << "]\n";
+            else
+              dump(std::get<sequant::eval::ScopeBlock>(s.value), d + 1);
+          }
+          for (auto const& [ovid, ok] : b.outputs)
+            std::cerr << ind << "  OUT vid=" << ovid
+                      << " h=" << (rich.cells[ovid].hash % 100000) << " kind="
+                      << (ok == sequant::eval::OutputKind::AccumulateScatter
+                              ? "SCATTER"
+                          : ok == sequant::eval::OutputKind::AccumulateSum
+                              ? "SUM"
+                              : "?")
+                      << " carried=[" << carried_str(ovid) << "]\n";
+        };
+    std::cerr << "=== ORDERED SCHEDULE TREE ===\n";
+    dump(ordered.root, 0);
+    std::cerr << "=== END TREE ===\n";
+  }
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 0;
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+
+  // THE reproducer: the dry-run walk of the aux+occ schedule must run to
+  // completion. It throws today ("read-from-home value vanished ... 98403") --
+  // the over-homing defect; fixing it makes this pass.
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+
+  logger.eval.level = prev_level;
+}
+
+// ===========================================================================
 // Cache-halt across CC iterations: a Κ-free PERSISTENT composite (I(i,i;a,a),
 // e.g. the 4-PNO-2-occ integral) built by contracting Κ between Κ-carrying
 // prerequisites must be built ONCE (iteration 1) and reused thereafter, AND

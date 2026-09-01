@@ -61,8 +61,7 @@ namespace detail {
 
 ///
 /// \brief True iff \p mode's index TYPE (\c IndexSpace::base_key()) ever
-/// survives, un-summed, into a forest-ROOT value's own (proto-expanded)
-/// carried slots.
+/// survives, un-summed, into a forest-ROOT value's own carried slots.
 ///
 /// \details \c RichSchedule does not carry \c BatchModeType directly: the
 /// cross-occurrence meet in \c stamp_lifetime_masks folds EVERY kind
@@ -98,11 +97,12 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                       return occ.point == occ.consumer_point;
                     });
     if (!is_root) continue;
-    container::svector<Index> slots;
-    for (auto const& s : cell.carried)
-      sequant::detail::proto_expand_into(slots, s);
+    // A batch axis (occ/aux) is external iff its SPACE appears on a root's own
+    // result slots. Slots are matched as-is: batch axes are plain, and a root
+    // carrying a composite PAO leg a<i,j> always carries its occ pair i,j
+    // plainly too, so no space is reachable only through a proto.
     bool const has_type = std::any_of(
-        slots.begin(), slots.end(),
+        cell.carried.begin(), cell.carried.end(),
         [&](Index const& ix) { return ix.space().base_key() == mode_bk; });
     if (has_type) return true;
   }

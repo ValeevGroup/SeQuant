@@ -26,40 +26,31 @@ inline void lifetime_mask_intersect_in_place(
   acc = std::move(keep);
 }
 
-/// Append \p ix to \p v, proto-expanded: a composite index (e.g. a PNO tied
-/// to an occ pair) contributes its \c proto_indices() instead of itself (a
-/// composite index is domain-tied to its occ pair, so slicing the pair
-/// slices it too); a plain index contributes itself. Shared by the batch-mode
-/// side (\c stamp_residency_impl's \c modes_of selectors) and the slot side
-/// (\c slot_modes_of) of the same proto expansion.
-inline void proto_expand_into(container::svector<Index>& v, Index const& ix) {
-  if (ix.has_proto_indices())
-    for (auto const& p : ix.proto_indices()) v.push_back(p);
-  else
-    v.push_back(ix);
-}
-
-/// Modes exposed by node \p n's OWN canonical slots, proto-expanded (the SLOT
-/// side of the same proto expansion the batch-mode selectors apply): a plain
-/// slot exposes itself; a composite slot \c a<i,j> exposes its proto indices
-/// \c i,j. A mode belongs in a node's residency mask only if it is one of
-/// these -- i.e. it lives on \p n's own result. A node invariant to an outer
-/// batched loop (it does not carry that loop's mode on any of its slots) is
-/// thus NOT stamped by it.
+/// A node's OWN result-slot modes: its canonical indices, each taken as itself.
+///
+/// Batch loops are always over PLAIN occ/aux modes (the DP's batchable modes;
+/// a PAO/PNO composite \c a<i,j> is the CSV inner dimension, never a loop
+/// axis), so a batch mode lives on this node iff it appears here as a plain
+/// slot. A composite slot \c a<i,j> therefore contributes only mode \c a, NOT
+/// its proto pair \c i,j: in array land \c a<i,j> is just mode \c a over an \c
+/// <i,j>-tied range, and slicing an \c i / \c j loop does nothing to mode \c a.
+/// Callers (the residency meet in \c stamp_residency_impl, the occurrence key
+/// in
+/// \c occurrence_key.hpp) intersect the in-scope batch modes with this set to
+/// keep only those on \p n's result; a node carrying none of a loop's mode is
+/// left unsliced by it (loop-invariant).
 template <typename Node>
 container::svector<Index> slot_modes_of(Node const& n) {
-  container::svector<Index> v;
-  for (auto const& s : n->canon_indices()) proto_expand_into(v, s);
-  return v;
+  auto const& ci = n->canon_indices();
+  return {ci.begin(), ci.end()};
 }
 
 /// Shared cross-occurrence meet walk underlying \c stamp_lifetime_masks.
-/// \p modes_of extracts a node's occurrence-local batch modes (already
-/// proto-expanded); \p setter stamps the resulting per-canonical-node meet
-/// onto the node (e.g. \c set_sliced_modes). Everything else -- the meet
-/// map, the top-down accumulation, the per-slot filter, the two-pass order --
-/// is identical between the two entry points; only the selector and the
-/// setter differ.
+/// \p modes_of extracts a node's occurrence-local batch modes (plain occ/aux
+/// loop modes); \p setter stamps the resulting per-canonical-node meet onto the
+/// node (e.g. \c set_sliced_modes). Everything else -- the meet map, the
+/// top-down accumulation, the per-slot filter, the two-pass order -- is
+/// identical between entry points; only the selector and setter differ.
 template <meta::eval_node_range R, typename ModesOf, typename Setter>
 void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
                           Setter const& setter) noexcept {
@@ -82,10 +73,16 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
   auto walk = [&](auto&& self, Node const& n,
                   container::svector<Index> acc) -> void {
     if (n.leaf()) return;  // leaves are not stamped (they carry no meet)
-    for (auto const& ix : modes_of(n)) acc.push_back(ix);
-    // Filter acc to modes that slice one of n's own slots (per-slot
-    // semantics), preserving acc's order; store THAT as n's meet
-    // contribution.
+    // acc is the SET of batch modes sliced at or above n -- deduped on push (a
+    // mode is batched above/at n or not; a mode carried by both an ancestor and
+    // n must not appear twice, else the per-slot filter copies each duplicate
+    // through and the positional home-walk homes the value one loop too deep
+    // per extra copy). Distinct modes carry distinct Index labels and are
+    // untouched.
+    for (auto const& ix : modes_of(n))
+      if (std::find(acc.begin(), acc.end(), ix) == acc.end()) acc.push_back(ix);
+    // n's meet contribution: acc filtered to n's OWN result slots, in acc
+    // order.
     auto const slots = slot_modes_of(n);
     container::svector<Index> node_modes;
     for (auto const& m : acc)
@@ -115,17 +112,15 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// (\c EvalExpr::sliced_modes) -- the runtime residency \c place_at_this_level
 /// consumes to home each value. A mode slices a canonical node iff it slices
 /// EVERY occurrence of that node in \p forest (a *meet* / set-intersection over
-/// occurrences). A node's occurrence-local sliced set is the union of ALL
-/// \c node_slice_mask() stamps -- any \c BatchModeType, External or Contracted
-/// -- of the node and all its ancestors, expanded proto-aware: a batched
-/// composite index contributes its \c proto_indices() (a PNO/composite index is
-/// domain-tied to its occ pair, so slicing the pair slices it too). That union
-/// is then filtered to the modes that slice one of the node's OWN canonical
-/// slots (\c canon_indices(), proto-expanded on the slot side): a mode belongs
-/// in the mask only if it lives on this node's result. A node invariant to an
-/// outer batched loop -- it does not carry that loop's mode on any slot -- is
-/// thus left all-full even under a batched ancestor, so it stays eligible for
-/// loop-invariant reuse.
+/// occurrences). A node's occurrence-local sliced set is the deduped union of
+/// ALL \c node_slice_mask() stamps -- any \c BatchModeType, External or
+/// Contracted -- of the node and all its ancestors (each a plain occ/aux loop
+/// mode), filtered to the modes that live on the node's OWN result slots
+/// (\c slot_modes_of, i.e. \c canon_indices() taken as-is -- see there for why
+/// a composite slot \c a<i,j> is just mode \c a, never its \c i,j proto pair).
+/// A node invariant to an outer batched loop -- it does not carry that loop's
+/// mode on any slot -- is thus left all-full even under a batched ancestor, so
+/// it stays eligible for loop-invariant reuse.
 ///
 /// This all-batched-modes meet subsumes the former per-occurrence
 /// \c contracted_modes bolt-on: a node variant to an outer contracted (aux)
@@ -135,10 +130,10 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// Occurrences are grouped by canonical identity (\c hash_value plus structural
 /// \c TreeNodeEqualityComparator equivalence). The meet is a set-intersection
 /// by
-/// \c Index identity: canonicalization gives a shared proto pair consistent
-/// labels across occurrences, so a genuinely sliced-everywhere mode survives,
-/// while a block-agnostic node (e.g. \c s*C) whose occurrences bind disjoint
-/// concrete modes intersects to empty (all-full).
+/// \c Index identity: canonicalization gives consistent labels across
+/// occurrences, so a genuinely sliced-everywhere mode survives, while a
+/// block-agnostic node (e.g. \c s*C) whose occurrences bind disjoint concrete
+/// modes intersects to empty (all-full).
 ///
 /// Idempotent; a no-op on the OFF path: with no \c node_slice_mask() stamps
 /// every occurrence set is empty, so every meet is empty and every mask is
@@ -150,14 +145,14 @@ void stamp_lifetime_masks(R const& forest) noexcept {
   using Node = std::ranges::range_value_t<R>;
   using Data = typename Node::value_type;
 
-  // Occurrence-local batch modes AT a node, proto-expanded, EVERY kind (not
-  // just External). The resulting sliced_modes IS the runtime residency (the
-  // all-batched-modes meet on the node's own result slots) that
-  // place_at_this_level consumes, and the value \c home_scope returns.
+  // Occurrence-local batch modes AT a node (EVERY kind, not just External).
+  // The resulting sliced_modes IS the runtime residency -- the
+  // all-batched-modes meet on the node's own result slots -- that
+  // place_at_this_level consumes and
+  // \c home_scope returns.
   auto all_batched_modes_of = [](Node const& n) {
     container::svector<Index> v;
-    for (auto const& [ix, kind] : n->node_slice_mask())
-      detail::proto_expand_into(v, ix);
+    for (auto const& [ix, kind] : n->node_slice_mask()) v.push_back(ix);
     return v;
   };
 

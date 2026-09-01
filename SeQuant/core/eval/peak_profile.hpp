@@ -232,7 +232,7 @@ struct OccurrenceRec {
   std::size_t point;           //!< this occurrence's production static point
   std::size_t consumer_point;  //!< its structural consumer (parent) point
   container::svector<Index> carried;  //!< this occurrence's canon_indices
-  container::svector<Index> home;     //!< proto-expanded home_scope
+  container::svector<Index> home;     //!< home_scope (plain modes)
   detail::BatchContext ectx;  //!< ENCLOSING loops (excludes this node's own)
   //!< Task 2 (loop identity): per \c carried position, the \c loop_slot of the
   //!< batch loop that slices it (which MEMBER of its same-space group), or -1
@@ -322,8 +322,8 @@ struct RichSchedule {
 /// \c sliced_modes, is populated), then walks every tree in post-order
 /// (children before parent),
 /// assigning each visited node -- leaves included -- a monotone static point.
-/// On descent each node's \c node_slice_mask() loops (proto-expanded, matching
-/// \c home_scope's proto expansion) are pushed onto an enclosing-batch-context
+/// On descent each node's \c node_slice_mask() loops are pushed onto an
+/// enclosing-batch-context
 /// stack visible to that node's CHILDREN, and popped before the node itself is
 /// recorded: a node's own realized loop encloses its operands but not its own
 /// (loop-result) value.
@@ -362,13 +362,12 @@ RichSchedule compute_dag_boulevard(R const& forest,
     bool is_leaf;
     std::size_t point;
     std::size_t consumer_point;
-    container::svector<Index> home;     // home_scope (proto-expanded)
+    container::svector<Index> home;     // home_scope
     container::svector<Index> carried;  // canon_indices
     detail::BatchContext ectx;  // ENCLOSING context (excludes own loops)
     container::svector<Index> own_modes;  // THIS occurrence's OWN realized
-                                          // loop modes (proto-expanded) --
-                                          // see the own_modes_union note
-                                          // below.
+                                          // loop modes -- see the
+                                          // own_modes_union note below.
   };
 
   container::svector<NodeRec> recs;
@@ -391,13 +390,11 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // own_modes likewise: a value's OWN loop is the one it OPENS ("its own
     // node, not an ancestor's" -- own_modes doc), which the sliced mask
     // over-reported for every carried descendant.
+    // Opened loops are over plain occ/aux modes (never a composite result
+    // slot), so each is taken as itself.
     for (auto const& [ix, kind] : n->batch_loops_opened_here()) {
-      container::svector<Index> expanded;
-      sequant::detail::proto_expand_into(expanded, ix);
-      for (auto const& m : expanded) {
-        child_ectx.push_back({m, {std::size_t{0}, block_of(m)}});
-        own_modes.push_back(m);
-      }
+      child_ectx.push_back({ix, {std::size_t{0}, block_of(ix)}});
+      own_modes.push_back(ix);
     }
 
     // TEMP instrumentation (Task 2 verify): dump this node's opened_here (the
@@ -428,7 +425,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     r.is_leaf = n.leaf();
     r.point = point;
     r.consumer_point = point;  // root default; overwritten by parent below
-    r.home = home_scope(n);    // proto-expanded sliced_modes (empty on leaves)
+    r.home = home_scope(n);    // sliced_modes (empty on leaves)
     r.carried.assign(n->canon_indices().begin(), n->canon_indices().end());
     r.ectx = std::move(ectx);
     r.own_modes = std::move(own_modes);
