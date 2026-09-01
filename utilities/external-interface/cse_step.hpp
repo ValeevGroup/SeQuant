@@ -22,6 +22,9 @@ class CSEStep : public OneByOneProcessingStep<ExportTreeData> {
   bool requires_options() const override;
   void set_options(const nlohmann::json &options) override;
 
+  std::size_t run(std::string_view step_id, ExecutionContext &ctx,
+                  const std::vector<std::string_view> &inputs = {}) override;
+
  protected:
   std::size_t process(std::string_view id_prefix, std::size_t id_start,
                       ExecutionContext &ctx,
@@ -30,6 +33,7 @@ class CSEStep : public OneByOneProcessingStep<ExportTreeData> {
   bool alias_unchanged_inputs() const override;
 
  private:
+  bool merge_inputs_ = false;
   std::size_t min_usage_ = 2;
 };
 

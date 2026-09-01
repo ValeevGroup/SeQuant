@@ -111,6 +111,50 @@
 			"inputs": "treeify"
 		},
 		{
+			"id": "cse_ecc",
+			"kind": "cse",
+			"inputs": "treeify.ecc",
+			"options": {
+				"merge_inputs": true
+			},
+			"outputs": {
+				"ecc": "0"
+			}
+		},
+		{
+			"id": "cse_ecc0",
+			"kind": "cse",
+			"inputs": "treeify.ecc0",
+			"options": {
+				"merge_inputs": true
+			},
+			"outputs": {
+				"ecc0": "0"
+			}
+		},
+		{
+			"id": "cse_res",
+			"kind": "cse",
+			"inputs": [
+				"treeify.res1_i1",
+				"treeify.res1_s0",
+				"treeify.res2_s1_singles",
+				"treeify.res1_s1",
+				"treeify.res2_p0",
+				"treeify.res2_p2",
+				"treeify.res2_i2",
+				"treeify.res2_p1",
+				"treeify.res2_s1",
+				"treeify.res2_s2"
+			],
+			"options": {
+				"merge_inputs": true
+			},
+			"outputs": {
+				"res": "0"
+			}
+		},
+		{
 			"kind": "export",
 			"inputs": "cse",
 			"options": {
@@ -137,7 +181,49 @@
 					"res2_s2"
 				],
 				"imports": {
-					"R2{a1;i1}": "TestImport"
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
+		},
+		{
+			"kind": "export",
+			"inputs": [
+				"cse_ecc0",
+				"cse_ecc",
+				"cse_res"
+			],
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_new_cse_merged.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				},
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
 				},
 				"meta": {
 					"index_spaces": {
