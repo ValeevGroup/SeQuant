@@ -754,3 +754,29 @@ TEST_CASE("eval_expr_conjugation_marker_identity",
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(D->hash_value() != A->hash_value());
 }
+
+TEST_CASE("canon_transform_algebra", "[EvalExpr][conj-transform]") {
+  using sequant::CanonTransform;
+  CanonTransform id{};
+  REQUIRE(id.trivial());
+  REQUIRE(id.phase == 1);
+  REQUIRE_FALSE(id.conj);
+  REQUIRE_FALSE(id.braket_swap);
+
+  CanonTransform c{.phase = 1, .conj = true, .braket_swap = false};
+  CanonTransform s{.phase = -1, .conj = false, .braket_swap = true};
+  REQUIRE_FALSE(c.trivial());
+
+  // composition: phases multiply, conj/swap are Z2 (xor)
+  auto cs = compose(c, s);
+  REQUIRE(cs.phase == -1);
+  REQUIRE(cs.conj);
+  REQUIRE(cs.braket_swap);
+  REQUIRE(compose(c, c).trivial());  // involution
+  // structural salt: conj/swap enter, phase does NOT (hoistable)
+  REQUIRE(CanonTransform{.phase = -1}.structural_salt() ==
+          CanonTransform{}.structural_salt());
+  REQUIRE(c.structural_salt() != CanonTransform{}.structural_salt());
+  REQUIRE(c.structural_salt() != s.structural_salt());
+  REQUIRE(c.structural_salt() != cs.structural_salt());
+}
