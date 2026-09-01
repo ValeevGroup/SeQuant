@@ -1111,11 +1111,22 @@ TEST_CASE(
   REQUIRE(sequant::eval::well_formed(ordered));
 
   if (std::getenv("SEQUANT_UT_SCHED_TREE")) {
+    auto const vmap_dump = sequant::eval::build_value_node_map(forest);
     auto carried_str = [&](std::size_t vid) {
       std::string s;
       if (vid < rich.cells.size())
         for (auto const& x : rich.cells[vid].carried)
           s += sequant::toUtf8(x.full_label()) + " ";
+      return s;
+    };
+    auto sliced_str = [&](std::size_t vid) {
+      std::string s;
+      if (vid < rich.cells.size()) {
+        auto const it = vmap_dump.find(rich.cells[vid].hash);
+        if (it != vmap_dump.end())
+          for (auto const& x : it->second->sliced_modes())
+            s += sequant::toUtf8(x.full_label()) + " ";
+      }
       return s;
     };
     std::function<void(sequant::eval::ScopeBlock const&, int)> dump =
@@ -1146,7 +1157,8 @@ TEST_CASE(
                           : ok == sequant::eval::OutputKind::AccumulateSum
                               ? "SUM"
                               : "?")
-                      << " carried=[" << carried_str(ovid) << "]\n";
+                      << " carried=[" << carried_str(ovid) << "] sliced=["
+                      << sliced_str(ovid) << "]\n";
         };
     std::cerr << "=== ORDERED SCHEDULE TREE ===\n";
     dump(ordered.root, 0);
