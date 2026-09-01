@@ -625,20 +625,23 @@ TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
     return e.expr()->is<Tensor>() && e.expr()->as<Tensor>().conjugated();
   };
 
-  SECTION("leaf identity: orientations are distinct at eval") {
+  SECTION("leaf identity: orientations share one slot via the transform") {
     EvalExpr a{C};
     EvalExpr b{C_swap};
-    // no fold: distinct spellings, distinct slots, no markers
-    REQUIRE(a.hash_value() != b.hash_value());
+    // fold ON: both orientations land on one canonical slot; the
+    // non-canonical spelling carries the fold map, and markers never
+    // survive on the stored leaf
+    REQUIRE(a.hash_value() == b.hash_value());
     REQUIRE_FALSE(is_conj_leaf(a));
     REQUIRE_FALSE(is_conj_leaf(b));
-    // a starred ToT spelling keeps its marker, and the marker colors the
-    // graph: C and C* stay distinct
+    REQUIRE(a.canon_transform().trivial() != b.canon_transform().trivial());
+    // a starred ToT spelling: same slot, transforms differ by exactly conj
     auto C_star = C;
     C_star.conjugate();
     EvalExpr s{C_star};
-    REQUIRE(is_conj_leaf(s));
-    REQUIRE(s.hash_value() != a.hash_value());
+    REQUIRE_FALSE(is_conj_leaf(s));
+    REQUIRE(s.hash_value() == a.hash_value());
+    REQUIRE(compose(s.canon_transform(), a.canon_transform()).conj);
   }
 
   SECTION("flat (block-canon) Conjugate leaf FOLDS at eval") {
@@ -820,4 +823,13 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
   Tensor s_star = s;
   s_star.conjugate();
   REQUIRE(EvalExpr{s_star}.canon_transform() == EvalExpr{s}.canon_transform());
+
+  // ToT: the same channels via canonicalize_slots' conjugated_tensors report
+  auto ct = deserialize(L"C{a_1<i_1>;i_1}:N-C-S")->as<Tensor>();
+  REQUIRE(ranges::any_of(ct.const_indices(), &Index::has_proto_indices));
+  Tensor ct_star = ct;
+  ct_star.conjugate();
+  EvalExpr ec{ct}, ecs{ct_star};
+  REQUIRE(ec.hash_value() == ecs.hash_value());  // one slot
+  REQUIRE(compose(ec.canon_transform(), ecs.canon_transform()).conj);
 }

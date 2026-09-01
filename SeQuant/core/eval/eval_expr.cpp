@@ -135,25 +135,53 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
+namespace {
+/// Normalizes a leaf tensor's SPELLING channels into transform bits:
+/// strips a '⁺' adjoint label (adjoint = conj ∘ swap) and converts the
+/// elementwise-conjugation marker to a PURE {conj} bit (slots untouched;
+/// orientation deltas belong to the canonicalizer fold alone). Symm markers
+/// are value-redundant and dropped. Returns the accumulated transform.
+CanonTransform normalize_leaf_spelling(Tensor& t) {
+  CanonTransform tr{};
+  if (!t.label().empty() && t.label().back() == adjoint_label) {
+    t.adjoint();  // removes the label, swaps slots back
+    tr = compose(tr, {.conj = true, .braket_swap = true});
+  }
+  if (t.conjugated()) {
+    if (t.braket_symmetry() != BraKetSymmetry::Symm)
+      tr = compose(tr, {.conj = true});
+    t.conjugate();  // the unmarked spelling is stored
+  }
+  return tr;
+}
+}  // namespace
+
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
+    // ToT leaf: normalize the spelling channels first, then let the
+    // slot-canonicalization (fold ON, the default) report the orientation
+    // fold via conjugated_tensors; respell to the canonical orientation so
+    // the stored spelling is canonical for flat and ToT leaves alike.
+    auto& t0 = expr_->as<Tensor>();
+    canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t0));
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
-    // The conjugate-braket fold is DISABLED at the eval boundary: leaves
-    // keep their as-written orientation (conjugation markers arrive only on
-    // already-starred spellings and are served by binarize through
-    // EvalOp::Adjoint). The marker still colors the graph, so T and T* stay
-    // distinct (the C·C* vs C*·C aliasing fix).
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
-             TensorCanonicalizer::cardinal_tensor_labels(),
-         .fold_conjugate_braket = false});
+             TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
     canon_transform_.phase = md.phase;
+    if (!md.conjugated_tensors.empty()) {
+      // single-tensor network: the canonical labeling spells this leaf in
+      // the swapped orientation -- the fold map is the delta
+      canon_transform_ =
+          compose(canon_transform_, {.conj = true, .braket_swap = true});
+      static_cast<AbstractTensor&>(t0)._swap_bra_ket();
+    }
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
@@ -164,23 +192,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // Conjugate tensor the two compose to adjoint, the identity on Hermitian
     // values -- every spelling route lands on one slot + a correct map).
     auto& t = expr_->as<Tensor>();
-    // 1. '⁺' adjoint label (Nonsymm only): strip to the bare spelling;
-    //    adjoint = conj ∘ swap
-    if (!t.label().empty() && t.label().back() == adjoint_label) {
-      t.adjoint();  // removes the label, swaps slots back
-      canon_transform_ =
-          compose(canon_transform_, {.conj = true, .braket_swap = true});
-    }
-    // 2. elementwise-conjugation marker: a PURE conj bit -- slots are never
-    //    touched here (orientation deltas belong to step 3's fold alone;
-    //    mixing them would collapse the starred-canonical spelling's salt
-    //    onto the plain spelling and re-alias C with C^*). Value-redundant
-    //    for Symm (Hermitian over a real field), where it is dropped.
-    if (t.conjugated()) {
-      if (t.braket_symmetry() != BraKetSymmetry::Symm)
-        canon_transform_ = compose(canon_transform_, {.conj = true});
-      t.conjugate();  // expr_ stores the unmarked spelling
-    }
+    canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t));
     // 3. block-canonicalize WITH the fold (the eval-boundary exception is
     //    gone); a fold performed here toggles the marker, which converts to
     //    transform bits the same way
