@@ -137,7 +137,7 @@ class EvalExpr {
   ///                     to indicate that no graph is present/necessary.
   ///
   EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
-           std::int8_t phase, size_t hash,
+           CanonTransform transform, size_t hash,
            std::shared_ptr<bliss::Graph> connectivity);
 
   ///
@@ -284,6 +284,12 @@ class EvalExpr {
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
   ///
+  /// \return The full canonicalization transform (phase/conj/braket_swap)
+  /// mapping this node's cached canonical result to its denoted value.
+  ///
+  [[nodiscard]] CanonTransform canon_transform() const noexcept;
+
+  ///
   /// \return Whether this expression has a connectivity graph
   /// \see connectivity_graph
   ///
@@ -312,7 +318,7 @@ class EvalExpr {
 
   index_vector canon_indices_;
 
-  std::int8_t canon_phase_{1};
+  CanonTransform canon_transform_{};
 
   size_t hash_value_;
 

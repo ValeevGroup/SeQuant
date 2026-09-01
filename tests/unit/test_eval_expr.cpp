@@ -780,3 +780,12 @@ TEST_CASE("canon_transform_algebra", "[EvalExpr][conj-transform]") {
   REQUIRE(c.structural_salt() != s.structural_salt());
   REQUIRE(c.structural_salt() != cs.structural_salt());
 }
+
+TEST_CASE("eval_expr_carries_canon_transform", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  EvalExpr ee{t};
+  REQUIRE(ee.canon_transform().trivial());
+  REQUIRE(ee.canon_phase() == ee.canon_transform().phase);  // compat accessor
+}

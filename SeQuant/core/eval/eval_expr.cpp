@@ -153,7 +153,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
              TensorCanonicalizer::cardinal_tensor_labels(),
          .fold_conjugate_braket = false});
     hash_value_ = md.hash_value();
-    canon_phase_ = md.phase;
+    canon_transform_.phase = md.phase;
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
@@ -171,7 +171,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // onto one orientation-shared slot is the lazy-conj eval follow-up.
     auto phase =
         TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
-    canon_phase_ = phase ? -1 : 1;
+    canon_transform_.phase = phase ? -1 : 1;
     // Leaf-hash invariant (owned by hash_terminal_tensor): the marker
     // enters the hash only where it is value-distinctive (Nonsymm); for
     // Conjugate (orientation fold) and Symm (value-redundant) both
@@ -201,13 +201,13 @@ EvalExpr::EvalExpr(Power const& p)
       hash_value_{hash::value(p)} {}
 
 EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
-                   index_vector ixs, std::int8_t p, size_t h,
+                   index_vector ixs, CanonTransform transform, size_t h,
                    std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
       expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
-      canon_phase_{p},
+      canon_transform_{transform},
       hash_value_{h},
       connectivity_{std::move(connectivity)} {
   if (connectivity_ != nullptr) {
@@ -295,7 +295,13 @@ std::string EvalExpr::label() const noexcept {
   }
 }
 
-std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
+std::int8_t EvalExpr::canon_phase() const noexcept {
+  return canon_transform_.phase;
+}
+
+CanonTransform EvalExpr::canon_transform() const noexcept {
+  return canon_transform_;
+}
 
 bool EvalExpr::has_connectivity_graph() const noexcept {
   return connectivity_ != nullptr;
@@ -412,7 +418,7 @@ void collect_tensor_factors(EvalExprNode const& node,  //
 /// EvalOp::Adjoint so cache lookups don't collide.
 EvalExprNode make_adjoint_node(EvalExprNode bare_leaf, ExprPtr adjointed,
                                EvalExpr::index_vector canon_ix,
-                               std::int8_t phase) {
+                               CanonTransform transform) {
   EvalExprNode sentinel{EvalExpr{Constant{1}}};
   auto h = bare_leaf->hash_value();
   hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
@@ -420,7 +426,7 @@ EvalExprNode make_adjoint_node(EvalExprNode bare_leaf, ExprPtr adjointed,
                ResultType::Tensor,
                std::move(adjointed),
                std::move(canon_ix),
-               phase,
+               transform,
                h,
                nullptr};
   return EvalExprNode{std::move(adj), std::move(bare_leaf),
@@ -467,7 +473,7 @@ EvalExprNode binarize(Tensor const& t) {
                    bare.label().back() != adjoint_label);
     return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, t.clone(),
                              t.indices() | ranges::to<EvalExpr::index_vector>,
-                             1);
+                             CanonTransform{});
   }
   if (t.conjugated() && t.braket_symmetry() == BraKetSymmetry::Symm) {
     // Symm marker: conj is the identity in value -- serve the unmarked
@@ -495,7 +501,7 @@ EvalExprNode binarize(Tensor const& t) {
     // spelling, the one leaf yielders serve
     Tensor bare = value_oriented(folded);
     return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, ee.expr(),
-                             ee.canon_indices(), ee.canon_phase());
+                             ee.canon_indices(), ee.canon_transform());
   }
   return EvalExprNode{std::move(ee)};
 }
@@ -533,7 +539,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           left.canon_indices(),                             //
-          1,                                                //
+          CanonTransform{},                                 //
           h,                                                //
           nullptr};
     } else {
@@ -541,7 +547,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
               ResultType::Scalar,       //
               detail::make_variable(),  //
               {},                       //
-              1,                        //
+              CanonTransform{},         //
               h,                        //
               nullptr};
     }
@@ -589,7 +595,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
               ResultType::Scalar,
               detail::make_variable(),
               {},
-              1,
+              CanonTransform{},
               h,
               nullptr};
     } else if (left->is_scalar() || right->is_scalar()) {
@@ -602,7 +608,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           tl->canon_indices(),                              //
-          tl->canon_phase(),                                //
+          tl->canon_transform(),                            //
           h,
           nullptr};
     } else {
@@ -651,11 +657,11 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {
-        return {EvalOp::Product,          //
-                ResultType::Scalar,       //
-                detail::make_variable(),  //
-                {},                       //
-                canon.phase,              //
+        return {EvalOp::Product,                       //
+                ResultType::Scalar,                    //
+                detail::make_variable(),               //
+                {},                                    //
+                CanonTransform{.phase = canon.phase},  //
                 h,
                 std::move(canon.graph)};
       } else {
@@ -665,7 +671,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                                                   ket(target_indices.ket),
                                                   aux(target_indices.aux)),
                 canon.get_indices<Index::index_vector>(),  //
-                canon.phase,                               //
+                CanonTransform{.phase = canon.phase},      //
                 h,
                 std::move(canon.graph)};
       }
@@ -687,12 +693,12 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
 
     auto h = left->hash_value();
     hash::combine(h, right->hash_value());
-    auto result = EvalExpr{EvalOp::Product,        //
-                           type,                   //
-                           expr,                   //
-                           left->canon_indices(),  //
-                           left->canon_phase(),    //
-                           h,                      //
+    auto result = EvalExpr{EvalOp::Product,          //
+                           type,                     //
+                           expr,                     //
+                           left->canon_indices(),    //
+                           left->canon_transform(),  //
+                           h,                        //
                            nullptr};
 
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
