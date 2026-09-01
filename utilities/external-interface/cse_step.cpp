@@ -2,6 +2,8 @@
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
 
+#include <range/v3/view/repeat_n.hpp>
+
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
@@ -50,8 +52,13 @@ void CSEStep::set_options(const nlohmann::json &options) {
   }
 }
 
-template <std::ranges::range ExprRange>
-std::vector<std::size_t> perform_cse(ExprRange &&exprs, std::size_t min_usage) {
+template <std::ranges::random_access_range ExprRange,
+          std::ranges::random_access_range InputRange,
+          std::ranges::random_access_range Expr2Inp>
+std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
+                                          InputRange &&inputs,
+                                          Expr2Inp &&expr_to_input,
+                                          std::size_t min_usage) {
   opt::CSEOptions<ExportNode<>> cse_opts;
   cse_opts.filter_predicate = [min_usage](const ExportNode<> &tree,
                                           std::size_t usage_count) {
@@ -78,7 +85,7 @@ std::vector<std::size_t> perform_cse(ExprRange &&exprs, std::size_t min_usage) {
     return true;
   };
 
-  return opt::eliminate_common_subexpressions(
+  std::vector<std::size_t> cse_positions = opt::eliminate_common_subexpressions(
       exprs,
       [](const auto &expr) {
         // Note: the lambda is needed to make the callable usable for
@@ -86,6 +93,61 @@ std::vector<std::size_t> perform_cse(ExprRange &&exprs, std::size_t min_usage) {
         return to_export_tree(expr);
       },
       cse_opts);
+
+  if (cse_positions.empty()) {
+    {};
+  }
+
+  std::ranges::sort(cse_positions, std::greater<>{});
+
+  ExportTreeData output;
+  output.entries.reserve(exprs.size());
+
+  std::size_t expr_offset = 0;
+  std::size_t last_input_idx = 0;
+  std::size_t entry_offset = 0;
+
+  for (std::size_t i = 0; i < exprs.size(); ++i) {
+    std::optional<Tensor> symm_target;
+
+    std::optional<bool> overwrite;
+    if (cse_positions.empty() || cse_positions.back() != i) {
+      SEQUANT_ASSERT(i >= expr_offset);
+      const std::size_t expr_idx = i - expr_offset;
+      const std::size_t input_idx = expr_to_input[expr_idx];
+
+      const ExportTreeData &assoc_tree_data = inputs[input_idx];
+
+      if (last_input_idx != input_idx) {
+        // Reset offset to ensure it is a per-input offset into entries
+        entry_offset = 0;
+        last_input_idx = input_idx;
+      }
+
+      SEQUANT_ASSERT(entry_offset < assoc_tree_data.entries.size());
+      symm_target =
+          assoc_tree_data.entries.at(entry_offset).symm_contribution_target;
+      ++entry_offset;
+    } else if (!cse_positions.empty()) {
+      cse_positions.pop_back();
+      ++expr_offset;
+      overwrite = true;
+    }
+
+    ExportTreeData::Entry current{
+        .tree = std::move(exprs[i]),
+        .symm_contribution_target = std::move(symm_target),
+        .overwrite_previous = std::move(overwrite)};
+
+    output.entries.emplace_back(std::move(current));
+  }
+
+  return output;
+}
+
+decltype(auto) to_tree_data(
+    const ExecutionContext::Data<ProcessingData> &data_obj) {
+  return convert_data<ExportTreeData>(data_obj.data.get());
 }
 
 std::size_t CSEStep::run(std::string_view step_id, ExecutionContext &ctx,
@@ -117,61 +179,16 @@ std::size_t CSEStep::run(std::string_view step_id, ExecutionContext &ctx,
 
   SEQUANT_ASSERT(expressions.size() == expr_to_input.size());
 
-  std::vector<std::size_t> cse_positions = perform_cse(expressions, min_usage_);
+  std::optional<ExportTreeData> result =
+      perform_cse(expressions, inputs | std::views::transform(&to_tree_data),
+                  expr_to_input, min_usage_);
 
-  if (cse_positions.empty()) {
+  if (!result.has_value()) {
     ctx.add_data_alias(input_ids, std::string(step_id) + ".0");
     return 1;  // we "produced" an alias
   }
 
-  std::ranges::sort(cse_positions, std::greater<>{});
-
-  ExportTreeData output;
-  output.entries.reserve(expressions.size());
-
-  std::size_t expr_offset = 0;
-  std::size_t last_input_idx = 0;
-  std::size_t entry_offset = 0;
-
-  for (std::size_t i = 0; i < expressions.size(); ++i) {
-    std::optional<Tensor> symm_target;
-
-    std::optional<bool> overwrite;
-    if (cse_positions.empty() || cse_positions.back() != i) {
-      SEQUANT_ASSERT(i >= expr_offset);
-      const std::size_t expr_idx = i - expr_offset;
-      const std::size_t input_idx = expr_to_input.at(expr_idx);
-      const ExecutionContext::Data<ProcessingData> &assoc_data =
-          inputs.at(input_idx);
-
-      const ExportTreeData &assoc_tree_data =
-          convert_data<ExportTreeData>(assoc_data.data.get());
-
-      if (last_input_idx != input_idx) {
-        // Reset offset to ensure it is a per-input offset into entries
-        entry_offset = 0;
-        last_input_idx = input_idx;
-      }
-
-      SEQUANT_ASSERT(entry_offset < assoc_tree_data.entries.size());
-      symm_target =
-          assoc_tree_data.entries.at(entry_offset).symm_contribution_target;
-      ++entry_offset;
-    } else if (!cse_positions.empty()) {
-      cse_positions.pop_back();
-      ++expr_offset;
-      overwrite = true;
-    }
-
-    ExportTreeData::Entry current{
-        .tree = std::move(expressions.at(i)),
-        .symm_contribution_target = std::move(symm_target),
-        .overwrite_previous = std::move(overwrite)};
-
-    output.entries.emplace_back(std::move(current));
-  }
-
-  ctx.set_data(step_id, 0, std::move(output));
+  ctx.set_data(step_id, 0, std::move(result.value()));
 
   return 1;
 }
@@ -184,41 +201,15 @@ std::size_t CSEStep::process(std::string_view id_prefix, std::size_t id_start,
   std::ranges::transform(input.entries, std::back_inserter(expressions),
                          &ExportTreeData::Entry::tree);
 
-  std::vector<std::size_t> cse_positions = perform_cse(expressions, min_usage_);
+  std::optional<ExportTreeData> result =
+      perform_cse(expressions, std::ranges::subrange(&input, &input + 1),
+                  ranges::views::repeat_n(0, input.entries.size()), min_usage_);
 
-  if (cse_positions.empty()) {
+  if (!result.has_value()) {
     return 0;
   }
 
-  std::ranges::sort(cse_positions, std::greater<>{});
-
-  ExportTreeData output;
-  output.entries.reserve(expressions.size());
-
-  std::size_t offset = 0;
-
-  for (std::size_t i = 0; i < expressions.size(); ++i) {
-    std::optional<Tensor> symm_target;
-
-    std::optional<bool> overwrite;
-    if (cse_positions.empty() || cse_positions.back() != i) {
-      SEQUANT_ASSERT(i >= offset);
-      symm_target = input.entries.at(i - offset).symm_contribution_target;
-    } else if (!cse_positions.empty()) {
-      cse_positions.pop_back();
-      ++offset;
-      overwrite = true;
-    }
-
-    ExportTreeData::Entry current{
-        .tree = std::move(expressions.at(i)),
-        .symm_contribution_target = std::move(symm_target),
-        .overwrite_previous = std::move(overwrite)};
-
-    output.entries.emplace_back(std::move(current));
-  }
-
-  ctx.set_data(id_prefix, id_start, std::move(output));
+  ctx.set_data(id_prefix, id_start, std::move(result.value()));
 
   return 1;
 }
