@@ -426,17 +426,29 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     // exclusions live in braket_foldable()
     if (!braket_foldable(tensor)) continue;
 
-    // a Conjugate half-tensor (empty bra or ket bundle) has no vertex for the
-    // empty bundle, so its recorded canonical bundle position is a
-    // value-initialized sentinel -- the graph cannot decide its orientation;
-    // the content-based refold after the lexicographic relabel decides it
+    // A half-tensor (empty bra or ket bundle) has no vertex for the empty
+    // bundle, so its recorded canonical bundle position is a value-initialized
+    // sentinel: the graph carries no orientation verdict for it. For Symm
+    // braket symmetry that is harmless -- both orientations denote the SAME
+    // value, so acting on the sentinel merely picks a spelling that the
+    // deterministic per-tensor refold below re-canonicalizes anyway. For
+    // Conjugate braket symmetry the two orientations denote CONJUGATE values
+    // (a swap must toggle the elementwise-conjugation marker), so acting on a
+    // sentinel would corrupt the value; defer to the content-based refold
+    // after the lexicographic relabel, which decides deterministically.
     if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate &&
         (bra_rank(tensor) == 0 || ket_rank(tensor) == 0))
       continue;
 
-    // swap bra and ket bundles into the canonical (graph-dictated) order;
-    // identical bra and ket bundles (diagonal trace T{p,q;p,q}) make the
-    // swap an identity -- skip it so no spurious conjugation marker arises
+    // Swap bra and ket bundles into the canonical (graph-dictated) order.
+    // Guard: when the bra and ket bundles are IDENTICAL (diagonal trace
+    // T{p,q;p,q}) the two bundle vertices are automorphic, so the "order"
+    // bliss reports between them is an arbitrary automorphism pick, not
+    // information about the input -- there is nothing to transfer from the
+    // graph. The slot swap itself would be the identity permutation, but for
+    // Conjugate braket symmetry it would still toggle the conjugation marker
+    // and thereby CHANGE the represented value (a spurious T^*{p,q;p,q});
+    // hence skip exactly this no-information case.
     if (canonical_bra_ket_bundle_order[i][0] >
             canonical_bra_ket_bundle_order[i][1] &&
         !ranges::equal(tensor._bra(), tensor._ket())) {
@@ -621,10 +633,13 @@ ExprPtr TensorNetworkV3::canonicalize(
 
     container::map<Index, Index> idxrepl;
 
-    // Use the new order of edges as the canonical order of indices and relabel
-    // accordingly (anonymous indices only; named indices are skipped per edge
-    // -- a named index need not be an edge, see the "lexicographic rewrite
-    // with named non-edge (pure proto) indices" regression test).
+    // Relabel the anonymous indices: the canonical edge order defines the
+    // canonical index order, so walk the edges and hand each anonymous index
+    // a fresh label in that order. Named indices keep their labels. N.B. the
+    // anonymity check is per-index rather than per-edge-position because a
+    // named index need not appear as an edge at all -- it can occur purely as
+    // a proto index (see the "lexicographic rewrite with named non-edge (pure
+    // proto) indices" regression test).
     for (std::size_t i = 0; i < edges_.size(); ++i) {
       const Index &index = edges_[i].idx();
       if (!is_anonymous_index(index)) continue;
@@ -649,11 +664,17 @@ ExprPtr TensorNetworkV3::canonicalize(
     apply_index_replacements(tensors_, idxrepl, true);
 
     // Re-apply the per-tensor braket orientation fold now that indices carry
-    // their FINAL labels: the fold's full-space-tie decision is
-    // label-sensitive, and a decision taken on pre-relabel labels need not
-    // be a fixed point of the relabeled expression. The fold is convergent
-    // (it decides on the VALUE orientation), so this pass makes the whole
-    // canonicalization idempotent.
+    // their FINAL labels. This pass is needed only because of Conjugate
+    // braket symmetry: for Symm the orientation decision is purely
+    // space-colored and hence label-independent, so relabeling can never
+    // flip it (which is why no refold existed before Conjugate folding). For
+    // Conjugate, a full space tie must still be broken -- the two
+    // orientations denote conjugate values and one spelling has to win -- and
+    // that tie-break is on the index LABELS, so a decision taken on
+    // pre-relabel labels need not be a fixed point of the relabeled
+    // expression. The fold is convergent (it decides on the VALUE
+    // orientation), so this pass makes the whole canonicalization
+    // idempotent.
     for (auto &tensor_ptr : tensors_) {
       DefaultTensorCanonicalizer::canonicalize_braket(*tensor_ptr);
     }
@@ -947,7 +968,7 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   // {bra,ket} bundle vertices are ordered ket-before-bra in the canonical
   // labeling, the canonical form is the bra<->ket-swapped (conjugated)
   // orientation of the input -- report the tensor's input ordinal in
-  // metadata.conjugated_tensors and fold the parity into metadata.conj.
+  // metadata.conjugated_tensors.
   // Vertices are visited tensor-major (TensorCore precedes that tensor's
   // bundle vertices, before the next TensorCore), mirroring the walk used by
   // canonicalize_graph to build canonical_bra_ket_bundle_order.
@@ -986,7 +1007,6 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
           !ranges::equal(tensors_[tensor_ord]->_bra(),
                          tensors_[tensor_ord]->_ket())) {
         metadata.conjugated_tensors.push_back(tensor_ord);
-        metadata.conj = !metadata.conj;
       }
     }
   }

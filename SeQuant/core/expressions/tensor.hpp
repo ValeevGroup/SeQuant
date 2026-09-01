@@ -55,6 +55,31 @@ DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
+///
+// clang-format off
+/// ### Conjugation / transposition / adjoint algebra
+///
+/// Three involutions act on a tensor's VALUE, closed under composition
+/// (together with the identity they form a Klein four-group):
+///
+/// | operation | effect                                          | via               |
+/// |-----------|-------------------------------------------------|-------------------|
+/// | `conj`    | elementwise complex conjugation, slots kept     | `conjugate()`     |
+/// | `swap`    | bra<->ket transposition, elements kept          | `_swap_bra_ket()` |
+/// | `adjoint` | conjugate transpose = `swap∘conj` = `conj∘swap` | `adjoint()`       |
+///
+/// Consequences per #BraKetSymmetry:
+/// - `Conjugate` (Hermitian over a complex field): `adjoint(T) == T` in
+///   value, hence `swap(T) == conj(T)` -- the fold identity
+///   `T{q;p} = conj(T{p;q})` the canonicalizer uses to spell both
+///   orientations over one canonical slot order (the swapped spelling
+///   carrying the marker).
+/// - `Symm` (Hermitian over a real field): `conj` and `swap` are both the
+///   identity in value; canonicalization never needs the marker.
+/// - `Nonsymm`: `adjoint` is value-distinct and is tracked by the reserved
+///   adjoint label suffix (see adjoint()); the marker alone expresses pure
+///   elementwise conjugation.
+// clang-format on
 class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
  private:
   using index_container_type = container::svector<Index>;
@@ -750,7 +775,21 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @note this performs rapid canonicalization only
   ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
-  /// @brief adjoint of a Tensor swaps its bra and ket
+  /// @brief adjoint of a Tensor: the conjugate transpose (`swap∘conj`; see
+  /// the algebra table in the class documentation)
+  ///
+  /// The slot swap happens immediately; the conjugation half is carried per
+  /// #BraKetSymmetry:
+  /// - `Nonsymm`: the adjoint is value-distinct from every slot permutation
+  ///   of the original, so it is marked by the reserved '⁺' label suffix.
+  /// - `Conjugate`/`Symm` (Hermitian): the conjugation is redundant in value
+  ///   (`adjoint(T) == T`), so adjoint() reduces to a pure bra<->ket swap.
+  ///
+  /// adjoint() deliberately does NOT toggle conjugated(): the marker
+  /// expresses elementwise conjugation ALONE, and the two operations
+  /// compose -- e.g. for a Conjugate-symmetry tensor, `conjugate()` followed
+  /// by `adjoint()` unfolds a marked spelling back to its value orientation
+  /// (see value_oriented()).
   virtual void adjoint() override;
 
   /// @return whether this tensor is complex-conjugated elementwise (no slot
@@ -766,31 +805,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     conjugated_ = !conjugated_;
     reset_hash_value();
   }
-
-  // clang-format off
-  /// @name conjugation / transposition / adjoint algebra
-  ///
-  /// Three involutions act on a tensor's VALUE, closed under composition
-  /// (together with the identity they form a Klein four-group):
-  ///
-  /// | operation | effect                                          | via               |
-  /// |-----------|-------------------------------------------------|-------------------|
-  /// | `conj`    | elementwise complex conjugation, slots kept     | `conjugate()`     |
-  /// | `swap`    | bra<->ket transposition, elements kept          | `_swap_bra_ket()` |
-  /// | `adjoint` | conjugate transpose = `swap∘conj` = `conj∘swap` | `adjoint()`       |
-  ///
-  /// Consequences per #BraKetSymmetry:
-  /// - `Conjugate` (Hermitian over a complex field): `adjoint(T) == T` in
-  ///   value, hence `swap(T) == conj(T)` -- the fold identity
-  ///   `T{q;p} = conj(T{p;q})` the canonicalizer uses to spell both
-  ///   orientations over one canonical slot order (the swapped spelling
-  ///   carrying the marker).
-  /// - `Symm` (Hermitian over a real field): `conj` and `swap` are both the
-  ///   identity in value; canonicalization never needs the marker.
-  /// - `Nonsymm`: `adjoint` is value-distinct and is tracked by the reserved
-  ///   adjoint label suffix (see adjoint()); the marker alone expresses pure
-  ///   elementwise conjugation.
-  // clang-format on
 
   /// @brief rebuilds this tensor with new slot bundles, carrying every
   /// non-slot attribute: label, #Symmetry, #BraKetSymmetry, #Hermiticity,

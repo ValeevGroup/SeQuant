@@ -294,12 +294,6 @@ class TensorNetworkV3 {
     /// by/dissolved into the maintainer's TreeIndex-based reporting when
     /// that lands, so it survives nested expressions.
     container::svector<std::size_t> conjugated_tensors;
-
-    /// the PARITY of the swaps recorded in `conjugated_tensors`. A single
-    /// bit is exact only when at most one tensor can have swapped; its sole
-    /// consumer is EvalExpr's single-tensor leaf constructor
-    /// -- prefer `conjugated_tensors`
-    bool conj = false;
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -316,10 +310,9 @@ class TensorNetworkV3 {
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
   /// @return the computed canonicalization metadata
-  [[deprecated(
-      "use the CanonicalizeSlotsOptions "
-      "overload")]] SlotCanonicalizationMetadata
-  canonicalize_slots(
+  /// @note equivalent to (and forwards to) the CanonicalizeSlotsOptions
+  /// overload; prefer that overload in new code
+  SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =

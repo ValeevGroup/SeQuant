@@ -253,8 +253,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
         //   h{bra;ket} = conj(h{ket;bra}),
         // so its two bra<->ket orientations fold onto a single canonical form
         // by default, carrying a recorded conjugation byproduct
-        // (SlotCanonicalizationMetadata::conjugated_tensors) that EvalExpr
-        // spells as the leaf tensor's elementwise-conjugation marker.
+        // (SlotCanonicalizationMetadata::conjugated_tensors).
         const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
         auto canonicalize_slots_metadata = [&cardinal](const std::wstring& s) {
           TN tn(deserialize(s));
@@ -268,18 +267,15 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           auto b = canonicalize_slots_metadata(L"h{i_1;a_1}:N-C-S");
           REQUIRE(a.graph->cmp(*b.graph) == 0);
           REQUIRE(a.hash_value() == b.hash_value());
-          REQUIRE(a.conj != b.conj);
           REQUIRE(a.conjugated_tensors.size() + b.conjugated_tensors.size() ==
                   1);
         }
 
-        // Symm braket also folds and never sets conj.
+        // Symm braket also folds and never reports conjugated tensors.
         {
           auto a = canonicalize_slots_metadata(L"h{a_1;i_1}:N-S-S");
           auto b = canonicalize_slots_metadata(L"h{i_1;a_1}:N-S-S");
           REQUIRE(a.graph->cmp(*b.graph) == 0);
-          REQUIRE(!a.conj);
-          REQUIRE(!b.conj);
           REQUIRE(a.conjugated_tensors.empty());
           REQUIRE(b.conjugated_tensors.empty());
         }

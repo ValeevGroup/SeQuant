@@ -466,9 +466,6 @@ TEST_CASE("tn_slots_determinism", "[conjugation]") {
   // the conj-swapped spelling is a DIFFERENT value and keeps its own slot
   auto m3 = md(Cstar(L"a_1") * C(L"a_2"));
   REQUIRE(m3.hash_value() == m1.hash_value());  // one shared graph family
-  // parity bit always equals the report's parity
-  for (auto* m : {&m1, &m2, &m3})
-    REQUIRE(m->conj == (m->conjugated_tensors.size() % 2 == 1));
 }
 
 TEST_CASE("conjugate_fold_skips_reserved", "[conjugation]") {

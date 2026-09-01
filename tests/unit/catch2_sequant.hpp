@@ -182,11 +182,15 @@ ExprVar to_expression(T &&expression) {
   using std::begin;
   using std::end;
 
-  // Braket fallback: Hermitian resolved over the ambient field — identical to
-  // the programmatic ex<Tensor>(label, bra, ket) default. Under a complex
-  // field this is Conjugate (the deserializer's own hard-coded fallback), so
-  // this is a no-op for complex-context tests; under a real field it yields
-  // Symm, keeping string fixtures coherent with ctor-built tensors.
+  // Braket fallback: Hermitian resolved over the ambient field — chosen to
+  // be IDENTICAL to today's programmatic ex<Tensor>(label, bra, ket)
+  // default, so string fixtures and ctor-built tensors always resolve to the
+  // same braket symmetry (the helper's whole job is that the two routes
+  // compare equal). Under a complex field this is Conjugate (the
+  // deserializer's own hard-coded fallback); under a real field it yields
+  // Symm. When the library's default braket symmetry changes (e.g. to
+  // Nonsymm with the default-symmetry rework), change this fallback in
+  // lockstep -- it mirrors the ctor default, it does not define one.
   const sequant::io::serialization::DeserializationOptions opts{
       .def_perm_symm = sequant::Symmetry::Nonsymm,
       .def_braket_symm = sequant::Hermiticity::Hermitian};

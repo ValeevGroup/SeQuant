@@ -234,14 +234,11 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
-    container::svector<Index> b(tensor.ket().begin(), tensor.ket().end());
-    container::svector<Index> k(tensor.bra().begin(), tensor.bra().end());
-    container::svector<Index> a(tensor.aux().begin(), tensor.aux().end());
-    // slot-only transpose: commutes with elementwise conjugation; with_slots
-    // carries the label, the symmetries, the aux indices, and the
-    // conjugation marker through the rebuild
-    return ex<Tensor>(tensor.with_slots(bra(std::move(b)), ket(std::move(k)),
-                                        aux(std::move(a))));
+    // in-place slot transpose on a copy: label, symmetries, aux slots, and
+    // the elementwise-conjugation marker are untouched by construction
+    auto copy = ex<Tensor>(tensor);
+    static_cast<AbstractTensor&>(copy->as<Tensor>())._swap_bra_ket();
+    return copy;
   };
 
   // Lambda for product
