@@ -23,6 +23,7 @@
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -148,10 +149,18 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
            mo[2].str();
   };
 
-  NestedTensorIndices oixs{tnsr};
+  // PR-2 contract: leaves are stored/served in their CANONICAL spelling, so
+  // normalize the orientation (and drop any fold marker) before keying --
+  // this makes literal test spellings and ctor-canonicalized leaves agree
+  auto canon = tnsr.clone();
+  {
+    auto& ct = canon->as<sequant::Tensor>();
+    sequant::TensorBlockCanonicalizer{}.apply(ct);
+    if (ct.conjugated()) ct.conjugate();
+  }
+  NestedTensorIndices oixs{canon->as<sequant::Tensor>()};
   if (oixs.inner.empty()) {
-    auto const tnsr_deparsed =
-        sequant::serialize(tnsr.clone(), {.annot_symm = false});
+    auto const tnsr_deparsed = sequant::serialize(canon, {.annot_symm = false});
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
@@ -169,7 +178,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
              ranges::to<std::wstring>;
     };
 
-    std::wstring result(tnsr.label());
+    std::wstring result(canon->as<sequant::Tensor>().label());
     result += L"{" + ixs_lbl(oixs.outer) + L";" + ixs_lbl(oixs.inner) + L"}";
     return result;
   }
@@ -548,11 +557,52 @@ class rand_tensor_yield {
   ///
   sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_er_.find(label.data());
-    if (found == label_to_er_.end())
-      found = label_to_er_.find(tensor_to_key(label));
+    if (found != label_to_er_.end()) return found->second;
+    found = label_to_er_.find(tensor_to_key(label));
     if (found == label_to_er_.end())
       throw sequant::Exception{"attempted access of non-existent ResultPtr!"};
-    return found->second;
+    // stored arrays are CANONICAL-spelling shaped; serve the literal spelling
+    // by applying its full leaf transform (orientation relabel + conj/phase),
+    // exactly as evaluation would. A label with no slot list is not a tensor
+    // spelling: hand it back as stored.
+    if (label.find(L'{') == std::wstring_view::npos) return found->second;
+    auto lt = sequant::deserialize<sequant::ExprPtr>(std::wstring(label))
+                  ->as<sequant::Tensor>();
+    auto annot_of = [](sequant::Tensor const& t) -> std::string {
+      // mirror EvalExpr::indices_annot's convention: outer = proto-free,
+      // inner = proto-carrying, tokens via to_label_annotation
+      using ranges::views::filter;
+      using ranges::views::intersperse;
+      using ranges::views::join;
+      using ranges::views::transform;
+      auto lbl = [](sequant::Index const& ix) {
+        // label + proto labels concatenated (to_label_annotation convention)
+        std::string r = sequant::toUtf8(ix.label());
+        for (auto const& pix : ix.proto_indices())
+          r += sequant::toUtf8(pix.label());
+        return r;
+      };
+      NestedTensorIndices const nti{t};
+      std::string outer = nti.outer | transform(lbl) |
+                          intersperse(std::string{","}) | join |
+                          ranges::to<std::string>;
+      std::string inner = nti.inner | transform(lbl) |
+                          intersperse(std::string{","}) | join |
+                          ranges::to<std::string>;
+      return outer + (inner.empty() ? "" : (";" + inner));
+    };
+    auto const post = annot_of(lt);    // requested (as-written) mode order
+    sequant::EvalExprTA const ev{lt};  // canonicalizes; computes the map
+    // canonical (stored) mode order from the tensor's SLOTS (ev.annot() is
+    // md-ordered for ToT leaves and may include proto-only named indices)
+    auto const pre = annot_of(ev.expr()->as<sequant::Tensor>());
+    auto const tr = ev.canon_transform();
+    if (tr.trivial() && pre == post) return found->second;
+    auto r =
+        found->second->apply_transform(tr, {std::any{pre}, std::any{post}});
+    // cache under the literal key: the fixture owns the transformed variant
+    auto [it2, ok] = label_to_er_.emplace(std::wstring(label), std::move(r));
+    return it2->second;
   }
 };
 
@@ -6456,9 +6506,9 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   // End-to-end check of the K-conjugated state on a ToT leaf at eval. Over a
   // real basis with an indefinite hermiticity and parity None a '꙳' is kept
   // symbolically and denotes the elementwise conjugate of the bare array, so
-  // binarize serves it as an EvalOp::Adjoint node with an identity layout over
-  // the bare leaf (no bundle exchange). The engine must hand back the
-  // elementwise conjugate of what the yielder serves for that bare leaf.
+  // binarize serves it as a plain leaf whose CanonTransform carries the
+  // conjugation. The engine must hand back the elementwise conjugate of what
+  // the yielder serves for that bare leaf.
   using namespace sequant;
   auto& world = TA::get_default_world();
   size_t const nocc = 2, nvirt = 3;
@@ -6513,18 +6563,14 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE_FALSE(node.leaf());
-  REQUIRE(node->op_type() == EvalOp::Adjoint);
-  REQUIRE(node.left().leaf());
-  REQUIRE_FALSE(node.left()->expr()->as<Tensor>().kconjugated());
-  // identity layout: the Adjoint node is laid out by its operand's own indices
-  REQUIRE(node->canon_indices() == node.left()->canon_indices());
-  REQUIRE(node->annot() == node.left()->annot());
+  REQUIRE(node.leaf());
+  REQUIRE(node->canon_transform().conj);
+  REQUIRE_FALSE(node->expr()->as<Tensor>().kconjugated());
 
   // the array served for the bare leaf, read before the evaluation so that a
   // kernel writing into it could not fake the comparison
   auto const& served =
-      yield(node.left()->expr()->as<Tensor>())->get<ArrayToT>();
+      yield(node->expr()->as<Tensor>())->get<ArrayToT>();
   std::vector<std::complex<double>> served_values;
   for (auto it = served.begin(); it != served.end(); ++it) {
     auto const& souter = it->get();
@@ -6556,6 +6602,84 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   REQUIRE(n == served_values.size());
 }
 
+TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
+  // End-to-end check of serving the '꙳' state at eval: a '꙳' ToT spelling
+  // binarizes to a plain leaf whose CanonTransform composes a pure {conj} on
+  // top of the unmarked spelling's, and retrieval applies it.
+  //
+  // Here: binarize a '꙳' spelling, evaluate it against a yielder that only
+  // ever serves the unmarked spelling, and require the result to be the
+  // elementwise conjugate of what was served.
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  size_t const nocc = 2, nvirt = 3;
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
+                                                                 nvirt};
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+
+  // braket symmetry pinned explicitly (:C): the test's premise is a
+  // Conjugate (Hermitian) ToT leaf, independent of the ambient deserializer
+  // defaults (which become conservative NonHermitian with the
+  // default-tensor-symmetry rework, PR #596)
+  auto const swapped =
+      deserialize<sequant::ExprPtr>(L"t{i2,i3;a3<i2,i3>,a4<i2,i3>}:N-C-S");
+  auto const canonical =
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
+
+  // PR-2 transform model: both orientations share ONE canonical slot; the
+  // non-canonical spelling carries the fold map in its CanonTransform
+  EvalExpr const swapped_leaf{swapped->as<Tensor>()};
+  EvalExpr const canon_leaf{canonical->as<Tensor>()};
+  auto const is_conj = [](EvalExpr const& leaf) {
+    return leaf.expr()->as<Tensor>().conjugated();
+  };
+  REQUIRE_FALSE(is_conj(swapped_leaf));
+  REQUIRE_FALSE(is_conj(canon_leaf));
+  REQUIRE(swapped_leaf.hash_value() == canon_leaf.hash_value());
+  REQUIRE(swapped_leaf.canon_transform().trivial() !=
+          canon_leaf.canon_transform().trivial());
+
+  // a STARRED spelling binarizes to a plain LEAF whose transform composes a
+  // pure {conj} on top; evaluation serves conj(cached) on retrieval
+  auto conj_side = canonical->clone();
+  REQUIRE(conj_side->as<Tensor>().kconjugate() == 1);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const node = binarize<EvalExprTA>(conj_side);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node.leaf());
+  // orientation-robust: the starred spelling's transform differs from the
+  // unstarred same-spelling leaf's by exactly conj
+  REQUIRE(sequant::compose(node->canon_transform(),
+                           EvalExpr{canonical->as<Tensor>()}.canon_transform())
+              .conj);
+  auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
+  auto const res = evaluate(node, node->annot(), yield, cache);
+  auto const& got = res->get<ArrayToT>();
+  // the leaf IS the node: served = the canonical unstarred spelling's data
+  auto const& served = yield(node->expr()->as<Tensor>())->get<ArrayToT>();
+
+  // expected = the leaf transform applied to the served canonical data:
+  // {conj} conjugates; a bare {braket_swap} is layout-invariant for ToT
+  // (outer/inner classification ignores bra/ket), i.e. the identity here
+  bool const expect_conj = node->canon_transform().conj;
+  auto it_s = served.begin();
+  auto it_g = got.begin();
+  for (; it_s != served.end(); ++it_s, ++it_g) {
+    auto const& souter = it_s->get();
+    auto const& gouter = it_g->get();
+    REQUIRE(souter.size() == gouter.size());
+    for (std::size_t o = 0; o < souter.size(); ++o) {
+      auto const& sinner = souter[o];
+      auto const& ginner = gouter[o];
+      if (sinner.empty()) continue;
+      for (std::size_t k = 0; k < sinner.size(); ++k) {
+        CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
+        CHECK(ginner[k].imag() ==
+              Catch::Approx((expect_conj ? -1 : 1) * sinner[k].imag()));
+      }
+    }
+  }
+}
 // ---------------------------------------------------------------------------
 // External-placement correctness reproducer.
 //

@@ -72,7 +72,7 @@ template <typename T, typename... Ts>
                     a->size_in_bytes();
                   }) {
       // Smart-pointer-like operand: tolerate null so callers (e.g. the
-      // EvalOp::Adjoint dispatcher, which leaves `right` unevaluated) can
+      // former unary-op dispatchers) can
       // pass an empty ResultPtr without an external guard.
       return a ? a->size_in_bytes() : size_t{0};
     } else if constexpr (requires { a->size_in_bytes(); })
@@ -170,10 +170,9 @@ enum struct EvalMode {
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
-    return node->is_product()   ? EvalMode::Product
-           : node->is_sum()     ? EvalMode::Sum
-           : node->is_adjoint() ? EvalMode::Permute
-                                : EvalMode::Unknown;
+    return node->is_product() ? EvalMode::Product
+           : node->is_sum()   ? EvalMode::Sum
+                              : EvalMode::Unknown;
   }
 }
 
@@ -648,7 +647,7 @@ template <typename Node>
 // through here at all -- it computes each cell from its own table reads (\c
 // eval::detail::compute_cell, ordered_executor.hpp), sharing this file's
 // per-op kernels (apply_one_op_traced, sum_in_place_traced, fetch_leaf_traced,
-// apply_canon_phase, try_custom_eval, note_fresh_build) rather than this
+// apply_canon_transform, try_custom_eval, note_fresh_build) rather than this
 // stack machine.
 
 /// \brief The single-op compute kernel.
@@ -668,12 +667,6 @@ template <typename Node>
 template <meta::can_evaluate Node>
 [[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
                                      ResultPtr const& right) {
-  if (node->op_type() == EvalOp::Adjoint) {
-    // Unary: only the left operand; the right child is the Constant(1)
-    // sentinel.
-    std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
-    return left->adjoint(adj_ann);
-  }
   std::array<std::any, 3> const ann{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
   if (node->op_type() == EvalOp::Sum) return left->sum(*right, ann);
@@ -683,30 +676,34 @@ template <meta::can_evaluate Node>
   return left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
 }
 
-/// \brief Multiply a result by its node's canonicalization phase, with the
-///        trace event and peak accounting that conversion carries.
+/// \brief Apply a result's node CanonTransform, with the trace event and peak
+///        accounting that conversion carries.
 ///
 /// \details A cell/cache holds the canonical orientation of a value while
-/// every consumer wants the node's own oriented one; the phase is an
-/// involution, so one multiply converts either way. Shared by
-/// \c evaluate_impl (through its \c apply_phase lambda) and the ordered
-/// executor's \c detail::compute_cell, so both convert identically --
-/// including the \c MultByPhase trace event, whose \c note_working_set call
-/// is what puts the transient second buffer on the peak monitor.
+/// every consumer wants the node's own oriented one; the transform (phase,
+/// elementwise conjugation, bra<->ket relabeling) is an involution, so one
+/// application converts either way. Shared by \c evaluate_impl (through its
+/// \c apply_phase lambda) and the ordered executor's \c
+/// detail::compute_cell, so both convert identically -- including the \c
+/// MultByPhase trace event, whose \c note_working_set call is what puts the
+/// transient second buffer on the peak monitor.
 ///
-/// A phase of 1 (the overwhelming majority) returns \p res untouched, with
-/// no event and no allocation.
+/// A trivial transform (the overwhelming majority) returns \p res untouched,
+/// with no event and no allocation.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
           bool FHC>
-[[nodiscard]] ResultPtr apply_canon_phase(Node const& nd, ResultPtr res,
-                                          CacheManager<N, FHC>& cache) {
-  auto phase = nd->canon_phase();
-  if (phase == 1) return res;
+[[nodiscard]] ResultPtr apply_canon_transform(Node const& nd, ResultPtr res,
+                                              CacheManager<N, FHC>& cache) {
+  auto const tr = nd->canon_transform();
+  if (tr.trivial()) return res;
 
   ResultPtr post;
   auto const _ph0 = std::chrono::steady_clock::now();
-  auto time =
-      detail::timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
+  auto time = detail::timed_eval_inplace([&]() {
+    std::array<std::any, 2> const ann{std::any{nd->annot()},
+                                      std::any{nd->annot()}};
+    post = res->apply_transform(tr, ann);
+  });
   eval::EvalImplTimeline::note_phase(_ph0);
 
   if constexpr (detail::trace(EvalTrace)) {
@@ -719,7 +716,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
         .mem_result = log::bytes(post),
         .mem_alloc = log::bytes(post),
         .mem_hwmark = {cache.note_working_set(hwmark, nd->hash_value())}};
-    log::eval(stat, std::format("{} * {}", phase, nd->label()),
+    log::eval(stat,
+              std::format("[{}{}{}] {}", int(tr.phase), tr.conj ? "*" : "",
+                          tr.braket_swap ? "^T" : "", nd->label()),
               log::slice_home_annot(nd, cache.batch_context()));
   }
   return post;
@@ -753,14 +752,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
                                             ResultPtr const& left,
                                             ResultPtr const& right,
                                             CacheManager<N, FHC>& cache) {
-  // The contraction annotation triple the shaped-product hook receives. A
-  // unary (Adjoint) node never reaches the hook, and its right child is the
-  // Constant(1) sentinel, so the triple is only built for a binary op.
-  std::array<std::any, 3> const ann =
-      node->op_type() == EvalOp::Adjoint
-          ? std::array<std::any, 3>{}
-          : std::array<std::any, 3>{node.left()->annot(), node.right()->annot(),
-                                    node->annot()};
+  // The contraction annotation triple the shaped-product hook receives.
+  std::array<std::any, 3> const ann{node.left()->annot(),
+                                    node.right()->annot(), node->annot()};
   ResultPtr result;
   log::Duration time{};
   if (node->op_type() != EvalOp::Product) {
@@ -1110,11 +1104,11 @@ ResultPtr evaluate_impl(Node const& node,         //
   // computes every cell itself (detail::compute_cell, ordered_executor.hpp),
   // so an ordered run must leave this counter at zero -- see OrderedOpCounts.
   ++eval::detail::ordered_op_counts_slot().probes;
-  // Multiply a (possibly cached) result by its node's canonicalization phase
-  // (apply_canon_phase, above -- shared with the ordered executor's own
+  // Apply a (possibly cached) result's node canonicalization transform
+  // (apply_canon_transform, above -- shared with the ordered executor's own
   // compute_cell).
   auto apply_phase = [&cache](auto const& nd, ResultPtr res) -> ResultPtr {
-    return apply_canon_phase<EvalTrace>(nd, std::move(res), cache);
+    return apply_canon_transform<EvalTrace>(nd, std::move(res), cache);
   };
 
   // Slice-on-use: slice a value fetched at the Enter stage to the current batch
@@ -1158,7 +1152,7 @@ ResultPtr evaluate_impl(Node const& node,         //
   // marks a Checked node that exists in the cache map but has not been stored
   // yet, so its computed result must be cached (this replaces the recursive
   // wrapper's `evaluate<..., Unchecked>` re-entry).
-  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftAdj };
+  enum class Stage { Enter, NeedLeft, NeedRight };
   struct Frame {
     // Non-owning pointer into the tree being evaluated (which outlives this
     // call): a Node member would deep-copy the whole subtree into every frame
@@ -1257,39 +1251,8 @@ ResultPtr evaluate_impl(Node const& node,         //
 
         // --- Internal node: request the left operand (always Checked). The
         //     stage must advance before the push (push may grow the deque). ---
-        f.stage = (f.nd()->op_type() == EvalOp::Adjoint) ? Stage::NeedLeftAdj
-                                                         : Stage::NeedLeft;
+        f.stage = Stage::NeedLeft;
         stk.push_back(Frame{.node_p = &f.nd().left(), .checked = true});
-        break;
-      }
-
-      case Stage::NeedLeftAdj: {
-        // Unary IR op (Adjoint): only the left operand is evaluated; the right
-        // child is the Constant(1) sentinel kept to preserve FullBinaryNode's
-        // invariant, and is intentionally never pushed.
-        f.left = std::move(ret);
-        SEQUANT_ASSERT(f.left);
-        ResultPtr result;
-        auto time = detail::timed_eval_inplace(
-            [&]() { result = apply_one_op(f.nd(), f.left, f.right); });
-
-        if constexpr (detail::trace(EvalTrace)) {
-          // `right` is null here (see log::bytes() null tolerance).
-          size_t hwmark = log::bytes(cache, result).value;
-          if (!cache.chain_holds(f.left)) hwmark += log::bytes(f.left).value;
-          hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-          log::eval(log::EvalStat{.mode = log::eval_mode(f.nd()),
-                                  .time = time,
-                                  .mem_result = log::bytes(result),
-                                  .mem_alloc = log::bytes(result),
-                                  .mem_hwmark = {cache.note_working_set(
-                                      hwmark, f.nd()->hash_value())},
-                                  .mem_left = log::bytes(f.left),
-                                  .mem_right = log::bytes(f.right)},
-                    log::label(f.nd(), cache.batch_context()));
-        }
-        log::release_after_op();
-        finalize(finish_phase_b(f, std::move(result)));
         break;
       }
 
@@ -1698,8 +1661,11 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   auto const& n0 = detail::node0(detail::arg0(std::forward<Args>(args)...));
 
   ResultPtr result;
-  auto time = detail::timed_eval_inplace(
-      [&]() { result = pre->antisymmetrize(n0->as_tensor().bra_rank()); });
+  auto time = detail::timed_eval_inplace([&]() {
+    result = pre->antisymmetrize((n0->canon_transform().braket_swap
+                                      ? n0->as_tensor().ket_rank()
+                                      : n0->as_tensor().bra_rank()));
+  });
 
   // logging
   if constexpr (detail::trace(EvalTrace)) {
@@ -2737,8 +2703,9 @@ template <Trace EvalTrace = Trace::Default, typename F,
           continue;
         }
         ResultPtr v = std::move(acc[m]);
-        if (auto const ph = (*mem)->canon_phase(); ph != 1)
-          v = v->mult_by_phase(ph);
+        if (auto const tr = (*mem)->canon_transform(); !tr.trivial())
+          v = v->apply_transform(
+              tr, {std::any{(*mem)->annot()}, std::any{(*mem)->annot()}});
         (void)cache.store_and_access(*mem, std::move(v));
       }
     }

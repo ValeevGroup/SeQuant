@@ -108,8 +108,8 @@ std::strong_ordering canonical_operand_cmp(TreeNode const &a,
 /// left/right the DP emitted.
 ///
 /// Meaningful for a commutative (Product) node; callers use the emitted order
-/// for everything else (a Sum's left child is the in-place accumulator, an
-/// Adjoint's right child is a sentinel), so this is not applied there.
+/// for everything else (a Sum's left child is the in-place accumulator), so
+/// this is not applied there.
 ///
 /// \param n a non-leaf node
 /// \pre \p n is not a leaf
@@ -265,14 +265,13 @@ struct TreeNodeEqualityComparator {
         return (*this)(lfirst, rfirst) && (*this)(lsecond, rsecond);
       }
 
-      // Non-Product internal node (Sum, scalar*tensor product, adjoint): its
+      // Non-Product internal node (Sum, scalar*tensor product): its
       // left/right assignment is canonical (e.g. the in-place Sum tree is
-      // left-folded; an Adjoint's right child is a sentinel), so operand order
-      // carries meaning and the children are compared in order. The right
-      // child (a single summand / the scalar factor / the adjoint sentinel) is
-      // bounded in depth and compared recursively; the left child is the deep
-      // spine, so rather than recurse into it the loop starts over with it as
-      // the new (lhs, rhs), unwinding the spine iteratively.
+      // left-folded), so operand order carries meaning and the children are
+      // compared in order. The right child (a single summand / the scalar
+      // factor) is bounded in depth and compared recursively; the left child
+      // is the deep spine, so rather than recurse into it the loop starts
+      // over with it as the new (lhs, rhs), unwinding the spine iteratively.
       if (!(*this)(lhs.right(), rhs.right())) {
         return false;
       }

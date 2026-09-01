@@ -452,7 +452,7 @@ ordered_range_of(eval::BatchContext const& ctx, LoopKey const& key) {
 /// CellReadResolver::fetch names the source cell, spends one of its declared
 /// lives and applies the Read's declared slices, and the value comes back in
 /// the registry's canonical orientation, which this converts to the operand
-/// node's own orientation (\c apply_canon_phase). Two cases do not resolve
+/// node's own orientation (\c apply_canon_transform). Two cases do not resolve
 /// to a held cell:
 ///   - a leaf's first touch: \c fetch defers (leaving the Read unconsumed),
 ///     the leaf evaluator runs on the whole leaf, the result is recorded as
@@ -532,7 +532,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   auto const read_operand = [&](auto&& self, node_t const& child) -> ResultPtr {
     std::size_t const key = value_key_of(child);
     if (auto v = resolver.fetch(key, ctx))
-      return apply_canon_phase<EvalTrace>(child, std::move(*v), cache);
+      return apply_canon_transform<EvalTrace>(child, std::move(*v), cache);
     if (child.leaf()) {
       ResultPtr whole =
           fetch_leaf_traced<EvalTrace>(child, leaf_evaluator, cache);
@@ -540,10 +540,10 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
       // (see CellRegistry's own doc); a no-op if the leaf is not a value of
       // the table, in which case the whole leaf below is this leg's value.
       resolver.record_leaf(key,
-                           apply_canon_phase<EvalTrace>(child, whole, cache));
+                           apply_canon_transform<EvalTrace>(child, whole, cache));
       note_fresh_build(child, cache);
       if (auto v = resolver.fetch(key, ctx))
-        return apply_canon_phase<EvalTrace>(child, std::move(*v), cache);
+        return apply_canon_transform<EvalTrace>(child, std::move(*v), cache);
       return whole;
     }
     // A transient of this production tree: computed in place from its own
@@ -554,9 +554,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
       return intercepted;
     }
     ResultPtr tl = self(self, child.left());
-    ResultPtr const tr = child->op_type() == EvalOp::Adjoint
-                             ? ResultPtr{}
-                             : self(self, child.right());
+    ResultPtr const tr = self(self, child.right());
     return apply_op(child, std::move(tl), tr);
   };
 
@@ -576,11 +574,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   }
 
   ResultPtr left = read_operand(read_operand, node.left());
-  // Unary (Adjoint): the right child is the Constant(1) sentinel, never
-  // evaluated -- and so never read, exactly as the tree walk never read it.
-  ResultPtr const right = node->op_type() == EvalOp::Adjoint
-                              ? ResultPtr{}
-                              : read_operand(read_operand, node.right());
+  ResultPtr const right = read_operand(read_operand, node.right());
 
   return apply_op(node, std::move(left), right);
 }

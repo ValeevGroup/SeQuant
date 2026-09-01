@@ -178,7 +178,14 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
              TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
     canon_transform_ = compose(canon_transform_, {.phase = md.phase});
-    canon_indices_ = md.get_indices<index_vector>();
+    // array-faithful indices in the Nested (outer;inner) convention: a ToT
+    // array's outer modes are the plain slots PLUS the proto constituents,
+    // deterministically ordered by tot_indices (the md list is the same set
+    // in named-canonical order, which annots must not depend on)
+    auto const slot_ixs = t0.const_indices() | ranges::to<index_vector>;
+    auto const nti = tot_indices<index_vector>(slot_ixs);
+    canon_indices_ =
+        ranges::views::concat(nti.outer, nti.inner) | ranges::to<index_vector>;
     connectivity_ = std::move(md.graph);
   } else {
     // Single (protoindex-free) tensor leaf: normalize to the canonical
@@ -293,10 +300,6 @@ bool EvalExpr::is_sum() const noexcept { return op_type() == EvalOp::Sum; }
 
 bool EvalExpr::is_product() const noexcept {
   return op_type() == EvalOp::Product;
-}
-
-bool EvalExpr::is_adjoint() const noexcept {
-  return op_type() == EvalOp::Adjoint;
 }
 
 Tensor const& EvalExpr::as_tensor() const { return expr().as<Tensor>(); }
