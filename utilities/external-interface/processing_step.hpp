@@ -176,13 +176,6 @@ class OneByOneProcessingStep
       }
     }
 
-    ctx.add_data_alias(
-        std::ranges::views::iota(std::size_t(0), total_outputs) |
-            std::ranges::views::transform([&step_id](std::size_t num) {
-              return std::string(step_id) + "." + std::to_string(num);
-            }),
-        std::string(step_id));
-
     return total_outputs;
   }
 

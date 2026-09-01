@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -98,6 +99,15 @@ void Executor::execute(const nlohmann::json &steps) {
         context_.add_data_alias(step_id + "[" + val.get<std::string>() + "]",
                                 step_id + "." + key);
       }
+    }
+
+    if (produced_outputs > 0) {
+      context_.add_data_alias(
+          std::ranges::views::iota(std::size_t(0), produced_outputs) |
+              std::ranges::views::transform([&step_id](std::size_t num) {
+                return std::string(step_id) + "." + std::to_string(num);
+              }),
+          std::string(step_id));
     }
 
     ++step_id_counter;
