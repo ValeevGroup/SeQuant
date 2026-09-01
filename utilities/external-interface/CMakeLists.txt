@@ -15,6 +15,7 @@ add_executable(external_interface
     execution_context.cpp
     executor.cpp
     export_step.cpp
+    index_batching_step.cpp
     optimization_step.cpp
     output_step.cpp
     processing_step.cpp

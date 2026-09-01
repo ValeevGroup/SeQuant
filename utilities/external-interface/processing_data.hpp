@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
@@ -39,6 +40,8 @@ struct ExportTreeData {
     /// upon. This implies that these expressions need to have been computed
     /// before this one can be calculated.
     std::vector<std::size_t> dependencies = {};
+    /// List of indices this expression shall be batched over
+    std::vector<Index> batch_indices = {};
 
     bool operator==(const Entry &) const = default;
   };
