@@ -344,9 +344,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_star)), std::logic_error);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
-    // a directly-constructed EvalExpr must not alias t and t* onto one cache
-    // slot: for Nonsymm they are value-distinct
-    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_star}.hash_value());
+    // PR-2 slot identity: one slot for t and t*, the conj in the transform
+    REQUIRE(EvalExpr{t}.hash_value() == EvalExpr{t_star}.hash_value());
+    REQUIRE(EvalExpr{t_star}.canon_transform().conj);
 
     // '⁺'-labeled AND marked (the symbolic transpose conj(adjoint(t))): the
     // marker refusal must fire before the '⁺' label channel, else the label
@@ -788,4 +788,17 @@ TEST_CASE("eval_expr_carries_canon_transform", "[EvalExpr][conj-transform]") {
   EvalExpr ee{t};
   REQUIRE(ee.canon_transform().trivial());
   REQUIRE(ee.canon_phase() == ee.canon_transform().phase);  // compat accessor
+}
+
+TEST_CASE("leaf_slot_identity_is_canonical_spelling",
+          "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  Tensor ts = t;
+  ts.conjugate();
+  // t and t^* SHARE one slot; the conj rides in the transform
+  REQUIRE(EvalExpr{t}.hash_value() == EvalExpr{ts}.hash_value());
+  REQUIRE(EvalExpr{ts}.canon_transform().conj);
+  REQUIRE_FALSE(EvalExpr{t}.canon_transform().conj);
 }

@@ -172,11 +172,13 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     auto phase =
         TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
     canon_transform_.phase = phase ? -1 : 1;
-    // Leaf-hash invariant (owned by hash_terminal_tensor): the marker
-    // enters the hash only where it is value-distinctive (Nonsymm); for
-    // Conjugate (orientation fold) and Symm (value-redundant) both
-    // spellings share one cache slot. The marker itself stays on expr_
-    // (its symbolic spelling).
+    // Leaf-hash invariant: hash_terminal_tensor is marker-blind, so every
+    // spelling of one slot shares one hash. A value-distinctive marker
+    // (Nonsymm braket symmetry) is recorded in the transform; the marker
+    // itself stays on expr_ (its symbolic spelling) until Task 4 moves the
+    // remaining channels here too.
+    if (t.conjugated() && t.braket_symmetry() == BraKetSymmetry::Nonsymm)
+      canon_transform_.conj = true;
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
@@ -345,11 +347,9 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
   hash::combine(h, hash::value(tnsr.label()));
   hash::combine(h, hash_indices(tnsr.const_slots()));
-  // the conjugation marker enters only where it is value-DISTINCTIVE
-  // (Nonsymm): for Conjugate it is an orientation fold and for Symm it is
-  // value-redundant, so there both spellings share one cache slot
-  if (tnsr.conjugated() && tnsr.braket_symmetry() == BraKetSymmetry::Nonsymm)
-    hash::combine(h, true);
+  // the conjugation marker NEVER enters the slot hash: slot identity is the
+  // canonical spelling; a value-distinctive marker (Nonsymm) rides in the
+  // leaf's CanonTransform and salts the PARENT's structural hash instead
   return h;
 }
 }  // namespace
