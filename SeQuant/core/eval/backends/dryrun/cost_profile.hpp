@@ -435,6 +435,14 @@ inline CostProfile cost_profile(
   // EVALUATOR's accept is the derived role union, applied inside
   // make_evaluator(policy) via policy.is_batchable_index().
   auto cache = build_dryrun_cache(forest, cfg, regime);
+  // The batched custom evaluator (make_evaluator with a batching policy) reads
+  // the backend array-ops off the cache chain (zero destination + axis
+  // chunking); without them make_batched_custom_evaluator asserts and the
+  // replay below throws (caught and swallowed -> a silently ZERO dryrun tally).
+  // Wire the DryRun array-ops so the batched replay actually runs. `aops` must
+  // OUTLIVE the replay loop (the cache holds a non-owning pointer).
+  auto const aops = make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
   // Enable the per-DISTINCT-value recompute tally on the (root) cache: the eval
   // loop's product-build site records each build against the node's identity
   // here (CacheManager::tally_build), keyed by the exact cache identity, for

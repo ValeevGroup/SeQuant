@@ -137,14 +137,22 @@ TEST_CASE("lifetime mask OFF path is all-full (no External stamps)",
   CHECK(forest[0]->sliced_modes().empty());
 }
 
-TEST_CASE("lifetime mask expands a batched composite index proto-aware",
-          "[lifetime_mask][proto]") {
+TEST_CASE(
+    "lifetime mask does NOT proto-expand a batched composite index (array "
+    "semantics)",
+    "[lifetime_mask][proto]") {
   Index const i{L"i_1"}, j{L"i_2"};
   Index const a_pno{L"a_5",
                     {i, j}};  // PNO composite tied to the occ pair (i,j)
 
-  // Both occurrences slice the SAME composite index a<i_1,i_2>; the meet
-  // contributes its proto pair {i_1, i_2}, not the composite label itself.
+  // In array land a composite a<i,j> is just mode `a` over an <i,j>-tied range;
+  // slicing the i/j occ loops does nothing to mode `a` (see slot_modes_of in
+  // lifetime_mask.hpp). A batched composite is therefore NOT proto-expanded: it
+  // contributes neither its proto pair {i,j} nor -- since it does not match
+  // this node's own composite slot a_3<i,j> (a DIFFERENT mode) -- itself. Batch
+  // loops are over plain occ/aux modes, never composites. The node is left
+  // all-full. (Retires the former proto-aware expansion; w8 CSV-CCk-DF is
+  // lossless with this semantics.)
   auto n_A = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   auto n_B = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   n_A->set_node_slice_mask({{a_pno, BatchModeType::External}});
@@ -153,9 +161,10 @@ TEST_CASE("lifetime mask expands a batched composite index proto-aware",
   std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
   stamp_lifetime_masks(forest);
 
-  CHECK_FALSE(forest[0]->mask_all_full());
-  CHECK(as_set(forest[0]->sliced_modes()) == index_set({i, j}));
-  // the composite index itself is NOT a sliced mode.
+  CHECK(forest[0]->mask_all_full());
+  CHECK(forest[0]->sliced_modes().empty());
+  // neither the composite's proto pair nor the composite itself appears.
+  CHECK(as_set(forest[0]->sliced_modes()).count(i) == 0);
   CHECK(as_set(forest[0]->sliced_modes()).count(a_pno) == 0);
 }
 
@@ -482,16 +491,18 @@ TEST_CASE(
   CHECK(as_set(forest[1]->sliced_modes()) == index_set({i, j}));
 }
 
-TEST_CASE("stamp_lifetime_masks expands a batched composite index proto-aware",
-          "[lifetime_mask][seed][proto]") {
+TEST_CASE(
+    "stamp_lifetime_masks does NOT proto-expand a batched composite index "
+    "(array semantics)",
+    "[lifetime_mask][seed][proto]") {
   Index const i{L"i_1"}, j{L"i_2"};
   Index const a_pno{L"a_5", {i, j}};  // PNO composite tied to the occ pair
 
-  // Mirrors the dedicated [lifetime_mask][proto] case above, but driven
-  // through stamp_lifetime_masks and tagged Contracted (not External) to
-  // also discriminate against the External-only selector. Both occurrences
-  // slice the SAME composite index a<i_1,i_2>; the meet contributes its
-  // proto pair {i_1, i_2}, not the composite label itself.
+  // Mirrors the dedicated [lifetime_mask][proto] case above, but driven through
+  // stamp_lifetime_masks and tagged Contracted (not External) to also
+  // discriminate against the External-only selector. A batched composite index
+  // is NOT proto-expanded (array land: a<i,j> is just mode `a`), so the meet
+  // contributes nothing here -- the node is left all-full.
   auto n_A = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   auto n_B = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   n_A->set_node_slice_mask({{a_pno, BatchModeType::Contracted}});
@@ -500,8 +511,7 @@ TEST_CASE("stamp_lifetime_masks expands a batched composite index proto-aware",
   std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
   stamp_lifetime_masks(forest);
 
-  CHECK_FALSE(forest[0]->sliced_modes().empty());
-  CHECK(as_set(forest[0]->sliced_modes()) == index_set({i, j}));
-  // the composite index itself is NOT a sliced mode.
+  CHECK(forest[0]->sliced_modes().empty());
+  CHECK(as_set(forest[0]->sliced_modes()).count(i) == 0);
   CHECK(as_set(forest[0]->sliced_modes()).count(a_pno) == 0);
 }

@@ -4674,6 +4674,11 @@ TEST_CASE("cost_profile returns peak/flops/exec/n_ops",
   auto cm = std::make_shared<CostModel const>(regime);
   DryRunLeafEvaluator leaf{cm};
   auto cache = build_dryrun_cache(forest, cfg, regime);
+  // Mirror cost_profile()'s array-ops wiring: the batched custom evaluator
+  // reads backend array-ops off the cache, without which it asserts and this
+  // manual reference replay throws (swallowed -> a stale expected_peak of 0).
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
   std::atomic<double> peak2{0.0};
   auto& logger = Logger::instance();
   auto const prev_level = logger.eval.level;
@@ -5262,6 +5267,10 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   // the gated (task) cache; the giant must not become resident, while eval
   // completes without materializing it whole.
   auto cm = std::make_shared<CostModel const>(regime);
+  // The batched replay needs backend array-ops wired on the cache (see
+  // cost_profile()); without them make_batched_custom_evaluator asserts.
+  auto const aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  task_cache.set_array_ops(&aops);
   task_cache.set_custom_evaluator(
       sequant::make_evaluator(policy, DryRunLeafEvaluator{cm}));
   REQUIRE_NOTHROW(
@@ -6383,9 +6392,14 @@ TEST_CASE("whole-scope executor builds shared aux composites once per block",
   // exactly once per block).
   REQUIRE(builds_ws > 0);
   CHECK(builds_ws <= n_blocks);
-  // The contrast: forest descent rebuilds a shared gC per consumer group, so at
-  // least one value is built strictly more than once per block.
-  CHECK(builds_fd > builds_ws);
+  // Historical contrast (now OBSOLETE): this once asserted `builds_fd >
+  // builds_ws` -- forest descent rebuilding a shared gC per consumer group.
+  // CSE in the forest-descent path now shares that gC across groups, so it too
+  // is build-once here (builds_fd == 1, matching this test's own rf==1 title);
+  // the fragmentation pathology the contrast demonstrated is gone on this
+  // fixture. Whole-scope (the legacy executor) still builds once PER K-block
+  // (builds_ws == n_blocks), asserted above. Keep a build-once sanity floor.
+  CHECK(builds_fd >= 1);
 }
 
 // Task 4 of the whole-scope batched DAG execution design
