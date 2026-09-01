@@ -6651,6 +6651,10 @@ TEST_CASE(
   for (auto& nd : forest) {
     nd->set_node_slice_mask({{K1, sequant::BatchModeType::Contracted},
                              {mu1, sequant::BatchModeType::Contracted}});
+    // This node opens both loops; the residency meet reads opens.
+    nd->set_batch_loops_opened_here(
+        {{K1, sequant::BatchModeType::Contracted},
+         {mu1, sequant::BatchModeType::Contracted}});
     nd->set_batch_order_aware(true);
   }
 

@@ -749,6 +749,7 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     auto const a3 = find_a3(node);
     REQUIRE(a3);
     node.left()->set_node_slice_mask({{*a3, BatchModeType::External}});
+    node.left()->set_batch_loops_opened_here({{*a3, BatchModeType::External}});
     auto man = sequant::cache_manager(std::array{node}, is_volatile,
                                       /*min_repeats=*/2);
     REQUIRE_FALSE(man.exists(node.left()));

@@ -2267,6 +2267,9 @@ TEST_CASE("evaluate_whole_scope matches forest descent over one aux loop",
     REQUIRE(ax.has_value());
     x1 = *ax;
     nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
+    // This node realizes (opens) the x_1 loop; the residency meet reads opens.
+    nd->set_batch_loops_opened_here(
+        {{*ax, sequant::BatchModeType::Contracted}});
     nd->set_batch_order_aware(true);
   }
   REQUIRE(x1.space() == aux);
@@ -3135,6 +3138,9 @@ TEST_CASE("evaluate_whole_scope matches forest descent over nested aux+occ",
   for (auto& nd : forest) {
     nd->set_node_slice_mask({{x1, sequant::BatchModeType::Contracted},
                              {i1, sequant::BatchModeType::External}});
+    // This node opens both loops; the residency meet reads opens.
+    nd->set_batch_loops_opened_here({{x1, sequant::BatchModeType::Contracted},
+                                     {i1, sequant::BatchModeType::External}});
     nd->set_batch_order_aware(true);
   }
 
@@ -3246,6 +3252,9 @@ TEST_CASE(
     REQUIRE(ax.has_value());
     x1 = *ax;
     nd->set_node_slice_mask({{*ax, sequant::BatchModeType::Contracted}});
+    // This node realizes (opens) the x_1 loop; the residency meet reads opens.
+    nd->set_batch_loops_opened_here(
+        {{*ax, sequant::BatchModeType::Contracted}});
     nd->set_batch_order_aware(true);
   }
   REQUIRE(x1.space() == aux);

@@ -46,28 +46,37 @@ std::set<Index> index_set(std::initializer_list<Index> l) {
   return std::set<Index>(l);
 }
 
-// Stamp a single External occ mode at a node.
+// Stamp a single External occ mode at a node that REALIZES (opens) the loop.
+// The residency meet reads the loops a node OPENS (batch_loops_opened_here), so
+// set that; also set node_slice_mask so the node matches a real DP-stamped node
+// (which carries both).
 void stamp_ext(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_node_slice_mask({{std::move(ix), BatchModeType::External}});
+  n->set_node_slice_mask({{ix, BatchModeType::External}});
+  n->set_batch_loops_opened_here({{std::move(ix), BatchModeType::External}});
 }
 
-// Stamp an External occ pair (i,j) at a node.
+// Stamp an External occ pair (i,j) at a node that opens both loops.
 void stamp_ext_pair(EvalNode<EvalExpr>& n, Index i, Index j) {
-  n->set_node_slice_mask({{std::move(i), BatchModeType::External},
-                          {std::move(j), BatchModeType::External}});
+  n->set_node_slice_mask(
+      {{i, BatchModeType::External}, {j, BatchModeType::External}});
+  n->set_batch_loops_opened_here({{std::move(i), BatchModeType::External},
+                                  {std::move(j), BatchModeType::External}});
 }
 
-// Stamp a single Contracted mode at a node (mirrors stamp_ext, but tagged
-// BatchModeType::Contracted instead of External).
+// Stamp a single Contracted mode at a node that opens (reduces) it (mirrors
+// stamp_ext, but tagged BatchModeType::Contracted instead of External).
 void stamp_con(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_node_slice_mask({{std::move(ix), BatchModeType::Contracted}});
+  n->set_node_slice_mask({{ix, BatchModeType::Contracted}});
+  n->set_batch_loops_opened_here({{std::move(ix), BatchModeType::Contracted}});
 }
 
-// Stamp a Contracted occ pair (i,j) at a node (mirrors stamp_ext_pair, but
-// tagged BatchModeType::Contracted instead of External).
+// Stamp a Contracted occ pair (i,j) at a node that opens both (mirrors
+// stamp_ext_pair, but tagged BatchModeType::Contracted instead of External).
 void stamp_con_pair(EvalNode<EvalExpr>& n, Index i, Index j) {
-  n->set_node_slice_mask({{std::move(i), BatchModeType::Contracted},
-                          {std::move(j), BatchModeType::Contracted}});
+  n->set_node_slice_mask(
+      {{i, BatchModeType::Contracted}, {j, BatchModeType::Contracted}});
+  n->set_batch_loops_opened_here({{std::move(i), BatchModeType::Contracted},
+                                  {std::move(j), BatchModeType::Contracted}});
 }
 
 // Build an EvalExpr from a single-tensor spec (e.g. "R{i_1;a_5}"); its
@@ -155,8 +164,13 @@ TEST_CASE(
   // lossless with this semantics.)
   auto n_A = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   auto n_B = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
+  // Open a_pno here (the residency meet reads opened loops); the point is that
+  // even an OPENED composite loop does not slice this node -- a_5<i,j> is not
+  // this node's own slot a_3<i,j> and is not proto-expanded to i,j.
   n_A->set_node_slice_mask({{a_pno, BatchModeType::External}});
+  n_A->set_batch_loops_opened_here({{a_pno, BatchModeType::External}});
   n_B->set_node_slice_mask({{a_pno, BatchModeType::External}});
+  n_B->set_batch_loops_opened_here({{a_pno, BatchModeType::External}});
 
   std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
   stamp_lifetime_masks(forest);
@@ -480,6 +494,9 @@ TEST_CASE(
   auto stamp_mixed = [&](EvalNode<EvalExpr>& n) {
     n->set_node_slice_mask(
         {{i, BatchModeType::External}, {j, BatchModeType::Contracted}});
+    // The residency meet reads the loops OPENED here; this node realizes both.
+    n->set_batch_loops_opened_here(
+        {{i, BatchModeType::External}, {j, BatchModeType::Contracted}});
   };
   stamp_mixed(n_A);
   stamp_mixed(n_B);
@@ -505,8 +522,13 @@ TEST_CASE(
   // contributes nothing here -- the node is left all-full.
   auto n_A = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
   auto n_B = head("L1{a_3<i_1,i_2>;i_3} * M1{i_3;a_4}");
+  // Open a_pno here (the residency meet reads opened loops); an opened
+  // composite loop still does not slice this node (a_5<i,j> != a_3<i,j>, no
+  // proto expand).
   n_A->set_node_slice_mask({{a_pno, BatchModeType::Contracted}});
+  n_A->set_batch_loops_opened_here({{a_pno, BatchModeType::Contracted}});
   n_B->set_node_slice_mask({{a_pno, BatchModeType::Contracted}});
+  n_B->set_batch_loops_opened_here({{a_pno, BatchModeType::Contracted}});
 
   std::vector<EvalNode<EvalExpr>> forest{n_A, n_B};
   stamp_lifetime_masks(forest);

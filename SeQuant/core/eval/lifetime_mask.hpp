@@ -46,11 +46,13 @@ container::svector<Index> slot_modes_of(Node const& n) {
 }
 
 /// Shared cross-occurrence meet walk underlying \c stamp_lifetime_masks.
-/// \p modes_of extracts a node's occurrence-local batch modes (plain occ/aux
-/// loop modes); \p setter stamps the resulting per-canonical-node meet onto the
-/// node (e.g. \c set_sliced_modes). Everything else -- the meet map, the
-/// top-down accumulation, the per-slot filter, the two-pass order -- is
-/// identical between entry points; only the selector and setter differ.
+/// \p modes_of extracts the batch loops a node OPENS (each physical loop once,
+/// at its open site -- \c batch_loops_opened_here, NOT the per-carrying-node
+/// \c node_slice_mask), which the top-down accumulation propagates down as a
+/// set (no dedup); \p setter stamps the resulting per-canonical-node meet onto
+/// the node (e.g. \c set_sliced_modes). Everything else -- the meet map, the
+/// accumulation, the per-slot filter, the two-pass order -- is identical
+/// between entry points; only the selector and setter differ.
 template <meta::eval_node_range R, typename ModesOf, typename Setter>
 void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
                           Setter const& setter) noexcept {
@@ -66,21 +68,22 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
   // pass.
   container::svector<Node const*> occ;
 
-  // Pass 1: top-down walk accumulating ancestor+self batch modes. The full
-  // \p acc is passed DOWN to children (descendants must know which modes are
-  // batched above them), but a node's contribution to the meet is \p acc
-  // filtered to the modes that slice one of that node's OWN slots.
+  // Pass 1: top-down walk accumulating the enclosing loops OPENED at or above
+  // n. The full \p acc is passed DOWN to children (descendants must know which
+  // loops enclose them), but a node's contribution to the meet is \p acc
+  // filtered to the modes that live on that node's OWN result slots.
   auto walk = [&](auto&& self, Node const& n,
                   container::svector<Index> acc) -> void {
     if (n.leaf()) return;  // leaves are not stamped (they carry no meet)
-    // acc is the SET of batch modes sliced at or above n -- deduped on push (a
-    // mode is batched above/at n or not; a mode carried by both an ancestor and
-    // n must not appear twice, else the per-slot filter copies each duplicate
-    // through and the positional home-walk homes the value one loop too deep
-    // per extra copy). Distinct modes carry distinct Index labels and are
-    // untouched.
-    for (auto const& ix : modes_of(n))
-      if (std::find(acc.begin(), acc.end(), ix) == acc.end()) acc.push_back(ix);
+    // acc = the enclosing loops opened at or above n, each appearing ONCE: a
+    // physical loop is opened at a single site (\p modes_of reads opens, not
+    // the per-carrying-node slice mask), so accumulating opens down every
+    // root-to- node path visits each loop exactly once -- no dedup needed, acc
+    // is a set by construction. (This is the whole point of sourcing opens: an
+    // External loop reaches its carriers here by inheritance, and a Contracted
+    // loop reaches its below-the-reduction carriers likewise, without either
+    // being double-counted.)
+    for (auto const& ix : modes_of(n)) acc.push_back(ix);
     // n's meet contribution: acc filtered to n's OWN result slots, in acc
     // order.
     auto const slots = slot_modes_of(n);
@@ -112,15 +115,20 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// (\c EvalExpr::sliced_modes) -- the runtime residency \c place_at_this_level
 /// consumes to home each value. A mode slices a canonical node iff it slices
 /// EVERY occurrence of that node in \p forest (a *meet* / set-intersection over
-/// occurrences). A node's occurrence-local sliced set is the deduped union of
-/// ALL \c node_slice_mask() stamps -- any \c BatchModeType, External or
-/// Contracted -- of the node and all its ancestors (each a plain occ/aux loop
-/// mode), filtered to the modes that live on the node's OWN result slots
-/// (\c slot_modes_of, i.e. \c canon_indices() taken as-is -- see there for why
-/// a composite slot \c a<i,j> is just mode \c a, never its \c i,j proto pair).
-/// A node invariant to an outer batched loop -- it does not carry that loop's
-/// mode on any slot -- is thus left all-full even under a batched ancestor, so
-/// it stays eligible for loop-invariant reuse.
+/// occurrences). A node's occurrence-local sliced set is the union of the
+/// enclosing loops OPENED at or above it -- \c batch_loops_opened_here (any
+/// \c BatchModeType: External opened at its open site, Contracted opened at its
+/// reduction site), each physical loop appearing once -- filtered to the modes
+/// that live on the node's OWN result slots (\c slot_modes_of, i.e.
+/// \c canon_indices() taken as-is -- see there for why a composite slot
+/// \c a<i,j> is just mode \c a, never its \c i,j proto pair). A node invariant
+/// to an outer batched loop -- it does not carry that loop's mode on any slot
+/// -- is thus left all-full even under a batched ancestor, so it stays eligible
+/// for loop-invariant reuse. (Sourcing OPENS, not the per-carrying-node
+/// \c node_slice_mask, is what makes the accumulation a set: an External loop
+/// reaches its carriers by inheritance rather than a redundant own-node stamp,
+/// and a Contracted loop reaches its below-the-reduction carriers the same way
+/// -- the case that genuinely needs the down-propagation.)
 ///
 /// This all-batched-modes meet subsumes the former per-occurrence
 /// \c contracted_modes bolt-on: a node variant to an outer contracted (aux)
@@ -145,20 +153,25 @@ void stamp_lifetime_masks(R const& forest) noexcept {
   using Node = std::ranges::range_value_t<R>;
   using Data = typename Node::value_type;
 
-  // Occurrence-local batch modes AT a node (EVERY kind, not just External).
-  // The resulting sliced_modes IS the runtime residency -- the
-  // all-batched-modes meet on the node's own result slots -- that
-  // place_at_this_level consumes and
-  // \c home_scope returns.
-  auto all_batched_modes_of = [](Node const& n) {
+  // The batch loops OPENED at a node (EVERY kind: External at its open site,
+  // Contracted at its reduction site), each physical loop named exactly ONCE --
+  // NOT node_slice_mask(), which the DP stamps on every CARRYING node. Reading
+  // opens is what makes the accumulation below a genuine set: each enclosing
+  // loop reaches a node once, propagated down from its single open site, so an
+  // External loop reaches its carriers by INHERITANCE (not a redundant own-node
+  // stamp) and a Contracted loop reaches its below-the-reduction carriers the
+  // SAME way -- the one case that genuinely needs the propagation.
+  // (peak_profile reads opens for the identical reason.) The resulting
+  // sliced_modes IS the runtime residency place_at_this_level consumes and \c
+  // home_scope returns.
+  auto opened_loops_of = [](Node const& n) {
     container::svector<Index> v;
-    for (auto const& [ix, kind] : n->node_slice_mask()) v.push_back(ix);
+    for (auto const& [ix, kind] : n->batch_loops_opened_here()) v.push_back(ix);
     return v;
   };
 
   detail::stamp_residency_impl(
-      forest, all_batched_modes_of,
-      [](Node const* n, container::svector<Index> m) {
+      forest, opened_loops_of, [](Node const* n, container::svector<Index> m) {
         const_cast<Data&>(**n).set_sliced_modes(std::move(m));
       });
 }
