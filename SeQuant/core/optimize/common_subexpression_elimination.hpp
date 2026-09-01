@@ -102,14 +102,12 @@ class SubexpressionReplacer {
         expr_to_tree(transformer),
         label_gen(label_gen) {}
 
-  void perform_replacements() {
+  void perform_replacements(std::size_t begin, std::size_t end) {
     // Ensure we won't have to reallocate while iterating over the expressions
     expr_trees.reserve(expr_trees.size() + subexpressions.size());
     cse_definition_indices.reserve(subexpressions.size());
 
-    const std::size_t orig_tree_count = expr_trees.size();
-
-    for (std::size_t i = 0; i < orig_tree_count; ++i) {
+    for (std::size_t i = begin; i < end; ++i) {
       current_expr_idx = i;
       expr_trees.at(i + expr_offset).visit_internal(*this);
     }
@@ -259,7 +257,8 @@ template <std::ranges::range VectorLike,
   requires std::regular_invocable<Transformer, ResultExpr> &&
            meta::eval_node<std::ranges::range_value_t<VectorLike>>
 std::vector<std::size_t> eliminate_common_subexpressions(
-    VectorLike &expr_trees, const Transformer &expr_to_tree,
+    VectorLike &expr_trees, std::size_t expr_begin, std::size_t expr_end,
+    const Transformer &expr_to_tree,
     const CSEOptions<std::ranges::range_value_t<VectorLike>> opts = {}) {
   using std::ranges::begin;
   using std::ranges::end;
@@ -269,7 +268,8 @@ std::vector<std::size_t> eliminate_common_subexpressions(
   cse::SubexpressionIdentifier<TreeNode, force_hash_collisions> identifier(
       opts.batch_indices);
 
-  for (const TreeNode &current : expr_trees) {
+  for (const TreeNode &current : std::ranges::subrange(
+           expr_trees.begin() + expr_begin, expr_trees.begin() + expr_end)) {
     current.visit_internal(identifier);
   }
 
@@ -285,9 +285,21 @@ std::vector<std::size_t> eliminate_common_subexpressions(
                              decltype(opts.label_gen), force_hash_collisions>
       replacer(expr_trees, subexpression_usages, expr_to_tree, opts.label_gen);
 
-  replacer.perform_replacements();
+  replacer.perform_replacements(expr_begin, expr_end);
 
   return replacer.cse_indices();
+}
+
+template <std::ranges::range VectorLike,
+          std::regular_invocable<ExprPtr> Transformer,
+          bool force_hash_collisions = false>
+  requires std::regular_invocable<Transformer, ResultExpr> &&
+           meta::eval_node<std::ranges::range_value_t<VectorLike>>
+std::vector<std::size_t> eliminate_common_subexpressions(
+    VectorLike &expr_trees, const Transformer &expr_to_tree,
+    const CSEOptions<std::ranges::range_value_t<VectorLike>> opts = {}) {
+  return eliminate_common_subexpressions(expr_trees, 0, expr_trees.size(),
+                                         expr_to_tree, opts);
 }
 
 }  // namespace sequant::opt
