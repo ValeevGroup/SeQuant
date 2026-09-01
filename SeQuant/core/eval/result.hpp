@@ -291,12 +291,6 @@ class Result {
   /// well. Not a pure virtual: only tensor-backed results need it; the
   /// default throws. Mirrors the slice_mode precedent.
   ///
-  [[nodiscard]] virtual ResultPtr adjoint(
-      std::array<std::any, 2> const& /*ann*/) const {
-    throw detail::unimplemented_method("adjoint");
-  }
-
-  ///
   /// \brief Applies a canonicalization transform to this result on
   /// retrieval: the returned result equals `phase * (conj? elementwise-conj)`
   /// of this, with slots relabeled per \p ann ({source annot, target annot};

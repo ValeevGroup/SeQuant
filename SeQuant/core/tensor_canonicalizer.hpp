@@ -282,8 +282,8 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
 
   /// \param fold_conjugate_braket if false, canonicalize_braket leaves
   ///        BraKetSymmetry::Conjugate tensors untouched (Symm still folds).
-  ///        Eval-boundary bridge: lets binarize build a fold-stable bare
-  ///        operand for the EvalOp::Adjoint wrap of a conjugate-folded leaf.
+  ///        Historical eval-boundary bridge (the eval layer now folds and
+  ///        serves conjugation via CanonTransform).
   explicit TensorBlockCanonicalizer(bool fold_conjugate_braket)
       : fold_conjugate_braket_(fold_conjugate_braket) {}
 

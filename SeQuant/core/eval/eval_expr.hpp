@@ -38,16 +38,6 @@ enum class EvalOp {
   ///        (in either order).
   Product,
 
-  ///
-  /// \brief Represents the adjoint (conjugate transpose) of one EvalExpr
-  ///        object. The result equals the bra/ket-swapped, complex-conjugated
-  ///        operand. The IR representation is "structurally binary, lexically
-  ///        unary": an Adjoint node holds the bare-label operand as its left
-  ///        child and a Constant(1) sentinel as its right child (so the
-  ///        FullBinaryNode invariant — every non-leaf has both children —
-  ///        is preserved). Evaluate dispatches on this op_type and only uses
-  ///        the left operand; the right is ignored.
-  Adjoint
 };
 
 ///
@@ -200,7 +190,6 @@ class EvalExpr {
   ///
   /// \return True if this expression is an adjoint (unary) node.
   ///
-  [[nodiscard]] bool is_adjoint() const noexcept;
 
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
@@ -505,11 +494,6 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
   auto const& evxpr = *node;
 
   if (node.leaf()) return evxpr.expr();
-
-  // Adjoint is unary and stores the marker-bearing tensor directly in its
-  // own ExprPtr; the bare-leaf left child and Constant(1) right child are
-  // structural plumbing for the IR, not part of the symbolic form.
-  if (op == EvalOp::Adjoint) return evxpr.expr();
 
   if (op == EvalOp::Product) {
     auto prod = Product{};

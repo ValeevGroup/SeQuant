@@ -532,29 +532,6 @@ class ResultTensorTA final : public Result {
     return eval_result<this_type>(std::move(result));
   }
 
-  [[nodiscard]] ResultPtr adjoint(
-      std::array<std::any, 2> const& ann) const override {
-    // T†{a;i} = conj(T{i;a}) — bra/ket-swapped layout (annotation rewrite
-    // baked into ann by the IR: operand annot in ann[0], adjoint annot in
-    // ann[1]) plus elementwise conjugation. For real numeric_type, conj is
-    // a no-op; elide it so the TA expression doesn't carry a ConjTsrExpr
-    // wrapper unnecessarily.
-    auto const pre_annot = std::any_cast<std::string>(ann[0]);
-    auto const post_annot = std::any_cast<std::string>(ann[1]);
-
-    detail::log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
-
-    ArrayT result;
-    if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      result(post_annot) = get<ArrayT>()(pre_annot).conj();
-    } else {
-      result(post_annot) = get<ArrayT>()(pre_annot);
-    }
-    ArrayT::wait_for_lazy_cleanup(result.world());
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
-  }
-
   [[nodiscard]] ResultPtr apply_transform(
       CanonTransform t, std::array<std::any, 2> const& ann) const override {
     // fused phase * conj * relabel in ONE TA expression (conj elided for a
@@ -769,28 +746,6 @@ class ResultTensorOfTensorTA final : public Result {
 
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
-    ArrayT::wait_for_lazy_cleanup(result.world());
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
-  }
-
-  [[nodiscard]] ResultPtr adjoint(
-      std::array<std::any, 2> const& ann) const override {
-    // ToT adjoint: bra/ket-swapped layout (operand annot in ann[0], adjoint
-    // annot in ann[1]) plus elementwise conj (a no-op for real numeric_type, so
-    // it is elided there to avoid a ConjTsrExpr wrapper). Identical to the
-    // regular-tensor branch above: TA's `.conj()` recurses into nested tiles.
-    auto const pre_annot = std::any_cast<std::string>(ann[0]);
-    auto const post_annot = std::any_cast<std::string>(ann[1]);
-
-    detail::log_ta(post_annot, " = adjoint(", pre_annot, ")\n");
-
-    ArrayT result;
-    if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      result(post_annot) = get<ArrayT>()(pre_annot).conj();
-    } else {
-      result(post_annot) = get<ArrayT>()(pre_annot);
-    }
     ArrayT::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));

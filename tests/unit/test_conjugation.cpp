@@ -530,8 +530,7 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
   auto const& ci = leaf.canon_indices();
   // named indices: the proto i_1, the ket i_2, and the ToT virtual a_1<i_1>
   REQUIRE(ci.size() == 3);
-  // proto-free indices precede proto-indexed ones (the comparator orders by
-  // proto-index count before space)
+  // proto-free indices precede proto-indexed ones (Nested outer;inner order)
   REQUIRE_FALSE(ci[0].has_proto_indices());
   REQUIRE_FALSE(ci[1].has_proto_indices());
   REQUIRE(ci[2].has_proto_indices());
