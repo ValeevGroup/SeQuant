@@ -95,7 +95,7 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
       cse_opts);
 
   if (cse_positions.empty()) {
-    {};
+    return {};
   }
 
   std::ranges::sort(cse_positions, std::greater<>{});
