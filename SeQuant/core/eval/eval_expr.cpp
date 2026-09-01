@@ -141,22 +141,17 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
+    // The conjugate-braket fold is DISABLED at the eval boundary: leaves
+    // keep their as-written orientation (conjugation markers arrive only on
+    // already-starred spellings and are served by binarize through
+    // EvalOp::Adjoint). The marker still colors the graph, so T and T* stay
+    // distinct (the C·C* vs C*·C aliasing fix).
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
-             TensorCanonicalizer::cardinal_tensor_labels()});
+             TensorCanonicalizer::cardinal_tensor_labels(),
+         .fold_conjugate_braket = false});
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
-    // The graph hash is orientation-shared (bra/ket of a foldable Conjugate
-    // tensor are colored identically), so both orientations land on one cache
-    // slot. When the canonical orientation is the swapped one (md.conj; for
-    // this single-tensor network the parity IS the tensor's own swap),
-    // rewrite expr_ to the canonical spelling: swap (the Conjugate adjoint)
-    // + toggle the elementwise-conjugation marker.
-    if (md.conj) {
-      auto& tt = expr_->as<Tensor>();
-      tt.adjoint();
-      tt.conjugate();
-    }
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
@@ -166,10 +161,14 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // and it normalizes bra<->ket orientation for braket-symmetric tensors so
     // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
     auto& t = expr_->as<Tensor>();
-    // apply() folds the two bra<->ket orientations of a flat Conjugate
-    // tensor onto the canonical one, toggling the tensor's
-    // elementwise-conjugation marker when it swaps (canonicalize_braket)
-    auto phase = TensorBlockCanonicalizer{}.apply(t);
+    // The flat-leaf conjugate-braket fold is DISABLED at the eval boundary:
+    // leaves keep their as-written (value) orientation so leaf yielders and
+    // evaluators need no conjugation awareness (Symm still folds, as on
+    // master). An already-starred spelling keeps its marker -- binarize
+    // serves it through an EvalOp::Adjoint wrap; folding fresh flat leaves
+    // onto one orientation-shared slot is the lazy-conj eval follow-up.
+    auto phase =
+        TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
     canon_phase_ = phase ? -1 : 1;
     // Leaf-hash invariant: the hash is always that of the UNSTARRED spelling,
     // so the two orientations of a Conjugate tensor share one cache slot; the
@@ -450,7 +449,34 @@ EvalExprNode binarize(Tensor const& t) {
     return EvalExprNode{std::move(adj), std::move(bare_leaf),
                         std::move(sentinel)};
   }
-  return EvalExprNode{EvalExpr{t}};
+  EvalExpr ee{t};
+  if (ee.expr()->as<Tensor>().conjugated()) {
+    // Conjugate-braket fold marker: a leaf arrives starred when its
+    // symbolic spelling was folded (the leaf ctor itself never creates
+    // markers at the eval boundary). Serve the marker the same way as the
+    // '⁺' channel above: an explicit EvalOp::Adjoint node over the unmarked
+    // VALUE-orientation operand, so evaluation and leaf yielders need no
+    // marker awareness (lazy conj is the eval follow-up).
+    Tensor const& folded = ee.expr()->as<Tensor>();
+    Tensor bare{folded};
+    bare.conjugate();  // unstar
+    bare.adjoint();    // swap back: the VALUE (as-written) orientation
+    // the leaf ctor never folds Conjugate tensors, so the bare operand stays
+    // in this spelling -- the one leaf yielders serve
+    EvalExprNode bare_leaf{EvalExpr{bare}};
+
+    EvalExprNode sentinel{EvalExpr{Constant{1}}};
+
+    auto h = bare_leaf->hash_value();
+    hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
+    EvalExpr adj{EvalOp::Adjoint,  ResultType::Tensor,
+                 ee.expr(),        ee.canon_indices(),
+                 ee.canon_phase(), h,
+                 nullptr};
+    return EvalExprNode{std::move(adj), std::move(bare_leaf),
+                        std::move(sentinel)};
+  }
+  return EvalExprNode{std::move(ee)};
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,

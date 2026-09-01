@@ -185,12 +185,11 @@ TEST_CASE("eval_node", "[EvalNode]") {
                  EquivalentTo("t{a3,a4;i1,i2}:A-N-S"));
   }
 
-  SECTION("conjugate-folded factor keeps intermediate partition") {
-    // A Conjugate-braket (Hermitian) factor authored in the non-canonical
-    // orientation folds to its swapped+starred spelling at the leaf
-    // (T^*{q;p} == T{p;q} by value). Intermediate bra/ket partitions must be
-    // derived from the VALUE orientation of each factor, not from the folded
-    // spelling — the partition fixes the result's column grouping downstream.
+  SECTION("Conjugate factor keeps as-written orientation and partition") {
+    // At the eval boundary a Conjugate-braket (Hermitian) factor keeps its
+    // as-written orientation (no fold -- that is the lazy-conj eval
+    // follow-up); intermediate bra/ket partitions derive from that value
+    // orientation.
     auto const p1 = deserialize(
         L"1/16 "
         L"* g{i3,i4;a3,a4}:A-C-S"
@@ -198,18 +197,11 @@ TEST_CASE("eval_node", "[EvalNode]") {
         L"* t{a3,a4;i1,i2}:A-N-S");
     auto node1 = eval_node(p1);
 
-    // the g leaf folded: the starred swapped spelling carried on the leaf
-    // itself (serving the marker at evaluation time -- e.g. via an Adjoint
-    // wrapper over the bare shared-cache operand -- is the eval-layer
-    // follow-up's contract)
+    // the g leaf stays as written, unmarked
     auto const gnode = node(node1, {L, L, L});
-    auto const& gstar = gnode.as_tensor();
-    REQUIRE(gstar.conjugated());
-    {
-      auto bare = gstar;
-      bare.conjugate();
-      REQUIRE_THAT(bare, EquivalentTo("g{a3,a4;i3,i4}:A-C-S"));
-    }
+    auto const& gleaf = gnode.as_tensor();
+    REQUIRE_FALSE(gleaf.conjugated());
+    REQUIRE_THAT(gleaf, EquivalentTo("g{i3,i4;a3,a4}:A-C-S"));
 
     // ...and the intermediates keep their value-oriented bra/ket splits
     REQUIRE_THAT(node(node1, {L, L}).as_tensor(),
@@ -217,12 +209,13 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE_THAT(node(node1, {L}).as_tensor(),
                  EquivalentTo("I{a1,a2;i1,i2}:N-N-N"));
 
-    // scalar * folded-tensor: partition likewise from the value orientation
+    // scalar * Conjugate tensor: partition likewise from the value
+    // orientation
     auto const p2 = deserialize(L"a * t{i1;a1}:N-C-S");
     auto const node2 = eval_node(p2);
     REQUIRE_THAT(node(node2, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));
 
-    // sum whose first summand folds: same rule
+    // sum whose first summand is Conjugate: same rule
     auto const s1 = deserialize(L"X{i1;a1}:N-C-S + Y{i1;a1}:N-N-S");
     auto const node3 = eval_node(s1);
     REQUIRE_THAT(node(node3, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));

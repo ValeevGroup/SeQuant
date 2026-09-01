@@ -2797,18 +2797,16 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
 }
 
 TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
-  // END-TO-END check of the ToT conjugate-braket fold: the two bra<->ket
-  // orientations of a proto-indexed (ToT) BraKetSymmetry::Conjugate leaf share
-  // one cache slot, and the swapped one is served through an EvalOp::Adjoint
-  // node. test_canonicalize's tot_conjugate_braket_fold covers the SYMBOLIC
-  // half (equal hash, opposite conjugated() markers); nothing covered the EVAL
-  // half -- Result::adjoint() is private and reachable only through the
-  // Adjoint IR node, so the override was compile-checked but never driven
-  // with data.
+  // END-TO-END check of serving the conjugation marker at eval: a starred
+  // ToT spelling binarizes to an EvalOp::Adjoint node over its unmarked
+  // VALUE-orientation operand -- Result::adjoint() is private and reachable
+  // only through the Adjoint IR node, so the override was compile-checked
+  // but never driven with data. (Folding fresh leaves onto one
+  // orientation-shared cache slot is the lazy-conj eval follow-up.)
   //
-  // Here: binarize the swapped orientation, evaluate it against a yielder that
-  // only ever serves the CANONICAL orientation, and require the result to be
-  // the elementwise conjugate of what was served.
+  // Here: binarize a starred spelling, evaluate it against a yielder that
+  // only ever serves the unmarked operand's spelling, and require the result
+  // to be the elementwise conjugate of what was served.
   using namespace sequant;
   auto& world = TA::get_default_world();
   size_t const nocc = 2, nvirt = 3;
@@ -2821,20 +2819,21 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
   auto const canonical =
       deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
 
+  // eval-boundary precondition: leaves are orientation-sensitive (no fold,
+  // no marker) -- the two orientations are distinct nodes
   EvalExpr const swapped_leaf{swapped->as<Tensor>()};
   EvalExpr const canon_leaf{canonical->as<Tensor>()};
-
-  // symbolic precondition: one shared slot, exactly one folded onto the
-  // conjugated spelling of the canonical orientation
   auto const is_conj = [](EvalExpr const& leaf) {
     return leaf.expr()->as<Tensor>().conjugated();
   };
-  REQUIRE(swapped_leaf.hash_value() == canon_leaf.hash_value());
-  REQUIRE(is_conj(swapped_leaf) != is_conj(canon_leaf));
+  REQUIRE_FALSE(is_conj(swapped_leaf));
+  REQUIRE_FALSE(is_conj(canon_leaf));
+  REQUIRE(swapped_leaf.hash_value() != canon_leaf.hash_value());
 
-  // pick whichever orientation is the NON-canonical one; that is the leaf
-  // binarize must wrap in EvalOp::Adjoint
-  auto const& conj_side = is_conj(swapped_leaf) ? swapped : canonical;
+  // a STARRED spelling is served through EvalOp::Adjoint: binarize wraps it
+  // over the unmarked VALUE-orientation operand
+  auto conj_side = canonical->clone();
+  conj_side->as<Tensor>().conjugate();
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END

@@ -343,11 +343,15 @@ bool braket_foldable(const AbstractTensor& t) {
          braket_conjugate_foldable(t);
 }
 
-void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
+void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
+                                                     bool fold_conjugate) {
   if (!braket_foldable(t)) {
     return;
   }
   const auto bks = t._braket_symmetry();
+  if (bks == BraKetSymmetry::Conjugate && !fold_conjugate) {
+    return;
+  }
 
   // Normalize to the VALUE orientation first: a marked Conjugate tensor's
   // starred spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has
@@ -437,7 +441,7 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  canonicalize_braket(t);
+  canonicalize_braket(t, fold_conjugate_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});

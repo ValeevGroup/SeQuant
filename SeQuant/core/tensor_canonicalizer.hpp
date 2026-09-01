@@ -190,7 +190,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   virtual ~DefaultTensorCanonicalizer() = default;
 
   /// Canonicalizes the assignment of indices to bra and ket
-  static void canonicalize_braket(AbstractTensor& t);
+  static void canonicalize_braket(AbstractTensor& t,
+                                  bool fold_conjugate = true);
 
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c
@@ -279,11 +280,21 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
   TensorBlockCanonicalizer() = default;
   ~TensorBlockCanonicalizer() = default;
 
+  /// \param fold_conjugate_braket if false, canonicalize_braket leaves
+  ///        BraKetSymmetry::Conjugate tensors untouched (Symm still folds).
+  ///        Eval-boundary bridge: lets binarize build a fold-stable bare
+  ///        operand for the EvalOp::Adjoint wrap of a conjugate-folded leaf.
+  explicit TensorBlockCanonicalizer(bool fold_conjugate_braket)
+      : fold_conjugate_braket_(fold_conjugate_braket) {}
+
   template <typename IndexContainer>
   TensorBlockCanonicalizer(const IndexContainer& external_indices)
       : DefaultTensorCanonicalizer(external_indices) {}
 
   ExprPtr apply(AbstractTensor& t) const override;
+
+ private:
+  bool fold_conjugate_braket_ = true;
 };
 
 }  // namespace sequant

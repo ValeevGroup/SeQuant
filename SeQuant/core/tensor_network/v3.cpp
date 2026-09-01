@@ -748,6 +748,7 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
       {.named_indices = &named_indices,
        .distinct_named_indices = false,
        .color_conjugation = true,
+       .fold_conjugate_braket = options.fold_conjugate_braket,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
@@ -968,7 +969,8 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
         // that is not orientation-pinned participates (an operator-valued
         // Conjugate "tensor" has differently colored bra/ket bundles, so its
         // bundle positions must not feed the detection)
-        if (braket_conjugate_foldable(*tensors_[tensor_ord])) {
+        if (options.fold_conjugate_braket &&
+            braket_conjugate_foldable(*tensors_[tensor_ord])) {
           const bool bra = vt == VertexType::TensorBraBundle;
           bundle_pos[tensor_ord][bra ? 0 : 1] = canonize_perm[v];
         }
@@ -1126,7 +1128,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // to c-number tensors -- for an operator-valued "tensor" (e.g.
     // NormalOperator) reorienting bra and ket would exchange creators and
     // annihilators (see braket_foldable())
-    const bool is_braket_symm = braket_foldable(tensor);
+    const bool is_braket_symm =
+        braket_foldable(tensor) &&
+        (options.fold_conjugate_braket ||
+         braket_symmetry(tensor) != BraKetSymmetry::Conjugate);
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
