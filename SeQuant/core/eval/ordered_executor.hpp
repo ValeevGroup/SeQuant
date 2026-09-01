@@ -253,7 +253,9 @@ void run_ordered_contracted_block(
     std::function<std::size_t(Index const&)> const& n_blocks = {},
     std::function<std::size_t(std::size_t, HomeScopeKey const&)> const&
         home_reads = {},
-    container::set<std::size_t> const* needed_build = nullptr) {
+    container::set<std::size_t> const* needed_build = nullptr,
+    std::unordered_map<std::size_t, container::set<std::size_t>> const*
+        consumer_loops = nullptr) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
@@ -590,7 +592,7 @@ void run_ordered_contracted_block(
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, ordered, leaf_evaluator, bs.cache, target, ctx,
             value_results, built, is_volatile, n_blocks, home_reads,
-            needed_build);
+            needed_build, consumer_loops);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -688,6 +690,61 @@ void run_ordered_contracted_block(
     // key, so without homing the output first, a consumer used only once (not
     // a CSE candidate) would silently recompute it.
     node_t const& out_node = resolve(vid);
+    // Layer 1 (residency-driven escape homing): the mechanical home is "one
+    // level OUT" (`parent_cache`, the innermost enclosing scope `ectx`). But an
+    // escape output INVARIANT to an enclosing loop -- its mode is absent from
+    // `sliced_modes` -- belongs SHALLOWER, at its residency home: homing it at
+    // `parent_cache` strands it inside a loop it does not vary with, so a
+    // consumer at the residency scope reads its home once that loop has closed
+    // and finds it gone (the w20 "vanished home value").
+    //
+    // Walk `parent_cache` OUT to the residency home, deciding per ACTUAL
+    // runtime cache level rather than a schedule-derived hop count:
+    // `parent_cache`'s `batch_context()` is `ectx`, and each `parent()` hop
+    // drops the innermost enclosing loop, so a nest-depth shift (a single-batch
+    // sliced mode the runtime did not realize as a loop) cannot desync a count.
+    // Stop as soon as the value is SLICED on the loop this cache sits directly
+    // inside (its residency floor), or at the chain root. A value sliced on the
+    // innermost enclosing loop stops immediately => byte-identical
+    // one-level-out; a value invariant to every enclosing loop homes at the
+    // chain root. The passthrough is a SCHEDULED home, not runtime motion: the
+    // invariant value is identical across the skipped loops' batches (each
+    // batch re-homes the same value), so the outermost store wins.
+    Cache* home_cache = &parent_cache;
+    if (!out_node.leaf()) {
+      auto const& sm = out_node->sliced_modes();
+      auto sliced_on = [&sm](Index const& m) {
+        return std::find(sm.begin(), sm.end(), m) != sm.end();
+      };
+      // Loops that a CONSUMER of this value reads it inside (by loop color).
+      // Relocating the value ABOVE such a loop would strand that in-loop
+      // consumer: it reads the value from the shallower home WITHOUT the loop's
+      // batch context, so a full (un-sliced) value meets a loop-sliced
+      // contraction and the shapes mismatch (the wet is_range_set_congruent /
+      // dry write_into_slice crash). So the value's home may rise only through
+      // loops it is BOTH invariant to AND has no consumer inside -- exactly the
+      // w20 root-consumer case; a value whose consumers live in the loop (the
+      // w8 case) stays one level out, where the seam already slices its reads.
+      container::set<std::size_t> const* cl = nullptr;
+      if (consumer_loops) {
+        auto const it = consumer_loops->find(vid);
+        if (it != consumer_loops->end()) cl = &it->second;
+      }
+      for (;;) {
+        auto const& ctx = home_cache->batch_context();
+        if (ctx.empty()) break;          // at the chain root
+        if (sliced_on(ctx.back().axis))  // sliced on the loop this cache sits
+          break;                         // directly inside => home is here
+        if (cl && cl->count(ctx.back().level.key().color()))
+          break;  // a consumer reads it inside => stay
+        Cache* const up = home_cache->parent();
+        if (!up) break;  // chain root reached (short chain)
+        home_cache = up;
+      }
+    }
+    // The residency home's own enclosing loops (this cache's context), used to
+    // key the escape's use-count at the scope where it is actually homed/read.
+    auto const& home_ectx = home_cache->batch_context();
     // Task 4: classify this homed escape output volatile-vs-persistent and set
     // its cache life. A subtree carrying a volatile leaf (is_volatile) is
     // NON-persistent -- released at its genuine last use (home_reads: the exact
@@ -700,13 +757,14 @@ void run_ordered_contracted_block(
     if (!out_node.leaf()) {
       if (is_volatile) {
         bool const vol = subtree_any(out_node, is_volatile);
-        // Per-cell home key: this escape homes ONE LEVEL OUT, at `ectx` (the
-        // enclosing scope; block.axis is not in ectx). Its (depth, slot,
-        // latitude) signature selects THIS cell's use count -- an inner
-        // (partial) escape level gets its own structural count, distinct from
-        // the collapsed full count the outermost level falls through to.
+        // Per-cell home key at the RESIDENCY home scope (`home_ectx` = the home
+        // cache's own enclosing loops), NOT the full one-level-out `ectx`: a
+        // value walked OUT to a shallower home is read there, so its (depth,
+        // slot, latitude) signature -- which selects THIS cell's use count --
+        // must name the loops enclosing that home. A value homed one-level-out
+        // (not walked) has home_ectx == ectx, unchanged.
         HomeScopeKey esc_home_key;
-        for (auto const& lvl : ectx)
+        for (auto const& lvl : home_ectx)
           esc_home_key.push_back({lvl.level.depth, lvl.level.loop_slot,
                                   lvl.level.latitude_ordinal});
         std::size_t const life = home_reads ? home_reads(vid, esc_home_key) : 1;
@@ -721,9 +779,9 @@ void run_ordered_contracted_block(
                     << " lat=" << block.latitude_ordinal
                     << ") ectx.size=" << ectx.size() << std::endl;
         }
-        parent_cache.ensure_home_slot(value_of(vid), life, /*persistent=*/!vol);
+        home_cache->ensure_home_slot(value_of(vid), life, /*persistent=*/!vol);
       } else {
-        parent_cache.ensure_home_slot(value_of(vid));
+        home_cache->ensure_home_slot(value_of(vid));
       }
     }
     // (a) key instrumentation: the coloring this store keys under, so a
@@ -746,7 +804,7 @@ void run_ordered_contracted_block(
         std::cerr << toUtf8(m.full_label()) << " ";
       std::cerr << "}" << std::endl;
     }
-    (void)parent_cache.store(value_of(vid), std::move(out));
+    (void)home_cache->store(value_of(vid), std::move(out));
     // Escape-output homing stores directly through CacheManager::store (not
     // evaluate_impl's store_after path), so without this it would land in the
     // top-level cache with NO Cache|... trace line -- making a homed value look
@@ -911,6 +969,41 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
                   return ordered_home_reads<node_t>(ordered, rich, vmap,
                                                     n_blocks);
                 }();
+
+  // Consumer-loop map for residency-driven escape homing (consumed by
+  // run_ordered_contracted_block's close-store walk): for each value, the loop
+  // COLORS that a CONSUMER reads it inside. An escape output's home may rise
+  // above a loop only when NO consumer reads it inside that loop -- else the
+  // relocated (shallower, un-sliced) value meets a loop-sliced use and the
+  // shapes mismatch. `build_scope` is exactly the loops a value's operands are
+  // read inside; a value V's consumers are its DAG parents W, so V is read
+  // inside every loop of build_scope[W].
+  std::unordered_map<std::size_t, container::set<std::size_t>> consumer_loops;
+  {
+    std::unordered_map<std::size_t,
+                       container::svector<detail::ScopeBlockAxisLevel>>
+        build_scope;
+    detail::populate_build_scope_walk(ordered.root, {}, build_scope);
+    std::unordered_map<std::size_t, std::size_t> vid_of_hash;
+    vid_of_hash.reserve(rich.cells.size());
+    for (ValueCell const& c : rich.cells)
+      vid_of_hash.emplace(c.hash, c.value_id);
+    for (ValueCell const& wc : rich.cells) {
+      auto const wit = vmap.find(wc.hash);
+      if (wit == vmap.end() || wit->second.leaf()) continue;
+      auto const bs_it = build_scope.find(wc.value_id);
+      if (bs_it == build_scope.end()) continue;
+      auto const add_child = [&](node_t const& child) {
+        auto const cv = vid_of_hash.find(child->hash_value());
+        if (cv == vid_of_hash.end()) return;
+        auto& cset = consumer_loops[cv->second];
+        for (auto const& lvl : bs_it->second)
+          cset.insert(lvl.level.key().color());
+      };
+      add_child(wit->second.left());
+      add_child(wit->second.right());
+    }
+  }
 
   // Per-value results, indexed by value_id (== a ValueCell's own slot in
   // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),
@@ -1090,7 +1183,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
           value_results, built, is_volatile, n_blocks, home_reads,
-          &needed_build);
+          &needed_build, &consumer_loops);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.
