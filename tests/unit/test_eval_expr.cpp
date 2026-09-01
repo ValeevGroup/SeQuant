@@ -1005,3 +1005,16 @@ TEST_CASE("eval_expr_carries_canon_transform", "[EvalExpr][conj-transform]") {
   REQUIRE(ee.canon_transform().trivial());
   REQUIRE(ee.canon_phase() == ee.canon_transform().phase);  // compat accessor
 }
+
+TEST_CASE("leaf_slot_identity_is_canonical_spelling",
+          "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  Tensor ts = t;
+  ts.conjugate();
+  // t and t^* SHARE one slot; the conj rides in the transform
+  REQUIRE(EvalExpr{t}.hash_value() == EvalExpr{ts}.hash_value());
+  REQUIRE(EvalExpr{ts}.canon_transform().conj);
+  REQUIRE_FALSE(EvalExpr{t}.canon_transform().conj);
+}
