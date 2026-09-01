@@ -106,6 +106,58 @@
 			"inputs": "opt"
 		},
 		{
+			"kind": "export",
+			"inputs": "treeify",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_v2.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				},
+				"relative_order": [
+					"ecc0",
+					"ecc",
+					"res1_i1",
+					"res1_s0",
+					"res2_s1_singles",
+					"res1_s1",
+					"res2_p0",
+					"res2_p2",
+					"res2_i2",
+					"res2_p1",
+					"res2_s1",
+					"res2_s2"
+				],
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
+		},
+		{
 			"id": "cse",
 			"kind": "cse",
 			"inputs": "treeify"
@@ -160,7 +212,7 @@
 			"options": {
 				"language": "itf",
 				"optimize": true,
-				"output": "nevpt2_new.itfaa",
+				"output": "nevpt2_v2_cse.itfaa",
 				"grouping": {
 					"Energy0": "ecc0",
 					"Energy": "ecc",
@@ -216,7 +268,7 @@
 			"options": {
 				"language": "itf",
 				"optimize": true,
-				"output": "nevpt2_new_cse_merged.itfaa",
+				"output": "nevpt2_v2_cse_merged.itfaa",
 				"grouping": {
 					"Energy0": "ecc0",
 					"Energy": "ecc",
