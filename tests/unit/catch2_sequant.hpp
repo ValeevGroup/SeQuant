@@ -182,28 +182,41 @@ ExprVar to_expression(T &&expression) {
   using std::begin;
   using std::end;
 
+  // Braket fallback: Hermitian resolved over the ambient field — chosen to
+  // be IDENTICAL to today's programmatic ex<Tensor>(label, bra, ket)
+  // default, so string fixtures and ctor-built tensors always resolve to the
+  // same braket symmetry (the helper's whole job is that the two routes
+  // compare equal). Under a complex field this is Conjugate (the
+  // deserializer's own hard-coded fallback); under a real field it yields
+  // Symm. TODO(PR #596): the default-tensor-symmetry rework makes the
+  // programmatic ctor defaults fixed conservative (Tensor::Defaults,
+  // NonHermitian) and moves the deserializer defaults into the Context
+  // (Context::hermiticity); when it lands, change this fallback in lockstep
+  // (drop it in favor of the Context default, or pin NonHermitian and adjust
+  // the string fixtures) -- it mirrors the ctor default, it does not define
+  // one.
+  const sequant::io::serialization::DeserializationOptions opts{
+      .def_perm_symm = sequant::Symmetry::Nonsymm,
+      .def_braket_symm = sequant::Hermiticity::Hermitian};
+
   if constexpr (std::is_convertible_v<T, std::string>) {
     std::wstring string = sequant::toUtf16(std::forward<T>(expression));
 
     if (std::find(begin(string), end(string), L'=') != end(string)) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::string(std::forward<T>(expression)), opts);
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::string(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::string(std::forward<T>(expression)), opts);
     }
   } else if constexpr (std::is_convertible_v<T, std::wstring>) {
     if (std::find(begin(expression), end(expression), L'=') !=
         end(expression)) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::wstring(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::wstring(std::forward<T>(expression)), opts);
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::wstring(std::forward<T>(expression)),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+          std::wstring(std::forward<T>(expression)), opts);
     }
   } else if constexpr (std::is_convertible_v<T, sequant::ResultExpr>) {
     return expression;

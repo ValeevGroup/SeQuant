@@ -33,6 +33,32 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
 
+namespace {
+
+/// The spintrace/biorthogonal machinery assumes REAL orbitals: it transposes
+/// Hermitian tensors without conjugating (e.g. mbpt::swap_bra_ket). Sections
+/// exercising it declare that honestly via this scoped context: under
+/// Field::Real a Hermitian tensor is braket-Symm, so those transposes are
+/// value-preserving and canonicalization treats the two orientations as equal
+/// spellings (no ^* marker). Strict bra-ket symmetry is relaxed because
+/// real-field expressions legitimately contract bra with bra / ket with ket.
+[[nodiscard]] auto real_orbital_context() {
+  auto ctx = sequant::get_default_context();
+  // clone() deep-copies the spaces; the registry COPY ctor shares them, and
+  // mutating shared (interned) spaces would leak Field::Real process-wide
+  auto reg = std::make_shared<sequant::IndexSpaceRegistry>(
+      ctx.index_space_registry()->clone());
+  std::vector<std::wstring> keys;
+  for (auto const& s : *reg) keys.push_back(s.base_key());
+  for (auto const& k : keys)
+    if (auto* s = reg->retrieve_ptr(k)) s->field(sequant::Field::Real);
+  ctx.set(std::move(reg));
+  ctx.set(sequant::AssertStrictBraKetSymmetry::No);
+  return sequant::set_scoped_default_context(ctx);
+}
+
+}  // namespace
+
 TEST_CASE("spin", "[spin]") {
   using namespace sequant;
   using namespace sequant::mbpt;
@@ -1457,6 +1483,7 @@ SECTION("Expand P operator pair-wise") {
 }
 
 SECTION("Open-shell spin-tracing") {
+  auto real_orbitals = real_orbital_context();
   const auto i1A = Index(L"i↑_1");
   const auto i2A = Index(L"i↑_2");
   const auto i3A = Index(L"i↑_3");
@@ -1570,8 +1597,8 @@ SECTION("Open-shell spin-tracing") {
     auto result = expand_A_op(input);
     result->visit(reset_idx_tags);
     REQUIRE_THAT(result,
-                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-C-S * "
-                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-C-S"));
+                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-S-S * "
+                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-S-S"));
 
     g = Tensor(L"g", bra{i4A, i5A}, ket{i1A, i2A}, Symmetry::Antisymm);
     t3 =
@@ -1581,8 +1608,8 @@ SECTION("Open-shell spin-tracing") {
     result = expand_A_op(input);
     result->visit(reset_idx_tags);
     REQUIRE_THAT(result,
-                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-C-S * "
-                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-C-S"));
+                 EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-S-S * "
+                              "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-S-S"));
   }
 
   // CCSDT R3 10 aaa, bbb
@@ -1676,13 +1703,15 @@ SECTION("Open-shell spin-tracing") {
 }
 
 SECTION("Open-shell CC spintrace energy") {
+  auto real_orbitals = real_orbital_context();
   // CC energy
   {
     const auto input = deserialize(
         L"f{i_1;a_1} t{a_1;i_1} "
         L"+ 1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} "
         L"+ 1/2 g{i_1,i_2;a_1,a_2} t{a_1;i_1} t{a_2;i_2}",
-        {.def_perm_symm = Symmetry::Antisymm});
+        {.def_perm_symm = Symmetry::Antisymm,
+         .def_braket_symm = Hermiticity::Hermitian});
     auto result = open_shell_CC_spintrace(input);
     REQUIRE(result.size() == 1);
     REQUIRE_THAT(
@@ -1699,7 +1728,8 @@ SECTION("Open-shell CC spintrace energy") {
   // CCD Energy (a single Product)
   {
     const auto input = deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
-                                   {.def_perm_symm = Symmetry::Antisymm});
+                                   {.def_perm_symm = Symmetry::Antisymm,
+                                    .def_braket_symm = Hermiticity::Hermitian});
     REQUIRE(input->is<Product>());
     auto result = open_shell_CC_spintrace(input);
     REQUIRE(result.size() == 1);
@@ -1715,6 +1745,9 @@ SECTION("ResultExpr") {
   auto ctx = get_default_context();
   ctx.set(mbpt::make_mr_spaces());
   auto resetter = set_scoped_default_context(ctx);
+  // the closed-shell/rigorous spintraces below use the real-orbital
+  // machinery; stamp the MR registry real accordingly
+  auto real_orbitals = real_orbital_context();
 
   const std::vector<std::wstring> inputs = {
       L"R = 1/4",
@@ -1753,11 +1786,14 @@ SECTION("ResultExpr") {
 
   for (std::size_t i = 0; i < inputs.size(); ++i) {
     CAPTURE(inputs.at(i));
-    const ResultExpr input = deserialize<ResultExpr>(inputs.at(i));
+    const ResultExpr input = deserialize<ResultExpr>(
+        inputs.at(i), {.def_braket_symm = Hermiticity::Hermitian});
 
     container::svector<ResultExpr> expected;
     for (std::size_t k = 0; k < expected_outputs.at(i).size(); ++k) {
-      expected.push_back(deserialize<ResultExpr>(expected_outputs.at(i).at(k)));
+      expected.push_back(
+          deserialize<ResultExpr>(expected_outputs.at(i).at(k),
+                                  {.def_braket_symm = Hermiticity::Hermitian}));
     }
 
     SECTION("closed_shell" + std::to_string(i)) {

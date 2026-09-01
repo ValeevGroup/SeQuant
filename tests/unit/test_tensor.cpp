@@ -565,3 +565,60 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
     REQUIRE_FALSE(make_diff(Field::Complex) == ex<Constant>(0));
   }
 }
+
+TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
+  using namespace sequant;
+
+  // Tensor::conjugated_ mirrors Variable/Power: a first-class elementwise
+  // complex-conjugation marker (no slot reordering), rendered ^* on the label
+
+  auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                  BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+
+  SECTION("toggle, identity, ordering") {
+    REQUIRE(!t.conjugated());
+    const auto h0 = t.hash_value();
+    const auto latex0 = t.to_latex();
+
+    Tensor tc{t};
+    tc.conjugate();
+    REQUIRE(tc.conjugated());
+    REQUIRE(tc.hash_value() != h0);  // conj is first-class identity
+    REQUIRE(!(t == tc));             // not equal to the bare tensor
+    REQUIRE(t < tc);                 // T orders before conj(T)
+    REQUIRE(tc.to_latex().find(L"^*") != std::wstring::npos);
+    REQUIRE(latex0.find(L"^*") == std::wstring::npos);
+
+    tc.conjugate();  // toggling back restores everything bit-for-bit
+    REQUIRE(!tc.conjugated());
+    REQUIRE(tc.hash_value() == h0);
+    REQUIRE(t == tc);
+  }
+
+  SECTION("clone preserves the marker") {
+    Tensor tc{t};
+    tc.conjugate();
+    auto cloned = tc.clone();
+    REQUIRE(cloned->as<Tensor>().conjugated());
+    REQUIRE(cloned->as<Tensor>() == tc);
+  }
+
+  SECTION("serialization spells label^*") {
+    Tensor tc{t};
+    tc.conjugate();
+    auto s = serialize(tc);
+    REQUIRE(s.find(L"t^*{") == 0);  // marker directly after the label
+    REQUIRE(serialize(Tensor{t}).find(L"^*") == std::wstring::npos);
+  }
+
+  SECTION("adjoint commutes with the marker for Conjugate braket symmetry") {
+    // for BraKetSymmetry::Conjugate, adjoint() is a pure bra<->ket swap (the
+    // conj is carried by the symmetry relation itself), so it must leave the
+    // marker alone
+    Tensor tc{t};
+    tc.conjugate();
+    tc.adjoint();
+    REQUIRE(tc.conjugated());
+    REQUIRE(tc.bra().at(0).label() == L"a_1");  // swapped
+  }
+}

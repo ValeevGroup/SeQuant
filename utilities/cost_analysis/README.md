@@ -128,3 +128,17 @@ report byte-stable), then compare it against a frozen `*.md.expected` via
   terms share one `g*t` intermediate, exercising the reuse census; also diffs
   the `--dump_tree` output against `R2.tree.txt.expected`.
 - `.../df_r1/*` — a single density-fitted product (the non-`Sum` path).
+
+## Tensor symmetries in equation files
+
+Tensors in an equation file may pin their symmetries explicitly with the
+`:<perm>-<braket>-<column>` suffix (e.g. `t{i3,i4;a3,a4}:N-N-S`). Unspecified
+tensors resolve to the deserializer's ambient defaults, which are
+context-dependent (and become conservative, fully non-symmetric ones with the
+default-tensor-symmetry rework, PR #596). Amplitudes, residuals, and
+three-center DF factors are physically non-Hermitian — their bra and ket are
+distinct — and canonicalization folds the two bra↔ket orientations of a
+Hermitian tensor onto one spelling, which would reorient them and change the
+analyzed network under any Hermitian-leaning default. The examples therefore
+pin `t`, `R`, `B` as `N-N-S` so the analyzed network states its physical
+facts explicitly and is independent of the ambient defaults.

@@ -26,6 +26,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -55,6 +56,31 @@ DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
+///
+// clang-format off
+/// ### Conjugation / transposition / adjoint algebra
+///
+/// Three involutions act on a tensor's VALUE, closed under composition
+/// (together with the identity they form a Klein four-group):
+///
+/// | operation | effect                                          | via               |
+/// |-----------|-------------------------------------------------|-------------------|
+/// | `conj`    | elementwise complex conjugation, slots kept     | `conjugate()`     |
+/// | `swap`    | bra<->ket transposition, elements kept          | `_swap_bra_ket()` |
+/// | `adjoint` | conjugate transpose = `swap∘conj` = `conj∘swap` | `adjoint()`       |
+///
+/// Consequences per #BraKetSymmetry:
+/// - `Conjugate` (Hermitian over a complex field): `adjoint(T) == T` in
+///   value, hence `swap(T) == conj(T)` -- the fold identity
+///   `T{q;p} = conj(T{p;q})` the canonicalizer uses to spell both
+///   orientations over one canonical slot order (the swapped spelling
+///   carrying the marker).
+/// - `Symm` (Hermitian over a real field): `conj` and `swap` are both the
+///   identity in value; canonicalization never needs the marker.
+/// - `Nonsymm`: `adjoint` is value-distinct and is tracked by the reserved
+///   adjoint label suffix (see adjoint()); the marker alone expresses pure
+///   elementwise conjugation.
+// clang-format on
 class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
  private:
   using index_container_type = container::svector<Index>;
@@ -472,6 +498,22 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// (e.g. integrals are Hermitian, amplitudes are not).
   /// @{
 
+ private:
+  /// resolves an abstract Hermiticity against the (materialized) bra and ket
+  /// bundles; mirrors the empty-bra+ket corner of the BraKetSymmetry-optional
+  /// ctors: when both bundles are empty the bra<->ket exchange has no
+  /// physical meaning and the literal Conjugate default applies (deriving
+  /// from base_field would yield Symm and break the spintrace bookkeeping
+  /// for vacuum-aux tensors)
+  template <typename BraIdx, typename KetIdx>
+  static BraKetSymmetry resolve_braket_symmetry(Hermiticity h, BraIdx &&bra_idx,
+                                                KetIdx &&ket_idx) {
+    if (ranges::empty(bra_idx) && ranges::empty(ket_idx))
+      return BraKetSymmetry::Conjugate;
+    return to_braket_symmetry(h, sequant::base_field(bra_idx, ket_idx));
+  }
+
+ public:
   /// @param label the tensor label
   /// @param bra_indices list of bra indices
   /// @param ket_indices list of ket indices
@@ -491,9 +533,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       // again); the duplication is the cost of safe delegation, not an
       // oversight.
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, s,
-               to_braket_symmetry(
-                   h, sequant::base_field(make_indices(bra_indices),
-                                          make_indices(ket_indices))),
+               resolve_braket_symmetry(h, make_indices(bra_indices),
+                                       make_indices(ket_indices)),
                ps) {
     // Overwrite after delegation to preserve the exact trait (incl.
     // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
@@ -525,9 +566,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       // again); the duplication is the cost of safe delegation, not an
       // oversight.
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices, s,
-               to_braket_symmetry(
-                   h, sequant::base_field(make_indices(bra_indices),
-                                          make_indices(ket_indices))),
+               resolve_braket_symmetry(h, make_indices(bra_indices),
+                                       make_indices(ket_indices)),
                ps) {
     // Overwrite after delegation to preserve the exact trait (incl.
     // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
@@ -684,6 +724,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       core_label += L"\\bar{";
     core_label += io::latex::utf_to_string(this->label());
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
+    if (conjugated_) core_label = L"{" + core_label + L"^*}";
 
     switch (bkst) {
       case BraKetSlotTypesetting::Naive: {
@@ -735,8 +776,62 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @note this performs rapid canonicalization only
   ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
-  /// @brief adjoint of a Tensor swaps its bra and ket
+  /// @brief adjoint of a Tensor: the conjugate transpose (`swap∘conj`; see
+  /// the algebra table in the class documentation)
+  ///
+  /// The slot swap happens immediately; the conjugation half is carried per
+  /// #BraKetSymmetry:
+  /// - `Nonsymm`: the adjoint is value-distinct from every slot permutation
+  ///   of the original, so it is marked by the reserved '⁺' label suffix.
+  /// - `Conjugate`/`Symm` (Hermitian): the conjugation is redundant in value
+  ///   (`adjoint(T) == T`), so adjoint() reduces to a pure bra<->ket swap.
+  ///
+  /// adjoint() deliberately does NOT toggle conjugated(): the marker
+  /// expresses elementwise conjugation ALONE, and the two operations
+  /// compose -- e.g. for a Conjugate-symmetry tensor, `conjugate()` followed
+  /// by `adjoint()` unfolds a marked spelling back to its value orientation
+  /// (see value_oriented()).
   virtual void adjoint() override;
+
+  /// @return whether this tensor is complex-conjugated elementwise (no slot
+  /// reordering; contrast adjoint(), which swaps bra and ket)
+  bool conjugated() const { return conjugated_; }
+
+  /// @brief complex-conjugates this tensor elementwise: toggles conjugated();
+  /// the slots are untouched. For a BraKetSymmetry::Conjugate tensor the
+  /// value identity T{q;p} = conj(T{p;q}) means a bra<->ket swap combined
+  /// with conjugate() preserves the represented value -- which is how the
+  /// canonicalizer folds the two orientations onto one spelling.
+  void conjugate() {
+    conjugated_ = !conjugated_;
+    reset_hash_value();
+  }
+
+  /// @brief rebuilds this tensor with new slot bundles, carrying every
+  /// non-slot attribute: label, #Symmetry, #BraKetSymmetry, #Hermiticity,
+  /// #ColumnSymmetry, and the elementwise-conjugation marker.
+  ///
+  /// The sanctioned rebuild API for transforms that rewrite a tensor's slots
+  /// (relabeling, expansion, factorization rules): rebuilding through a plain
+  /// constructor silently drops conjugated() (and can demote Hermiticity),
+  /// corrupting every complex-field workflow downstream. A transform that
+  /// instead REINTERPRETS the slots positionally must first normalize the
+  /// spelling to the value orientation (unstar + bra<->ket swap for a
+  /// #BraKetSymmetry::Conjugate tensor) before reading them.
+  // N.B. the slot bundle types are qualified because at this point in the
+  // class the bra()/ket()/aux() member accessors shadow the strong-type
+  // templates
+  [[nodiscard]] Tensor with_slots(
+      sequant::bra<index_container_type> new_bra,
+      sequant::ket<index_container_type> new_ket,
+      sequant::aux<index_container_type> new_aux) const {
+    Tensor t(label_, std::move(new_bra), std::move(new_ket), std::move(new_aux),
+             reserved_tag{}, symmetry_, braket_symmetry_, column_symmetry_);
+    t.hermiticity_ = hermiticity_;
+    t.conjugated_ = conjugated_;
+    t.reset_hash_value();
+    return t;
+  }
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
@@ -793,6 +888,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   // distinct canonicalization behavior yet); revisit if that changes.
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
+  /// whether this tensor is complex-conjugated elementwise (no slot
+  /// reordering); mirrors Variable::conjugated_ / Power::conjugated_ and is
+  /// rendered as a trailing ^* on the label
+  bool conjugated_ = false;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   std::size_t bra_net_rank_;
@@ -817,7 +916,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
       hash::combine(val, column_symmetry_);
-      // N.B. adjointness is baked into the label
+      // N.B. adjointness is baked into the label; conjugation contributes
+      // only when set so unconjugated tensors hash identically to builds
+      // that predate conjugated_
+      if (conjugated_) hash::combine(val, conjugated_);
       return val;
     };
     if (!hash_value_) {
@@ -835,6 +937,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() == that_cast.label() &&
+        this->conjugated() == that_cast.conjugated() &&
         this->symmetry() == that_cast.symmetry() &&
         this->braket_symmetry() == that_cast.braket_symmetry() &&
         this->column_symmetry() == that_cast.column_symmetry() &&
@@ -858,6 +961,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() != that_cast.label()) {
       return this->label() < that_cast.label();
+    }
+
+    if (this->conjugated() != that_cast.conjugated()) {
+      return !this->conjugated();  // T orders before conj(T)
     }
 
     if (this->bra_rank() != that_cast.bra_rank()) {
@@ -971,6 +1078,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     canonicalize_slots();
   }
 
+  void _conjugate() override final { conjugate(); }
+  bool _conjugated() const override final { return conjugated_; }
+
 };  // class Tensor
 
 static_assert(is_tensor<Tensor>,
@@ -978,6 +1088,39 @@ static_assert(is_tensor<Tensor>,
               "Tensor interface");
 
 using TensorPtr = std::shared_ptr<Tensor>;
+
+/// @return @p t rewritten in its VALUE orientation: the spelling whose slot
+///         layout denotes the value directly, with no conjugation marker
+///         left for a slot-rebuilding consumer to drop. No-op for unstarred
+///         tensors; for a marked tensor the result follows the braket
+///         symmetry (the marker is first-class, not only a fold byproduct):
+///         - `Conjugate`: the starred swapped spelling T^*{q;p} denotes
+///           conj(T{p;q}) (the canonicalizer's fold), so the bare unstarred
+///           spelling is returned (marker cleared, bra<->ket swapped back)
+///         - `Symm`: conjugation is the identity in value, so the marker is
+///           simply cleared (slots untouched)
+///         - `Nonsymm`: the marker denotes genuine elementwise conjugation,
+///           which no slot layout can express -- throws std::logic_error
+///           rather than silently dropping or misreading it (serving such
+///           spellings is the lazy-conj eval follow-up)
+///         Any transform that reads or rebuilds a tensor from its slot
+///         layout (rather than round-tripping it unchanged) must consume
+///         this form. A '⁺'-relabeled NonHermitian adjoint is NOT unfolded:
+///         its swap is a genuine value transpose.
+[[nodiscard]] inline Tensor value_oriented(Tensor const &t) {
+  if (!t.conjugated()) return t;
+  if (t.braket_symmetry() == BraKetSymmetry::Nonsymm)
+    throw std::logic_error(
+        "sequant::value_oriented: an elementwise-conjugated "
+        "BraKetSymmetry::Nonsymm tensor has no value-oriented slot spelling "
+        "(the conjugation cannot be consumed into slots)");
+  Tensor bare{t};
+  bare.conjugate();
+  if (t.braket_symmetry() == BraKetSymmetry::Conjugate)
+    bare.adjoint();  // pure bra<->ket swap: undoes the fold
+  // Symm: conj is the identity in value -- clearing the marker suffices
+  return bare;
+}
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   return ex<Tensor>(Tensor(reserved::overlap_label(), bra{bra_index},
