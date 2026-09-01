@@ -26,6 +26,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -1088,21 +1089,36 @@ static_assert(is_tensor<Tensor>,
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-/// @return @p t rewritten in its VALUE orientation: for a marker-conjugated
-///         BraKetSymmetry::Conjugate tensor the starred swapped spelling
-///         T^*{q;p} denotes conj(T{p;q}), so the bare unstarred spelling is
-///         returned (marker cleared, bra/ket swapped back). No-op for
-///         unstarred tensors. Any transform that reads or rebuilds a tensor
-///         from its slot layout (rather than round-tripping it unchanged)
-///         must consume this form, or it silently drops the conjugation.
-///         A '⁺'-relabeled NonHermitian adjoint is NOT unfolded: its swap is
-///         a genuine value transpose.
+/// @return @p t rewritten in its VALUE orientation: the spelling whose slot
+///         layout denotes the value directly, with no conjugation marker
+///         left for a slot-rebuilding consumer to drop. No-op for unstarred
+///         tensors; for a marked tensor the result follows the braket
+///         symmetry (the marker is first-class, not only a fold byproduct):
+///         - `Conjugate`: the starred swapped spelling T^*{q;p} denotes
+///           conj(T{p;q}) (the canonicalizer's fold), so the bare unstarred
+///           spelling is returned (marker cleared, bra<->ket swapped back)
+///         - `Symm`: conjugation is the identity in value, so the marker is
+///           simply cleared (slots untouched)
+///         - `Nonsymm`: the marker denotes genuine elementwise conjugation,
+///           which no slot layout can express -- throws std::logic_error
+///           rather than silently dropping or misreading it (serving such
+///           spellings is the lazy-conj eval follow-up)
+///         Any transform that reads or rebuilds a tensor from its slot
+///         layout (rather than round-tripping it unchanged) must consume
+///         this form. A '⁺'-relabeled NonHermitian adjoint is NOT unfolded:
+///         its swap is a genuine value transpose.
 [[nodiscard]] inline Tensor value_oriented(Tensor const &t) {
   if (!t.conjugated()) return t;
-  SEQUANT_ASSERT(t.braket_symmetry() == BraKetSymmetry::Conjugate);
+  if (t.braket_symmetry() == BraKetSymmetry::Nonsymm)
+    throw std::logic_error(
+        "sequant::value_oriented: an elementwise-conjugated "
+        "BraKetSymmetry::Nonsymm tensor has no value-oriented slot spelling "
+        "(the conjugation cannot be consumed into slots)");
   Tensor bare{t};
   bare.conjugate();
-  bare.adjoint();  // pure bra<->ket swap for Conjugate braket symmetry
+  if (t.braket_symmetry() == BraKetSymmetry::Conjugate)
+    bare.adjoint();  // pure bra<->ket swap: undoes the fold
+  // Symm: conj is the identity in value -- clearing the marker suffices
   return bare;
 }
 

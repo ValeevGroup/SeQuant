@@ -536,3 +536,40 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
   REQUIRE_FALSE(ci[1].has_proto_indices());
   REQUIRE(ci[2].has_proto_indices());
 }
+
+TEST_CASE("value_oriented_totality", "[conjugation]") {
+  // The conjugation marker is first-class (sequant::conjugate, deserialized
+  // "^*"), not only a Conjugate-fold byproduct -- value_oriented must be
+  // total over the marker x braket-symmetry grid.
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // Conjugate: the folded (starred + swapped) spelling unfolds back
+  Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  Tensor folded = g;
+  folded.conjugate();
+  folded.adjoint();  // pure swap for Conjugate: now the folded spelling
+  REQUIRE(value_oriented(folded) == g);
+  REQUIRE(value_oriented(g) == g);  // unstarred: no-op
+
+  // Symm: conj is the identity in value -> marker cleared, slots untouched
+  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  Tensor s_star = s;
+  s_star.conjugate();
+  auto s_vo = value_oriented(s_star);
+  REQUIRE_FALSE(s_vo.conjugated());
+  REQUIRE(s_vo == s);
+
+  // Nonsymm: genuine elementwise conjugation has no slot-only spelling, so a
+  // slot-rebuilding caller cannot consume it -> refuse loudly (a swap here
+  // would silently rewrite the value)
+  Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  Tensor t_star = t;
+  t_star.conjugate();
+  REQUIRE_THROWS_AS(value_oriented(t_star), std::logic_error);
+}

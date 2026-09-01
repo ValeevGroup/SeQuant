@@ -1,5 +1,7 @@
 #include <SeQuant/core/expressions/complex.hpp>
 
+#include <SeQuant/core/expressions/constant.hpp>
+
 namespace sequant {
 
 ExprPtr RealPart::clone() const { return ex<RealPart>(inner_->clone()); }

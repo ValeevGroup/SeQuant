@@ -5,7 +5,6 @@
 #ifndef SEQUANT_CORE_EXPRESSIONS_COMPLEX_HPP
 #define SEQUANT_CORE_EXPRESSIONS_COMPLEX_HPP
 
-#include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 

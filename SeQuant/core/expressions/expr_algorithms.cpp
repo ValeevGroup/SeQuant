@@ -660,6 +660,10 @@ ExprPtr conjugate(const ExprPtr& expr) {
     const auto& p = expr->as<Product>();
     auto r = std::make_shared<Product>();
     r->scale(conj_scalar(p.scalar()));
+    // Flatten::No preserves the input's factor structure 1:1 (conjugation
+    // is clone+mark; Product::clone appends with Flatten::No for the same
+    // reason): nesting appears in the result only where the input was
+    // already nested
     for (const auto& f : p) r->append(1, conjugate(f), Product::Flatten::No);
     return r;
   }

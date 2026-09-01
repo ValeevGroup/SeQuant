@@ -337,7 +337,7 @@ class TensorNetworkV3 {
         default_idxptr_slottype_lesscompare{};
     /// if false, BraKetSymmetry::Conjugate tensors are treated
     /// orientation-SENSITIVELY: their bra/ket bundles get distinct graph
-    /// colors (like Nonsymm) and no conjugated_tensors/conj byproduct is
+    /// colors (like Nonsymm) and no conjugated_tensors byproduct is
     /// reported. Used at the eval boundary, where leaves must keep their
     /// as-written orientation until evaluators understand conjugation (the
     /// lazy-conj follow-up); symbolic canonicalization keeps the default.

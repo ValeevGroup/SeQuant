@@ -319,6 +319,49 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(g_tree3->hash_value() != g_tree3.left()->hash_value());
   }
 
+  SECTION("starred non-Conjugate leaves") {
+    // The conjugation marker is first-class and can land on leaves whose
+    // braket symmetry is not Conjugate. Symm: conj is the identity in value,
+    // so the marker just drops and the leaf is served unmarked. Nonsymm:
+    // conj(t) has no slot spelling and no Adjoint-served equivalent, so
+    // binarize must refuse loudly instead of serving the wrong value
+    // (lazy-conj eval is the follow-up).
+    Tensor s(L"s", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm);
+    Tensor s_star = s;
+    s_star.conjugate();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto s_tree = binarize(ex<Tensor>(s_star));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(s_tree.leaf());
+    REQUIRE_FALSE(s_tree->as_tensor().conjugated());
+
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    Tensor t_star = t;
+    t_star.conjugate();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_star)), std::logic_error);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    // a directly-constructed EvalExpr must not alias t and t* onto one cache
+    // slot: for Nonsymm they are value-distinct
+    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_star}.hash_value());
+
+    // '⁺'-labeled AND marked (the symbolic transpose conj(adjoint(t))): the
+    // marker refusal must fire before the '⁺' label channel, else the label
+    // channel builds Adjoint over a still-marked bare leaf and the marker is
+    // silently ignored
+    Tensor t_adj_star = t;
+    t_adj_star.adjoint();    // '⁺' label + slot swap
+    t_adj_star.conjugate();  // marker on top: t^T, not evaluable
+    REQUIRE(t_adj_star.label() == L"t⁺");
+    REQUIRE(t_adj_star.conjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_adj_star)), std::logic_error);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+
   SECTION("Adjoint op in a binarized term") {
     // Regression: a tensor leaf can carry the adjoint marker U+207A '⁺' in its
     // label without having been produced by Tensor::adjoint() — e.g. when built

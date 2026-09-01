@@ -8,8 +8,8 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <compare>
 
+#include <compare>
 #include <memory>
 #include <mutex>
 #include <type_traits>
