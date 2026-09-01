@@ -649,3 +649,24 @@ Re/Im eval nodes (`EvalOp::RealPart/ImagPart`, `Result::real_part/imag_part`),
 `kshitij/refactor/kramer-pairs-separation` (h2o -0.23967684425,
 dch -1.04169026053). Written after Plan A lands so its tasks anchor on the
 real transform API.
+
+---
+
+## Execution deviations (recorded 2026-09-01, tasks 4/6/7)
+
+- Tasks 4, 6, and the product half of 7 landed as ONE green unit: the leaf
+  ctor's marker-clearing changes binarize's observable behavior, so the
+  plan's "IR-shape tests still pass" prediction at T4 was wrong.
+- The plan's T4 step-2 "unfold" (marker => {conj, braket_swap} + slot ops)
+  was WRONG: it collapses a starred-canonical spelling's transform onto the
+  plain spelling and re-aliases C with C^*. Implemented rule: the marker
+  composes a PURE {conj} bit (slots untouched); orientation deltas come from
+  the step-3 fold alone.
+- collect_tensor_factors re-materializes each leaf's DENOTED spelling
+  (swap + marker) for TN building and slot counting -- the canonical
+  respelling otherwise moves indices across bra/ket slots (strict-braket
+  assert) and erases the marker coloring that keeps mixed-conj products
+  identity-distinct.
+- Uniform-conj hoisting is implemented at product roots (marker stripping on
+  the collected TN copies + {conj} on the node); sum-level hoisting and the
+  cache-reuse tests remain in T7/T11.

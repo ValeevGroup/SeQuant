@@ -157,28 +157,42 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
-    // Single (protoindex-free) tensor: block-canonicalize it in place. This is
-    // a lightweight per-tensor canonicalization (no deep tensor-network
-    // canonicalization is needed for a tensor that is not itself a network),
-    // and it normalizes bra<->ket orientation for braket-symmetric tensors so
-    // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
+    // Single (protoindex-free) tensor leaf: normalize to the canonical
+    // unmarked spelling; every conjugation channel becomes a CanonTransform
+    // byproduct applied on retrieval. Transform bits compose syntactically:
+    // marker => conj, slot swap relative to canonical => braket_swap (for a
+    // Conjugate tensor the two compose to adjoint, the identity on Hermitian
+    // values -- every spelling route lands on one slot + a correct map).
     auto& t = expr_->as<Tensor>();
-    // The flat-leaf conjugate-braket fold is DISABLED at the eval boundary:
-    // leaves keep their as-written (value) orientation so leaf yielders and
-    // evaluators need no conjugation awareness (Symm still folds, as on
-    // master). An already-starred spelling keeps its marker -- binarize
-    // serves it through an EvalOp::Adjoint wrap; folding fresh flat leaves
-    // onto one orientation-shared slot is the lazy-conj eval follow-up.
-    auto phase =
-        TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
+    // 1. '⁺' adjoint label (Nonsymm only): strip to the bare spelling;
+    //    adjoint = conj ∘ swap
+    if (!t.label().empty() && t.label().back() == adjoint_label) {
+      t.adjoint();  // removes the label, swaps slots back
+      canon_transform_ =
+          compose(canon_transform_, {.conj = true, .braket_swap = true});
+    }
+    // 2. elementwise-conjugation marker: a PURE conj bit -- slots are never
+    //    touched here (orientation deltas belong to step 3's fold alone;
+    //    mixing them would collapse the starred-canonical spelling's salt
+    //    onto the plain spelling and re-alias C with C^*). Value-redundant
+    //    for Symm (Hermitian over a real field), where it is dropped.
+    if (t.conjugated()) {
+      if (t.braket_symmetry() != BraKetSymmetry::Symm)
+        canon_transform_ = compose(canon_transform_, {.conj = true});
+      t.conjugate();  // expr_ stores the unmarked spelling
+    }
+    // 3. block-canonicalize WITH the fold (the eval-boundary exception is
+    //    gone); a fold performed here toggles the marker, which converts to
+    //    transform bits the same way
+    auto phase = TensorBlockCanonicalizer{}.apply(t);
     canon_transform_.phase = phase ? -1 : 1;
-    // Leaf-hash invariant: hash_terminal_tensor is marker-blind, so every
-    // spelling of one slot shares one hash. A value-distinctive marker
-    // (Nonsymm braket symmetry) is recorded in the transform; the marker
-    // itself stays on expr_ (its symbolic spelling) until Task 4 moves the
-    // remaining channels here too.
-    if (t.conjugated() && t.braket_symmetry() == BraKetSymmetry::Nonsymm)
-      canon_transform_.conj = true;
+    if (t.conjugated()) {  // fold byproduct: canonicalize_braket swapped the
+      // slots INTO the canonical orientation and marked; convert the marker
+      // to transform bits and keep the canonical slots
+      canon_transform_ =
+          compose(canon_transform_, {.conj = true, .braket_swap = true});
+      t.conjugate();
+    }
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
@@ -392,45 +406,46 @@ IndexSet all_indices(ExprPtr const& expr) {
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
 ///        sub-tree, or, at the root node of a sum sub-tree.
 ///
+/// the leaf's DENOTED symbolic spelling: the stored canonical spelling with
+/// the transform re-materialized syntactically -- bra<->ket swapped back when
+/// braket_swap is set, the conjugation marker restored when conj is set. TN
+/// building and slot counting must see the orientation and conjugation the
+/// surrounding expression wrote (the marker also colors the TN graph, which
+/// keeps mixed-conj products like C·C^* identity-distinct).
+inline ExprPtr denoted_spelling(EvalExpr const& ee) {
+  auto t = ee.expr()->as<Tensor>();
+  auto const tr = ee.canon_transform();
+  if (tr.braket_swap) static_cast<AbstractTensor&>(t)._swap_bra_ket();
+  if (tr.conj) t.conjugate();
+  return ex<Tensor>(std::move(t));
+}
+
+/// a child's structural identity: slot hash + conj/swap salt (0 for a
+/// trivial transform, keeping marker-free hashes byte-stable)
+inline size_t salted_hash(EvalExprNode const& n) {
+  auto h = n->hash_value();
+  if (auto salt = n->canon_transform().structural_salt(); salt != 0)
+    hash::combine(h, salt);
+  return h;
+}
+
 template <typename Rng>
 void collect_tensor_factors(EvalExprNode const& node,  //
                             Rng& collect) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() &&
-      (!op || *op == EvalOp::Sum || *op == EvalOp::Adjoint))
-    // Treat Adjoint the same as Sum here: it produces a tensor result that
-    // enters a parent Product as a single factor — the parent shouldn't
-    // try to recurse past the Adjoint boundary, just collect the adjointed
-    // tensor (held in node->expr()) and move on.
-    collect.emplace_back(
-        ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
-  else if (node->op_type() == EvalOp::Product && !node.leaf()) {
+      node->is_tensor() && (!op || *op == EvalOp::Sum)) {
+    // Leaf tensors enter in their DENOTED spelling (transform re-materialized
+    // syntactically); a Sum-rooted subtree contributes its result tensor.
+    auto e = (!op && node->expr()->is<Tensor>()) ? denoted_spelling(*node)
+                                                 : node->expr();
+    collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
+                                      .hash = salted_hash(node)});
+  } else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
     collect_tensor_factors(node.right(), collect);
   }
-}
-
-/// Assembles the Adjoint IR node shared by binarize(Tensor)'s '⁺'-label and
-/// conjugation-marker channels: Adjoint(adj-metadata, Constant{1} sentinel)
-/// over @p bare_leaf, with the node hash = the bare-leaf hash salted by
-/// EvalOp::Adjoint so cache lookups don't collide.
-EvalExprNode make_adjoint_node(EvalExprNode bare_leaf, ExprPtr adjointed,
-                               EvalExpr::index_vector canon_ix,
-                               CanonTransform transform) {
-  EvalExprNode sentinel{EvalExpr{Constant{1}}};
-  auto h = bare_leaf->hash_value();
-  hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
-  EvalExpr adj{EvalOp::Adjoint,
-               ResultType::Tensor,
-               std::move(adjointed),
-               std::move(canon_ix),
-               transform,
-               h,
-               nullptr};
-  return EvalExprNode{std::move(adj), std::move(bare_leaf),
-                      std::move(sentinel)};
 }
 
 EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
@@ -440,70 +455,11 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
 EvalExprNode binarize(Tensor const& t) {
-  // A value-distinctive conjugation marker (Nonsymm braket symmetry) is
-  // refused up front -- BEFORE the '⁺' label channel below, which would
-  // otherwise serve a still-marked bare leaf with the marker silently
-  // ignored (conj(adjoint(t)) is the symbolic transpose t^T: no slot
-  // spelling, no Adjoint-served equivalent; lazy-conj eval is the
-  // follow-up).
-  if (t.conjugated() && t.braket_symmetry() == BraKetSymmetry::Nonsymm)
-    throw std::logic_error(
-        "sequant::binarize: an elementwise-conjugated "
-        "BraKetSymmetry::Nonsymm tensor leaf is not evaluable (no "
-        "Adjoint-served equivalent; lazy-conj eval is the follow-up)");
-  // Detect adjoint-marked tensor leaves (label ending in U+207A '⁺'). These
-  // arise when the user wrote an adjoint of a BraKetSymmetry::Nonsymm tensor,
-  // see Tensor::adjoint() in expressions/tensor.cpp. We surface the adjoint
-  // as an explicit IR op (EvalOp::Adjoint) wrapping the bare-label operand,
-  // so backends can serve T† by conjugating + permuting the cached T result.
-  //
-  // IR shape: Adjoint(Tensor{<bare>}, Constant{1})
-  // The Constant(1) right child is a sentinel — present so the FullBinaryNode
-  // invariant ("every non-leaf has two children") holds; evaluate ignores it
-  // for EvalOp::Adjoint dispatch.
-  if (!t.label().empty() && t.label().back() == adjoint_label) {
-    // The Adjoint node carries the *adjointed* tensor (so its canon_indices
-    // reflect the slot order parents see).
-
-    // Build the bare-label operand: copy and call adjoint() to toggle the
-    // marker off and swap bra/ket back to natural orientation.
-    Tensor bare{t};
-    bare.adjoint();
-    SEQUANT_ASSERT(bare.label().empty() ||
-                   bare.label().back() != adjoint_label);
-    return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, t.clone(),
-                             t.indices() | ranges::to<EvalExpr::index_vector>,
-                             CanonTransform{});
-  }
-  if (t.conjugated() && t.braket_symmetry() == BraKetSymmetry::Symm) {
-    // Symm marker: conj is the identity in value -- serve the unmarked
-    // spelling (value_oriented just clears the marker here)
-    return EvalExprNode{EvalExpr{value_oriented(t)}};
-  }
-  EvalExpr ee{t};
-  if (ee.expr()->as<Tensor>().conjugated()) {
-    // Conjugate-braket fold marker: a leaf arrives starred when its
-    // symbolic spelling was folded (the leaf ctor itself never creates
-    // markers at the eval boundary). Serve the marker the same way as the
-    // '⁺' channel above: an explicit EvalOp::Adjoint node over the unmarked
-    // VALUE-orientation operand, so evaluation and leaf yielders need no
-    // marker awareness (lazy conj is the eval follow-up).
-    //
-    // Serving convention (pinned until the lazy-conj follow-up): a yielder
-    // serves every leaf's as-written spelling truthfully; mixing a starred
-    // spelling of a Conjugate tensor with its PLAIN swapped spelling in one
-    // network is outside the designed symbolic-canonicalize-first pipeline
-    // (the fold spells the swapped orientation starred) and is not
-    // orientation-reconciled here.
-    Tensor const& folded = ee.expr()->as<Tensor>();
-    // unstar + swap back: the VALUE (as-written) orientation -- the leaf
-    // ctor never folds Conjugate tensors, so the bare operand stays in this
-    // spelling, the one leaf yielders serve
-    Tensor bare = value_oriented(folded);
-    return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, ee.expr(),
-                             ee.canon_indices(), ee.canon_transform());
-  }
-  return EvalExprNode{std::move(ee)};
+  // Every conjugation channel ('⁺' adjoint label, elementwise-conjugation
+  // marker, Conjugate-braket orientation) is normalized by the EvalExpr leaf
+  // ctor into the canonical unmarked spelling plus a CanonTransform served
+  // on retrieval -- a tensor leaf is always just a leaf.
+  return EvalExprNode{EvalExpr{t}};
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
@@ -524,7 +480,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   SEQUANT_ASSERT(all_tensors | all_scalars);
 
-  auto hvals = summands | transform([](auto&& n) { return n->hash_value(); });
+  auto hvals = summands | transform([](auto&& n) { return salted_hash(n); });
 
   auto make_sum = [i = 0,                    //
                    hs = imed_hashes(hvals),  //
@@ -532,7 +488,9 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
-      auto const t = value_oriented(left.as_tensor());
+      // partition from the DENOTED orientation (stored canonical slots,
+      // re-swapped per the child transform)
+      auto const t = denoted_spelling(left)->as<Tensor>();
       return {
           EvalOp::Sum,         //
           ResultType::Tensor,  //
@@ -581,7 +539,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         })  //
       | ranges::to_vector;
 
-  auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
+  auto hvals = factors | transform([](auto&& n) { return salted_hash(n); });
   auto const hs = imed_hashes(hvals) | ranges::to_vector;
 
   auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts](
@@ -601,7 +559,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
-      auto const t = value_oriented(tl->as_tensor());
+      auto const t =
+          denoted_spelling(*tl)->as<Tensor>();  // denoted orientation
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
@@ -616,23 +575,29 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       container::svector<ExprWithHash> subfacs;
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
+      // Uniform-conj hoisting (design spec): when EVERY tensor factor's
+      // denoted spelling is conjugated, the conjugation is a whole-node
+      // transform -- strip the markers (the TN then hashes onto the
+      // unconjugated product's slot) and record {conj} on this node. Mixed
+      // marks stay in the TN, where the marker coloring keeps e.g. C·C^*
+      // identity-distinct from C·C. (Sum-level hoisting: T7 follow-up.)
+      bool const hoist_conj =
+          !subfacs.empty() &&
+          ranges::all_of(subfacs, [](ExprWithHash const& f) {
+            return f.expr->is<Tensor>() && f.expr->as<Tensor>().conjugated();
+          });
+      if (hoist_conj)
+        for (auto& f : subfacs) f.expr->as<Tensor>().conjugate();
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
       IndexGroups<IndexVec> const target_indices = [&ts, &uncontracted_idxs]() {
         // route each surviving hyperindex to its correct slot
         // (bra, ket, or aux) based on which slot it occupies in
         // the factor tensors .. if appears in multiple slots put into aux
         //
-        // count on the value orientation of each factor: a folded Conjugate
-        // leaf is spelled swapped+starred but its indices occupy the authored
-        // slots by value; counting the folded spelling would migrate its ket
-        // group into bra and merge the intermediate's partition
-        auto unfolded = ts | transform([](ExprPtr const& x) -> ExprPtr {
-                          if (x->is<Tensor>() && x->as<Tensor>().conjugated())
-                            return ex<Tensor>(value_oriented(x->as<Tensor>()));
-                          return x;
-                        }) |
-                        ranges::to_vector;
-        auto counts = get_used_indices_with_counts(ex<Product>(unfolded));
+        // count on the denoted spellings (collect_tensor_factors already
+        // re-materialized each leaf's authored orientation; the conjugation
+        // marker does not affect slot occupancy)
+        auto counts = get_used_indices_with_counts(ex<Product>(ts));
         IndexGroups<IndexVec> result;
         for (auto&& [k, v] : counts) {
           if (v.nonproto() == 0) continue;
@@ -657,11 +622,11 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {
-        return {EvalOp::Product,                       //
-                ResultType::Scalar,                    //
-                detail::make_variable(),               //
-                {},                                    //
-                CanonTransform{.phase = canon.phase},  //
+        return {EvalOp::Product,                                           //
+                ResultType::Scalar,                                        //
+                detail::make_variable(),                                   //
+                {},                                                        //
+                CanonTransform{.phase = canon.phase, .conj = hoist_conj},  //
                 h,
                 std::move(canon.graph)};
       } else {
@@ -685,14 +650,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto right = binarize(Constant{prod.scalar()});
 
     auto expr = left->is_tensor()
-                    ? detail::make_tensor(value_oriented(left->as_tensor()),
+                    ? detail::make_tensor(denoted_spelling(*left)->as<Tensor>(),
                                           false, opts)
                 : left->is_constant() ? (left->expr() * right->expr())
                                       : detail::make_variable();
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
-    auto h = left->hash_value();
-    hash::combine(h, right->hash_value());
+    auto h = salted_hash(left);
+    hash::combine(h, salted_hash(right));
     auto result = EvalExpr{EvalOp::Product,          //
                            type,                     //
                            expr,                     //
