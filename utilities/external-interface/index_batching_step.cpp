@@ -1,4 +1,4 @@
-#include "index_batch_step.hpp"
+#include "index_batching_step.hpp"
 #include "processing_data.hpp"
 #include "processing_step_factory.hpp"
 
