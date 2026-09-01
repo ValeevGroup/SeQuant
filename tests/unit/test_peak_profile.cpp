@@ -82,15 +82,22 @@ EvalNode<EvalExpr> inode(std::string_view result, EvalNode<EvalExpr> l,
 
 // Stamp a single External batch loop mode at a node.
 void stamp_ext(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_node_slice_mask({{std::move(ix), BatchModeType::External}});
+  // Realizes an External loop AT n: stamp both the per-node sliced mask AND the
+  // loop-OPEN annotation the (opens-based) enclosing-context walk
+  // (OccurrenceRec::ectx) reads to reconstruct the loop nest.
+  n->set_node_slice_mask({{ix, BatchModeType::External}});
+  n->set_batch_loops_opened_here({{std::move(ix), BatchModeType::External}});
 }
 
 // Stamp TWO External batch loop modes at a node, outer first: realizes a
 // two-level nest (ix_outer at level 0, ix_inner at level 1) in ONE node
 // rather than needing a separate ancestor per level.
 void stamp_ext_pair(EvalNode<EvalExpr>& n, Index ix_outer, Index ix_inner) {
-  n->set_node_slice_mask({{std::move(ix_outer), BatchModeType::External},
-                          {std::move(ix_inner), BatchModeType::External}});
+  n->set_node_slice_mask({{ix_outer, BatchModeType::External},
+                          {ix_inner, BatchModeType::External}});
+  n->set_batch_loops_opened_here(
+      {{std::move(ix_outer), BatchModeType::External},
+       {std::move(ix_inner), BatchModeType::External}});
 }
 
 }  // namespace

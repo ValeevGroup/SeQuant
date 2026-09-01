@@ -123,7 +123,11 @@ EvalNode<EvalExpr> inode_remat(std::string_view result, EvalNode<EvalExpr> l,
 
 // Stamp a single External batch loop mode at a node.
 void stamp_ext_remat(EvalNode<EvalExpr>& n, Index ix) {
-  n->set_node_slice_mask({{std::move(ix), BatchModeType::External}});
+  // Realizes an External loop AT n: stamp both the per-node sliced mask AND the
+  // loop-OPEN annotation the (opens-based) enclosing-context walk
+  // (OccurrenceRec::ectx) reads to reconstruct the loop nest.
+  n->set_node_slice_mask({{ix, BatchModeType::External}});
+  n->set_batch_loops_opened_here({{std::move(ix), BatchModeType::External}});
 }
 
 // Builds one BatchContext entry for these placement_remat unit tests. \p
@@ -148,8 +152,11 @@ BatchContextEntry remat_test_ctx_entry(Index const& ax, std::size_t lo,
 // rather than needing a separate ancestor per level.
 void stamp_ext_pair_remat(EvalNode<EvalExpr>& n, Index ix_outer,
                           Index ix_inner) {
-  n->set_node_slice_mask({{std::move(ix_outer), BatchModeType::External},
-                          {std::move(ix_inner), BatchModeType::External}});
+  n->set_node_slice_mask({{ix_outer, BatchModeType::External},
+                          {ix_inner, BatchModeType::External}});
+  n->set_batch_loops_opened_here(
+      {{std::move(ix_outer), BatchModeType::External},
+       {std::move(ix_inner), BatchModeType::External}});
 }
 
 // Assert two flat Schedules are cell-for-cell identical: same cell count,
