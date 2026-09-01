@@ -492,9 +492,23 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   SEQUANT_ASSERT(all_tensors | all_scalars);
 
-  auto hvals = summands | transform([](auto&& n) { return salted_hash(n); });
+  // uniform-conj hoisting: a sum whose EVERY summand carries conj equals
+  // conj of the unconjugated sum -- strip the conj salts so the slot hash
+  // matches, and record {conj} on the sum nodes
+  bool const hoist_conj =
+      !ranges::empty(summands) && ranges::all_of(summands, [](auto&& n) {
+        return n->canon_transform().conj;
+      });
+  auto hvals = summands | transform([hoist_conj](auto&& n) {
+                 auto h = n->hash_value();
+                 auto tr = n->canon_transform();
+                 if (hoist_conj) tr.conj = false;
+                 if (auto salt = tr.structural_salt(); salt != 0)
+                   hash::combine(h, salt);
+                 return h;
+               });
 
-  auto make_sum = [i = 0,                    //
+  auto make_sum = [i = 0, hoist_conj,        //
                    hs = imed_hashes(hvals),  //
                    all_tensors, &opts](EvalExpr const& left,
                                        EvalExpr const&) mutable -> EvalExpr {
@@ -509,16 +523,16 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           left.canon_indices(),                             //
-          CanonTransform{},                                 //
+          CanonTransform{.conj = hoist_conj},               //
           h,                                                //
           nullptr};
     } else {
-      return {EvalOp::Sum,              //
-              ResultType::Scalar,       //
-              detail::make_variable(),  //
-              {},                       //
-              CanonTransform{},         //
-              h,                        //
+      return {EvalOp::Sum,                         //
+              ResultType::Scalar,                  //
+              detail::make_variable(),             //
+              {},                                  //
+              CanonTransform{.conj = hoist_conj},  //
+              h,                                   //
               nullptr};
     }
   };
@@ -551,10 +565,24 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         })  //
       | ranges::to_vector;
 
-  auto hvals = factors | transform([](auto&& n) { return salted_hash(n); });
+  // uniform-conj hoisting over the whole product (every prefix of a
+  // uniformly conjugated factor list is itself uniform, so the pairwise
+  // intermediates share slots with their unconjugated counterparts too)
+  bool const hoist_conj =
+      !ranges::empty(factors) && ranges::all_of(factors, [](auto&& n) {
+        return n->canon_transform().conj;
+      });
+  auto hvals = factors | transform([hoist_conj](auto&& n) {
+                 auto h = n->hash_value();
+                 auto tr = n->canon_transform();
+                 if (hoist_conj) tr.conj = false;
+                 if (auto salt = tr.structural_salt(); salt != 0)
+                   hash::combine(h, salt);
+                 return h;
+               });
   auto const hs = imed_hashes(hvals) | ranges::to_vector;
 
-  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts](
+  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, hoist_conj](
                        EvalExprNode const& left,
                        EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
@@ -593,13 +621,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // unconjugated product's slot) and record {conj} on this node. Mixed
       // marks stay in the TN, where the marker coloring keeps e.g. C·C^*
       // identity-distinct from C·C. (Sum-level hoisting: T7 follow-up.)
-      bool const hoist_conj =
-          !subfacs.empty() &&
-          ranges::all_of(subfacs, [](ExprWithHash const& f) {
-            return f.expr->is<Tensor>() && f.expr->as<Tensor>().conjugated();
-          });
       if (hoist_conj)
-        for (auto& f : subfacs) f.expr->as<Tensor>().conjugate();
+        for (auto& f : subfacs)
+          if (f.expr->is<Tensor>() && f.expr->as<Tensor>().conjugated())
+            f.expr->as<Tensor>().conjugate();
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
       IndexGroups<IndexVec> const target_indices = [&ts, &uncontracted_idxs]() {
         // route each surviving hyperindex to its correct slot
@@ -668,7 +693,17 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                                       : detail::make_variable();
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
-    auto h = salted_hash(left);
+    // a REAL scalar commutes with conj, so a conj-hoisted subtree hoists
+    // through the wrap too (Theta-partner terms carry real prefactors)
+    bool const wrap_hoist = left->canon_transform().conj &&
+                            right->is_constant() &&
+                            right->as_constant().value().imag() == 0;
+    auto h = left->hash_value();
+    {
+      auto tr = left->canon_transform();
+      if (wrap_hoist) tr.conj = false;
+      if (auto salt = tr.structural_salt(); salt != 0) hash::combine(h, salt);
+    }
     hash::combine(h, salted_hash(right));
     auto result = EvalExpr{EvalOp::Product,          //
                            type,                     //

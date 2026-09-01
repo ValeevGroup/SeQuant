@@ -833,3 +833,46 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
   REQUIRE(ec.hash_value() == ecs.hash_value());  // one slot
   REQUIRE(compose(ec.canon_transform(), ecs.canon_transform()).conj);
 }
+
+TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  auto A = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  auto B = ex<Tensor>(L"B", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto AB = binarize(A->clone() * B->clone());
+  auto ABc = binarize(conjugate(A->clone() * B->clone()));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  // uniform conj HOISTS: one slot, root transform conj
+  REQUIRE(AB->hash_value() == ABc->hash_value());
+  REQUIRE(ABc->canon_transform().conj);
+  REQUIRE_FALSE(AB->canon_transform().conj);
+
+  // mixed conj SALTS: C·D^* keeps its own identity vs C·D
+  auto Cx = ex<Tensor>(L"C", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                       BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  auto Dx = ex<Tensor>(L"D", bra{L"a_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                       BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto CD = binarize(Cx->clone() * Dx->clone());
+  auto CDc = binarize(Cx->clone() * conjugate(Dx->clone()));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(CD->hash_value() != CDc->hash_value());
+
+  // sum level: a uniformly conjugated SUM of products (the Theta-partner
+  // shape) hoists onto the unconjugated sum's slot with a conj transform
+  auto D = ex<Tensor>(L"D", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  auto E = ex<Tensor>(L"E", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  auto sum = D->clone() + E->clone();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto S = binarize(sum);
+  auto Sc = binarize(conjugate(sum));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(S->hash_value() == Sc->hash_value());
+  REQUIRE(Sc->canon_transform().conj);
+  REQUIRE_FALSE(S->canon_transform().conj);
+}
