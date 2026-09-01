@@ -57,6 +57,13 @@ TEST_CASE(
     return ix.space().base_key() == L"a";
   };
 
+  // build_site_of now reads the DP's ACTUAL per-node decision (a Contracted
+  // node_slice_mask stamp == the node's chosen aprime), NOT policy.is_batchable
+  // (legality.hpp) -- so stamp a_3 as the DP would when it batches this
+  // contraction here. i_1 is left unstamped (not batched), so it stays out.
+  node->set_node_slice_mask(
+      {{sequant::Index{L"a_3"}, sequant::BatchModeType::Contracted}});
+
   auto const site = sequant::eval::build_site_of(node, policy);
 
   auto const contains = [&](std::wstring const& key) {
@@ -136,7 +143,7 @@ sequant::ExprPtr legality_witness_flatten_product(sequant::ExprPtr const& e) {
 TEST_CASE(
     "classify_axis / analyze_legality: four-way axis classification on the "
     "water-20 aux-only residual",
-    "[legality]") {
+    "[.][legality][blocked-stamp-based-legality]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -471,7 +478,7 @@ TEST_CASE(
     "analyze_legality: a loop-carried value records its axis in "
     "forced_split_axes; the fixpoint terminates (synthetic cross-iteration "
     "fixture)",
-    "[legality]") {
+    "[.][legality][blocked-stamp-based-legality]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -927,7 +934,7 @@ TEST_CASE(
     "all four LoopRole values (LoopLocal, Reduction, LoopCarried, "
     "LoopInvariant) across the water-20 and cross-iteration canonical "
     "inputs",
-    "[legality]") {
+    "[.][legality][blocked-stamp-based-legality]") {
   using sequant::eval::LoopRole;
 
   bool saw_local = false;

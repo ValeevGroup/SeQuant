@@ -153,8 +153,13 @@ TEST_CASE(
   // Stamp the ROOT's own External loop over i_1. Plain (non-scope)
   // evaluate() ignores node_slice_mask without a custom evaluator (see
   // test_eval_dryrun.cpp's equivalent stamping), so this only feeds
-  // compute_dag_boulevard's home/ectx bookkeeping below, not the replay.
+  // compute_dag_boulevard's home/ectx bookkeeping below, not the replay. The
+  // enclosing-loop context (OccurrenceRec::ectx, which the children's `uses`
+  // reads) is reconstructed from batch_loops_opened_here(), so the root --
+  // which REALIZES the i_1 loop -- must open it, not merely carry the sliced
+  // mask.
   node->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
+  node->set_batch_loops_opened_here({{mode, sequant::BatchModeType::External}});
 
   std::vector<EvalNodeDryRun> const forest{node};
 

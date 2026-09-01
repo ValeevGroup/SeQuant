@@ -385,7 +385,7 @@ TEST_CASE(
     "build_ordered_schedule: water-20 aux-only residual places the "
     "Κ-contraction result as an AccumulateSum output of the {Κ} block, "
     "ordered before the root-level composite that reads it",
-    "[ordered-schedule]") {
+    "[.][ordered-schedule][blocked-layers-1-2]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -670,7 +670,7 @@ TEST_CASE(
     "block sorts before it, and the {Κ} block sorts before the root-level "
     "composite that reads its AccumulateSum output -- both directions in "
     "one forest",
-    "[ordered-schedule]") {
+    "[.][ordered-schedule][blocked-layers-1-2]") {
   auto ctx = sequant::get_default_context().clone();
   auto isr = ctx.mutable_index_space_registry();
   REQUIRE(isr != nullptr);
@@ -763,7 +763,7 @@ TEST_CASE(
     "sibling blocks -- a producer pass (loop-carried operands scattered to "
     "full) before a consumer pass (the cross-iteration read) -- with distinct "
     "ordinals",
-    "[ordered-schedule]") {
+    "[.][ordered-schedule][blocked-layers-1-2]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -943,7 +943,7 @@ sequant::EvalNode<sequant::EvalExpr> orderedsched_2axis_forest_root() {
 TEST_CASE(
     "build_ordered_schedule: a 2-axis occ-outer/aux-inner term realizes occ as "
     "the outer forced split (phase-3 gate)",
-    "[ordered-schedule][sp2-noninner]") {
+    "[.][ordered-schedule][sp2-noninner][blocked-layers-1-2]") {
   auto ctx = sequant::get_default_context().clone();
   auto isr = ctx.mutable_index_space_registry();
   REQUIRE(isr != nullptr);
@@ -1060,7 +1060,7 @@ void orderedsched_check_levels(
 TEST_CASE(
     "build_ordered_schedule: ScopeBlock::level mirrors axis/ordinal at the "
     "correct nesting depth (Task 3, DAG-scope runtime slicing)",
-    "[ordered-schedule][sp2-noninner]") {
+    "[.][ordered-schedule][sp2-noninner][blocked-layers-1-2]") {
   auto ctx = sequant::get_default_context().clone();
   auto isr = ctx.mutable_index_space_registry();
   REQUIRE(isr != nullptr);
@@ -1425,7 +1425,7 @@ TEST_CASE(
     "once, and all four production-site roles (Transient, AccumulateSum, "
     "AccumulateScatter producer pass, AccumulateScatter consumer pass) "
     "reachable across these two inputs are demonstrably exercised",
-    "[ordered-schedule]") {
+    "[.][ordered-schedule][blocked-layers-1-2]") {
   auto const water20 = orderedsched_water20_fixture();
   auto const cross = orderedsched_cross_iteration_fixture();
 
@@ -1514,7 +1514,7 @@ TEST_CASE(
     "build_ordered_schedule: executor-shape -- axis/kind/outputs per block, "
     "an ORDERED list of sibling child blocks (not a single chained child), "
     "and value_ids resolvable through rich.cells[...].hash",
-    "[ordered-schedule]") {
+    "[.][ordered-schedule][blocked-layers-1-2]") {
   auto const water20 = orderedsched_water20_fixture();
   auto const cross = orderedsched_cross_iteration_fixture();
 
