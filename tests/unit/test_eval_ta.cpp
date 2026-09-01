@@ -106,7 +106,7 @@ auto to_ta_node(sequant::FullBinaryNode<sequant::EvalExpr> node) {
       return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
                         NestedTensorIndices(val.as_tensor()).outer_inner() |
                             ranges::to<EvalExpr::index_vector>(),
-                        val.canon_phase(), val.hash_value(),
+                        val.canon_transform(), val.hash_value(),
                         val.copy_connectivity_graph());
     } else
       return EvalExprTA(val);
@@ -2865,4 +2865,41 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
       }
     }
   }
+}
+
+TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using ZArray = TA::DistArray<TA::Tensor<std::complex<double>>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  auto& world = TA::get_default_world();
+
+  TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
+  ZArray R(world, tr);
+  R.fill_random();
+  world.gop.fence();
+
+  ResultPtr res = eval_result<ResultZ>(R);
+  std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"a,i"}};
+
+  // full transform: -conj(R^T)
+  auto got = res->apply_transform(
+      CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+  ZArray ref;
+  ref("a,i") = std::complex<double>(-1.0, 0.0) * R("i,a").conj();
+  world.gop.fence();
+  ZArray diff;
+  diff("a,i") = got->get<ZArray>()("a,i") - ref("a,i");
+  REQUIRE(diff("a,i").norm().get() < 1e-12);
+
+  // conj-only (no transposition): equal annots
+  std::array<std::any, 2> ann_c{std::string{"i,a"}, std::string{"i,a"}};
+  auto gotc = res->apply_transform(CanonTransform{.conj = true}, ann_c);
+  ZArray refc;
+  refc("i,a") = R("i,a").conj();
+  world.gop.fence();
+  ZArray diffc;
+  diffc("i,a") = gotc->get<ZArray>()("i,a") - refc("i,a");
+  REQUIRE(diffc("i,a").norm().get() < 1e-12);
 }
