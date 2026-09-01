@@ -209,6 +209,24 @@ class GenerationVisitor {
     }
   }
 
+  /// scalar leaves store the UNMARKED spelling (the conj bit rides the
+  /// node's CanonTransform); re-materialize the marker for code generation.
+  /// Tensor leaves keep the documented transpose-only (real-field) export
+  /// limitation.
+  template <typename Node>
+  static ExprPtr denoted_expr(Node const &node) {
+    ExprPtr e = node->expr();
+    if (node->canon_transform().conj &&
+        (e->template is<Variable>() || e->template is<Power>())) {
+      e = e->clone();
+      if (e->template is<Variable>())
+        e->template as<Variable>().conjugate();
+      else
+        e->template as<Power>().conjugate();
+    }
+    return e;
+  }
+
   void process_computation(const ExportNode<NodeData> &node) {
     SEQUANT_ASSERT(!node.leaf());
     SEQUANT_ASSERT(node->op_type().has_value());
@@ -217,9 +235,9 @@ class GenerationVisitor {
     container::svector<ExprPtr> expressions;
     switch (node->op_type().value()) {
       case EvalOp::Product:
-        expressions.push_back(
-            ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
-                        Product::Flatten::No));
+        expressions.push_back(ex<Product>(
+            ExprPtrList{denoted_expr(node.left()), denoted_expr(node.right())},
+            Product::Flatten::No));
         break;
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
@@ -228,14 +246,14 @@ class GenerationVisitor {
             // computation that should be exported.
             return;
           case ComputeSelection::Left:
-            expressions.push_back(node.left()->expr());
+            expressions.push_back(denoted_expr(node.left()));
             break;
           case ComputeSelection::Right:
-            expressions.push_back(node.right()->expr());
+            expressions.push_back(denoted_expr(node.right()));
             break;
           case ComputeSelection::Both:
-            expressions.push_back(node.left()->expr());
-            expressions.push_back(node.right()->expr());
+            expressions.push_back(denoted_expr(node.left()));
+            expressions.push_back(denoted_expr(node.right()));
             break;
         }
         break;
@@ -300,8 +318,8 @@ class GenerationVisitor {
     }
 
     // Drop used leaf elements
-    drop(*node.right()->expr());
-    drop(*node.left()->expr());
+    drop(*denoted_expr(node.right()));
+    drop(*denoted_expr(node.left()));
   }
 
  private:

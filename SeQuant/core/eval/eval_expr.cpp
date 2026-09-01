@@ -226,14 +226,29 @@ EvalExpr::EvalExpr(Constant const& c)
 EvalExpr::EvalExpr(Variable const& v)
     : op_type_{std::nullopt},
       result_type_{ResultType::Scalar},
-      expr_{v.clone()},
-      hash_value_{hash::value(v)} {}
+      expr_{v.clone()} {
+  // a conjugation marker rides the transform; the unmarked spelling is
+  // stored and hashed (one cache slot for x and x^*)
+  auto& vv = expr_->as<Variable>();
+  if (vv.conjugated()) {
+    canon_transform_.conj = true;
+    vv.conjugate();
+  }
+  hash_value_ = hash::value(vv);
+}
 
 EvalExpr::EvalExpr(Power const& p)
     : op_type_{std::nullopt},
       result_type_{ResultType::Scalar},
-      expr_{p.clone()},
-      hash_value_{hash::value(p)} {}
+      expr_{p.clone()} {
+  // conj(b^n) = conj(b)^n for integer n: the marker rides the transform
+  auto& pp = expr_->as<Power>();
+  if (pp.conjugated()) {
+    canon_transform_.conj = true;
+    pp.conjugate();
+  }
+  hash_value_ = hash::value(pp);
+}
 
 EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    index_vector ixs, CanonTransform transform, size_t h,

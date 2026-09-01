@@ -876,3 +876,21 @@ TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
   REQUIRE(Sc->canon_transform().conj);
   REQUIRE_FALSE(S->canon_transform().conj);
 }
+
+TEST_CASE("conjugated_scalar_leaves", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  Variable x{L"x"};
+  Variable xs = x;
+  xs.conjugate();
+  REQUIRE(EvalExpr{x}.hash_value() == EvalExpr{xs}.hash_value());
+  REQUIRE(EvalExpr{xs}.canon_transform().conj);
+  REQUIRE(EvalExpr{x}.canon_transform().trivial());
+
+  // conj(b^n) = conj(b)^n for integer n: the marker rides the transform
+  auto pw = Power{ex<Variable>(L"y"), 2};
+  auto pws = pw;
+  pws.conjugate();
+  REQUIRE(EvalExpr{pw}.hash_value() == EvalExpr{pws}.hash_value());
+  REQUIRE(EvalExpr{pws}.canon_transform().conj);
+  REQUIRE(EvalExpr{pw}.canon_transform().trivial());
+}
