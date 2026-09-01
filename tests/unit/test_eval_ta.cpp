@@ -2814,10 +2814,14 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
                                                                  nvirt};
   using ArrayToT = typename decltype(yield)::array_tot_type;
 
+  // braket symmetry pinned explicitly (:C): the test's premise is a
+  // Conjugate (Hermitian) ToT leaf, independent of the ambient deserializer
+  // defaults (which become conservative NonHermitian with the
+  // default-tensor-symmetry rework, PR #596)
   auto const swapped =
-      deserialize<sequant::ExprPtr>(L"t{i2,i3;a3<i2,i3>,a4<i2,i3>}");
+      deserialize<sequant::ExprPtr>(L"t{i2,i3;a3<i2,i3>,a4<i2,i3>}:N-C-S");
   auto const canonical =
-      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
 
   // eval-boundary precondition: leaves are orientation-sensitive (no fold,
   // no marker) -- the two orientations are distinct nodes

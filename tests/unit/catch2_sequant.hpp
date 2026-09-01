@@ -188,9 +188,13 @@ ExprVar to_expression(T &&expression) {
   // same braket symmetry (the helper's whole job is that the two routes
   // compare equal). Under a complex field this is Conjugate (the
   // deserializer's own hard-coded fallback); under a real field it yields
-  // Symm. When the library's default braket symmetry changes (e.g. to
-  // Nonsymm with the default-symmetry rework), change this fallback in
-  // lockstep -- it mirrors the ctor default, it does not define one.
+  // Symm. TODO(PR #596): the default-tensor-symmetry rework makes the
+  // programmatic ctor defaults fixed conservative (Tensor::Defaults,
+  // NonHermitian) and moves the deserializer defaults into the Context
+  // (Context::hermiticity); when it lands, change this fallback in lockstep
+  // (drop it in favor of the Context default, or pin NonHermitian and adjust
+  // the string fixtures) -- it mirrors the ctor default, it does not define
+  // one.
   const sequant::io::serialization::DeserializationOptions opts{
       .def_perm_symm = sequant::Symmetry::Nonsymm,
       .def_braket_symm = sequant::Hermiticity::Hermitian};
