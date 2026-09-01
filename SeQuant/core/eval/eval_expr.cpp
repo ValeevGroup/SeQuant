@@ -138,19 +138,46 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
+namespace {
+/// Normalizes a leaf tensor's SPELLING channels into transform bits:
+/// strips a '⁺' adjoint label (adjoint = conj ∘ swap) and converts the
+/// elementwise-conjugation marker to a PURE {conj} bit (slots untouched;
+/// orientation deltas belong to the canonicalizer fold alone). Symm markers
+/// are value-redundant and dropped. Returns the accumulated transform.
+CanonTransform normalize_leaf_spelling(Tensor& t) {
+  CanonTransform tr{};
+  if (t.adjointed()) {
+    const auto sign = t.adjoint();  // exchanges the bundles back, clears '⁺'
+    tr = compose(tr, {.phase = sign, .conj = true, .braket_swap = true});
+  }
+  if (t.kconjugated()) {
+    if (t.braket_symmetry() != BraKetSymmetry::Symm)
+      tr = compose(tr, {.conj = true});
+    const auto sign = t.set_states(false, false);  // unmarked spelling stored
+    tr = compose(tr, {.phase = sign});
+  }
+  return tr;
+}
+}  // namespace
+
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
+    // ToT leaf: normalize the spelling channels first, then let the
+    // slot-canonicalization report the reorder phase, so the stored spelling
+    // is canonical for flat and ToT leaves alike.
+    auto& t0 = expr_->as<Tensor>();
+    canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t0));
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
              TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
-    canon_transform_.phase = md.phase;
+    canon_transform_ = compose(canon_transform_, {.phase = md.phase});
     canon_indices_ = md.get_indices<index_vector>();
     connectivity_ = std::move(md.graph);
   } else {
@@ -161,25 +188,9 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // Conjugate tensor the two compose to adjoint, the identity on Hermitian
     // values -- every spelling route lands on one slot + a correct map).
     auto& t = expr_->as<Tensor>();
-    // 1. '⁺' (adjointed): strip to the bare spelling; adjoint = conj ∘ swap
-    if (t.adjointed()) {
-      const auto sign = t.adjoint();  // exchanges the bundles back, clears '⁺'
-      canon_transform_ = compose(
-          canon_transform_, {.phase = sign, .conj = true, .braket_swap = true});
-    }
-    // 2. '꙳' (K-conjugated): a PURE conj bit -- slots are never touched here
-    //    (orientation deltas belong to step 3's fold alone; mixing them would
-    //    collapse the starred-canonical spelling's salt onto the plain
-    //    spelling and re-alias C with C꙳). Value-redundant for Symm
-    //    (Hermitian over a real field), where it is dropped.
-    if (t.kconjugated()) {
-      if (t.braket_symmetry() != BraKetSymmetry::Symm)
-        canon_transform_ = compose(canon_transform_, {.conj = true});
-      const auto sign = t.set_states(false, false);
-      canon_transform_ = compose(canon_transform_, {.phase = sign});
-    }
-    // 3. block-canonicalize the stored spelling; the reorder phase is a
-    //    retrieval byproduct
+    canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t));
+    // block-canonicalize the stored spelling; the reorder phase is a
+    // retrieval byproduct
     auto phase =
         TensorBlockCanonicalizer{/*fold_signed_braket=*/false}.apply(t);
     canon_transform_ = compose(
@@ -190,8 +201,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       // and keep the canonical slots
       const auto sign = t.set_states(false, false);
       canon_transform_ = compose(
-          canon_transform_,
-          {.phase = sign, .conj = true, .braket_swap = true});
+          canon_transform_, {.phase = sign, .conj = true, .braket_swap = true});
     }
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
