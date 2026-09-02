@@ -363,12 +363,6 @@ ExprPtr kramers_term_flip(const ExprPtr& term,
 ExprPtr mark_kramers_symmetric(
     const ExprPtr& expr, KramersSymmetry ks = KramersSymmetry::TimeReversal);
 
-/// @note a no-op (returns @p expr) when the default context's
-///       canonicalization options have fold_kramers == Yes: the network
-///       Kramers fold then owns the orientation of internal components
-ExprPtr kramers_internal_rebase(const ExprPtr& expr,
-                                const container::set<Index>& externals);
-
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPINOR_HPP
