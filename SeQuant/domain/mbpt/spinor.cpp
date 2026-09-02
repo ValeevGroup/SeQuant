@@ -741,7 +741,14 @@ using sequant::mbpt::Spin;
 
 // Kramers flavor of an index; Spin::any = unflavored.
 Spin kr_flavor(const Index& idx) {
-  return sequant::mbpt::to_spin(idx.space().qns());
+  // A space with no spin bits set (e.g. the DF aux space) has no Kramers
+  // flavor: report Spin::any so the rebase machinery never respells it.
+  // (to_spin asserts nonzero spin bits; with asserts IGNOREd it returned a
+  // zero Spin that read as flavored, and the flip minted spurious flavored
+  // aux dummies -- an aux index must never carry Kramers labels.)
+  const auto qns = idx.space().qns();
+  if ((qns.to_int32() & mask_v<Spin>) == 0) return Spin::any;
+  return sequant::mbpt::to_spin(qns);
 }
 
 // The flavor-flipped IndexSpace of a flavored index (registry-resolved,
