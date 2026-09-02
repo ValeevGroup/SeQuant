@@ -514,7 +514,8 @@ class TensorNetworkV3 {
   /// component is flipped (every flavored slot of every member replaced by
   /// its Kramers partner, conjugation marker toggled) iff the flipped
   /// spelling has fewer down-first tensors, ties broken by the sorted
-  /// (label, slot flavors, marker) fingerprint. Both spellings of a
+  /// (label, slot flavors) fingerprint (marker-free, so an unmarked flavor
+  /// twin of a traced sum orients like the marked flip). Both spellings of a
   /// component thus land on the same orientation.
   /// @param named_indices indices whose flavor is fixed
   /// @return the accumulated phase, (-1)^(#down slots) per flipped tensor,

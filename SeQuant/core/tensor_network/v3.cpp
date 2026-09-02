@@ -1104,8 +1104,8 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
     if (!carried[i].empty()) root_pinned[find(i)] |= pinned[i];
 
   // per free component: down-first counts and fingerprints of both
-  // orientations (label + per-slot flavor + marker; u<->d and the marker
-  // toggle under the flip), label-independent so both spellings agree
+  // orientations (label + per-slot flavor; u<->d under the flip),
+  // label-independent so both spellings agree
   struct Component {
     int n_down_first_asis = 0, n_down_first_flipped = 0;
     container::svector<std::wstring> fp_asis, fp_flipped;
@@ -1134,9 +1134,9 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
       fp_asis += down ? L'd' : L'u';
       fp_flipped += down ? L'u' : L'd';
     });
-    const bool marked = t._conjugated();
-    fp_asis += marked ? L'*' : L' ';
-    fp_flipped += marked ? L' ' : L'*';
+    // NB no marker in the fingerprint: a twin term of a traced sum is the
+    // flavor-flipped spelling WITHOUT markers (== phase*conj of the marked
+    // flip), and both must take the same orientation to pair as conjugates
     if (first_down) {
       if (*first_down)
         ++comp.n_down_first_asis;

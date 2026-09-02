@@ -1294,6 +1294,27 @@ TEST_CASE("kramers_network_fold", "[canonicalize][kramers]") {
     for (auto& f : dn_unmarked->as<Product>()) f->as<Tensor>().conjugate();
     REQUIRE(dn_unmarked == up);
   }
+  SECTION("tied component: an unmarked flavor twin folds onto conj of it") {
+    // g{i↑,i↓;a↑,a↓} t{a↓,a↑;i↓,i↑} has ONE down-first tensor in either
+    // orientation (tie). Its twin in a traced sum is the flavor-flipped
+    // spelling WITHOUT markers (it equals phase*conj of the marked flip),
+    // so the tie-break must ignore markers for both to land on one
+    // orientation, i.e. twin == conj(canonical) up to the markers
+    auto A = T(L"g", {L"i↑_1", L"i↓_1"}, {L"a↑_1", L"a↓_1"}) *
+             T(L"t", {L"a↓_1", L"a↑_1"}, {L"i↓_1", L"i↑_1"});
+    auto B = T(L"g", {L"i↓_1", L"i↑_1"}, {L"a↓_1", L"a↑_1"}) *
+             T(L"t", {L"a↑_1", L"a↓_1"}, {L"i↑_1", L"i↓_1"});
+    canonicalize(A, fold);
+    canonicalize(B, fold);
+    REQUIRE(n_down_first(A) == 1);
+    REQUIRE(n_down_first(B) == 1);
+    bool a_marked = leaves(A)[0]->conjugated();
+    for (auto* t : leaves(A)) REQUIRE(t->conjugated() == a_marked);
+    for (auto* t : leaves(B)) REQUIRE(t->conjugated() == !a_marked);
+    auto B_toggled = B->clone();
+    for (auto& f : B_toggled->as<Product>()) f->as<Tensor>().conjugate();
+    REQUIRE(B_toggled == A);
+  }
   SECTION("pinned component: externals fix the orientation") {
     // a↑_1 and i↑_1 are external; f is down-first but shares a↓_2 with t,
     // which holds the externals -> nothing may flip
