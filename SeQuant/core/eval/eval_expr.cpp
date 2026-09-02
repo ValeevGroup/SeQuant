@@ -583,27 +583,55 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         })  //
       | ranges::to_vector;
 
-  // uniform-conj hoisting over the whole product (every prefix of a
-  // uniformly conjugated factor list is itself uniform, so the pairwise
-  // intermediates share slots with their unconjugated counterparts too)
-  bool const hoist_conj =
-      !ranges::empty(factors) && ranges::all_of(factors, [](auto&& n) {
-        return n->canon_transform().conj;
-      });
-  auto hvals = factors | transform([hoist_conj](auto&& n) {
-                 auto h = n->hash_value();
-                 auto tr = n->canon_transform();
-                 if (hoist_conj) tr.conj = false;
-                 if (auto salt = tr.structural_salt(); salt != 0)
-                   hash::combine(h, salt);
-                 return h;
-               });
-  auto const hs = imed_hashes(hvals) | ranges::to_vector;
+  // PREFIX-uniform conj hoisting (design spec): the left-fold combines
+  // factor prefixes, and a prefix that is uniformly conjugated equals the
+  // conj of its unconjugated counterpart -- its node hoists {conj} and its
+  // factors' conj salts are stripped, so e.g. the (A^*·B^*) intermediate of
+  // A^*·B^*·C is a cache hit on the A·B slot. A broken prefix keeps the
+  // salts (mixed marks stay identity-distinct).
+  std::vector<char> prefix_conj;
+  prefix_conj.reserve(ranges::size(factors) + 1);
+  prefix_conj.push_back(false);  // 0-factor prefix
+  {
+    bool run = !ranges::empty(factors);
+    for (auto const& n : factors) {
+      run = run && n->canon_transform().conj;
+      prefix_conj.push_back(run);
+    }
+  }
+  // prefix hashes with PER-PREFIX conj-salt stripping: factor salts are
+  // stripped only inside a prefix that is uniformly conjugated (where the
+  // conj hoists onto that prefix's node); in a broken prefix every factor
+  // contributes its full salt. Per-prefix (not per-factor) stripping keeps
+  // the identity order-insensitive: C·C^* and C^*·C still agree.
+  std::vector<size_t> hs;
+  {
+    auto const n = ranges::size(factors);
+    hs.reserve(n);
+    std::vector<size_t> buf;
+    buf.reserve(n);
+    for (std::size_t j = 1; j <= n; ++j) {
+      buf.clear();
+      bool const strip = static_cast<bool>(prefix_conj[j]);
+      std::size_t k = 0;
+      for (auto const& fac : factors) {
+        if (++k > j) break;
+        auto h = fac->hash_value();
+        auto tr = fac->canon_transform();
+        if (strip) tr.conj = false;
+        if (auto salt = tr.structural_salt(); salt != 0) hash::combine(h, salt);
+        buf.push_back(h);
+      }
+      hs.push_back(hash::range_unordered(buf.begin(), buf.end()));
+    }
+  }
 
-  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, hoist_conj](
+  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, &prefix_conj](
                        EvalExprNode const& left,
                        EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
+    // combining the (i+1)-factor prefix: hoist iff that prefix is uniform
+    bool const hoist_conj = static_cast<bool>(prefix_conj[i + 1]);
     auto const& uncontracted_idxs = ltr_uncontr_idxs.imed[i];
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
@@ -690,8 +718,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                 detail::make_tensor_wo_symmetries(opts, bra(target_indices.bra),
                                                   ket(target_indices.ket),
                                                   aux(target_indices.aux)),
-                canon.get_indices<Index::index_vector>(),  //
-                CanonTransform{.phase = canon.phase},      //
+                canon.get_indices<Index::index_vector>(),                  //
+                CanonTransform{.phase = canon.phase, .conj = hoist_conj},  //
                 h,
                 std::move(canon.graph)};
       }
@@ -712,7 +740,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
     // a REAL scalar commutes with conj, so a conj-hoisted subtree hoists
-    // through the wrap too (Theta-partner terms carry real prefactors)
+    // through the wrap too (\mathcal{T}-partner terms carry real prefactors)
     bool const wrap_hoist = left->canon_transform().conj &&
                             right->is_constant() &&
                             right->as_constant().value().imag() == 0;

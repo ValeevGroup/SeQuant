@@ -2966,3 +2966,91 @@ TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
   diffc("i,a") = gotc->get<ZArray>()("i,a") - refc("i,a");
   REQUIRE(diffc("i,a").norm().get() < 1e-12);
 }
+
+TEST_CASE("conj_eval_cache_reuse", "[eval][conj-transform]") {
+  // The uniform-conjugate reuse contract end-to-end (the mechanism the
+  // TRS \mathcal{T} fold planned on top of this PR consumes): a conjugated
+  // network is a cache HIT on its unconjugated counterpart's slot, served
+  // as one retrieval conj -- whole terms, sum shapes, and intermediates
+  // buried in mixed terms alike.
+  using namespace sequant;
+  using node_t = FullBinaryNode<EvalExprTA>;
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<std::complex<double>> yield_{world, 2, 3};
+  using ZArr = typename decltype(yield_)::array_type;
+
+  std::map<std::wstring, int> n_yield;
+  auto yield = [&yield_, &n_yield](node_t const& n) {
+    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
+    return yield_(n);
+  };
+
+  auto term = [](wchar_t const* spec) { return deserialize<ExprPtr>(spec); };
+  auto const eAB = term(L"A{i_1;a_1}:N-N-S B{a_1;i_2}:N-N-S");
+  auto const AB = eval_node(eAB);
+  auto const ABc = eval_node(conjugate(eAB));
+  // uniform-conj hoisting: one slot
+  REQUIRE(AB->hash_value() == ABc->hash_value());
+  REQUIRE(ABc->canon_transform().conj);
+
+  auto const eS = term(L"A{i_1;a_1}:N-N-S B{a_1;i_2}:N-N-S")->clone() +
+                  term(L"D{i_1;a_2}:N-N-S E{a_2;i_2}:N-N-S");
+  auto const S = eval_node(eS);
+  auto const Sc = eval_node(conjugate(eS));
+  REQUIRE(S->hash_value() == Sc->hash_value());
+  REQUIRE(Sc->canon_transform().conj);
+
+  auto const eMixed = ex<Product>(
+      ExprPtrList{conjugate(eAB->clone()), term(L"C{i_2;i_3}:N-N-S")});
+  auto const mixed = eval_node(eMixed);
+
+  auto not_volatile = [](node_t const&) { return false; };
+  auto cache = cache_manager(std::vector{AB, ABc, S, Sc, mixed}, not_volatile);
+
+  auto const r1 =
+      evaluate(AB, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  auto const counts1 = n_yield;
+
+  // whole-term \mathcal{T} partner: zero new yields, values conjugated
+  auto const r2 =
+      evaluate(ABc, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield == counts1);
+  {
+    ZArr ref;
+    ref("i_1,i_2") = r1("i_1,i_2").conj();
+    ZArr diff;
+    diff("i_1,i_2") = r2("i_1,i_2") - ref("i_1,i_2");
+    REQUIRE(diff("i_1,i_2").norm().get() < 1e-10);
+  }
+
+  // mixed term: the buried (A^*.B^*) intermediate hits the cached A.B slot
+  auto const a_before = counts1.count(L"A") ? counts1.at(L"A") : 0;
+  auto const r3 =
+      evaluate(mixed, std::string("i_1,i_3"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield.at(L"A") == a_before);  // not re-yielded
+  REQUIRE(n_yield.at(L"B") == counts1.at(L"B"));
+  REQUIRE(n_yield.at(L"C") == 1);  // only the new factor
+  {
+    ZArr abc;
+    abc("i_1,i_3") =
+        r2("i_1,i_2") * yield_(L"C{i_2;i_3}")->get<ZArr>()("i_2,i_3");
+    ZArr diff;
+    diff("i_1,i_3") = r3("i_1,i_3") - abc("i_1,i_3");
+    REQUIRE(diff("i_1,i_3").norm().get() < 1e-10);
+  }
+
+  // \mathcal{T}-shaped sum of products: hit + conjugated values
+  auto const s1 =
+      evaluate(S, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  auto const counts2 = n_yield;
+  auto const s2 =
+      evaluate(Sc, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield == counts2);
+  {
+    ZArr ref;
+    ref("i_1,i_2") = s1("i_1,i_2").conj();
+    ZArr diff;
+    diff("i_1,i_2") = s2("i_1,i_2") - ref("i_1,i_2");
+    REQUIRE(diff("i_1,i_2").norm().get() < 1e-10);
+  }
+}

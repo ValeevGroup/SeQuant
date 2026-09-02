@@ -861,8 +861,9 @@ TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(CD->hash_value() != CDc->hash_value());
 
-  // sum level: a uniformly conjugated SUM of products (the Theta-partner
-  // shape) hoists onto the unconjugated sum's slot with a conj transform
+  // sum level: a uniformly conjugated SUM of products (the
+  // \mathcal{T}-partner shape) hoists onto the unconjugated sum's slot with a
+  // conj transform
   auto D = ex<Tensor>(L"D", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
                       BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   auto E = ex<Tensor>(L"E", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,

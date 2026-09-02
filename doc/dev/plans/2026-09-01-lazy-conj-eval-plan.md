@@ -618,7 +618,7 @@ struct CountingYielder {
      `REQUIRE(yielder.counts[L"A"] == 1)` and same for B (intermediate hit;
      only C newly yielded); result matches the no-reuse reference computed
      on a fresh cache;
-  4. uniform-conj SUM of products (the Θ-partner shape):
+  4. uniform-conj SUM of products (the \mathcal{T}-partner shape):
      `conjugate(A·B + C·D)` after `A·B + C·D` — zero new yields + equality.
 
 - [ ] **Step 2:** All green; run everything including `[long-tests]` once.
