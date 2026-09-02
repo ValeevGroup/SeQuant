@@ -209,6 +209,24 @@ class GenerationVisitor {
     }
   }
 
+  /// scalar leaves store the UNMARKED spelling (the conj bit rides the
+  /// node's CanonTransform); re-materialize the marker for code generation.
+  /// Tensor leaves keep the documented transpose-only (real-field) export
+  /// limitation.
+  template <typename Node>
+  static ExprPtr denoted_expr(Node const &node) {
+    ExprPtr e = node->expr();
+    if (node->canon_transform().conj &&
+        (e->template is<Variable>() || e->template is<Power>())) {
+      e = e->clone();
+      if (e->template is<Variable>())
+        e->template as<Variable>().conjugate();
+      else
+        e->template as<Power>().conjugate();
+    }
+    return e;
+  }
+
   void process_computation(const ExportNode<NodeData> &node) {
     SEQUANT_ASSERT(!node.leaf());
     SEQUANT_ASSERT(node->op_type().has_value());
@@ -217,29 +235,14 @@ class GenerationVisitor {
     container::svector<ExprPtr> expressions;
     switch (node->op_type().value()) {
       case EvalOp::Product:
-        expressions.push_back(
-            ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
-                        Product::Flatten::No));
+        expressions.push_back(ex<Product>(
+            ExprPtrList{denoted_expr(node.left()), denoted_expr(node.right())},
+            Product::Flatten::No));
         break;
-      case EvalOp::Adjoint:
-        // Unary IR op. The adjoint result (node->expr(), the marker-bearing
-        // tensor) is the assignment target node->as_tensor(); the right child
-        // is the Constant(1) sentinel. Emitting node->expr() here would yield a
-        // self-referential `result = result` that never reads the operand.
-        // Instead hand the code generator the bare-leaf operand (node.left()),
-        // whose bra/ket order is swapped relative to the result — that index
-        // reordering is exactly the transpose the adjoint must materialize.
-        //
-        // LIMITATION (real-field only): this emits the conjugate-*transpose*
-        // minus the conjugation — only the index permutation is exported, not
-        // the elementwise conj. For a real scalar field conj is the identity so
-        // the exported code is exact; for a complex field it is incomplete. The
-        // exported-expression IR has no conjugation node to carry that
-        // operation yet (the eval-path backends apply conj directly in
-        // Result::adjoint()). Adding complex-correct export requires
-        // representing conj in the generated IR — tracked separately.
-        expressions.push_back(node.left()->expr());
-        break;
+      case EvalOp::RealPart:
+      case EvalOp::ImagPart:
+        throw std::runtime_error(
+            "export of Re/Im eval nodes is not implemented yet");
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:
@@ -247,14 +250,14 @@ class GenerationVisitor {
             // computation that should be exported.
             return;
           case ComputeSelection::Left:
-            expressions.push_back(node.left()->expr());
+            expressions.push_back(denoted_expr(node.left()));
             break;
           case ComputeSelection::Right:
-            expressions.push_back(node.right()->expr());
+            expressions.push_back(denoted_expr(node.right()));
             break;
           case ComputeSelection::Both:
-            expressions.push_back(node.left()->expr());
-            expressions.push_back(node.right()->expr());
+            expressions.push_back(denoted_expr(node.left()));
+            expressions.push_back(denoted_expr(node.right()));
             break;
         }
         break;
@@ -319,8 +322,8 @@ class GenerationVisitor {
     }
 
     // Drop used leaf elements
-    drop(*node.right()->expr());
-    drop(*node.left()->expr());
+    drop(*denoted_expr(node.right()));
+    drop(*denoted_expr(node.left()));
   }
 
  private:

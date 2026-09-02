@@ -19,13 +19,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant::mbpt;
 
   auto has_tensor = [](const ExprPtr& e, const std::wstring& label) {
-    bool found = false;
-    e->visit(
-        [&](const ExprPtr& n) {
-          if (n.is<Tensor>() && n.as<Tensor>().label() == label) found = true;
-        },
-        /*atoms_only=*/true);
-    return found;
+    // the core has_tensor sees through RealPart/ImagPart wrappers, which the
+    // conjugate-pair fold (on by default in a complex field) emits
+    return sequant::has_tensor(e, label);
   };
 
   SECTION("sr_tcc") {
@@ -239,7 +235,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 #ifndef SEQUANT_SKIP_LONG_TESTS
     const auto E = cc.energy(3);
     REQUIRE_THAT(E, !EquivalentTo(amps.at(0)));
-    REQUIRE(size(E) == 46);
+    // 23 = 46 pre-fold terms with every {s, s*} pair folded to 2 Re(s) (the
+    // conjugate-pair fold is on by default in a complex field)
+    REQUIRE(size(E) == 23);
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
@@ -488,10 +486,14 @@ SECTION("ucc") {
       for (auto k = 0; k <= N; ++k) {
         REQUIRE(t_eqs[k]);
       }
-      // these are numerically verified against http://arxiv.org/abs/2503.00617
+      // pre-fold counts (20 and 74) numerically verified against
+      // http://arxiv.org/abs/2503.00617; the default conjugate-pair fold
+      // merges each {s, s*} pair to 2 Re(s): 20 -> 14 (6 pairs + 8
+      // self-conjugate)
       const auto energy_nterms = size(t_eqs[0]);
-      if (c == 2) REQUIRE(energy_nterms == 20);
-      if (c == 3) REQUIRE(energy_nterms == 74);
+      if (c == 2) REQUIRE(energy_nterms == 14);
+      // 74 -> 41 under the fold (33 pairs + 8 self-conjugate)
+      if (c == 3) REQUIRE(energy_nterms == 41);
     }
   }  // SECTION("t")
 }  // SECTION("ucc")

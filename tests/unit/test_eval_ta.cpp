@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/complex.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -11,6 +12,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -106,7 +108,7 @@ auto to_ta_node(sequant::FullBinaryNode<sequant::EvalExpr> node) {
       return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
                         NestedTensorIndices(val.as_tensor()).outer_inner() |
                             ranges::to<EvalExpr::index_vector>(),
-                        val.canon_phase(), val.hash_value(),
+                        val.canon_transform(), val.hash_value(),
                         val.copy_connectivity_graph());
     } else
       return EvalExprTA(val);
@@ -135,10 +137,18 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
            mo[2].str();
   };
 
-  NestedTensorIndices oixs{tnsr};
+  // PR-2 contract: leaves are stored/served in their CANONICAL spelling, so
+  // normalize the orientation (and drop any fold marker) before keying --
+  // this makes literal test spellings and ctor-canonicalized leaves agree
+  auto canon = tnsr.clone();
+  {
+    auto& ct = canon->as<sequant::Tensor>();
+    sequant::TensorBlockCanonicalizer{}.apply(ct);
+    if (ct.conjugated()) ct.conjugate();
+  }
+  NestedTensorIndices oixs{canon->as<sequant::Tensor>()};
   if (oixs.inner.empty()) {
-    auto const tnsr_deparsed =
-        sequant::serialize(tnsr.clone(), {.annot_symm = false});
+    auto const tnsr_deparsed = sequant::serialize(canon, {.annot_symm = false});
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
@@ -156,7 +166,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
              ranges::to<std::wstring>;
     };
 
-    std::wstring result(tnsr.label());
+    std::wstring result(canon->as<sequant::Tensor>().label());
     result += L"{" + ixs_lbl(oixs.outer) + L";" + ixs_lbl(oixs.inner) + L"}";
     return result;
   }
@@ -364,11 +374,54 @@ class rand_tensor_yield {
   ///
   sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_er_.find(label.data());
-    if (found == label_to_er_.end())
-      found = label_to_er_.find(tensor_to_key(label));
+    if (found != label_to_er_.end()) return found->second;
+    found = label_to_er_.find(tensor_to_key(label));
     if (found == label_to_er_.end())
       throw std::runtime_error{"attempted access of non-existent ResultPtr!"};
-    return found->second;
+    // stored arrays are CANONICAL-spelling shaped (PR-2 contract); if the
+    // requested literal is the other braket orientation, hand back a mode-
+    // permuted copy so manual references read as written
+    if (label.find(L'{') == std::wstring_view::npos) return found->second;
+    // stored arrays are CANONICAL-spelling shaped (PR-2 contract); serve the
+    // literal spelling by applying its full leaf transform (orientation
+    // relabel + conj/phase), exactly as evaluation would
+    auto lt = sequant::deserialize<sequant::ExprPtr>(std::wstring(label))
+                  ->as<sequant::Tensor>();
+    auto annot_of = [](sequant::Tensor const& t) -> std::string {
+      // mirror EvalExpr::indices_annot's convention: outer = proto-free,
+      // inner = proto-carrying, tokens via to_label_annotation
+      using ranges::views::filter;
+      using ranges::views::intersperse;
+      using ranges::views::join;
+      using ranges::views::transform;
+      auto lbl = [](sequant::Index const& ix) {
+        // label + proto labels concatenated (to_label_annotation convention)
+        std::string r = sequant::toUtf8(ix.label());
+        for (auto const& pix : ix.proto_indices())
+          r += sequant::toUtf8(pix.label());
+        return r;
+      };
+      NestedTensorIndices const nti{t};
+      std::string outer = nti.outer | transform(lbl) |
+                          intersperse(std::string{","}) | join |
+                          ranges::to<std::string>;
+      std::string inner = nti.inner | transform(lbl) |
+                          intersperse(std::string{","}) | join |
+                          ranges::to<std::string>;
+      return outer + (inner.empty() ? "" : (";" + inner));
+    };
+    auto const post = annot_of(lt);    // requested (as-written) mode order
+    sequant::EvalExprTA const ev{lt};  // canonicalizes; computes the map
+    // canonical (stored) mode order from the tensor's SLOTS (ev.annot() is
+    // md-ordered for ToT leaves and may include proto-only named indices)
+    auto const pre = annot_of(ev.expr()->as<sequant::Tensor>());
+    auto const tr = ev.canon_transform();
+    if (tr.trivial() && pre == post) return found->second;
+    auto r =
+        found->second->apply_transform(tr, {std::any{pre}, std::any{post}});
+    // cache under the literal key: the fixture owns the transformed variant
+    auto [it2, ok] = label_to_er_.emplace(std::wstring(label), std::move(r));
+    return it2->second;
   }
 };
 
@@ -2823,8 +2876,8 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
   auto const canonical =
       deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
 
-  // eval-boundary precondition: leaves are orientation-sensitive (no fold,
-  // no marker) -- the two orientations are distinct nodes
+  // PR-2 transform model: both orientations share ONE canonical slot; the
+  // non-canonical spelling carries the fold map in its CanonTransform
   EvalExpr const swapped_leaf{swapped->as<Tensor>()};
   EvalExpr const canon_leaf{canonical->as<Tensor>()};
   auto const is_conj = [](EvalExpr const& leaf) {
@@ -2832,23 +2885,33 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
   };
   REQUIRE_FALSE(is_conj(swapped_leaf));
   REQUIRE_FALSE(is_conj(canon_leaf));
-  REQUIRE(swapped_leaf.hash_value() != canon_leaf.hash_value());
+  REQUIRE(swapped_leaf.hash_value() == canon_leaf.hash_value());
+  REQUIRE(swapped_leaf.canon_transform().trivial() !=
+          canon_leaf.canon_transform().trivial());
 
-  // a STARRED spelling is served through EvalOp::Adjoint: binarize wraps it
-  // over the unmarked VALUE-orientation operand
+  // a STARRED spelling binarizes to a plain LEAF whose transform composes a
+  // pure {conj} on top; evaluation serves conj(cached) on retrieval
   auto conj_side = canonical->clone();
   conj_side->as<Tensor>().conjugate();
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE(node->op_type().has_value());
-  CHECK(node->op_type().value() == EvalOp::Adjoint);
+  REQUIRE(node.leaf());
+  // orientation-robust: the starred spelling's transform differs from the
+  // unstarred same-spelling leaf's by exactly conj
+  REQUIRE(sequant::compose(node->canon_transform(),
+                           EvalExpr{canonical->as<Tensor>()}.canon_transform())
+              .conj);
   auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
   auto const res = evaluate(node, node->annot(), yield, cache);
   auto const& got = res->get<ArrayToT>();
-  auto const& served =
-      yield(node.left()->expr()->as<Tensor>())->get<ArrayToT>();
+  // the leaf IS the node: served = the canonical unstarred spelling's data
+  auto const& served = yield(node->expr()->as<Tensor>())->get<ArrayToT>();
 
+  // expected = the leaf transform applied to the served canonical data:
+  // {conj} conjugates; a bare {braket_swap} is layout-invariant for ToT
+  // (outer/inner classification ignores bra/ket), i.e. the identity here
+  bool const expect_conj = node->canon_transform().conj;
   auto it_s = served.begin();
   auto it_g = got.begin();
   for (; it_s != served.end(); ++it_s, ++it_g) {
@@ -2861,8 +2924,169 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
       if (sinner.empty()) continue;
       for (std::size_t k = 0; k < sinner.size(); ++k) {
         CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
-        CHECK(ginner[k].imag() == Catch::Approx(-sinner[k].imag()));
+        CHECK(ginner[k].imag() ==
+              Catch::Approx((expect_conj ? -1 : 1) * sinner[k].imag()));
       }
     }
   }
+}
+
+TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using ZArray = TA::DistArray<TA::Tensor<std::complex<double>>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  auto& world = TA::get_default_world();
+
+  TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
+  ZArray R(world, tr);
+  R.fill_random();
+  world.gop.fence();
+
+  ResultPtr res = eval_result<ResultZ>(R);
+  std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"a,i"}};
+
+  // full transform: -conj(R^T)
+  auto got = res->apply_transform(
+      CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+  ZArray ref;
+  ref("a,i") = std::complex<double>(-1.0, 0.0) * R("i,a").conj();
+  world.gop.fence();
+  ZArray diff;
+  diff("a,i") = got->get<ZArray>()("a,i") - ref("a,i");
+  REQUIRE(diff("a,i").norm().get() < 1e-12);
+
+  // conj-only (no transposition): equal annots
+  std::array<std::any, 2> ann_c{std::string{"i,a"}, std::string{"i,a"}};
+  auto gotc = res->apply_transform(CanonTransform{.conj = true}, ann_c);
+  ZArray refc;
+  refc("i,a") = R("i,a").conj();
+  world.gop.fence();
+  ZArray diffc;
+  diffc("i,a") = gotc->get<ZArray>()("i,a") - refc("i,a");
+  REQUIRE(diffc("i,a").norm().get() < 1e-12);
+}
+
+TEST_CASE("conj_eval_cache_reuse", "[eval][conj-transform]") {
+  // The uniform-conjugate reuse contract end-to-end (the mechanism the
+  // TRS \mathcal{T} fold planned on top of this PR consumes): a conjugated
+  // network is a cache HIT on its unconjugated counterpart's slot, served
+  // as one retrieval conj -- whole terms, sum shapes, and intermediates
+  // buried in mixed terms alike.
+  using namespace sequant;
+  using node_t = FullBinaryNode<EvalExprTA>;
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<std::complex<double>> yield_{world, 2, 3};
+  using ZArr = typename decltype(yield_)::array_type;
+
+  std::map<std::wstring, int> n_yield;
+  auto yield = [&yield_, &n_yield](node_t const& n) {
+    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
+    return yield_(n);
+  };
+
+  auto term = [](wchar_t const* spec) { return deserialize<ExprPtr>(spec); };
+  auto const eAB = term(L"A{i_1;a_1}:N-N-S B{a_1;i_2}:N-N-S");
+  auto const AB = eval_node(eAB);
+  auto const ABc = eval_node(conjugate(eAB));
+  // uniform-conj hoisting: one slot
+  REQUIRE(AB->hash_value() == ABc->hash_value());
+  REQUIRE(ABc->canon_transform().conj);
+
+  auto const eS = term(L"A{i_1;a_1}:N-N-S B{a_1;i_2}:N-N-S")->clone() +
+                  term(L"D{i_1;a_2}:N-N-S E{a_2;i_2}:N-N-S");
+  auto const S = eval_node(eS);
+  auto const Sc = eval_node(conjugate(eS));
+  REQUIRE(S->hash_value() == Sc->hash_value());
+  REQUIRE(Sc->canon_transform().conj);
+
+  auto const eMixed = ex<Product>(
+      ExprPtrList{conjugate(eAB->clone()), term(L"C{i_2;i_3}:N-N-S")});
+  auto const mixed = eval_node(eMixed);
+
+  auto not_volatile = [](node_t const&) { return false; };
+  auto cache = cache_manager(std::vector{AB, ABc, S, Sc, mixed}, not_volatile);
+
+  auto const r1 =
+      evaluate(AB, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  auto const counts1 = n_yield;
+
+  // whole-term \mathcal{T} partner: zero new yields, values conjugated
+  auto const r2 =
+      evaluate(ABc, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield == counts1);
+  {
+    ZArr ref;
+    ref("i_1,i_2") = r1("i_1,i_2").conj();
+    ZArr diff;
+    diff("i_1,i_2") = r2("i_1,i_2") - ref("i_1,i_2");
+    REQUIRE(diff("i_1,i_2").norm().get() < 1e-10);
+  }
+
+  // mixed term: the buried (A^*.B^*) intermediate hits the cached A.B slot
+  auto const a_before = counts1.count(L"A") ? counts1.at(L"A") : 0;
+  auto const r3 =
+      evaluate(mixed, std::string("i_1,i_3"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield.at(L"A") == a_before);  // not re-yielded
+  REQUIRE(n_yield.at(L"B") == counts1.at(L"B"));
+  REQUIRE(n_yield.at(L"C") == 1);  // only the new factor
+  {
+    ZArr abc;
+    abc("i_1,i_3") =
+        r2("i_1,i_2") * yield_(L"C{i_2;i_3}")->get<ZArr>()("i_2,i_3");
+    ZArr diff;
+    diff("i_1,i_3") = r3("i_1,i_3") - abc("i_1,i_3");
+    REQUIRE(diff("i_1,i_3").norm().get() < 1e-10);
+  }
+
+  // \mathcal{T}-shaped sum of products: hit + conjugated values
+  auto const s1 =
+      evaluate(S, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  auto const counts2 = n_yield;
+  auto const s2 =
+      evaluate(Sc, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield == counts2);
+  {
+    ZArr ref;
+    ref("i_1,i_2") = s1("i_1,i_2").conj();
+    ZArr diff;
+    diff("i_1,i_2") = s2("i_1,i_2") - ref("i_1,i_2");
+    REQUIRE(diff("i_1,i_2").norm().get() < 1e-10);
+  }
+}
+
+TEST_CASE("re_im_evaluation", "[eval][re-im]") {
+  using namespace sequant;
+  // pin the whole symbolic environment (canonicalizer registry is
+  // process-global, and the ambient context's field must be complex for the
+  // conj channels to be nontrivial) so this case is order-independent
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto sr_ctx = Context{get_default_context()};
+  sr_ctx.set(mbpt::make_min_sr_spaces());
+  auto ctx_resetter = set_scoped_default_context(sr_ctx);
+  using C = std::complex<double>;
+  const size_t nocc = 2, nvirt = 4;
+  auto& world = TA::get_default_world();
+  auto yield_ = rand_tensor_yield<C, TA::DensePolicy>{world, nocc, nvirt};
+
+  // s = a closed-contraction scalar network on complex data
+  auto s_expr = deserialize<sequant::ExprPtr>(L"g{i_1;a_1}:N") *
+                deserialize<sequant::ExprPtr>(L"t{a_1;i_1}:N");
+
+  auto direct = evaluate(eval_node(s_expr->clone()), yield_)->get<C>();
+  REQUIRE(std::abs(direct.imag()) > 1e-12);  // genuinely complex data
+
+  auto re = evaluate(eval_node(real_part(s_expr->clone())), yield_)->get<C>();
+  auto im =
+      evaluate(eval_node(imaginary_part(s_expr->clone())), yield_)->get<C>();
+
+  // Re/Im results are real-valued
+  REQUIRE(re.imag() == 0.0);
+  REQUIRE(im.imag() == 0.0);
+  // Re(s) + i Im(s) == s
+  REQUIRE(std::abs(re + C(0, 1) * im - direct) < 1e-12);
+  REQUIRE(re.real() == Catch::Approx(direct.real()));
+  REQUIRE(im.real() == Catch::Approx(direct.imag()));
 }

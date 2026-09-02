@@ -62,7 +62,7 @@ template <typename T, typename... Ts>
                     a->size_in_bytes();
                   }) {
       // Smart-pointer-like operand: tolerate null so callers (e.g. the
-      // EvalOp::Adjoint dispatcher, which leaves `right` unevaluated) can
+      // former unary-op dispatchers) can
       // pass an empty ResultPtr without an external guard.
       return a ? a->size_in_bytes() : size_t{0};
     } else if constexpr (requires { a->size_in_bytes(); })
@@ -160,10 +160,9 @@ enum struct EvalMode {
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
-    return node->is_product()   ? EvalMode::Product
-           : node->is_sum()     ? EvalMode::Sum
-           : node->is_adjoint() ? EvalMode::Permute
-                                : EvalMode::Unknown;
+    return node->is_product() ? EvalMode::Product
+           : node->is_sum()   ? EvalMode::Sum
+                              : EvalMode::Unknown;
   }
 }
 
@@ -526,12 +525,15 @@ ResultPtr evaluate(Node const& node,  //
   // Multiply a (possibly cached) result by its node's canonicalization phase.
   // Formerly the `mult_by_phase` lambda local to the Checked wrapper.
   auto apply_phase = [&cache](auto const& nd, ResultPtr res) -> ResultPtr {
-    auto phase = nd->canon_phase();
-    if (phase == 1) return res;
+    auto const tr = nd->canon_transform();
+    if (tr.trivial()) return res;
 
     ResultPtr post;
-    auto time =
-        detail::timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
+    auto time = detail::timed_eval_inplace([&]() {
+      std::array<std::any, 2> const ann{std::any{nd->annot()},
+                                        std::any{nd->annot()}};
+      post = res->apply_transform(tr, ann);
+    });
 
     if constexpr (detail::trace(EvalTrace)) {
       size_t hwmark = log::bytes(cache, post).value;
@@ -541,7 +543,9 @@ ResultPtr evaluate(Node const& node,  //
                                 .mem_result = log::bytes(post),
                                 .mem_alloc = log::bytes(post),
                                 .mem_hwmark = {cache.note_working_set(hwmark)}};
-      log::eval(stat, std::format("{} * {}", phase, nd->label()));
+      log::eval(stat,
+                std::format("[{}{}{}] {}", int(tr.phase), tr.conj ? "*" : "",
+                            tr.braket_swap ? "^T" : "", nd->label()));
     }
     return post;
   };
@@ -551,7 +555,7 @@ ResultPtr evaluate(Node const& node,  //
   // marks a Checked node that exists in the cache map but has not been stored
   // yet, so its computed result must be cached (this replaces the recursive
   // wrapper's `evaluate<..., Unchecked>` re-entry).
-  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftAdj };
+  enum class Stage { Enter, NeedLeft, NeedRight };
   struct Frame {
     Node node;
     bool checked;
@@ -635,6 +639,11 @@ ResultPtr evaluate(Node const& node,  //
           ResultPtr result;
           auto time =
               detail::timed_eval_inplace([&]() { result = le(f.node); });
+          // the leaf evaluator serves the CANONICAL spelling; parents and
+          // the cache-store path expect the DENOTED value (CanonTransform is
+          // an involution: finish_phase_b's store re-applies it, leaving the
+          // cache with the canonical data)
+          result = apply_phase(f.node, std::move(result));
           if constexpr (detail::trace(EvalTrace)) {
             log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
                                     .time = time,
@@ -650,40 +659,8 @@ ResultPtr evaluate(Node const& node,  //
 
         // --- Internal node: request the left operand (always Checked). The
         //     stage must advance before the push (push may grow the deque). ---
-        f.stage = (f.node->op_type() == EvalOp::Adjoint) ? Stage::NeedLeftAdj
-                                                         : Stage::NeedLeft;
+        f.stage = Stage::NeedLeft;
         stk.push_back(Frame{.node = f.node.left(), .checked = true});
-        break;
-      }
-
-      case Stage::NeedLeftAdj: {
-        // Unary IR op (Adjoint): only the left operand is evaluated; the right
-        // child is the Constant(1) sentinel kept to preserve FullBinaryNode's
-        // invariant, and is intentionally never pushed.
-        f.left = std::move(ret);
-        SEQUANT_ASSERT(f.left);
-        std::array<std::any, 2> const adj_ann{f.node.left()->annot(),
-                                              f.node->annot()};
-        ResultPtr result;
-        auto time = detail::timed_eval_inplace(
-            [&]() { result = f.left->adjoint(adj_ann); });
-
-        if constexpr (detail::trace(EvalTrace)) {
-          // `right` is null here (see log::bytes() null tolerance).
-          size_t hwmark = log::bytes(cache, result).value;
-          if (!cache.alive(f.node.left()) || f.node.left()->canon_phase() != 1)
-            hwmark += log::bytes(f.left).value;
-          log::eval(
-              log::EvalStat{.mode = log::eval_mode(f.node),
-                            .time = time,
-                            .mem_result = log::bytes(result),
-                            .mem_alloc = log::bytes(result),
-                            .mem_hwmark = {cache.note_working_set(hwmark)},
-                            .mem_left = log::bytes(f.left),
-                            .mem_right = log::bytes(f.right)},
-              log::label(f.node));
-        }
-        finalize(finish_phase_b(f, std::move(result)));
         break;
       }
 
@@ -704,7 +681,15 @@ ResultPtr evaluate(Node const& node,  //
             f.node.left()->annot(), f.node.right()->annot(), f.node->annot()};
         ResultPtr result;
         log::Duration time;
-        if (f.node->op_type() == EvalOp::Sum) {
+        if (f.node->op_type() == EvalOp::RealPart ||
+            f.node->op_type() == EvalOp::ImagPart) {
+          // Unary Re/Im over the left operand; the right child is the
+          // Constant{1} sentinel (evaluated trivially above, ignored here).
+          bool const re = f.node->op_type() == EvalOp::RealPart;
+          time = detail::timed_eval_inplace([&]() {
+            result = re ? f.left->real_part() : f.left->imag_part();
+          });
+        } else if (f.node->op_type() == EvalOp::Sum) {
           time = detail::timed_eval_inplace(
               [&]() { result = f.left->sum(*f.right, ann); });
         } else {
@@ -736,14 +721,16 @@ ResultPtr evaluate(Node const& node,  //
 
         if constexpr (detail::trace(EvalTrace)) {
           // A cached child is *distinct* from the local left/right when its
-          // canon_phase != 1, because apply_phase allocates a fresh buffer
-          // while the cache still holds the pre-phase data. So only skip the
-          // local's bytes when the cache aliases the same buffer (phase == 1).
+          // canon transform is nontrivial, because applying it allocates a
+          // fresh buffer while the cache still holds the pre-phase data. So
+          // only skip the local's bytes when the cache aliases the same buffer
+          // (trivial).
           size_t hwmark = log::bytes(cache, result).value;
-          if (!cache.alive(f.node.left()) || f.node.left()->canon_phase() != 1)
+          if (!cache.alive(f.node.left()) ||
+              !f.node.left()->canon_transform().trivial())
             hwmark += log::bytes(f.left).value;
           if (f.right && (!cache.alive(f.node.right()) ||
-                          f.node.right()->canon_phase() != 1))
+                          !f.node.right()->canon_transform().trivial()))
             hwmark += log::bytes(f.right).value;
           log::eval(
               log::EvalStat{.mode = log::eval_mode(f.node),
@@ -814,7 +801,7 @@ ResultPtr evaluate(Node const& node,           //
       // the cached buffer unchanged — i.e. the node is cached AND no
       // mult_by_phase fresh allocation happened (phase == 1).
       size_t hwmark = log::bytes(cache, result.post).value;
-      if (!cache.alive(node) || node->canon_phase() != 1)
+      if (!cache.alive(node) || !node->canon_transform().trivial())
         hwmark += log::bytes(result.pre).value;
       auto stat = log::EvalStat{.mode = log::EvalMode::Permute,
                                 .time = time,
@@ -875,7 +862,8 @@ ResultPtr evaluate(Nodes const& nodes,  //
       // hwmark counts the cache plus both operands live at this moment;
       // skip pre's bytes only when pre is the cached buffer itself.
       size_t hwmark = log::bytes(cache, result).value;
-      if (!cache.alive(n) || n->canon_phase() != 1 || !layout_is_default)
+      if (!cache.alive(n) || !n->canon_transform().trivial() ||
+          !layout_is_default)
         hwmark += log::bytes(pre).value;
       auto stat = log::EvalStat{.mode = log::EvalMode::SumInplace,
                                 .time = time,
@@ -990,8 +978,11 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   auto const& n0 = detail::node0(detail::arg0(std::forward<Args>(args)...));
 
   ResultPtr result;
-  auto time = detail::timed_eval_inplace(
-      [&]() { result = pre->antisymmetrize(n0->as_tensor().bra_rank()); });
+  auto time = detail::timed_eval_inplace([&]() {
+    result = pre->antisymmetrize((n0->canon_transform().braket_swap
+                                      ? n0->as_tensor().ket_rank()
+                                      : n0->as_tensor().bra_rank()));
+  });
 
   // logging
   if constexpr (detail::trace(EvalTrace)) {
@@ -1397,8 +1388,9 @@ template <typename F, typename IndexPredicate = accept_any_index,
           continue;
         }
         ResultPtr v = std::move(acc[m]);
-        if (auto const ph = (*mem)->canon_phase(); ph != 1)
-          v = v->mult_by_phase(ph);
+        if (auto const tr = (*mem)->canon_transform(); !tr.trivial())
+          v = v->apply_transform(
+              tr, {std::any{(*mem)->annot()}, std::any{(*mem)->annot()}});
         (void)cache.store(*mem, std::move(v));
       }
     }
