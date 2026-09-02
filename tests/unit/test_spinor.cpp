@@ -955,17 +955,43 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
   REQUIRE(n_non_trs(df) == 0);
 
   // the network fold: never more down-first leaves than the input, and
-  // idempotent
+  // idempotent; canonicalization (fold on or off), conjugation and the
+  // conjugate-pair fold must all preserve the attribute
   REQUIRE(df->is<Sum>());
+  {
+    auto nofold = df->clone();
+    canonicalize(nofold, CanonicalizeOptions{});
+    REQUIRE(n_non_trs(nofold) == 0);
+    auto conj = sequant::conjugate(df->clone());
+    REQUIRE(n_non_trs(conj) == 0);
+    auto folded = fold_conjugate_pairs(df->clone(), fold, [](ExprPtr const& e) {
+      return sequant::conjugate(e);
+    });
+    REQUIRE(n_non_trs(folded) == 0);
+  }
   for (auto const& term : *df) {
     auto once = term->clone();
     canonicalize(once, fold);
+    REQUIRE(n_non_trs(once) == 0);
     REQUIRE(n_down_first(once) <= n_down_first(term));
     auto twice = once->clone();
     canonicalize(twice, fold);
     REQUIRE(twice == once);
   }
 
+  // dch energy term 0 (all-down component) must flip to all-up under the fold
+  {
+    auto e = deserialize(
+        L"1/2 C{a↓_1<i↓_1,i↓_2>;a↑_1}:N-C-N * C{a↓_2<i↓_1,i↓_2>;a↑_2}:N-C-N * "
+        L"g^*{i↓_1;a↑_1;Κ_1}:N-C-S * g^*{i↓_2;a↑_2;Κ_1}:N-C-S * "
+        L"t^*{a↓_1<i↓_1,i↓_2>,a↓_2<i↓_1,i↓_2>;i↓_1,i↓_2}:A-N-S");
+    e = mark_kramers_symmetric(e);
+    INFO("before: " << toUtf8(to_latex(e)) << " down-first "
+                    << n_down_first(e));
+    canonicalize(e, fold);
+    INFO("after: " << toUtf8(to_latex(e)));
+    REQUIRE(n_down_first(e) == 0);
+  }
   // rebase defers to the canonicalizer when the context folds
   {
     auto up = [](const wchar_t* l) { return make_spinalpha(Index(l)); };

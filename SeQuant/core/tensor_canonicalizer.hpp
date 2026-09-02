@@ -204,6 +204,12 @@ int canonicalize_kramers(AbstractTensor& t);
 /// @return whether any slot was flipped
 bool kramers_flip_slots(AbstractTensor& t);
 
+/// @return whether the first flavored slot of @p t's braket-canonical
+///         orientation (see DefaultTensorCanonicalizer::canonicalize_braket,
+///         evaluated on a copy) carries the non-canonical (down) flavor;
+///         false for tensors without flavored slots
+bool kramers_down_first(const AbstractTensor& t);
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;

@@ -1140,6 +1140,7 @@ TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
   using namespace sequant;
   auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   mbpt::add_fermi_spin(*isr);
+  mbpt::add_df_spaces(isr);
   Context ctx = get_default_context();
   ctx.set(isr);
   auto resetter = set_scoped_default_context(ctx);
@@ -1181,6 +1182,49 @@ TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
     REQUIRE(f.bra()[0].space() == a_up);
     REQUIRE(f.ket()[0].space() == i_dn);
     REQUIRE(!ph);
+  }
+  SECTION("braket orientation prefers the up-row bra for Kramers tensors") {
+    // a Hermitian (Conjugate) TimeReversal tensor may swap bra<->ket at the
+    // cost of the marker; the fold picks the orientation whose bra carries
+    // fewer down-flavored indices, so "first flavored slot up" is reachable
+    // by the cheaper braket move and the Kramers flip is not needed
+    auto C = Tensor(L"C", bra{Index(L"a↓_1")},
+                    ket{Index(L"a↑_1", {Index(L"i↑_1"), Index(L"i↑_2")})},
+                    Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                    ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    DefaultTensorCanonicalizer::canonicalize_braket(C);
+    REQUIRE(C.conjugated());
+    REQUIRE(C.bra()[0].space() == a_up);
+    REQUIRE(C.ket()[0].space() == a_dn);
+    // idempotent (value orientation is unfolded before deciding)
+    DefaultTensorCanonicalizer::canonicalize_braket(C);
+    REQUIRE(C.conjugated());
+    REQUIRE(C.bra()[0].space() == a_up);
+    // an unmarked up-row bra stays as written
+    auto g =
+        Tensor(L"g", bra{Index(L"a↑_1")}, ket{Index(L"i↓_1")},
+               aux{Index(L"Κ_1")}, Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+               ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    DefaultTensorCanonicalizer::canonicalize_braket(g);
+    REQUIRE(!g.conjugated());
+    REQUIRE(g.bra()[0].space() == a_up);
+    // the marked down-row-bra spelling of the same value swaps back to it
+    auto gs =
+        Tensor(L"g", bra{Index(L"i↓_1")}, ket{Index(L"a↑_1")},
+               aux{Index(L"Κ_1")}, Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+               ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    gs.conjugate();
+    DefaultTensorCanonicalizer::canonicalize_braket(gs);
+    REQUIRE(gs == g);
+    // a Nonsymm-Kramers tensor keeps the plain (space-order) criterion
+    auto Cn = Tensor(L"C", bra{Index(L"a↓_1")},
+                     ket{Index(L"a↑_1", {Index(L"i↑_1"), Index(L"i↑_2")})},
+                     Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                     ColumnSymmetry::Nonsymm, KramersSymmetry::Nonsymm);
+    auto Cn0 = Cn;
+    DefaultTensorCanonicalizer::canonicalize_braket(Cn);
+    DefaultTensorCanonicalizer::canonicalize_braket(Cn0);
+    REQUIRE(Cn == Cn0);
   }
   SECTION("default block canonicalizer never folds (network safety)") {
     // inside a network the per-tensor fold would flip one tensor's dummies

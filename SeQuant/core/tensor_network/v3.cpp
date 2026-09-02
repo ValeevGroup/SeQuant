@@ -1119,7 +1119,6 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
     auto &comp = components[root];
     comp.members.push_back(i);
     const AbstractTensor &t = *tensors_[i];
-    std::optional<bool> first_down;
     std::wstring fp_asis(t._label()), fp_flipped(t._label());
     fp_asis += L'|';
     fp_flipped += L'|';
@@ -1130,18 +1129,20 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
         return;
       }
       const bool down = is_down(idx);
-      if (!first_down) first_down = down;
       fp_asis += down ? L'd' : L'u';
       fp_flipped += down ? L'u' : L'd';
     });
     // NB no marker in the fingerprint: a twin term of a traced sum is the
     // flavor-flipped spelling WITHOUT markers (== phase*conj of the marked
-    // flip), and both must take the same orientation to pair as conjugates
-    if (first_down) {
-      if (*first_down)
-        ++comp.n_down_first_asis;
-      else
-        ++comp.n_down_first_flipped;
+    // flip), and both must take the same orientation to pair as conjugates.
+    // Down-first is judged on the braket-canonical orientation of each
+    // spelling (a Hermitian tensor reaches the up row by the braket move)
+    if (kramers_down_first(t)) ++comp.n_down_first_asis;
+    {
+      auto flipped_copy = t._clone_shared();
+      kramers_flip_slots(*flipped_copy);
+      flipped_copy->_conjugate();
+      if (kramers_down_first(*flipped_copy)) ++comp.n_down_first_flipped;
     }
     comp.fp_asis.push_back(std::move(fp_asis));
     comp.fp_flipped.push_back(std::move(fp_flipped));

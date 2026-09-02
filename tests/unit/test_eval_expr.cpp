@@ -979,12 +979,19 @@ TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
                               CanonicalizeOptions::FoldKramersEvalLeaves::Yes});
   auto resetter = set_scoped_default_context(ctx);
   for (auto bks : {BraKetSymmetry::Nonsymm, BraKetSymmetry::Conjugate}) {
-    // C(down,up) = -conj(C(up,down)): one slot flipped from down
+    // C(down,up) = -conj(C(up,down)): one slot flipped from down. For a
+    // Hermitian C the up-row spelling is reached by the braket move instead
+    // (C{a↓;a↑} = conj C{a↑;a↓} swapped): conj, no phase
     EvalExpr eu{mk(L"a↑_1", L"a↓_2", bks)};
     EvalExpr ed{mk(L"a↓_1", L"a↑_2", bks)};
-    REQUIRE(eu.hash_value() == ed.hash_value());
     REQUIRE(ed.canon_transform().conj != eu.canon_transform().conj);
-    REQUIRE(ed.canon_transform().phase == -eu.canon_transform().phase);
+    if (bks == BraKetSymmetry::Nonsymm) {
+      REQUIRE(eu.hash_value() == ed.hash_value());
+      REQUIRE(ed.canon_transform().phase == -eu.canon_transform().phase);
+    } else {
+      REQUIRE(ed.canon_transform().braket_swap);
+      REQUIRE(ed.canon_transform().phase == eu.canon_transform().phase);
+    }
     // C(down,down) = +conj(C(up,up)): two slots flipped from down
     EvalExpr euu{mk(L"a↑_1", L"a↑_2", bks)};
     EvalExpr edd{mk(L"a↓_1", L"a↓_2", bks)};
