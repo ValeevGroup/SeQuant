@@ -153,6 +153,37 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
       is one component anchored to the externals; the leftover down leaves
       are internal summations coupled to up externals → T19 is the lever.
       Twin fold on the self-conjugate block: still 0/48.
-- [ ] T19 (serving-level aliasing, enables `fold_kramers_eval_leaves`),
-      T20 (wrapped-summand eval so the folded energy evaluates), T21
-      (numerical antisymmetrization for PNS-MP1/2).
+- [x] T20 (wrapped-summand eval): RESOLVED — Re/Im wrapper factors are
+      transparent to the optimizer and the wrapper's inner batch axes are
+      re-keyed under the summand (9165b6f8a); dch folded energy 1.70 GB
+      peak (was 14 GB), MPQC CSV energy fold default-on.
+- [x] T19 layer 1 (28e75cf39): lazy {phase, conj, perm} views on
+      `ResultTensorTA` (TA `.conj()`/scaling are lazy expressions; flat
+      tensors only — `ResultTensorOfTensorTA::apply_transform` still
+      materializes one ToT copy per application).
+- [x] T19 layer 2 (1758ad78d): under `fold_kramers_eval_leaves` a
+      Kramers-noncanonical leaf stores the up-row spelling in `expr()`
+      (what a provider fetches) and the as-written labels in
+      `canon_indices()`; `kramers_folded()`, `denoted_spelling()`.
+      LANDMINE fixed on the way (1b77b067d, also on PR-2):
+      `CanonicalizeOptions::operator==` compared only `method`, so a scoped
+      context differing only in a fold flag was a silent no-op
+      (`set_scoped_default_context` skips equal contexts).
+      MPQC wiring: `EvalContext::fold_kramers_eval_leaves` scoped over
+      optimize+binarize on the complex Kramers-CSV path
+      (`MPQC_CCK_NO_KRAMERS_LEAF_FOLD` opts out); the dense f/g leaf
+      builder and the CSV t-leaf reconstruction map the as-written
+      annotation to the folded spelling by flipping ↑/↓. dch: iterations
+      1-8 identical to the unfolded run to 1e-11, tail differs at the
+      1e-9 convergence-noise level (−1.04169026663 at residual 1.6e-10),
+      3.3 s/it unchanged, 1.70 GB peak; the (⇓,⇓) C block is no longer
+      requested.
+- [ ] T19 layer 3 (provider serves 2 C blocks per rank): BLOCKED on a
+      verdict decision. C is `BraKetSymmetry::Conjugate`, so
+      `kramers_flavor_key` sorts its bra/ket bundles and a mixed (1 up, 1
+      down) C ties with its own flip → never folds at the leaf; both
+      (⇑,↓) and (⇓,↑) are requested (3 blocks per rank). Options: (B)
+      orient the leaf's braket first (Kramers-aware canonicalize_braket)
+      and break the per-tensor tie bra-first, or (A) MPQC serves (⇑,↓) as
+      the cached −conj of (⇓,↑).
+- [ ] T21 (numerical antisymmetrization for PNS-MP1/2).
