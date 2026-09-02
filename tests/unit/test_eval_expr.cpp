@@ -959,11 +959,25 @@ TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
   mbpt::add_fermi_spin(*isr);
   Context ctx = get_default_context();
   ctx.set(isr);
-  auto resetter = set_scoped_default_context(ctx);
   auto mk = [](std::wstring_view b, std::wstring_view k, BraKetSymmetry bks) {
     return Tensor(L"C", bra{Index(b)}, ket{Index(k)}, Symmetry::Nonsymm, bks,
                   ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
   };
+  // OFF by default: the leaf provider serves as_tensor()'s spelling and the
+  // transform's labels must match the sibling's, which a flavor flip breaks
+  // unless the provider itself aliases the partner block (serving-level
+  // aliasing); so the leaf fold is an explicit opt-in
+  {
+    auto resetter = set_scoped_default_context(ctx);
+    EvalExpr eu{mk(L"a↑_1", L"a↓_2", BraKetSymmetry::Nonsymm)};
+    EvalExpr ed{mk(L"a↓_1", L"a↑_2", BraKetSymmetry::Nonsymm)};
+    REQUIRE(eu.hash_value() != ed.hash_value());
+    REQUIRE(ed.canon_transform().trivial());
+  }
+  ctx.set(
+      CanonicalizeOptions{.fold_kramers_eval_leaves =
+                              CanonicalizeOptions::FoldKramersEvalLeaves::Yes});
+  auto resetter = set_scoped_default_context(ctx);
   for (auto bks : {BraKetSymmetry::Nonsymm, BraKetSymmetry::Conjugate}) {
     // C(down,up) = -conj(C(up,down)): one slot flipped from down
     EvalExpr eu{mk(L"a↑_1", L"a↓_2", bks)};

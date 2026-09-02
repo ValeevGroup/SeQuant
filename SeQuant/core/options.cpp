@@ -67,6 +67,13 @@ SimplifyOptions SimplifyOptions::default_options() {
 SimplifyOptions::SimplifyOptions(CanonicalizeOptions opts)
     : CanonicalizeOptions(opts) {}
 
+CanonicalizeOptions CanonicalizeOptions::copy_and_set(
+    FoldKramersEvalLeaves arg) const {
+  auto result = *this;
+  result.fold_kramers_eval_leaves = arg;
+  return result;
+}
+
 CanonicalizeOptions CanonicalizeOptions::copy_and_set(FoldKramers arg) const {
   auto result = *this;
   result.fold_kramers = arg;

@@ -84,6 +84,16 @@ calls it after `canonicalize_braket`. The eval leaf constructor
 `C↓↓`/`C↑↑` (`{conj, +1}`), and the MPQC server is only ever asked for the
 up-row arrays.
 
+**Eval-leaf fold is an explicit opt-in** (`CanonicalizeOptions::
+fold_kramers_eval_leaves`, default No). Measured on dch (2026-09-02): with
+the leaf fold on, PNS-MP1 drifts to −1.0115 and diverges. Cause: the
+evaluator serves a leaf from `as_tensor()` and applies the leaf's
+transform to the served value under the leaf's own annotation; a flavor
+flip changes the LABELS (a↓_1 → a↑_1), which no transform can relabel, so
+the down block is served and then conj/phase-transformed again. The leaf
+fold is only correct once the provider aliases the Kramers partner block
+(serving-level aliasing, T19), at which point the option can be enabled.
+
 ### 4. Network fold (symbolic equations)
 
 Under `CanonicalizeOptions::fold_kramers` (mirrored as

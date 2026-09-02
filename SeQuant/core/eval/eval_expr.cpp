@@ -9,6 +9,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -153,6 +154,13 @@ namespace {
 /// elementwise-conjugation marker to a PURE {conj} bit (slots untouched;
 /// orientation deltas belong to the canonicalizer fold alone). Symm markers
 /// are value-redundant and dropped. Returns the accumulated transform.
+/// the eval-leaf Kramers fold is an explicit context opt-in (see
+/// CanonicalizeOptions::fold_kramers_eval_leaves)
+bool fold_kramers_leaf() {
+  return CanonicalizeOptions::default_options().fold_kramers_eval_leaves ==
+         CanonicalizeOptions::FoldKramersEvalLeaves::Yes;
+}
+
 CanonTransform normalize_leaf_spelling(Tensor& t) {
   CanonTransform tr{};
   if (!t.label().empty() && t.label().back() == adjoint_label) {
@@ -183,7 +191,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // Kramers fold: a down-first leaf is respelled as its up-first partner;
     // the marker it produces is a pure {conj} bit (no slot swap) and the
     // phase multiplies the slot-canonicalization phase below
-    const int kramers_phase = canonicalize_kramers(t0);
+    const int kramers_phase =
+        fold_kramers_leaf() ? canonicalize_kramers(t0) : 1;
     const bool kramers_fired = t0.conjugated();
     if (kramers_fired) {
       canon_transform_ = compose(canon_transform_, {.conj = true});
@@ -226,7 +235,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t));
     // 2. Kramers fold first: its marker is a pure {conj} bit (no slot swap),
     //    distinct from the braket fold's marker converted below
-    const int kramers_phase = canonicalize_kramers(t);
+    const int kramers_phase = fold_kramers_leaf() ? canonicalize_kramers(t) : 1;
     const bool kramers_fired = t.conjugated();
     if (kramers_fired) {
       canon_transform_ = compose(canon_transform_, {.conj = true});
