@@ -44,7 +44,7 @@ void IndexBatchingStep::set_options(const nlohmann::json &options) {
       }
 
       max_batched_ = value.get<std::size_t>();
-    } else if (key == "select_strategy") {
+    } else if (key == "selection_strategy") {
       if (!value.is_string()) {
         throw Exception("Value for option '" + key + "' for " + kind() +
                         " expects a string");
