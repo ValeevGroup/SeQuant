@@ -502,6 +502,12 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
         }
       }
 
+      if (!current.batch_indices.empty()) {
+        // Note: this throws on generators that don't support batching
+        // we leave choosing to batch in the user's responsibility
+        genctx.set_batch_indices(current.batch_indices, current.tree->id());
+      }
+
       if (current.symm_contribution_target.has_value()) {
         auto symm_it = std::ranges::find(
             symms, current.tree->as_tensor(),
@@ -531,7 +537,16 @@ std::vector<ExpressionGroup<>> ExportStep::prepare_expressions(
       ResultExpr symmetrization(
           symm_res, generateResultSymmetrization(symm_res, unsymm_res.label()));
 
-      group.insert(it.base(), to_export_tree(symmetrization));
+      const auto batch_indices = genctx.batch_indices((*it)->id());
+
+      ExportNode<> symm_tree = to_export_tree(std::move(symmetrization));
+      std::size_t symm_id = symm_tree->id();
+
+      group.insert(it.base(), std::move(symm_tree));
+
+      if (!batch_indices.empty()) {
+        genctx.set_batch_indices(batch_indices, symm_id);
+      }
     }
   }
 
