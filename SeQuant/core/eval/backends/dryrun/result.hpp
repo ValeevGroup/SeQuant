@@ -338,11 +338,6 @@ class ResultDryRun final : public Result {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
   }
 
-  [[nodiscard]] ResultPtr adjoint(
-      std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
-  }
-
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     return detail::DryRunOps::slice_mode(indices_, overrides_, cm_, mode,
@@ -484,11 +479,6 @@ class ResultDryRunNested final : public Result {
   }
 
   [[nodiscard]] ResultPtr permute(
-      std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
-  }
-
-  [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
   }

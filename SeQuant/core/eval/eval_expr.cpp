@@ -546,12 +546,13 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                  return h;
                });
 
-  auto make_sum = [i = 0, hoist_conj,        //
-                   hs = imed_hashes(hvals),  //
-                   align = std::size_t{0},   //
-                   all_tensors,
-                   &opts](EvalExpr const& left,
-                          EvalExpr const& right) mutable -> EvalExpr {
+  auto make_sum =
+      [i = 0, hoist_conj,        //
+       hs = imed_hashes(hvals),  //
+       align = std::size_t{0},   //
+       all_tensors,
+       &opts](EvalExpr const& left,
+              [[maybe_unused]] EvalExpr const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       // partition from the DENOTED orientation (stored canonical slots,
@@ -832,8 +833,8 @@ namespace {
 // ignores it for these ops). Node hash = the inner child's salted hash
 // combined with the op, so Re(s), Im(s) and bare s occupy distinct slots
 // while the inner subtree itself stays on its own shared slot.
-EvalExprNode binarize_re_im(ExprPtr const& orig, ExprPtr const& inner,
-                            EvalOp op, IndexSet const& uncontract,
+EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
+                            IndexSet const& uncontract,
                             const BinarizationOptions& opts) {
   // the wrapper's inner is opaque to the single-term optimizer (like a Sum
   // factor): its contraction nodes are not DP nodes and have no entries in
@@ -863,11 +864,11 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
                       std::size_t& node_counter) {
   if (expr->is<RealPart>())
-    return binarize_re_im(expr, expr->as<RealPart>().inner(), EvalOp::RealPart,
+    return binarize_re_im(expr->as<RealPart>().inner(), EvalOp::RealPart,
                           uncontract, opts);
 
   if (expr->is<ImagPart>())
-    return binarize_re_im(expr, expr->as<ImagPart>().inner(), EvalOp::ImagPart,
+    return binarize_re_im(expr->as<ImagPart>().inner(), EvalOp::ImagPart,
                           uncontract, opts);
 
   if (expr->is<Constant>())  //
