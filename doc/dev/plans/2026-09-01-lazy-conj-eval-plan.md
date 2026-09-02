@@ -793,11 +793,21 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
   `doc/dev/{specs,plans}/2026-09-02-kramers-trs-canonicalizer-*.md`).
   Measured on dch: energy conjugate-pair fold 36 -> 20 terms (floor);
   residual blocks are externally anchored and unchanged.
-- **T19 -- MPQC serving-level aliasing.** Serve only the up-row C arrays;
-  down-row and conj-orientation leaves become CanonTransform views of the
-  same slot. Use TA's lazy `.conj()` inside the consuming expression rather
-  than materializing the transformed copy on retrieval; this also enables
-  the eval-leaf Kramers fold (`fold_kramers_eval_leaves`).
+- **T19 -- MPQC serving-level aliasing.** Layer 1 DONE here (597beb1fa):
+  `ResultTensorTA` records `apply_transform`/`permute`/`mult_by_phase` as
+  a lazy {phase, conj, perm} view consumed by the first contraction
+  (TA's `.conj()` and scaling are lazy expressions); ToT results still
+  materialize. Layer 2 (eval-leaf Kramers fold keeping the up-row
+  spelling in `expr()`) and the MPQC wiring live on the Kramers round-2
+  branch; layer 3 (2 C blocks per rank) is blocked on a per-tensor
+  tie-break for `BraKetSymmetry::Conjugate` mixed tensors.
+- **Options-equality landmine (2d733b25b).** `CanonicalizeOptions::
+  operator==` compared only `method`; `set_scoped_default_context` skips
+  contexts that compare equal, so a scoped context differing only in
+  `ignore_named_index_labels`/`named_indices` (or `SimplifyOptions::
+  fold_conjugate_pairs`) was a silent no-op whenever the default context
+  already carried options (MPQC's `load_convention` does). Every field
+  now participates; test `canonicalize_options_equality`.
 - **T20 -- wrapped-summand CSV eval: RESOLVED (2026-09-02).** Root cause was
   not the ResultExpr head but the optimizer: `RealPart::is_scalar()` made
   the fold's `2 Re[A]` an opaque scalar factor (A unoptimized, and on the
