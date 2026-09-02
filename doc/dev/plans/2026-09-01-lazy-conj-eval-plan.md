@@ -708,6 +708,34 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 
 ---
 
+## Execution deviations (recorded 2026-09-01, tasks 13-15)
+
+- The default flip (T14) needed hardening well beyond the one-line change:
+  - simplify() gates the fold on `expr->is_cnumber()` -- operator-carrying
+    intermediates head back into Wick, which does not ingest Re/Im wrappers
+    (unfolded, a worker-thread TN ctor threw and terminated the process).
+  - Wrapped summands from DIFFERENT simplify passes hold conjugate-related
+    inners (for a closed c-number network the adjoint IS the conjugate);
+    the fold now merges Re/Im-wrapped summands at entry AND exit over
+    canonical representatives (Re(x*) = Re(x), Im(x*) = -Im(x)), so
+    e.g. +c Re(X) - c Re(X^+) cancels exactly.
+  - RealPart/ImagPart canonicalize their inner in place (+ REAL-scalar
+    hoist via the byproduct contract); Product::canonicalize_impl resets
+    its memoized hash when a subfactor mutates in place (first mutating
+    non-tensor factor canonicalization ever -- the stale-hash self-check
+    fired).
+  - has_tensor sees through the wrappers (top level and product factors).
+  - Folding before the canonicalize stage was tried and REVERTED: it
+    preempts the Symm-braket collapse (a real-field a - a^T pair became
+    2i Im instead of 0).
+  - Diagnosis was repeatedly misled by (a) a file-local has_tensor lambda
+    in test_mbpt_cc shadowing the core function, and (b) wide fwprintf
+    probes silently no-opping on a byte-oriented stderr. Test fallout:
+    fold-shape assertions compare canonically; UCC energy term counts
+    halve per folded pair (46->23, 20->14, 74->41); re_im_evaluation pins
+    canonicalizer + context (order-independent).
+- T15 landed as staged: [[deprecated]] + pragma-wrapped self-test.
+
 ## Execution deviations (recorded 2026-09-01, tasks 4/6/7)
 
 - Tasks 4, 6, and the product half of 7 landed as ONE green unit: the leaf
