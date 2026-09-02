@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_RESULT_HPP
 #define SEQUANT_EVAL_RESULT_HPP
 
+#include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
@@ -290,9 +291,17 @@ class Result {
   /// well. Not a pure virtual: only tensor-backed results need it; the
   /// default throws. Mirrors the slice_mode precedent.
   ///
-  [[nodiscard]] virtual ResultPtr adjoint(
-      std::array<std::any, 2> const& /*ann*/) const {
-    throw detail::unimplemented_method("adjoint");
+  /// \brief Applies a canonicalization transform to this result on
+  /// retrieval: the returned result equals `phase * (conj? elementwise-conj)`
+  /// of this, with slots relabeled per \p ann ({source annot, target annot};
+  /// equal annots = no transposition). The caller handles the trivial
+  /// transform (returns the ResultPtr unchanged, exactly as apply_phase
+  /// short-circuits phase==1). Not pure: only data-bearing results
+  /// implement it; the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& /*ann*/) const {
+    throw detail::unimplemented_method("apply_transform");
   }
 
   ///
@@ -508,6 +517,16 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     return eval_result<ResultScalar<T>>(value() * T(factor));
+  }
+
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform t, std::array<std::any, 2> const&) const override {
+    auto v = value();
+    if constexpr (!std::is_arithmetic_v<T>) {
+      using std::conj;
+      if (t.conj) v = conj(v);
+    }
+    return eval_result<ResultScalar<T>>(v * T(t.phase));
   }
 
  private:

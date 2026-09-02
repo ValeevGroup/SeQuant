@@ -185,12 +185,14 @@ TEST_CASE("eval_node", "[EvalNode]") {
                  EquivalentTo("t{a3,a4;i1,i2}:A-N-S"));
   }
 
-  SECTION("conjugate-folded factor keeps intermediate partition") {
-    // A Conjugate-braket (Hermitian) factor authored in the non-canonical
-    // orientation folds to its swapped+starred spelling at the leaf
-    // (T^*{q;p} == T{p;q} by value). Intermediate bra/ket partitions must be
-    // derived from the VALUE orientation of each factor, not from the folded
-    // spelling — the partition fixes the result's column grouping downstream.
+  SECTION(
+      "Conjugate factor folds to canonical orientation; partitions keep the "
+      "denoted spelling") {
+    // With the fold ON at the eval boundary a Conjugate-braket (Hermitian)
+    // factor is stored in its canonical orientation, the delta to the
+    // as-written spelling recorded in the leaf's CanonTransform and applied
+    // on retrieval; intermediate bra/ket partitions still derive from the
+    // DENOTED (as-written) orientation.
     auto const p1 = deserialize(
         L"1/16 "
         L"* g{i3,i4;a3,a4}:A-C-S"
@@ -198,19 +200,16 @@ TEST_CASE("eval_node", "[EvalNode]") {
         L"* t{a3,a4;i1,i2}:A-N-S");
     auto node1 = eval_node(p1);
 
-    // the g leaf folded: an Adjoint wrapper carrying the starred spelling
-    // over the bare (unstarred) shared-cache operand
+    // the g leaf is stored unmarked in one of the two orientations; the
+    // transform records the written->canonical delta, which for a Conjugate
+    // leaf is either trivial (written canonically) or the fold map
+    // {conj, braket_swap} (an ARRAY map: conj + relabel on retrieval -- on
+    // Hermitian data exactly the written block)
     auto const gnode = node(node1, {L, L, L});
-    REQUIRE(gnode.op_type() == EvalOp::Adjoint);
-    auto const& gstar = gnode.as_tensor();
-    REQUIRE(gstar.conjugated());
-    {
-      auto bare = gstar;
-      bare.conjugate();
-      REQUIRE_THAT(bare, EquivalentTo("g{a3,a4;i3,i4}:A-C-S"));
-    }
-    REQUIRE_THAT(node(node1, {L, L, L, L}).as_tensor(),
-                 EquivalentTo("g{a3,a4;i3,i4}:A-C-S"));
+    auto const& gleaf = gnode.as_tensor();
+    REQUIRE_FALSE(gleaf.conjugated());
+    auto const gt = gnode.canon_transform();
+    REQUIRE(gt.conj == gt.braket_swap);  // fold map or trivial
 
     // ...and the intermediates keep their value-oriented bra/ket splits
     REQUIRE_THAT(node(node1, {L, L}).as_tensor(),
@@ -218,12 +217,13 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE_THAT(node(node1, {L}).as_tensor(),
                  EquivalentTo("I{a1,a2;i1,i2}:N-N-N"));
 
-    // scalar * folded-tensor: partition likewise from the value orientation
+    // scalar * Conjugate tensor: partition likewise from the value
+    // orientation
     auto const p2 = deserialize(L"a * t{i1;a1}:N-C-S");
     auto const node2 = eval_node(p2);
     REQUIRE_THAT(node(node2, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));
 
-    // sum whose first summand folds: same rule
+    // sum whose first summand is Conjugate: same rule
     auto const s1 = deserialize(L"X{i1;a1}:N-C-S + Y{i1;a1}:N-N-S");
     auto const node3 = eval_node(s1);
     REQUIRE_THAT(node(node3, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));

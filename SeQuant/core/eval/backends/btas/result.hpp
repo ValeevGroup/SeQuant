@@ -392,22 +392,22 @@ class ResultTensorBTAS final : public Result {
     return eval_result<ResultTensorBTAS<T>>(std::move(result));
   }
 
-  [[nodiscard]] ResultPtr adjoint(
-      std::array<std::any, 2> const& ann) const override {
-    // T†{a;i} = conj(T{i;a}): bra/ket-swapped layout (operand annot in ann[0],
-    // adjoint annot in ann[1]) plus elementwise conjugation. conj is a no-op
-    // for real numeric_type, so it is elided there.
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform t, std::array<std::any, 2> const& ann) const override {
+    // phase * (elementwise conj) * permute in one pass; conj elided for a
+    // real numeric_type (equal annots => the permute is a copy)
     auto const pre_annot = std::any_cast<annot_t>(ann[0]);
     auto const post_annot = std::any_cast<annot_t>(ann[1]);
-
-    detail::log_btas(detail::ords_to_labels(post_annot), " = adjoint(",
+    detail::log_btas(detail::ords_to_labels(post_annot), " = apply_transform(",
                      detail::ords_to_labels(pre_annot), ")\n");
-
     T result;
     btas::permute(get<T>(), pre_annot, result, post_annot);
     if constexpr (meta::is_complex_v<numeric_type>) {
-      for (auto& x : result) x = std::conj(x);
+      if (t.conj)
+        for (auto& x : result) x = std::conj(x);
     }
+    if (t.phase != 1)
+      for (auto& x : result) x = x * numeric_type(t.phase);
     return eval_result<ResultTensorBTAS<T>>(std::move(result));
   }
 

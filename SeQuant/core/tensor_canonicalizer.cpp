@@ -9,6 +9,7 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
+#include <compare>
 #include <memory>
 #include <mutex>
 #include <type_traits>
@@ -352,11 +353,15 @@ bool braket_foldable(const AbstractTensor& t) {
          braket_conjugate_foldable(t);
 }
 
-void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
+void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
+                                                     bool fold_conjugate) {
   if (!braket_foldable(t)) {
     return;
   }
   const auto bks = t._braket_symmetry();
+  if (bks == BraKetSymmetry::Conjugate && !fold_conjugate) {
+    return;
+  }
 
   // Normalize to the VALUE orientation first: a marked Conjugate tensor's
   // starred spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has
@@ -400,9 +405,14 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
   ranges::sort(ket_spaces, space_less);
 
   // canonical orientation: the bundle whose spaces are lexicographically
-  // larger goes to bra.
-  bool swap =
-      ranges::lexicographical_compare(bra_spaces, ket_spaces, space_less);
+  // larger goes to bra (three-way compare, so a full tie is detected without
+  // re-comparing in reverse)
+  const auto space_order = std::lexicographical_compare_three_way(
+      bra_spaces.begin(), bra_spaces.end(), ket_spaces.begin(),
+      ket_spaces.end(), [&cmp](const Index& a, const Index& b) {
+        return cmp.compare_spaces(a, b) <=> 0;
+      });
+  bool swap = space_order < 0;
 
   // Full space tie, Conjugate braket symmetry: break on the index labels,
   // keeping the label-lexicographically SMALLER bundle in the bra, so
@@ -410,8 +420,7 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
   // written. Identical bundles (diagonal T{p,q;p,q}) compare equal and never
   // swap. (Symm ties stay untouched: both orientations denote the SAME value
   // there, so no fold is required.)
-  if (!swap && bks == BraKetSymmetry::Conjugate &&
-      !ranges::lexicographical_compare(ket_spaces, bra_spaces, space_less)) {
+  if (space_order == 0 && bks == BraKetSymmetry::Conjugate) {
     std::vector<Index> bra_full(bra_spaces), ket_full(ket_spaces);
     ranges::sort(bra_full, std::less<Index>{});
     ranges::sort(ket_full, std::less<Index>{});
@@ -446,7 +455,7 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  canonicalize_braket(t);
+  canonicalize_braket(t, fold_conjugate_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});

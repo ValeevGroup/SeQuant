@@ -294,12 +294,6 @@ class TensorNetworkV3 {
     /// by/dissolved into the maintainer's TreeIndex-based reporting when
     /// that lands, so it survives nested expressions.
     container::svector<std::size_t> conjugated_tensors;
-
-    /// the PARITY of the swaps recorded in `conjugated_tensors`. A single
-    /// bit is exact only when at most one tensor can have swapped; its sole
-    /// consumer is EvalExpr's single-tensor leaf constructor
-    /// -- prefer `conjugated_tensors`
-    bool conj = false;
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -316,10 +310,9 @@ class TensorNetworkV3 {
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
   /// @return the computed canonicalization metadata
-  [[deprecated(
-      "use the CanonicalizeSlotsOptions "
-      "overload")]] SlotCanonicalizationMetadata
-  canonicalize_slots(
+  /// @note equivalent to (and forwards to) the CanonicalizeSlotsOptions
+  /// overload; prefer that overload in new code
+  SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
@@ -342,6 +335,13 @@ class TensorNetworkV3 {
     /// space-only fallback, a different path
     SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
         default_idxptr_slottype_lesscompare{};
+    /// if false, BraKetSymmetry::Conjugate tensors are treated
+    /// orientation-SENSITIVELY: their bra/ket bundles get distinct graph
+    /// colors (like Nonsymm) and no conjugated_tensors byproduct is
+    /// reported. Used at the eval boundary, where leaves must keep their
+    /// as-written orientation until evaluators understand conjugation (the
+    /// lazy-conj follow-up); symbolic canonicalization keeps the default.
+    bool fold_conjugate_braket = true;
   };
 
   /// @sa canonicalize_slots(const container::vector<std::wstring>&, const
@@ -399,6 +399,11 @@ class TensorNetworkV3 {
     /// `T*` are distinguishable (default: false, since canonicalize() toggles
     /// the marker while re-orienting Conjugate tensors)
     bool color_conjugation = false;
+
+    /// if false, BraKetSymmetry::Conjugate tensors get distinct bra/ket
+    /// bundle colors (orientation-sensitive), disabling the braket-conjugate
+    /// fold for graphs built with these options
+    bool fold_conjugate_braket = true;
 
     /// if false, will not generate the labels
     bool make_labels = true;
