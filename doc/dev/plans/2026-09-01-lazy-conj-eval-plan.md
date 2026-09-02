@@ -798,7 +798,12 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
   same slot. Use TA's lazy `.conj()` inside the consuming expression rather
   than materializing the transformed copy on retrieval; this also enables
   the eval-leaf Kramers fold (`fold_kramers_eval_leaves`).
-- **T20 -- wrapped-summand CSV eval fix.** Route binarize_re_im's inner root
-  through the ResultExpr scalar-head treatment so a Re-wrapped ToT summand
-  reduces instead of materializing (14 GB defect); then flip the CSV
-  energy fold to default-on (MPQC_CCK_TRS_FOLD gate removed).
+- **T20 -- wrapped-summand CSV eval: RESOLVED (2026-09-02).** Root cause was
+  not the ResultExpr head but the optimizer: `RealPart::is_scalar()` made
+  the fold's `2 Re[A]` an opaque scalar factor (A unoptimized, and on the
+  batching branch unbatched). Fix: Re/Im wrapper factors are transparent to
+  `optimize_impl` (PR-2 commit) and, on round 2, the wrapper's inner batch
+  axes are re-keyed under the summand and binarize shares its node counter
+  with root/scalar-sibling wrappers. dch: the 20-term folded energy
+  evaluates at 1.70 GB peak (was 14 GB), -1.04169026922 in band; MPQC's
+  CSV energy fold is default-on (MPQC_CCK_NO_TRS_FOLD opts out).
