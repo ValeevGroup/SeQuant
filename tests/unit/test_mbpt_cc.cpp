@@ -290,7 +290,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 #ifndef SEQUANT_SKIP_LONG_TESTS
     const auto E = cc.energy(3);
     REQUIRE_THAT(E, !EquivalentTo(amps.at(0)));
-    REQUIRE(size(E) == 46);
+    // 23 = 46 pre-fold terms with every {s, s*} pair folded to 2 Re(s) (the
+    // conjugate-pair fold is on by default in a complex field)
+    REQUIRE(size(E) == 23);
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
@@ -621,8 +623,9 @@ SECTION("ucc") {
       // these are numerically verified against
       // http://arxiv.org/abs/2503.00617
       const auto energy_nterms = size(t_eqs[0]);
-      if (c == 2) REQUIRE(energy_nterms == 20);
-      if (c == 3) REQUIRE(energy_nterms == 74);
+      if (c == 2) REQUIRE(energy_nterms == 14);
+      // 74 -> 41 under the fold (33 pairs + 8 self-conjugate)
+      if (c == 3) REQUIRE(energy_nterms == 41);
     }
   }  // SECTION("t")
 }  // SECTION("ucc")
