@@ -688,6 +688,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// slot bundles).
   ColumnSymmetry column_symmetry() const { return column_symmetry_; }
   KramersSymmetry kramers_symmetry() const { return kramers_symmetry_; }
+  /// sets the Kramers (time-reversal) symmetry attribute
+  void set_kramers_symmetry(KramersSymmetry ks) {
+    kramers_symmetry_ = ks;
+    reset_hash_value();
+  }
 
   /// @return number of bra slots (some may be occupied by null indices, hence
   /// this is the gross rank)

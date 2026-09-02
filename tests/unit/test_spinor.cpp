@@ -18,6 +18,9 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/rules/csv.hpp>
+#include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/spinor.hpp>
 
@@ -859,5 +862,123 @@ TEST_CASE("kramers_internal_rebase", "[korbit-rebase]") {
       (f->as<Tensor>().conjugated() ? marked : unmarked)++;
     REQUIRE(marked == 2);
     REQUIRE(unmarked == 2);
+  }
+}
+
+TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
+  // Task 5 of the TRS canonicalizer: every c-number leaf emitted by the
+  // Kramers trace carries KramersSymmetry::TimeReversal, the CSV and DF
+  // transforms propagate it to the tensors they mint (C, DF factors), the
+  // network fold (CanonicalizeOptions::fold_kramers) never increases the
+  // number of down-first leaves and is idempotent, and with the fold in the
+  // context kramers_internal_rebase is a no-op (the canonicalizer owns the
+  // orientation).
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto isr = std::make_shared<IndexSpaceRegistry>(
+      get_default_context().index_space_registry()->clone());
+  if (!isr->retrieve_ptr(L"μ̃")) add_pao_spaces(isr, Spin::any);
+  if (!isr->retrieve_ptr(L"Κ")) add_df_spaces(isr);
+  REQUIRE(isr->kramers_partner(isr->retrieve(L"a↑")));
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  ctx.set(CanonicalizeOptions{
+      .method = CanonicalizationMethod::Complete,
+      .fold_kramers = CanonicalizeOptions::FoldKramers::Yes});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  const auto fold = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::FoldKramers::Yes);
+
+  auto n_non_trs = [](const ExprPtr& e) {
+    std::size_t n = 0;
+    e->visit(
+        [&](const ExprPtr& node) {
+          if (node->is<Tensor>() && node->as<Tensor>().kramers_symmetry() !=
+                                        KramersSymmetry::TimeReversal)
+            ++n;
+        },
+        /*atoms_only=*/true);
+    return n;
+  };
+  auto n_tensors = [](const ExprPtr& e, auto pred) {
+    std::size_t n = 0;
+    e->visit(
+        [&](const ExprPtr& node) {
+          if (node->is<Tensor>() && pred(node->as<Tensor>())) ++n;
+        },
+        true);
+    return n;
+  };
+  auto n_down_first = [&](const ExprPtr& e) {
+    return n_tensors(e, [&](const Tensor& t) {
+      for (auto& idx : t.const_slots())
+        if (isr->kramers_partner(idx.space()))
+          return !isr->kramers_canonical(idx.space());
+      return false;
+    });
+  };
+
+  const Index i1{L"i_1"}, i2{L"i_2"};
+  const Index a1 = Index(L"a_1", {i1, i2});
+  const Index a2 = Index(L"a_2", {i1, i2});
+  const auto E = ex<Constant>(rational{1, 4}) *
+                 ex<Tensor>(L"g", bra{i1, i2}, ket{a1, a2}, Symmetry::Antisymm,
+                            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+                 ex<Tensor>(L"t", bra{a1, a2}, ket{i1, i2}, Symmetry::Antisymm,
+                            BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+
+  ExprPtr E_kr;
+  REQUIRE_NOTHROW(E_kr = closed_shell_kramers_trace(E, {}, /*fold_T=*/false,
+                                                    /*expand_g=*/true, false));
+  expand(E_kr);
+  flatten(E_kr);
+  REQUIRE(E_kr->is<Sum>());
+  REQUIRE(n_non_trs(E_kr) == 0);
+
+  auto csv =
+      csv_transform(E_kr, isr->retrieve(L"μ̃"), L"C",
+                    {L"f", L"g", std::wstring(reserved::overlap_label())},
+                    /*kramers=*/true);
+  expand(csv);
+  flatten(csv);
+  REQUIRE(n_tensors(csv, [](const Tensor& t) { return t.label() == L"C"; }) >
+          0);
+  REQUIRE(n_non_trs(csv) == 0);
+
+  auto df = density_fit(csv, isr->retrieve(L"Κ"), L"g", L"g");
+  expand(df);
+  flatten(df);
+  REQUIRE(n_tensors(df, [](const Tensor& t) { return t.aux_rank() == 1; }) > 0);
+  REQUIRE(n_non_trs(df) == 0);
+
+  // the network fold: never more down-first leaves than the input, and
+  // idempotent
+  REQUIRE(df->is<Sum>());
+  for (auto const& term : *df) {
+    auto once = term->clone();
+    canonicalize(once, fold);
+    REQUIRE(n_down_first(once) <= n_down_first(term));
+    auto twice = once->clone();
+    canonicalize(twice, fold);
+    REQUIRE(twice == once);
+  }
+
+  // rebase defers to the canonicalizer when the context folds
+  {
+    auto up = [](const wchar_t* l) { return make_spinalpha(Index(l)); };
+    auto dn = [](const wchar_t* l) { return make_spinbeta(Index(l)); };
+    auto T = [](const wchar_t* label, Index b, Index k) {
+      return ex<Tensor>(label, bra{std::move(b)}, ket{std::move(k)},
+                        Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                        ColumnSymmetry::Nonsymm);
+    };
+    (void)up;
+    auto term =
+        T(L"X", dn(L"i_1"), dn(L"i_2")) * T(L"Y", dn(L"i_2"), dn(L"i_1"));
+    auto out = kramers_internal_rebase(term, {});
+    REQUIRE(*out == *term);
   }
 }

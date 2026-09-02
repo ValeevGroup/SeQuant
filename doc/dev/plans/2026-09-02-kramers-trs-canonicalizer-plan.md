@@ -106,21 +106,24 @@ flavored index cannot flip at all. Replaced by:
 - [ ] Follow-up: serialization letter for `KramersSymmetry` (Task 1 left it
       out; tests build tensors programmatically).
 
-### Task 5: mbpt / emission integration
+### Task 5: mbpt / emission integration (DONE)
 
-Files: `SeQuant/domain/mbpt/op.cpp`, `op_registry.hpp/.cpp`,
-`rules/csv.cpp`, `rules/df.cpp`, `spinor.cpp`, `tests/unit/test_spinor.cpp`.
+Files: `SeQuant/domain/mbpt/spinor.hpp/.cpp`, `rules/csv.cpp`, `rules/df.cpp`,
+`SeQuant/core/expressions/tensor.hpp` (`set_kramers_symmetry`),
+`tests/unit/test_spinor.cpp` (`kramers_symmetry_propagation`).
 
-- [ ] Test: after `closed_shell_kramers_CC_trace` + `csv_transform` +
-      `density_fit` in a Kramers context, every C/g/f/t leaf reports
-      `TimeReversal`; with `fold_kramers` on, canonicalize of the energy
-      expression leaves no tensor whose first flavored slot is down
-      (census helper in the test); `kramers_internal_rebase` on the result
-      is a no-op (returns an equal expression).
-- [ ] Implement: registry default + `OpMaker` assignment; csv/df propagate
-      the attribute; `kramers_internal_rebase` early-returns when the
-      context has `fold_kramers` (retire after the MPQC measurement).
-- [ ] Run: pass. Commit `mbpt: Kramers-symmetric ops; csv/df propagate KramersSymmetry`.
+- [x] Test: after `closed_shell_kramers_trace` + `csv_transform` +
+      `density_fit` every leaf reports `TimeReversal`; with `fold_kramers`
+      the canonicalized term never has MORE down-first leaves than the input
+      and canonicalization is idempotent; `kramers_internal_rebase` returns
+      its input when the context folds. (The plan's "no down-first leaf
+      survives" was too strong: a component such as `g{↑↓;↑↓} t{↓↑;↓↑}` has
+      one down-first leaf in either orientation.)
+- [x] Implement: `mark_kramers_symmetric` (deep copy + stamp) applied to
+      the trace outputs (energy and CC blocks); `csv_transform` and
+      `density_fit` inherit the source tensor's attribute; rebase
+      early-returns under a folding context. No `OpMaker` change: marking
+      at the trace output keeps non-Kramers hashes untouched.
 
 ### Task 6: MPQC measurement (dch)
 

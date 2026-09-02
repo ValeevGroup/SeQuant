@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/domain/mbpt/rules/csv.hpp>
+#include <SeQuant/domain/mbpt/spinor.hpp>
 
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -233,7 +234,13 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
     auto const& tnsr = expr->as<Tensor>();
     if (!ranges::contains(tensor_labels, tnsr.label())) return expr;
     if (ranges::none_of(tnsr.indices(), &Index::has_proto_indices)) return expr;
-    return csv_transform_impl(tnsr, csv_basis, coeff_tensor_label, kramers);
+    auto out = csv_transform_impl(tnsr, csv_basis, coeff_tensor_label, kramers);
+    // the CSV coefficients (and the rebuilt tensor) inherit the source
+    // tensor's Kramers symmetry: C_μ^{a↓<..>} and C_μ^{a↑<..>} are
+    // time-reversal partners exactly when the tensor they expand is
+    if (tnsr.kramers_symmetry() != KramersSymmetry::Nonsymm)
+      out = mark_kramers_symmetric(out, tnsr.kramers_symmetry());
+    return out;
   } else if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
 

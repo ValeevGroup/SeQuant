@@ -603,7 +603,7 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
       if (!(filtered->is<Constant>() && filtered->as<Constant>().is_zero()))
         block = std::move(filtered);
     }
-    blocks.push_back(block);
+    blocks.push_back(mark_kramers_symmetric(block));
   }
   return blocks;
 }
@@ -641,7 +641,7 @@ ExprPtr closed_shell_kramers_trace(
                                              /*expand_g=*/false));
     ExprPtr result{out};
     flatten(result);
-    return result;
+    return mark_kramers_symmetric(result);
   }
 
   // Steps 1-2: classify indices and build groups (each internal index its own
@@ -732,7 +732,7 @@ ExprPtr closed_shell_kramers_trace(
     else
       result->append(ex<Constant>(mult) * block);
   }
-  return result;
+  return mark_kramers_symmetric(result);
 }
 
 namespace {
@@ -1006,9 +1006,23 @@ ExprPtr kramers_term_flip(const ExprPtr& term,
   return result;
 }
 
+ExprPtr mark_kramers_symmetric(const ExprPtr& expr, KramersSymmetry ks) {
+  if (!expr) return expr;
+  auto out = expr->clone();
+  out->visit(
+      [ks](const ExprPtr& node) {
+        if (node->is<Tensor>()) node->as<Tensor>().set_kramers_symmetry(ks);
+      },
+      /*atoms_only=*/true);
+  return out;
+}
+
 ExprPtr kramers_internal_rebase(const ExprPtr& expr,
                                 const container::set<Index>& externals) {
   if (!expr) return expr;
+  if (const auto copt = get_default_context().canonicalization_options();
+      copt && copt->fold_kramers == CanonicalizeOptions::FoldKramers::Yes)
+    return expr;  // the canonicalizer's Kramers fold owns the orientation
   if (expr->is<Sum>()) {
     auto out = std::make_shared<Sum>();
     for (auto const& s : expr->as<Sum>().summands()) {

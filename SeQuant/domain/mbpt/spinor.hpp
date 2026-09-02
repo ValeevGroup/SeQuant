@@ -354,6 +354,18 @@ bool has_antisymmetrizer(const ExprPtr& expr);
 ExprPtr kramers_term_flip(const ExprPtr& term,
                           const container::map<Index, Index>& ext_map);
 
+/// @brief deep-copies @p expr and stamps every Tensor leaf with @p ks
+/// (KramersSymmetry::TimeReversal by default): the Kramers trace applies it
+/// to its output so the canonicalizer's Kramers fold (see
+/// CanonicalizeOptions::fold_kramers) knows the leaves obey the
+/// time-reversal identity; csv_transform / density_fit propagate the
+/// attribute from the tensor they factorize
+ExprPtr mark_kramers_symmetric(
+    const ExprPtr& expr, KramersSymmetry ks = KramersSymmetry::TimeReversal);
+
+/// @note a no-op (returns @p expr) when the default context's
+///       canonicalization options have fold_kramers == Yes: the network
+///       Kramers fold then owns the orientation of internal components
 ExprPtr kramers_internal_rebase(const ExprPtr& expr,
                                 const container::set<Index>& externals);
 
