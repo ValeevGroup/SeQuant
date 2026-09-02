@@ -204,11 +204,21 @@ int canonicalize_kramers(AbstractTensor& t);
 /// @return whether any slot was flipped
 bool kramers_flip_slots(AbstractTensor& t);
 
-/// @return whether the first flavored slot of @p t's braket-canonical
-///         orientation (see DefaultTensorCanonicalizer::canonicalize_braket,
-///         evaluated on a copy) carries the non-canonical (down) flavor;
-///         false for tensors without flavored slots
-bool kramers_down_first(const AbstractTensor& t);
+/// @brief flavor key of @p t: label + per-bundle flavor characters
+/// ('a'/'b'/'-' for up/down/unflavored, so up orders first) SORTED within
+/// each bundle, the bra
+/// and ket bundles ordered canonically for braket-foldable tensors -- hence
+/// invariant under every symmetry the canonicalizer may exercise
+/// (within-bundle permutation, bra<->ket exchange) and under index
+/// relabeling
+/// @param flipped if true, the key of the Kramers-flipped spelling
+std::wstring kramers_flavor_key(const AbstractTensor& t, bool flipped = false);
+
+/// @return whether @p t is spelled in its non-canonical Kramers orientation:
+///         more down- than up-flavored slots, or (tie) the flipped flavor
+///         key orders before its own (see kramers_flavor_key); false for
+///         tensors without flavored slots
+bool kramers_noncanonical(const AbstractTensor& t);
 
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:

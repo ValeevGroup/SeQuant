@@ -992,6 +992,54 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
     INFO("after: " << toUtf8(to_latex(e)));
     REQUIRE(n_down_first(e) == 0);
   }
+  // dch energy twin pairs that failed to pair (2026-09-02): each pair is
+  // the flavor flip of the other (up to dummy relabeling and slot order in
+  // the antisymmetric t); under the fold both must land on ONE spelling
+  // up to the conj markers so the conjugate-pair fold can pair them
+  {
+    const wchar_t* pairs[][2] = {
+        {L"-1 C{a↑_1;a↑_2<i↓_1,i↓_2>}:N-C-N * C{a↑_3;a↓_1<i↓_1,i↓_2>}:N-C-N * "
+         L"g^*{a↑_1;i↓_2;Κ_1}:N-C-S * g^*{a↑_3;i↓_1;Κ_1}:N-C-S * "
+         L"t{a↑_2<i↓_1,i↓_2>,a↓_1<i↓_1,i↓_2>;i↓_1,i↓_2}:A-N-S",
+         L"C{a↓_2;a↓_3<i↑_1,i↑_2>}:N-C-N * C^*{a↑_1<i↑_1,i↑_2>;a↓_1}:N-C-N * "
+         L"g{i↑_1;a↓_1;Κ_1}:N-C-S * g{i↑_2;a↓_2;Κ_1}:N-C-S * "
+         L"t{a↑_1<i↑_1,i↑_2>,a↓_3<i↑_1,i↑_2>;i↑_1,i↑_2}:A-N-S"},
+        {L"1/2 C^*{a↑_1;a↓_1<i↓_1,i↓_2>}:N-C-N * "
+         L"C^*{a↑_2;a↓_2<i↓_1,i↓_2>}:N-C-N * "
+         L"g{a↑_1;i↓_1;Κ_1}:N-C-S * g{a↑_2;i↓_2;Κ_1}:N-C-S * "
+         L"t^*{a↓_1<i↓_1,i↓_2>,a↓_2<i↓_1,i↓_2>;i↓_1,i↓_2}:A-N-S",
+         L"1/2 C^*{a↑_1<i↑_1,i↑_2>;a↓_1}:N-C-N * "
+         L"C^*{a↑_2<i↑_1,i↑_2>;a↓_2}:N-C-N * "
+         L"g{i↑_1;a↓_1;Κ_1}:N-C-S * g{i↑_2;a↓_2;Κ_1}:N-C-S * "
+         L"t{a↑_1<i↑_1,i↑_2>,a↑_2<i↑_1,i↑_2>;i↑_1,i↑_2}:A-N-S"},
+        {L"1/2 C^*{a↓_1;a↓_2<i↑_1,i↑_2>}:N-C-N * "
+         L"C^*{a↓_3;a↓_4<i↑_1,i↑_2>}:N-C-N * "
+         L"g^*{i↑_1;a↓_1;Κ_1}:N-C-S * g^*{i↑_2;a↓_3;Κ_1}:N-C-S * "
+         L"t^*{a↓_2<i↑_1,i↑_2>,a↓_4<i↑_1,i↑_2>;i↑_1,i↑_2}:A-N-S",
+         L"1/2 C{a↑_1;a↑_2<i↓_1,i↓_2>}:N-C-N * C{a↑_3;a↑_4<i↓_1,i↓_2>}:N-C-N * "
+         L"g^*{a↑_1;i↓_1;Κ_1}:N-C-S * g^*{a↑_3;i↓_2;Κ_1}:N-C-S * "
+         L"t{a↑_2<i↓_1,i↓_2>,a↑_4<i↓_1,i↓_2>;i↓_1,i↓_2}:A-N-S"}};
+    int ip = 0;
+    for (auto const& pr : pairs) {
+      auto A = mark_kramers_symmetric(deserialize(pr[0]));
+      auto B = mark_kramers_symmetric(deserialize(pr[1]));
+      canonicalize(A, fold);
+      canonicalize(B, fold);
+      INFO("pair " << ip++ << "\nA = " << toUtf8(to_latex(A))
+                   << "\nB = " << toUtf8(to_latex(B)));
+      // strip markers and scalars, compare the networks
+      auto bare = [](ExprPtr e) {
+        auto p = std::make_shared<Product>();
+        for (auto& f : e->as<Product>()) {
+          auto t = f->as<Tensor>();
+          if (t.conjugated()) t.conjugate();
+          p->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
+        }
+        return ExprPtr(p);
+      };
+      REQUIRE(*bare(A) == *bare(B));
+    }
+  }
   // rebase defers to the canonicalizer when the context folds
   {
     auto up = [](const wchar_t* l) { return make_spinalpha(Index(l)); };

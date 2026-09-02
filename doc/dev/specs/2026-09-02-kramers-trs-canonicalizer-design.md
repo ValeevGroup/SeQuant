@@ -142,6 +142,18 @@ on its braket-canonical orientation. Consequence: a Hermitian C↓↑ reaches
 the up row by the braket move (conj, no phase) rather than the Kramers
 flip; only Nonsymm-braket tensors (t) need the flip itself.
 
+**Orientation verdicts are symmetry-invariant.** Measured on dch: three
+energy twin pairs (e.g. terms 2/8) failed to pair because "first flavored
+slot" changes under the antisymmetric slot permutation of t. The
+per-tensor verdict is now `kramers_noncanonical`: more down- than
+up-flavored slots, ties broken on `kramers_flavor_key` (label + per-bundle
+flavor characters sorted within each bundle, bra/ket bundles ordered
+canonically for braket-foldable tensors) — invariant under every symmetry
+the canonicalizer may exercise. The component fingerprint is the sorted
+multiset of these keys; a component whose every invariant coincides with
+its flip's (`g{i↑,i↓;a↑,a↓} t{a↓,a↑;i↓,i↑}`) is decided by the
+flavor-aware canonical hash of the component versus its flip.
+
 ### 5. Scope and expectations
 
 - Energy: the 12 unpaired terms are exactly component-orientation twins;

@@ -1332,11 +1332,17 @@ TEST_CASE("kramers_network_fold", "[canonicalize][kramers]") {
               T(L"t", {L"a↓_1", L"a↑_1"}, {L"i↓_1", L"i↑_1"});
     canonicalize(up, fold);
     canonicalize(dn, fold);
-    REQUIRE(n_down_first(dn) == 0);
-    for (auto* t : leaves(dn)) REQUIRE(t->conjugated());
+    // every invariant of this component coincides with its flip's, so the
+    // canonical-hash tie-break decides; whichever wins, both spellings
+    // land on it, one of them fully marked
+    bool up_marked = leaves(up)[0]->conjugated();
+    for (auto* t : leaves(up)) REQUIRE(t->conjugated() == up_marked);
+    for (auto* t : leaves(dn)) REQUIRE(t->conjugated() == !up_marked);
     auto dn_unmarked = dn->clone();
     for (auto& f : dn_unmarked->as<Product>()) f->as<Tensor>().conjugate();
-    REQUIRE(dn_unmarked == up);
+    auto up_unmarked = up->clone();
+    for (auto& f : up_unmarked->as<Product>()) f->as<Tensor>().conjugate();
+    REQUIRE((dn_unmarked == up || dn == up_unmarked));
   }
   SECTION("tied component: an unmarked flavor twin folds onto conj of it") {
     // g{i↑,i↓;a↑,a↓} t{a↓,a↑;i↓,i↑} has ONE down-first tensor in either

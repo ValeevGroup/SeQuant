@@ -1049,9 +1049,6 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
   const auto flavored = [&](const Index &idx) {
     return isr->kramers_partner(idx.space()).has_value();
   };
-  const auto is_down = [&](const Index &idx) {
-    return !isr->kramers_canonical(idx.space());
-  };
   const std::size_t n = tensors_.size();
 
   // flavored indices carried by each tensor: slots and proto indices
@@ -1119,48 +1116,60 @@ std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
     auto &comp = components[root];
     comp.members.push_back(i);
     const AbstractTensor &t = *tensors_[i];
-    std::wstring fp_asis(t._label()), fp_flipped(t._label());
-    fp_asis += L'|';
-    fp_flipped += L'|';
-    for_slots(t, [&](const Index &idx) {
-      if (!flavored(idx)) {
-        fp_asis += L'-';
-        fp_flipped += L'-';
-        return;
-      }
-      const bool down = is_down(idx);
-      fp_asis += down ? L'd' : L'u';
-      fp_flipped += down ? L'u' : L'd';
-    });
-    // NB no marker in the fingerprint: a twin term of a traced sum is the
-    // flavor-flipped spelling WITHOUT markers (== phase*conj of the marked
-    // flip), and both must take the same orientation to pair as conjugates.
-    // Down-first is judged on the braket-canonical orientation of each
-    // spelling (a Hermitian tensor reaches the up row by the braket move)
-    if (kramers_down_first(t)) ++comp.n_down_first_asis;
+    // symmetry-invariant per-tensor keys and orientation verdicts (see
+    // kramers_flavor_key / kramers_noncanonical). NB no marker in the key:
+    // a twin term of a traced sum is the flavor-flipped spelling WITHOUT
+    // markers (== phase*conj of the marked flip), and both must take the
+    // same orientation to pair as conjugates
+    std::wstring fp_asis = kramers_flavor_key(t, false);
+    std::wstring fp_flipped = kramers_flavor_key(t, true);
+    if (kramers_noncanonical(t)) ++comp.n_down_first_asis;
     {
       auto flipped_copy = t._clone_shared();
       kramers_flip_slots(*flipped_copy);
-      flipped_copy->_conjugate();
-      if (kramers_down_first(*flipped_copy)) ++comp.n_down_first_flipped;
+      if (kramers_noncanonical(*flipped_copy)) ++comp.n_down_first_flipped;
     }
     comp.fp_asis.push_back(std::move(fp_asis));
     comp.fp_flipped.push_back(std::move(fp_flipped));
   }
 
+  // canonical (graph) hash of a component's spelling, for the last-resort
+  // tie-break: a component whose every invariant coincides with its flip's
+  // (e.g. g{i↑,i↓;a↑,a↓} t{a↓,a↑;i↓,i↑}) is still a DIFFERENT network from
+  // its flip, and the flavor-aware canonical form tells them apart
+  // deterministically; both spellings compare the same two hashes
+  const auto component_hash = [&](const container::svector<std::size_t> &ms,
+                                  bool flipped) {
+    container::svector<ExprPtr> exprs;
+    for (const auto m : ms) {
+      auto copy = tensors_[m]->_clone_shared();
+      if (flipped) kramers_flip_slots(*copy);
+      auto e = std::dynamic_pointer_cast<Expr>(copy);
+      SEQUANT_ASSERT(e);
+      exprs.emplace_back(std::move(e));
+    }
+    TensorNetworkV3 sub(exprs);
+    return sub.canonicalize_slots(CanonicalizeSlotsOptions{}).hash_value();
+  };
+
   int phase = 1;
   for (auto &[root, comp] : components) {
     std::sort(comp.fp_asis.begin(), comp.fp_asis.end());
     std::sort(comp.fp_flipped.begin(), comp.fp_flipped.end());
-    const bool flip = comp.n_down_first_flipped < comp.n_down_first_asis ||
-                      (comp.n_down_first_flipped == comp.n_down_first_asis &&
-                       comp.fp_flipped < comp.fp_asis);
+    bool flip;
+    if (comp.n_down_first_flipped != comp.n_down_first_asis)
+      flip = comp.n_down_first_flipped < comp.n_down_first_asis;
+    else if (comp.fp_flipped != comp.fp_asis)
+      flip = comp.fp_flipped < comp.fp_asis;
+    else
+      flip = component_hash(comp.members, true) <
+             component_hash(comp.members, false);
     if (!flip) continue;
     for (const auto m : comp.members) {
       AbstractTensor &t = *tensors_[m];
       int n_down = 0;
       for_slots(t, [&](const Index &idx) {
-        if (flavored(idx) && is_down(idx)) ++n_down;
+        if (flavored(idx) && !isr->kramers_canonical(idx.space())) ++n_down;
       });
       if (n_down % 2) phase = -phase;
       kramers_flip_slots(t);

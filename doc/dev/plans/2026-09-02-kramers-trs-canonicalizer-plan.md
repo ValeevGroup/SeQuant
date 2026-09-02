@@ -131,6 +131,11 @@ Found by Task 6: see design §4 "Braket orientation is Kramers-aware".
 Tests: `kramers_block_fold` (orientation preference), eval leaf for a
 Hermitian C, dch energy term 0 reproduction in `kramers_symmetry_propagation`.
 
+### Task 4c: symmetry-invariant orientation verdicts (DONE)
+
+See design §4 "Orientation verdicts are symmetry-invariant". Regression:
+the three dch energy twin pairs in `kramers_symmetry_propagation`.
+
 ### Task 6: MPQC measurement (dch)
 
 Files: `mpqc4` `cc/sequant.cpp` (context option), runs in

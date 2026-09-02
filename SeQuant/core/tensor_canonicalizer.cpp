@@ -383,42 +383,62 @@ bool kramers_flip_slots(AbstractTensor& t) {
   return flipped;
 }
 
-namespace {
-/// first flavored slot (bra, ket, aux order) of @p t is down
-bool down_first_as_written(const AbstractTensor& t,
-                           const IndexSpaceRegistry& isr) {
-  // (a type-erased any_view is not const-iterable: take it by value)
-  auto scan = [&](auto slots, std::optional<bool>& down) {
+std::wstring kramers_flavor_key(const AbstractTensor& t, bool flipped) {
+  const auto isr = get_default_context().index_space_registry();
+  auto bundle = [&](auto slots) {
+    std::wstring b;
     for (const Index& idx : slots) {
-      if (down) return;
-      if (isr.kramers_partner(idx.space()))
-        down = !isr.kramers_canonical(idx.space());
+      if (!isr || !isr->kramers_partner(idx.space())) {
+        b += L'-';
+        continue;
+      }
+      const bool down = !isr->kramers_canonical(idx.space());
+      b += (down != flipped) ? L'b' : L'a';  // up 'a' orders before down 'b'
     }
+    std::sort(b.begin(), b.end());
+    return b;
   };
-  std::optional<bool> down;
-  scan(t._bra(), down);
-  scan(t._ket(), down);
-  scan(t._aux(), down);
-  return down.value_or(false);
+  std::wstring bra = bundle(t._bra()), ket = bundle(t._ket()),
+               aux = bundle(t._aux());
+  if (braket_foldable(t) && ket < bra) std::swap(bra, ket);
+  std::wstring key(t._label());
+  key += L'|';
+  key += bra;
+  key += L'|';
+  key += ket;
+  key += L'|';
+  key += aux;
+  return key;
 }
-}  // namespace
 
-bool kramers_down_first(const AbstractTensor& t) {
+bool kramers_noncanonical(const AbstractTensor& t) {
   const auto isr = get_default_context().index_space_registry();
   if (!isr) return false;
-  auto copy = t._clone_shared();
-  DefaultTensorCanonicalizer::canonicalize_braket(*copy);
-  return down_first_as_written(*copy, *isr);
+  std::size_t n_up = 0, n_down = 0;
+  auto count = [&](auto slots) {
+    for (const Index& idx : slots) {
+      if (!isr->kramers_partner(idx.space())) continue;
+      if (isr->kramers_canonical(idx.space()))
+        ++n_up;
+      else
+        ++n_down;
+    }
+  };
+  count(t._bra());
+  count(t._ket());
+  count(t._aux());
+  if (n_up + n_down == 0) return false;
+  if (n_down != n_up) return n_down > n_up;
+  return kramers_flavor_key(t, true) < kramers_flavor_key(t, false);
 }
 
 int canonicalize_kramers(AbstractTensor& t) {
   if (!kramers_foldable(t)) return 1;
   const auto isr = get_default_context().index_space_registry();
   if (!isr) return 1;
-  // the braket-canonical orientation decides (a Hermitian tensor reaches
-  // the up row by the cheaper braket move); count the down slots for the
-  // phase
-  if (!kramers_down_first(t)) return 1;  // nothing to fold
+  // orientation/permutation-invariant decision (see kramers_noncanonical);
+  // count the down slots for the phase
+  if (!kramers_noncanonical(t)) return 1;  // nothing to fold
   int n_down = 0;
   auto visit = [&](const Index& idx) {
     if (isr->kramers_partner(idx.space()) &&
