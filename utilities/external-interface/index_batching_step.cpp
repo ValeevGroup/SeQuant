@@ -87,26 +87,22 @@ std::size_t IndexBatchingStep::process(std::string_view id_prefix,
       return idx.space().approximate_size();
     });
 
-    std::vector<Index> batch_indices;
-    if (start_with_largest_) {
-      auto selected = indices | std::ranges::views::reverse |
-                      std::ranges::views::drop(min_unbatched_);
-      batch_indices.insert(batch_indices.end(), selected.begin(),
-                           selected.end());
+    if (indices.size() < min_unbatched_) {
+      indices.clear();
+    } else if (start_with_largest_) {
+      indices.erase(indices.begin(), indices.begin() + min_unbatched_);
     } else {
-      auto selected = indices | std::ranges::views::drop(min_unbatched_);
-      batch_indices.insert(batch_indices.end(), selected.begin(),
-                           selected.end());
+      indices.resize(indices.size() - min_unbatched_);
     }
 
-    if (batch_indices.size() > max_batched_) {
-      batch_indices.resize(max_batched_);
+    if (indices.size() > max_batched_) {
+      indices.resize(max_batched_);
     }
 
-    batched_some |= !batch_indices.empty();
+    batched_some |= !indices.empty();
 
     output.entries.emplace_back(current);
-    output.entries.back().batch_indices = std::move(batch_indices);
+    output.entries.back().batch_indices = std::move(indices);
   }
 
   if (!batched_some) {
