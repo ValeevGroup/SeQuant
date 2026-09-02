@@ -527,6 +527,13 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   }
 }
 
+namespace {
+EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
+                            IndexSet const& uncontract,
+                            const BinarizationOptions& opts,
+                            std::size_t& node_counter, bool shared_counter);
+}  // namespace
+
 EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
 
 EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
@@ -633,11 +640,25 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                                                                uncontract);
   }();
 
+  // a Re/Im wrapper factor shares the node counter iff every factor is a
+  // scalar (wrappers, constants, variables): then the product has no
+  // contraction nodes of its own and the wrappers' inner nodes are the
+  // summand's DP nodes (mirrors optimize_impl's re-keying)
+  const bool wrapper_shares_counter = ranges::all_of(
+      prod.factors(), [](ExprPtr const& f) { return f->is_scalar(); });
   auto factors =
       prod.factors()  //
-      | transform([i = 0, &ltr_uncontr_idxs, &opts,
-                   &node_counter](ExprPtr const& x) mutable {
+      | transform([i = 0, &ltr_uncontr_idxs, &opts, &node_counter,
+                   wrapper_shares_counter](ExprPtr const& x) mutable {
           auto const& uncontr = ltr_uncontr_idxs.children[i++];
+          if (x->is<RealPart>())
+            return binarize_re_im(x->as<RealPart>().inner(), EvalOp::RealPart,
+                                  uncontr, opts, node_counter,
+                                  wrapper_shares_counter);
+          if (x->is<ImagPart>())
+            return binarize_re_im(x->as<ImagPart>().inner(), EvalOp::ImagPart,
+                                  uncontr, opts, node_counter,
+                                  wrapper_shares_counter);
           if (x->is<Sum>()) {
             // A Sum factor is opaque to the single-term optimizer
             // (opt_mixed_product stands a placeholder tensor in
@@ -868,15 +889,21 @@ namespace {
 // while the inner subtree itself stays on its own shared slot.
 EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
                             IndexSet const& uncontract,
-                            const BinarizationOptions& opts) {
-  // the wrapper's inner is opaque to the single-term optimizer (like a Sum
-  // factor): its contraction nodes are not DP nodes and have no entries in
-  // opts.node_batch_axes -- binarize them with a private counter and no axes
-  BinarizationOptions inner_opts = opts;
-  inner_opts.node_batch_axes.clear();
-  std::size_t inner_counter = 0;
-  auto inner_node =
-      impl::binarize(inner, uncontract, inner_opts, inner_counter);
+                            const BinarizationOptions& opts,
+                            std::size_t& node_counter, bool shared_counter) {
+  // A wrapper at the summand root, or whose product siblings are all
+  // scalars, has its inner contraction nodes as the summand's DP nodes
+  // (the optimizer optimizes the inner and records its batch axes under the
+  // summand): share the node counter. Otherwise the inner is opaque to the
+  // single-term optimizer (like a Sum factor) -- private counter, no axes.
+  EvalExprNode inner_node = [&]() {
+    if (shared_counter)
+      return impl::binarize(inner, uncontract, opts, node_counter);
+    BinarizationOptions inner_opts = opts;
+    inner_opts.node_batch_axes.clear();
+    std::size_t inner_counter = 0;
+    return impl::binarize(inner, uncontract, inner_opts, inner_counter);
+  }();
   auto h = inner_node->hash_value();
   if (auto salt = inner_node->canon_transform().structural_salt(); salt != 0)
     hash::combine(h, salt);
@@ -898,11 +925,13 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                       std::size_t& node_counter) {
   if (expr->is<RealPart>())
     return binarize_re_im(expr->as<RealPart>().inner(), EvalOp::RealPart,
-                          uncontract, opts);
+                          uncontract, opts, node_counter,
+                          /*shared_counter=*/true);
 
   if (expr->is<ImagPart>())
     return binarize_re_im(expr->as<ImagPart>().inner(), EvalOp::ImagPart,
-                          uncontract, opts);
+                          uncontract, opts, node_counter,
+                          /*shared_counter=*/true);
 
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());

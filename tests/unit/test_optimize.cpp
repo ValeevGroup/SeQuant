@@ -4515,3 +4515,104 @@ TEST_CASE("Re-wrapped product factor is optimized like the bare product",
     REQUIRE(*found == *ref);
   }
 }
+
+// T20 (round 2): the Re/Im-wrapped summand must also be BATCH-annotated like
+// the bare product: the optimizer records the inner product's per-node batch
+// axes under the summand pointer the caller keys on, and binarize consumes
+// them on the inner contraction nodes (shared node counter) -- for the
+// wrapper-at-root and scalar-siblings shapes the fold emits.
+TEST_CASE("Re-wrapped summand batch-annotates its inner product",
+          "[optimize][annotate][re_im]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{20};
+  };
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto make_opts = [&](std::shared_ptr<AxesMap> const& axes_map) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = is_batch;
+    opts.batch_policy.batch_target_size = bts;
+    opts.batch_policy.peak_threshold = 1.0;  // force batching
+    opts.term_batch_axes = axes_map;
+    return opts;
+  };
+  auto bare =
+      deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4}");
+  auto ref_map = std::make_shared<AxesMap>();
+  auto ref = optimize(bare, make_opts(ref_map));
+  auto ref_it = ref_map->find(ref.get());
+  REQUIRE(ref_it != ref_map->end());
+  REQUIRE(!ref_it->second.empty());
+  auto const n_ref = ref_it->second.size();
+
+  auto check = [&](ExprPtr const& summand, const char* what) {
+    INFO(what);
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized = optimize(summand, make_opts(axes_map));
+    REQUIRE(optimized);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    REQUIRE(it->second.size() == n_ref);
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(optimized, {}, bopts);  // asserts the counter matches
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    bool aux_found = false;
+    std::size_t n_re = 0;
+    node.visit([&](auto const& n) {
+      if (n->op_type() == EvalOp::RealPart) ++n_re;
+      for (auto const& entry : n->batched_here())
+        if (entry.first.space() == aux) aux_found = true;
+    });
+    REQUIRE(n_re == 1);
+    REQUIRE(aux_found);
+  };
+  check(real_part(bare->clone()), "bare Re[A] summand");
+  check(ex<Constant>(2) * real_part(bare->clone()), "2 Re[A] summand");
+  {
+    // (summand reordering rebuilds the Sum, so key lookup needs it off --
+    // MPQC optimizes summand by summand and never hits this)
+    auto sum = ex<Constant>(2) * real_part(bare->clone()) +
+               ex<Constant>(2) * real_part(bare->clone());
+    auto axes_map = std::make_shared<AxesMap>();
+    auto sopts = make_opts(axes_map);
+    sopts.reorder = ReorderSum::NoReorder;
+    auto optimized = optimize(sum, sopts);
+    REQUIRE(optimized->is<Sum>());
+    for (auto const& s : optimized->as<Sum>().summands()) {
+      auto it = axes_map->find(s.get());
+      REQUIRE(it != axes_map->end());
+      REQUIRE(it->second.size() == n_ref);
+    }
+  }
+  // a wrapper next to a TENSOR sibling keeps the opaque treatment (no inner
+  // entries, private counter) -- and binarize must not throw on it
+  {
+    auto mixed = deserialize(L"f{i_5;i_5}") * real_part(bare->clone());
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized = optimize(mixed, make_opts(axes_map));
+    auto it = axes_map->find(optimized.get());
+    BinarizationOptions bopts;
+    if (it != axes_map->end()) bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_NOTHROW(binarize(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+}

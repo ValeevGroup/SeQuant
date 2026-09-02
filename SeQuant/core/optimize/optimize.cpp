@@ -213,14 +213,29 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
   // and its inner product evaluates in naive left-to-right order (measured:
   // 14.4 GB vs 1.7 GB peak RSS on a Kramers-CSV MP2 energy whose TRS fold
   // wrapped three terms).
-  if (expr->is<RealPart>())
-    return ex<RealPart>(optimize_impl(expr->as<RealPart>().inner(), opts,
-                                      /*reorder=*/false,
-                                      /*parallel_outer=*/false));
-  if (expr->is<ImagPart>())
-    return ex<ImagPart>(optimize_impl(expr->as<ImagPart>().inner(), opts,
-                                      /*reorder=*/false,
-                                      /*parallel_outer=*/false));
+  // A wrapper at the summand root: its inner contraction nodes ARE the
+  // summand's DP nodes (binarize shares the node counter with it), so its
+  // batch axes are re-keyed under the wrapper the caller keys on.
+  auto rekey_axes = [&opts](ExprPtr const& inner, ExprPtr const& wrapper) {
+    if (!opts.term_batch_axes) return;
+    auto it = opts.term_batch_axes->find(inner.get());
+    if (it != opts.term_batch_axes->end())
+      (*opts.term_batch_axes)[wrapper.get()] = it->second;
+  };
+  if (expr->is<RealPart>()) {
+    auto inner = optimize_impl(expr->as<RealPart>().inner(), opts,
+                               /*reorder=*/false, /*parallel_outer=*/false);
+    auto wrapped = ex<RealPart>(inner);
+    rekey_axes(inner, wrapped);
+    return wrapped;
+  }
+  if (expr->is<ImagPart>()) {
+    auto inner = optimize_impl(expr->as<ImagPart>().inner(), opts,
+                               /*reorder=*/false, /*parallel_outer=*/false);
+    auto wrapped = ex<ImagPart>(inner);
+    rekey_axes(inner, wrapped);
+    return wrapped;
+  }
   if (expr->is<Product>()) {
     auto const& prod_in = expr->as<Product>();
     // Re/Im wrapper FACTORS are transparent too (the conjugate-pair fold
@@ -231,15 +246,18 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
       return x->template is<RealPart>() || x->template is<ImagPart>();
     });
     Product::factors_type factors;
+    container::svector<ExprPtr> inners;  // optimized wrapper inners, in order
     if (has_wrapper) {
       for (auto const& f : prod_in) {
-        if (f->is<RealPart>())
-          factors.push_back(ex<RealPart>(
-              optimize_impl(f->as<RealPart>().inner(), opts, false, false)));
-        else if (f->is<ImagPart>())
-          factors.push_back(ex<ImagPart>(
-              optimize_impl(f->as<ImagPart>().inner(), opts, false, false)));
-        else
+        if (f->is<RealPart>()) {
+          inners.push_back(
+              optimize_impl(f->as<RealPart>().inner(), opts, false, false));
+          factors.push_back(ex<RealPart>(inners.back()));
+        } else if (f->is<ImagPart>()) {
+          inners.push_back(
+              optimize_impl(f->as<ImagPart>().inner(), opts, false, false));
+          factors.push_back(ex<ImagPart>(inners.back()));
+        } else
           factors.push_back(f);
       }
     }
@@ -250,7 +268,27 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     bool pure = ranges::all_of(prod, [](auto&& x) {
       return x->template is<Tensor>() || x->is_scalar();
     });
-    return pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    auto result =
+        pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    // Wrappers whose siblings are all scalars (the fold's `2 Re[A]`): the
+    // product has no contraction nodes of its own, so the summand's DP nodes
+    // are exactly the wrappers' inner nodes, in factor order (binarize
+    // shares its node counter with such wrappers). Re-key their batch axes
+    // under the summand pointer the caller keys on.
+    if (has_wrapper && opts.term_batch_axes) {
+      const bool scalar_siblings =
+          ranges::all_of(prod_in, [](auto&& x) { return x->is_scalar(); });
+      if (scalar_siblings) {
+        container::vector<NodeBatchAnnotation> axes;
+        for (auto const& inner : inners) {
+          auto it = opts.term_batch_axes->find(inner.get());
+          if (it != opts.term_batch_axes->end())
+            axes.insert(axes.end(), it->second.begin(), it->second.end());
+        }
+        (*opts.term_batch_axes)[result.get()] = std::move(axes);
+      }
+    }
+    return result;
   }
 
   if (expr->is<Sum>()) {
