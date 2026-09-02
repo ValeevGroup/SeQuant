@@ -145,6 +145,14 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
       vs 24 on the rebase path. Pairing diagnostic:
       `MPQC_CCK_TRS_FOLD=1 MPQC_CCK_TRS_FOLD_TRACE=1` prints per-term
       canonical hashes of the term and its conjugate.
-- [ ] Flip the default (fold on, rebase retired) after the user signs off;
-      then T19 (serving-level aliasing, enables `fold_kramers_eval_leaves`)
-      and T20 (wrapped-summand eval so the folded energy evaluates).
+- [x] Default flipped (fold on for the Kramers-CSV path, MPQC
+      `MPQC_CCK_NO_KRAMERS_FOLD` opts out); `kramers_internal_rebase`
+      retired (SeQuant 574d3a4f8). Default-path dch: −1.0416902697, 10 it.
+- [x] Residual census (exact, `[cck-eqs/census]`): blocks unchanged by the
+      fold (26/46/82/50/70 non-canonical leaves of 256) — each residual term
+      is one component anchored to the externals; the leftover down leaves
+      are internal summations coupled to up externals → T19 is the lever.
+      Twin fold on the self-conjugate block: still 0/48.
+- [ ] T19 (serving-level aliasing, enables `fold_kramers_eval_leaves`),
+      T20 (wrapped-summand eval so the folded energy evaluates), T21
+      (numerical antisymmetrization for PNS-MP1/2).
