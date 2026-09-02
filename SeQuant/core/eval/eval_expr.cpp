@@ -180,13 +180,21 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // the stored spelling is canonical for flat and ToT leaves alike.
     auto& t0 = expr_->as<Tensor>();
     canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t0));
+    // Kramers fold: a down-first leaf is respelled as its up-first partner;
+    // the marker it produces is a pure {conj} bit (no slot swap) and the
+    // phase multiplies the slot-canonicalization phase below
+    const int kramers_phase = canonicalize_kramers(t0);
+    if (t0.conjugated()) {
+      canon_transform_ = compose(canon_transform_, {.conj = true});
+      t0.conjugate();
+    }
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
              TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
-    canon_transform_.phase = md.phase;
+    canon_transform_.phase = md.phase * kramers_phase;
     if (!md.conjugated_tensors.empty()) {
       // single-tensor network: the canonical labeling spells this leaf in
       // the swapped orientation -- the fold map is the delta
@@ -212,11 +220,19 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // values -- every spelling route lands on one slot + a correct map).
     auto& t = expr_->as<Tensor>();
     canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t));
-    // 3. block-canonicalize WITH the fold (the eval-boundary exception is
-    //    gone); a fold performed here toggles the marker, which converts to
+    // 2. Kramers fold first: its marker is a pure {conj} bit (no slot swap),
+    //    distinct from the braket fold's marker converted below
+    const int kramers_phase = canonicalize_kramers(t);
+    if (t.conjugated()) {
+      canon_transform_ = compose(canon_transform_, {.conj = true});
+      t.conjugate();
+    }
+    // 3. block-canonicalize WITH the braket fold (the Kramers fold is already
+    //    applied, so the block canonicalizer's own Kramers pass is a no-op);
+    //    a braket fold performed here toggles the marker, which converts to
     //    transform bits the same way
     auto phase = TensorBlockCanonicalizer{}.apply(t);
-    canon_transform_.phase = phase ? -1 : 1;
+    canon_transform_.phase = (phase ? -1 : 1) * kramers_phase;
     if (t.conjugated()) {  // fold byproduct: canonicalize_braket swapped the
       // slots INTO the canonical orientation and marked; convert the marker
       // to transform bits and keep the canonical slots

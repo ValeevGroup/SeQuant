@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -353,6 +354,49 @@ bool braket_foldable(const AbstractTensor& t) {
          braket_conjugate_foldable(t);
 }
 
+bool kramers_foldable(const AbstractTensor& t) {
+  return t._is_cnumber() &&
+         t._kramers_symmetry() == KramersSymmetry::TimeReversal &&
+         !braket_orientation_pinned(t);
+}
+
+int canonicalize_kramers(AbstractTensor& t) {
+  if (!kramers_foldable(t)) return 1;
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return 1;
+  // first flavored slot decides; count the down slots for the phase
+  std::optional<bool> first_canonical;
+  int n_down = 0;
+  auto visit = [&](const Index& idx) {
+    if (!isr->kramers_partner(idx.space()))
+      return;  // unflavored slot (e.g. a DF auxiliary)
+    const bool canonical = isr->kramers_canonical(idx.space());
+    if (!first_canonical) first_canonical = canonical;
+    if (!canonical) ++n_down;
+  };
+  for (const auto& idx : t._bra()) visit(idx);
+  for (const auto& idx : t._ket()) visit(idx);
+  for (const auto& idx : t._aux()) visit(idx);
+  if (!first_canonical || *first_canonical) return 1;  // nothing to fold
+  // flip the slots in place (not via _transform_indices: the block
+  // canonicalizer tags every slot first and Index::transform skips tagged
+  // indices); a tag present on the slot is carried over
+  auto flip = [&](auto&& slots) {
+    for (auto& idx : slots) {
+      auto f = kramers_flipped(idx, *isr);
+      if (!f) continue;
+      const bool tagged = idx.tag().has_value();
+      idx = std::move(*f);
+      if (tagged) idx.tag().assign(0);
+    }
+  };
+  flip(t._bra_mutable());
+  flip(t._ket_mutable());
+  flip(t._aux_mutable());
+  t._conjugate();
+  return (n_down % 2) ? -1 : 1;
+}
+
 void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
                                                      bool fold_conjugate) {
   if (!braket_foldable(t)) {
@@ -456,13 +500,17 @@ ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
   canonicalize_braket(t, fold_conjugate_braket_);
+  const int kramers_phase = fold_kramers_ ? canonicalize_kramers(t) : 1;
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});
 
   reset_tags(t);
 
-  return result;
+  // combine the slot-permutation phase with the Kramers fold phase
+  const int perm_phase = result ? -1 : 1;
+  if (perm_phase * kramers_phase < 0) return result ? result : ex<Constant>(-1);
+  return nullptr;
 }
 
 }  // namespace sequant

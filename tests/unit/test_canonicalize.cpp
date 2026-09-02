@@ -1131,3 +1131,81 @@ TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
       /*atoms_only=*/true);
   CHECK(!duplicate);
 }
+
+TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
+  // single-tensor Kramers (time-reversal) fold: a down-first tensor is
+  // respelled as its all-flipped partner with the conjugation marker and
+  // phase (-1)^(#slots flipped from down); up-first and non-Kramers tensors
+  // are untouched; unflavored slots (e.g. a DF auxiliary) never flip
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const auto& a_up = isr->retrieve(L"a↑");
+  const auto& a_dn = isr->retrieve(L"a↓");
+  const auto& i_up = isr->retrieve(L"i↑");
+  const auto& i_dn = isr->retrieve(L"i↓");
+  auto mk = [](std::wstring_view lbl, std::wstring_view b, std::wstring_view k,
+               KramersSymmetry ks = KramersSymmetry::TimeReversal) {
+    return Tensor(lbl, bra{Index(b)}, ket{Index(k)}, Symmetry::Nonsymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, ks);
+  };
+
+  SECTION("down-first, one down slot: flipped, marked, phase -1") {
+    auto f = mk(L"f", L"a↓_1", L"i↑_1");
+    auto ph = TensorBlockCanonicalizer{}.apply(f);
+    REQUIRE(f.conjugated());
+    REQUIRE(f.bra()[0].space() == a_up);
+    REQUIRE(f.ket()[0].space() == i_dn);
+    REQUIRE(ph);  // -1
+    // idempotent
+    auto ph2 = TensorBlockCanonicalizer{}.apply(f);
+    REQUIRE(f.conjugated());
+    REQUIRE(f.bra()[0].space() == a_up);
+    REQUIRE(!ph2);
+  }
+  SECTION("down-first, two down slots: flipped, marked, phase +1") {
+    auto f = mk(L"f", L"a↓_1", L"i↓_1");
+    auto ph = TensorBlockCanonicalizer{}.apply(f);
+    REQUIRE(f.conjugated());
+    REQUIRE(f.bra()[0].space() == a_up);
+    REQUIRE(f.ket()[0].space() == i_up);
+    REQUIRE(!ph);
+  }
+  SECTION("up-first: untouched") {
+    auto f = mk(L"f", L"a↑_1", L"i↓_1");
+    auto ph = TensorBlockCanonicalizer{}.apply(f);
+    REQUIRE(!f.conjugated());
+    REQUIRE(f.bra()[0].space() == a_up);
+    REQUIRE(f.ket()[0].space() == i_dn);
+    REQUIRE(!ph);
+  }
+  SECTION("no Kramers symmetry: untouched") {
+    auto f = mk(L"f", L"a↓_1", L"i↑_1", KramersSymmetry::Nonsymm);
+    TensorBlockCanonicalizer{}.apply(f);
+    REQUIRE(!f.conjugated());
+    REQUIRE(f.bra()[0].space() == a_dn);
+  }
+  SECTION("proto indices flip with their referent; unflavored aux stays") {
+    Index a2(L"a↑_2", {Index(L"i↑_1"), Index(L"i↓_1")});
+    Tensor C(L"C", bra{Index(L"a↓_1")}, ket{a2}, aux{Index(L"a_9")},
+             Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto ph = TensorBlockCanonicalizer{}.apply(C);
+    REQUIRE(C.conjugated());
+    REQUIRE(C.bra()[0].space() == a_up);
+    REQUIRE(C.ket()[0].space() == a_dn);
+    const auto& protos = C.ket()[0].proto_indices();
+    REQUIRE(protos.size() == 2);
+    bool has_dn = false, has_up = false;
+    for (auto const& pr : protos) {
+      has_dn |= pr.space() == i_dn;
+      has_up |= pr.space() == i_up;
+    }
+    REQUIRE((has_dn && has_up));
+    REQUIRE(C.aux()[0].space() == isr->retrieve(L"a"));
+    REQUIRE(ph);  // one down slot flipped -> -1
+  }
+}

@@ -1,4 +1,5 @@
 #include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -948,4 +949,35 @@ TEST_CASE("re_im_eval_nodes", "[EvalExpr][re-im]") {
   REQUIRE(re->hash_value() != im->hash_value());
   REQUIRE(re->hash_value() != inner_alone->hash_value());
   REQUIRE(im->hash_value() != inner_alone->hash_value());
+}
+
+TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
+  // a down-first Kramers leaf occupies the SAME eval slot as its up-first
+  // partner; the difference rides the CanonTransform as {conj, phase}
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto mk = [](std::wstring_view b, std::wstring_view k, BraKetSymmetry bks) {
+    return Tensor(L"C", bra{Index(b)}, ket{Index(k)}, Symmetry::Nonsymm, bks,
+                  ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+  };
+  for (auto bks : {BraKetSymmetry::Nonsymm, BraKetSymmetry::Conjugate}) {
+    // C(down,up) = -conj(C(up,down)): one slot flipped from down
+    EvalExpr eu{mk(L"a↑_1", L"a↓_2", bks)};
+    EvalExpr ed{mk(L"a↓_1", L"a↑_2", bks)};
+    REQUIRE(eu.hash_value() == ed.hash_value());
+    REQUIRE(ed.canon_transform().conj != eu.canon_transform().conj);
+    REQUIRE(ed.canon_transform().phase == -eu.canon_transform().phase);
+    // C(down,down) = +conj(C(up,up)): two slots flipped from down
+    EvalExpr euu{mk(L"a↑_1", L"a↑_2", bks)};
+    EvalExpr edd{mk(L"a↓_1", L"a↓_2", bks)};
+    REQUIRE(euu.hash_value() == edd.hash_value());
+    REQUIRE(edd.canon_transform().conj != euu.canon_transform().conj);
+    REQUIRE(edd.canon_transform().phase == euu.canon_transform().phase);
+    // distinct families stay distinct
+    REQUIRE(eu.hash_value() != euu.hash_value());
+  }
 }

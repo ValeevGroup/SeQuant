@@ -227,9 +227,10 @@ class AbstractTensor {
   virtual ColumnSymmetry _column_symmetry() const {
     throw missing_instantiation_for("_column_symmetry");
   }
-  /// @return the time-reversal (Kramers) symmetry of the tensor
+  /// @return the time-reversal (Kramers) symmetry of the tensor; the default
+  ///         (no override, e.g. operator-valued tensors) is Nonsymm
   virtual KramersSymmetry _kramers_symmetry() const {
-    throw missing_instantiation_for("_kramers_symmetry");
+    return KramersSymmetry::Nonsymm;
   }
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");

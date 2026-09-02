@@ -181,6 +181,22 @@ bool braket_conjugate_foldable(const AbstractTensor& t);
 ///         (braket_conjugate_foldable())
 bool braket_foldable(const AbstractTensor& t);
 
+/// @return whether the Kramers (time-reversal) fold applies to @p t:
+///         KramersSymmetry::TimeReversal, a c-number, and not
+///         orientation-pinned (reserved operators never fold)
+bool kramers_foldable(const AbstractTensor& t);
+
+/// @brief Kramers (time-reversal) fold of a single tensor: if @p t's FIRST
+/// flavored slot (bra, ket, aux order) carries the non-canonical (down)
+/// flavor, every flavored slot index is replaced by its Kramers partner
+/// (proto indices flipped recursively, unflavored slots untouched) and the
+/// conjugation marker is toggled, preserving the value up to the returned
+/// phase: T = phase * conj(T_flipped), phase = (-1)^(#slots flipped from
+/// down). No-op (phase +1) if the fold does not apply or the first flavored
+/// slot is already canonical. Idempotent.
+/// @return the phase (+1 or -1)
+int canonicalize_kramers(AbstractTensor& t);
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;
@@ -303,8 +319,15 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
 
   ExprPtr apply(AbstractTensor& t) const override;
 
+  /// @param fold_kramers if false, the Kramers fold is skipped
+  TensorBlockCanonicalizer& fold_kramers(bool fold_kramers) {
+    fold_kramers_ = fold_kramers;
+    return *this;
+  }
+
  private:
   bool fold_conjugate_braket_ = true;
+  bool fold_kramers_ = true;
 };
 
 }  // namespace sequant
