@@ -29,6 +29,7 @@
 #include <range/v3/algorithm/equal.hpp>
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <iterator>
 #include <limits>

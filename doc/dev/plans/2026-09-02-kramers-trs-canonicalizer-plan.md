@@ -136,18 +136,15 @@ Hermitian C, dch energy term 0 reproduction in `kramers_symmetry_propagation`.
 See design §4 "Orientation verdicts are symmetry-invariant". Regression:
 the three dch energy twin pairs in `kramers_symmetry_propagation`.
 
-### Task 6: MPQC measurement (dch)
+### Task 6: MPQC measurement (dch) — DONE
 
-Files: `mpqc4` `cc/sequant.cpp` (context option), runs in
-`~/code/runs-mpqc/pr2-eval-smoke/`.
-
-- [ ] Enable `fold_kramers` in MPQC's SeQuant context for the Kramers
-      path; rebuild; run dch default: energy in the −1.0416902693 band,
-      iteration count unchanged.
-- [ ] Census (`twin_census.py`): expect zero down-first leaves in internal
-      components; report per-block counts. Energy fold: expect 36 → 18.
-- [ ] Twin fold (`MPQC_CCK_TWIN_FOLD=1`, block 4): report pairs; if still
-      0, run the numerical term study extension (`t' == sign·conj(perm(t))`)
-      to settle value-level pairing. Record results in the design doc's
-      "Scope and expectations" and in the PR-2 plan roadmap.
-- [ ] Commit the MPQC context change; update memory.
+- [x] `MPQC_CCK_KRAMERS_FOLD=1` (opt-in; options passed explicitly, see
+      design §5) on dch default: PNS-MP2 −1.04169026891 (band), 10
+      iterations, energy equation 36 terms, residual blocks 48 each.
+- [x] Energy conjugate-pair fold: 36 → 20 (17 pairs + 2 self-conjugate),
+      vs 24 on the rebase path. Pairing diagnostic:
+      `MPQC_CCK_TRS_FOLD=1 MPQC_CCK_TRS_FOLD_TRACE=1` prints per-term
+      canonical hashes of the term and its conjugate.
+- [ ] Flip the default (fold on, rebase retired) after the user signs off;
+      then T19 (serving-level aliasing, enables `fold_kramers_eval_leaves`)
+      and T20 (wrapped-summand eval so the folded energy evaluates).

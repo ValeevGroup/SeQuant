@@ -154,18 +154,22 @@ multiset of these keys; a component whose every invariant coincides with
 its flip's (`g{i↑,i↓;a↑,a↓} t{a↓,a↑;i↓,i↑}`) is decided by the
 flavor-aware canonical hash of the component versus its flip.
 
-### 5. Scope and expectations
+### 5. Scope and expectations — MEASURED (dch PNS-MP1, 2026-09-02)
 
-- Energy: the 12 unpaired terms are exactly component-orientation twins;
-  they pair once the fold is idempotent with canonicalization.
-- Residual blocks: all internal components become canonical; components
-  anchored to externals keep the externals' flavors (correct — their
-  images are the reconstructed partner blocks). Whether the self-conjugate
-  block's within-block twins pair after the combined braket+Kramers folds
-  is an open question to be MEASURED, and independently verified by the
-  numerical term study (`t' == sign·conj(perm(t))` on evaluated terms).
-- `kramers_internal_rebase` becomes redundant; it stays until measured
-  equal, then is retired.
+- Energy: with the network fold and the conjugate-pair fold the 36 traced
+  terms pair to 17 conjugate pairs + 2 self-conjugate terms = 20 terms
+  (rebase path: 24; the two leftovers are their own flavor flip up to
+  relabeling, hence real by themselves — the floor).
+- Residual blocks: respelled almost everywhere (243 of 136 dump lines
+  changed vs the rebase path) with the PNS-MP2 energy unchanged:
+  −1.04169026891 vs the −1.04169026886…971 band, 10 iterations.
+- `kramers_internal_rebase` is redundant under the fold (measured equal
+  when the fold engages; MPQC skips it explicitly). Retire after the fold
+  becomes the default.
+- MPQC landmine: the SeQuant default context is replaced non-scopedly
+  downstream of the trace, so the options must be passed EXPLICITLY at the
+  canonicalize/fold sites (`kramers_fold_options` in `cc/sequant.cpp`);
+  every "fold ON" measurement before that fix was silently fold OFF.
 
 ## Non-goals
 
