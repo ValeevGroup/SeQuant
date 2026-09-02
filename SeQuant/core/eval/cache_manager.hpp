@@ -33,6 +33,7 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -377,6 +378,13 @@ struct EvalImplTimeline {
 ///        executions, so build_count > iterations for a node == genuine
 ///        recompute (re-run contraction), the ground truth the FLOP count
 ///        reflects. Env gate SEQUANT_UT_BUILD_METER. Single-threaded only.
+/// Strict cache-fill-once mode (see entry::store): env
+/// SEQUANT_UT_STRICT_FILL_ONCE.
+[[nodiscard]] inline bool strict_fill_once() noexcept {
+  static bool const on = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE") != nullptr;
+  return on;
+}
+
 struct BuildMeter {
   static bool enabled() noexcept {
     static bool const on = std::getenv("SEQUANT_UT_BUILD_METER") != nullptr;
@@ -844,6 +852,17 @@ class CacheManager {
       // excluded: they legitimately re-store across batch replays.
       if (!persistent_) {
         SEQUANT_ASSERT(!stored_this_eval_);
+        // STRICT cache-fill-once (dry-run schedule test-drive): the assert
+        // above is compiled out in Release/RelWithDebInfo, so a duplicate
+        // producer (the same value cell built twice without an intervening
+        // reset -- e.g. a frame-sensitive key that made a consumer miss a
+        // resident value and rebuild it) passes silently. Under
+        // SEQUANT_UT_STRICT_FILL_ONCE it is a hard error.
+        if (stored_this_eval_ && eval::strict_fill_once())
+          throw std::runtime_error(
+              "CacheManager::entry::store: value cell stored twice without an "
+              "intervening reset() (duplicate producer / a consumer missed the "
+              "resident cell and rebuilt it) -- cache-fill-once violated");
         stored_this_eval_ = true;
       }
       data_p = std::move(data);

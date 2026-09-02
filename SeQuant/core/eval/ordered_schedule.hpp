@@ -713,13 +713,37 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
       if (hit == home_scope->end() || vid >= rich.cells.size()) continue;
       auto const vit = vmap.find(rich.cells[vid].hash);
       if (vit == vmap.end()) continue;
-      auto const& sm = vit->second->sliced_modes();
       auto const& cl = cons_loops[vid];
       auto& hs = hit->second;
+      // IDENTITY-based "sliced on this loop" (2026-09-02): the loop's canonical
+      // axis LABEL is meaningless across the DAG (every i-loop of w20 is
+      // labeled i_1), so `find(sliced_modes, ax)` stopped the walk at the
+      // INNERMOST same-space loop; a value sliced only on the OUTERMOST i loop
+      // (home coloring {i:color(d7)}) was homed at d33 where its consumer at
+      // d20 could never read it ("read-from-home value vanished"). Test the
+      // loop's COLOR against the value's home coloring instead.
+      // Residency (sliced_modes, INCLUDING self-opened loops) mapped to loop
+      // identity via the occurrence's per-position fusion slot; NOT
+      // home_mode_depth, which excludes a scatter root's own loops and sent a
+      // multi-level escape's inner partial to the root.
+      auto const& sm = vit->second->sliced_modes();
+      ValueCell const& cell = rich.cells[vid];
+      auto const sliced_on_loop = [&](Index const& ax, LoopKey const& k) {
+        std::wstring const space{ax.space().base_key()};
+        for (std::size_t p = 0; p < cell.carried.size(); ++p) {
+          if (std::find(sm.begin(), sm.end(), cell.carried[p]) == sm.end())
+            continue;
+          if (std::wstring(cell.carried[p].space().base_key()) != space)
+            continue;
+          for (auto const& occ : cell.occurrences)
+            if (p < occ.loop_slot.size() && occ.loop_slot[p] == k.loop_slot)
+              return true;
+        }
+        return false;
+      };
       while (!hs.empty()) {
         auto const& [ax, k] = hs.back();
-        bool const sliced_on = std::find(sm.begin(), sm.end(), ax) != sm.end();
-        if (sliced_on || cl.count(k.color())) break;
+        if (sliced_on_loop(ax, k) || cl.count(k.color())) break;
         hs.pop_back();
       }
     }
@@ -844,8 +868,25 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
           auto const cit = cons_loops.find(vid);
           while (!home.empty()) {
             auto const& [ax, ent] = home.back();
-            bool const sliced_on =
-                std::find(sm.begin(), sm.end(), ax) != sm.end();
+            // identity-based (see the home_scope walk above): residency
+            // mode of this loop's space whose fusion slot is this loop's.
+            bool sliced_on = false;
+            {
+              ValueCell const& cell = rich.cells[vid];
+              std::wstring const space{ax.space().base_key()};
+              int const slot = std::get<1>(ent);
+              for (std::size_t p = 0; p < cell.carried.size() && !sliced_on;
+                   ++p) {
+                if (std::find(sm.begin(), sm.end(), cell.carried[p]) ==
+                    sm.end())
+                  continue;
+                if (std::wstring(cell.carried[p].space().base_key()) != space)
+                  continue;
+                for (auto const& occ : cell.occurrences)
+                  if (p < occ.loop_slot.size() && occ.loop_slot[p] == slot)
+                    sliced_on = true;
+              }
+            }
             bool const cons_in =
                 cit != cons_loops.end() &&
                 cit->second.count(
@@ -2349,6 +2390,12 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
     for (OccurrenceRec const& occ : vc.occurrences)
       point_owner[occ.point] = vc.value_id;
 
+  // point -> that occurrence record (to reach the PARENT occurrence on an
+  // edge: the consumer's occurrence in the SAME tree as the operand's).
+  std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences) point_occ[occ.point] = &occ;
+
   // The VALUE-LEVEL component slot per carried position: the loop_slot the
   // union-find (Task 2) assigned to (value, position), recovered UNMASKED. Task
   // 2 stamps occ.loop_slot = -1 wherever a mode is not batched AT THAT
@@ -2373,6 +2420,18 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       if (occ.consumer_point == occ.point) continue;  // forest root
       auto const oit = point_owner.find(occ.consumer_point);
       if (oit == point_owner.end()) continue;  // defensive
+      // PRODUCTION EDGE ONLY (2026-09-02): a consumer value is PRODUCED once,
+      // from its canonical (front) occurrence's tree; its other occurrences
+      // are READS of the finished value, and the W->C edges inside those
+      // trees never execute. Slice facts recorded from such a non-production
+      // edge are keyed by the same (W, C, loop) triple and MERGE with the
+      // production edge's facts -- in a permuted frame that binds C's modes
+      // to other loop instances, which sliced one operand position by two
+      // loops (w20 strict dry-run walk: 20632 pos 1 by slots 1 AND 2).
+      if (rich.cells[oit->second].occurrences.empty() ||
+          rich.cells[oit->second].occurrences.front().point !=
+              occ.consumer_point)
+        continue;
       auto const sit = build_scope.find(oit->second);
       if (sit == build_scope.end()) continue;  // consumer has no enclosing loop
       container::svector<detail::ScopeBlockAxisLevel> const& scope =
@@ -2474,13 +2533,20 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         bool recorded = false;
         for (std::size_t cp = 0; cp < c_carried.size() && cp < cvs.size();
              ++cp) {
-          // per-value slot OR any occurrence's own slot (per-occurrence loop
-          // instance; see the k-loop note above).
-          bool c_sliced = cvs[cp] == lvl.loop_slot;
-          for (auto const& cocc : rich.cells[c_vid].occurrences)
-            if (!c_sliced && cp < cocc.loop_slot.size() &&
-                cocc.loop_slot[cp] == lvl.loop_slot)
-              c_sliced = true;
+          // The consumer's slot for position cp IN THIS TREE: the parent
+          // occurrence on this edge (point == occ.consumer_point). Mixing C's
+          // OTHER occurrences (other trees, permuted frames) leaked a slot
+          // binding from a different frame and sliced one operand position
+          // by two loops (w20 strict dry-run walk: 20632 pos 1 by slot 1 AND
+          // slot 2). The per-value value_slot is the fallback only when the
+          // parent occurrence carries no stamp at all.
+          bool c_sliced = false;
+          if (auto const pit = point_occ.find(occ.consumer_point);
+              pit != point_occ.end() && cp < pit->second->loop_slot.size() &&
+              pit->second->loop_slot[cp] >= 0)
+            c_sliced = pit->second->loop_slot[cp] == lvl.loop_slot;
+          else
+            c_sliced = cvs[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
           if (std::wstring(c_carried[cp].space().base_key()) != lvl.space)
             continue;
@@ -2557,6 +2623,14 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             if (recorded) break;
           }
         }
+        // Nothing sliced this operand here and nothing declared it invariant:
+        // record the invariant EXPLICITLY so the completeness guard (whose
+        // consumer oracle is a per-value union over C's occurrences) does not
+        // mistake a legitimately whole read for a gap. Range conformance is
+        // enforced by the dry-run/wet backends themselves.
+        if (!recorded)
+          result.occ_invariant.push_back(
+              std::make_tuple(w_vid, id_of(lvl), oit->second));
       }
     }
   }

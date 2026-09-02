@@ -1384,6 +1384,16 @@ TEST_CASE(
   // non-decrementing reuse, per-occurrence use-induced slicing with explicit
   // invariant facts, per-level scatter axis selection, and inner-scatter
   // destination sizing. Any regression in those surfaces here as a throw.
+  // STRICT dry-run test-drive (2026-09-02): (1) the dry-run backend now
+  // carries slice LOBOUNDS and throws on any shared-label range mismatch in
+  // prod/sum/add_inplace/scatter (the analogue of TA's index-map and
+  // is_range_set_congruent asserts, which Release elides); (2) cache-fill-once
+  // is a hard error (a value cell stored twice without a reset = a consumer
+  // missed the resident cell and rebuilt it, e.g. a frame-sensitive key);
+  // (3) strict read-from-home is on in the ordered executor. Together these
+  // make the walk catch, in seconds, the classes of defect that took
+  // RelWithDebInfo wet runs to find on w20.
+  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));

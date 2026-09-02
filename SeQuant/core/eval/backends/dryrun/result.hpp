@@ -11,6 +11,7 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <format>
+#include <stdexcept>
 
 #include <algorithm>
 #include <any>
@@ -61,7 +62,7 @@ class ResultDryRunNested;
 ///
 [[nodiscard]] inline ResultPtr make_dryrun_result(
     container::svector<Index> idx, std::shared_ptr<CostModel const> cm,
-    ExtentOverrides overrides = {});
+    ExtentOverrides overrides = {}, ExtentOverrides lobounds = {});
 
 namespace detail {
 
@@ -115,6 +116,98 @@ namespace detail {
 // need the concrete classes' definitions.
 [[nodiscard]] container::svector<Index> indices_of(Result const& r);
 [[nodiscard]] ExtentOverrides overrides_of(Result const& r);
+/// Positional lower bounds of SLICED modes (mode -> element lobound); a mode
+/// absent here is whole (lobound 0). Kept parallel to \c ExtentOverrides so a
+/// slice preserves its ABSOLUTE position, as the TA backend does.
+[[nodiscard]] ExtentOverrides lobounds_of(Result const& r);
+
+/// The realized element range of position \p pos of an operand: (lo, extent)
+/// -- sliced modes from the overrides, whole modes from the regime.
+/// (lo, extent); extent is 0 when unknown (whole mode whose label the regime
+/// does not size, e.g. a fixture hyperindex) -- callers compare only known
+/// extents.
+[[nodiscard]] inline std::pair<std::size_t, std::size_t> range_at(
+    ExtentOverrides const& ov, ExtentOverrides const& lob,
+    std::shared_ptr<CostModel const> const& cm, annot_t const& annot,
+    std::size_t pos) {
+  std::size_t lo = 0, ext = 0;
+  if (auto it = ov.find(pos); it != ov.end())
+    ext = it->second;
+  else
+    try {
+      ext = cm->regime().extent(annot[pos]);
+    } catch (std::exception const&) {
+      ext = 0;  // unknown
+    }
+  if (auto it = lob.find(pos); it != lob.end()) lo = it->second;
+  return {lo, ext};
+}
+
+/// DRY-RUN CONFORMANCE CHECK (the dry-run analogue of TA's einsum index-map
+/// merge and is_range_set_congruent): every label shared by the two operand
+/// annotations must realize the SAME element range (lobound AND extent) on
+/// both sides. A whole operand meeting a sliced partner (extent mismatch) or
+/// two operands sliced to DIFFERENT batches of one loop (lobound mismatch,
+/// e.g. a stale per-batch cell reused across batches) is a schedule/runtime
+/// slicing defect; the wet backend hangs or asserts on it, the dry run used to
+/// pass silently. Throws with both ranges named.
+inline void check_shared_ranges(char const* op, annot_t const& lannot,
+                                ExtentOverrides const& lov,
+                                ExtentOverrides const& llob,
+                                annot_t const& rannot,
+                                ExtentOverrides const& rov,
+                                ExtentOverrides const& rlob,
+                                std::shared_ptr<CostModel const> const& cm) {
+  for (std::size_t lp = 0; lp < lannot.size(); ++lp) {
+    auto const rit = std::find(rannot.begin(), rannot.end(), lannot[lp]);
+    if (rit == rannot.end()) continue;
+    std::size_t const rp = static_cast<std::size_t>(rit - rannot.begin());
+    // Both whole on this label => trivially equal (no regime query needed).
+    if (!lov.count(lp) && !llob.count(lp) && !rov.count(rp) && !rlob.count(rp))
+      continue;
+    auto const [llo, lext] = range_at(lov, llob, cm, lannot, lp);
+    auto const [rlo, rext] = range_at(rov, rlob, cm, rannot, rp);
+    if (llo == rlo && (lext == rext || lext == 0 || rext == 0)) continue;
+    auto lbls = [](annot_t const& a) {
+      std::string s;
+      for (auto const& x : a) s += toUtf8(x.full_label()) + " ";
+      return s;
+    };
+    throw std::runtime_error(std::format(
+        "[dryrun] {}: shared label {} realizes DIFFERENT ranges on the two "
+        "operands: L[{}]=[{},{}) vs R[{}]=[{},{}) -- a whole operand against "
+        "a sliced partner (extent) or two slices of different batches "
+        "(lobound); L=({}) R=({})",
+        op, toUtf8(lannot[lp].full_label()), lp, llo, llo + lext, rp, rlo,
+        rlo + rext, lbls(lannot), lbls(rannot)));
+  }
+}
+
+/// Accumulation (add_inplace) conformance: the accumulator and the partial
+/// must realize the SAME range on every mode (same slicing, same batch) --
+/// summing a partial of one batch into a cell of another is the stale-cell
+/// signature. Positional (both carry the result's own index order).
+inline void check_accumulate_ranges(
+    container::svector<Index> const& idx, ExtentOverrides const& ov,
+    ExtentOverrides const& lob, Result const& other,
+    std::shared_ptr<CostModel const> const& cm) {
+  auto const oov = overrides_of(other);
+  auto const olob = lobounds_of(other);
+  annot_t const a(idx.begin(), idx.end());
+  for (std::size_t pos = 0; pos < idx.size(); ++pos) {
+    if (!ov.count(pos) && !lob.count(pos) && !oov.count(pos) &&
+        !olob.count(pos))
+      continue;
+    auto const [lo, ext] = range_at(ov, lob, cm, a, pos);
+    auto const [olo, oext] = range_at(oov, olob, cm, a, pos);
+    if (lo == olo && (ext == oext || ext == 0 || oext == 0)) continue;
+    throw std::runtime_error(std::format(
+        "[dryrun] add_inplace: mode {} ({}) accumulator range [{},{}) vs "
+        "partial range [{},{}) -- accumulating a partial of a different "
+        "slicing/batch into this cell",
+        pos, toUtf8(idx[pos].full_label()), lo, lo + ext, olo, olo + oext));
+  }
+}
 
 ///
 /// \brief Shared op bodies for the two DryRun Result concrete types.
@@ -131,29 +224,43 @@ struct DryRunOps {
                                      ExtentOverrides const& ov,
                                      std::shared_ptr<CostModel const> const& cm,
                                      Result const& other,
-                                     std::array<std::any, 3> const& annot) {
+                                     std::array<std::any, 3> const& annot,
+                                     ExtentOverrides const& lob = {}) {
     auto const a = Annot<annot_t>{annot};
+    auto const other_ov = overrides_of(other);
+    auto const other_lob = lobounds_of(other);
+    check_shared_ranges("sum", a.lannot, ov, lob, a.rannot, other_ov, other_lob,
+                        cm);
     // Both summands share the result's index set (possibly reordered); project
     // each operand's positional slice widths onto the result annotation by
     // label before merging (position k is a different mode in each operand).
     auto merged = merge_overrides(
         remap_overrides_by_annot(ov, a.lannot, a.this_annot),
-        remap_overrides_by_annot(overrides_of(other), a.rannot, a.this_annot));
+        remap_overrides_by_annot(other_ov, a.rannot, a.this_annot));
+    auto merged_lob = merge_overrides(
+        remap_overrides_by_annot(lob, a.lannot, a.this_annot),
+        remap_overrides_by_annot(other_lob, a.rannot, a.this_annot));
     return make_dryrun_result(
         container::svector<Index>(a.this_annot.begin(), a.this_annot.end()), cm,
-        std::move(merged));
+        std::move(merged), std::move(merged_lob));
   }
 
   [[nodiscard]] static ResultPtr prod(
       container::svector<Index> const& idx, ExtentOverrides const& ov,
       std::shared_ptr<CostModel const> const& cm, Result const& other,
-      std::array<std::any, 3> const& annot) {
+      std::array<std::any, 3> const& annot, ExtentOverrides const& lob = {}) {
     if (other.is<ResultScalar<double>>()) {
       // Scalar * tensor: shape (and any accumulated slicing) unchanged.
-      return make_dryrun_result(idx, cm, ov);
+      return make_dryrun_result(idx, cm, ov, lob);
     }
     auto const a = Annot<annot_t>{annot};
     auto const other_ov = overrides_of(other);
+    auto const other_lob = lobounds_of(other);
+    check_shared_ranges("prod", a.lannot, ov, lob, a.rannot, other_ov,
+                        other_lob, cm);
+    auto merged_lob = merge_overrides(
+        remap_overrides_by_annot(lob, a.lannot, a.this_annot),
+        remap_overrides_by_annot(other_lob, a.rannot, a.this_annot));
     // RESULT overrides: each operand's positional slice widths are positional
     // against ITS OWN annotation (== its canon index order); project both onto
     // the result's annotation by label (dropping any contracted-away mode),
@@ -229,30 +336,35 @@ struct DryRunOps {
     }
     return make_dryrun_result(
         container::svector<Index>(a.this_annot.begin(), a.this_annot.end()), cm,
-        std::move(merged));
+        std::move(merged), std::move(merged_lob));
   }
 
   [[nodiscard]] static ResultPtr permute(
       container::svector<Index> const& idx, ExtentOverrides const& ov,
       std::shared_ptr<CostModel const> const& cm,
-      std::array<std::any, 2> const& ann) {
+      std::array<std::any, 2> const& ann, ExtentOverrides const& lob = {}) {
     auto const post = std::any_cast<annot_t>(ann[1]);
     // Reordering modes moves each mode's position, so the positional overrides
     // must move with them: `ov` is positional against `idx` (the pre-permute
     // canon order); project it onto `post` by label.
     return make_dryrun_result(
         container::svector<Index>(post.begin(), post.end()), cm,
-        remap_overrides_by_annot(ov, idx, post));
+        remap_overrides_by_annot(ov, idx, post),
+        remap_overrides_by_annot(lob, idx, post));
   }
 
   [[nodiscard]] static ResultPtr slice_mode(
       container::svector<Index> const& idx, ExtentOverrides const& ov,
       std::shared_ptr<CostModel const> const& cm, std::size_t mode,
-      std::size_t elem_lo, std::size_t elem_hi) {
+      std::size_t elem_lo, std::size_t elem_hi,
+      ExtentOverrides const& lob = {}) {
     SEQUANT_ASSERT(mode < idx.size());
     auto merged = ov;
     merged[mode] = elem_hi - elem_lo;  // positional: mode `mode`, any label
-    return make_dryrun_result(idx, cm, std::move(merged));
+    auto merged_lob = lob;
+    merged_lob[mode] = elem_lo;  // ABSOLUTE position preserved (as TA does)
+    return make_dryrun_result(idx, cm, std::move(merged),
+                              std::move(merged_lob));
   }
 
   /// Scatter \p block into the `[block_lo, block_hi)` element slice of the
@@ -296,6 +408,26 @@ struct DryRunOps {
       std::cerr << "}" << std::endl;
     }
     SEQUANT_ASSERT(block_extent == block_hi - block_lo);
+    if (block_extent != block_hi - block_lo)
+      throw std::runtime_error(std::format(
+          "[dryrun] write_into_slice: block extent {} on mode {} ({}) != "
+          "destination slice [{},{})",
+          block_extent, mode, toUtf8(mix.full_label()), block_lo, block_hi));
+    // The block's ABSOLUTE position on this mode (if it is a slice) must be
+    // the destination slice it is written into.
+    {
+      auto const blob = lobounds_of(block);
+      auto const bit = std::find(bidx.begin(), bidx.end(), mix);
+      if (bit != bidx.end()) {
+        auto const bpos = static_cast<std::size_t>(bit - bidx.begin());
+        if (auto lit = blob.find(bpos);
+            lit != blob.end() && lit->second != block_lo)
+          throw std::runtime_error(std::format(
+              "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
+              "destination slice lobound {}",
+              lit->second, mode, toUtf8(mix.full_label()), block_lo));
+      }
+    }
     // Merge the block's range into the assembled coverage, requiring
     // contiguity: a block that neither appends after nor prepends before the
     // filled range would leave a gap or overlap another block (a
@@ -396,11 +528,15 @@ class ResultDryRun final : public Result {
 
   ResultDryRun(container::svector<Index> idxset,
                std::shared_ptr<CostModel const> cm,
-               ExtentOverrides overrides = {})
+               ExtentOverrides overrides = {}, ExtentOverrides lobounds = {})
       : Result{Payload{}},
         indices_{std::move(idxset)},
         cm_{std::move(cm)},
-        overrides_{std::move(overrides)} {}
+        overrides_{std::move(overrides)},
+        lobounds_{std::move(lobounds)} {}
+  [[nodiscard]] ExtentOverrides const& lobounds() const noexcept {
+    return lobounds_;
+  }
 
   [[nodiscard]] container::svector<Index> const& indices() const noexcept {
     return indices_;
@@ -428,29 +564,33 @@ class ResultDryRun final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    return detail::DryRunOps::sum(indices_, overrides_, cm_, other, annot);
+    return detail::DryRunOps::sum(indices_, overrides_, cm_, other, annot,
+                                  lobounds_);
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
                                std::array<std::any, 3> const& annot,
                                DeNest /*DeNestFlag*/) const override {
-    return detail::DryRunOps::prod(indices_, overrides_, cm_, other, annot);
+    return detail::DryRunOps::prod(indices_, overrides_, cm_, other, annot,
+                                   lobounds_);
   }
 
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
+    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
+                                      lobounds_);
   }
 
   [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
+    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
+                                      lobounds_);
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     return detail::DryRunOps::slice_mode(indices_, overrides_, cm_, mode,
-                                         elem_lo, elem_hi);
+                                         elem_lo, elem_hi, lobounds_);
   }
 
   void write_into_slice(Result const& block, std::size_t mode,
@@ -461,20 +601,23 @@ class ResultDryRun final : public Result {
 
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<ResultDryRun>() || other.is<ResultDryRunNested>());
+    detail::check_accumulate_ranges(indices_, overrides_, lobounds_, other,
+                                    cm_);
     overrides_ =
         detail::merge_overrides(overrides_, detail::overrides_of(other));
+    lobounds_ = detail::merge_overrides(lobounds_, detail::lobounds_of(other));
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    return eval_result<ResultDryRun>(indices_, cm_, overrides_);
+    return eval_result<ResultDryRun>(indices_, cm_, overrides_, lobounds_);
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
-    return eval_result<ResultDryRun>(indices_, cm_, overrides_);
+    return eval_result<ResultDryRun>(indices_, cm_, overrides_, lobounds_);
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t /*factor*/) const override {
-    return eval_result<ResultDryRun>(indices_, cm_, overrides_);
+    return eval_result<ResultDryRun>(indices_, cm_, overrides_, lobounds_);
   }
 
   [[nodiscard]] std::size_t size_in_bytes() const final {
@@ -484,6 +627,7 @@ class ResultDryRun final : public Result {
   container::svector<Index> indices_;
   std::shared_ptr<CostModel const> cm_;
   ExtentOverrides overrides_;
+  ExtentOverrides lobounds_;  // positional lobounds of sliced modes
   AssembledCoverage assembled_;
 };
 
@@ -519,7 +663,8 @@ class ResultDryRunNested final : public Result {
                      container::svector<Index> inner,
                      std::shared_ptr<CostModel const> cm,
                      ExtentOverrides overrides = {},
-                     container::svector<Index> canon_order = {})
+                     container::svector<Index> canon_order = {},
+                     ExtentOverrides lobounds = {})
       : Result{Payload{}},
         outer_{std::move(outer)},
         inner_{std::move(inner)},
@@ -531,7 +676,11 @@ class ResultDryRunNested final : public Result {
                        }()
                      : std::move(canon_order)},
         cm_{std::move(cm)},
-        overrides_{std::move(overrides)} {}
+        overrides_{std::move(overrides)},
+        lobounds_{std::move(lobounds)} {}
+  [[nodiscard]] ExtentOverrides const& lobounds() const noexcept {
+    return lobounds_;
+  }
 
   [[nodiscard]] container::svector<Index> const& outer() const noexcept {
     return outer_;
@@ -565,29 +714,33 @@ class ResultDryRunNested final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    return detail::DryRunOps::sum(indices_, overrides_, cm_, other, annot);
+    return detail::DryRunOps::sum(indices_, overrides_, cm_, other, annot,
+                                  lobounds_);
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
                                std::array<std::any, 3> const& annot,
                                DeNest /*DeNestFlag*/) const override {
-    return detail::DryRunOps::prod(indices_, overrides_, cm_, other, annot);
+    return detail::DryRunOps::prod(indices_, overrides_, cm_, other, annot,
+                                   lobounds_);
   }
 
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
+    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
+                                      lobounds_);
   }
 
   [[nodiscard]] ResultPtr adjoint(
       std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann);
+    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
+                                      lobounds_);
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     return detail::DryRunOps::slice_mode(indices_, overrides_, cm_, mode,
-                                         elem_lo, elem_hi);
+                                         elem_lo, elem_hi, lobounds_);
   }
 
   void write_into_slice(Result const& block, std::size_t mode,
@@ -598,23 +751,26 @@ class ResultDryRunNested final : public Result {
 
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<ResultDryRun>() || other.is<ResultDryRunNested>());
+    detail::check_accumulate_ranges(indices_, overrides_, lobounds_, other,
+                                    cm_);
     overrides_ =
         detail::merge_overrides(overrides_, detail::overrides_of(other));
+    lobounds_ = detail::merge_overrides(lobounds_, detail::lobounds_of(other));
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
     return eval_result<ResultDryRunNested>(outer_, inner_, cm_, overrides_,
-                                           indices_);
+                                           indices_, lobounds_);
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
     return eval_result<ResultDryRunNested>(outer_, inner_, cm_, overrides_,
-                                           indices_);
+                                           indices_, lobounds_);
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t /*factor*/) const override {
     return eval_result<ResultDryRunNested>(outer_, inner_, cm_, overrides_,
-                                           indices_);
+                                           indices_, lobounds_);
   }
 
   [[nodiscard]] std::size_t size_in_bytes() const final {
@@ -626,21 +782,22 @@ class ResultDryRunNested final : public Result {
   container::svector<Index> indices_;  // canon order; outer_++inner_ content
   std::shared_ptr<CostModel const> cm_;
   ExtentOverrides overrides_;
+  ExtentOverrides lobounds_;  // positional lobounds of sliced modes
   AssembledCoverage assembled_;
 };
 
 [[nodiscard]] inline ResultPtr make_dryrun_result(
     container::svector<Index> idx, std::shared_ptr<CostModel const> cm,
-    ExtentOverrides overrides) {
+    ExtentOverrides overrides, ExtentOverrides lobounds) {
   if (!detail::has_proto(idx))
     return eval_result<ResultDryRun>(std::move(idx), std::move(cm),
-                                     std::move(overrides));
+                                     std::move(overrides), std::move(lobounds));
   container::svector<Index> outer, inner;
   for (auto const& ix : idx)
     (ix.has_proto_indices() ? inner : outer).push_back(ix);
   return eval_result<ResultDryRunNested>(std::move(outer), std::move(inner),
                                          std::move(cm), std::move(overrides),
-                                         std::move(idx));
+                                         std::move(idx), std::move(lobounds));
 }
 
 namespace detail {
@@ -655,6 +812,11 @@ namespace detail {
   if (r.is<ResultDryRun>()) return r.as<ResultDryRun>().overrides();
   SEQUANT_ASSERT(r.is<ResultDryRunNested>());
   return r.as<ResultDryRunNested>().overrides();
+}
+[[nodiscard]] inline ExtentOverrides lobounds_of(Result const& r) {
+  if (r.is<ResultDryRun>()) return r.as<ResultDryRun>().lobounds();
+  SEQUANT_ASSERT(r.is<ResultDryRunNested>());
+  return r.as<ResultDryRunNested>().lobounds();
 }
 
 }  // namespace detail

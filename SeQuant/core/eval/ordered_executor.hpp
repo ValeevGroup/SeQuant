@@ -795,9 +795,30 @@ void run_ordered_contracted_block(
     // batch re-homes the same value), so the outermost store wins.
     Cache* home_cache = &parent_cache;
     if (!out_node.leaf()) {
+      // IDENTITY-based (2026-09-02): "sliced on the loop this cache sits in"
+      // is decided by the loop's COLOR against the value's home coloring, not
+      // by the loop's canonical axis LABEL (every i-loop is labeled i_1 --
+      // a label test stopped the walk at the innermost same-space loop and
+      // homed a value below its only consumer; see the schedule-side walk).
+      // The value's RESIDENCY (sliced_modes: every mode it is sliced on,
+      // INCLUDING the loops it opens itself as a scatter root -- home_modes /
+      // home_mode_depth EXCLUDE those and would send a multi-level escape's
+      // inner partial to the root, colliding across outer batches) mapped to
+      // loop identity by the occurrence's per-position fusion slot.
       auto const& sm = out_node->sliced_modes();
-      auto sliced_on = [&sm](Index const& m) {
-        return std::find(sm.begin(), sm.end(), m) != sm.end();
+      auto const& canon = out_node->canon_indices();
+      ValueCell const& cell = rich.cells[vid];
+      auto sliced_on_level = [&](DagScopeLevel const& level) {
+        for (std::size_t p = 0; p < canon.size() && p < cell.carried.size();
+             ++p) {
+          if (std::find(sm.begin(), sm.end(), canon[p]) == sm.end()) continue;
+          if (std::wstring(cell.carried[p].space().base_key()) != level.space)
+            continue;
+          for (auto const& occ : cell.occurrences)
+            if (p < occ.loop_slot.size() && occ.loop_slot[p] == level.loop_slot)
+              return true;
+        }
+        return false;
       };
       // Loops that a CONSUMER of this value reads it inside (by loop color).
       // Relocating the value ABOVE such a loop would strand that in-loop
@@ -815,9 +836,9 @@ void run_ordered_contracted_block(
       }
       for (;;) {
         auto const& ctx = home_cache->batch_context();
-        if (ctx.empty()) break;          // at the chain root
-        if (sliced_on(ctx.back().axis))  // sliced on the loop this cache sits
-          break;                         // directly inside => home is here
+        if (ctx.empty()) break;  // at the chain root
+        if (sliced_on_level(ctx.back().level))
+          break;  // sliced on the loop this cache sits directly inside
         if (cl && cl->count(ctx.back().level.key().color()))
           break;  // a consumer reads it inside => stay
         Cache* const up = home_cache->parent();
