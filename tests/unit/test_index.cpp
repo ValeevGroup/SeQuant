@@ -492,6 +492,23 @@ TEST_CASE("kramers_partner", "[elements][index][kramers]") {
   auto cloned = isr->clone();
   REQUIRE(cloned.kramers_partner(a_up).has_value());
 
+  // temporary (generated) indices flip too, keeping their tmp ordinal: the
+  // eval leaf folds trace-marked tensors whose CSV/expansion dummies are
+  // tmp indices (the non-tmp ctor would throw on such an ordinal)
+  {
+    auto tmp = Index::make_tmp_index(a_dn);
+    auto ftmp = kramers_flipped(tmp, *isr);
+    REQUIRE(ftmp.has_value());
+    REQUIRE(ftmp->space() == a_up);
+    REQUIRE(ftmp->ordinal() == tmp.ordinal());
+    auto tmp_proto =
+        Index::make_tmp_index(a_dn, Index::index_vector{Index(L"i↑_1")});
+    auto ftp = kramers_flipped(tmp_proto, *isr);
+    REQUIRE(ftp.has_value());
+    REQUIRE(ftp->ordinal() == tmp_proto.ordinal());
+    REQUIRE(ftp->proto_indices().size() == 1);
+    REQUIRE(ftp->proto_indices()[0].space() == isr->retrieve(L"i↓"));
+  }
   // index flip: ordinal kept, protos mapped recursively, unflavored kept
   Index i1(L"i↑_1"), i2(L"i↓_2");
   Index a(L"a↓_3", {i1, i2});
