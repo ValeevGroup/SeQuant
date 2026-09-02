@@ -2394,7 +2394,21 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         bool self_sliced = false;
         for (std::size_t pos = 0; pos < occ.carried.size() && pos < vs.size();
              ++pos) {
-          if (vs[pos] != lvl.loop_slot) continue;
+          // PER-OCCURRENCE slot (2026-09-02): value_slot folds every
+          // occurrence's loop_slot into ONE per-value vector, so a CSE-shared
+          // value whose mode is sliced by DIFFERENT loop instances in
+          // different occurrences (w20: 51337's K position under K-loop slot
+          // 0 for one consumer, slot 1 / depth 43 for a K-reduction
+          // consumer) keeps only one slot and silently misses the other
+          // occurrence (served WHOLE under a K batch -> TA sparse-gemm
+          // out-of-bounds read). The occurrence's own loop_slot is the
+          // truth; the per-value slot is only the fallback where it is
+          // unstamped (-1).
+          int const occ_slot =
+              (pos < occ.loop_slot.size() && occ.loop_slot[pos] >= 0)
+                  ? occ.loop_slot[pos]
+                  : vs[pos];
+          if (occ_slot != lvl.loop_slot) continue;
           if (std::wstring(occ.carried[pos].space().base_key()) != lvl.space)
             continue;
           result.occ_facts.push_back(
@@ -2457,6 +2471,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                       << (cp < cvs.size() ? cvs[cp] : -99) << " ";
           std::cerr << "]\n";
         }
+        bool recorded = false;
         for (std::size_t cp = 0; cp < c_carried.size() && cp < cvs.size();
              ++cp) {
           if (cvs[cp] != lvl.loop_slot) continue;
@@ -2484,10 +2499,12 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             // explicitly so the guard does not mistake it for a gap.
             result.occ_invariant.push_back(
                 std::make_tuple(w_vid, id_of(lvl), oit->second));
+            recorded = true;
             continue;
           }
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second));
+          recorded = true;
           if (std::getenv("SEQUANT_DUMP_USEINDUCED"))
             std::cerr << "[useinduced] value_h="
                       << (rich.cells[w_vid].hash % 100000)
@@ -2496,6 +2513,42 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                       << " consumer_h=" << (rich.cells[c_vid].hash % 100000)
                       << "\n";
           break;  // one shared mode per enclosing loop
+        }
+        // REDUCTION consumer (2026-09-02): C REDUCES a mode under this loop
+        // (its result does not carry it, so it is in no carried/value_slot
+        // position) -- C is building a per-batch PARTIAL of that reduction,
+        // so an operand occurrence carrying the reduced mode is sliced on
+        // it; one that does not carry it is legitimately whole. Recorded
+        // per occurrence from C's own reduced_slot (fusion union-find).
+        if (!recorded) {
+          for (auto const& cocc : rich.cells[c_vid].occurrences) {
+            for (auto const& [rm, rs] : cocc.reduced_slot) {
+              if (rs != lvl.loop_slot) continue;
+              if (std::wstring(rm.space().base_key()) != lvl.space) continue;
+              std::size_t pos_a = occ.carried.size();
+              for (std::size_t pa = 0; pa < occ.carried.size(); ++pa)
+                if (occ.carried[pa] == rm) {
+                  pos_a = pa;
+                  break;
+                }
+              if (_fb)
+                std::cerr << "[fallback]   C REDUCES M="
+                          << toUtf8(rm.full_label()) << " -> W carries M? "
+                          << (pos_a == occ.carried.size()
+                                  ? "NO"
+                                  : "yes pos=" + std::to_string(pos_a))
+                          << "\n";
+              if (pos_a == occ.carried.size())
+                result.occ_invariant.push_back(
+                    std::make_tuple(w_vid, id_of(lvl), oit->second));
+              else
+                result.occ_facts.push_back(
+                    std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second));
+              recorded = true;
+              break;
+            }
+            if (recorded) break;
+          }
         }
       }
     }
@@ -2514,16 +2567,39 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
     if (bit == build_scope.end()) continue;
     auto const& cvs = value_slot[c.value_id];
     container::svector<LoopId> loops;
-    for (detail::ScopeBlockAxisLevel const& sbl : bit->second)
-      for (std::size_t p = 0; p < c.carried.size() && p < cvs.size(); ++p) {
-        if (cvs[p] != sbl.level.loop_slot) continue;
+    auto const add = [&loops](LoopId lid) {
+      if (std::find(loops.begin(), loops.end(), lid) == loops.end())
+        loops.push_back(lid);
+    };
+    for (detail::ScopeBlockAxisLevel const& sbl : bit->second) {
+      bool hit = false;
+      for (std::size_t p = 0; p < c.carried.size() && p < cvs.size() && !hit;
+           ++p) {
         if (std::wstring(c.carried[p].space().base_key()) != sbl.level.space)
           continue;
-        LoopId const lid = id_of(sbl.level);
-        if (std::find(loops.begin(), loops.end(), lid) == loops.end())
-          loops.push_back(lid);
-        break;
+        // per-value slot OR any occurrence's own slot (see the per-occurrence
+        // note in the k-loop above): C is produced-sliced on this loop if
+        // ANY of its occurrences carries position p under this slot.
+        bool sliced = cvs[p] == sbl.level.loop_slot;
+        for (auto const& occ : c.occurrences)
+          if (!sliced && p < occ.loop_slot.size() &&
+              occ.loop_slot[p] == sbl.level.loop_slot)
+            sliced = true;
+        if (sliced) {
+          add(id_of(sbl.level));
+          hit = true;
+        }
       }
+      // C REDUCES a mode under this loop: it builds a per-batch partial there,
+      // so its K-carrying operands MUST be sliced -- count the loop so the
+      // completeness guard fires on a whole-served operand instead of TA
+      // reading out of bounds.
+      for (auto const& occ : c.occurrences)
+        for (auto const& [rm, rs] : occ.reduced_slot)
+          if (rs == sbl.level.loop_slot &&
+              std::wstring(rm.space().base_key()) == sbl.level.space)
+            add(id_of(sbl.level));
+    }
     if (!loops.empty())
       result.consumer_sliced_loops.emplace(c.value_id, std::move(loops));
   }
