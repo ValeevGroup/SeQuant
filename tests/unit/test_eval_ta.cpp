@@ -5103,3 +5103,118 @@ TEST_CASE("re_im_evaluation", "[eval][re-im]") {
   REQUIRE(re.real() == Catch::Approx(direct.real()));
   REQUIRE(im.real() == Catch::Approx(direct.imag()));
 }
+
+// T19 layer 1: apply_transform on a TA result is LAZY -- it returns a view
+// that shares the array and carries a pending {phase, conj, relabel}; the
+// view feeds sum/prod/dot/permute without materializing, get<>() (external
+// readers) materializes on demand, and transforms compose.
+TEST_CASE("result_transform_view_ta", "[eval][conj-transform][view]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultScalar;
+  using ZArray = TA::DistArray<TA::Tensor<std::complex<double>>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  auto& world = TA::get_default_world();
+  auto norm_diff = [&](ZArray const& x, ZArray const& y, std::string const& a) {
+    ZArray d;
+    d(a) = x(a) - y(a);
+    world.gop.fence();
+    return d(a).norm().get();
+  };
+
+  TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
+  ZArray R(world, tr), S(world, tr);
+  R.fill_random();
+  S.fill_random();
+  world.gop.fence();
+  ResultPtr res = eval_result<ResultZ>(R);
+  ResultPtr other = eval_result<ResultZ>(S);
+
+  SECTION("view: shares the array, get<> materializes on demand") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"a,i"}};
+    auto got = res->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(got->as<ResultZ>().is_view());
+    ZArray ref;
+    ref("a,i") = std::complex<double>(-1.0, 0.0) * R("i,a").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref, "a,i") < 1e-12);
+    REQUIRE(!got->as<ResultZ>().is_view());  // materialized by get<>
+  }
+  SECTION("view feeds a plain contraction lazily") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    // C(i,j) = -conj(R)(i,a) * S(j,a)
+    std::array<std::any, 3> pann{std::string{"i,a"}, std::string{"j,a"},
+                                 std::string{"i,j"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZArray ref;
+    ref("i,j") = std::complex<double>(-1.0, 0.0) * R("i,a").conj() * S("j,a");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref, "i,j") < 1e-12);
+    REQUIRE(v->as<ResultZ>().is_view());  // the operand was not materialized
+  }
+  SECTION("view as the RIGHT operand, and dot") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v = other->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,a"}, std::string{"j,a"},
+                                 std::string{"i,j"}};
+    auto got = res->prod(*v, pann, sequant::DeNest::False);
+    ZArray ref;
+    ref("i,j") = R("i,a") * S("j,a").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref, "i,j") < 1e-12);
+    std::array<std::any, 3> dann{std::string{"i,a"}, std::string{"i,a"},
+                                 std::string{}};
+    auto d = res->prod(*v, dann, sequant::DeNest::False);
+    auto dref = R("i,a").dot(S("i,a").conj()).get();
+    REQUIRE(std::abs(d->get<std::complex<double>>() - dref) < 1e-12);
+    REQUIRE(v->as<ResultZ>().is_view());
+  }
+  SECTION("sum, add_inplace, permute and phase compose on views") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> sann{std::string{"i,a"}, std::string{"i,a"},
+                                 std::string{"i,a"}};
+    auto s = v->sum(*other, sann);
+    ZArray ref;
+    ref("i,a") = R("i,a").conj() + S("i,a");
+    world.gop.fence();
+    REQUIRE(norm_diff(s->get<ZArray>(), ref, "i,a") < 1e-12);
+    // add_inplace into a view materializes the target, adds the other lazily
+    auto w = res->apply_transform(CanonTransform{.conj = true}, ann);
+    w->add_inplace(*v);
+    ZArray ref2;
+    ref2("i,a") = std::complex<double>(2.0, 0.0) * R("i,a").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(w->get<ZArray>(), ref2, "i,a") < 1e-12);
+    // permute of a view stays a view; a second transform composes
+    std::array<std::any, 2> pann{std::string{"i,a"}, std::string{"a,i"}};
+    auto pv = v->permute(pann);
+    REQUIRE(pv->as<ResultZ>().is_view());
+    auto pvm = pv->mult_by_phase(-1);
+    REQUIRE(pvm->as<ResultZ>().is_view());
+    auto pvc = pvm->apply_transform(CanonTransform{.conj = true},
+                                    {std::string{"a,i"}, std::string{"a,i"}});
+    ZArray ref3;
+    ref3("a,i") = std::complex<double>(-1.0, 0.0) * R("i,a");  // conj twice
+    world.gop.fence();
+    REQUIRE(norm_diff(pvc->get<ZArray>(), ref3, "a,i") < 1e-12);
+  }
+  SECTION("Hadamard product with a view operand is still correct") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> hann{std::string{"i,a"}, std::string{"i,a"},
+                                 std::string{"i,a"}};
+    auto got = v->prod(*other, hann, sequant::DeNest::False);
+    // reference: conj elementwise then einsum
+    ZArray Rc;
+    Rc("i,a") = R("i,a").conj();
+    world.gop.fence();
+    ZArray ref2 = TA::einsum(Rc("i,a"), S("i,a"), "i,a");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref2, "i,a") < 1e-12);
+  }
+}
