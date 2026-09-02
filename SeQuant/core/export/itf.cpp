@@ -240,7 +240,7 @@ void ItfContext::set_batch_indices(std::span<const Index> indices,
 
   // ITF can parallelize over the first index so make sure this is as large
   // as possible
-  std::ranges::sort(it->second, std::greater<>{}, [](const Index &idx) {
+  std::ranges::stable_sort(it->second, std::greater<>{}, [](const Index &idx) {
     return idx.space().approximate_size();
   });
 }

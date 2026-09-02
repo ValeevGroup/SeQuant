@@ -189,13 +189,13 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
 
       std::vector<Index> indices;
       if (exprs[i]->is_tensor()) {
+        auto tensor_indices = exprs[i]->as_tensor().const_indices();
         // Only batch over indices that are actually present in the result
-        std::ranges::copy_if(
-            exprs[i]->as_tensor().const_indices(), std::back_inserter(indices),
-            [&current_batch_indices](const Index &idx) {
-              return std::ranges::find(current_batch_indices, idx) !=
-                     current_batch_indices.end();
-            });
+        std::ranges::copy_if(current_batch_indices, std::back_inserter(indices),
+                             [&tensor_indices](const Index &idx) {
+                               return std::ranges::find(tensor_indices, idx) !=
+                                      tensor_indices.end();
+                             });
       } else {
         SEQUANT_ASSERT(current_batch_indices.empty());
       }

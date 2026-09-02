@@ -79,12 +79,15 @@ std::size_t IndexBatchingStep::process(std::string_view id_prefix,
 
     const Tensor &result = current.tree->as_tensor();
 
-    std::vector<Index> indices;
-    indices.insert(indices.end(), result.const_indices().begin(),
-                   result.const_indices().end());
+    std::vector<Index> indices(result.const_indices().begin(),
+                               result.const_indices().end());
 
-    std::ranges::sort(indices, std::less<>{}, [](const Index &idx) {
-      return idx.space().approximate_size();
+    std::ranges::sort(indices, [](const Index &lhs, const Index &rhs) {
+      if (lhs.space().approximate_size() != rhs.space().approximate_size()) {
+        return lhs.space().approximate_size() < rhs.space().approximate_size();
+      }
+
+      return lhs < rhs;
     });
 
     if (indices.size() < min_unbatched_) {
