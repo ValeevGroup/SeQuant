@@ -178,12 +178,14 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
       1e-9 convergence-noise level (−1.04169026663 at residual 1.6e-10),
       3.3 s/it unchanged, 1.70 GB peak; the (⇓,⇓) C block is no longer
       requested.
-- [ ] T19 layer 3 (provider serves 2 C blocks per rank): BLOCKED on a
-      verdict decision. C is `BraKetSymmetry::Conjugate`, so
-      `kramers_flavor_key` sorts its bra/ket bundles and a mixed (1 up, 1
-      down) C ties with its own flip → never folds at the leaf; both
-      (⇑,↓) and (⇓,↑) are requested (3 blocks per rank). Options: (B)
-      orient the leaf's braket first (Kramers-aware canonicalize_braket)
-      and break the per-tensor tie bra-first, or (A) MPQC serves (⇑,↓) as
-      the cached −conj of (⇓,↑).
+- [x] T19 layer 3 (MPQC): the PNS provider emits only the K_up column of
+      the Kramers C blocks (2 per rank); `CSV::coefficients(rank, K_dn,
+      row)` throws and `eval_csv` derives a ⇓ request as the 𝒯 image of
+      the stored block ((⇓,↑) = −conj((⇑,↓)), (⇓,↓) = +conj((⇑,↑))). A
+      mixed C never folds at the leaf (it is `BraKetSymmetry::Conjugate`,
+      so `kramers_flavor_key` sorts its bundles and the flip ties), which
+      is fine: those leaves arrive through the braket-swap orientation and
+      are served from the stored column. dch: fold off reproduces the old
+      trajectory to 1e-12 (−1.04169026953), fold on converges further
+      (−1.04169026662, residual 2.6e-10).
 - [ ] T21 (numerical antisymmetrization for PNS-MP1/2).
