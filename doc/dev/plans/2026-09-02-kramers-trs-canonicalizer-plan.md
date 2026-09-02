@@ -188,4 +188,9 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
       are served from the stored column. dch: fold off reproduces the old
       trajectory to 1e-12 (−1.04169026953), fold on converges further
       (−1.04169026662, residual 2.6e-10).
-- [ ] T21 (numerical antisymmetrization for PNS-MP1/2).
+- [x] T21 (numerical antisymmetrization for PNS-MP1/2, MPQC only): the
+      PNS-CCD partial-Â route (`kramers_partial_A`: Â expanded over
+      mixed-flavour external groups, same-flavour groups antisymmetrized
+      numerically within the block) applies unchanged to the MP1 residual
+      and is now its default. dch PNS-MP1: residual 48x5 -> 28/44/28/32/48
+      terms, iterations identical to 1e-12, -1.04169026965 in band.
