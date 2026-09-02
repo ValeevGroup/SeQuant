@@ -7,6 +7,7 @@
 // family. Canonicalization- and network-level cases live at the bottom and
 // grow with the conjugation-symbolic work.
 
+#include <SeQuant/core/utility/macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -279,8 +280,14 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
   }
 
   SECTION("back-compat real-sum fold emits 2 A") {
+    SEQUANT_PRAGMA_CLANG(diagnostic push)
+    SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
+    SEQUANT_PRAGMA_GCC(diagnostic push)
+    SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
     auto folded =
         fold_conjugate_pairs_of_real_sum(term->clone() + term_adj->clone());
+    SEQUANT_PRAGMA_GCC(diagnostic pop)
+    SEQUANT_PRAGMA_CLANG(diagnostic pop)
     auto expected = ex<Constant>(2) * term->clone();
     simplify(folded);
     simplify(expected);
