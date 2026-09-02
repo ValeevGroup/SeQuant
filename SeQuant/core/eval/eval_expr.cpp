@@ -290,19 +290,7 @@ const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
 
 ResultType EvalExpr::result_type() const noexcept { return result_type_; }
 
-size_t EvalExpr::hash_value() const noexcept {
-  // canon_phase (+1/-1) is part of the node's *value* identity: two nodes that
-  // share a canonical graph/leaf but differ in antisymmetric-reorder parity
-  // evaluate to negatives of each other (+T vs -T), so they must not share a
-  // CSE cache slot. Folding it in here (rather than special-casing the
-  // comparator) makes every node hash carry the phase. It is a no-op for real
-  // closed-shell paths (every phase is +1, so all hashes shift uniformly and
-  // the equality structure is unchanged); complex/Kramers paths, which do
-  // produce -1 phases, are thereby kept apart.
-  auto h = hash_value_;
-  hash::combine(h, canon_phase_);
-  return h;
-}
+size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
 
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
 
@@ -672,7 +660,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     }
   }
 
-  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, &prefix_conj](
+  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, &prefix_conj,
+                    &node_counter](
                        EvalExprNode const& left,
                        EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
@@ -750,24 +739,41 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
            .named_indices = &named_indices});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
-      if (scalar_result) {
-        return {EvalOp::Product,                                           //
-                ResultType::Scalar,                                        //
-                detail::make_variable(),                                   //
-                {},                                                        //
-                CanonTransform{.phase = canon.phase, .conj = hoist_conj},  //
-                h,
-                std::move(canon.graph)};
-      } else {
-        return {EvalOp::Product,     //
-                ResultType::Tensor,  //
-                detail::make_tensor_wo_symmetries(opts, bra(target_indices.bra),
-                                                  ket(target_indices.ket),
-                                                  aux(target_indices.aux)),
-                canon.get_indices<Index::index_vector>(),                  //
-                CanonTransform{.phase = canon.phase, .conj = hoist_conj},  //
-                h,
-                std::move(canon.graph)};
+      EvalExpr result =
+          scalar_result
+              ? EvalExpr{EvalOp::Product,          //
+                         ResultType::Scalar,       //
+                         detail::make_variable(),  //
+                         {},                       //
+                         CanonTransform{.phase = canon.phase,
+                                        .conj = hoist_conj},  //
+                         h,
+                         std::move(canon.graph)}
+              : EvalExpr{EvalOp::Product,     //
+                         ResultType::Tensor,  //
+                         detail::make_tensor_wo_symmetries(
+                             opts, bra(target_indices.bra),
+                             ket(target_indices.ket), aux(target_indices.aux)),
+                         canon.get_indices<Index::index_vector>(),  //
+                         CanonTransform{.phase = canon.phase,
+                                        .conj = hoist_conj},  //
+                         h,
+                         std::move(canon.graph)};
+      // This is a genuine contraction (DP) node: the optimizer's
+      // node_batch_axes carries one entry per such node, in the same
+      // left-first post-order (children -- built by the recursive
+      // impl::binarize calls above, which all run before this lambda is
+      // invoked -- fully processed before this node). Stamp it if the caller
+      // supplied per-node modes; always advance node_counter regardless, so
+      // the top-level SEQUANT_ASSERT(node_counter ==
+      // opts.node_batch_axes.size()) in binarize(ExprPtr, ...) can catch a
+      // misaligned optimizer/binarize post-order.
+      if (node_counter < opts.node_batch_axes.size()) {
+        auto const& ann = opts.node_batch_axes[node_counter];
+        result.set_batched_here(ann.axes);
+        result.set_contracted_modes(ann.contracted_modes);
+        result.set_batch_order_aware(ann.order_aware);
+        result.set_batch_effective_count(ann.effective_count);
       }
       ++node_counter;
       return result;
@@ -823,7 +829,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Variable>());
 
   if (expr->is<Tensor>())  //
-    return binarize(expr->as<Tensor>(), opts);
+    return binarize(expr->as<Tensor>());
 
   if (expr->is<Sum>())  //
     return binarize(expr->as<Sum>(), uncontract, opts, node_counter);
