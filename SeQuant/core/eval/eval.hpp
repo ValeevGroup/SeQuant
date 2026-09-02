@@ -667,6 +667,13 @@ template <typename Node>
 template <meta::can_evaluate Node>
 [[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
                                      ResultPtr const& right) {
+  if (node->op_type() == EvalOp::RealPart ||
+      node->op_type() == EvalOp::ImagPart) {
+    // Unary Re/Im over the left operand; the right child is the Constant{1}
+    // sentinel that keeps FullBinaryNode's two-children invariant.
+    return node->op_type() == EvalOp::RealPart ? left->real_part()
+                                               : left->imag_part();
+  }
   std::array<std::any, 3> const ann{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
   if (node->op_type() == EvalOp::Sum) return left->sum(*right, ann);
@@ -752,9 +759,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
                                             ResultPtr const& left,
                                             ResultPtr const& right,
                                             CacheManager<N, FHC>& cache) {
-  // The contraction annotation triple the shaped-product hook receives.
-  std::array<std::any, 3> const ann{node.left()->annot(),
-                                    node.right()->annot(), node->annot()};
+  // The contraction annotation triple the shaped-product hook receives. A
+  // unary (Re/Im) node never reaches the hook, and its right child is the
+  // Constant{1} sentinel, so the triple is only built for a binary op.
+  bool const unary = node->op_type() == EvalOp::RealPart ||
+                     node->op_type() == EvalOp::ImagPart;
+  std::array<std::any, 3> const ann =
+      unary ? std::array<std::any, 3>{}
+            : std::array<std::any, 3>{node.left()->annot(),
+                                      node.right()->annot(), node->annot()};
   ResultPtr result;
   log::Duration time{};
   if (node->op_type() != EvalOp::Product) {
