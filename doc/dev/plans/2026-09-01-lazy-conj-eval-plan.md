@@ -641,14 +641,70 @@ struct CountingYielder {
 
 ---
 
+## Extended in-draft scope (decided 2026-09-01): Tasks 13-16
+
+Owner decision: the exact `fold_conjugate_pairs` ({s, s*} -> 2 Re(s),
+{s, -s*} -> 2i Im(s)) is the wanted fold; `fold_conjugate_pairs_of_real_sum`
+is fragile (unverifiable reality assertion; difference pairs silently
+unfolded) and is to be retired. Since that needs eval-side Re/Im ingestion,
+the following Plan-B items move INTO this draft PR.
+
+### Task 13: Re/Im eval nodes (IR + backends)
+
+**Files:** `SeQuant/core/eval/eval_expr.hpp/.cpp`, `SeQuant/core/eval/eval.hpp`,
+`SeQuant/core/eval/result.hpp` + `backends/{tiledarray,btas,tapp}/result.hpp`,
+tests `test_eval_expr.cpp`, `test_eval_ta.cpp`.
+
+- Failing IR test first: `binarize` of the fold emission
+  `Constant(2) * RealPart(s)` (s = closed-contraction scalar network) yields a
+  Product node whose RealPart factor is a UNARY node -- `EvalOp::RealPart`,
+  `ResultType::Scalar`, `Constant{1}` sentinel right child (the retired
+  Adjoint's FullBinaryNode pattern), hash = inner subtree hash combined with
+  the EvalOp -- over the SHARED inner subtree (inner slots identical to the
+  ones other consumers of s's pieces use). Same for ImagPart.
+- `EvalOp::RealPart`/`ImagPart` enumerators; dispatcher case in
+  `binarize(ExprPtr,...)` (replacing the "unsupported expression" throw for
+  these types); recursive `binarize(inner)` under the wrapper.
+- evaluate: unary compute branch `result = f.left->real_part(...)` /
+  `imag_part(...)` (right sentinel ignored), cache/store machinery unchanged.
+- `Result::real_part()/imag_part()` virtuals, default-throwing like
+  `apply_transform`; overrides: `ResultScalar` (std::real/imag),
+  TA (elementwise), BTAS, tapp.
+- Numeric tests: `Re(A) + i*Im(A) == A` on random complex data; inner-slot
+  sharing proven with the counting yielder; both suites green
+  (`build-tests-debug` THROW + `build-ta-tests`).
+
+### Task 14: Flip `FoldConjugatePairs` default to Yes
+
+`options.hpp` member default `No -> Yes` (the parked "until the evaluation
+layer understands them" condition is now met -- update that comment); fix
+suite-wide fallout; verify `2*Re(A)` from the auto-fold evaluates equal to
+`A + A^*` computed with the fold off.
+
+### Task 15: Deprecate `fold_conjugate_pairs_of_real_sum`
+
+`[[deprecated]]` with rationale in `expr_algorithms.hpp`; migrate or
+warning-silence its direct unit tests; removal deferred until no caller
+remains (MPQC switches in Task 16).
+
+### Task 16: MPQC CC path to the exact fold + smoke re-certification
+
+On the MPQC smoke setup (`smoke/pr2-eval` SeQuant +
+`kshitij/refactor/kramer-pairs-separation`): switch
+`src/mpqc/chemistry/qc/lcao/cc/sequant.cpp` from
+`fold_conjugate_pairs_of_real_sum` to `fold_conjugate_pairs` (same
+`swap_spin` conjugate_op), rebuild, re-run the h2o/dch decks against the
+recorded baselines; capture the eval-dump proof of Re-node evaluation with
+shared inner slots; resolve the open dch ~3e-9 old-vs-new-binary delta;
+revert the temporary diagnostics (eval.hpp cache trace, eval_expr.cpp leaf
+trace, MPQC fold-skip gate) before the draft goes up.
+
 ## Plan B (queued, separate document)
 
-Re/Im eval nodes (`EvalOp::RealPart/ImagPart`, `Result::real_part/imag_part`),
-`FoldConjugatePairs` default flip, export conj emission via `wrap_conj`,
-`test_eval_conjugation.cpp` exhaustive symbolic-to-eval matrix, MPQC smoke on
-`kshitij/refactor/kramer-pairs-separation` (h2o -0.23967684425,
-dch -1.04169026053). Written after Plan A lands so its tasks anchor on the
-real transform API.
+Remaining after the in-draft pull: export conj emission via `wrap_conj`
+(tensor conj in generated code), and the exhaustive
+`test_eval_conjugation.cpp` symbolic-to-eval matrix mirroring every PR-1
+`test_conjugation.cpp` case. Written after this PR lands.
 
 ---
 
