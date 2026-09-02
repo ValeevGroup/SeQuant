@@ -360,6 +360,29 @@ bool kramers_foldable(const AbstractTensor& t) {
          !braket_orientation_pinned(t);
 }
 
+bool kramers_flip_slots(AbstractTensor& t) {
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return false;
+  bool flipped = false;
+  // in place (not via _transform_indices: the block canonicalizer tags every
+  // slot and Index::transform skips tagged indices); a tag present on the
+  // slot is carried over
+  auto flip = [&](auto&& slots) {
+    for (auto& idx : slots) {
+      auto f = kramers_flipped(idx, *isr);
+      if (!f) continue;
+      const bool tagged = idx.tag().has_value();
+      idx = std::move(*f);
+      if (tagged) idx.tag().assign(0);
+      flipped = true;
+    }
+  };
+  flip(t._bra_mutable());
+  flip(t._ket_mutable());
+  flip(t._aux_mutable());
+  return flipped;
+}
+
 int canonicalize_kramers(AbstractTensor& t) {
   if (!kramers_foldable(t)) return 1;
   const auto isr = get_default_context().index_space_registry();
@@ -378,21 +401,7 @@ int canonicalize_kramers(AbstractTensor& t) {
   for (const auto& idx : t._ket()) visit(idx);
   for (const auto& idx : t._aux()) visit(idx);
   if (!first_canonical || *first_canonical) return 1;  // nothing to fold
-  // flip the slots in place (not via _transform_indices: the block
-  // canonicalizer tags every slot first and Index::transform skips tagged
-  // indices); a tag present on the slot is carried over
-  auto flip = [&](auto&& slots) {
-    for (auto& idx : slots) {
-      auto f = kramers_flipped(idx, *isr);
-      if (!f) continue;
-      const bool tagged = idx.tag().has_value();
-      idx = std::move(*f);
-      if (tagged) idx.tag().assign(0);
-    }
-  };
-  flip(t._bra_mutable());
-  flip(t._ket_mutable());
-  flip(t._aux_mutable());
+  kramers_flip_slots(t);
   t._conjugate();
   return (n_down % 2) ? -1 : 1;
 }

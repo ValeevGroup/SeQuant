@@ -197,6 +197,13 @@ bool kramers_foldable(const AbstractTensor& t);
 /// @return the phase (+1 or -1)
 int canonicalize_kramers(AbstractTensor& t);
 
+/// @brief flips every flavored slot index of @p t to its Kramers partner in
+/// place (proto indices recursively, unflavored slots untouched); no marker
+/// or phase bookkeeping -- an involution used by canonicalize_kramers() and
+/// by consumers that must restore a folded spelling
+/// @return whether any slot was flipped
+bool kramers_flip_slots(AbstractTensor& t);
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;
@@ -319,7 +326,10 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
 
   ExprPtr apply(AbstractTensor& t) const override;
 
-  /// @param fold_kramers if false, the Kramers fold is skipped
+  /// @param fold_kramers if true, canonicalize_kramers() is applied; OFF by
+  ///        default: inside a network the per-tensor fold would flip one
+  ///        tensor's dummies but not its partner's (the network fold owns
+  ///        that decision); the eval leaf boundary opts in explicitly
   TensorBlockCanonicalizer& fold_kramers(bool fold_kramers) {
     fold_kramers_ = fold_kramers;
     return *this;
@@ -327,7 +337,7 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
 
  private:
   bool fold_conjugate_braket_ = true;
-  bool fold_kramers_ = true;
+  bool fold_kramers_ = false;
 };
 
 }  // namespace sequant

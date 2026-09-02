@@ -184,7 +184,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // the marker it produces is a pure {conj} bit (no slot swap) and the
     // phase multiplies the slot-canonicalization phase below
     const int kramers_phase = canonicalize_kramers(t0);
-    if (t0.conjugated()) {
+    const bool kramers_fired = t0.conjugated();
+    if (kramers_fired) {
       canon_transform_ = compose(canon_transform_, {.conj = true});
       t0.conjugate();
     }
@@ -206,6 +207,9 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // array's outer modes are the plain slots PLUS the proto constituents,
     // deterministically ordered by NestedTensorIndices (the md list is the
     // same set in named-canonical order, which annots must not depend on)
+    // the fold decided the slot (hash) and the transform; the parent
+    // contracts by LABEL, so the stored spelling keeps the as-written flavors
+    if (kramers_fired) kramers_flip_slots(t0);
     auto const slot_ixs = t0.const_indices() | ranges::to<index_vector>;
     auto const nti = tot_indices<index_vector>(slot_ixs);
     canon_indices_ =
@@ -223,12 +227,13 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // 2. Kramers fold first: its marker is a pure {conj} bit (no slot swap),
     //    distinct from the braket fold's marker converted below
     const int kramers_phase = canonicalize_kramers(t);
-    if (t.conjugated()) {
+    const bool kramers_fired = t.conjugated();
+    if (kramers_fired) {
       canon_transform_ = compose(canon_transform_, {.conj = true});
       t.conjugate();
     }
-    // 3. block-canonicalize WITH the braket fold (the Kramers fold is already
-    //    applied, so the block canonicalizer's own Kramers pass is a no-op);
+    // 3. block-canonicalize WITH the braket fold (the block canonicalizer's
+    //    own Kramers fold is opt-in and stays off here);
     //    a braket fold performed here toggles the marker, which converts to
     //    transform bits the same way
     auto phase = TensorBlockCanonicalizer{}.apply(t);
@@ -241,6 +246,9 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       t.conjugate();
     }
     hash_value_ = hash_terminal_tensor(t);
+    // the fold decided the slot (hash) and the transform; the parent
+    // contracts by LABEL, so the stored spelling keeps the as-written flavors
+    if (kramers_fired) kramers_flip_slots(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
 }

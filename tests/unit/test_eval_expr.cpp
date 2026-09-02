@@ -979,5 +979,39 @@ TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
     REQUIRE(edd.canon_transform().phase == euu.canon_transform().phase);
     // distinct families stay distinct
     REQUIRE(eu.hash_value() != euu.hash_value());
+    // the leaf keeps its as-written flavors (the parent contracts by label);
+    // only the hash and the transform reflect the fold
+    // (for a Conjugate tensor the braket fold may swap bra and ket, so the
+    // label SET is the invariant, not the slot positions)
+    auto const& ed_t = ed.expr()->as<Tensor>();
+    REQUIRE(!ed_t.conjugated());
+    auto has_label = [&](std::wstring_view lbl) {
+      return ranges::any_of(ed.canon_indices(), [&](Index const& i) {
+        return i.full_label() == lbl;
+      });
+    };
+    REQUIRE(has_label(L"a↓_1"));
+    REQUIRE(has_label(L"a↑_2"));
+  }
+  // a product over a down-flavored dummy still contracts: the folded leaf
+  // shares the up-row slot while its labels keep matching the sibling
+  {
+    auto f_dn = Tensor(L"f", bra{Index(L"a↓_1")}, ket{Index(L"i↑_1")},
+                       Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                       ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto f_up = Tensor(L"f", bra{Index(L"a↑_1")}, ket{Index(L"i↓_1")},
+                       Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                       ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto t = Tensor(L"t", bra{Index(L"i↑_1")}, ket{Index(L"a↓_1")},
+                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                    ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto root = binarize(ex<Tensor>(f_dn) * ex<Tensor>(t));
+    REQUIRE(root->result_type() == ResultType::Scalar);
+    REQUIRE(root->canon_indices().empty());
+    auto const& f_leaf =
+        root.left()->as_tensor().label() == L"f" ? root.left() : root.right();
+    REQUIRE(f_leaf->hash_value() == EvalExpr{f_up}.hash_value());
+    REQUIRE(f_leaf->canon_transform().conj);
+    REQUIRE(f_leaf->canon_transform().phase == -1);
   }
 }

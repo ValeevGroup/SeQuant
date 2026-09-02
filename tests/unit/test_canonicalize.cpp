@@ -1155,20 +1155,20 @@ TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
 
   SECTION("down-first, one down slot: flipped, marked, phase -1") {
     auto f = mk(L"f", L"a↓_1", L"i↑_1");
-    auto ph = TensorBlockCanonicalizer{}.apply(f);
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
     REQUIRE(f.conjugated());
     REQUIRE(f.bra()[0].space() == a_up);
     REQUIRE(f.ket()[0].space() == i_dn);
     REQUIRE(ph);  // -1
     // idempotent
-    auto ph2 = TensorBlockCanonicalizer{}.apply(f);
+    auto ph2 = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
     REQUIRE(f.conjugated());
     REQUIRE(f.bra()[0].space() == a_up);
     REQUIRE(!ph2);
   }
   SECTION("down-first, two down slots: flipped, marked, phase +1") {
     auto f = mk(L"f", L"a↓_1", L"i↓_1");
-    auto ph = TensorBlockCanonicalizer{}.apply(f);
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
     REQUIRE(f.conjugated());
     REQUIRE(f.bra()[0].space() == a_up);
     REQUIRE(f.ket()[0].space() == i_up);
@@ -1176,15 +1176,24 @@ TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
   }
   SECTION("up-first: untouched") {
     auto f = mk(L"f", L"a↑_1", L"i↓_1");
-    auto ph = TensorBlockCanonicalizer{}.apply(f);
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
     REQUIRE(!f.conjugated());
     REQUIRE(f.bra()[0].space() == a_up);
     REQUIRE(f.ket()[0].space() == i_dn);
     REQUIRE(!ph);
   }
+  SECTION("default block canonicalizer never folds (network safety)") {
+    // inside a network the per-tensor fold would flip one tensor's dummies
+    // but not its partner's, so the fold is opt-in at the block level
+    auto f = mk(L"f", L"a↓_1", L"i↑_1");
+    TensorBlockCanonicalizer{}.apply(f);
+    REQUIRE(!f.conjugated());
+    REQUIRE(f.bra()[0].space() == a_dn);
+    REQUIRE(f.ket()[0].space() == i_up);
+  }
   SECTION("no Kramers symmetry: untouched") {
     auto f = mk(L"f", L"a↓_1", L"i↑_1", KramersSymmetry::Nonsymm);
-    TensorBlockCanonicalizer{}.apply(f);
+    TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
     REQUIRE(!f.conjugated());
     REQUIRE(f.bra()[0].space() == a_dn);
   }
@@ -1193,7 +1202,7 @@ TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
     Tensor C(L"C", bra{Index(L"a↓_1")}, ket{a2}, aux{Index(L"a_9")},
              Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
              ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
-    auto ph = TensorBlockCanonicalizer{}.apply(C);
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(C);
     REQUIRE(C.conjugated());
     REQUIRE(C.bra()[0].space() == a_up);
     REQUIRE(C.ket()[0].space() == a_dn);
