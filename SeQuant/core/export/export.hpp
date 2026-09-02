@@ -59,12 +59,13 @@ class GenerationVisitor {
       : m_generator(generator), m_ctx(ctx), m_scalarFactors(scalarFactors) {
     if (m_generator.supports_index_batching()) {
       // Make tensor comparator aware of the list of batched indices
-      std::vector<Index> batchIndices =
+      std::span<const Index> batchIndices =
           m_ctx.batch_indices(m_ctx.current_expression_id());
       if (!batchIndices.empty()) {
         IndexSpecificTensorBlockLessThanComparator cmp =
             m_tensorUses.key_comp();
-        cmp.set_indices(std::move(batchIndices));
+        cmp.set_indices(
+            std::vector<Index>(batchIndices.begin(), batchIndices.end()));
         m_tensorUses = decltype(m_tensorUses)(std::move(cmp));
       }
     }

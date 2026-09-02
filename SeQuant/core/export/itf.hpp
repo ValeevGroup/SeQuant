@@ -87,13 +87,10 @@ class ItfContext : public ReorderingContext {
   /// to be >= this value
   virtual void set_index_id_offset(std::size_t offset);
 
-  void set_batch_indices(std::vector<Index> indices,
-                         std::optional<std::size_t> id = {});
-  std::vector<Index> batch_indices(
+  void set_batch_indices(std::span<const Index> indices,
+                         std::optional<std::size_t> id = {}) override;
+  std::span<const Index> batch_indices(
       std::optional<std::size_t> id = {}) const override;
-  bool is_batched(std::optional<std::size_t> = {}) const;
-  bool is_index_batched(const Index &idx,
-                        std::optional<std::size_t> = {}) const;
 
  private:
   NameMap m_space_names;
@@ -419,7 +416,7 @@ class ItfGenerator : public Generator<Context> {
     }
 
     if (ctx.is_batched(ctx.current_expression_id())) {
-      std::vector<Index> batchIndices =
+      std::span<const Index> batchIndices =
           ctx.batch_indices(ctx.current_expression_id());
 
       SEQUANT_ASSERT(std::ranges::is_sorted(
@@ -465,7 +462,7 @@ class ItfGenerator : public Generator<Context> {
       }
       append_line("]:");
       m_indent_level += 1;
-      m_currentBatchIndices = std::move(batchIndices);
+      m_currentBatchIndices.assign(batchIndices.begin(), batchIndices.end());
     } else {
       end_batching();
     }

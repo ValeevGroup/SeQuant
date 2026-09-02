@@ -239,7 +239,8 @@ ExportNode<> prepareForExport(const ResultExpr &result,
 
     if (num_batched > opts.max_batched) {
       // Ctx might sort batch indices in a preferential way
-      batchIndices = ctx.batch_indices(tree->id());
+      const auto indices = ctx.batch_indices(tree->id());
+      batchIndices.assign(indices.begin(), indices.end());
       batchIndices.resize(opts.max_batched);
       ctx.set_batch_indices(std::move(batchIndices), tree->id());
     }
@@ -498,13 +499,15 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       container::svector<ExportNode<>> current_buff;
       while (!tmp.empty()) {
-        opts.batch_indices = context.batch_indices(tmp.back()->id());
+        auto indices = context.batch_indices(tmp.back()->id());
+        opts.batch_indices.assign(indices.begin(), indices.end());
 
         current_buff.clear();
 
         // Create batch of expressions that are batched over the same indices
         while (!tmp.empty() &&
-               context.batch_indices(tmp.back()->id()) == opts.batch_indices) {
+               std::ranges::equal(context.batch_indices(tmp.back()->id()),
+                                  opts.batch_indices)) {
           current_buff.emplace_back(std::move(tmp.back()));
           tmp.pop_back();
         }

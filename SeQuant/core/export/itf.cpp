@@ -227,18 +227,25 @@ void ItfContext::set_index_id_offset(std::size_t offset) {
   m_idx_offset = offset;
 }
 
-void ItfContext::set_batch_indices(std::vector<Index> indices,
+void ItfContext::set_batch_indices(std::span<const Index> indices,
                                    std::optional<std::size_t> id) {
+  auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
+
+  if (it == m_batch_indices.end()) {
+    std::vector<Index> copy(indices.begin(), indices.end());
+    it = m_batch_indices.emplace(id.value_or(ID_GLOBAL), std::move(copy)).first;
+  } else {
+    it->second.assign(indices.begin(), indices.end());
+  }
+
   // ITF can parallelize over the first index so make sure this is as large
   // as possible
-  std::ranges::sort(indices, std::greater<>{}, [](const Index &idx) {
+  std::ranges::sort(it->second, std::greater<>{}, [](const Index &idx) {
     return idx.space().approximate_size();
   });
-
-  m_batch_indices[id.value_or(ID_GLOBAL)] = std::move(indices);
 }
 
-std::vector<Index> ItfContext::batch_indices(
+std::span<const Index> ItfContext::batch_indices(
     std::optional<std::size_t> id) const {
   auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
 
@@ -251,31 +258,6 @@ std::vector<Index> ItfContext::batch_indices(
   }
 
   return it->second;
-}
-
-bool ItfContext::is_batched(std::optional<std::size_t> id) const {
-  auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
-
-  if (it == m_batch_indices.end() && id.has_value()) {
-    it = m_batch_indices.find(ID_GLOBAL);
-  }
-
-  return it != m_batch_indices.end() && !it->second.empty();
-}
-
-bool ItfContext::is_index_batched(const Index &idx,
-                                  std::optional<std::size_t> id) const {
-  auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
-
-  if (it == m_batch_indices.end() && id.has_value()) {
-    it = m_batch_indices.find(ID_GLOBAL);
-  }
-
-  if (it == m_batch_indices.end()) {
-    return false;
-  }
-
-  return std::ranges::find(it->second, idx) != it->second.end();
 }
 
 }  // namespace sequant
