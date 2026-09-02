@@ -968,26 +968,26 @@ class Index : public Taggable {
                         wchar_t>)
   static std::optional<ordinal_type> to_ordinal(
       View && label) noexcept {
-	  auto end = base_label_end(label);
+    auto end = base_label_end(label);
 
-	  if (end == std::ranges::end(label)) {
-		  return std::nullopt;
-	  }
+    if (end == std::ranges::end(label)) {
+      return std::nullopt;
+    }
 
-	  if (*end == '_') {
-		  ++end;
-	  }
+    if (*end == '_') {
+      ++end;
+    }
 
-	  SEQUANT_ASSERT(end != std::ranges::end(label));
+    SEQUANT_ASSERT(end != std::ranges::end(label));
 
-	  std::basic_string_view<std::remove_cvref_t<std::ranges::range_value_t<View>>> view(&(*end),
-			  std::ranges::distance(end, std::ranges::end(label)));
-	  return string_to<ordinal_type>(view);
+    std::basic_string_view<std::remove_cvref_t<std::ranges::range_value_t<View>>> view(&(*end),
+        std::ranges::distance(end, std::ranges::end(label)));
+    return string_to<ordinal_type>(view);
   }
 
   template<typename CharT>
   static std::optional<ordinal_type> to_ordinal(const CharT *label) noexcept {
-	  return to_ordinal(std::basic_string_view<CharT>{label});
+    return to_ordinal(std::basic_string_view<CharT>{label});
   }
 
   friend class IndexFactory;
@@ -1230,6 +1230,28 @@ Field base_field(BraRange bra, KetRange ket) {
     return false;
   };
   return (has_complex(bra) || has_complex(ket)) ? Field::Complex : Field::Real;
+}
+
+/// @brief the Kramers (time-reversal) image of @p idx: same ordinal in the
+/// partner space registered in @p isr, proto indices flipped recursively
+/// (proto indices without a partner are kept)
+/// @return the flipped index, or nullopt if @p idx's space has no partner
+inline std::optional<Index> kramers_flipped(const Index& idx,
+                                            const IndexSpaceRegistry& isr) {
+  auto partner = isr.kramers_partner(idx.space());
+  if (!partner) return std::nullopt;
+  if (!idx.has_proto_indices()) {
+    if (idx.ordinal()) return Index(*partner, *idx.ordinal());
+    return Index(*partner);
+  }
+  Index::index_vector protos;
+  for (const auto& p : idx.proto_indices()) {
+    auto fp = kramers_flipped(p, isr);
+    protos.push_back(fp ? *fp : p);
+  }
+  if (idx.ordinal())
+    return Index(*partner, *idx.ordinal(), std::move(protos));
+  return Index(*partner, std::move(protos));
 }
 
 }  // namespace sequant

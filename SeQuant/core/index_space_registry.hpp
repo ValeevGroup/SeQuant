@@ -6,9 +6,12 @@
 #define SEQUANT_INDEX_SPACE_REGISTRY_HPP
 
 #include <SeQuant/core/bitset.hpp>
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
+
+#include <optional>
 
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -107,6 +110,8 @@ class IndexSpaceRegistry {
   /// copy constructor
   IndexSpaceRegistry(const IndexSpaceRegistry& other)
       : spaces_(other.spaces_),
+        kramers_partner_keys_(other.kramers_partner_keys_),
+        kramers_canonical_keys_(other.kramers_canonical_keys_),
         physical_particle_attribute_mask_(
             other.physical_particle_attribute_mask_),
         vacocc_(other.vacocc_),
@@ -118,6 +123,8 @@ class IndexSpaceRegistry {
   /// move constructor
   IndexSpaceRegistry(IndexSpaceRegistry&& other)
       : spaces_(std::move(other.spaces_)),
+        kramers_partner_keys_(std::move(other.kramers_partner_keys_)),
+        kramers_canonical_keys_(std::move(other.kramers_canonical_keys_)),
         physical_particle_attribute_mask_(
             std::move(other.physical_particle_attribute_mask_)),
         vacocc_(std::move(other.vacocc_)),
@@ -129,6 +136,8 @@ class IndexSpaceRegistry {
   /// copy assignment operator
   IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
     spaces_ = other.spaces_;
+    kramers_partner_keys_ = other.kramers_partner_keys_;
+    kramers_canonical_keys_ = other.kramers_canonical_keys_;
     physical_particle_attribute_mask_ = other.physical_particle_attribute_mask_;
     vacocc_ = other.vacocc_;
     refocc_ = other.refocc_;
@@ -141,6 +150,8 @@ class IndexSpaceRegistry {
   /// move assignment operator
   IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) {
     spaces_ = std::move(other.spaces_);
+    kramers_partner_keys_ = std::move(other.kramers_partner_keys_);
+    kramers_canonical_keys_ = std::move(other.kramers_canonical_keys_);
     physical_particle_attribute_mask_ =
         std::move(other.physical_particle_attribute_mask_);
     vacocc_ = std::move(other.vacocc_);
@@ -153,6 +164,35 @@ class IndexSpaceRegistry {
 
   /// deep copy of this object, creates a copy of its spaces
   IndexSpaceRegistry clone() const;
+
+  /// @brief registers @p canonical (the up flavor) and @p partner (the down
+  /// flavor) as each other's Kramers (time-reversal) partner spaces
+  void add_kramers_partners(const IndexSpace& canonical,
+                            const IndexSpace& partner) {
+    kramers_partner_keys_[std::wstring(canonical.base_key())] =
+        std::wstring(partner.base_key());
+    kramers_partner_keys_[std::wstring(partner.base_key())] =
+        std::wstring(canonical.base_key());
+    kramers_canonical_keys_.insert(std::wstring(canonical.base_key()));
+  }
+
+  /// @return false iff @p space is the non-canonical (down) flavor of a
+  ///         registered Kramers pair; unflavored spaces are canonical
+  bool kramers_canonical(const IndexSpace& space) const {
+    const std::wstring key(space.base_key());
+    if (kramers_partner_keys_.find(key) == kramers_partner_keys_.end())
+      return true;
+    return kramers_canonical_keys_.find(key) != kramers_canonical_keys_.end();
+  }
+
+  /// @return the Kramers partner of @p space, or nullopt if @p space has no
+  ///         registered partner (an unflavored space never flips)
+  std::optional<IndexSpace> kramers_partner(const IndexSpace& space) const {
+    auto it = kramers_partner_keys_.find(std::wstring(space.base_key()));
+    if (it == kramers_partner_keys_.end()) return std::nullopt;
+    if (const auto* p = retrieve_ptr(it->second)) return *p;
+    return std::nullopt;
+  }
 
   const auto& spaces() const { return spaces_; }
 
@@ -1382,6 +1422,11 @@ class IndexSpaceRegistry {
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
   std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
+  /// Kramers (time-reversal) partner spaces, keyed by base key in both
+  /// directions; populated by the convention that creates the spin clones
+  container::map<std::wstring, std::wstring> kramers_partner_keys_;
+  /// base keys of the CANONICAL (up) flavor of each Kramers pair
+  container::set<std::wstring> kramers_canonical_keys_;
 
   bitset_t physical_particle_attribute_mask_ = bitset::null;
 
