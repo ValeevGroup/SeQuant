@@ -38,6 +38,17 @@ enum class EvalOp {
   ///        (in either order).
   Product,
 
+  ///
+  /// \brief The real part of a scalar-valued EvalExpr (a unary node over the
+  ///        shared inner subtree; the right child is a Constant{1} sentinel).
+  ///        Re is a projection (not invertible), so unlike the conjugation
+  ///        channels it cannot ride in CanonTransform and remains an IR node.
+  RealPart,
+
+  ///
+  /// \brief The imaginary part of a scalar-valued EvalExpr; see RealPart.
+  ImagPart,
+
 };
 
 ///

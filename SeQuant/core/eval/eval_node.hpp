@@ -9,6 +9,7 @@
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -28,6 +29,8 @@ ExprPtr linearize_eval_node(Node const& node) {
   SEQUANT_ASSERT(rres);
 
   if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+  if (node->op_type() == EvalOp::RealPart) return ex<RealPart>(lres);
+  if (node->op_type() == EvalOp::ImagPart) return ex<ImagPart>(lres);
   SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
   return ex<Product>(
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});

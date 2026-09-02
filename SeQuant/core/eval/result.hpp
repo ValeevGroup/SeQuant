@@ -305,6 +305,24 @@ class Result {
   }
 
   ///
+  /// \brief The real part of this result. Re is a projection (not an
+  /// involution), so unlike the conjugation channels it is served by a
+  /// dedicated IR node (EvalOp::RealPart), not by CanonTransform. Not pure:
+  /// only scalar-backed results need it today (the conjugate-pair fold emits
+  /// Re/Im of fully contracted c-number networks); the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr real_part() const {
+    throw detail::unimplemented_method("real_part");
+  }
+
+  ///
+  /// \brief The imaginary part of this result; see real_part().
+  ///
+  [[nodiscard]] virtual ResultPtr imag_part() const {
+    throw detail::unimplemented_method("imag_part");
+  }
+
+  ///
   /// \brief Restrict this result to a contiguous *element* range of one mode.
   ///
   /// Keeps elements `[elem_lo, elem_hi)` of mode \p mode and all elements of
@@ -479,6 +497,24 @@ class ResultScalar final : public Result {
       if (t.conj) v = conj(v);
     }
     return eval_result<ResultScalar<T>>(v * T(t.phase));
+  }
+
+  [[nodiscard]] ResultPtr real_part() const override {
+    if constexpr (std::is_arithmetic_v<T>) {
+      return eval_result<ResultScalar<T>>(value());
+    } else {
+      using std::real;
+      return eval_result<ResultScalar<T>>(T(real(value())));
+    }
+  }
+
+  [[nodiscard]] ResultPtr imag_part() const override {
+    if constexpr (std::is_arithmetic_v<T>) {
+      return eval_result<ResultScalar<T>>(T{0});
+    } else {
+      using std::imag;
+      return eval_result<ResultScalar<T>>(T(imag(value())));
+    }
   }
 
  private:

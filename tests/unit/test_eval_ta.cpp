@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/complex.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -3053,4 +3054,31 @@ TEST_CASE("conj_eval_cache_reuse", "[eval][conj-transform]") {
     diff("i_1,i_2") = s2("i_1,i_2") - ref("i_1,i_2");
     REQUIRE(diff("i_1,i_2").norm().get() < 1e-10);
   }
+}
+
+TEST_CASE("re_im_evaluation", "[eval][re-im]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+  const size_t nocc = 2, nvirt = 4;
+  auto& world = TA::get_default_world();
+  auto yield_ = rand_tensor_yield<C, TA::DensePolicy>{world, nocc, nvirt};
+
+  // s = a closed-contraction scalar network on complex data
+  auto s_expr = deserialize<sequant::ExprPtr>(L"g{i_1;a_1}:N") *
+                deserialize<sequant::ExprPtr>(L"t{a_1;i_1}:N");
+
+  auto direct = evaluate(eval_node(s_expr->clone()), yield_)->get<C>();
+  REQUIRE(std::abs(direct.imag()) > 1e-12);  // genuinely complex data
+
+  auto re = evaluate(eval_node(real_part(s_expr->clone())), yield_)->get<C>();
+  auto im =
+      evaluate(eval_node(imaginary_part(s_expr->clone())), yield_)->get<C>();
+
+  // Re/Im results are real-valued
+  REQUIRE(re.imag() == 0.0);
+  REQUIRE(im.imag() == 0.0);
+  // Re(s) + i Im(s) == s
+  REQUIRE(std::abs(re + C(0, 1) * im - direct) < 1e-12);
+  REQUIRE(re.real() == Catch::Approx(direct.real()));
+  REQUIRE(im.real() == Catch::Approx(direct.imag()));
 }

@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/complex.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -894,4 +895,41 @@ TEST_CASE("conjugated_scalar_leaves", "[EvalExpr][conj-transform]") {
   REQUIRE(EvalExpr{pw}.hash_value() == EvalExpr{pws}.hash_value());
   REQUIRE(EvalExpr{pws}.canon_transform().conj);
   REQUIRE(EvalExpr{pw}.canon_transform().trivial());
+}
+
+TEST_CASE("re_im_eval_nodes", "[EvalExpr][re-im]") {
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  // The fold emission shape: Constant(2) * RealPart(s), s a
+  // closed-contraction scalar network.
+  auto g = deserialize(L"g{i_1;a_1}:N");
+  auto t = deserialize(L"t{a_1;i_1}:N");
+  auto s_expr = g->clone() * t->clone();
+
+  auto two_re = ex<Constant>(2) * real_part(s_expr->clone());
+  auto node = binarize(two_re);
+
+  // locate the RealPart unary node in the scalar-wrapped root
+  auto const& re = node.left()->op_type() ? node.left() : node.right();
+  REQUIRE(re->op_type() == EvalOp::RealPart);
+  REQUIRE(re->result_type() == ResultType::Scalar);
+  REQUIRE_FALSE(re->is_primary());
+  // Constant{1} sentinel right child; inner subtree on the left
+  REQUIRE(re.right()->is_constant());
+  REQUIRE(re.left()->is_product());
+
+  // the inner subtree occupies the SAME slot as an independent binarize of s
+  auto inner_alone = binarize(s_expr->clone());
+  REQUIRE(re.left()->hash_value() == inner_alone->hash_value());
+
+  // Re, Im, and the bare inner all hash to distinct slots
+  auto two_im = ex<Constant>(2) * imaginary_part(s_expr->clone());
+  auto node_im = binarize(two_im);
+  auto const& im = node_im.left()->op_type() ? node_im.left() : node_im.right();
+  REQUIRE(im->op_type() == EvalOp::ImagPart);
+  REQUIRE(re->hash_value() != im->hash_value());
+  REQUIRE(re->hash_value() != inner_alone->hash_value());
+  REQUIRE(im->hash_value() != inner_alone->hash_value());
 }

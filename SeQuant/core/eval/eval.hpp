@@ -681,7 +681,15 @@ ResultPtr evaluate(Node const& node,  //
             f.node.left()->annot(), f.node.right()->annot(), f.node->annot()};
         ResultPtr result;
         log::Duration time;
-        if (f.node->op_type() == EvalOp::Sum) {
+        if (f.node->op_type() == EvalOp::RealPart ||
+            f.node->op_type() == EvalOp::ImagPart) {
+          // Unary Re/Im over the left operand; the right child is the
+          // Constant{1} sentinel (evaluated trivially above, ignored here).
+          bool const re = f.node->op_type() == EvalOp::RealPart;
+          time = detail::timed_eval_inplace([&]() {
+            result = re ? f.left->real_part() : f.left->imag_part();
+          });
+        } else if (f.node->op_type() == EvalOp::Sum) {
           time = detail::timed_eval_inplace(
               [&]() { result = f.left->sum(*f.right, ann); });
         } else {
