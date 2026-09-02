@@ -239,6 +239,10 @@ class GenerationVisitor {
             ExprPtrList{denoted_expr(node.left()), denoted_expr(node.right())},
             Product::Flatten::No));
         break;
+      case EvalOp::RealPart:
+      case EvalOp::ImagPart:
+        throw std::runtime_error(
+            "export of Re/Im eval nodes is not implemented yet");
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:

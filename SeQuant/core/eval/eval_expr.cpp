@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -347,6 +348,10 @@ std::string EvalExpr::label() const noexcept {
     return toUtf8(io::serialization::to_string(as_power()));
   } else if (is_variable()) {
     return toUtf8(as_variable().label());
+  } else if (expr_->is<RealPart>()) {
+    return "Re";
+  } else if (expr_->is<ImagPart>()) {
+    return "Im";
   } else {
     SEQUANT_ABORT("EvalExpr::label: unhandled expression type");
   }
@@ -817,11 +822,51 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
   }
 }
 
+namespace {
+
+// Unary Re/Im wrapper over the shared inner subtree: EvalOp::RealPart or
+// ImagPart, ResultType::Scalar, Constant{1} sentinel right child (the
+// FullBinaryNode "every non-leaf has two children" invariant; evaluate
+// ignores it for these ops). Node hash = the inner child's salted hash
+// combined with the op, so Re(s), Im(s) and bare s occupy distinct slots
+// while the inner subtree itself stays on its own shared slot.
+EvalExprNode binarize_re_im(ExprPtr const& orig, ExprPtr const& inner,
+                            EvalOp op, IndexSet const& uncontract,
+                            const BinarizationOptions& opts) {
+  // the wrapper's inner is opaque to the single-term optimizer (like a Sum
+  // factor): its contraction nodes are not DP nodes and have no entries in
+  // opts.node_batch_axes -- binarize them with a private counter and no axes
+  BinarizationOptions inner_opts = opts;
+  inner_opts.node_batch_axes.clear();
+  std::size_t inner_counter = 0;
+  auto inner_node =
+      impl::binarize(inner, uncontract, inner_opts, inner_counter);
+  auto h = inner_node->hash_value();
+  if (auto salt = inner_node->canon_transform().structural_salt(); salt != 0)
+    hash::combine(h, salt);
+  hash::combine(h, static_cast<size_t>(op));
+  EvalExpr wrap{
+      op, ResultType::Scalar, orig->clone(), {}, CanonTransform{}, h, nullptr};
+  EvalExprNode sentinel{EvalExpr{Constant{1}}};
+  return EvalExprNode{std::move(wrap), std::move(inner_node),
+                      std::move(sentinel)};
+}
+
+}  // namespace
+
 namespace impl {
 
 EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                       const BinarizationOptions& opts,
                       std::size_t& node_counter) {
+  if (expr->is<RealPart>())
+    return binarize_re_im(expr, expr->as<RealPart>().inner(), EvalOp::RealPart,
+                          uncontract, opts);
+
+  if (expr->is<ImagPart>())
+    return binarize_re_im(expr, expr->as<ImagPart>().inner(), EvalOp::ImagPart,
+                          uncontract, opts);
+
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
 
