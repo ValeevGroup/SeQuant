@@ -333,3 +333,34 @@ regenerated with justification in the PR description.-
 
         - TA lazy conj -
         view(retrieval stays eager per use).- TRS / korbit folding(PR 3).
+
+## Implementation deltas (recorded 2026-09-01, Plan A complete)
+
+Refinements the implementation forced on the letter (not the spirit) of
+the contract above; the plan doc's "Execution deviations" section has
+the play-by-play.
+
+- **Marker composition is syntactic and slot-free**: the elementwise
+  marker contributes a PURE {conj} bit; orientation deltas come from the
+  canonicalizer fold alone. (The draft's marker-unfold would have
+  re-aliased starred-canonical spellings with their plain form.)
+- **Hoisting is per-PREFIX of the left fold**: a uniformly conjugated
+  factor prefix strips its factors' conj salts (per-prefix, keeping
+  C.C^* vs C^*.C order-insensitive) and records {conj} on its node --
+  this is what makes the buried-intermediate CSE work; whole-product
+  uniformity is the special case.
+- **Evaluation invariant**: hand-ups are DENOTED values; the cache holds
+  CANONICAL data. The leaf evaluator serves the canonical spelling and
+  the leaf hand-up applies the transform; finish_phase_b's store
+  re-applies it (an involution), leaving canonical data in the cache.
+- **ToT leaves carry array-faithful Nested (outer;inner) indices** via
+  tot_indices -- the md named list (proto-only constituents, named
+  order) stays internal to slot canonicalization.
+- **Export**: scalar leaves re-materialize the conj marker
+  (denoted_expr); tensor leaves keep the documented transpose-only
+  real-field limitation.
+- **symmetrize/antisymmetrize wrappers** use the DENOTED bra rank
+  (braket_swap-aware).
+- **Test-fixture contract**: yield keys and stored arrays are
+  canonical-spelling shaped; literal spellings are served through the
+  leaf's transform (the fixture caches the transformed variant).
