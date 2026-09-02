@@ -209,7 +209,57 @@ std::optional<ExportTreeData> perform_cse(ExprRange &&exprs,
       output.entries.emplace_back(std::move(current));
     }
 
-    // TODO: stable_sort output entry to group by batching index
+    SEQUANT_ASSERT(output.entries.size() == current_batch.second);
+
+    auto batch_entries =
+        std::ranges::subrange(output.entries.begin() + current_batch.first,
+                              output.entries.begin() + current_batch.second);
+
+    // Sort by used batch indices per expression. Batch indices are treated as
+    // having a "priority". We start at the highest priority (first) batch index
+    // and compare on the first batch index that only one of the expressions
+    // has. Expressions with the lower priority batching indices (or even none)
+    // come before the ones with the higher priority (or more) batching indices.
+    // Since all non-CSEs are chose to have the same batching indices,
+    // their relative order remains unchanged. And since CSEs can't depend
+    // on each other (due to the way we determine them), their order is
+    // irrelevant as long as they are computed before they are used, which
+    // is guaranteed because the CSE can at most have as many batched
+    // indices as the associated main expression and hence they compare
+    // equivalent with the used comparator (and stable_sort guarantees
+    // retained relative order of equivalent elements).
+    std::ranges::stable_sort(
+        batch_entries,
+        [&current_batch_indices](const ExportNode<> &lhs,
+                                 const ExportNode<> &rhs) {
+          if (!rhs->is_tensor()) {
+            return true;
+          }
+          if (!lhs->is_tensor()) {
+            return std::ranges::any_of(
+                rhs->as_tensor().const_indices(), [&](const Index &idx) {
+                  return std::ranges::find(current_batch_indices, idx) !=
+                         current_batch_indices.end();
+                });
+          }
+
+          auto lhs_indices = lhs->as_tensor().const_indices();
+          auto rhs_indices = rhs->as_tensor().const_indices();
+
+          for (const Index &idx : current_batch_indices) {
+            const bool lhs_contains =
+                std::ranges::find(lhs_indices, idx) != lhs_indices.end();
+            const bool rhs_contains =
+                std::ranges::find(rhs_indices, idx) != rhs_indices.end();
+
+            if (lhs_contains != rhs_contains) {
+              return rhs_contains;
+            }
+          }
+
+          return false;
+        },
+        &ExportTreeData::Entry::tree);
   }
 
   return output;
