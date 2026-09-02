@@ -36,6 +36,14 @@ enum class Field { Real, Complex };
 // clang-format on
 enum class ColumnSymmetry { Symm, Nonsymm };
 
+/// describes whether a tensorial object whose slot indices carry Kramers
+/// flavors obeys the time-reversal identity: the spelling with EVERY flavored
+/// slot index flavor-flipped equals `phase * conj(T)` elementwise, with
+/// `phase = (-1)^(number of slots flipped from the down flavor)`. Orthogonal
+/// to #BraKetSymmetry (the two folds compose); slots in spaces without a
+/// Kramers partner (e.g. a density-fitting auxiliary) are never flipped.
+enum class KramersSymmetry { Nonsymm, TimeReversal };
+
 // clang-format off
 /// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects
 /// @note bra or ket can be symmetric or antisymmetric only if the tensor is particle-symmetric, otherwise it does not make sense to permute indices corresponding to distinguishable particles

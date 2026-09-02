@@ -227,6 +227,10 @@ class AbstractTensor {
   virtual ColumnSymmetry _column_symmetry() const {
     throw missing_instantiation_for("_column_symmetry");
   }
+  /// @return the time-reversal (Kramers) symmetry of the tensor
+  virtual KramersSymmetry _kramers_symmetry() const {
+    throw missing_instantiation_for("_kramers_symmetry");
+  }
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");
   }
@@ -415,6 +419,9 @@ inline auto hermiticity(const AbstractTensor& t) { return t._hermiticity(); }
 inline auto base_field(const AbstractTensor& t) { return t._base_field(); }
 inline auto column_symmetry(const AbstractTensor& t) {
   return t._column_symmetry();
+}
+inline auto kramers_symmetry(const AbstractTensor& t) {
+  return t._kramers_symmetry();
 }
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }

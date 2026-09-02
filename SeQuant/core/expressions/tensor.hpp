@@ -288,7 +288,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const aux<IndexRange3> &aux_indices, reserved_tag,
          Symmetry s = Symmetry::Nonsymm,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
@@ -314,6 +315,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                                      sequant::base_field(bra_, ket_)))),
         hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
+        kramers_symmetry_(ks),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -343,7 +345,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          aux<index_container_type> &&aux_indices, reserved_tag,
          Symmetry s = Symmetry::Nonsymm,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : label_(toUtf16(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
@@ -363,6 +366,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                                      sequant::base_field(bra_, ket_)))),
         hermiticity_(to_hermiticity(braket_symmetry_)),
         column_symmetry_(ps),
+        kramers_symmetry_(ks),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -417,9 +421,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::Nonsymm,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
-               reserved_tag{}, s, bks_opt, ps) {
+               reserved_tag{}, s, bks_opt, ps, ks) {
     assert_nonreserved_label(label_);
   }
 
@@ -440,9 +445,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::Nonsymm,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
-               reserved_tag{}, s, bks_opt, ps) {
+               reserved_tag{}, s, bks_opt, ps, ks) {
     assert_nonreserved_label(label_);
   }
 
@@ -459,10 +465,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          ket<index_container_type> &&ket_indices,
          Symmetry s = Symmetry::Nonsymm,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), sequant::aux{}, reserved_tag{}, s,
-               bks_opt, ps) {
+               bks_opt, ps, ks) {
     assert_nonreserved_label(label_);
   }
 
@@ -482,10 +489,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          aux<index_container_type> &&aux_indices,
          Symmetry s = Symmetry::Nonsymm,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), std::move(aux_indices), reserved_tag{},
-               s, bks_opt, ps) {
+               s, bks_opt, ps, ks) {
     assert_nonreserved_label(label_);
   }
 
@@ -524,7 +532,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             range_of_castables_to_index IndexRange2>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s, Hermiticity h,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       // The base_field must be resolved into a BraKetSymmetry *here*, in the
       // delegation, because the delegated-to ctor's body runs
       // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
@@ -535,7 +544,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, s,
                resolve_braket_symmetry(h, make_indices(bra_indices),
                                        make_indices(ket_indices)),
-               ps) {
+               ps, ks) {
     // Overwrite after delegation to preserve the exact trait (incl.
     // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
     // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
@@ -557,7 +566,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s, Hermiticity h,
-         ColumnSymmetry ps = ColumnSymmetry::Symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       // The base_field must be resolved into a BraKetSymmetry *here*, in the
       // delegation, because the delegated-to ctor's body runs
       // canonicalize_slots() (which keys off braket_symmetry_) -- it cannot be
@@ -568,7 +578,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices, s,
                resolve_braket_symmetry(h, make_indices(bra_indices),
                                        make_indices(ket_indices)),
-               ps) {
+               ps, ks) {
     // Overwrite after delegation to preserve the exact trait (incl.
     // AntiHermitian, which the BraKetSymmetry round-trip cannot represent).
     // Stays consistent with the reserved-(anti)symmetrizer Symm->Conjugate
@@ -677,6 +687,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}
   /// slot bundles).
   ColumnSymmetry column_symmetry() const { return column_symmetry_; }
+  KramersSymmetry kramers_symmetry() const { return kramers_symmetry_; }
 
   /// @return number of bra slots (some may be occupied by null indices, hence
   /// this is the gross rank)
@@ -826,7 +837,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       sequant::ket<index_container_type> new_ket,
       sequant::aux<index_container_type> new_aux) const {
     Tensor t(label_, std::move(new_bra), std::move(new_ket), std::move(new_aux),
-             reserved_tag{}, symmetry_, braket_symmetry_, column_symmetry_);
+             reserved_tag{}, symmetry_, braket_symmetry_, column_symmetry_,
+             kramers_symmetry_);
     t.hermiticity_ = hermiticity_;
     t.conjugated_ = conjugated_;
     t.reset_hash_value();
@@ -888,6 +900,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   // distinct canonicalization behavior yet); revisit if that changes.
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
+  KramersSymmetry kramers_symmetry_ = KramersSymmetry::Nonsymm;
   /// whether this tensor is complex-conjugated elementwise (no slot
   /// reordering); mirrors Variable::conjugated_ / Power::conjugated_ and is
   /// rendered as a trailing ^* on the label
@@ -916,6 +929,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
       hash::combine(val, column_symmetry_);
+      if (kramers_symmetry_ != KramersSymmetry::Nonsymm)
+        hash::combine(val, kramers_symmetry_);
       // N.B. adjointness is baked into the label; conjugation contributes
       // only when set so unconjugated tensors hash identically to builds
       // that predate conjugated_
@@ -941,6 +956,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         this->symmetry() == that_cast.symmetry() &&
         this->braket_symmetry() == that_cast.braket_symmetry() &&
         this->column_symmetry() == that_cast.column_symmetry() &&
+        this->kramers_symmetry() == that_cast.kramers_symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
         this->ket_rank() == that_cast.ket_rank() &&
         this->aux_rank() == that_cast.aux_rank()) {
@@ -965,6 +981,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
     if (this->conjugated() != that_cast.conjugated()) {
       return !this->conjugated();  // T orders before conj(T)
+    }
+    if (this->kramers_symmetry() != that_cast.kramers_symmetry()) {
+      return this->kramers_symmetry() == KramersSymmetry::Nonsymm;
     }
 
     if (this->bra_rank() != that_cast.bra_rank()) {
@@ -1040,6 +1059,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Hermiticity _hermiticity() const override final { return hermiticity_; }
   ColumnSymmetry _column_symmetry() const override final {
     return column_symmetry_;
+  }
+  KramersSymmetry _kramers_symmetry() const override final {
+    return kramers_symmetry_;
   }
   std::size_t _color() const override final { return 0; }
   bool _is_cnumber() const override final { return true; }

@@ -624,3 +624,42 @@ TEST_CASE("has_tensor_sees_through_re_im", "[conjugation]") {
             imaginary_part(t->clone() * f->clone());
   REQUIRE(has_tensor(im, L"f"));
 }
+
+TEST_CASE("kramers_symmetry_attribute", "[conjugation][kramers]") {
+  // KramersSymmetry: a declared tensor symmetry (time reversal relates the
+  // all-flavors-flipped spelling to phase * conj(T)); orthogonal to
+  // BraKetSymmetry, carried by with_slots, part of identity (hash/equality)
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  Tensor plain(L"C", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+               BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm);
+  REQUIRE(plain.kramers_symmetry() == KramersSymmetry::Nonsymm);
+
+  Tensor trs(L"C", bra{L"a_1"}, ket{L"a_2"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm,
+             KramersSymmetry::TimeReversal);
+  REQUIRE(trs.kramers_symmetry() == KramersSymmetry::TimeReversal);
+  REQUIRE(trs.braket_symmetry() == BraKetSymmetry::Conjugate);
+
+  // identity: the attribute distinguishes otherwise-equal tensors
+  REQUIRE(!(plain == trs));
+  REQUIRE(plain.hash_value() != trs.hash_value());
+
+  // with_slots carries it
+  using ixvec = container::svector<Index>;
+  auto r = trs.with_slots(bra<ixvec>{ixvec{Index{L"a_3"}}},
+                          ket<ixvec>{ixvec{Index{L"a_4"}}}, aux<ixvec>{});
+  REQUIRE(r.kramers_symmetry() == KramersSymmetry::TimeReversal);
+
+  // the free wrapper used by the canonicalizer
+  REQUIRE(kramers_symmetry(static_cast<const AbstractTensor&>(trs)) ==
+          KramersSymmetry::TimeReversal);
+
+  // the conjugation marker is orthogonal to the attribute
+  trs.conjugate();
+  REQUIRE(trs.conjugated());
+  REQUIRE(trs.kramers_symmetry() == KramersSymmetry::TimeReversal);
+}
