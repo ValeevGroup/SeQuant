@@ -754,3 +754,32 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 - Uniform-conj hoisting is implemented at product roots (marker stripping on
   the collected TN copies + {conj} on the node); sum-level hoisting and the
   cache-reuse tests remain in T7/T11.
+
+## Execution deviations (recorded 2026-09-02, T16 MPQC smoke)
+
+- The MPQC CC-path fold (process_equations) needed THREE upstream repairs
+  before pairing worked on the Kramers-CSV energy:
+  (1) expand + flatten ALL CSV flavor sums before the korbit rebase
+  (residuals included; 48 flat terms/block replace 12 nested);
+  (2) rebase the fully contracted energy too, so a member's TRS partner is
+  its plain elementwise conjugate -- conjugate_op = sequant::conjugate on
+  the CSV path, mbpt::swap_spin on the non-CSV path (unrebased members
+  pair by all-flipped relabeling);
+  (3) round2-side kr_flavor guard: a spin-bit-free IndexSpace (the DF aux)
+  was misread as flavored under IGNOREd asserts (to_spin(qns) on zero spin
+  bits) and the rebase minted spurious flavored aux dummies, defeating
+  every pairing op. Measured after repairs: dch 24/36 paired -> 12 Re
+  (eq0 36 -> 24 terms), h2o 8/10.
+- optimize_impl was OPAQUE to Re/Im wrappers (returned untouched -> naive
+  inner contraction order). Fixed with a see-through case + regression
+  test (test_optimize.cpp "optimize sees through Re/Im wrappers").
+- OPEN: a Re-wrapped ToT/CSV scalar summand's inner root evaluates through
+  a MATERIALIZING DeNest einsum instead of the plain summand's scalar
+  reduction (binarize_re_im's inner binarize lacks the ResultExpr root
+  treatment): ~14 GB peak / OOM on dch vs 1.7 GB unfolded. Flat-TA wrapper
+  eval is certified (h2o). The MPQC CSV-energy fold therefore ships opt-in
+  (MPQC_CCK_TRS_FOLD=1) until the wrapper's inner root is routed through
+  the same result-expression treatment as an unwrapped scalar term.
+- Certified after all changes: h2o CCk -0.13510773505222942 (fold on),
+  dch PNS-MP2 -1.04169026886 (default, fold auto-off; within the known
+  X2C thread scatter of the old reference).
