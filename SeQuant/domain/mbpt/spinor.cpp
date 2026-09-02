@@ -880,7 +880,21 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
     }
     std::sort(fp.begin(), fp.end());
     std::sort(fp_flip.begin(), fp_flip.end());
-    if (fp_flip < fp) flip_roots.insert(root);
+    // Orientation criterion: prefer the orientation with FEWER
+    // non-Kramers-canonical leaves (a leaf whose FIRST flavored slot is the
+    // down flavor is non-canonical: only the canonical configs -- C up-up /
+    // up-down, g up-up / up-down, and their conj+phase variants -- may
+    // appear in the equations; that identification is what the conj-aware
+    // eval CSE pairs). Tie-break: the original lexicographic fingerprint.
+    auto n_noncanon = [](auto const& prints) {
+      std::size_t n = 0;
+      for (auto const& pr : prints)
+        if (!pr.second.empty() && pr.second.front() == 1) ++n;
+      return n;
+    };
+    const auto nc = n_noncanon(fp), nc_flip = n_noncanon(fp_flip);
+    if (nc_flip < nc || (nc_flip == nc && fp_flip < fp))
+      flip_roots.insert(root);
   }
   if (flip_roots.empty() && sum_pos.empty()) return nullptr;  // nothing to do
 
@@ -936,6 +950,61 @@ ExprPtr kramers_rebase_term(const ExprPtr& term,
 }
 
 }  // namespace
+
+ExprPtr kramers_term_flip(const ExprPtr& term,
+                          const container::map<Index, Index>& ext_map) {
+  if (!term) return term;
+  container::svector<ExprPtr> factors;
+  if (term->is<Tensor>())
+    factors.push_back(term);
+  else if (term->is<Product>())
+    for (auto const& f : term->as<Product>().factors()) factors.push_back(f);
+  else
+    return nullptr;  // only flat terms
+  // collect flavored slot indices over all leaves
+  container::set<Index> flavored;
+  for (auto const& f : factors) {
+    if (f->is<Constant>() || f->is<Variable>()) continue;
+    if (!f->is<Tensor>()) return nullptr;  // nested Sum etc.: not flat
+    for (auto const& idx : f->as<Tensor>().const_indices())
+      if (kr_flavor(idx) != Spin::any) flavored.insert(idx);
+  }
+  // replacement map: externals via ext_map, internals -> fresh flipped tmps;
+  // plain indices first, then composites (protos mapped through)
+  container::map<Index, Index> repl;
+  for (auto const& idx : flavored) {
+    if (idx.has_proto_indices()) continue;
+    if (auto it = ext_map.find(idx); it != ext_map.end())
+      repl.emplace(idx, it->second);
+    else
+      repl.emplace(idx, Index::make_tmp_index(kr_flipped_space(idx)));
+  }
+  for (auto const& idx : flavored) {
+    if (!idx.has_proto_indices()) continue;
+    if (auto it = ext_map.find(idx); it != ext_map.end()) {
+      repl.emplace(idx, it->second);
+      continue;
+    }
+    auto protos = idx.proto_indices();
+    for (auto& pr : protos)
+      if (auto it = repl.find(pr); it != repl.end()) pr = it->second;
+    repl.emplace(
+        idx, Index::make_tmp_index(kr_flipped_space(idx), std::move(protos)));
+  }
+  auto result = std::make_shared<Product>();
+  if (term->is<Product>()) result->scale(term->as<Product>().scalar());
+  for (auto const& f : factors) {
+    if (f->is<Tensor>()) {
+      Tensor t{f->as<Tensor>()};
+      t.transform_indices(repl);
+      t.conjugate();  // every leaf: the time-reversal image is conj+relabel
+      result->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
+    } else {
+      result->append(1, f, Product::Flatten::No);
+    }
+  }
+  return result;
+}
 
 ExprPtr kramers_internal_rebase(const ExprPtr& expr,
                                 const container::set<Index>& externals) {

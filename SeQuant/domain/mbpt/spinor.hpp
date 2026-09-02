@@ -344,6 +344,16 @@ bool has_antisymmetrizer(const ExprPtr& expr);
 /// @param externals the term-set's external (fixed-flavor) indices
 /// @return the rebased expression
 // clang-format on
+/// @brief Whole-term time-reversal image of a flat term: every flavored
+/// slot index is flavor-flipped (externals through @p ext_map, internal
+/// dummies to fresh flipped-space tmps, proto bundles following their
+/// referents) and every leaf is conjugate-marked. The scalar is untouched:
+/// the external-flip phase is the caller's (the block stabilizer's sign).
+/// @return the flipped term, or nullptr if @p term is not a flat product of
+///         tensors and scalars
+ExprPtr kramers_term_flip(const ExprPtr& term,
+                          const container::map<Index, Index>& ext_map);
+
 ExprPtr kramers_internal_rebase(const ExprPtr& expr,
                                 const container::set<Index>& externals);
 
