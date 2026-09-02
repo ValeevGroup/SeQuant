@@ -662,7 +662,12 @@ void run_ordered_contracted_block(
     // iterations -- rather than re-home/re-store it. It was NOT re-accumulated
     // in the loop, so acc[k]/dest[k] are null here.
     if (reuse[k]) {
-      value_results[vid] = parent_cache.access(value_of(vid));
+      // Reuse the resident home value UNTOUCHED: peek (non-decrementing), never
+      // access() -- spending a life here drains the entry meant for the value's
+      // genuine consumers (an invariant escape re-visited each enclosing-loop
+      // batch would otherwise burn its whole life on reuse and vanish before
+      // its real reader).
+      value_results[vid] = parent_cache.peek_at(value_of(vid));
       if (!value_results[vid])
         throw Exception(
             "evaluate_ordered_schedule: a resident output vanished from its "
@@ -777,7 +782,8 @@ void run_ordered_contracted_block(
                     << " block(depth=" << block.level.depth
                     << " slot=" << block.level.loop_slot
                     << " lat=" << block.latitude_ordinal
-                    << ") ectx.size=" << ectx.size() << std::endl;
+                    << ") ectx.size=" << ectx.size()
+                    << " home_ectx.size=" << home_ectx.size() << std::endl;
         }
         home_cache->ensure_home_slot(value_of(vid), life, /*persistent=*/!vol);
       } else {
@@ -921,6 +927,14 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     SEQUANT_ASSERT(vid < rich.cells.size() && consumer_vid < rich.cells.size());
     loop_colored_slice_seam.by_hash_consumer[rich.cells[vid].hash].push_back(
         std::make_tuple(pos, loop, rich.cells[consumer_vid].hash));
+  }
+  // Project the consumer-residency oracle (value_id -> its produced-sliced
+  // loops) onto the consumer HASH the runtime sees (current_consumer()).
+  for (auto const& [vid, loops] :
+       sliced_mode_assignment.consumer_sliced_loops) {
+    SEQUANT_ASSERT(vid < rich.cells.size());
+    loop_colored_slice_seam.consumer_sliced_loops.emplace(rich.cells[vid].hash,
+                                                          loops);
   }
   struct LoopColoredSliceSeamGuard {
     CacheManager<N, FHC>& c;

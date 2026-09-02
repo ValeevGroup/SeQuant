@@ -171,6 +171,26 @@ struct LoopColoredSliceSeam {
       container::svector<std::tuple<std::size_t, LoopId, std::size_t>>>
       by_hash_consumer;
 
+  /// consumer node hash -> the loops that consumer is PRODUCED sliced on (it is
+  /// building a batch of each). The use-induced-slicing oracle: a fetched
+  /// operand carrying loop L's mode is sliced iff the CURRENT consumer is here
+  /// under L -- i.e. building an L-batch. Drives both the slice decision for a
+  /// whole-produced operand and the completeness guard (a consumer NOT sliced
+  /// on L reads its operands whole there, never a gap). Non-transitive: keyed
+  /// on the consumer's OWN production, never a use-induced slice it acquired
+  /// for a different consumer.
+  std::unordered_map<std::size_t, container::svector<LoopId>>
+      consumer_sliced_loops;
+
+  /// \return whether \p consumer is produced sliced on \p loop (building an
+  /// \p loop-batch), so its operands carrying that loop's mode must be sliced.
+  [[nodiscard]] bool consumer_slices(std::size_t consumer, LoopId loop) const {
+    auto const it = consumer_sliced_loops.find(consumer);
+    if (it == consumer_sliced_loops.end()) return false;
+    return std::find(it->second.begin(), it->second.end(), loop) !=
+           it->second.end();
+  }
+
   /// \return the \c LoopId whose realized \c DagScopeLevel equals \p level, or
   ///         nullopt if no realized loop matches (\p level is the root scope or
   ///         a level this seam does not enumerate).

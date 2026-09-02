@@ -825,6 +825,11 @@ class CacheManager {
       return data_p;
     }
 
+    /// Non-decrementing read: return the held value WITHOUT decaying its
+    /// lifetime or releasing it. For a reuse/probe that must leave the entry's
+    /// remaining life intact for its genuine consumers.
+    [[nodiscard]] ResultPtr peek() const noexcept { return data_p; }
+
     // NOT noexcept: SEQUANT_ASSERT below can throw (SEQUANT_ASSERT_BEHAVIOR
     // = THROW) -- see the tripwire comment on stored_this_eval_. In every
     // default build config (IGNORE, or Debug's ABORT) this never actually
@@ -1685,6 +1690,18 @@ class CacheManager {
   ///         hop distance, for the non-batched callers that do not slice.
   ResultPtr access(cache_key_type const& key) noexcept {
     return access_at(key).ptr;
+  }
+
+  /// Non-decrementing chain lookup: return @p key's held value from the nearest
+  /// scope up the chain that holds it, WITHOUT decaying any lifetime (mirrors
+  /// \c access_at's recolor + parent walk, but reads via \c entry::peek()).
+  /// For a reuse/probe of an already-homed value that must not spend a life
+  /// reserved for the value's genuine consumers.
+  [[nodiscard]] ResultPtr peek_at(cache_key_type const& key) noexcept {
+    cache_key_type const rk = recolor(key);
+    if (auto found = cache_map_.find(rk); found != cache_map_.end())
+      if (auto data = found->second.peek()) return data;
+    return parent_ ? parent_->peek_at(rk) : nullptr;
   }
 
   /// Fetch @p key from EXACTLY @p hops scopes up the chain (walk @p hops

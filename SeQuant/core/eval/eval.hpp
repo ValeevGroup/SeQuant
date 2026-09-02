@@ -809,7 +809,20 @@ ResultPtr evaluate_impl(Node const& node,         //
           // silently instead of erroring. Fail loud. A value with NO fact under
           // `loop` (participates() == false) is genuinely invariant to it and
           // is correctly left unsliced -- the guard does not fire there.
-          if (!p_new && seam->participates(nd->hash_value(), *loop)) {
+          //
+          // Consumer-aware relaxation (Layer 2, use-induced slicing): a
+          // WHOLE-produced value CSE-shared between a consumer sliced on this
+          // loop and one INVARIANT to it is legitimately read sliced by the
+          // former and WHOLE by the latter. When THIS consumer is itself NOT
+          // sliced on `loop` (no fact of its own there), its whole read is
+          // correct, not a gap -- do not fire. The guard still fires for a
+          // consumer that IS sliced here yet fetches an unsliced participating
+          // operand (the real conformance gap).
+          bool const consumer_sliced_here =
+              cache.current_consumer() &&
+              seam->consumer_slices(*cache.current_consumer(), *loop);
+          if (!p_new && seam->participates(nd->hash_value(), *loop) &&
+              consumer_sliced_here) {
             std::cerr << "[gap] node canon=[";
             for (auto const& ix : nd->canon_indices())
               std::cerr << toUtf8(ix.full_label()) << " ";

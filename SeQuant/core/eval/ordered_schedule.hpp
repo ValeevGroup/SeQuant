@@ -617,7 +617,8 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
       std::unordered_map<std::size_t, container::svector<ScopeEntry>>>();
   auto home_scope = std::make_shared<
       std::unordered_map<std::size_t, container::svector<ScopeEntry>>>();
-  auto const walk = [&build_scope, &home_scope](
+  auto escapes = std::make_shared<std::unordered_set<std::size_t>>();
+  auto const walk = [&build_scope, &home_scope, &escapes](
                         auto&& self, ScopeBlock const& b,
                         container::svector<ScopeEntry> const& enc) -> void {
     for (Step const& s : b.steps) {
@@ -652,6 +653,7 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
       container::svector<ScopeEntry> out_scope = enc;
       if (!out_scope.empty()) out_scope.pop_back();
       (*home_scope)[vid] = out_scope;
+      escapes->insert(vid);
     }
   };
   walk(walk, ordered.root, {});
@@ -676,6 +678,48 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
       if (kk == k) return true;
     return false;
   };
+
+  // Layer 1 consistency: an escape output's home_scope was set one level OUT of
+  // its producing block, but the runtime close-store homes it at its CONSUMER-
+  // AWARE residency -- walking out past every enclosing loop it is invariant to
+  // AND has no consumer inside (run_ordered_contracted_block's close walk).
+  // Walk each escape's home_scope out the SAME way here, BEFORE `reads` is
+  // charged, so its lifetime is accounted at the scope it is actually stored
+  // at. Without this, w20's 64060 is stored at root but accounted at {i_1}: the
+  // life key mismatches and the root entry is evicted before its root consumer
+  // reads it.
+  {
+    std::unordered_map<std::size_t, std::unordered_set<std::size_t>> cons_loops;
+    for (ValueCell const& wc : rich.cells) {
+      auto const wit = vmap.find(wc.hash);
+      if (wit == vmap.end() || wit->second.leaf()) continue;
+      container::svector<ScopeEntry> const bsW =
+          scope_of(build_scope, wc.value_id);
+      auto const add = [&](node_t const& ch) {
+        auto const cv = hash_to_vid.find(ch->hash_value());
+        if (cv == hash_to_vid.end()) return;
+        auto& s = cons_loops[cv->second];
+        for (auto const& [ax, k] : bsW) s.insert(k.color());
+      };
+      add(wit->second.left());
+      add(wit->second.right());
+    }
+    for (std::size_t vid : *escapes) {
+      auto const hit = home_scope->find(vid);
+      if (hit == home_scope->end() || vid >= rich.cells.size()) continue;
+      auto const vit = vmap.find(rich.cells[vid].hash);
+      if (vit == vmap.end()) continue;
+      auto const& sm = vit->second->sliced_modes();
+      auto const& cl = cons_loops[vid];
+      auto& hs = hit->second;
+      while (!hs.empty()) {
+        auto const& [ax, k] = hs.back();
+        bool const sliced_on = std::find(sm.begin(), sm.end(), ax) != sm.end();
+        if (sliced_on || cl.count(k.color())) break;
+        hs.pop_back();
+      }
+    }
+  }
 
   // Every value is cached at its scope (no min-use floor, member roots cached),
   // so evaluate_impl always stops at a consumer's DIRECT operands: V's home is
@@ -1862,6 +1906,20 @@ forced_split_demotions(RichSchedule const& rich,
                       container::svector<std::pair<Index, int>> const& levels) {
           if (vid >= rich.cells.size()) return;
           ValueCell const& c = rich.cells[vid];
+          // SINGLE-SOURCE-OF-TRUTH home: the value's coloring may only name
+          // modes in its residency home (\c home_modes), NOT every carried mode
+          // that shares a space with an enclosing loop. Pairing a carried mode
+          // with a loop it is INVARIANT to (e.g. an occ-reduction carrying i_3
+          // that is invariant to the i_1 loop it happens to be nested under)
+          // colors it on that loop, so its escape store keys under {i_3} while
+          // its true (root) home reads it uncolored -- a key mismatch that
+          // vanishes the value. Filtering to \c home_modes leaves such an
+          // invariant value uncolored, matching where the close-store actually
+          // homes it.
+          auto const& hm = c.home_modes;
+          auto const is_home_mode = [&hm](Index const& m) {
+            return std::find(hm.begin(), hm.end(), m) != hm.end();
+          };
           container::svector<std::pair<Index, int>> mode_depth;
           container::svector<bool> consumed(c.carried.size(), false);
           for (auto const& [axis, depth] : levels) {
@@ -1870,6 +1928,7 @@ forced_split_demotions(RichSchedule const& rich,
               if (consumed[j]) continue;
               if (std::wstring(c.carried[j].space().base_key()) != space)
                 continue;
+              if (!is_home_mode(c.carried[j])) continue;
               consumed[j] = true;
               mode_depth.push_back({c.carried[j], depth});
               break;
@@ -2084,6 +2143,17 @@ struct SlicedModeAssignment {
   container::svector<std::tuple<std::size_t, std::size_t, LoopId, std::size_t>>
       occ_facts;
 
+  /// value_id -> the loops this value is PRODUCED sliced on (from its OWN
+  /// production/`value_slot`, NOT any use-induced fact). This is the consumer-
+  /// residency oracle for use-induced slicing: at a fetch, an operand carrying
+  /// loop L's mode is sliced iff the CONSUMER is produced-sliced on L (it is
+  /// building an L-batch), so a whole-produced operand read by a batching
+  /// consumer is sliced while the SAME operand read by an invariant consumer
+  /// stays whole -- with no propagation, since each read consults the immediate
+  /// consumer's own production, never a transitively-induced slice.
+  std::unordered_map<std::size_t, container::svector<LoopId>>
+      consumer_sliced_loops;
+
   /// \return the \c LoopId slicing \p value_id's own \p mode, or \c
   /// std::nullopt if \p mode is not one of \p value_id's sliced modes.
   [[nodiscard]] std::optional<LoopId> loop_of(std::size_t value_id,
@@ -2275,6 +2345,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       auto const& vs = value_slot[w_vid];
       for (std::size_t k = 0; k < scope.size(); ++k) {
         DagScopeLevel const& lvl = scope[k].level;
+        bool self_sliced = false;
         for (std::size_t pos = 0; pos < occ.carried.size() && pos < vs.size();
              ++pos) {
           if (vs[pos] != lvl.loop_slot) continue;
@@ -2282,10 +2353,79 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             continue;
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos, id_of(lvl), oit->second));
+          self_sliced = true;
           break;  // one W-position per enclosing loop
+        }
+        if (self_sliced) continue;
+        // Use-induced slicing (Layer 2): W is WHOLE-produced on this loop's
+        // space (no own sliced slot), but THIS CONSUMER C is sliced on a mode M
+        // there. If M is a SHARED external W also carries, the C = ...*W
+        // contraction binds W's M to C's sliced M -- so W must be sliced on M
+        // at this loop for THIS fetch. Record it CONSUMER-KEYED in occ_facts
+        // (-> by_hash_consumer), NOT consumer-blind by_value: W may be
+        // CSE-shared between C (sliced here) and a DIFFERENT consumer that
+        // reads it whole (invariant), and a blind fact would wrongly slice it
+        // for both. Bounded to a mode C actually slices (conformability), NOT
+        // every carried-mode coincidence, so a genuinely invariant shared
+        // operand is not sliced.
+        std::size_t const c_vid = oit->second;
+        auto const& cvs = value_slot[c_vid];
+        auto const& c_carried = rich.cells[c_vid].carried;
+        for (std::size_t cp = 0; cp < c_carried.size() && cp < cvs.size();
+             ++cp) {
+          if (cvs[cp] != lvl.loop_slot) continue;
+          if (std::wstring(c_carried[cp].space().base_key()) != lvl.space)
+            continue;
+          Index const& M = c_carried[cp];  // the mode C is sliced on here
+          // W carries M at some own-occurrence position (shared external,
+          // canonical-label match for a direct operand)?
+          std::size_t pos_a = occ.carried.size();
+          for (std::size_t pa = 0; pa < occ.carried.size(); ++pa)
+            if (occ.carried[pa] == M) {
+              pos_a = pa;
+              break;
+            }
+          if (pos_a == occ.carried.size()) continue;  // W does not carry M
+          result.occ_facts.push_back(
+              std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second));
+          if (std::getenv("SEQUANT_DUMP_USEINDUCED"))
+            std::cerr << "[useinduced] value_h="
+                      << (rich.cells[w_vid].hash % 100000)
+                      << " M=" << toUtf8(M.full_label()) << " pos=" << pos_a
+                      << " loop=" << id_of(lvl)
+                      << " consumer_h=" << (rich.cells[c_vid].hash % 100000)
+                      << "\n";
+          break;  // one shared mode per enclosing loop
         }
       }
     }
+  }
+
+  // Consumer-residency oracle (use-induced slicing): for each value C, the
+  // loops it is PRODUCED sliced on -- an enclosing loop L (build_scope[C])
+  // whose (space, slot) C's OWN production mask (value_slot) carries. This is
+  // "C is building an L-batch," the signal a fetch consults to decide whether
+  // to slice an operand that carries L's mode. Uses C's own value_slot, so it
+  // is non-transitive: 43 (value_slot=[Κ]) is building only a Κ-batch, so it
+  // reads its i_1-carrying operands WHOLE even though 43 itself is sliced on
+  // i_1 for a DIFFERENT consumer.
+  for (ValueCell const& c : rich.cells) {
+    auto const bit = build_scope.find(c.value_id);
+    if (bit == build_scope.end()) continue;
+    auto const& cvs = value_slot[c.value_id];
+    container::svector<LoopId> loops;
+    for (detail::ScopeBlockAxisLevel const& sbl : bit->second)
+      for (std::size_t p = 0; p < c.carried.size() && p < cvs.size(); ++p) {
+        if (cvs[p] != sbl.level.loop_slot) continue;
+        if (std::wstring(c.carried[p].space().base_key()) != sbl.level.space)
+          continue;
+        LoopId const lid = id_of(sbl.level);
+        if (std::find(loops.begin(), loops.end(), lid) == loops.end())
+          loops.push_back(lid);
+        break;
+      }
+    if (!loops.empty())
+      result.consumer_sliced_loops.emplace(c.value_id, std::move(loops));
   }
 
   // Fold raw (value, Index) -> DagScopeLevel facts through the canonical
