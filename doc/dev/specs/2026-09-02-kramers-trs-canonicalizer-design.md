@@ -130,6 +130,18 @@ would flip one tensor's dummies but not its partner's. The eval leaf opts
 in and, after the fold has fixed the hash and the `{conj, phase}`
 transform, restores the as-written flavors (parents contract by label).
 
+**Braket orientation is Kramers-aware.** Measured on dch: the network
+fold flipped an all-down energy component to all-up, but the Conjugate
+bra/ket fold that follows re-oriented C and g so a down index sat in the
+bra again — "first flavored slot" is not invariant under the swap a
+Hermitian tensor may make. `canonicalize_braket` therefore prefers, for
+`TimeReversal` tensors, the orientation whose bra carries fewer
+down-flavored indices (label/permutation invariant, value-exact via the
+marker; ties fall through), and `kramers_down_first()` judges a spelling
+on its braket-canonical orientation. Consequence: a Hermitian C↓↑ reaches
+the up row by the braket move (conj, no phase) rather than the Kramers
+flip; only Nonsymm-braket tensors (t) need the flip itself.
+
 ### 5. Scope and expectations
 
 - Energy: the 12 unpaired terms are exactly component-orientation twins;

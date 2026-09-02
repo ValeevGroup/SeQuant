@@ -125,6 +125,12 @@ Files: `SeQuant/domain/mbpt/spinor.hpp/.cpp`, `rules/csv.cpp`, `rules/df.cpp`,
       early-returns under a folding context. No `OpMaker` change: marking
       at the trace output keeps non-Kramers hashes untouched.
 
+### Task 4b: Kramers-aware braket orientation (DONE, a62e52365)
+
+Found by Task 6: see design §4 "Braket orientation is Kramers-aware".
+Tests: `kramers_block_fold` (orientation preference), eval leaf for a
+Hermitian C, dch energy term 0 reproduction in `kramers_symmetry_propagation`.
+
 ### Task 6: MPQC measurement (dch)
 
 Files: `mpqc4` `cc/sequant.cpp` (context option), runs in
