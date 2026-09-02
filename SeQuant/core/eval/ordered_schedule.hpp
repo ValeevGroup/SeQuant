@@ -688,22 +688,26 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
   // at. Without this, w20's 64060 is stored at root but accounted at {i_1}: the
   // life key mismatches and the root entry is evicted before its root consumer
   // reads it.
+  // consumer_loops[vid]: the loop colors a consumer reads vid inside. The
+  // consumer-aware home walk (home_scope here, lat_homes below, and the runtime
+  // close-store) all stop at the first enclosing loop the value is sliced on OR
+  // has a consumer inside. Computed ONCE, shared by all three (single truth).
+  std::unordered_map<std::size_t, std::unordered_set<std::size_t>> cons_loops;
+  for (ValueCell const& wc : rich.cells) {
+    auto const wit = vmap.find(wc.hash);
+    if (wit == vmap.end() || wit->second.leaf()) continue;
+    container::svector<ScopeEntry> const bsW =
+        scope_of(build_scope, wc.value_id);
+    auto const add = [&](node_t const& ch) {
+      auto const cv = hash_to_vid.find(ch->hash_value());
+      if (cv == hash_to_vid.end()) return;
+      auto& s = cons_loops[cv->second];
+      for (auto const& [ax, k] : bsW) s.insert(k.color());
+    };
+    add(wit->second.left());
+    add(wit->second.right());
+  }
   {
-    std::unordered_map<std::size_t, std::unordered_set<std::size_t>> cons_loops;
-    for (ValueCell const& wc : rich.cells) {
-      auto const wit = vmap.find(wc.hash);
-      if (wit == vmap.end() || wit->second.leaf()) continue;
-      container::svector<ScopeEntry> const bsW =
-          scope_of(build_scope, wc.value_id);
-      auto const add = [&](node_t const& ch) {
-        auto const cv = hash_to_vid.find(ch->hash_value());
-        if (cv == hash_to_vid.end()) return;
-        auto& s = cons_loops[cv->second];
-        for (auto const& [ax, k] : bsW) s.insert(k.color());
-      };
-      add(wit->second.left());
-      add(wit->second.right());
-    }
     for (std::size_t vid : *escapes) {
       auto const hit = home_scope->find(vid);
       if (hit == home_scope->end() || vid >= rich.cells.size()) continue;
@@ -809,20 +813,51 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
     LatScope build;
   };
   std::unordered_map<std::size_t, container::svector<LatCell>> lat_homes;
-  std::function<void(ScopeBlock const&, LatScope const&)> lwalk =
-      [&](ScopeBlock const& b, LatScope const& enc) -> void {
+  // Carry the AXIS alongside each (depth, slot, latitude) entry so the
+  // consumer-aware walk-out below can test `sliced_on` against the value's
+  // sliced_modes (an identity match, as home_scope does); the stored LatScope
+  // keeps only the (depth, slot, latitude) triple sig_of / the executor need.
+  using AxLat = std::pair<Index, LatEntry>;
+  std::function<void(ScopeBlock const&, container::svector<AxLat> const&)>
+      lwalk = [&](ScopeBlock const& b,
+                  container::svector<AxLat> const& enc) -> void {
     for (Step const& s : b.steps)
       if (auto const* child = std::get_if<ScopeBlock>(&s.value)) {
-        LatScope inner = enc;
-        inner.push_back({child->level.depth, child->level.loop_slot,
-                         child->level.latitude_ordinal});
+        container::svector<AxLat> inner = enc;
+        inner.push_back(
+            {child->axis, LatEntry{child->level.depth, child->level.loop_slot,
+                                   child->level.latitude_ordinal}});
         lwalk(*child, inner);
       }
     for (auto const& [vid, kind] : b.outputs) {
       (void)kind;
-      LatScope home = enc;
-      if (!home.empty()) home.pop_back();
-      lat_homes[vid].push_back({std::move(home), enc});
+      container::svector<AxLat> home = enc;
+      if (!home.empty()) home.pop_back();  // one level OUT of the escape
+      // Consumer-aware walk-out -- SAME criterion as home_scope and the runtime
+      // close-store (single truth): rise past an enclosing loop the value is
+      // invariant to AND has no consumer inside, so this cell's home matches
+      // the scope the value is actually stored at.
+      if (vid < rich.cells.size())
+        if (auto const vit = vmap.find(rich.cells[vid].hash);
+            vit != vmap.end()) {
+          auto const& sm = vit->second->sliced_modes();
+          auto const cit = cons_loops.find(vid);
+          while (!home.empty()) {
+            auto const& [ax, ent] = home.back();
+            bool const sliced_on =
+                std::find(sm.begin(), sm.end(), ax) != sm.end();
+            bool const cons_in =
+                cit != cons_loops.end() &&
+                cit->second.count(
+                    LoopKey{std::get<0>(ent), std::get<1>(ent)}.color());
+            if (sliced_on || cons_in) break;
+            home.pop_back();
+          }
+        }
+      LatScope home_le, build_le;
+      for (auto const& [ax, e] : home) home_le.push_back(e);
+      for (auto const& [ax, e] : enc) build_le.push_back(e);
+      lat_homes[vid].push_back({std::move(home_le), std::move(build_le)});
     }
   };
   lwalk(ordered.root, {});
