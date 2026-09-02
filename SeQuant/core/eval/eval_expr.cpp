@@ -335,12 +335,12 @@ std::string EvalExpr::label() const noexcept {
     return toUtf8(io::serialization::to_string(as_constant()));
   } else if (is_power()) {
     return toUtf8(io::serialization::to_string(as_power()));
+  } else if (op_type() == EvalOp::RealPart) {
+    return "Re";
+  } else if (op_type() == EvalOp::ImagPart) {
+    return "Im";
   } else if (is_variable()) {
     return toUtf8(as_variable().label());
-  } else if (expr_->is<RealPart>()) {
-    return "Re";
-  } else if (expr_->is<ImagPart>()) {
-    return "Im";
   } else {
     SEQUANT_ABORT("EvalExpr::label: unhandled expression type");
   }
@@ -776,16 +776,17 @@ namespace {
 // ignores it for these ops). Node hash = the inner child's salted hash
 // combined with the op, so Re(s), Im(s) and bare s occupy distinct slots
 // while the inner subtree itself stays on its own shared slot.
-EvalExprNode binarize_re_im(ExprPtr const& orig, ExprPtr const& inner,
-                            EvalOp op, IndexSet const& uncontract,
+EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
+                            IndexSet const& uncontract,
                             const BinarizationOptions& opts) {
   auto inner_node = impl::binarize(inner, uncontract, opts);
   auto h = inner_node->hash_value();
   if (auto salt = inner_node->canon_transform().structural_salt(); salt != 0)
     hash::combine(h, salt);
   hash::combine(h, static_cast<size_t>(op));
-  EvalExpr wrap{
-      op, ResultType::Scalar, orig->clone(), {}, CanonTransform{}, h, nullptr};
+  EvalExpr wrap{op,     ResultType::Scalar, detail::make_variable(),
+                {},     CanonTransform{},   h,
+                nullptr};
   EvalExprNode sentinel{EvalExpr{Constant{1}}};
   return EvalExprNode{std::move(wrap), std::move(inner_node),
                       std::move(sentinel)};
@@ -798,11 +799,11 @@ namespace impl {
 EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                       const BinarizationOptions& opts) {
   if (expr->is<RealPart>())
-    return binarize_re_im(expr, expr->as<RealPart>().inner(), EvalOp::RealPart,
+    return binarize_re_im(expr->as<RealPart>().inner(), EvalOp::RealPart,
                           uncontract, opts);
 
   if (expr->is<ImagPart>())
-    return binarize_re_im(expr, expr->as<ImagPart>().inner(), EvalOp::ImagPart,
+    return binarize_re_im(expr->as<ImagPart>().inner(), EvalOp::ImagPart,
                           uncontract, opts);
 
   if (expr->is<Constant>())  //

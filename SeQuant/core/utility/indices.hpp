@@ -4,6 +4,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
@@ -257,6 +258,10 @@ IndexGroups<Container> get_unique_indices(const Expr& expr) {
     return get_unique_indices<Container>(expr.as<Product>());
   } else if (expr.is<Power>()) {
     return get_unique_indices<Container>(expr.as<Power>());
+  } else if (expr.is<RealPart>() || expr.is<ImagPart>()) {
+    // scalar-valued Re/Im wrapper (the conjugate-pair fold emits these):
+    // every inner index is internal to the closed contraction
+    return {};
   } else {
     throw Exception(
         "Encountered unsupported expression type in get_unique_indices");
