@@ -154,6 +154,15 @@ namespace {
 /// elementwise-conjugation marker to a PURE {conj} bit (slots untouched;
 /// orientation deltas belong to the canonicalizer fold alone). Symm markers
 /// are value-redundant and dropped. Returns the accumulated transform.
+/// maps a folded leaf's canonical indices back to the as-written flavors
+/// (the Kramers flip is an involution; ordinals and order are kept)
+void kramers_flip_indices_as_written(EvalExpr::index_vector& ixs) {
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return;
+  for (auto& ix : ixs)
+    if (auto f = kramers_flipped(ix, *isr)) ix = std::move(*f);
+}
+
 /// the eval-leaf Kramers fold is an explicit context opt-in (see
 /// CanonicalizeOptions::fold_kramers_eval_leaves)
 bool fold_kramers_leaf() {
@@ -216,13 +225,17 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // array's outer modes are the plain slots PLUS the proto constituents,
     // deterministically ordered by NestedTensorIndices (the md list is the
     // same set in named-canonical order, which annots must not depend on)
-    // the fold decided the slot (hash) and the transform; the parent
-    // contracts by LABEL, so the stored spelling keeps the as-written flavors
-    if (kramers_fired) kramers_flip_slots(t0);
+    // T19 layer 2 contract: expr() keeps the FOLDED (up-row) spelling --
+    // what a leaf provider fetches -- while canon_indices() (the parent's
+    // contraction labels; TA matches annotations, not spellings) carries
+    // the as-written flavors in the same canonical order, so the served
+    // up block + {conj, phase} denotes the as-written value
     auto const slot_ixs = t0.const_indices() | ranges::to<index_vector>;
     auto const nti = tot_indices<index_vector>(slot_ixs);
     canon_indices_ =
         ranges::views::concat(nti.outer, nti.inner) | ranges::to<index_vector>;
+    if (kramers_fired) kramers_flip_indices_as_written(canon_indices_);
+    kramers_folded_ = kramers_fired;
     connectivity_ = std::move(md.graph);
   } else {
     // Single (protoindex-free) tensor leaf: normalize to the canonical
@@ -255,10 +268,11 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       t.conjugate();
     }
     hash_value_ = hash_terminal_tensor(t);
-    // the fold decided the slot (hash) and the transform; the parent
-    // contracts by LABEL, so the stored spelling keeps the as-written flavors
-    if (kramers_fired) kramers_flip_slots(t);
+    // T19 layer 2 contract (see the ToT branch): expr() keeps the folded
+    // spelling, canon_indices() the as-written labels
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
+    if (kramers_fired) kramers_flip_indices_as_written(canon_indices_);
+    kramers_folded_ = kramers_fired;
   }
 }
 
@@ -496,6 +510,13 @@ inline ExprPtr denoted_spelling(EvalExpr const& ee) {
   auto const tr = ee.canon_transform();
   if (tr.braket_swap) static_cast<AbstractTensor&>(t)._swap_bra_ket();
   if (tr.conj) t.conjugate();
+  // a Kramers-folded leaf (T19 layer 2) stores the up-row partner: flip the
+  // flavors back and undo the fold's marker toggle (its conj is already in
+  // tr.conj, so toggling again restores the as-written marker)
+  if (ee.kramers_folded()) {
+    kramers_flip_slots(static_cast<AbstractTensor&>(t));
+    t.conjugate();
+  }
   return ex<Tensor>(std::move(t));
 }
 

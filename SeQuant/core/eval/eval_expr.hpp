@@ -258,6 +258,13 @@ class EvalExpr {
   ///
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
+  /// @return whether this leaf's stored spelling is its Kramers-folded
+  ///         (up-row) partner of the as-written one (T19 layer 2): expr()
+  ///         is what a provider fetches, canon_indices() carries the
+  ///         as-written labels, and the {conj, phase} of the transform maps
+  ///         the served block to the as-written value
+  [[nodiscard]] bool kramers_folded() const noexcept { return kramers_folded_; }
+
   ///
   /// \return The canonicalization phase (+1 or -1).
   ///
@@ -401,6 +408,7 @@ class EvalExpr {
   index_vector canon_indices_;
 
   CanonTransform canon_transform_{};
+  bool kramers_folded_ = false;
 
   size_t hash_value_;
 

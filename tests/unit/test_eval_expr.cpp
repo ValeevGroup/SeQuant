@@ -1000,12 +1000,21 @@ TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
     REQUIRE(edd.canon_transform().phase == euu.canon_transform().phase);
     // distinct families stay distinct
     REQUIRE(eu.hash_value() != euu.hash_value());
-    // the leaf keeps its as-written flavors (the parent contracts by label);
-    // only the hash and the transform reflect the fold
-    // (for a Conjugate tensor the braket fold may swap bra and ket, so the
-    // label SET is the invariant, not the slot positions)
+    // T19 layer 2 contract: expr() is the FOLDED (up-row) spelling -- what a
+    // leaf provider fetches -- while canon_indices() carries the as-written
+    // labels (the parent contracts by label; TA matches annotations, not
+    // spellings), so the served up block + {conj, phase} denotes the
+    // as-written value. (For a Conjugate tensor the braket fold may swap
+    // bra and ket, so label SETS are the invariant, not slot positions.)
     auto const& ed_t = ed.expr()->as<Tensor>();
     REQUIRE(!ed_t.conjugated());
+    auto has_space = [&](auto rng, std::wstring_view sp) {
+      return ranges::any_of(
+          rng, [&](Index const& i) { return i.space() == isr->retrieve(sp); });
+    };
+    REQUIRE(has_space(ed_t.const_indices(), L"a↑"));
+    // the served spelling is the Kramers-canonical one: bra slot up
+    REQUIRE(ed_t.bra()[0].space() == isr->retrieve(L"a↑"));
     auto has_label = [&](std::wstring_view lbl) {
       return ranges::any_of(ed.canon_indices(), [&](Index const& i) {
         return i.full_label() == lbl;
