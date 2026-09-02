@@ -783,3 +783,22 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 - Certified after all changes: h2o CCk -0.13510773505222942 (fold on),
   dch PNS-MP2 -1.04169026886 (default, fold auto-off; within the known
   X2C thread scatter of the old reference).
+
+## Follow-up roadmap (2026-09-02)
+
+- **T18 -- Kramers-canonical configs only (symbolic layer): RESOLVED on the
+  Kramers round-2 branch** by a time-reversal-aware canonicalizer
+  (`KramersSymmetry` tensor attribute, registry partner spaces, network
+  fold under `CanonicalizeOptions::fold_kramers`; design and plan under
+  `doc/dev/{specs,plans}/2026-09-02-kramers-trs-canonicalizer-*.md`).
+  Measured on dch: energy conjugate-pair fold 36 -> 20 terms (floor);
+  residual blocks are externally anchored and unchanged.
+- **T19 -- MPQC serving-level aliasing.** Serve only the up-row C arrays;
+  down-row and conj-orientation leaves become CanonTransform views of the
+  same slot. Use TA's lazy `.conj()` inside the consuming expression rather
+  than materializing the transformed copy on retrieval; this also enables
+  the eval-leaf Kramers fold (`fold_kramers_eval_leaves`).
+- **T20 -- wrapped-summand CSV eval fix.** Route binarize_re_im's inner root
+  through the ResultExpr scalar-head treatment so a Re-wrapped ToT summand
+  reduces instead of materializing (14 GB defect); then flip the CSV
+  energy fold to default-on (MPQC_CCK_TRS_FOLD gate removed).
