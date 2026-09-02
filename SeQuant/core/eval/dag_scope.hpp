@@ -182,6 +182,29 @@ struct LoopColoredSliceSeam {
   std::unordered_map<std::size_t, container::svector<LoopId>>
       consumer_sliced_loops;
 
+  /// EXPLICIT per-occurrence INVARIANT facts: value hash -> (LoopId, CONSUMER
+  /// hash) pairs recording that this consumer's fetch of the value is
+  /// correctly UNSLICED on that loop (the value's occurrence in this consumer's
+  /// frame does not carry the loop's mode). Consulted by the completeness
+  /// guard: a fetch with no slice fact is a GAP only if it also has no
+  /// invariant fact -- a CSE-shared value that carries the mode in one frame
+  /// (sliced there) and not in another (invariant there) must not trip the
+  /// guard on the latter.
+  std::unordered_map<std::size_t,
+                     container::svector<std::pair<LoopId, std::size_t>>>
+      by_hash_consumer_invariant;
+
+  /// \return whether \p hash's fetch by \p consumer is recorded as correctly
+  /// UNSLICED on \p loop (an explicit invariant decision, not a gap).
+  [[nodiscard]] bool invariant_for(std::size_t hash, LoopId loop,
+                                   std::size_t consumer) const {
+    auto const it = by_hash_consumer_invariant.find(hash);
+    if (it == by_hash_consumer_invariant.end()) return false;
+    for (auto const& [lid, ch] : it->second)
+      if (lid == loop && ch == consumer) return true;
+    return false;
+  }
+
   /// \return whether \p consumer is produced sliced on \p loop (building an
   /// \p loop-batch), so its operands carrying that loop's mode must be sliced.
   [[nodiscard]] bool consumer_slices(std::size_t consumer, LoopId loop) const {

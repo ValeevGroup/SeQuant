@@ -389,10 +389,51 @@ void run_ordered_contracted_block(
                    kind == OutputKind::AccumulateScatter);
     node_t const& nd = resolve(vid);
     bool const scatter = kind == OutputKind::AccumulateScatter;
-    Index const mx = member_axis(nd, scatter);
+    Index mx = member_axis(nd, scatter);
+    // Per-LEVEL escape axis for a multi-level scatter. member_axis() is
+    // level-blind: it returns the SAME external axis at every level of a value
+    // escaping through nested loops (e.g. the i_2-inner / i_1-outer scatter of
+    // a doubles residual), so the outer level would scatter its inner-assembled
+    // partial (already full on the inner mode) into the INNER mode's slice --
+    // a block_extent mismatch. The identity-correct axis for THIS block is the
+    // carried position whose fusion loop_slot is this block's slot (the same
+    // per-position loop_slot compute_sliced_mode_assignment's value_slot reads
+    // off the value's occurrences). The block's canonical axis label cannot
+    // disambiguate (every i-loop is labeled i_1); only the loop identity can.
+    if (scatter) {
+      ValueCell const& c = rich.cells[vid];
+      std::wstring const bspace{block.axis.space().base_key()};
+      std::optional<std::size_t> per_level;
+      for (std::size_t p = 0; p < c.carried.size() && !per_level; ++p) {
+        if (std::wstring(c.carried[p].space().base_key()) != bspace) continue;
+        for (OccurrenceRec const& occ : c.occurrences)
+          if (p < occ.loop_slot.size() &&
+              occ.loop_slot[p] == block.level.loop_slot) {
+            per_level = p;
+            break;
+          }
+      }
+      if (per_level) mx = c.carried[*per_level];
+    }
     members.push_back({&nd, mx});
     if (scatter) {
       dm[k] = index_position(nd, mx);
+      if (char const* dh = std::getenv("SEQUANT_DUMP_DM");
+          dh && (nd->hash_value() % 100000u) == std::strtoul(dh, nullptr, 10))
+        std::cerr << "[dm] out h=" << (nd->hash_value() % 100000u)
+                  << " block(axis=" << toUtf8(block.axis.full_label())
+                  << " depth=" << block.level.depth
+                  << " slot=" << block.level.loop_slot
+                  << ") member_axis=" << toUtf8(mx.full_label())
+                  << " -> dm=" << (dm[k] ? std::to_string(*dm[k]) : "none")
+                  << " carried=[" <<
+            [&] {
+              std::string r;
+              for (auto const& x : nd->canon_indices())
+                r += toUtf8(x.full_label()) + " ";
+              return r;
+            }() << "]"
+                  << std::endl;
       SEQUANT_ASSERT(dm[k] &&
                      "evaluate_ordered_schedule: an AccumulateScatter output "
                      "does not carry its own escape axis on its result");
@@ -641,7 +682,38 @@ void run_ordered_contracted_block(
         // The full-extent zero destination is shaped by the node's own
         // (unsliced) index list; the backend realizes it from the spaces alone
         // -- no carrier, no Result-type reconciliation.
-        if (!dest[k]) dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
+        if (!dest[k]) {
+          dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
+          // A multi-level scatter's INNER destination lives inside the
+          // enclosing batches, so size it to the enclosing loops' CURRENT
+          // slices on the modes the value carries there (identity: the
+          // per-position fusion loop_slot equals the enclosing loop's slot).
+          // make_zeros sizes every mode at regime, which is right only for a
+          // root-level (single-level) scatter; an inner partial left at regime
+          // on an enclosing batched mode is then scattered by the OUTER level
+          // expecting that batch's extent -> block_extent mismatch (and, in a
+          // wet backend, an over-allocated destination). A value carrying no
+          // enclosing batched mode is untouched (byte-identical).
+          ValueCell const& c = rich.cells[vid];
+          for (auto const& lvl : ectx) {
+            std::wstring const lspace{lvl.axis.space().base_key()};
+            for (std::size_t p = 0; p < c.carried.size(); ++p) {
+              if (std::wstring(c.carried[p].space().base_key()) != lspace)
+                continue;
+              bool hit = false;
+              for (OccurrenceRec const& occ : c.occurrences)
+                if (p < occ.loop_slot.size() &&
+                    occ.loop_slot[p] == lvl.level.loop_slot) {
+                  hit = true;
+                  break;
+                }
+              if (!hit) continue;
+              dest[k] =
+                  dest[k]->slice_mode(p, lvl.range.first, lvl.range.second);
+              break;
+            }
+          }
+        }
         dest[k]->write_into_slice(*part, *dm[k], e_lo, e_hi);
       } else {
         // R4: an escape output is AccumulateSum or AccumulateScatter (a
@@ -785,7 +857,29 @@ void run_ordered_contracted_block(
                     << ") ectx.size=" << ectx.size()
                     << " home_ectx.size=" << home_ectx.size() << std::endl;
         }
-        home_cache->ensure_home_slot(value_of(vid), life, /*persistent=*/!vol);
+        // (the [esc-home] dump above prints before the classification; the
+        // per-batch decision is visible via SEQUANT_SCHED_DUMP's reuse flag)
+        // A value SLICED ON THE LOOP IT IS HOMED IN (its home coloring names
+        // the home cache's own loop) is a PER-BATCH cell: it must not survive
+        // that loop's per-batch reset(), else the next batch finds the
+        // previous batch's slice resident (resident_in_chain) and reuses it
+        // stale -- an i_1=[8,24) slice contracted against [24,40) partners
+        // (w8: TA einsum a[k]==b[k] / is_range_set_congruent, a Release
+        // deadlock). Persistence (survive reset() across CC iterations) is
+        // only for a value INVARIANT to its home loop -- the case the reuse
+        // path was written for.
+        auto const home_key = value_of(vid);
+        bool sliced_on_home_loop = false;
+        if (!home_ectx.empty()) {
+          auto const hc = home_ectx.back().level.key().color();
+          for (auto const& [m, c] : home_key.coloring.colors)
+            if (static_cast<std::size_t>(c) == hc) {
+              sliced_on_home_loop = true;
+              break;
+            }
+        }
+        bool const persistent = !vol && !sliced_on_home_loop;
+        home_cache->ensure_home_slot(home_key, life, persistent);
       } else {
         home_cache->ensure_home_slot(value_of(vid));
       }
@@ -927,6 +1021,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     SEQUANT_ASSERT(vid < rich.cells.size() && consumer_vid < rich.cells.size());
     loop_colored_slice_seam.by_hash_consumer[rich.cells[vid].hash].push_back(
         std::make_tuple(pos, loop, rich.cells[consumer_vid].hash));
+  }
+  // Project the explicit per-occurrence INVARIANT facts (value_id, loop,
+  // consumer_vid) onto hashes, so the completeness guard can tell a recorded
+  // "correctly unsliced here" from a genuine gap.
+  for (auto const& [vid, loop, consumer_vid] :
+       sliced_mode_assignment.occ_invariant) {
+    SEQUANT_ASSERT(vid < rich.cells.size() && consumer_vid < rich.cells.size());
+    loop_colored_slice_seam.by_hash_consumer_invariant[rich.cells[vid].hash]
+        .push_back({loop, rich.cells[consumer_vid].hash});
   }
   // Project the consumer-residency oracle (value_id -> its produced-sliced
   // loops) onto the consumer HASH the runtime sees (current_consumer()).

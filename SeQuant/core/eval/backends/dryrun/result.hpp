@@ -282,6 +282,19 @@ struct DryRunOps {
       }
       return cm->regime().extent(mix);
     }();
+    if (block_extent != block_hi - block_lo) {
+      std::cerr << "[scatter-mismatch] result idx=[";
+      for (auto const& x : idx) std::cerr << toUtf8(x.full_label()) << " ";
+      std::cerr << "] slice mode=" << mode << " (" << toUtf8(mix.full_label())
+                << ") block idx=[";
+      for (auto const& x : bidx) std::cerr << toUtf8(x.full_label()) << " ";
+      std::cerr << "] block_extent=" << block_extent << " expected slice=["
+                << block_lo << "," << block_hi << ")=" << (block_hi - block_lo)
+                << " regime_extent(mix)=" << cm->regime().extent(mix)
+                << " block_ov={";
+      for (auto const& [bp, ex] : bov) std::cerr << bp << ":" << ex << " ";
+      std::cerr << "}" << std::endl;
+    }
     SEQUANT_ASSERT(block_extent == block_hi - block_lo);
     // Merge the block's range into the assembled coverage, requiring
     // contiguity: a block that neither appends after nor prepends before the

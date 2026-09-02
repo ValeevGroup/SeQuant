@@ -835,7 +835,9 @@ class ResultTensorOfTensorTA final : public Result {
           // trim spaces
           while (!lbl.empty() && lbl.front() == ' ') lbl.erase(lbl.begin());
           while (!lbl.empty() && lbl.back() == ' ') lbl.pop_back();
-          s += (d ? "," : "") + lbl + ":" + std::to_string(tr.dim(d).extent());
+          s += (d ? "," : "") + lbl + ":" +
+               std::to_string(tr.dim(d).elements_range().first) + "+" +
+               std::to_string(tr.dim(d).extent());
           ++d;
           if (comma == std::string::npos) break;
           pos = comma + 1;

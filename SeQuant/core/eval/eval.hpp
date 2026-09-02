@@ -821,8 +821,16 @@ ResultPtr evaluate_impl(Node const& node,         //
           bool const consumer_sliced_here =
               cache.current_consumer() &&
               seam->consumer_slices(*cache.current_consumer(), *loop);
+          // An EXPLICIT invariant decision for this (value, loop, consumer) --
+          // the value's occurrence in this consumer's frame does not carry the
+          // loop's mode -- is a correct unsliced fetch, not a gap. Only a fetch
+          // with NEITHER a slice fact NOR an invariant fact is a real gap.
+          bool const invariant_here =
+              cache.current_consumer() &&
+              seam->invariant_for(nd->hash_value(), *loop,
+                                  *cache.current_consumer());
           if (!p_new && seam->participates(nd->hash_value(), *loop) &&
-              consumer_sliced_here) {
+              consumer_sliced_here && !invariant_here) {
             std::cerr << "[gap] node canon=[";
             for (auto const& ix : nd->canon_indices())
               std::cerr << toUtf8(ix.full_label()) << " ";
@@ -875,6 +883,13 @@ ResultPtr evaluate_impl(Node const& node,         //
                   << " crossed-axis="
                   << toUtf8(std::wstring(ctx[i].axis.space().base_key()))
                   << "@o" << ctx[i].level.latitude_ordinal
+                  << " slot=" << ctx[i].level.loop_slot
+                  << " depth=" << ctx[i].level.depth
+                  << " axis=" << toUtf8(ctx[i].axis.full_label())
+                  << " consumer="
+                  << (cache.current_consumer()
+                          ? *cache.current_consumer() % 100000u
+                          : 0u)
                   << " -> p_new=" << (p_new ? std::to_string(*p_new) : "none")
                   << " blk=[" << blk.first << "," << blk.second << ")"
                   << std::endl;

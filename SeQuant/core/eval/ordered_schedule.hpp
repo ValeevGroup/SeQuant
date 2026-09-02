@@ -2178,6 +2178,17 @@ struct SlicedModeAssignment {
   container::svector<std::tuple<std::size_t, std::size_t, LoopId, std::size_t>>
       occ_facts;
 
+  /// EXPLICIT per-occurrence INVARIANT facts: (value_id, LoopId, CONSUMER
+  /// value_id) triples recording that this consumer's fetch of the value is
+  /// correctly UNSLICED on this loop -- the consumer is building that loop's
+  /// batch, but the value's occurrence IN THIS CONSUMER'S FRAME does not carry
+  /// the loop's mode (a CSE-shared value can carry the mode in one frame and
+  /// not another). Recording the negative decision lets the runtime tell
+  /// "correctly invariant" apart from "no decision recorded" (a real gap), so
+  /// the completeness guard fires only on the latter.
+  container::svector<std::tuple<std::size_t, LoopId, std::size_t>>
+      occ_invariant;
+
   /// value_id -> the loops this value is PRODUCED sliced on (from its OWN
   /// production/`value_slot`, NOT any use-induced fact). This is the consumer-
   /// residency oracle for use-induced slicing: at a fetch, an operand carrying
@@ -2391,6 +2402,19 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           self_sliced = true;
           break;  // one W-position per enclosing loop
         }
+        {
+          static long const _kc = [] {
+            char const* dh = std::getenv("SEQUANT_DUMP_FALLBACK_C");
+            return dh ? std::strtol(dh, nullptr, 10) : -1L;
+          }();
+          if (_kc >= 0 && (rich.cells[oit->second].hash % 100000u) ==
+                              static_cast<unsigned>(_kc))
+            std::cerr << "[kloop] W=" << (rich.cells[w_vid].hash % 100000)
+                      << " C=" << (rich.cells[oit->second].hash % 100000)
+                      << " L(space=" << toUtf8(lvl.space)
+                      << " slot=" << lvl.loop_slot
+                      << ") self_sliced=" << self_sliced << "\n";
+        }
         if (self_sliced) continue;
         // Use-induced slicing (Layer 2): W is WHOLE-produced on this loop's
         // space (no own sliced slot), but THIS CONSUMER C is sliced on a mode M
@@ -2406,6 +2430,33 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         std::size_t const c_vid = oit->second;
         auto const& cvs = value_slot[c_vid];
         auto const& c_carried = rich.cells[c_vid].carried;
+        static long const _fb_target = [] {
+          char const* dh = std::getenv("SEQUANT_DUMP_FALLBACK");
+          return dh ? std::strtol(dh, nullptr, 10) : -1L;
+        }();
+        static long const _fb_ctarget = [] {
+          char const* dh = std::getenv("SEQUANT_DUMP_FALLBACK_C");
+          return dh ? std::strtol(dh, nullptr, 10) : -1L;
+        }();
+        bool const _fb =
+            (_fb_target >= 0 && (rich.cells[w_vid].hash % 100000u) ==
+                                    static_cast<unsigned>(_fb_target)) ||
+            (_fb_ctarget >= 0 && (rich.cells[c_vid].hash % 100000u) ==
+                                     static_cast<unsigned>(_fb_ctarget));
+        if (_fb) {
+          std::cerr << "[fallback] W=" << (rich.cells[w_vid].hash % 100000)
+                    << " C=" << (rich.cells[c_vid].hash % 100000)
+                    << " L(space=" << toUtf8(lvl.space)
+                    << " slot=" << lvl.loop_slot << " depth=" << lvl.depth
+                    << ") W.occ.carried=[";
+          for (auto const& x : occ.carried)
+            std::cerr << toUtf8(x.full_label()) << " ";
+          std::cerr << "] C.carried:vslot=[";
+          for (std::size_t cp = 0; cp < c_carried.size(); ++cp)
+            std::cerr << toUtf8(c_carried[cp].full_label()) << ":"
+                      << (cp < cvs.size() ? cvs[cp] : -99) << " ";
+          std::cerr << "]\n";
+        }
         for (std::size_t cp = 0; cp < c_carried.size() && cp < cvs.size();
              ++cp) {
           if (cvs[cp] != lvl.loop_slot) continue;
@@ -2420,7 +2471,21 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
               pos_a = pa;
               break;
             }
-          if (pos_a == occ.carried.size()) continue;  // W does not carry M
+          if (_fb)
+            std::cerr << "[fallback]   C sliced on M=" << toUtf8(M.full_label())
+                      << " -> W carries M? "
+                      << (pos_a == occ.carried.size()
+                              ? "NO (label mismatch across frames?)"
+                              : "yes pos=" + std::to_string(pos_a))
+                      << "\n";
+          if (pos_a == occ.carried.size()) {
+            // W does not carry C's sliced mode in THIS occurrence's frame: its
+            // fetch by C is correctly unsliced on this loop. Record that
+            // explicitly so the guard does not mistake it for a gap.
+            result.occ_invariant.push_back(
+                std::make_tuple(w_vid, id_of(lvl), oit->second));
+            continue;
+          }
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second));
           if (std::getenv("SEQUANT_DUMP_USEINDUCED"))

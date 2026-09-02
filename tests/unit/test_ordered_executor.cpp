@@ -1004,7 +1004,7 @@ TEST_CASE(
     "ordered executor: water-20 aux+occ residual dry-run walk completes "
     "without "
     "a vanished home value",
-    "[.][ordered][w20-auxocc-walk]") {
+    "[ordered][w20-auxocc-walk]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -1173,6 +1173,29 @@ TEST_CASE(
     std::cerr << "=== ORDERED SCHEDULE TREE ===\n";
     dump(ordered.root, 0);
     std::cerr << "=== END TREE ===\n";
+
+    // Children dump: SEQUANT_UT_CHILDREN=<hash%100000> prints the node's two
+    // operands (hash, carried, leaf?) straight from the forest.
+    if (char const* ch = std::getenv("SEQUANT_UT_CHILDREN")) {
+      auto const want = std::strtoul(ch, nullptr, 10);
+      for (auto const& [h, nd] : vmap_dump) {
+        if ((h % 100000u) != want || nd.leaf()) continue;
+        auto pr = [&](char const* tag, auto const& c) {
+          std::cerr << "[children] " << tag
+                    << " h=" << (c->hash_value() % 100000u)
+                    << " leaf=" << (int)c.leaf() << " carried=[";
+          for (auto const& x : c->canon_indices())
+            std::cerr << sequant::toUtf8(x.full_label()) << " ";
+          std::cerr << "] sliced=[";
+          for (auto const& x : c->sliced_modes())
+            std::cerr << sequant::toUtf8(x.full_label()) << " ";
+          std::cerr << "]\n";
+        };
+        std::cerr << "[children] parent h=" << (h % 100000u) << "\n";
+        pr("left ", nd.left());
+        pr("right", nd.right());
+      }
+    }
 
     // Residency-consistency check (the sanity invariant): a value homed
     // inside a loop over physical mode m, that CARRIES m, must be SLICED on m.
@@ -1356,8 +1379,11 @@ TEST_CASE(
   ordered_cache.set_array_ops(&aops);
 
   // THE reproducer: the dry-run walk of the aux+occ schedule must run to
-  // completion. It throws today ("read-from-home value vanished ... 98403") --
-  // the over-homing defect; fixing it makes this pass.
+  // completion. It exercises the full ordered-executor runtime on the real w20
+  // schedule AS-IS (no schedule rewrite): consumer-aware residency homing,
+  // non-decrementing reuse, per-occurrence use-induced slicing with explicit
+  // invariant facts, per-level scatter axis selection, and inner-scatter
+  // destination sizing. Any regression in those surfaces here as a throw.
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
