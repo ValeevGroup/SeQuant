@@ -3058,6 +3058,14 @@ TEST_CASE("conj_eval_cache_reuse", "[eval][conj-transform]") {
 
 TEST_CASE("re_im_evaluation", "[eval][re-im]") {
   using namespace sequant;
+  // pin the whole symbolic environment (canonicalizer registry is
+  // process-global, and the ambient context's field must be complex for the
+  // conj channels to be nontrivial) so this case is order-independent
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto sr_ctx = Context{get_default_context()};
+  sr_ctx.set(mbpt::make_min_sr_spaces());
+  auto ctx_resetter = set_scoped_default_context(sr_ctx);
   using C = std::complex<double>;
   const size_t nocc = 2, nvirt = 4;
   auto& world = TA::get_default_world();

@@ -1,10 +1,28 @@
 #include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 
 #include <SeQuant/core/expressions/constant.hpp>
 
 namespace sequant {
 
 ExprPtr RealPart::clone() const { return ex<RealPart>(inner_->clone()); }
+
+ExprPtr RealPart::canonicalize(CanonicalizeOptions opts) {
+  sequant::canonicalize(inner_, opts);
+  ExprPtr byproduct;
+  // hoist a REAL scalar prefactor: Re(c X) = c Re(X) for real c (a complex
+  // scalar mixes Re and Im and stays put; the real_part factory handles it)
+  if (inner_->is<Product>()) {
+    auto const& p = inner_->as<Product>();
+    auto const c = p.scalar();
+    if (c.imag() == 0 && !c.is_identity()) {
+      inner_ = detail::strip_scalar(p);
+      byproduct = ex<Constant>(c);
+    }
+  }
+  reset_hash_value();
+  return byproduct;
+}
 
 std::wstring RealPart::to_latex() const {
   return L"\\Re\\left[" + inner_->to_latex() + L"\\right]";
@@ -26,6 +44,22 @@ bool RealPart::static_equal(const Expr& that) const {
 
 bool RealPart::static_less_than(const Expr& that) const {
   return *inner_ < *static_cast<const RealPart&>(that).inner_;
+}
+
+ExprPtr ImagPart::canonicalize(CanonicalizeOptions opts) {
+  sequant::canonicalize(inner_, opts);
+  ExprPtr byproduct;
+  // hoist a REAL scalar prefactor: Im(c X) = c Im(X) for real c
+  if (inner_->is<Product>()) {
+    auto const& p = inner_->as<Product>();
+    auto const c = p.scalar();
+    if (c.imag() == 0 && !c.is_identity()) {
+      inner_ = detail::strip_scalar(p);
+      byproduct = ex<Constant>(c);
+    }
+  }
+  reset_hash_value();
+  return byproduct;
 }
 
 ExprPtr ImagPart::clone() const { return ex<ImagPart>(inner_->clone()); }
