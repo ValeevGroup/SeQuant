@@ -132,6 +132,21 @@ struct LoopColoredSliceSeam {
   /// \c SlicedModeAssignment::levels): a \c LoopId indexes this list.
   container::vector<DagScopeLevel> levels;
 
+  /// value hash -> loop colors (LoopKey::color) of the loops the value is
+  /// PRODUCED-SLICED on (its residency home coloring, home_mode_depth). A
+  /// fetch inside such a loop must NOT slice again (the stored form already
+  /// is the batch); a fetch inside any OTHER enclosing loop the value carries
+  /// a mode of is a use-induced slice decided by mode_of(). Empty when the
+  /// caller did not publish residency (legacy hops-prefix slicing applies).
+  std::unordered_map<std::size_t, container::svector<std::size_t>> home_colors;
+  [[nodiscard]] bool produced_sliced_on(std::size_t hash,
+                                        std::size_t color) const {
+    auto const it = home_colors.find(hash);
+    if (it == home_colors.end()) return false;
+    return std::find(it->second.begin(), it->second.end(), color) !=
+           it->second.end();
+  }
+
   /// value hash -> (this value's own sliced-mode PHYSICAL POSITION, slicing
   /// LoopId) pairs. The position is the mode's index in the value's own carried
   /// (canon_indices) order -- computed at schedule time IN THE VALUE'S OWN

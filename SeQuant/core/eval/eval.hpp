@@ -751,7 +751,18 @@ ResultPtr evaluate_impl(Node const& node,         //
         std::cerr << toUtf8(ix.full_label()) << " ";
       std::cerr << "]" << std::endl;
     }
-    for (std::size_t i = d - hops; i < d; ++i) {
+    // PER-LEVEL residency rule (2026-09-02): when the seam publishes home
+    // colors, visit EVERY enclosing level (not the hops-innermost prefix) and
+    // skip the ones the value is PRODUCED-SLICED on -- its stored form already
+    // is that batch. The prefix model assumed a value stored at this scope is
+    // sliced on all enclosing loops; a member produced whole on i but sliced
+    // on the innermost K (w20 56937) breaks that and was served whole on i.
+    auto const* const seam_hc = cache.loop_colored_slice_seam();
+    bool const per_level = seam_hc && !seam_hc->home_colors.empty();
+    for (std::size_t i = per_level ? 0 : d - hops; i < d; ++i) {
+      if (per_level && seam_hc->produced_sliced_on(nd->hash_value(),
+                                                   ctx[i].level.key().color()))
+        continue;  // already the batch on this loop
       auto const& axis = ctx[i].axis;
       auto const& blk = ctx[i].range;
       // Diagnostic-only exact match of this batch-context axis on nd (feeds the
@@ -790,6 +801,16 @@ ResultPtr evaluate_impl(Node const& node,         //
       if (ctx[i].exact_axis) {
         p_new = index_position(nd, *ctx[i].exact_axis);
       } else if (auto const* seam = cache.loop_colored_slice_seam()) {
+        // DIAG: a block level the seam does not enumerate skips slicing AND the
+        // completeness guard silently -- make that visible in the trace.
+        if (_home_diag && !seam->loop_of_level(ctx[i].level))
+          std::cerr << "  [HOME-SLICE] node#" << (nd->hash_value() % 100000u)
+                    << " level(depth=" << ctx[i].level.depth
+                    << " slot=" << ctx[i].level.loop_slot
+                    << " lat=" << ctx[i].level.latitude_ordinal
+                    << ") NOT ENUMERATED by the seam -> served whole, "
+                       "guard skipped"
+                    << std::endl;
         if (std::optional<LoopId> const loop =
                 seam->loop_of_level(ctx[i].level)) {
           // FRAME-CORRECT (2026-08-24 slot-slicing design): mode_of returns the
@@ -1114,6 +1135,25 @@ ResultPtr evaluate_impl(Node const& node,         //
                         << "#d" << lvl.level.depth << "s" << lvl.level.loop_slot
                         << "o" << lvl.level.latitude_ordinal << " ";
             std::cerr << "]" << std::endl;
+            // What IS stored for this hash anywhere up the chain (key
+            // mismatch vs genuine absence), and the probe's own coloring.
+            {
+              auto const* vctx = cache.value_coloring_ctx();
+              auto const vit = vctx ? vctx->find(f.node->hash_value())
+                                    : decltype(vctx->end()){};
+              std::cerr << "  [chain-dump] probe coloring={";
+              if (vctx && vit != vctx->end())
+                for (auto const& m : vit->second.ctx_modes)
+                  std::cerr
+                      << toUtf8(m.full_label()) << ":"
+                      << (vit->second.colors.count(m) ? vit->second.colors.at(m)
+                                                      : std::size_t(-1))
+                      << " ";
+              else
+                std::cerr << "(none: hash not in this scope's coloring ctx)";
+              std::cerr << "}" << std::endl;
+              cache.dump_entries_for_hash(f.node->hash_value());
+            }
             throw Exception(
                 "evaluate_impl: a read-from-home value vanished before use. "
                 "The value must be RESIDENT here but is not -- one of: (a) "
@@ -2076,7 +2116,9 @@ template <typename TreeNode, bool FHC, typename Members>
     typename CacheManager<TreeNode, FHC>::ValueColoringCtx const* coloring =
         nullptr,
     std::function<std::size_t(TreeNode const&)> member_life = nullptr,
-    std::unordered_set<std::size_t> const* escape_output_hashes = nullptr) {
+    std::unordered_set<std::size_t> const* escape_output_hashes = nullptr,
+    typename CacheManager<TreeNode, FHC>::CanonicalNodeCtx const*
+        canonical_nodes = nullptr) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -2273,6 +2315,7 @@ template <typename TreeNode, bool FHC, typename Members>
   // path).
   if (coloring) {
     scratch.set_value_coloring_ctx(coloring);
+    scratch.set_canonical_node_ctx(canonical_nodes);
     scratch.recolor_registered_entries();
   }
   // Read-from-home scratches statically pre-schedule every value and read

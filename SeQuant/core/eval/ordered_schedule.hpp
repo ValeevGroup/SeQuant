@@ -2474,7 +2474,14 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         bool recorded = false;
         for (std::size_t cp = 0; cp < c_carried.size() && cp < cvs.size();
              ++cp) {
-          if (cvs[cp] != lvl.loop_slot) continue;
+          // per-value slot OR any occurrence's own slot (per-occurrence loop
+          // instance; see the k-loop note above).
+          bool c_sliced = cvs[cp] == lvl.loop_slot;
+          for (auto const& cocc : rich.cells[c_vid].occurrences)
+            if (!c_sliced && cp < cocc.loop_slot.size() &&
+                cocc.loop_slot[cp] == lvl.loop_slot)
+              c_sliced = true;
+          if (!c_sliced) continue;
           if (std::wstring(c_carried[cp].space().base_key()) != lvl.space)
             continue;
           Index const& M = c_carried[cp];  // the mode C is sliced on here

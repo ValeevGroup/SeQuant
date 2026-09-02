@@ -449,11 +449,15 @@ void run_ordered_contracted_block(
   // (the scratch holds a non-owning pointer). Empty (nothing sliced) =>
   // byte-identical.
   typename Cache::ValueColoringCtx scope_ctx;
+  typename Cache::CanonicalNodeCtx scope_nodes;  // hash -> canonical node
   {
     auto add_v = [&](std::size_t vid) {
       if (vid >= rich.cells.size()) return;
       auto col = ordered_value_home_coloring(ordered, vid);
-      if (!col.empty()) scope_ctx.emplace(rich.cells[vid].hash, std::move(col));
+      if (!col.empty()) {
+        scope_ctx.emplace(rich.cells[vid].hash, std::move(col));
+        scope_nodes.emplace(rich.cells[vid].hash, resolve(vid));
+      }
     };
     auto add_with_ops = [&](std::size_t vid) {
       add_v(vid);
@@ -512,7 +516,7 @@ void run_ordered_contracted_block(
     return sequant::detail::make_batched_scratch(
         members, parent_cache, /*read_from_home=*/true,
         scope_ctx.empty() ? nullptr : &scope_ctx, member_life,
-        &escape_output_hashes);
+        &escape_output_hashes, scope_nodes.empty() ? nullptr : &scope_nodes);
   }();
   bs.cache.set_parent(&parent_cache);
 
@@ -609,7 +613,9 @@ void run_ordered_contracted_block(
         if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
           std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
                     << " batch=[" << e_lo << "," << e_hi
-                    << ") BUILD vid=" << build->value_id << std::endl;
+                    << ") BUILD vid=" << build->value_id
+                    << " hash=" << (rich.cells[build->value_id].hash % 100000u)
+                    << std::endl;
         // PILLAR 2: mark the use-site currently fetching values so
         // slice_to_use can disambiguate a shared symmetric value's free mode.
         // RAII-restored (CurrentConsumerGuard) so a throwing evaluate_impl
@@ -1038,6 +1044,21 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     SEQUANT_ASSERT(vid < rich.cells.size());
     loop_colored_slice_seam.consumer_sliced_loops.emplace(rich.cells[vid].hash,
                                                           loops);
+  }
+  // Residency home coloring per value hash: the loops a value is
+  // PRODUCED-SLICED on. slice_to_use uses it to decide PER LEVEL whether a
+  // fetch inside an enclosing loop must slice (use-induced) or must not
+  // (already the batch) -- the hops-prefix model conflated "stored in this
+  // scope" with "sliced on every enclosing loop" (w20: a member produced
+  // WHOLE on i but K-sliced, fetched by a sibling member inside the i loops
+  // with hops == 0 -> served whole on i against an i-sliced partner).
+  for (auto const& [vid, mode_depth] : ordered.home_mode_depth) {
+    SEQUANT_ASSERT(vid < rich.cells.size());
+    container::svector<std::size_t> colors;
+    for (auto const& [m, dc] : mode_depth)
+      colors.push_back(static_cast<std::size_t>(dc));
+    loop_colored_slice_seam.home_colors.emplace(rich.cells[vid].hash,
+                                                std::move(colors));
   }
   struct LoopColoredSliceSeamGuard {
     CacheManager<N, FHC>& c;

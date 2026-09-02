@@ -634,6 +634,8 @@ class CacheManager {
   /// node->coloring is 1:1.
   using ValueColoringCtx =
       std::unordered_map<std::size_t, eval::ValueIdColoring>;
+  /// value hash -> the value's canonical node (see recolor()).
+  using CanonicalNodeCtx = std::unordered_map<std::size_t, TreeNode>;
 
   /// A custom evaluator type. `evaluate()` consults the cache's custom
   /// evaluator (if set) before applying its standard recursive scheme to each
@@ -1066,6 +1068,7 @@ class CacheManager {
   /// access_at then walks parents with that already-built key. Null (default)
   /// => no re-color => byte-identical.
   ValueColoringCtx const* value_coloring_ctx_ = nullptr;
+  CanonicalNodeCtx const* canonical_node_ctx_ = nullptr;
 
   /// Pillar 1 / Task 7: re-color an EMPTY-coloring key from the local per-build
   /// coloring context, so a bare-node key (`evaluate_impl` passes nodes, which
@@ -1077,8 +1080,25 @@ class CacheManager {
   [[nodiscard]] cache_key_type recolor(cache_key_type const& key) const {
     if (value_coloring_ctx_ && key.coloring.empty()) {
       auto const it = value_coloring_ctx_->find(key.node->hash_value());
-      if (it != value_coloring_ctx_->end() && !it->second.empty())
+      if (it != value_coloring_ctx_->end() && !it->second.empty()) {
+        // FRAME-CANONICAL key (2026-09-02): a sliced value's key compares
+        // colored occurrence graphs, and the scope coloring is keyed by the
+        // VALUE-frame labels. A consumer tree's node for the same value may
+        // carry the same labels on PERMUTED positions (w20 10288:
+        // [i_2 i_1 K a_1<i_1,i_2>] in one consumer, [i_1 i_2 K a_2<i_1,i_2>]
+        // in another), so coloring THAT node by label swaps the loop colors
+        // and the key no longer folds -- the second consumer misses a value
+        // resident with lives to spare. Key every probe of a hash in this
+        // scope by the value's ONE canonical node (the cell's node) so all
+        // occurrences coincide; the stored data is frame-invariant
+        // (canonical positions are the same physical modes).
+        if (canonical_node_ctx_) {
+          auto const cit = canonical_node_ctx_->find(key.node->hash_value());
+          if (cit != canonical_node_ctx_->end())
+            return cache_key_type{cit->second, it->second};
+        }
         return cache_key_type{key.node, it->second};
+      }
     }
     return key;
   }
@@ -1194,6 +1214,15 @@ class CacheManager {
   /// Sets the local per-build coloring context (see value_coloring_ctx_). Pass
   /// nullptr to detach. Non-owning; the pointee must outlive the build. LOCAL
   /// (not inherited): the RAII guard is the ordered executor's.
+  /// See recolor(): value hash -> the value's canonical node, so every
+  /// occurrence's probe keys by one node regardless of its tree's labels.
+  void set_canonical_node_ctx(CanonicalNodeCtx const* ctx) noexcept {
+    canonical_node_ctx_ = ctx;
+  }
+  [[nodiscard]] CanonicalNodeCtx const* canonical_node_ctx() const noexcept {
+    return canonical_node_ctx_;
+  }
+
   void set_value_coloring_ctx(ValueColoringCtx const* ctx) noexcept {
     value_coloring_ctx_ = ctx;
   }
@@ -1841,6 +1870,27 @@ class CacheManager {
   ///         already resident at its home is read from there each batch (the
   ///         parent-chain fall-through), so it is neither registered nor
   ///         rebuilt in the per-batch scratch.
+  /// DIAGNOSTIC: print every entry in this cache and its ancestors whose node
+  /// hash equals @p hash (any coloring), with coloring, residency and life --
+  /// for a read-from-home miss, shows whether the value is stored under a
+  /// DIFFERENT key (coloring/scope mismatch) or genuinely absent.
+  void dump_entries_for_hash(std::size_t hash, std::size_t depth = 0) const {
+    for (auto const& [key, ent] : cache_map_) {
+      if (key.node->hash_value() != hash) continue;
+      std::cerr << "  [chain-dump] depth=" << depth
+                << " hash=" << (hash % 100000u) << " coloring={";
+      for (auto const& m : key.coloring.ctx_modes)
+        std::cerr << toUtf8(m.full_label()) << ":"
+                  << (key.coloring.colors.count(m) ? key.coloring.colors.at(m)
+                                                   : std::size_t(-1))
+                  << " ";
+      std::cerr << "} alive=" << (int)ent.alive()
+                << " life=" << ent.life_count() << "/" << ent.max_life_count()
+                << " persistent=" << (int)ent.persistent() << std::endl;
+    }
+    if (parent_) parent_->dump_entries_for_hash(hash, depth + 1);
+  }
+
   [[nodiscard]] bool resident_in_chain(
       cache_key_type const& key) const noexcept {
     if (auto iter =
