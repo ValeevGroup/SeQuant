@@ -58,8 +58,6 @@ void IndexBatchingStep::set_options(const nlohmann::json &options) {
         throw Exception("Unknown index selection strategy '" +
                         value.get<std::string>() + "'");
       }
-
-      max_batched_ = value.get<std::size_t>();
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
@@ -76,6 +74,7 @@ std::size_t IndexBatchingStep::process(std::string_view id_prefix,
   for (const ExportTreeData::Entry &current : input.entries) {
     if (!current.tree->is_tensor()) {
       output.entries.emplace_back(current);
+      continue;
     }
 
     const Tensor &result = current.tree->as_tensor();
