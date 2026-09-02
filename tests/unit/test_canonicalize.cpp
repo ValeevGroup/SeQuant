@@ -1218,3 +1218,131 @@ TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
     REQUIRE(ph);  // one down slot flipped -> -1
   }
 }
+
+TEST_CASE("kramers_network_fold", "[canonicalize][kramers]") {
+  // network Kramers (time-reversal) fold: a connected component of tensors
+  // joined by shared flavored dummies is ONE orientation unit (flipping a
+  // tensor flips every flavored slot, so every partner sharing a dummy
+  // flips too); components touching a named (external) index are pinned.
+  // A free component takes the orientation with fewer down-first leaves
+  // (tie: label/flavor fingerprint), every flipped tensor acquiring the
+  // conjugation marker and the phase (-1)^(#down slots) -- a closed
+  // component's phase is always +1 (each dummy is down in two slots).
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const auto& a_up = isr->retrieve(L"a↑");
+  const auto& a_dn = isr->retrieve(L"a↓");
+  const auto& i_up = isr->retrieve(L"i↑");
+  const auto& i_dn = isr->retrieve(L"i↓");
+  auto T = [](std::wstring_view lbl, std::vector<std::wstring_view> b,
+              std::vector<std::wstring_view> k) {
+    container::svector<Index> bv, kv;
+    for (auto l : b) bv.emplace_back(l);
+    for (auto l : k) kv.emplace_back(l);
+    return ex<Tensor>(lbl, bra(std::move(bv)), ket(std::move(kv)),
+                      Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                      ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+  };
+  auto leaves = [](const ExprPtr& e) {
+    std::vector<const Tensor*> out;
+    for (auto& f : e->as<Product>()) out.push_back(&f->as<Tensor>());
+    return out;
+  };
+  auto n_down_first = [&](const ExprPtr& e) {
+    int n = 0;
+    for (auto* t : leaves(e))
+      for (auto& idx : t->const_slots())
+        if (isr->kramers_partner(idx.space())) {
+          if (!isr->kramers_canonical(idx.space())) ++n;
+          break;
+        }
+    return n;
+  };
+  const auto fold = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::FoldKramers::Yes);
+
+  SECTION("free component: all-down spelling folds onto all-up + conj") {
+    auto up = T(L"g", {L"i↑_1", L"i↑_2"}, {L"a↑_1", L"a↑_2"}) *
+              T(L"t", {L"a↑_1", L"a↑_2"}, {L"i↑_1", L"i↑_2"});
+    auto dn = T(L"g", {L"i↓_1", L"i↓_2"}, {L"a↓_1", L"a↓_2"}) *
+              T(L"t", {L"a↓_1", L"a↓_2"}, {L"i↓_1", L"i↓_2"});
+    canonicalize(up, fold);
+    canonicalize(dn, fold);
+    REQUIRE(n_down_first(dn) == 0);
+    for (auto* t : leaves(dn)) REQUIRE(t->conjugated());
+    for (auto* t : leaves(up)) REQUIRE(!t->conjugated());
+    REQUIRE(dn->as<Product>().scalar() == up->as<Product>().scalar());
+    // apart from the markers the two are the same network
+    auto dn_unmarked = dn->clone();
+    for (auto& f : dn_unmarked->as<Product>()) f->as<Tensor>().conjugate();
+    REQUIRE(dn_unmarked == up);
+  }
+  SECTION("free component: mixed spelling picks the up-first orientation") {
+    auto up = T(L"g", {L"i↑_1", L"i↓_1"}, {L"a↑_1", L"a↓_1"}) *
+              T(L"t", {L"a↑_1", L"a↓_1"}, {L"i↑_1", L"i↓_1"});
+    auto dn = T(L"g", {L"i↓_1", L"i↑_1"}, {L"a↓_1", L"a↑_1"}) *
+              T(L"t", {L"a↓_1", L"a↑_1"}, {L"i↓_1", L"i↑_1"});
+    canonicalize(up, fold);
+    canonicalize(dn, fold);
+    REQUIRE(n_down_first(dn) == 0);
+    for (auto* t : leaves(dn)) REQUIRE(t->conjugated());
+    auto dn_unmarked = dn->clone();
+    for (auto& f : dn_unmarked->as<Product>()) f->as<Tensor>().conjugate();
+    REQUIRE(dn_unmarked == up);
+  }
+  SECTION("pinned component: externals fix the orientation") {
+    // a↑_1 and i↑_1 are external; f is down-first but shares a↓_2 with t,
+    // which holds the externals -> nothing may flip
+    auto e = T(L"f", {L"a↓_2"}, {L"a↑_1"}) * T(L"t", {L"i↑_1"}, {L"a↓_2"});
+    canonicalize(e, fold);
+    REQUIRE(n_down_first(e) == 1);
+    for (auto* t : leaves(e)) REQUIRE(!t->conjugated());
+  }
+  SECTION("default options do not fold") {
+    auto dn = T(L"g", {L"i↓_1", L"i↓_2"}, {L"a↓_1", L"a↓_2"}) *
+              T(L"t", {L"a↓_1", L"a↓_2"}, {L"i↓_1", L"i↓_2"});
+    canonicalize(dn);
+    REQUIRE(n_down_first(dn) == 2);
+    for (auto* t : leaves(dn)) REQUIRE(!t->conjugated());
+  }
+  SECTION("idempotent") {
+    auto dn = T(L"g", {L"i↓_1", L"i↑_1"}, {L"a↓_1", L"a↑_1"}) *
+              T(L"t", {L"a↓_1", L"a↑_1"}, {L"i↓_1", L"i↑_1"});
+    canonicalize(dn, fold);
+    auto once = dn->clone();
+    canonicalize(dn, fold);
+    REQUIRE(dn == once);
+  }
+  SECTION("canonicalize_slots: byproduct and hash") {
+    auto up = T(L"g", {L"i↑_1", L"i↑_2"}, {L"a↑_1", L"a↑_2"}) *
+              T(L"t", {L"a↑_1", L"a↑_2"}, {L"i↑_1", L"i↑_2"});
+    auto dn = T(L"g", {L"i↓_1", L"i↓_2"}, {L"a↓_1", L"a↓_2"}) *
+              T(L"t", {L"a↓_1", L"a↓_2"}, {L"i↓_1", L"i↓_2"});
+    // the value identity is dn = conj(up): compare against the MARKED up
+    for (auto& f : up->as<Product>()) f->as<Tensor>().conjugate();
+    TensorNetworkV3 tn_up(up->as<Product>().factors());
+    TensorNetworkV3 tn_dn(dn->as<Product>().factors());
+    auto md_up = tn_up.canonicalize_slots(
+        TensorNetworkV3::CanonicalizeSlotsOptions{.fold_kramers = true});
+    auto md_dn = tn_dn.canonicalize_slots(
+        TensorNetworkV3::CanonicalizeSlotsOptions{.fold_kramers = true});
+    REQUIRE(md_up.kramers_flipped_tensors.empty());
+    REQUIRE(md_dn.kramers_flipped_tensors.size() == 2);
+    REQUIRE(md_dn.phase == md_up.phase);
+    REQUIRE(md_up.hash_value() == md_dn.hash_value());
+    // and without the fold the two stay distinct
+    TensorNetworkV3 tn_dn2(dn->as<Product>().factors());
+    auto md_dn2 =
+        tn_dn2.canonicalize_slots(TensorNetworkV3::CanonicalizeSlotsOptions{});
+    REQUIRE(md_dn2.kramers_flipped_tensors.empty());
+    REQUIRE(md_up.hash_value() != md_dn2.hash_value());
+  }
+  (void)a_up;
+  (void)a_dn;
+  (void)i_up;
+  (void)i_dn;
+}

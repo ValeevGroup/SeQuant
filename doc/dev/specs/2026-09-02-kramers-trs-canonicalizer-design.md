@@ -86,29 +86,39 @@ up-row arrays.
 
 ### 4. Network fold (symbolic equations)
 
-Under a new `CanonicalizeOptions::fold_kramers` (mirrored in
-`CanonicalizeSlotsOptions` and `CreateGraphOptions`, forwarded into
-`canonicalize_graph` which today receives only `method` and
-`ignore_named_index_labels`):
+Under `CanonicalizeOptions::fold_kramers` (mirrored as
+`CanonicalizeSlotsOptions::fold_kramers`), `TensorNetworkV3::kramers_orient`
+runs as a PRE-PASS before the ordinary (flavor-aware) canonicalization:
 
-- index-vertex colours become flavor-blind for flavored spaces (mask the
-  spin qns bits in `VertexPainterImpl::operator()(const Index&)`), and the
-  tensor core colour is normalized over flavor the way bra/ket ranks are;
-  named (external) indices keep their identity — their flavor is fixed;
-- two spellings that differ by flipping the flavors of a connected component
-  of dummies now produce the same canonical graph;
-- after the canonical labeling, each connected component of flavored dummies
-  gets ONE orientation: components touching a named index are fixed by it;
-  free components take the orientation with fewer leaves whose first
-  flavored slot is down, tie-broken by the `(label, flavor bits)`
-  fingerprint — bit-identical to `kramers_rebase_term` so the two agree;
-- the byproduct is reported per tensor like `conjugated_tensors`:
-  `kramers_flipped_tensors` (ordinals) plus the accumulated `phase`;
-  `canonicalize` respells flipped tensors (partner-space indices, conj
-  marker toggled) and multiplies the phase into the scalar.
+- the TRS identity is a whole-tensor identity, so flipping a tensor flips
+  every flavored slot it has; every tensor sharing a flavored dummy (as a
+  slot or as a proto index) must flip with it. The orientation unit is
+  therefore a connected component of tensors joined by shared flavored
+  indices (union-find);
+- a component is pinned if it contains a named (external) index — their
+  flavor is fixed — or a tensor without a Kramers identity
+  (`kramers_foldable` false);
+- a free component is flipped iff the flipped spelling has fewer
+  down-first tensors, ties broken by the sorted `(label, per-slot flavor,
+  marker)` fingerprint, which is index-label-independent so both spellings
+  of a component land on the same orientation;
+- flipped tensors get partner-space indices (proto indices recursively)
+  and the conjugation marker; the phase `(-1)^(#down slots)` per flipped
+  tensor multiplies into the byproduct (a closed component's phase is +1:
+  each dummy is down in two slots);
+- `canonicalize_slots` reports the flipped input ordinals as
+  `kramers_flipped_tensors` next to `conjugated_tensors` and folds the
+  phase into `phase`.
 
-The conj colouring of the marker (#57) is kept: `C·C*` and `C*·C` stay
-distinct; a Kramers-flipped-and-marked tensor is coloured as marked.
+No flavor-blind graph colouring is needed (an earlier draft of this
+section proposed it): once the pre-pass has oriented every free component,
+the flavor-aware graph identifies the two spellings by construction, and
+the conj colouring of the marker (#57) keeps `C·C*` and `C*·C` distinct.
+Consequently the fold does not run inside `TensorBlockCanonicalizer` by
+default (`fold_kramers(false)`): applied per tensor inside a network it
+would flip one tensor's dummies but not its partner's. The eval leaf opts
+in and, after the fold has fixed the hash and the `{conj, phase}`
+transform, restores the as-written flavors (parents contract by label).
 
 ### 5. Scope and expectations
 

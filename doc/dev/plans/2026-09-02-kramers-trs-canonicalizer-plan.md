@@ -18,7 +18,7 @@ orientation, and a `kramers_flipped_tensors`+phase byproduct.
 
 ---
 
-### Task 1: `KramersSymmetry` attribute plumbing
+### Task 1: `KramersSymmetry` attribute plumbing (DONE)
 
 Files: `SeQuant/core/attr.hpp`, `SeQuant/core/expressions/tensor.hpp`,
 `SeQuant/core/expressions/abstract_tensor.hpp`,
@@ -39,7 +39,7 @@ Files: `SeQuant/core/attr.hpp`, `SeQuant/core/expressions/tensor.hpp`,
       serialization letter `T`/`N` as optional 4th field.
 - [ ] Run: pass. Commit `core: KramersSymmetry tensor attribute`.
 
-### Task 2: flavor partner in the registry
+### Task 2: flavor partner in the registry (DONE)
 
 Files: `SeQuant/core/index_space_registry.hpp/.cpp`, `SeQuant/core/index.hpp`,
 `SeQuant/domain/mbpt/convention.cpp`, `tests/unit/test_index.cpp` (new
@@ -55,7 +55,7 @@ TEST_CASE `kramers_partner`).
       protos mapped recursively, unflavored protos kept).
 - [ ] Run: pass. Commit `core: Kramers partner spaces in the registry`.
 
-### Task 3: single-tensor Kramers fold + eval leaf boundary
+### Task 3: single-tensor Kramers fold + eval leaf boundary (DONE)
 
 Files: `SeQuant/core/tensor_canonicalizer.hpp/.cpp`,
 `SeQuant/core/eval/eval_expr.cpp`, `tests/unit/test_canonicalize.cpp`
@@ -81,41 +81,30 @@ Files: `SeQuant/core/tensor_canonicalizer.hpp/.cpp`,
       the phase and set `conj` when the fold fired.
 - [ ] Run: pass. Commit `canonicalize: single-tensor Kramers fold; eval leaves share up-row slots`.
 
-### Task 4: network fold under `fold_kramers`
+### Task 4: network fold under `fold_kramers` (DONE — component pre-pass)
 
 Files: `SeQuant/core/options.hpp/.cpp`, `SeQuant/core/tensor_network/v3.hpp/.cpp`,
-`SeQuant/core/tensor_network/vertex_painter.cpp`,
-`SeQuant/core/expressions/expr_algorithms.cpp` (respell), tests in
-`tests/unit/test_tensor_network.cpp` (`SECTION("kramers fold")` in
-`tensor_network_shared`) and `tests/unit/test_canonicalize.cpp`
-(`kramers_network_fold`).
+`tests/unit/test_canonicalize.cpp` (`kramers_network_fold`).
 
-- [ ] Test 1: two products differing by flipping the flavors of an
-      internal component (e.g. `g{a↑_1;i↑_1;Κ_1} C{a↑_1;a↑_2<P>}` vs
-      `g{a↓_1;i↓_1;Κ_1} C{a↓_1;a↑_2<P>}` with the external `a↑_2<P>`):
-      under `fold_kramers` both `canonicalize_slots` runs give equal
-      `hash_value()`; exactly one reports both tensors in
-      `kramers_flipped_tensors` with phase per the rule.
-- [ ] Test 2: canonicalize() of the down-spelled product returns the
-      up-spelled product with conj markers and the phase in the scalar;
-      canonicalize is idempotent; a component touching a named down index
-      keeps its orientation.
-- [ ] Test 3: `tn_slots_determinism` (#57) still passes with
-      `fold_kramers` on: `C·C*` vs `C*·C` remain distinct.
-- [ ] Implement: `fold_kramers` in `CanonicalizeOptions` (+`copy_and_set`),
-      `CanonicalizeSlotsOptions` (`v3.hpp:342`), `CreateGraphOptions`
-      (`v3.hpp:406`), forwarded into `canonicalize_graph` (`v3.cpp:575`);
-      flavor-blind index colour (`vertex_painter.cpp:104-121`, mask the
-      partner-space distinction via the registry) and core-colour
-      normalization (`:29-32` pattern); component orientation after the
-      canonical labeling (union-find over flavored dummies, externals fix
-      their component, criterion = fewer down-first leaves then
-      fingerprint); byproduct `kramers_flipped_tensors` + `phase` next to
-      `conjugated_tensors` (`v3.hpp:296`, populated in the `v3.cpp:966-1012`
-      walk); respell in `canonicalize` where `conjugated_tensors` is applied.
-- [ ] Run: pass; run the full `[canonicalize]`, `[tensor_network]`,
-      `[conjugation]`, `[eval_expr]`, `[spinor]` tags. Commit
-      `canonicalize: network Kramers fold (flavor-blind colours, component orientation, conj+phase byproduct)`.
+The plan's original Test 1 (`C{a↓_1;a↑_2<P>}` with `a↑_2` external) was
+invalid under the whole-tensor identity: a tensor holding an external
+flavored index cannot flip at all. Replaced by:
+
+- [x] free component: `g{i↓_1,i↓_2;a↓_1,a↓_2} t{a↓_1,a↓_2;i↓_1,i↓_2}`
+      canonicalizes (fold on) onto the all-up spelling with both tensors
+      marked, scalar unchanged; mixed spelling picks the up-first
+      orientation.
+- [x] pinned component: `f{a↓_2;a↑_1} t{i↑_1;a↓_2}` (externals `a↑_1`,
+      `i↑_1`) does not flip.
+- [x] default options do not fold; the fold is idempotent.
+- [x] `canonicalize_slots({.fold_kramers = true})`: down spelling hashes
+      equal to the MARKED up spelling, reports both ordinals in
+      `kramers_flipped_tensors`; without the fold the hashes differ.
+- [x] Implemented `TensorNetworkV3::kramers_orient` (see design §4);
+      `CanonicalizeOptions::FoldKramers` (+`copy_and_set`),
+      `CanonicalizeSlotsOptions::fold_kramers`; no vertex-painter change.
+- [ ] Follow-up: serialization letter for `KramersSymmetry` (Task 1 left it
+      out; tests build tensors programmatically).
 
 ### Task 5: mbpt / emission integration
 
