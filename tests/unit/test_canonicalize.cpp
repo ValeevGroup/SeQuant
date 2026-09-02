@@ -1417,3 +1417,42 @@ TEST_CASE("kramers_network_fold", "[canonicalize][kramers]") {
   (void)i_up;
   (void)i_dn;
 }
+
+TEST_CASE("canonicalize_options_equality", "[canonicalize][kramers][context]") {
+  using namespace sequant;
+  // a scoped context that differs from the current one ONLY in a
+  // CanonicalizeOptions field must take effect (set_scoped_implicit_context
+  // skips contexts that compare equal, so equality must see every field)
+  auto base = get_default_context();
+  base.set(CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::FoldKramersEvalLeaves::No));
+  auto outer = set_scoped_default_context(base);
+  REQUIRE(CanonicalizeOptions::default_options().fold_kramers_eval_leaves ==
+          CanonicalizeOptions::FoldKramersEvalLeaves::No);
+  {
+    auto ctx = Context(get_default_context());
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizeOptions::FoldKramersEvalLeaves::Yes));
+    auto inner = set_scoped_default_context(ctx);
+    REQUIRE(CanonicalizeOptions::default_options().fold_kramers_eval_leaves ==
+            CanonicalizeOptions::FoldKramersEvalLeaves::Yes);
+  }
+  {
+    auto ctx = Context(get_default_context());
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizeOptions::FoldKramers::Yes));
+    auto inner = set_scoped_default_context(ctx);
+    REQUIRE(CanonicalizeOptions::default_options().fold_kramers ==
+            CanonicalizeOptions::FoldKramers::Yes);
+  }
+  {
+    auto ctx = Context(get_default_context());
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    auto inner = set_scoped_default_context(ctx);
+    REQUIRE(CanonicalizeOptions::default_options().ignore_named_index_labels ==
+            CanonicalizeOptions::IgnoreNamedIndexLabel::No);
+  }
+  REQUIRE(CanonicalizeOptions::default_options().fold_kramers_eval_leaves ==
+          CanonicalizeOptions::FoldKramersEvalLeaves::No);
+}

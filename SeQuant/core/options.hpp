@@ -91,9 +91,14 @@ struct CanonicalizeOptions {
   CanonicalizeOptions copy_and_set(FoldKramers) const;
   CanonicalizeOptions copy_and_set(FoldKramersEvalLeaves) const;
 
-  friend constexpr bool operator==(const CanonicalizeOptions& a,
-                                   const CanonicalizeOptions& b) {
-    return a.method == b.method;
+  /// every field participates: Context equality (and hence the scoped
+  /// context setter, which skips contexts that compare equal) relies on it
+  friend bool operator==(const CanonicalizeOptions& a,
+                         const CanonicalizeOptions& b) {
+    return a.method == b.method && a.named_indices == b.named_indices &&
+           a.ignore_named_index_labels == b.ignore_named_index_labels &&
+           a.fold_kramers == b.fold_kramers &&
+           a.fold_kramers_eval_leaves == b.fold_kramers_eval_leaves;
   }
 };
 
@@ -120,10 +125,10 @@ struct SimplifyOptions : public CanonicalizeOptions {
   static SimplifyOptions default_options();
   SimplifyOptions(CanonicalizeOptions opts);
 
-  friend constexpr bool operator==(const SimplifyOptions& a,
-                                   const SimplifyOptions& b) {
+  friend bool operator==(const SimplifyOptions& a, const SimplifyOptions& b) {
     return static_cast<const CanonicalizeOptions&>(a) ==
-           static_cast<const CanonicalizeOptions&>(b);
+               static_cast<const CanonicalizeOptions&>(b) &&
+           a.fold_conjugate_pairs == b.fold_conjugate_pairs;
   }
 };
 
