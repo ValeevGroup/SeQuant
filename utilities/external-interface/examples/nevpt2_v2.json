@@ -299,6 +299,61 @@
 					"min_index_id": 1
 				}
 			}
+		},
+		{
+			"id": "batched",
+			"kind": "batch_indices",
+			"inputs": "treeify",
+			"options": {
+				"selection_strategy": "largest"
+			}
+		},
+		{
+			"id": "batched_cse",
+			"kind": "cse",
+			"inputs": "batched"
+		},
+		{
+			"kind": "export",
+			"inputs": "batched_cse",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_v2_cse_batched.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				},
+				"relative_order": [
+					"res2_s1_singles",
+					"res1_s1"
+				],
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
 		}
 	]
 }
