@@ -1129,12 +1129,20 @@ TEST_CASE(
       }
       return s;
     };
+    auto home_str = [&](std::size_t vid) {
+      std::string s;
+      if (vid < rich.cells.size())
+        for (auto const& x : rich.cells[vid].home_modes)
+          s += sequant::toUtf8(x.full_label()) + " ";
+      return s;
+    };
     std::function<void(sequant::eval::ScopeBlock const&, int)> dump =
         [&](sequant::eval::ScopeBlock const& b, int d) {
           std::string ind(2 * d, ' ');
           if (d > 0)
-            std::cerr << ind << "BLOCK axis="
-                      << sequant::toUtf8(b.axis.space().base_key()) << " kind="
+            std::cerr << ind
+                      << "BLOCK axis=" << sequant::toUtf8(b.axis.full_label())
+                      << " kind="
                       << (b.kind == sequant::BatchModeType::External ? "EXT"
                                                                      : "CON")
                       << " depth=" << b.level.depth
@@ -1145,7 +1153,8 @@ TEST_CASE(
                     std::get_if<sequant::eval::BuildStep>(&s.value))
               std::cerr << ind << "  build vid=" << bs->value_id
                         << " h=" << (rich.cells[bs->value_id].hash % 100000)
-                        << " carried=[" << carried_str(bs->value_id) << "]\n";
+                        << " carried=[" << carried_str(bs->value_id)
+                        << "] sliced=[" << sliced_str(bs->value_id) << "]\n";
             else
               dump(std::get<sequant::eval::ScopeBlock>(s.value), d + 1);
           }
@@ -1158,11 +1167,172 @@ TEST_CASE(
                               ? "SUM"
                               : "?")
                       << " carried=[" << carried_str(ovid) << "] sliced=["
-                      << sliced_str(ovid) << "]\n";
+                      << sliced_str(ovid) << "] home=[" << home_str(ovid)
+                      << "]\n";
         };
     std::cerr << "=== ORDERED SCHEDULE TREE ===\n";
     dump(ordered.root, 0);
     std::cerr << "=== END TREE ===\n";
+
+    // Residency-consistency check (the sanity invariant): a value homed
+    // inside a loop over physical mode m, that CARRIES m, must be SLICED on m.
+    // A build is homed inside its enclosing block chain (incl. its own block);
+    // an escape output is homed ONE LEVEL OUT (its own block excluded). A
+    // carried-but-not-sliced mode means the value is placed inside a loop its
+    // own residency says it is invariant to -- the vanish/scatter bug.
+    std::vector<std::string> viol;
+    auto label_set = [&](std::size_t vid, bool sliced) {
+      std::vector<std::string> v;
+      if (sliced) {
+        auto const it = vmap_dump.find(rich.cells[vid].hash);
+        if (it != vmap_dump.end())
+          for (auto const& x : it->second->sliced_modes())
+            v.push_back(sequant::toUtf8(x.full_label()));
+      } else if (vid < rich.cells.size()) {
+        for (auto const& x : rich.cells[vid].carried)
+          v.push_back(sequant::toUtf8(x.full_label()));
+      }
+      return v;
+    };
+    auto check_value = [&](std::size_t vid,
+                           std::vector<std::string> const& encl,
+                           const char* what) {
+      auto const carried = label_set(vid, /*sliced=*/false);
+      auto const sliced = label_set(vid, /*sliced=*/true);
+      for (auto const& m : encl) {
+        bool const carries =
+            std::find(carried.begin(), carried.end(), m) != carried.end();
+        bool const is_sliced =
+            std::find(sliced.begin(), sliced.end(), m) != sliced.end();
+        if (carries && !is_sliced)
+          viol.push_back(std::string(what) + " vid=" + std::to_string(vid) +
+                         " h=" + std::to_string(rich.cells[vid].hash % 100000) +
+                         " carries " + m +
+                         " (enclosing loop) but is NOT sliced on it");
+      }
+    };
+    std::function<void(sequant::eval::ScopeBlock const&,
+                       std::vector<std::string>, int)>
+        chk = [&](sequant::eval::ScopeBlock const& b,
+                  std::vector<std::string> encl, int d) {
+          // outputs escape one level out -> checked against encl (b excluded)
+          for (auto const& [ovid, ok] : b.outputs)
+            check_value(ovid, encl, "OUT");
+          // builds & nested blocks live inside b -> b's own axis encloses them
+          // (the root scope, d==0, opens no loop)
+          if (d > 0) encl.push_back(sequant::toUtf8(b.axis.full_label()));
+          for (auto const& s : b.steps) {
+            if (auto const* bs =
+                    std::get_if<sequant::eval::BuildStep>(&s.value))
+              check_value(bs->value_id, encl, "build");
+            else
+              chk(std::get<sequant::eval::ScopeBlock>(s.value), encl, d + 1);
+          }
+        };
+    chk(ordered.root, {}, 0);
+    std::cerr << "=== RESIDENCY-CONSISTENCY: " << viol.size()
+              << " violation(s) ===\n";
+    for (auto const& v : viol) std::cerr << "  " << v << "\n";
+    std::cerr << "=== END RESIDENCY-CONSISTENCY ===\n";
+
+    // Occurrence trace: the meet stamps sliced=i_1 on a canonical node iff
+    // EVERY forest occurrence has i_1 in its node_modes = (i_1 opened at/above
+    // it) AND (it carries i_1). Record, per Κ-block member, each occurrence's
+    // (i1_open_above, carries_i1) so a cross-occurrence intersection that kills
+    // i_1 (some occurrence lacks the open) is visible directly.
+    {
+      std::unordered_map<std::size_t, std::string> tag;
+      for (auto const& [vid, t] :
+           std::initializer_list<std::pair<int, const char*>>{{43, "43"},
+                                                              {44, "44"},
+                                                              {80, "80"},
+                                                              {81, "81"},
+                                                              {106, "106"},
+                                                              {107, "107"},
+                                                              {45, "45=64060"},
+                                                              {82, "82"},
+                                                              {108, "108"},
+                                                              {192, "192"}})
+        tag[rich.cells[vid].hash] = t;
+      // per target hash: list of "(open,carry)" occurrence strings
+      std::unordered_map<std::size_t, std::vector<std::string>> occ;
+      using NodeT = std::remove_cvref_t<decltype(forest.front())>;
+      std::function<void(NodeT const&, bool)> ow = [&](NodeT const& n,
+                                                       bool i1_open_above) {
+        if (n.leaf()) return;
+        bool opens_i1 = false;
+        for (auto const& [ix, k] : n->batch_loops_opened_here())
+          if (sequant::toUtf8(ix.full_label()) == "i_1") opens_i1 = true;
+        bool const i1_here = i1_open_above || opens_i1;
+        if (auto it = tag.find(n->hash_value()); it != tag.end()) {
+          bool carries = false;
+          for (auto const& x : n->canon_indices())
+            if (sequant::toUtf8(x.full_label()) == "i_1") carries = true;
+          occ[n->hash_value()].push_back(
+              std::string("(open_above=") + (i1_open_above ? "Y" : "n") +
+              " opens_here=" + (opens_i1 ? "Y" : "n") +
+              " carries=" + (carries ? "Y" : "n") + " => node_modes has i_1: " +
+              ((i1_here && carries) ? "YES" : "no") + ")");
+        }
+        ow(n.left(), i1_here);
+        ow(n.right(), i1_here);
+      };
+      for (auto const& t : forest) ow(t, false);
+      std::cerr << "=== OCCURRENCE TRACE (i_1) ===\n";
+      for (auto const& [vid, t] :
+           std::initializer_list<std::pair<int, const char*>>{{43, "43"},
+                                                              {44, "44"},
+                                                              {80, "80"},
+                                                              {81, "81"},
+                                                              {106, "106"},
+                                                              {107, "107"},
+                                                              {45, "45=64060"},
+                                                              {82, "82"},
+                                                              {108, "108"},
+                                                              {192, "192"}}) {
+        auto const& list = occ[rich.cells[vid].hash];
+        std::cerr << "  " << t << " (h=" << (rich.cells[vid].hash % 100000)
+                  << "): " << list.size() << " occurrence(s)\n";
+        for (auto const& s : list) std::cerr << "      " << s << "\n";
+      }
+      std::cerr << "=== END OCCURRENCE TRACE ===\n";
+    }
+
+    // per_axis role + home_floor for the violators: confirm residency home.
+    {
+      auto role_name = [](sequant::eval::LoopRole r) -> const char* {
+        switch (r) {
+          case sequant::eval::LoopRole::LoopLocal:
+            return "Local";
+          case sequant::eval::LoopRole::Reduction:
+            return "Reduction";
+          case sequant::eval::LoopRole::LoopCarried:
+            return "Carried";
+          case sequant::eval::LoopRole::LoopInvariant:
+            return "Invariant";
+        }
+        return "?";
+      };
+      std::unordered_map<std::size_t, std::size_t> cell_of;
+      for (std::size_t i = 0; i < legality.cells.size(); ++i)
+        cell_of[legality.cells[i].hash] = i;
+      std::cerr << "=== PER_AXIS / HOME_FLOOR (violators + peers) ===\n";
+      for (int vid : {43, 44, 80, 81, 106, 107, 45, 108, 82, 192}) {
+        auto it = cell_of.find(rich.cells[vid].hash);
+        if (it == cell_of.end()) continue;
+        auto const& cl = legality.cells[it->second];
+        std::cerr << "  vid=" << vid << " h=" << (rich.cells[vid].hash % 100000)
+                  << " per_axis={";
+        for (auto const& ac : cl.per_axis)
+          std::cerr << sequant::toUtf8(ac.axis.full_label()) << ":"
+                    << role_name(ac.role) << " ";
+        std::cerr << "} home_floor={";
+        for (auto const& x : cl.home_floor)
+          std::cerr << sequant::toUtf8(x.full_label()) << " ";
+        std::cerr << "}\n";
+      }
+      std::cerr << "=== END PER_AXIS / HOME_FLOOR ===\n";
+    }
   }
 
   using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
