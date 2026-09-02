@@ -13,6 +13,7 @@
 #include <range/v3/view/iota.hpp>
 
 #include <algorithm>
+#include <optional>
 
 namespace sequant {
 
@@ -406,27 +407,175 @@ class ResultTensorTA final : public Result {
   using Result::id_t;
   using numeric_type = typename ArrayT::numeric_type;
 
+  /// A pending (lazy) transform of the shared array: phase, elementwise
+  /// conjugation, and a mode relabeling -- logical mode m of the view is
+  /// stored mode perm[m] (empty perm = identity). Applied inside the TA
+  /// expression that consumes the view (sum, plain contraction, dot, scale)
+  /// or materialized on demand (get<>(), operations that need the array).
+  struct View {
+    std::int8_t phase = 1;
+    bool conj = false;
+    container::svector<std::size_t> perm;
+    [[nodiscard]] bool trivial() const noexcept {
+      return phase == 1 && !conj && perm.empty();
+    }
+  };
+
   explicit ResultTensorTA(ArrayT arr) : Result{std::move(arr)} {}
+  ResultTensorTA(ArrayT arr, View view)
+      : Result{std::move(arr)}, view_{std::move(view)} {
+    if (view_->trivial()) view_.reset();
+  }
+
+  /// @return whether this result is a lazy view (pending transform) of a
+  ///         shared array; get<>() materializes it
+  [[nodiscard]] bool is_view() const noexcept { return view_.has_value(); }
 
  private:
   using this_type = ResultTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
 
+  mutable std::optional<View> view_;
+
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
+  }
+
+  static container::svector<std::string> tokens(std::string const& annot) {
+    container::svector<std::string> out;
+    std::string cur;
+    for (char c : annot) {
+      if (c == ',') {
+        out.push_back(cur);
+        cur.clear();
+      } else if (c != ' ')
+        cur += c;
+    }
+    if (!cur.empty() || !annot.empty()) out.push_back(cur);
+    return out;
+  }
+  static std::string join(container::svector<std::string> const& toks) {
+    std::string out;
+    for (std::size_t i = 0; i < toks.size(); ++i) {
+      if (i) out += ',';
+      out += toks[i];
+    }
+    return out;
+  }
+
+  /// annotation of the STORED array for a consumer annotation given in the
+  /// view's LOGICAL mode order
+  [[nodiscard]] std::string translate(std::string const& logical) const {
+    if (!view_ || view_->perm.empty()) return logical;
+    auto toks = tokens(logical);
+    SEQUANT_ASSERT(toks.size() == view_->perm.size());
+    container::svector<std::string> stored(toks.size());
+    for (std::size_t m = 0; m < toks.size(); ++m)
+      stored[view_->perm[m]] = toks[m];
+    return join(stored);
+  }
+
+  /// relabel `result(post) = this(pre)` composed onto the current view
+  [[nodiscard]] View composed_relabel(std::string const& pre,
+                                      std::string const& post) const {
+    View v = view_.value_or(View{});
+    auto pre_t = tokens(pre), post_t = tokens(post);
+    if (pre_t == post_t) return v;
+    SEQUANT_ASSERT(pre_t.size() == post_t.size());
+    container::svector<std::size_t> perm(post_t.size());
+    for (std::size_t k = 0; k < post_t.size(); ++k) {
+      auto it = std::find(pre_t.begin(), pre_t.end(), post_t[k]);
+      SEQUANT_ASSERT(it != pre_t.end());
+      auto const m = static_cast<std::size_t>(it - pre_t.begin());
+      perm[k] = v.perm.empty() ? m : v.perm[m];
+    }
+    bool identity = true;
+    for (std::size_t k = 0; k < perm.size(); ++k)
+      if (perm[k] != k) identity = false;
+    if (identity)
+      v.perm.clear();
+    else
+      v.perm = std::move(perm);
+    return v;
+  }
+
+  /// invokes @p f with the TA expression of this result under the consumer
+  /// annotation @p annot (logical order), the pending transform folded in
+  template <typename F>
+  decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    auto const& arr = raw<ArrayT>();
+    auto const a = translate(annot);
+    if (view_) {
+      auto const ph = view_->phase;
+      if constexpr (TA::detail::is_complex_v<numeric_type>) {
+        if (view_->conj && ph != 1) return f(numeric_type(ph) * arr(a).conj());
+        if (view_->conj) return f(arr(a).conj());
+      }
+      if (ph != 1) return f(numeric_type(ph) * arr(a));
+    }
+    return f(arr(a));
+  }
+
+  void ensure_materialized() const override {
+    if (!view_) return;
+    auto const rank = raw<ArrayT>().trange().rank();
+    auto const ann = TA::detail::dummy_annotation(rank);
+    ArrayT r;
+    with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    ArrayT::wait_for_lazy_cleanup(r.world());
+    log_ta_tensor_host_memory_use();
+    reset_value(std::move(r));
+    view_.reset();
+  }
+
+  /// a handle to the array in the view's logical layout: the stored array
+  /// itself if not a view, else a materialized temporary
+  [[nodiscard]] ArrayT logical_array() const {
+    if (!view_) return raw<ArrayT>();
+    auto const rank = raw<ArrayT>().trange().rank();
+    auto const ann = TA::detail::dummy_annotation(rank);
+    ArrayT r;
+    with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    ArrayT::wait_for_lazy_cleanup(r.world());
+    return r;
+  }
+
+  /// a plain contraction (every index in exactly two of {l, r, c}) is what
+  /// TA's expression engine `*` handles; anything else (Hadamard/hyper
+  /// indices, traces) needs einsum
+  static bool plain_contraction(std::string const& l, std::string const& r,
+                                std::string const& c) {
+    auto lt = tokens(l), rt = tokens(r), ct = tokens(c);
+    auto in = [](auto const& v, std::string const& x) {
+      return std::find(v.begin(), v.end(), x) != v.end();
+    };
+    auto distinct = [](auto v) {
+      std::sort(v.begin(), v.end());
+      return std::adjacent_find(v.begin(), v.end()) == v.end();
+    };
+    if (!distinct(lt) || !distinct(rt) || !distinct(ct)) return false;
+    for (auto const& x : lt)
+      if (in(rt, x) == in(ct, x)) return false;  // in all three or l only
+    for (auto const& x : rt)
+      if (in(lt, x) == in(ct, x)) return false;
+    for (auto const& x : ct)
+      if (!(in(lt, x) != in(rt, x))) return false;  // must be in exactly one
+    return true;
   }
 
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = static_cast<this_type const&>(other);
     auto const a = annot_wrap{annot};
 
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-    result(a.this_annot) =
-        get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
+    with_expr(a.lannot, [&](auto&& le) {
+      o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
+    });
     decltype(result)::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
@@ -434,11 +583,8 @@ class ResultTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
+    ensure_materialized();
     auto const& tr1 = get<ArrayT>().trange().dim(mode);
-    // slice_mode takes element bounds, but a tiled backend can only cut on tile
-    // boundaries; mode_batches() returns exactly such (tile-aligned, in-range)
-    // bounds. Assert the precondition so misuse is caught rather than silently
-    // producing an over- or under-sized slice (which would break batched sums).
     SEQUANT_ASSERT(elem_lo >= tr1.elements_range().first && elem_lo < elem_hi &&
                    elem_hi <= tr1.elements_range().second);
     std::size_t const tile_lo = tr1.element_to_tile(elem_lo);
@@ -456,6 +602,7 @@ class ResultTensorTA final : public Result {
 
   [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
   mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
+    ensure_materialized();
     return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
                                    target_batch_size);
   }
@@ -466,25 +613,27 @@ class ResultTensorTA final : public Result {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {
-      auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
 
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
-      result(a.this_annot) = scalar * result(a.lannot);
-
+      ArrayT result;
+      with_expr(a.lannot,
+                [&](auto&& le) { result(a.this_annot) = scalar * le; });
       decltype(result)::wait_for_lazy_cleanup(result.world());
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     }
 
     if (a.this_annot.empty()) {
-      // DOT product
       SEQUANT_ASSERT(other.is<this_type>());
-      numeric_type d =
-          TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
-      ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
-      ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
+      auto const& o = static_cast<this_type const&>(other);
+      numeric_type d{};
+      with_expr(a.lannot, [&](auto&& le) {
+        o.with_expr(a.rannot, [&](auto&& re) { d = le.dot(re).get(); });
+      });
+      ArrayT::wait_for_lazy_cleanup(raw<ArrayT>().world());
+      ArrayT::wait_for_lazy_cleanup(o.template raw<ArrayT>().world());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -493,29 +642,36 @@ class ResultTensorTA final : public Result {
     }
 
     if (!other.is<this_type>()) {
-      // potential T * ToT
       auto annot_swap = annot;
       std::swap(annot_swap[0], annot_swap[1]);
       return other.prod(*this, annot_swap, DeNestFlag);
     }
-
-    // confirmed: other.is<this_type>() is true
+    auto const& o = static_cast<this_type const&>(other);
 
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-
-    result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
-                        a.this_annot);
+    if (plain_contraction(a.lannot, a.rannot, a.this_annot)) {
+      // TA's expression engine takes the pending transforms lazily
+      with_expr(a.lannot, [&](auto&& le) {
+        o.with_expr(a.rannot,
+                    [&](auto&& re) { result(a.this_annot) = le * re; });
+      });
+    } else {
+      // einsum takes plain tensor expressions only: materialize views
+      auto const A = logical_array();
+      auto const B = o.logical_array();
+      result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
+    }
     decltype(result)::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
-    auto pre = get<ArrayT>();
-    TA::scale(pre, numeric_type(factor));
-    return eval_result<this_type>(std::move(pre));
+    View v = view_.value_or(View{});
+    v.phase = static_cast<std::int8_t>(v.phase * factor);
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -523,72 +679,59 @@ class ResultTensorTA final : public Result {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
-    detail::log_ta(pre_annot, " = ", post_annot, "\n");
+    detail::log_ta(pre_annot, " = ", post_annot, " (view)\n");
 
-    ArrayT result;
-    result(post_annot) = get<ArrayT>()(pre_annot);
-    ArrayT::wait_for_lazy_cleanup(result.world());
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    return eval_result<this_type>(raw<ArrayT>(),
+                                  composed_relabel(pre_annot, post_annot));
   }
 
   [[nodiscard]] ResultPtr apply_transform(
       CanonTransform t, std::array<std::any, 2> const& ann) const override {
-    // fused phase * conj * relabel in ONE TA expression (conj elided for a
-    // real numeric_type, exactly as adjoint() above)
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
-    detail::log_ta(post_annot, " = apply_transform(", pre_annot, ")\n");
-    ArrayT result;
-    if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      if (t.conj && t.phase != 1)
-        result(post_annot) =
-            numeric_type(t.phase) * get<ArrayT>()(pre_annot).conj();
-      else if (t.conj)
-        result(post_annot) = get<ArrayT>()(pre_annot).conj();
-      else if (t.phase != 1)
-        result(post_annot) = numeric_type(t.phase) * get<ArrayT>()(pre_annot);
-      else
-        result(post_annot) = get<ArrayT>()(pre_annot);
-    } else {
-      if (t.phase != 1)
-        result(post_annot) = numeric_type(t.phase) * get<ArrayT>()(pre_annot);
-      else
-        result(post_annot) = get<ArrayT>()(pre_annot);
-    }
-    ArrayT::wait_for_lazy_cleanup(result.world());
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    detail::log_ta(post_annot, " = apply_transform(", pre_annot, ") (view)\n");
+    View v = composed_relabel(pre_annot, post_annot);
+    v.phase = static_cast<std::int8_t>(v.phase * t.phase);
+    if constexpr (TA::detail::is_complex_v<numeric_type>)
+      if (t.conj) v.conj = !v.conj;
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
   }
 
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = static_cast<this_type const&>(other);
 
+    ensure_materialized();  // the target must be a real, unshared array
     auto& t = get<ArrayT>();
-    auto const& o = other.get<ArrayT>();
+    // a relabeled view has a different stored mode order: materialize it;
+    // a phase/conj-only view is consumed lazily
+    if (o.view_ && !o.view_->perm.empty()) o.ensure_materialized();
+    auto const& oarr = o.template raw<ArrayT>();
 
-    SEQUANT_ASSERT(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == oarr.trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
 
     detail::log_ta(ann, " += ", ann, "\n");
 
-    t(ann) += o(ann);
+    o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
     ArrayT::wait_for_lazy_cleanup(t.world());
     log_ta_tensor_host_memory_use();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
+    ensure_materialized();
     return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
+    ensure_materialized();
     return eval_result<this_type>(
         detail::particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
   }
 
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    auto& v = get<ArrayT>();
+    auto& v = raw<ArrayT>();
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
     return local_size;

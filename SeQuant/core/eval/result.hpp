@@ -384,6 +384,7 @@ class Result {
   template <typename T>
   [[nodiscard]] T& get() {
     SEQUANT_ASSERT(has_value());
+    ensure_materialized();
     return *std::any_cast<T>(&value_);
   }
 
@@ -394,6 +395,7 @@ class Result {
   template <typename T>
   [[nodiscard]] T const& get() const {
     SEQUANT_ASSERT(has_value());
+    ensure_materialized();
     return *std::any_cast<const T>(&value_);
   }
 
@@ -408,6 +410,26 @@ class Result {
 
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
+  /// @brief hook for lazily-transformed results: called by get<>() before
+  /// handing out the stored value, so a result that carries a pending
+  /// transform (see e.g. ResultTensorTA::is_view) materializes it here.
+  /// Default: no-op.
+  virtual void ensure_materialized() const {}
+
+  /// @return the stored value WITHOUT the materialization hook (for a
+  ///         backend's own lazy paths)
+  template <typename T>
+  [[nodiscard]] T const& raw() const {
+    SEQUANT_ASSERT(has_value());
+    return *std::any_cast<const T>(&value_);
+  }
+
+  /// replaces the stored value (used by ensure_materialized overrides)
+  template <typename T>
+  void reset_value(T&& arg) const {
+    value_ = std::make_any<std::decay_t<T>>(std::forward<T>(arg));
+  }
+
   template <typename T>
   [[nodiscard]] static id_t id_for_type() noexcept {
     static id_t id = next_id();
@@ -415,7 +437,7 @@ class Result {
   }
 
  private:
-  std::any value_;
+  mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;
 };
