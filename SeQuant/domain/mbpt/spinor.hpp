@@ -18,12 +18,11 @@
 //   Spin::alpha (== Spin::up)   = Kramers-up   (label suffix U+2191)
 //   Spin::beta  (== Spin::down) = Kramers-down (label suffix U+2193)
 //
-// `RealPart`/`ImagPart` are symbolic scalar Expr markers: they wrap a
-// closed (scalar-valued) contraction so the evaluator takes its real/
-// imaginary part. They are opaque to `simplify`/`canonicalize`, so the
-// wrapped sub-expression is never re-permuted. SeQuant's own evaluation
-// engine does not (yet) evaluate `Re()`/`Im()` of a tensor network — that
-// is a TODO; for now the marker is consumed by the MPQC evaluator.
+// `RealPart`/`ImagPart` (now the core wrappers, see
+// SeQuant/core/expressions/complex.hpp) mark a closed (scalar-valued)
+// contraction so the evaluator takes its real/imaginary part; the core eval
+// layer evaluates them natively (EvalOp::RealPart/ImagPart), and their
+// canonicalization normalizes the inner in place.
 //
 
 #ifndef SEQUANT_DOMAIN_MBPT_SPINOR_HPP
@@ -34,6 +33,8 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+
+#include <SeQuant/core/expressions/complex.hpp>
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
@@ -58,105 +59,11 @@ inline bool has_conj_suffix(std::wstring_view label) {
   return !label.empty() && label.back() == L'*';
 }
 
-/// @brief Symbolic real-part wrapper: `RealPart(E)` = `Re(E)` for a
-///        scalar-valued Expr `E`.
-class RealPart : public sequant::Expr {
- public:
-  RealPart() = delete;
-  RealPart(const RealPart&) = default;
-  RealPart(RealPart&&) = default;
-  ~RealPart() override = default;
-
-  /// @pre @p inner is non-null and scalar-valued
-  ///
-  /// We do not enforce `Expr::is_scalar()` because Tensor (an atom)
-  /// returns false unconditionally and a closed-contraction Product of
-  /// two Tensors inherits the same answer — the typical inner here.
-  explicit RealPart(ExprPtr inner) : inner_{std::move(inner)} {
-    SEQUANT_ASSERT(inner_);
-  }
-
-  const ExprPtr& inner() const { return inner_; }
-  bool is_scalar() const override { return true; }
-  type_id_type type_id() const override { return get_type_id<RealPart>(); }
-  ExprPtr clone() const override { return ex<RealPart>(inner_->clone()); }
-  void adjoint() override {}  // Re(E) is real, self-adjoint
-  std::wstring to_latex() const override {
-    return L"\\Re\\left[" + inner_->to_latex() + L"\\right]";
-  }
-
- private:
-  ExprPtr inner_;
-
-  hash_type memoizing_hash() const override {
-    auto compute = [this]() {
-      auto v = hash::value(*inner_);
-      hash::combine(v, std::size_t{0xC0FFEE01ull});
-      return v;
-    };
-    if (!hash_value_) hash_value_ = compute();
-    return *hash_value_;
-  }
-  bool static_equal(const Expr& that) const override {
-    return *inner_ == *static_cast<const RealPart&>(that).inner_;
-  }
-  bool static_less_than(const Expr& that) const override {
-    return *inner_ < *static_cast<const RealPart&>(that).inner_;
-  }
-};
-
-/// @brief Symbolic imaginary-part wrapper: `ImagPart(E)` = `Im(E)`.
-class ImagPart : public sequant::Expr {
- public:
-  ImagPart() = delete;
-  ImagPart(const ImagPart&) = default;
-  ImagPart(ImagPart&&) = default;
-  ~ImagPart() override = default;
-
-  /// @pre @p inner is non-null and scalar-valued (see RealPart for why
-  ///      we don't use `Expr::is_scalar()` as the precondition)
-  explicit ImagPart(ExprPtr inner) : inner_{std::move(inner)} {
-    SEQUANT_ASSERT(inner_);
-  }
-
-  const ExprPtr& inner() const { return inner_; }
-  bool is_scalar() const override { return true; }
-  type_id_type type_id() const override { return get_type_id<ImagPart>(); }
-  ExprPtr clone() const override { return ex<ImagPart>(inner_->clone()); }
-  void adjoint() override {}  // Im(E) is real, self-adjoint
-  std::wstring to_latex() const override {
-    return L"\\Im\\left[" + inner_->to_latex() + L"\\right]";
-  }
-
- private:
-  ExprPtr inner_;
-
-  hash_type memoizing_hash() const override {
-    auto compute = [this]() {
-      auto v = hash::value(*inner_);
-      hash::combine(v, std::size_t{0xC0FFEE02ull});
-      return v;
-    };
-    if (!hash_value_) hash_value_ = compute();
-    return *hash_value_;
-  }
-  bool static_equal(const Expr& that) const override {
-    return *inner_ == *static_cast<const ImagPart&>(that).inner_;
-  }
-  bool static_less_than(const Expr& that) const override {
-    return *inner_ < *static_cast<const ImagPart&>(that).inner_;
-  }
-};
-
-/// @brief Wraps @p expr as `Re(expr)`.
-[[nodiscard]] inline ExprPtr real_part(ExprPtr expr) {
-  return ex<RealPart>(std::move(expr));
-}
-
-/// @brief Wraps @p expr as `Im(expr)`.
-[[nodiscard]] inline ExprPtr imaginary_part(ExprPtr expr) {
-  return ex<ImagPart>(std::move(expr));
-}
+// RealPart/ImagPart wrappers: provided by the core
+// (SeQuant/core/expressions/complex.hpp) together with the real_part /
+// imaginary_part factories; the eval layer evaluates them natively
+// (EvalOp::RealPart/ImagPart). The duplicate domain-local definitions that
+// used to live here were retired when the core gained them.
 
 // =====================================================================
 // Kramers tracer.

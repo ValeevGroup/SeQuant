@@ -346,12 +346,12 @@ std::string EvalExpr::label() const noexcept {
     return toUtf8(io::serialization::to_string(as_constant()));
   } else if (is_power()) {
     return toUtf8(io::serialization::to_string(as_power()));
+  } else if (op_type() == EvalOp::RealPart) {
+    return "Re";
+  } else if (op_type() == EvalOp::ImagPart) {
+    return "Im";
   } else if (is_variable()) {
     return toUtf8(as_variable().label());
-  } else if (expr_->is<RealPart>()) {
-    return "Re";
-  } else if (expr_->is<ImagPart>()) {
-    return "Im";
   } else {
     SEQUANT_ABORT("EvalExpr::label: unhandled expression type");
   }
@@ -505,7 +505,9 @@ EvalExprNode binarize(Tensor const& t) {
   // marker, Conjugate-braket orientation) is normalized by the EvalExpr leaf
   // ctor into the canonical unmarked spelling plus a CanonTransform served
   // on retrieval -- a tensor leaf is always just a leaf.
-  return EvalExprNode{EvalExpr{t}};
+  EvalExpr leaf{t};
+  // whose spelling normalization produced a non-trivial retrieval transform.
+  return EvalExprNode{std::move(leaf)};
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
@@ -845,8 +847,9 @@ EvalExprNode binarize_re_im(ExprPtr const& orig, ExprPtr const& inner,
   if (auto salt = inner_node->canon_transform().structural_salt(); salt != 0)
     hash::combine(h, salt);
   hash::combine(h, static_cast<size_t>(op));
-  EvalExpr wrap{
-      op, ResultType::Scalar, orig->clone(), {}, CanonTransform{}, h, nullptr};
+  EvalExpr wrap{op,     ResultType::Scalar, detail::make_variable(),
+                {},     CanonTransform{},   h,
+                nullptr};
   EvalExprNode sentinel{EvalExpr{Constant{1}}};
   return EvalExprNode{std::move(wrap), std::move(inner_node),
                       std::move(sentinel)};
