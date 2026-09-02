@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
@@ -2444,4 +2445,40 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   auto without = to_latex(optimize(prod, opt));
   unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
   CHECK(with == without);
+}
+
+TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
+  using namespace sequant;
+  // A Re/Im wrapper must be transparent to optimization: the inner product
+  // gets contraction-order optimized (binarized) and re-wrapped. An opaque
+  // wrapper would come back untouched, leaving the inner to evaluate in
+  // naive left-to-right order.
+  auto const flat =
+      deserialize(L"g{i3,i4;a3,a4} * t{a1,a2;i3,i4} * t{a3,a4;i1,i2}");
+  REQUIRE(flat->as<Product>().size() == 3);
+
+  SECTION("RealPart") {
+    auto opt = optimize(ex<RealPart>(flat->clone()), /*reorder_sum=*/false);
+    REQUIRE(opt->is<RealPart>());
+    auto const& inner = opt->as<RealPart>().inner();
+    REQUIRE(inner->is<Product>());
+    CHECK(inner->as<Product>().size() == 2);  // binarized, not flat
+  }
+
+  SECTION("ImagPart") {
+    auto opt = optimize(ex<ImagPart>(flat->clone()), /*reorder_sum=*/false);
+    REQUIRE(opt->is<ImagPart>());
+    auto const& inner = opt->as<ImagPart>().inner();
+    REQUIRE(inner->is<Product>());
+    CHECK(inner->as<Product>().size() == 2);
+  }
+
+  SECTION("wrapped summand inside a Sum") {
+    auto sum = ex<Sum>(ExprPtrList{ex<RealPart>(flat->clone()), flat->clone()});
+    auto opt = optimize(sum, /*reorder_sum=*/false);
+    REQUIRE(opt->is<Sum>());
+    auto const& s0 = opt->as<Sum>().summand(0);
+    REQUIRE(s0->is<RealPart>());
+    CHECK(s0->as<RealPart>().inner()->as<Product>().size() == 2);
+  }
 }

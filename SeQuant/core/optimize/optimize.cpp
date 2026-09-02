@@ -3,6 +3,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
@@ -182,6 +183,19 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                       bool reorder, bool parallel_outer) {
+  // Re/Im wrappers are transparent to optimization: optimize the wrapped
+  // expression and re-wrap. Without this the wrapper is returned untouched
+  // and its inner product evaluates in naive left-to-right order (measured:
+  // 14.4 GB vs 1.7 GB peak RSS on a Kramers-CSV MP2 energy whose TRS fold
+  // wrapped three terms).
+  if (expr->is<RealPart>())
+    return ex<RealPart>(optimize_impl(expr->as<RealPart>().inner(), opts,
+                                      /*reorder=*/false,
+                                      /*parallel_outer=*/false));
+  if (expr->is<ImagPart>())
+    return ex<ImagPart>(optimize_impl(expr->as<ImagPart>().inner(), opts,
+                                      /*reorder=*/false,
+                                      /*parallel_outer=*/false));
   if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
     bool pure = ranges::all_of(prod, [](auto&& x) {
