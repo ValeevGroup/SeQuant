@@ -472,7 +472,8 @@ class Result {
     return *std::any_cast<const T>(&value_);
   }
 
-  /// replaces the stored value (used by ensure_materialized overrides)
+  /// replaces the stored value in place (an ensure_materialized override
+  /// swaps its materialized copy in for the shared source)
   template <typename T>
   void reset_value(T&& arg) const {
     value_ = std::make_any<std::decay_t<T>>(std::forward<T>(arg));
@@ -485,6 +486,10 @@ class Result {
   }
 
  private:
+  /// mutable so that a lazily transformed result can materialize itself on
+  /// first read through a const handle. NOT thread-safe: a Result is owned
+  /// by one evaluation (the serial evaluate() stack / cache); concurrent
+  /// get<>() on a pending view is not supported
   mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;
