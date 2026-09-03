@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         build_type : [ Release, Debug ]
-        os : [ macos-26, ubuntu-24.04 ]
+        os : [ macos-26, ubuntu-24.04, windows-2025 ]
         valgrind: [ true, false ]
         sanitize: [ true, false ]
         exclude:
@@ -28,6 +28,10 @@ jobs:
           - os: macos-26
             sanitize: true
           - os: macos-26
+            valgrind: true
+          - os: windows-2025
+            sanitize: true
+          - os: windows-2025
             valgrind: true
         include:
           - os: ubuntu-24.04
@@ -53,7 +57,7 @@ jobs:
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
         -DSEQUANT_TESTS=ON
-        -DSEQUANT_EVAL_TESTS=${{ !matrix.valgrind && !matrix.sanitize }}
+        -DSEQUANT_EVAL_TESTS=${{ !matrix.valgrind && !matrix.sanitize && !startswith(matrix.os, 'windows') }}
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
         -DCMAKE_CXX_STANDARD=20
         -DCMAKE_CXX_EXTENSIONS=OFF
@@ -99,6 +103,12 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2
+
+    - name: Setup MSVC
+      if: ${{ startswith(matrix.os, 'windows') }}
+      uses: TheMrMilchmann/setup-msvc-dev@v4
+      with:
+        arch: x64
 
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
