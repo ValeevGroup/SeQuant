@@ -359,15 +359,6 @@ void run_ordered_contracted_block(
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
-  // PILLAR 2 (current_consumer save/restore): RAII wrapper around
-  // Cache::set_current_consumer -- restores the prior consumer in its
-  // destructor so a throwing evaluate_impl cannot leak a stale consumer
-  // (see the two call sites below).
-  struct CurrentConsumerGuard {
-    Cache& c;
-    std::optional<std::size_t> prev;
-    ~CurrentConsumerGuard() { c.set_current_consumer(prev); }
-  };
   // Backend array-ops (zero destination + axis chunking), sourced from the
   // cache chain (the backend -- mpqc's registries or a test's leaf source --
   // wires the root cache). A batched block cannot be realized without it.
@@ -761,15 +752,8 @@ void run_ordered_contracted_block(
                     << ") BUILD vid=" << build->value_id
                     << " hash=" << (rich.cells[build->value_id].hash % 100000u)
                     << std::endl;
-        // PILLAR 2: mark the use-site currently fetching values so
-        // slice_to_use can disambiguate a shared symmetric value's free mode.
-        // RAII-restored (CurrentConsumerGuard) so a throwing evaluate_impl
-        // does not leak a stale consumer into the rest of this schedule.
         node_t const& build_node = resolve(build->value_id);
         {
-          CurrentConsumerGuard const consumer_guard{
-              bs.cache, bs.cache.current_consumer()};
-          bs.cache.set_current_consumer(build_node->hash_value());
           // Task 7 (Pillar 1): the block's per-scope coloring context is
           // already set on bs.cache (make_batched_scratch), so evaluate_impl's
           // bare-node self-store of V and its operand fetches are colored by
@@ -834,12 +818,6 @@ void run_ordered_contracted_block(
                       : kind == OutputKind::AccumulateScatter ? "SCATTER"
                                                               : "?")
                   << std::endl;
-      // PILLAR 2: this output is the use-site fetching (and slicing) shared
-      // values this iteration -- name it as the current consumer so
-      // slice_to_use binds a symmetric value's free mode to THIS output's own
-      // mode (design sec.2). RAII-restored (CurrentConsumerGuard) so a
-      // sibling output's fetch is not mis-attributed, including on a
-      // throwing evaluate_impl.
       node_t const& out_eval_node = resolve(vid);
       ResultPtr part;
       if (auto const it = escaped_build_results.find(vid);
@@ -883,9 +861,6 @@ void run_ordered_contracted_block(
             std::to_string(e_lo) + "," + std::to_string(e_hi) +
             ")) -- its BuildStep did not run this batch");
       } else {
-        CurrentConsumerGuard const consumer_guard{bs.cache,
-                                                  bs.cache.current_consumer()};
-        bs.cache.set_current_consumer(out_eval_node->hash_value());
         // Task 7 (Pillar 1): the block's per-scope coloring context is already
         // set on bs.cache, coloring this escape output's self-store + operands.
         // SP4 Task 4 fix1: the value's form visible at THIS block's own
@@ -1337,102 +1312,14 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
 
-  // Task 7 (sliced-value canonical-layout / loop-coloring design): self-wire
-  // the loop-colored slice seam slice_to_use (eval.hpp) reads to resolve a
-  // fetched value's physical slice mode off the loop-colored canonical layout
-  // -- the ordered path's slice-mode source (sec.4) -- HERE, not only at the
-  // eval::evaluate dispatch wrapper (scope_executor.hpp), which wires an
-  // equivalent seam before calling evaluate_ordered_schedule but is bypassed
-  // by any caller that invokes evaluate_ordered_schedule /
-  // evaluate_ordered_multiroot directly (this function is the shared core
-  // both delegate to) -- notably many unit tests exercising the ordered
-  // executor at this level. slice_to_use's ordered-path resolution requires
-  // this seam: with the old space-fallback removed from that arm, an unwired
-  // seam would silently leave a fetch unsliced rather than mis-slice it, so
-  // this is a correctness dependency, not an optional convenience. Built HERE
-  // from the SAME already-in-hand `ordered`/`rich`. The per-(value,sliced-
-  // mode)->loop facts come from compute_sliced_mode_assignment
-  // (value_id-keyed); projected here onto the value hash slice_to_use has in
-  // hand at a fetch. RAII-restored on every exit (incl. exceptions), so a
-  // caller's persistent, cross-iteration `cache` never keeps a stale pointer
-  // into a seam local to this call.
+  // Task 5 (explicit value cells, stage 2): the per-(value,sliced-mode)->loop
+  // facts (SlicedModeAssignment, value_id-keyed) feed the cell table builder
+  // below (make_cell_table_inputs) -- the runtime no longer projects them onto
+  // a hash-keyed seam for slice_to_use to consult; every ordered operand read
+  // now goes through the cell table's CellReadResolver instead (already-sliced
+  // cells, no runtime slice inference).
   SlicedModeAssignment const sliced_mode_assignment =
       compute_sliced_mode_assignment(ordered, rich);
-  LoopColoredSliceSeam loop_colored_slice_seam;
-  loop_colored_slice_seam.levels = sliced_mode_assignment.levels;
-  loop_colored_slice_seam.by_hash.reserve(rich.cells.size());
-  for (ValueCell const& c : rich.cells) {
-    auto const it = sliced_mode_assignment.by_value.find(c.value_id);
-    if (it == sliced_mode_assignment.by_value.end()) continue;
-    // Project each (own sliced-mode Index, LoopId) to a PHYSICAL POSITION in
-    // this value's own carried (first-occurrence) frame -- so the runtime uses
-    // the position directly, never re-matching the Index against a
-    // differently-framed fetched node. A value whose occurrences physically
-    // diverge is resolved per-occurrence via by_hash_consumer (below); this
-    // per-value map is correct for the non-divergent majority.
-    container::svector<std::pair<std::size_t, LoopId>> pos_pairs;
-    for (auto const& [ix, lid] : it->second) {
-      auto const pit = std::find(c.carried.begin(), c.carried.end(), ix);
-      if (pit != c.carried.end())
-        pos_pairs.push_back(
-            {static_cast<std::size_t>(pit - c.carried.begin()), lid});
-    }
-    if (!pos_pairs.empty())
-      loop_colored_slice_seam.by_hash.emplace(c.hash, std::move(pos_pairs));
-  }
-  // PILLAR 2: project the per-occurrence (value, mode, loop, consumer) facts
-  // onto the hash-keyed consumer-disambiguation map. value_id -> hash for both
-  // the fetched value and the consumer use-site: at runtime slice_to_use has
-  // the fetched node's hash (nd->hash_value()) and the current consumer's node
-  // hash (CacheManager::current_consumer, set by this executor around each
-  // evaluate_impl -- rich.cells[consumer_vid].hash IS that same node's hash for
-  // the w8 case, where the consumer use-site is itself the evaluated output).
-  // Only values with >1 mode under one loop ever consult this at runtime, so
-  // recording every fact (single-mode values included) is harmless.
-  for (auto const& [vid, pos, loop, consumer_vid] :
-       sliced_mode_assignment.occ_facts) {
-    SEQUANT_ASSERT(vid < rich.cells.size() && consumer_vid < rich.cells.size());
-    loop_colored_slice_seam.by_hash_consumer[rich.cells[vid].hash].push_back(
-        std::make_tuple(pos, loop, rich.cells[consumer_vid].hash));
-  }
-  // Project the explicit per-occurrence INVARIANT facts (value_id, loop,
-  // consumer_vid) onto hashes, so the completeness guard can tell a recorded
-  // "correctly unsliced here" from a genuine gap.
-  for (auto const& [vid, loop, consumer_vid] :
-       sliced_mode_assignment.occ_invariant) {
-    SEQUANT_ASSERT(vid < rich.cells.size() && consumer_vid < rich.cells.size());
-    loop_colored_slice_seam.by_hash_consumer_invariant[rich.cells[vid].hash]
-        .push_back({loop, rich.cells[consumer_vid].hash});
-  }
-  // Project the consumer-residency oracle (value_id -> its produced-sliced
-  // loops) onto the consumer HASH the runtime sees (current_consumer()).
-  for (auto const& [vid, loops] :
-       sliced_mode_assignment.consumer_sliced_loops) {
-    SEQUANT_ASSERT(vid < rich.cells.size());
-    loop_colored_slice_seam.consumer_sliced_loops.emplace(rich.cells[vid].hash,
-                                                          loops);
-  }
-  // Residency home coloring per value hash: the loops a value is
-  // PRODUCED-SLICED on. slice_to_use uses it to decide PER LEVEL whether a
-  // fetch inside an enclosing loop must slice (use-induced) or must not
-  // (already the batch) -- the hops-prefix model conflated "stored in this
-  // scope" with "sliced on every enclosing loop" (w20: a member produced
-  // WHOLE on i but K-sliced, fetched by a sibling member inside the i loops
-  // with hops == 0 -> served whole on i against an i-sliced partner).
-  for (auto const& [vid, mode_depth] : ordered.home_mode_depth) {
-    SEQUANT_ASSERT(vid < rich.cells.size());
-    container::svector<std::size_t> colors;
-    for (auto const& [m, dc] : mode_depth)
-      colors.push_back(static_cast<std::size_t>(dc));
-    loop_colored_slice_seam.home_colors.emplace(rich.cells[vid].hash,
-                                                std::move(colors));
-  }
-  struct LoopColoredSliceSeamGuard {
-    CacheManager<N, FHC>& c;
-    LoopColoredSliceSeam const* prev;
-    ~LoopColoredSliceSeamGuard() { c.set_loop_colored_slice_seam(prev); }
-  } loop_colored_slice_seam_guard{cache, cache.loop_colored_slice_seam()};
-  cache.set_loop_colored_slice_seam(&loop_colored_slice_seam);
 
   // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
   // to the forest node evaluate_impl builds.
@@ -1763,17 +1650,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       // operands are unsliced (sliced values live in sub-scopes and escape
       // unsliced), so node-id == value-id here -- no coloring context is
       // needed.
-      // Name this root build as the current consumer while it fetches its
-      // operands (mirrors the block path's CurrentConsumerGuard): a root
-      // BuildStep's operand reads were otherwise anonymous (current_consumer
-      // unset), which both hid them from diagnostics and left slice_to_use
-      // without a consumer identity for a symmetric operand at root. RAII-
-      // restored so a throwing evaluate_impl cannot leak a stale consumer.
       {
-        auto const prev_consumer = cache.current_consumer();
-        cache.set_current_consumer(it->second->hash_value());
         // SP4 Task 4: a root-scope BuildStep is a Build cell at the EMPTY
-        // scope (CellScope{} -- the root, never inside a batch loop).
+        // scope (CellScope{} -- the root, never inside a batch loop). The
+        // resolver carries this cell as the consumer for the operand reads
+        // inside evaluate_impl (Task 5: no cache-level consumer identity).
         auto const root_cell = registry.build_cell_at(vid, CellScope{});
         if (!root_cell)
           throw Exception(
@@ -1783,7 +1664,6 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         ResultPtr const r =
             evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
         registry.set(*root_cell, r);
-        cache.set_current_consumer(prev_consumer);
       }
       built[vid] = 1;  // R3: this root-scope value is produced.
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {

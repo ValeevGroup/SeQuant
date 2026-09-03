@@ -1004,52 +1004,15 @@ class CacheManager {
   /// pointee must outlive this cache.
   BackendArrayOps const* array_ops_ = nullptr;
 
-  /// Non-owning loop-colored slice seam (see \c LoopColoredSliceSeam,
-  /// dag_scope.hpp): the per-value (hash-keyed) sliced-mode -> loop assignment
-  /// \c slice_to_use (eval.hpp) reads to resolve a fetched value's physical
-  /// slice mode off the loop-colored canonical layout -- the ordered path's
-  /// sole slice-mode source. Populated by the ordered executor's shared core
-  /// (\c run_ordered_schedule_pre_results) from the \c OrderedSchedule's
-  /// \c compute_sliced_mode_assignment, and inherited from \c parent_ (only
-  /// the root cache is wired in practice), mirroring \c array_ops_ / \c
-  /// placement_router_. Null (default) => no seam wired => the ordered arm
-  /// leaves the fetch unsliced (byte-identical). Non-owning; the pointee
-  /// must outlive this cache.
-  LoopColoredSliceSeam const* loop_colored_slice_seam_ = nullptr;
-
   /// Explicit value cells (SP4 Task 4): the table-driven operand-read
   /// resolver \c evaluate_impl consults ahead of the router/access_at probes
   /// when set (see \c CellReadResolver, cell_registry.hpp). Inherited from
   /// \c parent_ (only the top-level cache of a table-driven run is wired in
-  /// practice), mirroring \c array_ops_ / \c loop_colored_slice_seam_. Null
-  /// (default) => no resolver wired => evaluate_impl falls through to the
-  /// legacy seam/access_at probes unchanged (the forest path, in this stage).
-  /// Non-owning; the pointee must outlive this cache.
+  /// practice), mirroring \c array_ops_. Null (default) => no resolver wired
+  /// => evaluate_impl falls through to the legacy access_at probes unchanged
+  /// (the forest path, in this stage). Non-owning; the pointee must outlive
+  /// this cache.
   eval::CellReadResolver* cell_read_resolver_ = nullptr;
-
-  /// The CONSUMER identity (an eval-node hash) currently fetching values under
-  /// this cache (sliced-value canonical-layout / loop-coloring design, PILLAR
-  /// 2). The ordered executor sets this to the hash of the member-root / output
-  /// it is about to \c evaluate_impl (ordered_executor.hpp), bracketing each
-  /// such call, so \c slice_to_use (eval.hpp) can disambiguate WHICH use-site
-  /// is fetching a shared symmetric value -- the datum \c
-  /// LoopColoredSliceSeam::by_hash_consumer needs to bind each occurrence to
-  /// its own free mode. Nullopt (default) => no consumer tracked => the seam
-  /// falls back to its consumer-blind first-match (byte-identical). Inherited
-  /// from \c parent_ so a per-block child scratch sees the enclosing consumer.
-  std::optional<std::size_t> current_consumer_{};
-
-  /// TEST-ONLY observer of every slice_to_use decision (sliced-value
-  /// canonical-layout / loop-coloring design, PILLAR 2): invoked -- only when
-  /// set -- with (fetched value hash, current consumer, resolved physical slice
-  /// position, loop level ordinal) just before the slice is applied. Lets a
-  /// unit test witness that two consumers of one symmetric shared value slice
-  /// DIFFERENT physical modes (the w8 fix), which is otherwise internal to the
-  /// per-batch fetch and invisible in the final accumulated result. Unset
-  /// (default) => zero cost, byte-identical. Inherited from \c parent_ so the
-  /// per-block scratch reports through the root cache's observer.
-  std::function<void(std::size_t, std::optional<std::size_t>, std::size_t, int)>
-      slice_observer_{};
 
   /// Running high-water mark (bytes) of the eval engine's live working set,
   /// updated by note_working_set() and cleared by reset(). Held here rather
@@ -1342,22 +1305,6 @@ class CacheManager {
     return array_ops_ ? array_ops_ : parent_ ? parent_->array_ops() : nullptr;
   }
 
-  /// Sets the loop-colored slice seam (see loop_colored_slice_seam_). Pass
-  /// nullptr to detach. Non-owning; the pointee must outlive this cache.
-  void set_loop_colored_slice_seam(LoopColoredSliceSeam const* s) noexcept {
-    loop_colored_slice_seam_ = s;
-  }
-
-  /// \return the local loop-colored slice seam if set, else the one inherited
-  ///         from \c parent_ (only the root cache is wired in practice);
-  ///         nullptr if none is wired anywhere along the chain. Non-owning.
-  [[nodiscard]] LoopColoredSliceSeam const* loop_colored_slice_seam()
-      const noexcept {
-    return loop_colored_slice_seam_ ? loop_colored_slice_seam_
-           : parent_                ? parent_->loop_colored_slice_seam()
-                                    : nullptr;
-  }
-
   /// Sets the local cell-read resolver (see cell_read_resolver_). Pass
   /// nullptr to detach. Non-owning; the pointee must outlive this cache.
   void set_cell_read_resolver(eval::CellReadResolver* r) noexcept {
@@ -1372,42 +1319,6 @@ class CacheManager {
     return cell_read_resolver_ ? cell_read_resolver_
            : parent_           ? parent_->cell_read_resolver()
                                : nullptr;
-  }
-
-  /// Sets the current consumer identity (see current_consumer_). Pass nullopt
-  /// to clear. Cheap value set; the ordered executor RAII-restores it around
-  /// each member-root evaluate_impl.
-  void set_current_consumer(std::optional<std::size_t> consumer) noexcept {
-    current_consumer_ = consumer;
-  }
-
-  /// \return the consumer identity set on this cache, else the one inherited
-  ///         from \c parent_ (a per-block child scratch defers to its enclosing
-  ///         scope's consumer); nullopt if none is set anywhere along the
-  ///         chain.
-  [[nodiscard]] std::optional<std::size_t> current_consumer() const noexcept {
-    return current_consumer_ ? current_consumer_
-           : parent_         ? parent_->current_consumer()
-                             : std::nullopt;
-  }
-
-  /// Sets the TEST-ONLY slice observer (see slice_observer_). Pass an empty
-  /// function to clear.
-  void set_slice_observer(
-      std::function<void(std::size_t, std::optional<std::size_t>, std::size_t,
-                         int)>
-          obs) {
-    slice_observer_ = std::move(obs);
-  }
-
-  /// \return the slice observer set on this cache, else the one inherited from
-  ///         \c parent_; an empty function if none is set along the chain.
-  [[nodiscard]] std::function<void(std::size_t, std::optional<std::size_t>,
-                                   std::size_t, int)> const&
-  slice_observer() const noexcept {
-    if (slice_observer_) return slice_observer_;
-    if (parent_) return parent_->slice_observer();
-    return slice_observer_;  // empty
   }
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
@@ -1705,18 +1616,12 @@ class CacheManager {
   /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
-  [[nodiscard]] AccessResult access_at(
-      cache_key_type const& key,
-      std::optional<std::size_t> origin_consumer = std::nullopt) noexcept {
+  [[nodiscard]] AccessResult access_at(cache_key_type const& key) noexcept {
     // Task 7: color the key from THIS cache's per-build context (no-op without
     // one), then look up AND walk parents with the ALREADY-colored key. The
     // cache genuinely keys by VALUE: two values of one node coexist as distinct
     // colored entries (a home value found by its own home identity, never a
     // same-node sibling), which is the whole point of the value-keyed cache.
-    // DIAGNOSTIC: capture the consuming value at the ORIGIN cache (where the
-    // fetch starts) and thread it through the parent recursion so a root-homed
-    // hit can name WHO read it.
-    if (!origin_consumer) origin_consumer = current_consumer();
     cache_key_type const rk = recolor(key);
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(rk); });
@@ -1736,8 +1641,6 @@ class CacheManager {
                     << (++_ax_n)
                     << " remaining_life=" << found->second.life_count()
                     << " max_life=" << found->second.max_life_count()
-                    << " consumer="
-                    << (origin_consumer ? *origin_consumer % 100000u : 0u)
                     << std::endl;
         }
         // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
@@ -1755,13 +1658,11 @@ class CacheManager {
                   << " MISS-DRAINED (data absent) remaining_life="
                   << found->second.life_count()
                   << " max_life=" << found->second.max_life_count()
-                  << " consumer="
-                  << (origin_consumer ? *origin_consumer % 100000u : 0u)
                   << std::endl;
       }
     }
     if (!parent_) return {nullptr, 0};
-    auto up = parent_->access_at(rk, origin_consumer);
+    auto up = parent_->access_at(rk);
     return {up.ptr, up.hops + 1};  // count the link we just crossed
   }
 

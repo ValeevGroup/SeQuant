@@ -738,189 +738,18 @@ ResultPtr evaluate_impl(Node const& node,         //
     // one parent link, so hops <= d always. A violation would underflow
     // `d - hops` and silently UNDER-slice (oversized result); assert loudly.
     SEQUANT_ASSERT(hops <= d);
-    bool const _home_diag = std::getenv("SEQUANT_UT_HOME_DIAG") != nullptr;
-    if (_home_diag && d > 0) {
-      std::cerr << "[HOME] node#" << (nd->hash_value() % 100000u)
-                << " use_d=" << d << " hops=" << hops
-                << " home_d=" << (d - hops) << " scope=[";
-      for (std::size_t j = 0; j < d; ++j)
-        std::cerr << toUtf8(std::wstring(ctx[j].axis.space().base_key()))
-                  << "@o" << ctx[j].level.latitude_ordinal
-                  << (j < d - hops ? "(home) " : "(x) ");
-      std::cerr << "] canon=[";
-      for (auto const& ix : nd->canon_indices())
-        std::cerr << toUtf8(ix.full_label()) << " ";
-      std::cerr << "]" << std::endl;
-    }
-    // PER-LEVEL residency rule (2026-09-02): when the seam publishes home
-    // colors, visit EVERY enclosing level (not the hops-innermost prefix) and
-    // skip the ones the value is PRODUCED-SLICED on -- its stored form already
-    // is that batch. The prefix model assumed a value stored at this scope is
-    // sliced on all enclosing loops; a member produced whole on i but sliced
-    // on the innermost K (w20 56937) breaks that and was served whole on i.
-    auto const* const seam_hc = cache.loop_colored_slice_seam();
-    bool const per_level = seam_hc && !seam_hc->home_colors.empty();
-    for (std::size_t i = per_level ? 0 : d - hops; i < d; ++i) {
-      if (per_level && seam_hc->produced_sliced_on(nd->hash_value(),
-                                                   ctx[i].level.key().color()))
-        continue;  // already the batch on this loop
-      auto const& axis = ctx[i].axis;
-      auto const& blk = ctx[i].range;
-      // Diagnostic-only exact match of this batch-context axis on nd (feeds the
-      // [SLICE] trace below). The ACTUAL slice mode is p_new, resolved off the
-      // loop-colored seam further down -- eval never deduces a slice mode from
-      // an index's space, so a node that does not carry the exact axis simply
-      // does not match here.
-      auto p = index_position(nd, axis);
-      bool const exact = p.has_value();
-      if (p && std::getenv("SEQUANT_UT_SLICE_DIAG"))
-        std::cerr << "[SLICE] node#" << (nd->hash_value() % 100000u)
-                  << " space=" << toUtf8(axis.space().base_key())
-                  << " pmode=" << *p
-                  << " via=" << (exact ? "exact" : "fallback") << " idx@pmode="
-                  << toUtf8(nd->canon_indices()[*p].full_label()) << " slice=["
-                  << blk.first << "," << blk.second << ")" << std::endl;
-      // p_new (Task 7, sliced-value canonical-layout / loop-coloring design):
-      // the ACTUAL slice mode this entry resolves to, per path.
-      //  - `exact_axis` present (forest / whole-scope, which push each
-      //    member's OWN physical axis): the same intra-tree exact match as old
-      //    `p` (exact_axis == axis on those paths), byte-identical to before.
-      //  - else (the ordered executor, which pushes ONE canonical block.axis
-      //    per type-bucketed loop): resolve OFF THE LOOP-COLORED CANONICAL
-      //    LAYOUT (design sec.4) rather than the per-cell mode_to_level map --
-      //    the loop-colored slice seam maps this loop (ctx[i].level) to the
-      //    fetched value's OWN sliced-mode Index, whose physical slot on `nd`
-      //    is then read directly (index_position). The seam returns the mode
-      //    nd actually carries for this loop; there is NO space-deduction
-      //    fallback -- eval never guesses a slice mode. A value with no seam
-      //    entry for this loop (an unsliced value,
-      //    or one built inside this loop -- the built-within participation
-      //    gate) leaves p_new nullopt => full/unsliced. If the seam is unwired
-      //    (a direct caller that did not set it) p_new likewise stays nullopt;
-      //    the ordered executor always wires it in practice.
-      std::optional<std::size_t> p_new;
-      if (ctx[i].exact_axis) {
-        p_new = index_position(nd, *ctx[i].exact_axis);
-      } else if (auto const* seam = cache.loop_colored_slice_seam()) {
-        // DIAG: a block level the seam does not enumerate skips slicing AND the
-        // completeness guard silently -- make that visible in the trace.
-        if (_home_diag && !seam->loop_of_level(ctx[i].level))
-          std::cerr << "  [HOME-SLICE] node#" << (nd->hash_value() % 100000u)
-                    << " level(depth=" << ctx[i].level.depth
-                    << " slot=" << ctx[i].level.loop_slot
-                    << " lat=" << ctx[i].level.latitude_ordinal
-                    << ") NOT ENUMERATED by the seam -> served whole, "
-                       "guard skipped"
-                    << std::endl;
-        if (std::optional<LoopId> const loop =
-                seam->loop_of_level(ctx[i].level)) {
-          // FRAME-CORRECT (2026-08-24 slot-slicing design): mode_of returns the
-          // sliced mode's PHYSICAL POSITION, computed at schedule time in the
-          // fetched value's OWN index-frame -- per-occurrence via the consumer
-          // for a divergent (relabeled) or symmetric value. It is used directly
-          // as the slice mode here: NO index_position, and NO re-matching a
-          // canonical Index label against this (differently-framed) node.
-          p_new =
-              seam->mode_of(nd->hash_value(), *loop, cache.current_consumer());
-          // COMPLETENESS GUARD (2026-08-25 loop-open design): the value
-          // PARTICIPATES in this loop -- the seam has a sliced-mode fact for it
-          // under `loop` for SOME consumer -- yet THIS fetch got none. That is
-          // a scheduler gap: the operand would be served UNSLICED while its
-          // contraction partner is sliced, and TA's tiled-range assert is
-          // elided in Release, so the mismatched DistEval would DEADLOCK
-          // silently instead of erroring. Fail loud. A value with NO fact under
-          // `loop` (participates() == false) is genuinely invariant to it and
-          // is correctly left unsliced -- the guard does not fire there.
-          //
-          // Consumer-aware relaxation (Layer 2, use-induced slicing): a
-          // WHOLE-produced value CSE-shared between a consumer sliced on this
-          // loop and one INVARIANT to it is legitimately read sliced by the
-          // former and WHOLE by the latter. When THIS consumer is itself NOT
-          // sliced on `loop` (no fact of its own there), its whole read is
-          // correct, not a gap -- do not fire. The guard still fires for a
-          // consumer that IS sliced here yet fetches an unsliced participating
-          // operand (the real conformance gap).
-          bool const consumer_sliced_here =
-              cache.current_consumer() &&
-              seam->consumer_slices(*cache.current_consumer(), *loop);
-          // An EXPLICIT invariant decision for this (value, loop, consumer) --
-          // the value's occurrence in this consumer's frame does not carry the
-          // loop's mode -- is a correct unsliced fetch, not a gap. Only a fetch
-          // with NEITHER a slice fact NOR an invariant fact is a real gap.
-          bool const invariant_here =
-              cache.current_consumer() &&
-              seam->invariant_for(nd->hash_value(), *loop,
-                                  *cache.current_consumer());
-          if (!p_new && seam->participates(nd->hash_value(), *loop) &&
-              consumer_sliced_here && !invariant_here) {
-            std::cerr << "[gap] node canon=[";
-            for (auto const& ix : nd->canon_indices())
-              std::cerr << toUtf8(ix.full_label()) << " ";
-            std::cerr << "] loop(space=" << toUtf8(ctx[i].level.space)
-                      << " slot=" << ctx[i].level.loop_slot
-                      << " depth=" << ctx[i].level.depth
-                      << " lat=" << ctx[i].level.latitude_ordinal
-                      << ") consumer="
-                      << (cache.current_consumer()
-                              ? *cache.current_consumer() % 100000u
-                              : 0u)
-                      << " nodehash=" << (nd->hash_value() % 100000u)
-                      << std::endl;
-            std::cerr << "[gap]   queried LoopId=" << *loop
-                      << " level(space=" << toUtf8(seam->levels[*loop].space)
-                      << " slot=" << seam->levels[*loop].loop_slot
-                      << " depth=" << seam->levels[*loop].depth << ")\n";
-            if (auto const cit = seam->by_hash_consumer.find(nd->hash_value());
-                cit != seam->by_hash_consumer.end())
-              for (auto const& [pos, lid, ch] : cit->second)
-                std::cerr << "[gap]   by_hash_consumer pos=" << pos
-                          << " LoopId=" << lid
-                          << " (space=" << toUtf8(seam->levels[lid].space)
-                          << " slot=" << seam->levels[lid].loop_slot
-                          << ") consumer=" << (ch % 100000u) << "\n";
-            if (auto const bit = seam->by_hash.find(nd->hash_value());
-                bit != seam->by_hash.end())
-              for (auto const& [pos, lid] : bit->second)
-                std::cerr << "[gap]   by_hash pos=" << pos << " LoopId=" << lid
-                          << " (space=" << toUtf8(seam->levels[lid].space)
-                          << " slot=" << seam->levels[lid].loop_slot << ")\n";
-            throw Exception(
-                "slice_to_use: value participates in a batch loop but this "
-                "fetch has no sliced-mode fact for the current consumer -- an "
-                "incomplete sliced-mode assignment (occ_facts gap) that would "
-                "leave the operand unsliced and mismatch its contraction "
-                "partner. The occurrence's slice fact must be recorded at "
-                "schedule time, never left to a silent unsliced fetch.");
-          }
-        }
-      }
-      // Task 7-part-2 / Task 8: the transitional equivalence assert this used
-      // to cross-check against the old per-cell mode_to_level map is RETIRED,
-      // and that map and its populators are now deleted entirely (Task 8).
-      // With per-consumer binding, the loop-colored resolution
-      // INTENTIONALLY diverges from what the old consumer-blind map would
-      // have given for the symmetric case -- that divergence IS the fix.
-      if (_home_diag)
-        std::cerr << "  [HOME-SLICE] node#" << (nd->hash_value() % 100000u)
-                  << " crossed-axis="
-                  << toUtf8(std::wstring(ctx[i].axis.space().base_key()))
-                  << "@o" << ctx[i].level.latitude_ordinal
-                  << " slot=" << ctx[i].level.loop_slot
-                  << " depth=" << ctx[i].level.depth
-                  << " axis=" << toUtf8(ctx[i].axis.full_label())
-                  << " consumer="
-                  << (cache.current_consumer()
-                          ? *cache.current_consumer() % 100000u
-                          : 0u)
-                  << " -> p_new=" << (p_new ? std::to_string(*p_new) : "none")
-                  << " blk=[" << blk.first << "," << blk.second << ")"
-                  << std::endl;
+    // The forest / whole-scope evaluator pushes each member's OWN physical
+    // axis as `exact_axis`; a slice fires only where that is set (an intra-
+    // tree exact match on `nd`). The ordered executor's operand reads no
+    // longer go through this path at all (Task 4-5): every ordered fetch is
+    // resolved by the cell registry's CellReadResolver, which reads the
+    // already-sliced cell directly, so `exact_axis` is unset there and this
+    // loop is a no-op.
+    for (std::size_t i = d - hops; i < d; ++i) {
+      if (!ctx[i].exact_axis) continue;
+      auto const p_new = index_position(nd, *ctx[i].exact_axis);
       if (p_new) {
-        // Test-only witness of the consumer-aware slice decision (PILLAR 2):
-        // no-op unless an observer is installed.
-        if (auto const& obs = cache.slice_observer(); obs)
-          obs(nd->hash_value(), cache.current_consumer(), *p_new,
-              ctx[i].level.latitude_ordinal);
+        auto const& blk = ctx[i].range;
         value = value->slice_mode(*p_new, blk.first, blk.second);
       }
     }
@@ -1148,11 +977,7 @@ ResultPtr evaluate_impl(Node const& node,         //
               lbl += toUtf8(ix.full_label()) + " ";
             std::cerr << "[evict] vanished hash="
                       << (f.node->hash_value() % 100000u) << " canon=[" << lbl
-                      << "] consumer="
-                      << (cache.current_consumer()
-                              ? *cache.current_consumer() % 100000u
-                              : 0u)
-                      << " top=" << (node->hash_value() % 100000u)
+                      << "] top=" << (node->hash_value() % 100000u)
                       << " scope=[";
             for (auto const& lvl : cache.batch_context())
               std::cerr << toUtf8(std::wstring(lvl.axis.space().base_key()))

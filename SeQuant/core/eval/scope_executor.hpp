@@ -850,20 +850,20 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
         eval::analyze_legality(rich, forest, policy);
     eval::OrderedSchedule const ordered =
         eval::build_ordered_schedule(rich, legality, policy, mode_order);
-    // Task 7 (sliced-value canonical-layout / loop-coloring design): the
-    // loop-colored canonical layout the ordered executor's runtime slice
-    // resolution reads is delivered as the hash-keyed LoopColoredSliceSeam
-    // self-wired inside detail::run_ordered_schedule_pre_results (the shared
-    // ordered core evaluate_ordered_schedule below delegates to), built from
-    // this same schedule's compute_sliced_mode_assignment -- so it is
-    // correctly built and wired regardless of caller. The materialized
-    // per-value/per-occurrence ValueCell::canonical_layout /
-    // OccurrenceRec::perm_to_canonical (populate_canonical_layouts) are the
-    // schedule-side inspection view of that SAME assignment and are exercised
-    // by the [sliced-layout] integration tests; they are NOT on the runtime
-    // slice path and are not populated here (populate_canonical_layouts walks
-    // EVERY forest node including the residual-head Sum, which has no
-    // occurrence key -- a schedule-analysis co-pass, not a hot-path step).
+    // Task 5 (explicit value cells, stage 2): the ordered executor's runtime
+    // operand reads are table-driven (CellReadResolver, cell_registry.hpp),
+    // built inside detail::run_ordered_schedule_pre_results (the shared
+    // ordered core evaluate_ordered_schedule below delegates to) from this
+    // same schedule's compute_sliced_mode_assignment -- so it is correctly
+    // built and wired regardless of caller; there is no separate runtime
+    // slice-inference seam. The materialized per-value/per-occurrence
+    // ValueCell::canonical_layout / OccurrenceRec::perm_to_canonical
+    // (populate_canonical_layouts) are the schedule-side inspection view of
+    // that SAME assignment and are exercised by the [sliced-layout]
+    // integration tests; they are NOT on the runtime read path and are not
+    // populated here (populate_canonical_layouts walks EVERY forest node
+    // including the residual-head Sum, which has no occurrence key -- a
+    // schedule-analysis co-pass, not a hot-path step).
 
     // NODE-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
     // own is_volatile_node lift (eval.hpp) computes it -- threaded into the

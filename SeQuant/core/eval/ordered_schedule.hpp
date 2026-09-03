@@ -2391,9 +2391,8 @@ inline void assert_global_level_axis_uniqueness(
 /// identity is a slot color" section: producer/consumer passes must be
 /// distinguishable colors, not folded).
 ///
-/// \note Defined in \c dag_scope.hpp so the low-level \c LoopColoredSliceSeam
-/// (the executor's runtime consumption view, consumed by \c CacheManager) can
-/// name it without depending on this schedule header; re-exported here for the
+/// \note Defined in \c dag_scope.hpp so the low-level DAG-scope types can be
+/// named without depending on this schedule header; re-exported here for the
 /// schedule-side code that has always referred to \c eval::LoopId.
 using sequant::LoopId;
 
@@ -2432,16 +2431,16 @@ struct SlicedModeAssignment {
   /// the CONSUMER value_id -- the use-site whose fetch of \c value_id binds the
   /// loop to that Index). Recorded ONLY by the regime-2 (occurrence-driven)
   /// pass, the one pass that can attribute a stamp to a specific occurrence and
-  /// hence to a specific consumer. This is the raw material the executor
-  /// projects onto \c LoopColoredSliceSeam::by_hash_consumer to disambiguate
-  /// the w8-symmetric case (one value, one loop, two free modes bound by two
+  /// hence to a specific consumer. This is the raw material the cell table
+  /// builder (cell_table_builder.hpp) consumes to disambiguate the
+  /// w8-symmetric case (one value, one loop, two free modes bound by two
   /// different consumers); \c by_value alone cannot express "pos0 here, pos1
   /// there" because it folds away which occurrence bound which mode.
   /// (value_id, this occurrence's own sliced-mode PHYSICAL POSITION -- its
   /// index in occ.carried, computed in THAT occurrence's own index-frame,
   /// LoopId, CONSUMER value_id). The position (not an Index label) is what the
-  /// executor projects onto \c LoopColoredSliceSeam::by_hash_consumer, so the
-  /// runtime never re-matches a label across index-frames.
+  /// table builder consumes, so the runtime never re-matches a label across
+  /// index-frames.
   container::svector<std::tuple<std::size_t, std::size_t, LoopId, std::size_t>>
       occ_facts;
 
@@ -2719,8 +2718,8 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         // space (no own sliced slot), but THIS CONSUMER C is sliced on a mode M
         // there. If M is a SHARED external W also carries, the C = ...*W
         // contraction binds W's M to C's sliced M -- so W must be sliced on M
-        // at this loop for THIS fetch. Record it CONSUMER-KEYED in occ_facts
-        // (-> by_hash_consumer), NOT consumer-blind by_value: W may be
+        // at this loop for THIS fetch. Record it CONSUMER-KEYED in occ_facts,
+        // NOT consumer-blind by_value: W may be
         // CSE-shared between C (sliced here) and a DIFFERENT consumer that
         // reads it whole (invariant), and a blind fact would wrongly slice it
         // for both. Bounded to a mode C actually slices (conformability), NOT
