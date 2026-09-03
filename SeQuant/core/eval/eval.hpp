@@ -557,7 +557,8 @@ ResultPtr evaluate(Node const& node,  //
     bool checked;
     Stage stage = Stage::Enter;
     bool store_after = false;
-    ResultPtr left, right;
+    ResultPtr left = {};
+    ResultPtr right = {};
   };
 
   // Finalize a freshly computed Phase-B result: if this Checked node needs
