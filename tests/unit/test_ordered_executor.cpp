@@ -1814,6 +1814,200 @@ TEST_CASE("cell table: input-mirrored w20 configuration reports its known gap",
 }
 
 // ===========================================================================
+// Diagnostic-only dump (Task 1 of the explicit-cells stage-2 plan):
+// characterize, on the mirrored w20 configuration, the values the stage-1
+// table already flags as violations (see the case immediately above) --
+// where each is built or escaped, and who consumes it and where. Hidden
+// ("[.]") so it never runs in the default or CI suites; run explicitly with
+// the mirrored environment (SEQUANT_UT_PEAK_THRESHOLD=25e9,
+// SEQUANT_UT_OBJECTIVE=dense_time_space_batched) to see the report on
+// stderr. The watched value ids are only meaningful under that mirrored
+// configuration.
+// ===========================================================================
+TEST_CASE(
+    "cell table: dump the mixed-pass members of the mirrored w20 schedule",
+    "[cell_table][ordered][.][mixed-pass-dump]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  // FULL residual (all summands) to match the MPQC w20 run; overridable for
+  // bisecting which term first breaks the walk.
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // AUX+OCC: Κ batchable-contracted (aux), occ batchable-EXTERNAL; spectator
+  // batching + node-level placement ON (make_csv_batch_policy, occ_target>0).
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+  // Mirror a specific MPQC input (z820 w20 csv-cck-diag.json: batch
+  // peak_threshold 25e9, optimize objective dense_time_space) via env.
+  if (char const* pt = std::getenv("SEQUANT_UT_PEAK_THRESHOLD"))
+    policy.peak_threshold = std::atof(pt);
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  if (char const* ob = std::getenv("SEQUANT_UT_OBJECTIVE")) {
+    std::string const o{ob};
+    if (o == "dense_time_space")
+      opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpace;
+    else if (o == "dense_time_space_batched")
+      opts.objective_function =
+          sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+    else if (o == "dense_space_time")
+      opts.objective_function = sequant::ObjectiveFunction::DenseSpaceTime;
+    else if (o == "dense_space_time_batched")
+      opts.objective_function =
+          sequant::ObjectiveFunction::DenseSpaceTimeBatched;
+  }
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedexec_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  // MPQC passes an EMPTY mode_order (build_ordered_schedule derives the forced
+  // split axes from the legality) -- match that.
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  std::set<std::size_t> const watch = {45, 48, 197, 198};
+  // (1) where each watched value is built or escaped
+  std::function<void(sequant::eval::ScopeBlock const&, std::string)> walk =
+      [&](sequant::eval::ScopeBlock const& b, std::string path) {
+        path += "[d" + std::to_string(b.level.depth) + " s" +
+                std::to_string(b.level.loop_slot) + " lat" +
+                std::to_string(b.latitude_ordinal) + "]";
+        for (auto const& st : b.steps) {
+          if (auto const* bs =
+                  std::get_if<sequant::eval::BuildStep>(&st.value)) {
+            if (watch.count(bs->value_id))
+              std::cerr << "BUILD v" << bs->value_id
+                        << " hash=" << rich.cells[bs->value_id].hash % 100000u
+                        << " at " << path << "\n";
+          } else {
+            walk(std::get<sequant::eval::ScopeBlock>(st.value), path);
+          }
+        }
+        for (auto const& [ovid, kind] : b.outputs)
+          if (watch.count(ovid))
+            std::cerr << "OUTPUT v" << ovid
+                      << " kind=" << static_cast<int>(kind) << " of " << path
+                      << "\n";
+      };
+  walk(ordered.root, "");
+  // (2) consumers of each watched value and where they are built
+  std::unordered_map<std::size_t, std::string> built_at;
+  std::function<void(sequant::eval::ScopeBlock const&, std::string)> index =
+      [&](sequant::eval::ScopeBlock const& b, std::string path) {
+        path += "[d" + std::to_string(b.level.depth) + " s" +
+                std::to_string(b.level.loop_slot) + " lat" +
+                std::to_string(b.latitude_ordinal) + "]";
+        for (auto const& st : b.steps) {
+          if (auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value))
+            built_at[bs->value_id] = path;
+          else
+            index(std::get<sequant::eval::ScopeBlock>(st.value), path);
+        }
+        for (auto const& [ovid, kind] : b.outputs)
+          built_at.try_emplace(ovid, path + "(output)");
+      };
+  index(ordered.root, "");
+  for (std::size_t v : watch) {
+    std::cerr << "v" << v << " hash=" << rich.cells[v].hash % 100000u
+              << " leaf=" << rich.cells[v].is_leaf << " consumers:";
+    if (auto it = g.consumers_of.find(v); it != g.consumers_of.end())
+      for (std::size_t c : it->second)
+        std::cerr << " v" << c << "@" << built_at[c];
+    std::cerr << "\n  operands:";
+    if (auto it = g.depends_on.find(v); it != g.depends_on.end())
+      for (std::size_t o : it->second)
+        std::cerr << " v" << o << "@" << built_at[o];
+    std::cerr << "\n";
+  }
+  SUCCEED("characterization printed to stderr");
+}
+
+// ===========================================================================
 // Cache-halt across CC iterations: a Κ-free PERSISTENT composite (I(i,i;a,a),
 // e.g. the 4-PNO-2-occ integral) built by contracting Κ between Κ-carrying
 // prerequisites must be built ONCE (iteration 1) and reused thereafter, AND
