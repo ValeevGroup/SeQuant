@@ -73,6 +73,13 @@ class CellRegistry {
 
   /// \overload As \c read(CellId), and reports through \p exhausted (when
   /// non-null) whether this read spent the cell's last life.
+  ///
+  /// STAGE-3 SEAM: the \p exhausted output exists solely to let the caller
+  /// keep the legacy \c CacheManager::chain_holds_shared check honest under
+  /// table-driven reads (it drives \c CacheManager::release_at on the same
+  /// canonical node every production site keys on); the next stage re-derives
+  /// in-place eligibility from this table's own \c life / \c persistent and
+  /// deletes it.
   [[nodiscard]] ResultPtr read(CellId c, bool* exhausted) {
     auto& s = slot(c);
     if (exhausted) *exhausted = false;

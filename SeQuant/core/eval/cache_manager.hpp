@@ -895,6 +895,12 @@ class CacheManager {
     /// consumed value pins its memory AND makes every later reader treat the
     /// buffer as shared. A persistent entry is never released (its whole
     /// point is to outlive its reads).
+    ///
+    /// STAGE-3 SEAM: this exists solely to keep the legacy \c
+    /// chain_holds_shared check honest under table-driven reads, keyed by the
+    /// same canonical node as every production site; the next stage
+    /// re-derives in-place eligibility from the cell table's own \c life /
+    /// \c persistent and deletes it.
     void release() noexcept {
       if (persistent_) return;
       life_c = 0;
@@ -1709,13 +1715,24 @@ class CacheManager {
   /// for again. Used by the cell table's read path, which serves a value
   /// from the cell registry rather than through \c access_at, so nothing
   /// else would ever spend the entry's last life -- see \c entry::release.
-  /// A persistent entry is skipped (release() is a no-op there) and the walk
-  /// continues, so a persistent home is never disturbed.
+  ///
+  /// The walk STOPS at the first scope holding a live entry for @p key,
+  /// whatever its persistence -- exactly where \c access_at and \c peek_at
+  /// stop, so all three agree on WHICH scope owns a value. A persistent
+  /// entry found there is left untouched (\c entry::release is a no-op on
+  /// one) and the walk still ends: a persistent home is never disturbed, and
+  /// never bypassed in favour of a stale outer copy of the same key.
+  ///
+  /// STAGE-3 SEAM: this exists solely to keep the legacy \c
+  /// chain_holds_shared check honest under table-driven reads, keyed by the
+  /// same canonical node as every production site; the next stage
+  /// re-derives in-place eligibility from the cell table's own \c life /
+  /// \c persistent and deletes it.
   void release_at(cache_key_type const& key) noexcept {
     cache_key_type const rk = recolor(key);
     if (auto found = cache_map_.find(rk); found != cache_map_.end())
-      if (!found->second.persistent() && found->second.alive()) {
-        found->second.release();
+      if (found->second.alive()) {
+        found->second.release();  // a no-op on a persistent entry
         return;
       }
     if (parent_) parent_->release_at(rk);

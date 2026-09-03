@@ -745,6 +745,29 @@ class ResultTensorOfTensorTA final : public Result {
     ::sequant::detail::note_fence();
   }
 
+  /// KNOWN DEFECT: this allocating addition does NOT treat an operand whose
+  /// inner tiles are all empty (\c tot_inner_rank() == 0) as the additive
+  /// identity -- the expression add below propagates those empty inner tiles
+  /// into the result and so ANNIHILATES the other addend, even when that one
+  /// holds data. \c add_inplace() below does not have this hole: it takes an
+  /// explicit \c tot_inner_rank() == 0 branch and returns the accumulator
+  /// untouched. An all-empty nested operand is a normal, correct intermediate
+  /// (e.g. a scatter destination whose per-batch partials were all zero this
+  /// iteration), so the two implementations of one addition disagree on real
+  /// data, and which of them a caller reaches is a LIFETIME decision (\c
+  /// evaluate_impl's in-place accumulation gate), never a numerical one. This
+  /// was the mechanism behind a NaN residual on the w8 CSV-CCk wet gate once
+  /// in-place accumulation stopped being eligible: the whole residual came
+  /// back with no data at all, and its norm is then 0/0 (see SeQuant
+  /// 965e420b8, which fixed the eligibility, not this).
+  ///
+  /// The intended fix is a guard here mirroring \c add_inplace()'s -- return
+  /// the surviving addend permuted into this node's layout -- but it is NOT
+  /// applied yet: it awaits a nested-array reproduction. A fixture over
+  /// \c TA::DistArray<TA::Tensor<TA::Tensor<double>>> does NOT reproduce the
+  /// annihilation (it already behaves as the identity there); the
+  /// application's nested arrays do. Do not ship the guard on the strength of
+  /// a fixture that passes without it.
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {

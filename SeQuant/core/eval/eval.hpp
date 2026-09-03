@@ -1069,7 +1069,17 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (auto* rr = cache.cell_read_resolver()) {
             if (auto v =
                     rr->fetch(f.node->hash_value(), cache.batch_context())) {
-              // See the ownership note on the operand probe above.
+              // See the ownership note on the operand probe above. NOTE this
+              // one cannot bite TODAY, and no test pins it: this branch is
+              // reached only after the Checked probe's access_at MISSED for
+              // this very node, and an access_at miss means no scope in the
+              // chain holds the value -- so there is nothing here for
+              // release_at to let go of. It is kept because the two probes
+              // must not drift apart, and because it is already the correct
+              // wiring for the ordering the design asks for (section 4:
+              // leaves are cells, read with declared slices like any other
+              // cell, with no separate leaf path) -- once this probe runs
+              // AHEAD of access_at, a leaf's home is live right here.
               if (rr->last_read_exhausted_source()) cache.release_at(f.node);
               finalize(apply_phase(f.node, *v));  // recorded leaf, sliced
               break;

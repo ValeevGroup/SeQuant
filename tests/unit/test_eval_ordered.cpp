@@ -422,6 +422,100 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "table-driven reads flip in-place eligibility: a homed value is shared "
+    "while the table still has reads of it, and released by its last one",
+    "[eval][ordered]") {
+  // End-to-end pin for the ownership seam eval.hpp opens at its two
+  //   if (rr->last_read_exhausted_source()) cache.release_at(f.node);
+  // sites. The table-driven read serves a value from the cell registry and
+  // never through access_at, so nothing else ever spends the scope entry's
+  // last life -- entry::access() did that, and it is what makes a fully
+  // consumed value exclusively owned by its final consumer. Without the
+  // release the entry holds the buffer for the whole evaluation, and
+  // chain_holds_shared() then reports EVERY operand as shared forever, which
+  // silently disables the in-place accumulation branch of every Sum.
+  //
+  // The same fixture as the in-place hazard case above: A = a*b is CSE'd
+  // across the two roots, so the ordered executor homes it multi-use, and one
+  // leaf is declared VOLATILE so A's table cell is non-persistent and
+  // therefore has a finite, spendable life (a cell the table marks persistent
+  // is never exhausted and, by design, never released). That makes the two
+  // halves of the flip directly observable through existing accessors:
+  //   * WHILE the table still has reads of A pending, A's home is alive and
+  //     chain_holds_shared(A) is true -- the guard correctly refuses to let
+  //     (A + c) accumulate into the shared buffer;
+  //   * AFTER A's last table read, the home has let go, so the same
+  //     predicate is false again and a later accumulation into A would be
+  //     eligible.
+  // Nothing spends the home entry's life any more (every read of A goes
+  // through the cell registry, not access_at), so the second half holds ONLY
+  // because release_at ran: delete the operand-probe call site and the
+  // post-run checks below fail.
+  ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
+  ScalarNode const root2 = scalar_tree(L"(a * b) * d");
+  ScalarNode const shared = scalar_tree(L"a * b");  // the CSE'd value A
+  ScalarLeafEvaluator const yield{
+      {{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}, {L"d", 1.5}}};
+
+  // Leaf "a" is VOLATILE, so every value carrying it -- A included -- is a
+  // non-persistent cell with a finite, spendable life, exactly as an
+  // amplitude-carrying intermediate is in the application. A cell the table
+  // marks persistent is never exhausted, so it never reaches release_at.
+  std::function<bool(ScalarNode const&)> const is_volatile =
+      [](ScalarNode const& n) {
+        return n.leaf() && n->expr()->is<Variable>() &&
+               n->expr()->as<Variable>().label() == L"a";
+      };
+
+  sequant::BatchPolicy const policy;
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 1; };
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const&) -> std::size_t { return 1; };
+
+  svector<ScalarNode> const roots{root1, root2};
+  RichSchedule const rich = compute_dag_boulevard(roots, cm, block_of);
+  auto const legality = analyze_legality(rich, roots, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  auto cache = sequant::CacheManager<ScalarNode>::empty();
+
+  // Mid-run probe: the custom-evaluator hook is consulted at the Enter stage
+  // of every non-leaf node with the live cache, and DECLINES (null return),
+  // so it observes without changing what runs.
+  bool seen_alive_and_shared = false;
+  ResultPtr shared_buffer;  // A's homed buffer, captured while it is alive
+  cache.set_custom_evaluator(
+      [&](ScalarNode const&,
+          sequant::CacheManager<ScalarNode>& c) -> ResultPtr {
+        if (ResultPtr const held = c.peek_at(shared)) {
+          shared_buffer = held;
+          if (c.chain_holds_shared(held)) seen_alive_and_shared = true;
+        }
+        return nullptr;  // decline
+      });
+
+  ResultPtr const got = evaluate_ordered_schedule(
+      roots, ordered, rich, ScalarEvalExpr::annot_t{}, yield, cache, target,
+      sequant::make_no_scope_guard{}, is_volatile);
+
+  // The run itself is unchanged: root1 = (A + c) * A = -1.75, root2 = A * d
+  // = -10.5, and this entry point returns the forest-wide sum.
+  CHECK(got->as<ResultScalar<double>>().value() == Catch::Approx(-12.25));
+
+  // Before A's last table read: homed, alive, and reported shared.
+  CHECK(seen_alive_and_shared);
+  REQUIRE(shared_buffer);
+
+  // After it: the home let go, so the predicate that gates in-place
+  // accumulation has flipped for that very buffer.
+  CHECK_FALSE(cache.peek_at(shared));
+  CHECK_FALSE(cache.chain_holds_shared(shared_buffer));
+}
+
+TEST_CASE(
     "CacheManager::chain_holds_shared treats a persistent entry as shared "
     "even when its max_life == 1",
     "[eval][ordered]") {
