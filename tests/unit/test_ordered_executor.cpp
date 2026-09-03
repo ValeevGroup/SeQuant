@@ -1539,16 +1539,30 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   };
   auto const table = sequant::eval::build_cell_table(in);
 
-  // one Build cell per BuildStep, one Assemble per output entry, Leaf cells
-  std::size_t builds = 0, outputs = 0;
+  // one Build cell per BuildStep, plus one implicit Build cell per output
+  // entry (b, ovid) whose value has no BuildStep of its own in b and no
+  // direct child block of b that already lists ovid among its own outputs
+  // (a nested escape, whose own Build/Assemble already covers it); one
+  // Assemble per output entry; Leaf cells.
+  std::size_t builds = 0, outputs = 0, implicit = 0;
   std::function<void(sequant::eval::ScopeBlock const&)> count =
       [&](sequant::eval::ScopeBlock const& b) {
-        for (auto const& st : b.steps)
-          if (std::holds_alternative<sequant::eval::BuildStep>(st.value))
+        std::unordered_set<std::size_t> own_builds, child_outputs;
+        for (auto const& st : b.steps) {
+          if (auto const* bs =
+                  std::get_if<sequant::eval::BuildStep>(&st.value)) {
             ++builds;
-          else
-            count(std::get<sequant::eval::ScopeBlock>(st.value));
+            own_builds.insert(bs->value_id);
+          } else {
+            auto const& child = std::get<sequant::eval::ScopeBlock>(st.value);
+            for (auto const& [cvid, ckind] : child.outputs)
+              child_outputs.insert(cvid);
+            count(child);
+          }
+        }
         outputs += b.outputs.size();
+        for (auto const& [ovid, okind] : b.outputs)
+          if (!own_builds.count(ovid) && !child_outputs.count(ovid)) ++implicit;
       };
   count(ordered.root);
   std::size_t nb = 0, na = 0, nl = 0;
@@ -1557,16 +1571,27 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
     if (c.production.kind == sequant::eval::ProductionKind::Assemble) ++na;
     if (c.production.kind == sequant::eval::ProductionKind::Leaf) ++nl;
   }
-  CHECK(nb == builds);
+  CHECK(nb == builds + implicit);
   CHECK(na == outputs);
   CHECK(nl > 0);
-  // every Assemble encloses its source strictly, every Build cell's sliced
-  // entries name enclosing instances of its own scope
+  // every Assemble encloses its source strictly, assembles a form of its
+  // OWN value, and (for a Sum) the source records the closing instance as
+  // partial-summed over; every Build cell's sliced entries name enclosing
+  // instances of its own scope.
   for (auto const& c : table.cells) {
     if (c.production.kind == sequant::eval::ProductionKind::Assemble) {
       auto const& s = table.cells[c.production.source];
       CHECK(c.scope.encloses(s.scope));
       CHECK(s.scope.path.size() == c.scope.path.size() + 1);
+      CHECK(s.value_id == c.value_id);
+      if (c.production.assemble == sequant::eval::AssembleKind::Sum) {
+        auto const& closing = s.scope.path.back().first;
+        bool found = false;
+        for (auto const& k : s.partial_over)
+          if (k.depth == closing.depth && k.loop_slot == closing.loop_slot)
+            found = true;
+        CHECK(found);
+      }
     }
     if (c.production.kind == sequant::eval::ProductionKind::Build)
       for (auto const& [pos, k] : c.sliced) {

@@ -89,6 +89,69 @@ sequant::eval::CellTable make_two_level_table() {
 sequant::eval::ScopeBlock empty_root() { return sequant::eval::ScopeBlock{}; }
 }  // namespace
 
+namespace {
+// value 1 = built inside loop (1,0) as a partial sum over that loop (a
+// synthesized per-batch cell of a value whose production fuses an operand
+// contraction with the reduction, so it carries no sliced position of its
+// own); value 1's Sum-assembled form at root reduces that loop away.
+sequant::eval::CellTable make_sum_table() {
+  using namespace sequant::eval;
+  CellTable t;
+  TableCell inner;  // cell 0: value 1, partial sum over loop (1,0)
+  inner.value_id = 1;
+  inner.scope.path.push_back({LoopKey{1, 0}, 0});
+  inner.production.kind = ProductionKind::Build;
+  inner.partial_over.push_back(LoopKey{1, 0});
+  inner.life = 1;
+  t.cells.push_back(inner);  // cell 0
+  TableCell assembled;       // cell 1: Sum-assemble at root, reduces (1,0)
+  assembled.value_id = 1;
+  assembled.production.kind = ProductionKind::Assemble;
+  assembled.production.assemble = AssembleKind::Sum;
+  assembled.production.source = 0;
+  assembled.life = 1;
+  t.cells.push_back(assembled);  // cell 1
+  TableCell root_consumer;       // cell 2: root, reads the assembled form
+  root_consumer.value_id = 2;
+  root_consumer.production.kind = ProductionKind::Build;
+  root_consumer.life = 0;
+  t.cells.push_back(root_consumer);  // cell 2
+  t.reads.push_back(
+      Read{/*consumer=*/2, /*operand_value_id=*/1, /*source=*/1, {}});
+  return t;
+}
+}  // namespace
+
+TEST_CASE(
+    "cell table validator: a sum assemble requires its source's "
+    "partial_over to record the closing instance, and the same value_id",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  {
+    auto const t = make_sum_table();
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    CHECK(v.empty());
+  }
+  {
+    // source's partial_over does not record the closing instance (1,0).
+    auto t = make_sum_table();
+    t.cells[0].partial_over.clear();
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    REQUIRE(v.size() == 1);
+    CHECK(v.front().rule == "chain");
+  }
+  {
+    // source is a cell of a different value.
+    auto t = make_sum_table();
+    t.cells[0].value_id = 99;
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    bool chain = false;
+    for (auto const& x : v) chain = chain || x.rule == "chain";
+    CHECK(chain);
+  }
+}
+
 TEST_CASE("cell table validator: a consistent two-level table is valid",
           "[cell_table]") {
   auto const t = make_two_level_table();

@@ -63,6 +63,10 @@ struct TableCell {
   std::size_t value_id = 0;
   /// carried position -> loop instance slicing it; empty = whole.
   container::svector<std::pair<std::size_t, LoopKey>> sliced;
+  /// loop instances this cell is a partial sum over (a reduced axis has no
+  /// carried position, so it cannot appear in \c sliced); empty = complete
+  /// over every reduced axis.
+  container::svector<LoopKey> partial_over;
   CellScope scope;
   Production production;
   bool produce_if_absent = false;
@@ -104,9 +108,23 @@ namespace detail {
   return a.depth == b.depth && a.loop_slot == b.loop_slot;
 }
 
+/// The loop instances \p c is bound to: its sliced positions' instances plus
+/// the instances it is a partial sum over (\c partial_over) -- the single
+/// place every "is this cell bound to instance k" test should read from.
+[[nodiscard]] inline container::svector<LoopKey> bound_instances(
+    TableCell const& c) {
+  container::svector<LoopKey> out;
+  for (auto const& [pos, k] : c.sliced) {
+    (void)pos;
+    out.push_back(k);
+  }
+  for (LoopKey const& k : c.partial_over) out.push_back(k);
+  return out;
+}
+
 /// The scope over which a produced cell \p s remains resident, once
 /// produced: (1) a persistent cell is resident everywhere (the root scope);
-/// (2) else, if \p s is bound (via \c s.sliced) to one instance of a loop
+/// (2) else, if \p s is bound (\c bound_instances) to one instance of a loop
 /// that also appears in \c s.scope.path, it is resident only through that
 /// loop's current batch, i.e. through the prefix of \c s.scope.path ending
 /// at the DEEPEST such bound loop (it dies when that loop's batch ends); (3)
@@ -114,12 +132,12 @@ namespace detail {
 /// its innermost loop) it is resident exactly at \c s.scope.
 [[nodiscard]] inline CellScope residency_scope(TableCell const& s) {
   if (s.persistent) return CellScope{};
+  auto const bi = bound_instances(s);
   std::size_t deepest = 0;
   bool bound = false;
   for (std::size_t i = 0; i < s.scope.path.size(); ++i) {
     LoopKey const& here = s.scope.path[i].first;
-    for (auto const& [pos, k] : s.sliced) {
-      (void)pos;
+    for (LoopKey const& k : bi) {
       if (same_key(k, here)) {
         bound = true;
         deepest = i;
@@ -194,7 +212,7 @@ namespace detail {
         if (r.consumer != id) continue;
         TableCell const& s = table.cells[r.source];
         bool bound_here = false, bound_other = false;
-        for (auto const& [p, k] : s.sliced)
+        for (LoopKey const& k : detail::bound_instances(s))
           if (k.depth == L.depth)
             (k.loop_slot == L.loop_slot ? bound_here : bound_other) = true;
         for (auto const& [p, k] : r.slice)
@@ -230,6 +248,10 @@ namespace detail {
           s.scope.path.size() > c.scope.path.size()))
       out.push_back({"chain", detail::cell_str(table, id) +
                                   " does not enclose its source scope"});
+    if (s.value_id != c.value_id)
+      out.push_back({"chain", detail::cell_str(table, id) +
+                                  " assembles a source of a different "
+                                  "value"});
     if (c.production.assemble == AssembleKind::Scatter) {
       for (auto const& [pos, k] : c.production.scatter_map) {
         bool found = false;
@@ -242,18 +264,15 @@ namespace detail {
                                       " from a source not sliced by that "
                                       "instance"});
       }
-    } else {
-      bool reduces_one = false;
-      for (auto const& [sp, sk] : s.sliced) {
-        bool kept = false;
-        for (auto const& [cp, ck] : c.sliced)
-          if (detail::same_key(sk, ck)) kept = true;
-        if (!kept) reduces_one = true;
-      }
-      if (!reduces_one)
+    } else if (!s.scope.path.empty()) {
+      LoopKey const closing = s.scope.path.back().first;
+      bool found = false;
+      for (LoopKey const& k : s.partial_over)
+        if (detail::same_key(k, closing)) found = true;
+      if (!found)
         out.push_back({"chain", detail::cell_str(table, id) +
-                                    " sums a source sliced by no instance "
-                                    "the sum removes"});
+                                    " sums a source whose partial_over "
+                                    "lacks the closing instance"});
     }
   }
 
@@ -339,35 +358,39 @@ struct CellBuildState {
   return std::nullopt;
 }
 
-/// The cell to assemble FROM for an escaping value \p ovid closing loop
-/// instance \p inst: \p ovid's own cell inside the closing block if one was
-/// registered there (a Build, or a nested escape already assembled at this
-/// scope); otherwise \p ovid never got its own cell here (its production
-/// fuses the reduction/scatter with an operand contraction, so the escaped
-/// value's hash differs from any single operand's by exactly the closing
-/// axis) and the true partial is whichever DIRECT operand's own registered
-/// cell is itself sliced by \p inst.
-[[nodiscard]] inline std::optional<CellId> resolve_escape_source(
-    CellTableInputs const& in, CellBuildState const& st, std::size_t ovid,
-    LoopKey const& inst) {
-  if (auto const fit = st.forms_of.find(ovid);
-      fit != st.forms_of.end() && !fit->second.empty())
-    return fit->second.back();
-  auto const oit = in.ordered->operand_vids.find(ovid);
-  if (oit == in.ordered->operand_vids.end()) return std::nullopt;
-  for (std::size_t op : oit->second) {
-    auto const fit = st.forms_of.find(op);
-    if (fit == st.forms_of.end() || fit->second.empty()) continue;
-    CellId const cand = fit->second.back();
-    for (auto const& [p, k] : st.table.cells[cand].sliced)
-      if (detail::same_key(k, inst)) return cand;
+/// Whether block \p b lists \p ovid as an \c AccumulateSum output (a
+/// reduction escape realized at \p b's own loop instance).
+[[nodiscard]] inline bool has_accumulate_sum_output(ScopeBlock const& b,
+                                                    std::size_t ovid) {
+  for (auto const& [vid, kind] : b.outputs)
+    if (vid == ovid && kind == OutputKind::AccumulateSum) return true;
+  return false;
+}
+
+/// Sets the \c persistent / \c produce_if_absent flags of \p cell from its
+/// bound instances (\c bound_instances) against the current \p path: a cell
+/// is persistent iff it carries no volatile leaf and is bound to none of its
+/// enclosing loops; it is produced only on first visit (\c produce_if_absent)
+/// iff its scope is nested inside a loop it is NOT bound to on that loop's
+/// own instance.
+inline void set_residency_flags(
+    TableCell& cell, bool volatile_value,
+    container::svector<std::pair<LoopKey, int>> const& path) {
+  bool bound_on_any_enclosing = false, bound_on_innermost = false;
+  for (LoopKey const& k : bound_instances(cell)) {
+    for (auto const& [pk, lat] : path)
+      if (same_key(pk, k)) bound_on_any_enclosing = true;
+    if (!path.empty() && same_key(path.back().first, k))
+      bound_on_innermost = true;
   }
-  return std::nullopt;
+  cell.persistent = !volatile_value && !bound_on_any_enclosing;
+  cell.produce_if_absent = !path.empty() && !bound_on_innermost;
 }
 
 inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
                        container::svector<std::pair<LoopKey, int>>& path,
                        container::svector<std::wstring>& path_spaces,
+                       container::svector<ScopeBlock const*>& block_stack,
                        CellBuildState& st) {
   RichSchedule const& rich = *in.rich;
   for (Step const& step : block.steps) {
@@ -386,15 +409,7 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
         if (auto k = slicing_instance(rich, vid, p, path, path_spaces))
           cell.sliced.push_back({p, *k});
       }
-      bool sliced_on_any_enclosing = false, sliced_on_innermost = false;
-      for (auto const& [p, k] : cell.sliced) {
-        for (auto const& [pk, lat] : path)
-          if (detail::same_key(pk, k)) sliced_on_any_enclosing = true;
-        if (!path.empty() && detail::same_key(path.back().first, k))
-          sliced_on_innermost = true;
-      }
-      cell.persistent = !in.volatile_of(vid) && !sliced_on_any_enclosing;
-      cell.produce_if_absent = !path.empty() && !sliced_on_innermost;
+      set_residency_flags(cell, in.volatile_of(vid), path);
       st.table.cells.push_back(std::move(cell));
       st.forms_of[vid].push_back(st.table.cells.size() - 1);
       continue;
@@ -402,14 +417,60 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     auto const& child = std::get<ScopeBlock>(step.value);
     path.push_back({child.level.key(), child.latitude_ordinal});
     path_spaces.push_back(std::wstring{child.axis.space().base_key()});
-    emit_cells(in, child, path, path_spaces, st);
+    block_stack.push_back(&child);
+    // the number of forms already registered for each of the child's own
+    // escapes BEFORE walking the child: a nested (deeper) escape of the same
+    // value registers a NEW form during the recursive walk below, at the
+    // child's own scope -- distinguishing that from "nothing registered".
+    std::unordered_map<std::size_t, std::size_t> before_count;
+    for (auto const& [ovid, okind] : child.outputs) {
+      (void)okind;
+      before_count[ovid] = st.forms_of[ovid].size();
+    }
+    emit_cells(in, child, path, path_spaces, block_stack, st);
     // the child's outputs assemble at THIS scope
     for (auto const& [ovid, okind] : child.outputs) {
       LoopKey const inst = child.level.key();
-      auto const src_opt = resolve_escape_source(in, st, ovid, inst);
-      if (!src_opt) continue;
-      CellId const src = *src_opt;
+      auto const& forms = st.forms_of[ovid];
+      CellId src;
+      if (forms.size() > before_count[ovid]) {
+        // a nested escape already produced ovid's form at the child's scope.
+        src = forms.back();
+      } else {
+        // ovid never got its own cell inside the child: its production
+        // fuses the reduction/scatter with an operand contraction (the
+        // escaped value's hash differs from any single operand's by
+        // exactly the closing axis), so the legacy schedule never emits a
+        // plain BuildStep for it. The per-batch partial is nonetheless a
+        // real form of ovid itself, realized once per batch at the child's
+        // own scope; synthesize its Build cell here.
+        TableCell cell;
+        cell.value_id = ovid;
+        cell.scope.path = path;  // path currently has child on top
+        cell.production.kind = ProductionKind::Build;
+        auto const sm = in.sliced_modes_of(ovid);
+        ValueCell const& vc = rich.cells[ovid];
+        for (std::size_t p = 0; p < vc.carried.size(); ++p) {
+          bool const in_sm =
+              std::find(sm.begin(), sm.end(), vc.carried[p]) != sm.end();
+          if (!in_sm) continue;
+          if (auto k = slicing_instance(rich, ovid, p, path, path_spaces))
+            cell.sliced.push_back({p, *k});
+        }
+        for (std::size_t i = 0; i < path.size(); ++i)
+          if (has_accumulate_sum_output(*block_stack[i], ovid))
+            cell.partial_over.push_back(path[i].first);
+        set_residency_flags(cell, in.volatile_of(ovid), path);
+        st.table.cells.push_back(std::move(cell));
+        st.forms_of[ovid].push_back(st.table.cells.size() - 1);
+        src = st.table.cells.size() - 1;
+      }
       TableCell const& s = st.table.cells[src];
+      if (s.value_id != ovid)
+        throw std::logic_error(
+            "cell table: no same-value source found for escaping value " +
+            std::to_string(ovid) + " at block depth " +
+            std::to_string(child.level.depth));
       TableCell a;
       a.value_id = ovid;
       a.production.kind = ProductionKind::Assemble;
@@ -425,25 +486,26 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
           a.sliced.push_back({p, k});
         }
       }
+      if (a.production.assemble == AssembleKind::Sum) {
+        for (LoopKey const& k : s.partial_over)
+          if (!detail::same_key(k, inst)) a.partial_over.push_back(k);
+      } else {
+        a.partial_over = s.partial_over;
+      }
       path.pop_back();
       path_spaces.pop_back();
+      block_stack.pop_back();
       a.scope.path = path;
-      bool any_enclosing = false, innermost = false;
-      for (auto const& [p, k] : a.sliced) {
-        for (auto const& [pk, lat] : path)
-          if (detail::same_key(pk, k)) any_enclosing = true;
-        if (!path.empty() && detail::same_key(path.back().first, k))
-          innermost = true;
-      }
-      a.persistent = !in.volatile_of(ovid) && !any_enclosing;
-      a.produce_if_absent = !path.empty() && !innermost;
+      set_residency_flags(a, in.volatile_of(ovid), path);
       st.table.cells.push_back(std::move(a));
       st.forms_of[ovid].push_back(st.table.cells.size() - 1);
       path.push_back({child.level.key(), child.latitude_ordinal});
       path_spaces.push_back(std::wstring{child.axis.space().base_key()});
+      block_stack.push_back(&child);
     }
     path.pop_back();
     path_spaces.pop_back();
+    block_stack.pop_back();
   }
 }
 }  // namespace detail
@@ -458,7 +520,8 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
   detail::CellBuildState st;
   container::svector<std::pair<LoopKey, int>> path;
   container::svector<std::wstring> path_spaces;
-  detail::emit_cells(in, in.ordered->root, path, path_spaces, st);
+  container::svector<ScopeBlock const*> block_stack;
+  detail::emit_cells(in, in.ordered->root, path, path_spaces, block_stack, st);
   // Leaf cells: every leaf value that is an operand of some value.
   auto const g = detail::ordered_schedule_dep_graph(*in.rich);
   std::unordered_set<std::size_t> leaf_done;
