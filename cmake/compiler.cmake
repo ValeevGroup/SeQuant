@@ -16,7 +16,7 @@ function(target_warnings_as_errors TARGET)
     endif()
 endfunction()
 
-function(target_set_warning_flags TARGET)
+function(target_set_compiler_flags TARGET)
     __check_gnu_like_compiler()
 
     if (NOT PROJECT_IS_TOP_LEVEL)

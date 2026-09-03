@@ -44,7 +44,7 @@ foreach(current IN LISTS EXAMPLE_CODES)
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
 
-    target_set_warning_flags("${current_name}")
+    target_set_compiler_flags("${current_name}")
 
     math(EXPR counter "${counter} + 1")
 endforeach()
