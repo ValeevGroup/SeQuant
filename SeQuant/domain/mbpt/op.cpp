@@ -580,14 +580,14 @@ ExprPtr OpMaker<S>::operator()(
   if (!dep && csv) {
     if (opclass == OpClass::Ex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : cre_spaces_) {
+        for ([[maybe_unused]] const auto& s : cre_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
       dep = UseDepIdx::Bra;
     } else if (opclass == OpClass::Deex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : ann_spaces_) {
+        for ([[maybe_unused]] const auto& s : ann_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
@@ -609,7 +609,7 @@ ExprPtr OpMaker<S>::operator()(
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt, full_label, op_herm](
+        [opsymm_opt, full_label, op_herm](
             const auto& creidxs, const auto& annidxs, const auto& batchidxs,
             Symmetry opsymm) {
           // mbpt operators act on indistinguishable particles, hence are
@@ -623,7 +623,7 @@ ExprPtr OpMaker<S>::operator()(
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt, full_label, op_herm](
+      [opsymm_opt, full_label, op_herm](
           const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
         // mbpt operators act on indistinguishable particles, hence are
         // particle (column) symmetric
