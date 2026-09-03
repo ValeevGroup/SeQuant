@@ -1033,6 +1033,21 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   auto const ba = sum_of(L"g{i_1;a_1}", L"f{i_1;a_1}");
   REQUIRE(ab->hash_value() != ac->hash_value());
   REQUIRE(ab->hash_value() == ba->hash_value());
+  // the result layout is the FIRST summand's: the same summands in another
+  // order with a different leading layout are a different slot (the cached
+  // array would be served in the wrong mode order otherwise)
+  // (NonHermitian f keeps its written orientation, so the two leaves have
+  // different layouts)
+  auto const nonherm = [](std::wstring_view spec) {
+    return deserialize<ExprPtr>(spec,
+                                {.def_braket_symm = Hermiticity::NonHermitian});
+  };
+  auto const tf = binarize(
+      ex<Sum>(ExprPtrList{nonherm(L"t{a_1;i_1}"), nonherm(L"f{i_1;a_1}")}));
+  auto const ft = binarize(
+      ex<Sum>(ExprPtrList{nonherm(L"f{i_1;a_1}"), nonherm(L"t{a_1;i_1}")}));
+  REQUIRE(tf->canon_indices().front() != ft->canon_indices().front());
+  REQUIRE(tf->hash_value() != ft->hash_value());
   // three summands: the LAST one must count too
   auto const abc = binarize(ex<Sum>(ExprPtrList{deserialize(L"f{i_1;a_1}"),
                                                 deserialize(L"g{i_1;a_1}"),
