@@ -2342,7 +2342,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   std::function<double(Index const&, std::size_t)> const ip_off = {};
 
   bool composite_inner_checked = false;
-  for (std::wstring const term :
+  for (std::wstring const& term :
        {std::wstring(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
         std::wstring(L"g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
     for (auto const* ip : {&ip_on, &ip_off}) {
