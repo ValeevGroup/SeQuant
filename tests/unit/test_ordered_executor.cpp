@@ -64,6 +64,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -383,6 +384,8 @@ std::size_t orderedexec_builds_of(
 /// copied from it) de-duplicates its operand lists, so a value contracted
 /// with itself would otherwise contribute ONE read where the runtime performs
 /// two home accesses.
+/// \note Captures \p rich and \p vmap by reference: both must outlive the
+/// returned callable.
 ///
 template <typename NodeT>
 std::function<sequant::container::svector<std::size_t>(std::size_t)>
