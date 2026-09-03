@@ -23,6 +23,9 @@ function(target_set_compiler_flags TARGET)
 		# By default MSVC is not standard-compliant in its preprocessor implementation
 		# but we need it to be (partially in headers, which is why this is a public option)
 		target_compile_options("${TARGET}" PUBLIC "/Zc:preprocessor")
+		# By default MSVC does not set the __cplusplus macro to the correct value
+		# That breaks any code that tries to be compatible with different C++ standards
+		target_compile_options("${TARGET}" PUBLIC "/Zc:__cplusplus")
 	endif()
 
     if (NOT PROJECT_IS_TOP_LEVEL)
