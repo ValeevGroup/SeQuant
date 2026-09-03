@@ -19,6 +19,12 @@ endfunction()
 function(target_set_compiler_flags TARGET)
     __check_gnu_like_compiler()
 
+	if (MSVC)
+		# By default MSVC is not standard-compliant in its preprocessor implementation
+		# but we need it to be (partially in headers, which is why this is a public option)
+		target_compile_options("${TARGET}" PUBLIC "/Zc:preprocessor")
+	endif()
+
     if (NOT PROJECT_IS_TOP_LEVEL)
         if (IS_GNU_LIKE_COMPILER)
             # Disable compiler warnings
