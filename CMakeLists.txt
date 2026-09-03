@@ -262,8 +262,6 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/uintseqhash.hh
         SeQuant/external/bliss/heap.cc
         SeQuant/external/bliss/heap.hh
-        SeQuant/external/bliss/timer.cc
-        SeQuant/external/bliss/timer.hh
         SeQuant/external/bliss/utils.cc
         SeQuant/external/bliss/utils.hh
         SeQuant/external/bliss/bliss_C.cc
