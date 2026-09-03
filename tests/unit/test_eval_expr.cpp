@@ -1045,3 +1045,40 @@ TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
     REQUIRE(f_leaf->canon_transform().phase == -1);
   }
 }
+
+TEST_CASE("tot_leaf_canonical_spelling_and_phase", "[eval_expr][tot][phase]") {
+  // A tensor-of-tensors leaf is block-canonicalized IN PLACE like a flat
+  // leaf: the stored spelling (what a leaf provider serves) and
+  // canon_indices() carry the canonical slot order, the antisymmetric
+  // reorder phase is the retrieval transform's byproduct, and the two
+  // spellings share one slot. (HSeOH PNS sign regression, 2026-09-02: the
+  // phase was recorded against an un-reordered spelling.)
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↓_1");
+  const Index a2(L"a↑_2", {i1, i2}), a3(L"a↑_3", {i1, i2});
+  auto mk = [&](Index const& x, Index const& y) {
+    return Tensor(L"t", bra{x, y}, ket{i1, i2}, Symmetry::Antisymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  EvalExpr e23{mk(a2, a3)}, e32{mk(a3, a2)};
+  // both store the canonical spelling ...
+  REQUIRE(e23.as_tensor().bra()[0].label() == e32.as_tensor().bra()[0].label());
+  auto const& ci = e32.canon_indices();
+  auto pos = [&](std::wstring_view l) {
+    return std::find_if(ci.begin(), ci.end(),
+                        [&](Index const& ix) { return ix.label() == l; }) -
+           ci.begin();
+  };
+  REQUIRE(pos(e32.as_tensor().bra()[0].label()) <
+          pos(e32.as_tensor().bra()[1].label()));
+  // ... share one slot, and differ by the reorder phase only
+  REQUIRE(e23.hash_value() == e32.hash_value());
+  REQUIRE(e23.canon_transform().phase * e32.canon_transform().phase == -1);
+  REQUIRE_FALSE(e23.canon_transform().conj);
+  REQUIRE_FALSE(e32.canon_transform().conj);
+}

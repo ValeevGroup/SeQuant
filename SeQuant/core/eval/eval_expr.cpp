@@ -16,14 +16,18 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
+#include <algorithm>
+#include <numeric>
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/find.hpp>
 #include <range/v3/functional/not_fn.hpp>
 #include <range/v3/range/operations.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/move.hpp>
 #include <range/v3/view/transform.hpp>
+#include <span>
 
 #include <algorithm>
 #include <cmath>
@@ -207,19 +211,75 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       canon_transform_ = compose(canon_transform_, {.conj = true});
       t0.conjugate();
     }
+    // Block-canonicalize the SPELLING in place, exactly as the flat branch
+    // does: the stored tensor is what a leaf provider serves, so the slot
+    // order it carries must be the canonical one and the antisymmetric
+    // reorder phase a true byproduct of that reorder. (The slot
+    // canonicalization below only LABELS: it never reorders a
+    // tensor-of-tensors, so recording its phase against the as-written
+    // spelling negated correctly served leaves -- HSeOH PNS sign
+    // regression, 2026-09-02.)
+    auto const block_phase = TensorBlockCanonicalizer{}.apply(t0);
+    canon_transform_.phase = (block_phase ? -1 : 1) * kramers_phase;
+    if (t0.conjugated()) {  // fold byproduct: canonicalize_braket swapped the
+      // slots INTO the canonical orientation and marked; convert the marker
+      // to transform bits and keep the canonical slots
+      canon_transform_ =
+          compose(canon_transform_, {.conj = true, .braket_swap = true});
+      t0.conjugate();
+    }
+    // slot identity: the canonical labeling of the block-canonical spelling.
+    // The block canonicalizer is label-blind (same-space slots keep their
+    // order), so finish the reorder here: an ANTISYMMETRIC bra/ket bundle
+    // is put into the labeling's canonical slot order (the order the
+    // labeling's phase is defined against), with the permutation parity as
+    // the phase -- so the two spellings t{a2,a3;..} and t{a3,a2;..} store
+    // ONE spelling, share one slot, and differ by the retrieval phase only.
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
              TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
-    canon_transform_.phase = md.phase * kramers_phase;
-    if (!md.conjugated_tensors.empty()) {
-      // single-tensor network: the canonical labeling spells this leaf in
-      // the swapped orientation -- the fold map is the delta
-      canon_transform_ =
-          compose(canon_transform_, {.conj = true, .braket_swap = true});
-      static_cast<AbstractTensor&>(t0)._swap_bra_ket();
+    if (t0.symmetry() == Symmetry::Antisymm) {
+      auto const canon_order = md.get_indices<index_vector>();
+      auto rank_of = [&](Index const& ix) -> std::size_t {
+        auto it = ranges::find(canon_order, ix);
+        return it == canon_order.end() ? canon_order.size()
+                                       : std::size_t(it - canon_order.begin());
+      };
+      int parity = 1;
+      auto reorder = [&](auto&& slots, auto&& permute) {
+        std::size_t const n = ranges::size(slots);
+        if (n < 2) return;
+        container::svector<std::size_t> perm(n);
+        std::iota(perm.begin(), perm.end(), std::size_t{0});
+        container::svector<std::size_t> ranks;
+        for (auto const& ix : slots) ranks.push_back(rank_of(ix));
+        std::stable_sort(
+            perm.begin(), perm.end(),
+            [&](std::size_t a, std::size_t b) { return ranks[a] < ranks[b]; });
+        // parity of the from-permutation (cycle decomposition)
+        container::svector<char> seen(n, 0);
+        for (std::size_t i = 0; i < n; ++i) {
+          if (seen[i]) continue;
+          std::size_t len = 0;
+          for (std::size_t j = i; !seen[j]; j = perm[j]) {
+            seen[j] = 1;
+            ++len;
+          }
+          if (len % 2 == 0) parity = -parity;
+        }
+        permute(std::span<const std::size_t>(perm.data(), n));
+      };
+      auto& at = static_cast<AbstractTensor&>(t0);
+      reorder(t0.bra(), [&](auto p) { at._permute_bra(p); });
+      reorder(t0.ket(), [&](auto p) { at._permute_ket(p); });
+      SEQUANT_ASSERT(parity == md.phase &&
+                     "ToT leaf: reorder parity disagrees with the slot "
+                     "canonicalization phase");
+      canon_transform_.phase =
+          static_cast<std::int8_t>(canon_transform_.phase * parity);
     }
     // array-faithful indices in the Nested (outer;inner) convention: a ToT
     // array's outer modes are the plain slots PLUS the proto constituents,
