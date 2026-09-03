@@ -706,6 +706,39 @@ void run_ordered_contracted_block(
                    ? 1
                    : 0;
 
+  // SP4 Task 4 (final round): the block close's OWNERSHIP step. The Assemble
+  // cell this block's close produces at the parent scope declares a read of
+  // its `production.source` -- the per-batch form -- and the table charged
+  // that source +1 life for it. Three of the close's four ways of obtaining
+  // that per-batch value hand it over from somewhere other than the registry
+  // (a step's own result, a child's already-closed result, a resident home),
+  // and each of them still owes the table that read: leaving it unspent
+  // means the source's scope entry keeps holding a fully consumed buffer,
+  // which pins the memory AND makes every later reader see the value as
+  // shared -- disabling `evaluate_impl`'s in-place accumulation for exactly
+  // these values (the mechanism of the stage's wet-gate defect, section 8.4
+  // of the design). Routed through eval::table_read, the same helper
+  // CellReadResolver::fetch uses, so the two cannot drift.
+  //
+  // The release names the SOURCE's canonical node -- the same node every
+  // production site stores under -- and starts from this block's own scratch,
+  // so release_at's chain walk reaches whichever scope actually holds it,
+  // exactly as the operand-read path does from inside evaluate_impl.
+  auto spend_assemble_source = [&](std::size_t vid,
+                                   CellScope const& parent_scope) {
+    auto const assemble_cell = registry.assemble_cell_at(vid, parent_scope);
+    if (!assemble_cell) return;  // reported by the close-store site itself
+    CellId const src = registry.table().cells[*assemble_cell].production.source;
+    // A source with no current result was never produced this call -- the
+    // reuse path below is reached exactly when the batch loop did not
+    // accumulate this output at all -- so there is no life to spend and
+    // nothing holding the buffer. (A source that WAS produced always has one.)
+    if (!registry.peek(src)) return;
+    ResultPtr const spent = eval::table_read(
+        registry, src, [&]() { bs.cache.release_at(resolve(vid)); });
+    (void)spent;  // the value itself already reached the caller by hand
+  };
+
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
     {
@@ -823,8 +856,10 @@ void run_ordered_contracted_block(
       if (auto const it = escaped_build_results.find(vid);
           it != escaped_build_results.end()) {
         // Built by a step of this very block this batch: that result IS the
-        // partial (see escaped_build_results).
+        // partial (see escaped_build_results). Spend the read the Assemble
+        // declares of that Build cell (see spend_assemble_source).
         part = it->second;
+        spend_assemble_source(vid, current_scope(ectx));
       } else if (escaped_by_child.count(vid) && value_results[vid]) {
         // The next link of an escape chain: the partial a child block closed
         // during THIS batch (see escaped_by_child). It is CURRENT only because
@@ -834,6 +869,9 @@ void run_ordered_contracted_block(
         // has one) would leave a stale partial here and must invalidate this
         // branch.
         part = value_results[vid];
+        // The Assemble's declared read of the child's cell (the sibling of
+        // the registry.read the level-skipping branch below performs).
+        spend_assemble_source(vid, current_scope(ectx));
         if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
           std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
                     << " batch=[" << e_lo << "," << e_hi
@@ -988,6 +1026,10 @@ void run_ordered_contracted_block(
               std::to_string(block.level.loop_slot));
         registry.set(*assemble_cell, value_results[vid]);
       }
+      // The Assemble's declared read of its source, like every other close
+      // (a no-op when the batch loop produced no per-batch form for this
+      // reused output, which is the usual case here).
+      spend_assemble_source(vid, current_scope(ectx));
       built[vid] = 1;
       continue;
     }

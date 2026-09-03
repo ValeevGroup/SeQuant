@@ -1113,6 +1113,25 @@ ResultPtr evaluate_impl(Node const& node,         //
           // size). This reproduces the old per-block leaf slicing (le_g) on the
           // main value path; the OFF path (empty batch_context) is a no-op.
           ResultPtr stored = finish_phase_b(f, std::move(result));
+          // Explicit value cells (SP4 Task 4): the leaf is recorded now, so
+          // the Read left UNCONSUMED by the probe above can finally be
+          // served. THIS is the leg's read -- serving the stored leaf whole
+          // here instead would drop the Read's DECLARED SLICE (slice_to_use
+          // slices only on an `exact_axis`, which no table-driven fetch ever
+          // sets), handing the consumer a whole operand where the schedule
+          // says a batch slice. A nullopt here means the node is not a table
+          // value at all (no Leaf cell was recorded), which is the only case
+          // that still falls through to the un-declared slicing below.
+          if (auto* rr = cache.cell_read_resolver()) {
+            if (auto v =
+                    rr->fetch(f.node->hash_value(), cache.batch_context())) {
+              // See the ownership note on the operand probe above: the table
+              // says whether this read was the value's last.
+              if (rr->last_read_exhausted_source()) cache.release_at(f.node);
+              finalize(apply_phase(f.node, *v));
+              break;
+            }
+          }
           finalize(slice_to_use(stored, f.node, cache.batch_context().size()));
           break;
         }

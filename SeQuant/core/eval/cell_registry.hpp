@@ -195,6 +195,30 @@ class CellRegistry {
   std::unordered_map<std::size_t, CellId> leaf_of_;
 };
 
+/// The OWNERSHIP half of one table-driven read of \p source, shared by every
+/// site that spends a table-declared life so none of them can drift: spend
+/// one life of \p source in \p reg and, when that read spent the cell's LAST
+/// life, invoke \p on_exhausted -- the caller's cue to make the legacy scope
+/// chain let go of the same value too (\c CacheManager::release_at on the
+/// canonical node every production site keys on). Two kinds of site call it:
+/// \c CellReadResolver::fetch, for a consumer's operand reads, and the
+/// ordered executor's block-close handoffs, for the read an \c Assemble
+/// declares of its \c production.source. A read the executor serves from
+/// somewhere other than the registry still owes the table that life: skipping
+/// it leaves the source's scope entry holding a fully consumed buffer, which
+/// pins the memory and makes every later reader see the value as shared.
+///
+/// STAGE-3 SEAM: only the \p on_exhausted call is legacy-cache business; the
+/// stage that moves storage onto the table drops it and keeps the read.
+template <typename OnExhausted>
+[[nodiscard]] inline ResultPtr table_read(CellRegistry& reg, CellId source,
+                                          OnExhausted&& on_exhausted) {
+  bool exhausted = false;
+  ResultPtr v = reg.read(source, &exhausted);
+  if (exhausted) on_exhausted();
+  return v;
+}
+
 /// Resolves one consumer cell's operand fetches to table reads. Installed on
 /// a scratch cache for one consumer cell at a time (\c begin_consumer resets
 /// the per-operand read cursors); \c fetch is consulted by \c evaluate_impl
@@ -258,7 +282,9 @@ class CellReadResolver {
           std::to_string(*vid) + ") has no current result");
     }
     it->second.erase(it->second.begin());
-    ResultPtr v = reg_->read(r.source, &last_read_exhausted_source_);
+    last_read_exhausted_source_ = false;
+    ResultPtr v = table_read(*reg_, r.source,
+                             [this]() { last_read_exhausted_source_ = true; });
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
       for (auto const& e : ctx)

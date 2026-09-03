@@ -3844,3 +3844,132 @@ TEST_CASE("ordered executor has no slice seam", "[ordered][cell_table]") {
                 "the loop-colored slice seam must be gone from the cache");
   SUCCEED();
 }
+
+// ===========================================================================
+// Explicit value cells, final round (C1): a LEAF's FIRST touch must be served
+// through its Read, sliced. The read resolver defers a leaf whose cell has no
+// result yet (nothing has recorded it), the leaf evaluator runs, and the leaf
+// is recorded -- but the value handed to the consumer used to be the WHOLE
+// leaf: the only slicing left on that path is `slice_to_use`, whose ordered
+// arm is a no-op (it fires on an `exact_axis`, which no table-driven fetch
+// sets). So the first consumer of a leaf inside a batch loop got a whole
+// operand where the schedule declares a batch slice, while every LATER
+// consumer of the same leaf got the declared slice -- a silent
+// whole-against-sliced pairing.
+//
+// Driven at the read path directly (a hand-built table + registry + resolver
+// on a cache carrying one batch-loop context) rather than through a whole
+// derived schedule: the defect is entirely in which value the leaf branch
+// finalizes, and this pins it without depending on a schedule shape that
+// happens to touch some leaf first inside a loop.
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: a leaf's first touch inside a batch loop is served "
+    "through its Read, with the declared slice",
+    "[ordered][cell_registry]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+
+  auto ctx0 = sequant::get_default_context().clone();
+  ctx0.set_first_dummy_index_ordinal(1000000);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx0));
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}, {L"a", 4}};
+  auto const cm =
+      std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // C = X(i_1) * P(a_1): X is the leaf whose Read declares a slice on the
+  // enclosing loop; P is deliberately NOT a value of the table (a transient,
+  // which the resolver reports as such and the caller evaluates in place).
+  auto const mk = [](std::wstring const& label, sequant::Index const& ix) {
+    return sequant::ex<sequant::Tensor>(
+        label, sequant::bra(sequant::container::svector<sequant::Index>{ix}),
+        sequant::ket{}, sequant::Symmetry::Nonsymm,
+        sequant::BraKetSymmetry::Symm, sequant::ColumnSymmetry::Nonsymm);
+  };
+  auto const prod = sequant::ex<sequant::Product>(
+      1,
+      sequant::ExprPtrList{mk(L"X", sequant::Index{L"i_1"}),
+                           mk(L"P", sequant::Index{L"a_1"})},
+      sequant::Product::Flatten::No);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const node = sequant::binarize<EvalExprDryRun>(prod);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE_FALSE(node.leaf());
+  // Whichever leg carries i_1 is the table's leaf value; the other is the
+  // transient.
+  auto const carries_i = [](EvalNodeDryRun const& n) {
+    for (auto const& ix : n->canon_indices())
+      if (ix.label() == L"i_1") return true;
+    return false;
+  };
+  REQUIRE(carries_i(node.left()) != carries_i(node.right()));
+  std::size_t const x_hash = carries_i(node.left())
+                                 ? node.left()->hash_value()
+                                 : node.right()->hash_value();
+
+  // The table: cell 0 = the Leaf (value 0); cell 1 = the consumer's Build
+  // (value 1) at the loop's scope; one Read of value 0 declaring the slice of
+  // position 0 by loop instance (1,0).
+  sequant::eval::CellTable table;
+  {
+    sequant::eval::TableCell leaf;
+    leaf.value_id = 0;
+    leaf.production.kind = sequant::eval::ProductionKind::Leaf;
+    leaf.life = 1;
+    table.cells.push_back(leaf);
+    sequant::eval::TableCell build;
+    build.value_id = 1;
+    build.production.kind = sequant::eval::ProductionKind::Build;
+    build.scope.path = {{sequant::eval::LoopKey{1, 0}, 0}};
+    build.sliced = {{0, sequant::eval::LoopKey{1, 0}}};
+    table.cells.push_back(build);
+    table.reads.push_back(
+        sequant::eval::Read{1, 0, 0, {{0, sequant::eval::LoopKey{1, 0}}}, {}});
+  }
+  sequant::eval::CellRegistry registry(table);
+  sequant::eval::CellReadResolver resolver(
+      registry, [x_hash](std::size_t h) -> std::optional<std::size_t> {
+        if (h == x_hash) return std::size_t{0};
+        return std::nullopt;  // the partner leg is a transient
+      });
+  resolver.begin_consumer(1);
+
+  auto cache = sequant::CacheManager<EvalNodeDryRun>::empty();
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  cache.set_array_ops(&aops);
+  sequant::eval::BatchContext bctx;
+  bctx.push_back({sequant::Index{L"i_1"},
+                  sequant::eval::DagScopeLevel{1, L"i", 0, 0, 0},
+                  {2, 4},
+                  std::nullopt});
+  cache.set_batch_context(bctx);
+  cache.set_cell_read_resolver(&resolver);
+
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  sequant::ResultPtr const got =
+      sequant::evaluate_impl<sequant::Trace::Off>(node, yield, cache);
+  REQUIRE(got);
+
+  // The leaf reached the contraction SLICED to [2,4): the product's own i_1
+  // mode carries the batch extent and the absolute lower bound. Served whole
+  // (the pre-fix behavior) the result has no override on that position at
+  // all, and lobound 0.
+  auto const idx = sequant::eval::dryrun::detail::indices_of(*got);
+  auto const ov = sequant::eval::dryrun::detail::overrides_of(*got);
+  auto const lob = sequant::eval::dryrun::detail::lobounds_of(*got);
+  std::optional<std::size_t> i_pos;
+  for (std::size_t p = 0; p < idx.size(); ++p)
+    if (idx[p].label() == L"i_1") i_pos = p;
+  REQUIRE(i_pos.has_value());
+  REQUIRE(ov.count(*i_pos) == 1);
+  CHECK(ov.at(*i_pos) == 2);
+  REQUIRE(lob.count(*i_pos) == 1);
+  CHECK(lob.at(*i_pos) == 2);
+
+  // The Read was consumed exactly once by the two fetches the leg makes (the
+  // deferring first touch left it unconsumed; the second served it), so the
+  // consumer has no read of that value left.
+  CHECK_THROWS(resolver.fetch(x_hash, bctx));
+}

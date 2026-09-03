@@ -167,11 +167,17 @@ TEST_CASE(
   // record_leaf populates it, and the SAME Read is then served (and
   // consumed, sliced per the read) by a second fetch.
   CHECK_FALSE(res.fetch(0, ctx).has_value());
+  CHECK(res.served() == 0);  // the deferring touch serves nothing
   auto leaf = std::make_shared<sequant::eval::dryrun::ResultDryRun>(idx, cm);
   res.record_leaf(0, leaf);
+  // THE first touch's read (eval.hpp's leaf branch calls exactly this after
+  // record_leaf): the SAME Read, now served and SLICED per its declaration --
+  // finalizing the recorded leaf whole instead would drop the slice.
   auto got0 = res.fetch(0, ctx);
   REQUIRE(got0.has_value());
   CHECK(sequant::eval::dryrun::detail::lobounds_of(**got0).at(0) == 2);
+  CHECK(sequant::eval::dryrun::detail::overrides_of(**got0).at(0) == 2);
+  CHECK(res.served() == 1);         // consumed exactly once for the leg
   CHECK_THROWS(res.fetch(0, ctx));  // now consumed: no remaining Read
 
   // (b) Build cell 1 has no current result and is never recorded by the
@@ -227,4 +233,34 @@ TEST_CASE("cell registry: cell_of finds a value's form by residency",
   REQUIRE(b_deep.has_value());
   CHECK(*b_deep == 1);
   CHECK_FALSE(reg.cell_of(6, root).has_value());
+}
+
+TEST_CASE("table_read spends one declared life and reports exhaustion once",
+          "[cell_registry]") {
+  // The shared ownership helper: EVERY site that spends a table-declared
+  // life routes through it -- CellReadResolver::fetch for a consumer's
+  // operand reads, and the ordered executor's block-close handoffs for the
+  // read an Assemble declares of its production.source (a close that takes
+  // the per-batch value from a step's own result, a child's closed result or
+  // a resident home still owes the table that read). The two must not drift:
+  // the callback fires on the read that spends the LAST life and on no
+  // other, and never for a persistent cell.
+  auto const t = make_table();
+  CellRegistry reg(t);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+
+  std::size_t released = 0;
+  reg.set(1, r);  // cell 1: Build, non-persistent, life 1
+  CHECK(sequant::eval::table_read(reg, 1, [&] { ++released; }) == r);
+  CHECK(released == 1);
+  CHECK_FALSE(reg.peek(1));  // sole ownership handed to the reader
+
+  reg.set(0, r);  // cell 0: Leaf, PERSISTENT, life 2
+  CHECK(sequant::eval::table_read(reg, 0, [&] { ++released; }) == r);
+  CHECK(sequant::eval::table_read(reg, 0, [&] { ++released; }) == r);
+  CHECK(released == 1);  // a persistent cell never exhausts
+  CHECK(reg.peek(0) == r);
 }
