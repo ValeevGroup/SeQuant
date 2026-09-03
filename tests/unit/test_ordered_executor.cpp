@@ -26,6 +26,7 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/cell_table.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -1416,6 +1417,166 @@ TEST_CASE(
       is_volatile_node));
 
   logger.eval.level = prev_level;
+}
+
+// ===========================================================================
+// Explicit value cells (SP4 Task 3): derive the cell table's productions
+// (Build/Assemble/Leaf) from an ordered schedule already built above by the
+// [w20-auxocc-walk] fixture. This checks structure only (one Build per
+// BuildStep, one Assemble per block output entry, at least one Leaf, every
+// Assemble strictly enclosing its source, every Build cell's sliced entries
+// naming an enclosing loop instance of its own scope) -- reads and lives are
+// Task 4.
+// ===========================================================================
+TEST_CASE("cell table: cells derived from the w20 default schedule",
+          "[cell_table][ordered]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+  // Same construction as the [w20-auxocc-walk] case up to the schedule.
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+  std::vector<Node> forest;
+  for (auto const& s : summands) {
+    sequant::ExprPtr const term = orderedexec_witness_flatten_product(s);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+  auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+
+  sequant::eval::CellTableInputs in;
+  in.ordered = &ordered;
+  in.rich = &rich;
+  in.legality = &legality;
+  in.sliced = &sma;
+  in.sliced_modes_of = [&](std::size_t vid) {
+    auto const it = vmap.find(rich.cells[vid].hash);
+    REQUIRE(it != vmap.end());
+    return sequant::container::svector<sequant::Index>(
+        it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+  };
+  in.volatile_of = [&](std::size_t vid) {
+    auto const it = vmap.find(rich.cells[vid].hash);
+    return it != vmap.end() &&
+           sequant::subtree_any(it->second, [&](auto const& n) {
+             return n.leaf() && n->is_tensor() &&
+                    n->as_tensor().label() == L"t";
+           });
+  };
+  in.n_batches_of = [](sequant::eval::LoopKey const&) {
+    return std::size_t{1};
+  };
+  auto const table = sequant::eval::build_cell_table(in);
+
+  // one Build cell per BuildStep, one Assemble per output entry, Leaf cells
+  std::size_t builds = 0, outputs = 0;
+  std::function<void(sequant::eval::ScopeBlock const&)> count =
+      [&](sequant::eval::ScopeBlock const& b) {
+        for (auto const& st : b.steps)
+          if (std::holds_alternative<sequant::eval::BuildStep>(st.value))
+            ++builds;
+          else
+            count(std::get<sequant::eval::ScopeBlock>(st.value));
+        outputs += b.outputs.size();
+      };
+  count(ordered.root);
+  std::size_t nb = 0, na = 0, nl = 0;
+  for (auto const& c : table.cells) {
+    if (c.production.kind == sequant::eval::ProductionKind::Build) ++nb;
+    if (c.production.kind == sequant::eval::ProductionKind::Assemble) ++na;
+    if (c.production.kind == sequant::eval::ProductionKind::Leaf) ++nl;
+  }
+  CHECK(nb == builds);
+  CHECK(na == outputs);
+  CHECK(nl > 0);
+  // every Assemble encloses its source strictly, every Build cell's sliced
+  // entries name enclosing instances of its own scope
+  for (auto const& c : table.cells) {
+    if (c.production.kind == sequant::eval::ProductionKind::Assemble) {
+      auto const& s = table.cells[c.production.source];
+      CHECK(c.scope.encloses(s.scope));
+      CHECK(s.scope.path.size() == c.scope.path.size() + 1);
+    }
+    if (c.production.kind == sequant::eval::ProductionKind::Build)
+      for (auto const& [pos, k] : c.sliced) {
+        bool enclosing = false;
+        for (auto const& [pk, lat] : c.scope.path)
+          if (pk.depth == k.depth && pk.loop_slot == k.loop_slot)
+            enclosing = true;
+        CHECK(enclosing);
+      }
+  }
 }
 
 // ===========================================================================
