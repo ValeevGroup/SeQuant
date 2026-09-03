@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <SeQuant/core/eval/cell_table.hpp>
+// for ScopeBlock, which validate_cell_table names but never dereferences
+#include <SeQuant/core/eval/ordered_schedule.hpp>
 
 using sequant::eval::AssembleKind;
 using sequant::eval::CellScope;

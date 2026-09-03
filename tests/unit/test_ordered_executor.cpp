@@ -26,7 +26,7 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
-#include <SeQuant/core/eval/cell_table.hpp>
+#include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -1418,7 +1418,6 @@ TEST_CASE(
     sequant::eval::CellTableInputs in;
     in.ordered = &ordered;
     in.rich = &rich;
-    in.legality = &legality;
     in.sliced = &sma;
     in.sliced_modes_of = [&](std::size_t vid) {
       auto const it = vmap.find(rich.cells[vid].hash);
@@ -1556,7 +1555,6 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   sequant::eval::CellTableInputs in;
   in.ordered = &ordered;
   in.rich = &rich;
-  in.legality = &legality;
   in.sliced = &sma;
   in.sliced_modes_of = [&](std::size_t vid) {
     auto const it = vmap.find(rich.cells[vid].hash);

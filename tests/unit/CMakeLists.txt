@@ -160,6 +160,7 @@ endif()
 # OBJECT library: DryRun backend tests
 ##########################
 set(eval_dryrun_test_sources
+    "test_cell_table.cpp"
     "test_dag_scope.cpp"
     "test_eval_dryrun.cpp"
     "test_eval_ordered.cpp"
@@ -167,7 +168,6 @@ set(eval_dryrun_test_sources
     "test_meter.cpp"
     "test_occurrence_key.cpp"
     "test_ordered_executor.cpp"
-    "test_cell_table.cpp"
     "test_ordered_schedule.cpp"
     "test_peak_profile.cpp"
     "test_placement_remat.cpp"
