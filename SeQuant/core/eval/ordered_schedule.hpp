@@ -1035,6 +1035,40 @@ inline ForcedSplitPasses forced_split_passes(std::wstring const& axis_key,
     if (it != g.consumers_of.end())
       for (std::size_t p : it->second) push(p);
   }
+  // DOWNWARD closure (2026-09-02): a LoopLocal member of this nest whose
+  // consumers ALL sit in the consumer pass must move with them -- its
+  // per-batch cell is pass-local, so left in the producer pass it is gone by
+  // the time the consumer pass runs (w20 pVDZ-F12 strict walk: 59557, a
+  // 4-occ member read only by two consumer-pass members at i#d1s0 lat 1 ->
+  // "read-from-home value vanished"). A member with consumers in BOTH passes
+  // is left where it is (it cannot be built twice); such a case must escape
+  // instead and shows up in the strict walk.
+  for (bool grew = true; grew;) {
+    grew = false;
+    container::svector<std::size_t> members(r.consumer_pass.begin(),
+                                            r.consumer_pass.end());
+    for (std::size_t v : members) {
+      auto const dit = g.depends_on.find(v);
+      if (dit == g.depends_on.end()) continue;
+      for (std::size_t op : dit->second) {
+        if (r.consumer_pass.count(op) || r.carried.count(op)) continue;
+        auto const cit = g.consumers_of.find(op);
+        if (cit == g.consumers_of.end() || cit->second.empty()) continue;
+        bool all_in = true;
+        for (std::size_t c : cit->second)
+          if (!r.consumer_pass.count(c)) {
+            all_in = false;
+            break;
+          }
+        // All consumers on the consumer side: move it. Consumers on BOTH
+        // sides: left where it is -- a per-batch cell is pass-local, so this
+        // is a genuine scheduling conflict (recompute it in the consumer pass
+        // vs materialize it across the pass boundary) that the schedule must
+        // decide with a cost; it surfaces in the strict walk, by design.
+        if (all_in && r.consumer_pass.insert(op).second) grew = true;
+      }
+    }
+  }
   return r;
 }
 
@@ -1977,9 +2011,20 @@ forced_split_demotions(RichSchedule const& rich,
   // space + nest position -- the same frame-safe routing occ_facts uses -- and
   // keep only modes that are the value's `home_modes` (its home-sliced set).
   {
+    // A value's home coloring names only the loops it is LoopLocal on: a
+    // loop it ESCAPES (LoopCarried/Reduction -> its assembled form at the
+    // parent scope is unsliced on it) must not color the key, else a reader
+    // in a LATER PASS of that loop (latitude > 0) probes a colored per-batch
+    // cell that no longer exists instead of the resident root form (w20
+    // pVDZ-F12 strict walk: 28705 read by 66997 at i#d1s0 lat 1 ->
+    // "vanished" while the root cell was alive).
+    std::unordered_map<std::size_t, CellLegality const*> legality_of_hash;
+    for (CellLegality const& cl : legality.cells)
+      legality_of_hash.emplace(cl.hash, &cl);
     auto const record =
-        [&out, &rich](std::size_t vid,
-                      container::svector<std::pair<Index, int>> const& levels) {
+        [&out, &rich, &legality_of_hash](
+            std::size_t vid,
+            container::svector<std::pair<Index, int>> const& levels) {
           if (vid >= rich.cells.size()) return;
           ValueCell const& c = rich.cells[vid];
           // SINGLE-SOURCE-OF-TRUTH home: the value's coloring may only name
@@ -1993,8 +2038,16 @@ forced_split_demotions(RichSchedule const& rich,
           // invariant value uncolored, matching where the close-store actually
           // homes it.
           auto const& hm = c.home_modes;
-          auto const is_home_mode = [&hm](Index const& m) {
-            return std::find(hm.begin(), hm.end(), m) != hm.end();
+          CellLegality const* cl = nullptr;
+          if (auto const lit = legality_of_hash.find(c.hash);
+              lit != legality_of_hash.end())
+            cl = lit->second;
+          auto const is_home_mode = [&hm, cl](Index const& m) {
+            if (std::find(hm.begin(), hm.end(), m) == hm.end()) return false;
+            if (!cl) return true;
+            for (AxisClass const& ac : cl->per_axis)
+              if (ac.axis == m) return ac.role == LoopRole::LoopLocal;
+            return true;  // no legality entry for this mode: unchanged
           };
           container::svector<std::pair<Index, int>> mode_depth;
           container::svector<bool> consumed(c.carried.size(), false);

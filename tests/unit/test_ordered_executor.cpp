@@ -1060,12 +1060,29 @@ TEST_CASE(
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
   policy.peak_threshold = 1e11;
+  // Mirror a specific MPQC input (z820 w20 csv-cck-diag.json: batch
+  // peak_threshold 25e9, optimize objective dense_time_space) via env.
+  if (char const* pt = std::getenv("SEQUANT_UT_PEAK_THRESHOLD"))
+    policy.peak_threshold = std::atof(pt);
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
       sequant::container::vector<sequant::NodeBatchAnnotation>>>();
   sequant::OptimizeOptions opts;
   opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  if (char const* ob = std::getenv("SEQUANT_UT_OBJECTIVE")) {
+    std::string const o{ob};
+    if (o == "dense_time_space")
+      opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpace;
+    else if (o == "dense_time_space_batched")
+      opts.objective_function =
+          sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+    else if (o == "dense_space_time")
+      opts.objective_function = sequant::ObjectiveFunction::DenseSpaceTime;
+    else if (o == "dense_space_time_batched")
+      opts.objective_function =
+          sequant::ObjectiveFunction::DenseSpaceTimeBatched;
+  }
   opts.idx_to_extent = regime.idx_to_extent();
   opts.inner_pow = regime.inner_pow_fn();
   opts.batch_policy = policy;

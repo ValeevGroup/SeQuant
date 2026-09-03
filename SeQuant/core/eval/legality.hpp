@@ -235,11 +235,23 @@ using DemotionSource =
 ///       at all, the axis is a plain free result index with nothing to lock
 ///       it to a loop iteration -> \c LoopCarried.
 ///
+/// \param enclosing_slot (optional) the fusion loop_slot of the ENCLOSING loop
+///        with tree-frame label \p L at occurrence \p occ (the parent
+///        occurrence's slot for L; -1 if unknown). Lockstep with an enclosing
+///        loop is then LOOP-INSTANCE-aware: a same-space enclosing loop of a
+///        DIFFERENT fusion instance is NOT this value's loop -- the value is
+///        LoopCarried (an assembled escape of its own nest that the other nest
+///        reads sliced), not LoopLocal. Label equality alone conflated the
+///        instances (w20: a 4-occ intermediate built per batch inside its own
+///        nest and read from a sibling nest -> "read-from-home value
+///        vanished").
 [[nodiscard]] inline LoopRole classify_axis(
     container::svector<Index> const& carried,
     container::svector<Index> const& contracted_below, Index const& axis,
     container::svector<OccurrenceRec> const& occurrences,
-    container::svector<Index> const& sliced) {
+    container::svector<Index> const& sliced,
+    std::function<int(OccurrenceRec const&, Index const&)> const&
+        enclosing_slot = {}) {
   auto const same_type = [&](Index const& ix) {
     return ix.space().base_key() == axis.space().base_key();
   };
@@ -287,6 +299,51 @@ using DemotionSource =
     // carried slot with no matching enclosing loop (a free / cross-iteration
     // read) makes the whole occurrence -- and thus the axis -- LoopCarried.
     bool matched_any_same_type = false;
+    // Loop-INSTANCE test at the SET level: the fusion slots of the value's
+    // own same-space batched positions at this occurrence. An enclosing loop
+    // whose instance is NOT among them is a loop this value is not sliced by
+    // in ANY position -- a SIBLING nest (w20 pVDZ-F12: a 4-occ intermediate
+    // built in nest {s3,s4} and read from nest {s5,s6}) -- so the value must
+    // be an assembled escape of its own nest: LoopCarried. A PERMUTATION of
+    // the same instances (a symmetric value read with i_1/i_2 transposed,
+    // slots {1,2} either way) is NOT this case: the value-keyed cache serves
+    // it as a distinct colored cell in-nest, and forcing it to the root would
+    // strand the in-nest read.
+    // The value's PRODUCTION instances: the front occurrence's stamps (the
+    // value is built there; a read occurrence's own stamps follow the
+    // CONSUMER's instance at that read -- a sibling-nest read is stamped with
+    // the sibling's slots and would pass a self-comparison).
+    container::svector<int> own_slots;
+    {
+      OccurrenceRec const& prod = occurrences.front();
+      for (std::size_t pc = 0; pc < prod.carried.size(); ++pc)
+        if (same_type(prod.carried[pc]) && is_batched(prod.carried[pc]) &&
+            pc < prod.loop_slot.size() && prod.loop_slot[pc] >= 0)
+          own_slots.push_back(prod.loop_slot[pc]);
+    }
+    // Direction matters: the value may be read INSIDE loops it is invariant
+    // to (a deeper level of its own nest -- enclosing instances beyond its
+    // own are fine), but every one of ITS OWN instances must be among the
+    // enclosing loops, else it is being read OUTSIDE its own loops (a sibling
+    // nest) and must be an assembled escape. Skipped when any enclosing
+    // instance cannot be resolved (incomplete evidence -> label-only test).
+    if (enclosing_slot && !own_slots.empty()) {
+      container::svector<int> encl_slots;
+      bool complete = true;
+      for (Index const& L : encl) {
+        int const es = enclosing_slot(occ, L);
+        if (es < 0) {
+          complete = false;
+          break;
+        }
+        encl_slots.push_back(es);
+      }
+      if (complete)
+        for (int os : own_slots)
+          if (std::find(encl_slots.begin(), encl_slots.end(), os) ==
+              encl_slots.end())
+            return LoopRole::LoopCarried;  // own loop instance not enclosing
+    }
     for (Index const& c : occ.carried) {
       if (!same_type(c)) continue;
       if (!is_batched(c)) continue;  // free full spectator dim -- not a loop
@@ -358,6 +415,33 @@ template <meta::eval_node_range R>
     RichSchedule const& rich, R const& forest, BatchPolicy const& policy,
     DemotionSource demotion_source = {}) {
   using Node = std::ranges::range_value_t<R>;
+
+  // point -> occurrence, to reach the PARENT occurrence (same tree) of an
+  // occurrence and read the fusion slot of an enclosing loop by its
+  // tree-frame label (carried position, or a reduced mode of the parent).
+  std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
+  for (ValueCell const& vc : rich.cells)
+    for (OccurrenceRec const& occ : vc.occurrences) point_occ[occ.point] = &occ;
+  std::function<int(OccurrenceRec const&, Index const&)> const enclosing_slot =
+      [&point_occ](OccurrenceRec const& occ, Index const& L) -> int {
+    // Walk up the tree: the loop labeled L is opened by SOME ancestor; the
+    // nearest ancestor carrying (or reducing) L in its own frame stamps its
+    // slot.
+    std::size_t pt = occ.consumer_point;
+    for (int guard = 0; guard < 64; ++guard) {
+      auto const it = point_occ.find(pt);
+      if (it == point_occ.end()) return -1;
+      OccurrenceRec const& par = *it->second;
+      for (std::size_t p = 0; p < par.carried.size(); ++p)
+        if (par.carried[p] == L)
+          return p < par.loop_slot.size() ? par.loop_slot[p] : -1;
+      for (auto const& [rm, rs] : par.reduced_slot)
+        if (rm == L) return rs;
+      if (par.consumer_point == par.point) return -1;  // forest root
+      pt = par.consumer_point;
+    }
+    return -1;
+  };
 
   std::unordered_map<std::size_t, Node> node_of;
   auto visit = [&](auto&& self, Node const& n) -> void {
@@ -451,7 +535,7 @@ template <meta::eval_node_range R>
         AxisClass ac;
         ac.axis = axis;
         ac.role = classify_axis(vc.carried, contracted_below, axis,
-                                vc.occurrences, dp_sliced);
+                                vc.occurrences, dp_sliced, enclosing_slot);
         // Monotone demotion (SP2 hook): a prior fixpoint round can force an
         // axis LoopLocal -> LoopCarried; roles only ever move toward
         // LoopCarried, never back, which is what makes the fixpoint monotone.

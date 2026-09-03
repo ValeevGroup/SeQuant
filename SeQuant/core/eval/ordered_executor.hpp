@@ -793,6 +793,24 @@ void run_ordered_contracted_block(
     // chain root. The passthrough is a SCHEDULED home, not runtime motion: the
     // invariant value is identical across the skipped loops' batches (each
     // batch re-homes the same value), so the outermost store wins.
+    // ONE truth for "sliced on this loop" (residency + fusion slot), used by
+    // the home walk AND the per-batch persistence decision below.
+    ValueCell const& cell = rich.cells[vid];
+    auto sliced_on_level = [&](DagScopeLevel const& level) {
+      if (out_node.leaf()) return false;
+      auto const& sm = out_node->sliced_modes();
+      auto const& canon = out_node->canon_indices();
+      for (std::size_t p = 0; p < canon.size() && p < cell.carried.size();
+           ++p) {
+        if (std::find(sm.begin(), sm.end(), canon[p]) == sm.end()) continue;
+        if (std::wstring(cell.carried[p].space().base_key()) != level.space)
+          continue;
+        for (auto const& occ : cell.occurrences)
+          if (p < occ.loop_slot.size() && occ.loop_slot[p] == level.loop_slot)
+            return true;
+      }
+      return false;
+    };
     Cache* home_cache = &parent_cache;
     if (!out_node.leaf()) {
       // IDENTITY-based (2026-09-02): "sliced on the loop this cache sits in"
@@ -805,21 +823,6 @@ void run_ordered_contracted_block(
       // home_mode_depth EXCLUDE those and would send a multi-level escape's
       // inner partial to the root, colliding across outer batches) mapped to
       // loop identity by the occurrence's per-position fusion slot.
-      auto const& sm = out_node->sliced_modes();
-      auto const& canon = out_node->canon_indices();
-      ValueCell const& cell = rich.cells[vid];
-      auto sliced_on_level = [&](DagScopeLevel const& level) {
-        for (std::size_t p = 0; p < canon.size() && p < cell.carried.size();
-             ++p) {
-          if (std::find(sm.begin(), sm.end(), canon[p]) == sm.end()) continue;
-          if (std::wstring(cell.carried[p].space().base_key()) != level.space)
-            continue;
-          for (auto const& occ : cell.occurrences)
-            if (p < occ.loop_slot.size() && occ.loop_slot[p] == level.loop_slot)
-              return true;
-        }
-        return false;
-      };
       // Loops that a CONSUMER of this value reads it inside (by loop color).
       // Relocating the value ABOVE such a loop would strand that in-loop
       // consumer: it reads the value from the shallower home WITHOUT the loop's
@@ -896,15 +899,16 @@ void run_ordered_contracted_block(
         // only for a value INVARIANT to its home loop -- the case the reuse
         // path was written for.
         auto const home_key = value_of(vid);
-        bool sliced_on_home_loop = false;
-        if (!home_ectx.empty()) {
-          auto const hc = home_ectx.back().level.key().color();
-          for (auto const& [m, c] : home_key.coloring.colors)
-            if (static_cast<std::size_t>(c) == hc) {
-              sliced_on_home_loop = true;
-              break;
-            }
-        }
+        // SINGLE TRUTH: "sliced on the loop this cache sits in" is the
+        // residency+slot oracle used by the home walk above (sliced_on_level),
+        // NOT the key coloring -- the coloring names only LoopLocal loops
+        // (an escape's assembled form is unsliced on the loops it escapes),
+        // so a multi-level escape's INNER partial, sliced on the enclosing
+        // outer loop, has no color for it and would be classified persistent,
+        // survive the outer scratch's reset, and be scattered stale into the
+        // next outer batch (strict walk: block lobound 0 into slice 16).
+        bool const sliced_on_home_loop =
+            !home_ectx.empty() && sliced_on_level(home_ectx.back().level);
         bool const persistent = !vol && !sliced_on_home_loop;
         home_cache->ensure_home_slot(home_key, life, persistent);
       } else {
