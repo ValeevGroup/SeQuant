@@ -96,7 +96,7 @@ jobs:
 
     - name: Install prerequisite MacOS packages
       if: ${{ startswith(matrix.os, 'macos') }}
-      run: brew install boost eigen open-mpi ccache boost
+      run: brew install boost eigen open-mpi ccache
 
     - name: Install prerequisites Ubuntu packages
       if: ${{ startswith(matrix.os, 'ubuntu') }}
@@ -109,6 +109,13 @@ jobs:
       uses: TheMrMilchmann/setup-msvc-dev@v4
       with:
         arch: x64
+
+    - name: Install prerequisites Windows packages
+      if: ${{ startswith(matrix.os, 'windows') }}
+      shell: bash
+      run: |
+        vcpkg install eigen3 boost-locale boost-random boost-regex boost-container boost-container-hash boost-hana boost-multiprecision boost-conversion boost-interval boost-range boost-spirit
+        echo "CMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
 
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
@@ -124,14 +131,8 @@ jobs:
           ${{ matrix.config.name }}-ccache-
 
     - name: Configure CMake
-      # Use a bash shell so we can use the same syntax for environment variable
-      # access regardless of the host operating system
       shell: bash
-      working-directory: ${{github.workspace}}/build
-      # Note the current convention is to use the -S and -B options here to specify source 
-      # and build directories, but this is only available with CMake 3.13 and higher.  
-      # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG
+      run: cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG -B $GITHUB_WORKSPACE/build -S $GITHUB_WORKSPACE
 
 
     - name: Build
