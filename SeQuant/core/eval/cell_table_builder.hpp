@@ -181,24 +181,27 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     block_stack.pop_back();
     for (auto const& [ovid, okind] : child.outputs) {
       LoopKey const inst = child.level.key();
-      // a form of ovid registered EXACTLY at the child's own scope (a
-      // BuildStep there, an implicit Build synthesized below, or an
-      // Assemble registered at the child's scope for a grandchild escape)
-      // is ovid's own cell inside the child; a sibling block's forms live
-      // at a different scope (a different loop_slot or latitude even at
-      // the same depth), so full CellScope equality -- not just depth --
-      // rules those out.
+      // The child's IN-BLOCK form of ovid: the LAST form registered at a scope
+      // the child's own scope ENCLOSES (the child's path is a prefix of it) --
+      // the child's own scope qualifies, and so does any scope deeper inside
+      // it. Enclosure, not equality: an escape chain may SKIP a level the
+      // value is INVARIANT to, so the form that is live at the child's close
+      // can be one the child's grandchild registered (an Assemble one or more
+      // levels further in), and the runtime's home walk carries it out through
+      // the skipped level. Taking the LAST such form takes the outermost
+      // already-assembled one when several exist. A SIBLING block's forms live
+      // at a scope the child does not enclose (a different loop_slot or
+      // latitude even at the same depth), so they are still ruled out.
       CellId src = 0;
       bool found = false;
       if (auto const fit = st.forms_of.find(ovid); fit != st.forms_of.end())
         for (CellId id : fit->second)
-          if (st.table.cells[id].scope == child_scope) {
+          if (child_scope.encloses(st.table.cells[id].scope)) {
             src = id;
             found = true;
-            break;
           }
       if (!found) {
-        // ovid never got its own cell inside the child: its production
+        // ovid has NO form anywhere inside the child: its production
         // fuses the reduction/scatter with an operand contraction (the
         // escaped value's hash differs from any single operand's by
         // exactly the closing axis), so the legacy schedule never emits a
@@ -252,7 +255,9 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
 /// Derives the cell table's PRODUCTIONS from an ordered schedule already
 /// built by \c build_ordered_schedule: one \c Build cell per \c BuildStep,
 /// one \c Assemble cell per block output entry (at the block's parent
-/// scope), and one \c Leaf cell for every leaf value that is an operand of
+/// scope, sourced from the deepest form of that value registered inside the
+/// block -- an escape chain may SKIP a level the value is invariant to), and
+/// one \c Leaf cell for every leaf value that is an operand of
 /// some computed value; then one \c Read per leg of every Build cell's
 /// production tree, and every cell's \c life from those reads (weighted by
 /// batch multiplicity) plus the Assembles that consume it. Sliced-mode

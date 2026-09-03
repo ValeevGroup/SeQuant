@@ -701,3 +701,77 @@ TEST_CASE(
     CHECK(v.empty());
   }
 }
+
+namespace {
+// An escape chain that SKIPS a level the value is invariant to.
+//
+// value 1 is produced as a per-batch partial over the innermost loop (3,0),
+// three levels in, and sliced on the outermost loop (1,0). Its Sum assemble
+// closes (3,0) at [(1,0),(2,0)] -- and the level [(1,0)] contributes NOTHING
+// to the chain (the value is invariant to (2,0)'s loop there), so the next
+// link, the root Scatter that opens (1,0) up to the whole value, takes that
+// Sum assemble as its source ACROSS the skipped level. value 2 reads the
+// whole root form.
+sequant::eval::CellTable make_level_skipping_chain_table() {
+  using namespace sequant::eval;
+  CellTable t;
+  TableCell partial;  // cell 0: per-batch partial, three levels in
+  partial.value_id = 1;
+  partial.scope.path = {
+      {LoopKey{1, 0}, 0}, {LoopKey{2, 0}, 0}, {LoopKey{3, 0}, 0}};
+  partial.sliced.push_back({0, LoopKey{1, 0}});
+  partial.partial_over.push_back(LoopKey{3, 0});
+  partial.production.kind = ProductionKind::Build;
+  partial.life = 1;  // its closing Sum assemble
+  t.cells.push_back(partial);
+  TableCell summed;  // cell 1: closes (3,0) two levels in
+  summed.value_id = 1;
+  summed.scope.path = {{LoopKey{1, 0}, 0}, {LoopKey{2, 0}, 0}};
+  summed.sliced.push_back({0, LoopKey{1, 0}});
+  summed.production.kind = ProductionKind::Assemble;
+  summed.production.assemble = AssembleKind::Sum;
+  summed.production.source = 0;
+  summed.life = 1;  // the root Scatter, one level SKIPPED further out
+  t.cells.push_back(summed);
+  TableCell whole;  // cell 2: root form, opens (1,0) up
+  whole.value_id = 1;
+  whole.production.kind = ProductionKind::Assemble;
+  whole.production.assemble = AssembleKind::Scatter;
+  whole.production.source = 1;
+  whole.production.scatter_map.push_back({0, LoopKey{1, 0}});
+  whole.life = 1;  // read by value 2
+  t.cells.push_back(whole);
+  TableCell consumer;  // cell 3: root consumer, reads the whole form
+  consumer.value_id = 2;
+  consumer.production.kind = ProductionKind::Build;
+  consumer.life = 0;
+  t.cells.push_back(consumer);
+  t.reads.push_back(
+      Read{/*consumer=*/3, /*operand_value_id=*/1, /*source=*/2, {}});
+  return t;
+}
+}  // namespace
+
+TEST_CASE(
+    "cell table validator: an escape chain may skip a level the value is "
+    "invariant to, but every link must strictly enclose its source",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  {
+    auto const t = make_level_skipping_chain_table();
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    CHECK(v.empty());
+  }
+  {
+    // The link direction is what makes a skipped level safe: an assemble whose
+    // scope does NOT enclose its source's is an escape running inward.
+    auto t = make_level_skipping_chain_table();
+    t.cells[1].scope.path.push_back({LoopKey{3, 0}, 0});
+    t.cells[1].scope.path.push_back({LoopKey{6, 5}, 0});
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    REQUIRE(v.size() == 1);
+    CHECK(v.front().rule == "chain");
+  }
+}

@@ -1474,26 +1474,29 @@ TEST_CASE(
     auto const table = sequant::eval::build_cell_table(in);
     auto const violations = sequant::eval::validate_cell_table(
         table, ordered.root, in.n_batches_of);
-    for (auto const& v : violations)
+    // The report goes to stderr as well as to Catch2: unscoped messages are
+    // not surfaced by every reporter, and a gate that fails without naming the
+    // offending cells is not usable. Both loops are silent when clean.
+    for (auto const& v : violations) {
       UNSCOPED_INFO("[" << v.rule << "] " << v.what);
+      std::cerr << "[" << v.rule << "] " << v.what << "\n";
+    }
     // A sliced mode that matched no enclosing loop instance is recorded whole
-    // -- a form the schedule may not produce; on the default configuration
-    // that list must be empty, exactly like a violation.
-    for (auto const& [cid, pos] : table.unresolved)
+    // -- a form the schedule may not produce; that list must be empty, exactly
+    // like a violation.
+    for (auto const& [cid, pos] : table.unresolved) {
       UNSCOPED_INFO("[unresolved] cell#" << cid << " position " << pos
                                          << " (value "
                                          << table.cells[cid].value_id << ")");
-    // Mirrored-input configurations may carry known builder gaps (spec section
-    // 2 rule 4); the default configuration must be clean.
-    if (!std::getenv("SEQUANT_UT_PEAK_THRESHOLD") &&
-        !std::getenv("SEQUANT_UT_OBJECTIVE")) {
-      REQUIRE(violations.empty());
-      REQUIRE(table.unresolved.empty());
-    } else {
-      WARN("cell table violations for this configuration: "
-           << violations.size()
-           << "; unresolved sliced positions: " << table.unresolved.size());
+      std::cerr << "[unresolved] cell#" << cid << " position " << pos
+                << " (value " << table.cells[cid].value_id << ")\n";
     }
+    // The static gate, unconditional: EVERY configuration this fixture is run
+    // under (the default one, or one mirrored from an input through the
+    // environment overrides above) must derive a valid table before the walk
+    // executes it.
+    REQUIRE(violations.empty());
+    REQUIRE(table.unresolved.empty());
   }
 
   setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
@@ -1695,7 +1698,10 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
     if (c.production.kind == sequant::eval::ProductionKind::Assemble) {
       auto const& s = table.cells[c.production.source];
       CHECK(c.scope.encloses(s.scope));
-      CHECK(s.scope.path.size() == c.scope.path.size() + 1);
+      // STRICT enclosure, not "exactly one level deeper": an escape chain may
+      // SKIP a level the value is invariant to, so an Assemble's source can
+      // sit more than one level inside it.
+      CHECK(s.scope.path.size() > c.scope.path.size());
       CHECK(s.value_id == c.value_id);
       if (c.production.assemble == sequant::eval::AssembleKind::Sum) {
         auto const& closing = s.scope.path.back().first;
@@ -1796,21 +1802,6 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   for (auto const& v : violations)
     UNSCOPED_INFO("[" << v.rule << "] " << v.what);
   REQUIRE(violations.empty());
-}
-
-TEST_CASE("cell table: input-mirrored w20 configuration reports its known gap",
-          "[cell_table][ordered][.]") {
-  // Run the walk case's construction with the mirrored settings and print the
-  // validator report; the expected state at the end of stage 1 is a
-  // visibility violation for the member read from both passes of a forced
-  // split (spec section 2 rule 4), and nothing else.
-  // This case deliberately sets nothing: a setenv here would leak into every
-  // later case in the same process, silently reconfiguring them.
-  SUCCEED(
-      "to see the report, run [w20-auxocc-walk] with "
-      "SEQUANT_UT_PEAK_THRESHOLD=25e9 and "
-      "SEQUANT_UT_OBJECTIVE=dense_time_space_batched set in the environment, "
-      "and read its WARN line");
 }
 
 // ===========================================================================
