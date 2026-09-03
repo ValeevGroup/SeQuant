@@ -107,3 +107,92 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   CHECK_THROWS(res.fetch(1, ctx));  // no remaining Read of value 1 for cell 2
   CHECK_FALSE(res.fetch(77, ctx).has_value());  // not a value: transient
 }
+
+TEST_CASE(
+    "cell read resolver: leaf first touch defers without consuming; a "
+    "non-leaf miss throws",
+    "[cell_registry]") {
+  auto const t = make_table();
+  CellRegistry reg(t);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  sequant::container::svector<sequant::Index> idx{sequant::Index{L"i_1"}};
+  // Neither cell 0 (Leaf) nor cell 1 (Build) is set: both reads (see
+  // make_table's doc comment: consumer 2 reads cell 0 sliced, cell 1 whole)
+  // start with no current result.
+  CellReadResolver res(reg, [](std::size_t h) -> std::optional<std::size_t> {
+    if (h == 0 || h == 1) return h;
+    return std::nullopt;
+  });
+  res.begin_consumer(2);
+  sequant::eval::BatchContext ctx;
+  ctx.push_back({sequant::Index{L"i_1"},
+                 sequant::eval::DagScopeLevel{1, L"i", 0, 0, 0},
+                 {2, 4},
+                 std::nullopt});
+
+  // (a) Leaf cell 0's first touch: nullopt, and the Read is NOT consumed --
+  // record_leaf populates it, and the SAME Read is then served (and
+  // consumed, sliced per the read) by a second fetch.
+  CHECK_FALSE(res.fetch(0, ctx).has_value());
+  auto leaf = std::make_shared<sequant::eval::dryrun::ResultDryRun>(idx, cm);
+  res.record_leaf(0, leaf);
+  auto got0 = res.fetch(0, ctx);
+  REQUIRE(got0.has_value());
+  CHECK(sequant::eval::dryrun::detail::lobounds_of(**got0).at(0) == 2);
+  CHECK_THROWS(res.fetch(0, ctx));  // now consumed: no remaining Read
+
+  // (b) Build cell 1 has no current result and is never recorded by the
+  // caller (unlike a Leaf, nothing ever populates it out-of-band) -- this
+  // is a genuine table/tree or recording gap, so fetch throws rather than
+  // deferring.
+  CHECK_THROWS(res.fetch(1, ctx));
+}
+
+namespace {
+// A separate small fixture for cell_of: cell 0 is an UNBOUND Assemble
+// (value 5) at scope [(1,0)] -- residency root (detail::residency_scope
+// returns the empty scope for an Assemble bound to none of its enclosing
+// loops), so it is visible from any scope. Cell 1 is a Build (value 6) at
+// the same scope [(1,0)] -- a Build's residency is always its own scope, so
+// it is visible only from scopes that scope encloses.
+CellTable make_residency_table() {
+  CellTable t;
+  TableCell a;
+  a.value_id = 5;
+  a.production.kind = ProductionKind::Assemble;
+  a.scope.path = {{LoopKey{1, 0}, 0}};
+  t.cells.push_back(a);
+  TableCell b;
+  b.value_id = 6;
+  b.production.kind = ProductionKind::Build;
+  b.scope.path = {{LoopKey{1, 0}, 0}};
+  t.cells.push_back(b);
+  return t;
+}
+}  // namespace
+
+TEST_CASE("cell registry: cell_of finds a value's form by residency",
+          "[cell_registry]") {
+  auto const t = make_residency_table();
+  CellRegistry reg(t);
+  CellScope deep;
+  deep.path = {{LoopKey{1, 0}, 0}, {LoopKey{2, 0}, 0}};
+  CellScope const root;  // empty path
+
+  // The Assemble's residency is root: found from a nested query scope AND
+  // from root itself.
+  auto const a_deep = reg.cell_of(5, deep);
+  REQUIRE(a_deep.has_value());
+  CHECK(*a_deep == 0);
+  auto const a_root = reg.cell_of(5, root);
+  REQUIRE(a_root.has_value());
+  CHECK(*a_root == 0);
+
+  // The Build's residency is its own scope [(1,0)]: found from a scope it
+  // encloses (the deeper query), not from root.
+  auto const b_deep = reg.cell_of(6, deep);
+  REQUIRE(b_deep.has_value());
+  CHECK(*b_deep == 1);
+  CHECK_FALSE(reg.cell_of(6, root).has_value());
+}

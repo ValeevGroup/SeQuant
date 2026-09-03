@@ -1498,9 +1498,14 @@ TEST_CASE(
       return it != vmap.end() &&
              sequant::subtree_any(it->second, is_volatile_node);
     };
-    in.n_batches_of = [](sequant::eval::LoopKey const&) {
-      return std::size_t{1};
-    };
+    // SP4 Task 4 fix1 item 4: the static gate must validate the same lives
+    // the executor enforces at runtime -- real per-loop-instance batch
+    // counts, not the constant-1 stub (which under-counts a value read from
+    // outside n*m nested real batches, exactly the gap that made
+    // CellRegistry::read throw "read past its life" before ordered_executor
+    // wired the real function into run_ordered_schedule_pre_results).
+    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
+        ordered, target, &aops);
     in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
     auto const violations = sequant::eval::validate_cell_table(
@@ -1636,6 +1641,10 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
+  // SP4 Task 4 fix1 item 4: real per-loop batch counts for n_batches_of (see
+  // the walk-gate case's own note); aops is otherwise unused in this
+  // static-only fixture.
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
 
   sequant::eval::CellTableInputs in;
   in.ordered = &ordered;
@@ -1655,9 +1664,8 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
                     n->as_tensor().label() == L"t";
            });
   };
-  in.n_batches_of = [](sequant::eval::LoopKey const&) {
-    return std::size_t{1};
-  };
+  in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
+      ordered, policy.batch_target_size, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 
@@ -1942,6 +1950,10 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
+  // SP4 Task 4 fix1 item 4: real per-loop batch counts for n_batches_of (see
+  // the walk-gate case's own note); aops is otherwise unused in this
+  // static-only fixture.
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
 
   sequant::eval::CellTableInputs in;
   in.ordered = &ordered;
@@ -1961,9 +1973,8 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
                     n->as_tensor().label() == L"t";
            });
   };
-  in.n_batches_of = [](sequant::eval::LoopKey const&) {
-    return std::size_t{1};
-  };
+  in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
+      ordered, policy.batch_target_size, &aops);
   in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 

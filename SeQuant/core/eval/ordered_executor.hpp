@@ -888,37 +888,40 @@ void run_ordered_contracted_block(
         bs.cache.set_current_consumer(out_eval_node->hash_value());
         // Task 7 (Pillar 1): the block's per-scope coloring context is already
         // set on bs.cache, coloring this escape output's self-store + operands.
-        // SP4 Task 4: this is the implicit per-batch Build cell for an
-        // escaping value with no BuildStep of its own in this block
-        // (emit_build_cell's !found branch, cell_table_builder.hpp) ONLY
-        // when the table synthesized one AT THIS BLOCK's OWN SCOPE. A value
-        // reaching this branch can ALSO be a multi-level (skip-chain) escape
-        // -- this block relists an ovid one of its OWN descendant blocks
-        // already escaped several levels in (cell_table_builder.hpp's
-        // emit_cells 'child_scope.encloses' search finds that DEEPER form
-        // instead of needing a fresh cell here) -- for which the table
-        // registers NO cell at this scope at all, by design (see
-        // CellTable::Read's escaping-values note). That value is, BY THE
-        // SAME SKIP-CHAIN CONSTRUCTION, already resident several cache
-        // levels up (a descendant ScopeBlock step -- never gated -- already
-        // ran and homed it earlier in this very batch's step loop, before
-        // this output loop starts): evaluate_impl's own top-frame Checked
-        // probe finds it there directly (a cache hit, no descent into
-        // out_eval_node's children, so the globally-wired resolver's
-        // per-child probe is never reached) -- exactly the legacy path this
-        // branch always took before this task. So a miss here is NOT a
-        // table/schedule disagreement; only a genuine BuildStep (which
-        // ALWAYS gets its own cell, see the BuildStep site above) enforces
-        // the table strictly.
+        // SP4 Task 4 fix1: the value's form visible at THIS block's own
+        // scope, found by RESIDENCY (CellRegistry::cell_of), not exact
+        // scope equality -- a Build cell exactly here (the genuine implicit
+        // per-batch Build, cell_table_builder.hpp's emit_build_cell !found
+        // branch) is built fresh via evaluate_impl; an Assemble cell whose
+        // residency reaches this scope (a level-skipping escape: a
+        // descendant's close, earlier in this very batch's step loop,
+        // already recorded it -- Task 2's escaped_by_child handoff covers
+        // the direct-child case above, this covers the rest) is consumed
+        // directly, no fresh evaluation. Throws (naming the value and this
+        // scope) when neither exists: a genuine table/schedule
+        // disagreement.
         CellScope const out_scope = current_scope(ectx, block);
-        if (auto const out_cell = registry.build_cell_at(vid, out_scope)) {
+        auto const out_cell = registry.cell_of(vid, out_scope);
+        if (!out_cell)
+          throw Exception(
+              "evaluate_ordered_schedule: no form of escaping value " +
+              std::to_string(vid) +
+              " visible at this scope (cell table/schedule disagreement), "
+              "block depth " +
+              std::to_string(block.level.depth) + " slot " +
+              std::to_string(block.level.loop_slot));
+        if (registry.table().cells[*out_cell].production.kind ==
+            ProductionKind::Build) {
           resolver.begin_consumer(*out_cell);
           part =
               evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
           registry.set(*out_cell, part);
         } else {
-          part =
-              evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
+          // Assemble: a descendant's close already recorded this value this
+          // batch; consume it as this block's own per-batch use (the +1
+          // life the table's chain rule already budgets for this
+          // Assemble-to-Assemble link).
+          part = registry.read(*out_cell);
         }
       }
       if (kind == OutputKind::AccumulateSum) {
@@ -1490,6 +1493,23 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // (a transient of some production tree), which CellReadResolver::fetch
   // reports as nullopt rather than mis-resolving.
   CellRegistry registry(cell_table);
+  // SP4 Task 4 fix1 item 2: seed the registry from the top-level cache for
+  // every table cell the table marks persistent -- a value that survives
+  // cache reset() across CC iterations may already be resident from a PRIOR
+  // call; this registry (rebuilt fresh every call) otherwise has no record
+  // of that, which would make CellReadResolver::fetch's strict throw fire on
+  // a value the cache-halt gate (needed_build) correctly skipped rebuilding
+  // this call. A persistent TableCell is, by its own definition, bound to no
+  // loop instance (detail::bound_instances empty), so its home coloring is
+  // trivially the plain (uncolored) node key -- peek_at with a bare node
+  // implicitly converts to that key, the same key the reuse[k] site's
+  // (scope-filtered, degenerately empty at an unbound value) value_of would
+  // compute.
+  for (CellId c = 0; c < cell_table.cells.size(); ++c) {
+    if (!cell_table.cells[c].persistent) continue;
+    if (auto p = cache.peek_at(resolve(cell_table.cells[c].value_id)))
+      registry.set(c, p);
+  }
   std::unordered_map<std::size_t, std::size_t> const cell_vid_of_hash = [&] {
     std::unordered_map<std::size_t, std::size_t> m;
     m.reserve(rich.cells.size());

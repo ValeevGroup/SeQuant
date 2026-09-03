@@ -108,6 +108,42 @@ class CellRegistry {
     return it->second;
   }
 
+  /// The value's form VISIBLE at \p scope, by RESIDENCY (not exact scope
+  /// equality) -- the table's own visibility contract (cell_table.hpp's
+  /// validator rule 1 / \c detail::residency_scope's own doc comment): the
+  /// DEEPEST-scoped (largest \c scope.path) Build or Assemble cell of \p vid
+  /// whose \c detail::residency_scope ENCLOSES \p scope. A tie at equal
+  /// depth prefers a Build cell (a Build and an Assemble of one value never
+  /// actually coexist at one scope on a well-formed table, so this never
+  /// actually arbitrates; kept for determinism). Leaf cells are not
+  /// candidates here (see \c leaf_cell): a leaf has no scope in this sense.
+  [[nodiscard]] std::optional<CellId> cell_of(std::size_t vid,
+                                              CellScope const& scope) const {
+    std::optional<CellId> best;
+    auto const consider = [&](container::svector<CellId> const& ids) {
+      for (CellId c : ids) {
+        TableCell const& cell = table_->cells[c];
+        if (!detail::residency_scope(cell).encloses(scope)) continue;
+        if (!best) {
+          best = c;
+          continue;
+        }
+        TableCell const& b = table_->cells[*best];
+        bool const deeper = cell.scope.path.size() > b.scope.path.size();
+        bool const tie_prefers_build =
+            cell.scope.path.size() == b.scope.path.size() &&
+            cell.production.kind == ProductionKind::Build &&
+            b.production.kind != ProductionKind::Build;
+        if (deeper || tie_prefers_build) best = c;
+      }
+    };
+    if (auto it = build_at_.find(vid); it != build_at_.end())
+      consider(it->second);
+    if (auto it = assemble_at_.find(vid); it != assemble_at_.end())
+      consider(it->second);
+    return best;
+  }
+
  private:
   struct Slot {
     ResultPtr value;
@@ -161,25 +197,26 @@ class CellReadResolver {
   }
   [[nodiscard]] CellId consumer() const { return consumer_; }
 
-  /// \return nullopt when \p operand_node_hash is not a value of the table (a
-  /// transient of this production tree, evaluated in place by the caller), OR
-  /// when the matched Read's source cell has no CURRENT result yet -- either
-  /// the first touch of a Leaf cell (the caller must evaluate the leaf and
-  /// call \c record_leaf), or a Build/Assemble cell whose production this
-  /// call's runtime cache-halt gate (\c needed_build) skipped because it is
-  /// already resident, persistent, on the SHARED legacy cache from a prior
-  /// call -- this registry is rebuilt fresh every call, so it never records
-  /// that. Either way the cursor entry is left UNCONSUMED (the caller's own
-  /// path -- leaf evaluation, or the legacy access_at/router probes, which
-  /// still find a genuinely persistent value on the chain -- serves this
-  /// exact read; a LATER fetch of the same value, once/if this registry does
-  /// come to record it, consumes it then). Otherwise the sliced source: each
-  /// \c (pos, key) of the matched Read's \c slice is applied as
-  /// \c slice_mode(pos, range.first, range.second) with \c range taken from
-  /// the \p ctx entry whose \c level.key() equals \c key. Throws when the
-  /// consumer has no remaining Read of that value at all (table/tree
-  /// disagreement), or when a declared slice names a loop instance absent
-  /// from \p ctx.
+  /// \return nullopt when \p operand_node_hash is not a value of the table
+  /// (a transient of this production tree, evaluated in place by the
+  /// caller), OR when the matched Read's source is a LEAF cell with no
+  /// current result yet (first touch: the caller must evaluate the leaf and
+  /// call \c record_leaf; the cursor entry is left UNCONSUMED so the SAME
+  /// Read is served -- and consumed -- by a later fetch once the leaf is
+  /// recorded). Any OTHER matched Read whose source has no current result
+  /// THROWS naming the consumer cell, the source cell and the value (spec
+  /// section 4: "missing entry or non-resident source: throw with both
+  /// ids") -- a well-formed table guarantees a Build cell's own source is
+  /// always resident when read (registry lookups go by RESIDENCY, see \c
+  /// CellRegistry::cell_of, and persistent cross-call values are seeded into
+  /// the registry at entry, see \c run_ordered_schedule_pre_results), so
+  /// this is a genuine table/tree or recording gap, never deferred.
+  /// Otherwise the sliced source: each \c (pos, key) of the matched Read's
+  /// \c slice is applied as \c slice_mode(pos, range.first, range.second)
+  /// with \c range taken from the \p ctx entry whose \c level.key() equals
+  /// \c key. Throws when the consumer has no remaining Read of that value at
+  /// all (table/tree disagreement), or when a declared slice names a loop
+  /// instance absent from \p ctx.
   [[nodiscard]] std::optional<ResultPtr> fetch(std::size_t operand_node_hash,
                                                BatchContext const& ctx) {
     auto const vid = vid_of_hash_(operand_node_hash);
@@ -190,7 +227,15 @@ class CellReadResolver {
           "CellReadResolver: consumer cell#" + std::to_string(consumer_) +
           " has no remaining read of value " + std::to_string(*vid));
     Read const& r = reg_->table().reads[it->second.front()];
-    if (!reg_->peek(r.source)) return std::nullopt;
+    TableCell const& src_cell = reg_->table().cells[r.source];
+    if (!reg_->peek(r.source)) {
+      if (src_cell.production.kind == ProductionKind::Leaf)
+        return std::nullopt;  // leaf first touch: cursor left UNCONSUMED
+      throw std::runtime_error(
+          "CellReadResolver: consumer cell#" + std::to_string(consumer_) +
+          " source cell#" + std::to_string(r.source) + " (value " +
+          std::to_string(*vid) + ") has no current result");
+    }
     it->second.erase(it->second.begin());
     ResultPtr v = reg_->read(r.source);
     for (auto const& [pos, key] : r.slice) {
