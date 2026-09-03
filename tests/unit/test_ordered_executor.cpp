@@ -373,6 +373,40 @@ std::size_t orderedexec_builds_of(
   return b;
 }
 
+///
+/// \brief A \c CellTableInputs::operands_of callback: the direct operand
+/// value ids of a value WITH REPETITION, one per leg of its production tree.
+///
+/// \details Read off the canonical forest node's two children and resolved
+/// back to value ids through \c ValueCell::hash. The dependency graph
+/// (\c ordered_schedule_dep_graph, and \c OrderedSchedule::operand_vids
+/// copied from it) de-duplicates its operand lists, so a value contracted
+/// with itself would otherwise contribute ONE read where the runtime performs
+/// two home accesses.
+///
+template <typename NodeT>
+std::function<sequant::container::svector<std::size_t>(std::size_t)>
+orderedexec_per_leg_operands(
+    sequant::eval::RichSchedule const& rich,
+    std::unordered_map<std::size_t, NodeT> const& vmap) {
+  auto vid_of_hash =
+      std::make_shared<std::unordered_map<std::size_t, std::size_t>>();
+  for (auto const& vc : rich.cells) vid_of_hash->emplace(vc.hash, vc.value_id);
+  return [&rich, &vmap, vid_of_hash](
+             std::size_t vid) -> sequant::container::svector<std::size_t> {
+    sequant::container::svector<std::size_t> out;
+    auto const it = vmap.find(rich.cells[vid].hash);
+    if (it == vmap.end() || it->second.leaf()) return out;
+    auto const add = [&](NodeT const& child) {
+      auto const f = vid_of_hash->find(child->hash_value());
+      if (f != vid_of_hash->end()) out.push_back(f->second);
+    };
+    add(it->second.left());
+    add(it->second.right());
+    return out;
+  };
+}
+
 std::optional<std::size_t> orderedexec_index_of_build_step(
     sequant::eval::ScopeBlock const& block, std::size_t value_id) {
   for (std::size_t i = 0; i < block.steps.size(); ++i)
@@ -1433,19 +1467,30 @@ TEST_CASE(
     in.n_batches_of = [](sequant::eval::LoopKey const&) {
       return std::size_t{1};
     };
+    in.operands_of = orderedexec_per_leg_operands(rich, vmap);
     auto const table = sequant::eval::build_cell_table(in);
-    auto const violations =
-        sequant::eval::validate_cell_table(table, ordered.root);
+    auto const violations = sequant::eval::validate_cell_table(
+        table, ordered.root, in.n_batches_of);
     for (auto const& v : violations)
       UNSCOPED_INFO("[" << v.rule << "] " << v.what);
+    // A sliced mode that matched no enclosing loop instance is recorded whole
+    // -- a form the schedule may not produce; on the default configuration
+    // that list must be empty, exactly like a violation.
+    for (auto const& [cid, pos] : table.unresolved)
+      UNSCOPED_INFO("[unresolved] cell#" << cid << " position " << pos
+                                         << " (value "
+                                         << table.cells[cid].value_id << ")");
     // Mirrored-input configurations may carry known builder gaps (spec section
     // 2 rule 4); the default configuration must be clean.
     if (!std::getenv("SEQUANT_UT_PEAK_THRESHOLD") &&
-        !std::getenv("SEQUANT_UT_OBJECTIVE"))
+        !std::getenv("SEQUANT_UT_OBJECTIVE")) {
       REQUIRE(violations.empty());
-    else
+      REQUIRE(table.unresolved.empty());
+    } else {
       WARN("cell table violations for this configuration: "
-           << violations.size());
+           << violations.size()
+           << "; unresolved sliced positions: " << table.unresolved.size());
+    }
   }
 
   setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
@@ -1573,6 +1618,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   in.n_batches_of = [](sequant::eval::LoopKey const&) {
     return std::size_t{1};
   };
+  in.operands_of = orderedexec_per_leg_operands(rich, vmap);
   auto const table = sequant::eval::build_cell_table(in);
 
   // one Build cell per BuildStep, plus one implicit Build cell per output
@@ -1666,14 +1712,37 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
         CHECK(enclosing);
       }
   }
-  // reads: exactly one per (consumer Build cell, operand) DAG edge
-  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
-  std::size_t edges = 0;
+  // every sliced mode resolved to an enclosing loop instance
+  for (auto const& [cid, pos] : table.unresolved)
+    UNSCOPED_INFO("[unresolved] cell#" << cid << " position " << pos
+                                       << " (value "
+                                       << table.cells[cid].value_id << ")");
+  CHECK(table.unresolved.empty());
+
+  // reads: exactly one per LEG of a consumer Build cell's production tree --
+  // counted from the SAME per-leg source the builder consumed, so a consumer
+  // whose two legs read one value contributes two. The de-duplicated
+  // dependency graph is the lower bound: one read per distinct (consumer,
+  // operand) pair.
+  std::size_t edges = 0, distinct_pairs = 0, double_leg_consumers = 0;
   for (auto const& c : table.cells)
-    if (c.production.kind == sequant::eval::ProductionKind::Build)
-      if (auto it = g.depends_on.find(c.value_id); it != g.depends_on.end())
-        edges += it->second.size();
+    if (c.production.kind == sequant::eval::ProductionKind::Build) {
+      auto const ops = in.operands_of(c.value_id);
+      edges += ops.size();
+      std::unordered_set<std::size_t> distinct(ops.begin(), ops.end());
+      distinct_pairs += distinct.size();
+      if (distinct.size() < ops.size()) ++double_leg_consumers;
+    }
   CHECK(table.reads.size() == edges);
+  CHECK(table.reads.size() >= distinct_pairs);
+  UNSCOPED_INFO("reads " << table.reads.size()
+                         << ", distinct (consumer, "
+                            "operand) pairs "
+                         << distinct_pairs
+                         << ", consumers reading one value "
+                            "on both legs "
+                         << double_leg_consumers);
+  CHECK(double_leg_consumers > 0);
   for (auto const& r : table.reads) {
     REQUIRE(r.source < table.cells.size());
     CHECK(table.cells[r.source].value_id == r.operand_value_id);
@@ -1683,10 +1752,40 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
         CHECK_FALSE(
             (sp == p && sk.depth == k.depth && sk.loop_slot == k.loop_slot));
   }
+  // residency flags: both kinds occur, and each means what it says.
+  std::size_t n_persistent = 0, n_produce_if_absent = 0;
+  for (auto const& c : table.cells) {
+    if (c.persistent) {
+      ++n_persistent;
+      // cross-evaluation invariance: bound to no loop instance, no volatile
+      // leaf underneath
+      CHECK(sequant::eval::detail::bound_instances(c).empty());
+      CHECK_FALSE(in.volatile_of(c.value_id));
+    }
+    if (c.produce_if_absent) {
+      ++n_produce_if_absent;
+      // first-visit production only makes sense inside a loop
+      CHECK_FALSE(c.scope.path.empty());
+    }
+    // a cell bound to the innermost loop of its own scope is rebuilt every
+    // batch of that loop, never reused across visits
+    if (c.production.kind == sequant::eval::ProductionKind::Build &&
+        !c.scope.path.empty()) {
+      bool bound_innermost = false;
+      for (auto const& k : sequant::eval::detail::bound_instances(c))
+        if (k.depth == c.scope.path.back().first.depth &&
+            k.loop_slot == c.scope.path.back().first.loop_slot)
+          bound_innermost = true;
+      if (bound_innermost) CHECK_FALSE(c.produce_if_absent);
+    }
+  }
+  CHECK(n_persistent > 0);
+  CHECK(n_produce_if_absent > 0);
+
   // Validate the derived table once; reuse the same violations both for the
   // life-rule count and the final full-table check.
   auto const violations =
-      sequant::eval::validate_cell_table(table, ordered.root);
+      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of);
   std::size_t life_violations = 0;
   for (auto const& v : violations)
     if (v.rule == "life") ++life_violations;
@@ -1702,9 +1801,13 @@ TEST_CASE("cell table: input-mirrored w20 configuration reports its known gap",
   // validator report; the expected state at the end of stage 1 is a
   // visibility violation for the member read from both passes of a forced
   // split (spec section 2 rule 4), and nothing else.
-  setenv("SEQUANT_UT_PEAK_THRESHOLD", "25e9", 1);
-  setenv("SEQUANT_UT_OBJECTIVE", "dense_time_space_batched", 1);
-  SUCCEED("run [w20-auxocc-walk] with these env vars and read the WARN line");
+  // This case deliberately sets nothing: a setenv here would leak into every
+  // later case in the same process, silently reconfiguring them.
+  SUCCEED(
+      "to see the report, run [w20-auxocc-walk] with "
+      "SEQUANT_UT_PEAK_THRESHOLD=25e9 and "
+      "SEQUANT_UT_OBJECTIVE=dense_time_space_batched set in the environment, "
+      "and read its WARN line");
 }
 
 // ===========================================================================

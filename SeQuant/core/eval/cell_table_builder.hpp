@@ -28,6 +28,17 @@ struct CellTableInputs {
   std::function<container::svector<Index>(std::size_t)> sliced_modes_of;
   std::function<bool(std::size_t)> volatile_of;
   std::function<std::size_t(LoopKey const&)> n_batches_of;
+  /// OPTIONAL: the value's direct operand value ids WITH REPETITION -- one
+  /// entry per LEG of its production tree, so a value contracted with itself
+  /// appears twice. Both \c ordered_schedule_dep_graph's \c depends_on and
+  /// the \c OrderedSchedule::operand_vids copied from it DE-DUPLICATE their
+  /// operand lists, and a de-duplicated list loses exactly the read the
+  /// runtime does perform (a home access per leg); a caller that can see the
+  /// production tree (the forest node's two children, resolved back to value
+  /// ids) supplies it here. When unset, the builder falls back to the
+  /// de-duplicated \c depends_on and a self-contracting consumer gets one
+  /// read instead of two.
+  std::function<container::svector<std::size_t>(std::size_t)> operands_of;
 };
 
 namespace detail {
@@ -39,20 +50,31 @@ struct CellBuildState {
 };
 
 /// The loop instance among \p path (with its axis spaces) that slices carried
-/// position \p p of value \p vid: the production occurrence's fusion slot for
-/// p, matched against an enclosing entry of the same index space.
+/// position \p p of value \p vid: an enclosing entry whose index space is the
+/// position's own AND whose slot is the fusion slot ANY occurrence of the
+/// value records for that position. Every occurrence is tested, not just the
+/// production one, because that is the runtime's own test: a value CSE-shared
+/// by several consumers is sliced on this loop if any of its occurrences was
+/// bound to that slot, and the first occurrence is not privileged.
+///
+/// \note The match is on (space, slot), and so relies on fusion never giving
+/// two levels of the SAME space one slot -- were that to happen, a position
+/// could match the wrong level of its own space. Outermost enclosing entry
+/// wins (\p path is outermost-first).
 [[nodiscard]] inline std::optional<LoopKey> slicing_instance(
     RichSchedule const& rich, std::size_t vid, std::size_t p,
     container::svector<std::pair<LoopKey, int>> const& path,
     container::svector<std::wstring> const& path_spaces) {
   ValueCell const& c = rich.cells[vid];
-  if (c.occurrences.empty()) return std::nullopt;
-  OccurrenceRec const& prod = c.occurrences.front();
-  if (p >= prod.loop_slot.size() || prod.loop_slot[p] < 0) return std::nullopt;
+  if (c.occurrences.empty() || p >= c.carried.size()) return std::nullopt;
   std::wstring const space{c.carried[p].space().base_key()};
-  for (std::size_t i = 0; i < path.size(); ++i)
-    if (path_spaces[i] == space && path[i].first.loop_slot == prod.loop_slot[p])
-      return path[i].first;
+  for (std::size_t i = 0; i < path.size(); ++i) {
+    if (path_spaces[i] != space) continue;
+    for (OccurrenceRec const& occ : c.occurrences)
+      if (p < occ.loop_slot.size() && occ.loop_slot[p] >= 0 &&
+          occ.loop_slot[p] == path[i].first.loop_slot)
+        return path[i].first;
+  }
   return std::nullopt;
 }
 
@@ -92,8 +114,9 @@ inline void set_residency_flags(
 /// blocks, innermost included) that lists \c (vid, AccumulateSum) among its
 /// own outputs -- so a value with a genuine \c BuildStep gets the same
 /// treatment as one synthesized for an escape with no in-block form of its
-/// own; residency flags via \c set_residency_flags. Returns the new cell's
-/// id.
+/// own; residency flags via \c set_residency_flags. A sliced mode whose
+/// position matches no enclosing instance is recorded WHOLE and reported in
+/// \c CellTable::unresolved. Returns the new cell's id.
 [[nodiscard]] inline CellId emit_build_cell(
     CellTableInputs const& in, std::size_t vid,
     container::svector<std::pair<LoopKey, int>> const& path,
@@ -106,6 +129,7 @@ inline void set_residency_flags(
   cell.scope.path = path;
   cell.production.kind = ProductionKind::Build;
   auto const sm = in.sliced_modes_of(vid);
+  container::svector<std::size_t> unresolved_positions;
   ValueCell const& vc = rich.cells[vid];
   for (std::size_t p = 0; p < vc.carried.size(); ++p) {
     bool const in_sm =
@@ -113,14 +137,19 @@ inline void set_residency_flags(
     if (!in_sm) continue;
     if (auto k = slicing_instance(rich, vid, p, path, path_spaces))
       cell.sliced.push_back({p, *k});
+    else
+      unresolved_positions.push_back(p);
   }
   for (ScopeBlock const* b : block_stack)
     if (has_accumulate_sum_output(*b, vid))
       cell.partial_over.push_back(b->level.key());
   set_residency_flags(cell, in.volatile_of(vid), path);
   st.table.cells.push_back(std::move(cell));
-  st.forms_of[vid].push_back(st.table.cells.size() - 1);
-  return st.table.cells.size() - 1;
+  CellId const id = st.table.cells.size() - 1;
+  for (std::size_t p : unresolved_positions)
+    st.table.unresolved.push_back({id, p});
+  st.forms_of[vid].push_back(id);
+  return id;
 }
 
 inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
@@ -139,8 +168,17 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     path_spaces.push_back(std::wstring{child.axis.space().base_key()});
     block_stack.push_back(&child);
     emit_cells(in, child, path, path_spaces, block_stack, st);
-    // the child's outputs assemble at THIS scope
-    CellScope const child_scope{path};  // path currently has child on top
+    // The child's outputs assemble at THIS (the parent's) scope, while an
+    // implicit Build synthesized for one of them belongs at the CHILD's. Leave
+    // the child ONCE here, keeping a snapshot of the child-inclusive scope,
+    // rather than pushing and popping all three stacks per output entry.
+    CellScope const child_scope{path};  // path still has child on top
+    auto const child_path = path;
+    auto const child_spaces = path_spaces;
+    auto const child_stack = block_stack;
+    path.pop_back();
+    path_spaces.pop_back();
+    block_stack.pop_back();
     for (auto const& [ovid, okind] : child.outputs) {
       LoopKey const inst = child.level.key();
       // a form of ovid registered EXACTLY at the child's own scope (a
@@ -167,7 +205,8 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
         // plain BuildStep for it. The per-batch partial is nonetheless a
         // real form of ovid itself, realized once per batch at the child's
         // own scope; synthesize its Build cell here.
-        src = emit_build_cell(in, ovid, path, path_spaces, block_stack, st);
+        src = emit_build_cell(in, ovid, child_path, child_spaces, child_stack,
+                              st);
       }
       TableCell const& s = st.table.cells[src];
       // Unreachable by construction: every entry under forms_of[ovid] is a
@@ -201,20 +240,11 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
       } else {
         a.partial_over = s.partial_over;
       }
-      path.pop_back();
-      path_spaces.pop_back();
-      block_stack.pop_back();
       a.scope.path = path;
       set_residency_flags(a, in.volatile_of(ovid), path);
       st.table.cells.push_back(std::move(a));
       st.forms_of[ovid].push_back(st.table.cells.size() - 1);
-      path.push_back({child.level.key(), child.latitude_ordinal});
-      path_spaces.push_back(std::wstring{child.axis.space().base_key()});
-      block_stack.push_back(&child);
     }
-    path.pop_back();
-    path_spaces.pop_back();
-    block_stack.pop_back();
   }
 }
 }  // namespace detail
@@ -223,8 +253,11 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
 /// built by \c build_ordered_schedule: one \c Build cell per \c BuildStep,
 /// one \c Assemble cell per block output entry (at the block's parent
 /// scope), and one \c Leaf cell for every leaf value that is an operand of
-/// some computed value. Reads and lives are left empty/zero here; Task 4
-/// fills them in.
+/// some computed value; then one \c Read per leg of every Build cell's
+/// production tree, and every cell's \c life from those reads (weighted by
+/// batch multiplicity) plus the Assembles that consume it. Sliced-mode
+/// positions that match no enclosing loop instance are reported in \c
+/// CellTable::unresolved.
 [[nodiscard]] inline CellTable build_cell_table(CellTableInputs const& in) {
   if (!in.ordered || !in.rich || !in.sliced || !in.sliced_modes_of ||
       !in.volatile_of)
@@ -236,21 +269,36 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
   container::svector<std::wstring> path_spaces;
   container::svector<ScopeBlock const*> block_stack;
   detail::emit_cells(in, in.ordered->root, path, path_spaces, block_stack, st);
-  // Leaf cells: every leaf value that is an operand of some value.
   auto const g = detail::ordered_schedule_dep_graph(*in.rich);
-  std::unordered_set<std::size_t> leaf_done;
-  for (auto const& [vid, ops] : g.depends_on)
-    for (std::size_t op : ops)
-      if (in.rich->cells[op].is_leaf && leaf_done.insert(op).second) {
-        TableCell leaf;
-        leaf.value_id = op;
-        leaf.production.kind = ProductionKind::Leaf;
-        leaf.persistent = !in.volatile_of(op);
-        st.table.cells.push_back(std::move(leaf));
-        st.forms_of[op].push_back(st.table.cells.size() - 1);
-      }
+  // The per-LEG operand list of a value (see CellTableInputs::operands_of),
+  // falling back to the de-duplicated dependency graph when the caller cannot
+  // supply one. Every operand question below -- which leaves are used, and
+  // which reads exist -- goes through this one accessor, so the two never
+  // disagree about what an operand is.
+  auto const operands_of =
+      [&](std::size_t vid) -> container::svector<std::size_t> {
+    if (in.operands_of) return in.operands_of(vid);
+    auto const it = g.depends_on.find(vid);
+    if (it == g.depends_on.end()) return {};
+    return it->second;
+  };
+  // Leaf cells: every leaf value that is an operand of some value. Emitted by
+  // walking rich.cells in VALUE-ID order (the dependency map's iteration order
+  // is unspecified), so cell ids are a deterministic function of the schedule.
+  std::unordered_set<std::size_t> used_as_operand;
+  for (ValueCell const& vc : in.rich->cells)
+    for (std::size_t op : operands_of(vc.value_id)) used_as_operand.insert(op);
+  for (ValueCell const& vc : in.rich->cells)
+    if (vc.is_leaf && used_as_operand.count(vc.value_id)) {
+      TableCell leaf;
+      leaf.value_id = vc.value_id;
+      leaf.production.kind = ProductionKind::Leaf;
+      leaf.persistent = !in.volatile_of(vc.value_id);
+      st.table.cells.push_back(std::move(leaf));
+      st.forms_of[vc.value_id].push_back(st.table.cells.size() - 1);
+    }
 
-  // Reads: one per (consumer Build cell, operand value) edge. The
+  // Reads: one per (consumer Build cell, production-tree LEG). The
   // occ_facts/occ_invariant scans below are linear per read (O(reads x
   // facts)); acceptable at this stage.
   auto const key_of_lid = [&](LoopId lid) {
@@ -259,10 +307,8 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
   for (CellId cid = 0; cid < st.table.cells.size(); ++cid) {
     TableCell const& c = st.table.cells[cid];
     if (c.production.kind != ProductionKind::Build) continue;
-    auto const dit = g.depends_on.find(c.value_id);
-    if (dit == g.depends_on.end()) continue;
     auto const c_bound = detail::bound_instances(c);
-    for (std::size_t op : dit->second) {
+    for (std::size_t op : operands_of(c.value_id)) {
       auto const fit = st.forms_of.find(op);
       if (fit == st.forms_of.end() || fit->second.empty())
         throw std::logic_error("cell table: operand value " +

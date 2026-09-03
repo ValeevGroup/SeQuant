@@ -408,10 +408,19 @@ TEST_CASE(
     src.life = 3;
     t.cells.push_back(src);  // cell 0
     TableCell consumer;      // cell 1: value 1, Build inside (1,0), reads src
-                             // whole
+                             // whole; a per-batch partial the Assemble below
+                             // closes, so it is not a zero-read cell
     consumer.value_id = 1;
     consumer.scope.path.push_back({LoopKey{1, 0}, 0});
+    consumer.partial_over.push_back(LoopKey{1, 0});
+    consumer.life = 1;
     t.cells.push_back(consumer);  // cell 1
+    TableCell assembled;          // cell 2: Sum-assemble of value 1 at root
+    assembled.value_id = 1;
+    assembled.production.kind = ProductionKind::Assemble;
+    assembled.production.assemble = AssembleKind::Sum;
+    assembled.production.source = 1;
+    t.cells.push_back(assembled);  // cell 2
     t.reads.push_back(Read{/*consumer=*/1,
                            /*operand_value_id=*/0,
                            /*source=*/0,
@@ -457,10 +466,20 @@ TEST_CASE(
     assembled.life = 3;            // one read, multiplicity 3
     t.cells.push_back(assembled);  // cell 1
 
-    TableCell consumer;  // cell 2: value 1, Build inside sibling (1,1)
+    TableCell consumer;  // cell 2: value 1, Build inside sibling (1,1), a
+                         // per-batch partial cell 3 closes
     consumer.value_id = 1;
     consumer.scope.path.push_back({LoopKey{1, 1}, 0});
+    consumer.partial_over.push_back(LoopKey{1, 1});
+    consumer.life = 1;
     t.cells.push_back(consumer);  // cell 2
+
+    TableCell assembled2;  // cell 3: Sum-assemble of value 1 at root
+    assembled2.value_id = 1;
+    assembled2.production.kind = ProductionKind::Assemble;
+    assembled2.production.assemble = AssembleKind::Sum;
+    assembled2.production.source = 2;
+    t.cells.push_back(assembled2);  // cell 3
 
     t.reads.push_back(Read{/*consumer=*/2,
                            /*operand_value_id=*/0,
@@ -503,5 +522,182 @@ TEST_CASE("cell table: empty table and out-of-range read ids", "[cell_table]") {
                            {}});
     auto const v = validate_cell_table(t, ScopeBlock{});
     CHECK(v.size() >= 1);
+  }
+}
+
+TEST_CASE(
+    "cell table validator: the form rule covers every instance the consumer "
+    "is BOUND to, a partial sum over a loop included",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  // value 2 is a partial sum over loop (1,0) -- it slices no position of its
+  // own, so only partial_over records the binding. Its two operands: value 0,
+  // sliced by (1,0), and value 1, built whole at root.
+  auto make = [] {
+    CellTable t;
+    TableCell a;  // cell 0: value 0, sliced by (1,0), built inside it
+    a.value_id = 0;
+    a.sliced.push_back({0, LoopKey{1, 0}});
+    a.scope.path.push_back({LoopKey{1, 0}, 0});
+    a.life = 1;
+    t.cells.push_back(a);
+    TableCell b;  // cell 1: value 1, Build at root, whole
+    b.value_id = 1;
+    b.life = 1;
+    t.cells.push_back(b);
+    TableCell c;  // cell 2: value 2, per-batch partial over (1,0)
+    c.value_id = 2;
+    c.scope.path.push_back({LoopKey{1, 0}, 0});
+    c.partial_over.push_back(LoopKey{1, 0});
+    c.life = 1;  // read once, by the Assemble
+    t.cells.push_back(c);
+    TableCell assembled;  // cell 3: Sum-assemble of value 2 at root
+    assembled.value_id = 2;
+    assembled.production.kind = ProductionKind::Assemble;
+    assembled.production.assemble = AssembleKind::Sum;
+    assembled.production.source = 2;
+    t.cells.push_back(assembled);
+    t.reads.push_back(Read{/*consumer=*/2, 0, /*source=*/0, {}, {}});
+    t.reads.push_back(Read{/*consumer=*/2, 1, /*source=*/1, {}, {}});
+    return t;
+  };
+
+  {
+    // the whole operand (cell 1) against the (1,0)-bound one (cell 0), with
+    // no invariant record: exactly one form violation, found through
+    // partial_over -- the consumer's own `sliced` is empty.
+    auto const t = make();
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    std::size_t n_form = 0;
+    for (auto const& x : v)
+      if (x.rule == "form") ++n_form;
+    CHECK(n_form == 1);
+    CHECK(v.size() == 1);
+  }
+  {
+    // the same table with the whole read explicitly recorded invariant on
+    // (1,0): valid.
+    auto t = make();
+    t.reads.back().invariant_on.push_back(LoopKey{1, 0});
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    CHECK(v.empty());
+  }
+}
+
+TEST_CASE(
+    "cell table validator: two legs of one consumer reading one value are "
+    "two reads",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  // value 1 = value 0 contracted with itself: one consumer, one source, TWO
+  // reads (the runtime accesses the source's home once per leg).
+  CellTable t;
+  TableCell src;
+  src.value_id = 0;
+  src.life = 2;
+  t.cells.push_back(src);  // cell 0
+  TableCell consumer;
+  consumer.value_id = 1;
+  t.cells.push_back(consumer);  // cell 1
+  t.reads.push_back(Read{/*consumer=*/1, 0, /*source=*/0, {}, {}});
+  t.reads.push_back(Read{/*consumer=*/1, 0, /*source=*/0, {}, {}});
+  {
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    CHECK(v.empty());
+  }
+  {
+    // life 1 -- what a de-duplicated operand list would produce -- is one
+    // life violation.
+    t.cells[0].life = 1;
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    std::size_t n_life = 0;
+    for (auto const& x : v)
+      if (x.rule == "life") ++n_life;
+    CHECK(n_life == 1);
+    CHECK(v.size() == 1);
+  }
+}
+
+TEST_CASE("cell table validator: a read of a partial sum is a chain violation",
+          "[cell_table]") {
+  using namespace sequant::eval;
+  auto t = make_sum_table();
+  // a root Build reads the PARTIAL (cell 0) instead of its assembled form.
+  t.reads.push_back(Read{/*consumer=*/2, 1, /*source=*/0, {}, {}});
+  t.cells[0].life = 2;  // the Assemble plus this read
+  auto const v = validate_cell_table(t, ScopeBlock{});
+  for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+  std::size_t n_chain = 0, n_other = 0;
+  for (auto const& x : v) {
+    if (x.rule == "chain") ++n_chain;
+    // the partial lives inside (1,0), so reading it from root is ALSO a
+    // visibility fault; the chain rule is the one under test.
+    else if (x.rule != "visibility")
+      ++n_other;
+  }
+  CHECK(n_chain == 1);
+  CHECK(n_other == 0);
+}
+
+TEST_CASE(
+    "cell table validator: a scatter assemble with an empty map, and an "
+    "assemble that does not enclose its source, are chain violations",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  {
+    auto t = make_two_level_table();
+    t.cells[2].production.scatter_map.clear();
+    auto const v = validate_cell_table(t, empty_root());
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    REQUIRE(v.size() == 1);
+    CHECK(v.front().rule == "chain");
+  }
+  {
+    // the Assemble sits in a SIBLING nest (1,1); its source lives in (1,0),
+    // which that scope does not enclose.
+    auto t = make_two_level_table();
+    t.cells[2].scope.path.push_back({LoopKey{1, 1}, 0});
+    auto const v = validate_cell_table(t, empty_root());
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    std::size_t n_chain = 0;
+    for (auto const& x : v)
+      if (x.rule == "chain") ++n_chain;
+    CHECK(n_chain == 1);
+  }
+}
+
+TEST_CASE(
+    "cell table validator: a produced cell nobody reads is a life violation "
+    "unless it sits at the root scope",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  {
+    // an extra Build inside (1,0) that no read and no Assemble consumes
+    auto t = make_two_level_table();
+    TableCell dead;
+    dead.value_id = 5;
+    dead.scope.path.push_back({LoopKey{1, 0}, 0});
+    dead.production.kind = ProductionKind::Build;
+    dead.life = 0;
+    t.cells.push_back(dead);
+    auto const v = validate_cell_table(t, empty_root());
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    REQUIRE(v.size() == 1);
+    CHECK(v.front().rule == "life");
+  }
+  {
+    // the same cell at the ROOT scope is a result, not dead work
+    auto t = make_two_level_table();
+    TableCell result;
+    result.value_id = 5;
+    result.production.kind = ProductionKind::Build;
+    result.life = 0;
+    t.cells.push_back(result);
+    auto const v = validate_cell_table(t, empty_root());
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    CHECK(v.empty());
   }
 }

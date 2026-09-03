@@ -74,11 +74,28 @@ struct TableCell {
   CellScope scope;
   Production production;
   bool produce_if_absent = false;
+  /// CROSS-EVALUATION invariance: the cell carries no volatile leaf AND is
+  /// bound to no loop instance (\c detail::bound_instances empty), so its
+  /// content is identical across every batch and across repeated evaluations
+  /// of the same schedule and may survive a cache reset between them. This is
+  /// NOT the legacy runtime's per-scratch "survives the reset of its home
+  /// scope" flag, which tests only the innermost home loop (a cell bound to an
+  /// OUTER loop passes that test and fails this one).
   bool persistent = false;
   std::size_t life = 0;
 };
 
-/// One per DAG edge into a consumer cell's production tree.
+/// One per LEG of a consumer cell's production tree -- not one per distinct
+/// operand value: a consumer whose two legs read the SAME value carries two
+/// reads of it (the runtime accesses that cell's home twice), which the
+/// de-duplicated operand lists of \c ordered_schedule_dep_graph / \c
+/// OrderedSchedule::operand_vids cannot express (see \c
+/// CellTableInputs::operands_of).
+///
+/// \note Known stage-1 limitation: the two legs of one consumer reading one
+/// value carry IDENTICAL \c slice and \c invariant_on, because the schedule
+/// seam attributes its facts per (value, consumer) rather than per leg.
+/// Per-leg facts are a stage-2 seam change.
 struct Read {
   CellId consumer = 0;
   std::size_t operand_value_id = 0;
@@ -97,6 +114,13 @@ struct Read {
 struct CellTable {
   container::vector<TableCell> cells;
   container::vector<Read> reads;
+  /// Diagnostics, not part of the model: (cell, carried position) pairs that
+  /// are in the value's own sliced modes but matched no enclosing loop
+  /// instance of the same index space at the cell's scope. The cell records
+  /// such a position WHOLE, so a non-empty list means the table describes a
+  /// form the schedule may not actually produce -- treat it like a violation
+  /// on any schedule that is expected to be fully resolved.
+  container::svector<std::pair<CellId, std::size_t>> unresolved;
 };
 
 struct CellViolation {
@@ -147,6 +171,15 @@ namespace detail {
 /// are SEPARATE properties (survival across evaluations / first-visit
 /// production, not where within one evaluation a cell lives) and are NOT
 /// consulted here.
+///
+/// \note This is the residency CEILING, deliberately: it is where a
+/// table-driven executor MAY home the cell, since such an executor homes an
+/// Assemble at that scope and slices every read of it explicitly. The legacy
+/// runtime's close-store walk stops EARLIER in two cases -- at a loop that
+/// some consumer reads the value inside, and at the end of the cache chain --
+/// so a value the runtime holds deeper than this says is not a table defect;
+/// the reverse (the runtime holding it shallower than the table claims) would
+/// be.
 [[nodiscard]] inline CellScope residency_scope(TableCell const& s) {
   if (s.production.kind == ProductionKind::Leaf) return CellScope{};
   if (s.production.kind == ProductionKind::Build) return s.scope;
@@ -201,9 +234,14 @@ namespace detail {
 }  // namespace detail
 
 /// Static validation of a cell table (spec section 3). Production order is
-/// the order of non-Leaf cells in \p table.cells (Task 3's builder emits
-/// them in execution order). The block tree \p root is accepted for the
-/// Task 3 integration (it is not consulted here beyond being passed through).
+/// the order of non-Leaf cells in \p table.cells (the builder emits them in
+/// execution order).
+///
+/// \param root the ordered schedule's block tree. RESERVED for the block-tree
+/// walk of design rule 1 (visibility tracked along the real execution order of
+/// blocks) and UNUSED in stage 1, where visibility is decided from the cells'
+/// own scopes and their order in \p table.cells; it is named in the signature
+/// so adding that walk does not change every call site.
 [[nodiscard]] inline container::vector<CellViolation> validate_cell_table(
     CellTable const& table, ScopeBlock const& /*root*/,
     std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {
@@ -249,7 +287,11 @@ namespace detail {
     }
   }
 
-  // (2) form: per consumer and per loop group it is sliced by, every operand
+  // (2) form: per consumer and per loop instance it is BOUND to (\c
+  // detail::bound_instances -- its sliced positions' instances AND the
+  // instances it is a partial sum over; a value reduced over a loop is just as
+  // much a per-batch form of that loop as one sliced by it, and its operands
+  // must agree on the batch just the same), every operand
   // bound to that group must be bound to the SAME instance; an UNDECIDED
   // whole operand (one with no explicit invariant record) on a group that
   // another operand is bound to is a mismatch. A read the seam recorded as
@@ -261,11 +303,24 @@ namespace detail {
   // ground truth), and it never contributes to the mismatch. A read bound
   // to another instance of the SAME group is still always its own
   // violation, invariant or not.
+  //
+  // That "another instance of the same group" branch keys the group on \c
+  // depth ALONE (not the full LoopKey): two members of one loop group share a
+  // depth and differ by \c loop_slot. Note that the passes of a forced split
+  // differ by LATITUDE, which LoopKey drops entirely, so they are the SAME
+  // instance here; and on a schedule with a single instance per depth the
+  // branch cannot fire at all. It guards hand-built tables and the
+  // multi-instance loop groups a later stage will emit.
   for (CellId id = 0; id < n; ++id) {
     TableCell const& c = table.cells[id];
     if (c.production.kind != ProductionKind::Build) continue;
-    for (auto const& entry : c.sliced) {
-      LoopKey const& L = entry.second;
+    container::svector<LoopKey> seen;
+    for (LoopKey const& L : detail::bound_instances(c)) {
+      bool repeated = false;  // two sliced positions can name one instance
+      for (LoopKey const& k : seen)
+        if (detail::same_key(k, L)) repeated = true;
+      if (repeated) continue;
+      seen.push_back(L);
       bool any_bound = false, any_whole = false;
       for (Read const& r : table.reads) {
         if (r.consumer != id) continue;
@@ -326,6 +381,9 @@ namespace detail {
                                       " from a source not sliced by that "
                                       "instance"});
       }
+      if (c.production.scatter_map.empty())
+        out.push_back({"chain", detail::cell_str(table, id) +
+                                    " scatters nothing: empty scatter map"});
     } else if (!s.scope.path.empty()) {
       LoopKey const closing = s.scope.path.back().first;
       bool found = false;
@@ -338,9 +396,21 @@ namespace detail {
     }
   }
 
+  // (3b) chain: a partial sum is consumed ONLY by the Assemble that closes it
+  // -- every Read is a read of a complete form, so a Read whose source has a
+  // non-empty partial_over means some consumer would see a half-summed value.
+  for (Read const& r : table.reads)
+    if (!table.cells[r.source].partial_over.empty())
+      out.push_back({"chain", detail::cell_str(table, r.consumer) + " reads " +
+                                  detail::cell_str(table, r.source) +
+                                  ", a partial sum"});
+
   // (4) life: reads (weighted by the consumer's extra enclosing batches via
   // detail::read_multiplicity, same rule the builder uses) plus one per
   // Assemble that consumes the cell == life.
+  // Leaf cells are skipped: they are not PRODUCED by the table (an input is
+  // fetched on demand from outside it), so their lives are informational only
+  // and nothing here has to add up.
   for (CellId id = 0; id < n; ++id) {
     TableCell const& c = table.cells[id];
     if (c.production.kind == ProductionKind::Leaf) continue;
@@ -357,6 +427,12 @@ namespace detail {
       out.push_back({"life", detail::cell_str(table, id) + " life " +
                                  std::to_string(c.life) + " != reads " +
                                  std::to_string(reads)});
+    // A produced cell nobody reads is dead work. Only at the ROOT scope is a
+    // zero-read cell legitimate: those are the schedule's results, read by
+    // whoever asked for the evaluation.
+    if (c.life == 0 && !c.scope.path.empty())
+      out.push_back({"life", detail::cell_str(table, id) +
+                                 " zero-read cell at a non-root scope"});
   }
 
   // (5) uniqueness: one Build per (value, scope).
