@@ -2,7 +2,11 @@
 
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
+#ifdef SEQUANT_BENCH_MAX_CC_RANK
+static constexpr std::size_t maxRank = SEQUANT_BENCH_MAX_CC_RANK;
+#else
 static constexpr std::size_t maxRank = 10;
+#endif
 
 using namespace sequant;
 using namespace sequant::mbpt;

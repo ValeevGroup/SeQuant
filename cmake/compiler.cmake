@@ -60,3 +60,69 @@ function(target_set_warning_flags TARGET)
         target_compile_options("${TARGET}" PRIVATE "-Wno-unused-lambda-capture")
     endif()
 endfunction()
+
+
+include(CheckIPOSupported)
+
+check_ipo_supported(RESULT SEQUANT_CAN_RELY_ON_CMAKE_LTO LANGUAGES CXX)
+
+function(target_set_optimization_flags TARGET)
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+		return()
+	endif()
+
+	get_target_property(TARGET_TYPE "${TARGET}" TYPE)
+
+	if (TARGET_TYPE STREQUAL "INTERFACE_LIBRARY")
+		message(WARNING "target_set_optimization_flags is not intended to be used on interface targets")
+		return()
+	endif()
+
+	include(CheckCXXCompilerFlag)
+
+	set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
+	check_cxx_compiler_flag("-flto" SEQUANT_LTO_FLAG_SUPPORTED)
+	check_cxx_compiler_flag("-flto=auto" SEQUANT_LTO_AUTO_SUPPORTED)
+	check_cxx_compiler_flag("-flto;-ffat-lto-objects" SEQUANT_FAT_LTO_FLAG_SUPPORTED)
+
+	if (DEFINED SEQUANT_LTO)
+		# Always honor explicit user choice
+		set(ENABLE_LTO ${SEQUANT_LTO})
+	elseif(TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR TARGET_TYPE STREQUAL "OBJECT_LIBRARY")
+		# For static/object libraries we only want to enable LTO by default, if we can create
+		# "fat" object files. Those can still be linked without LTO and hence shouldn't
+		# break any downstream use.
+		set(ENABLE_LTO ${SEQUANT_FAT_LTO_FLAG_SUPPORTED})
+	elseif(SEQUANT_LTO_FLAG_SUPPORTED OR SEQUANT_CAN_RELY_ON_CMAKE_LTO)
+		# Anything but static/object libraries is also linked by us and
+		# hence enabling LTO doesn't affect downstream compatibility
+		set(ENABLE_LTO ON)
+	endif()
+
+	if (ENABLE_LTO)
+		if (SEQUANT_LTO_FLAG_SUPPORTED)
+			# We prefer to manually set the LTO flag(s) rather than CMake doing it for us
+			# due to https://gitlab.kitware.com/cmake/cmake/-/work_items/23136
+			# On some compilers, the thin LTO type requested by CMake is incompatible
+			# with explicitly asking for fat LTO object files.
+			# Besides, it seems like full LTO achieves quite a bit better optimizations
+			# with Clang.
+			if (SEQUANT_LTO_AUTO_SUPPORTED)
+				target_compile_options("${TARGET}" PRIVATE -flto=auto)
+				target_link_options("${TARGET}" PRIVATE -flto=auto)
+			else()
+				target_compile_options("${TARGET}" PRIVATE -flto)
+				target_link_options("${TARGET}" PRIVATE -flto)
+			endif()
+
+			if (SEQUANT_FAT_LTO_FLAG_SUPPORTED)
+				target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
+			endif()
+		else()
+			if (NOT SEQUANT_CAN_RELY_ON_CMAKE_LTO)
+				message(FATAL_ERROR "Requested LTO but CMake doesn't know how to enable it for your compiler - Use SEQUANT_LTO=OFF")
+			endif()
+			set_target_properties("${TARGET}" PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+		endif()
+	endif()
+endfunction()
