@@ -3,18 +3,22 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
+#include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/ordered_schedule.hpp>
+#include <SeQuant/core/eval/peak_profile.hpp>
 
 #include <cstddef>
+#include <functional>
+#include <string>
 #include <utility>
 
 namespace sequant::eval {
 
 using LoopKey = sequant::LoopKey;
 
-/// Explicit value cells (design: doc/dev/specs/2026-09-02-ordered-schedule-
-/// explicit-cells-design.md in the mpqc4 repo). A cell is one FORM of a value
-/// resident at one scope; identity is by cell id, carried position and loop
-/// instance -- never by canonical index label.
+/// Explicit value cells (see the explicit-value-cells design document). A cell
+/// is one FORM of a value resident at one scope; identity is by cell id,
+/// carried position and loop instance -- never by canonical index label.
 using CellId = std::size_t;
 
 /// Enclosing loop instances outermost-first, each with its latitude (pass).
@@ -27,10 +31,7 @@ struct CellScope {
   [[nodiscard]] bool encloses(CellScope const& inner) const noexcept {
     if (path.size() > inner.path.size()) return false;
     for (std::size_t i = 0; i < path.size(); ++i)
-      if (path[i].first.depth != inner.path[i].first.depth ||
-          path[i].first.loop_slot != inner.path[i].first.loop_slot ||
-          path[i].second != inner.path[i].second)
-        return false;
+      if (path[i] != inner.path[i]) return false;
     return true;
   }
   [[nodiscard]] friend bool operator==(CellScope const& a,
@@ -51,7 +52,9 @@ struct Production {
   container::svector<std::pair<std::size_t, LoopKey>> scatter_map;
 };
 
-struct Cell {
+/// Represents one form of a value at one scope. Named TableCell to avoid
+/// collision with the existing sequant::eval::Cell in peak_profile.hpp.
+struct TableCell {
   std::size_t value_id = 0;
   /// carried position -> loop instance slicing it; empty = whole.
   container::svector<std::pair<std::size_t, LoopKey>> sliced;
@@ -72,7 +75,7 @@ struct Read {
 };
 
 struct CellTable {
-  container::vector<Cell> cells;
+  container::vector<TableCell> cells;
   container::vector<Read> reads;
 };
 

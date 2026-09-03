@@ -2,12 +2,12 @@
 
 #include <SeQuant/core/eval/cell_table.hpp>
 
-using sequant::eval::Cell;
 using sequant::eval::CellScope;
 using sequant::eval::CellTable;
 using sequant::eval::LoopKey;
 using sequant::eval::ProductionKind;
 using sequant::eval::Read;
+using sequant::eval::TableCell;
 
 TEST_CASE("cell table: scope prefix and equality", "[cell_table]") {
   CellScope root;
@@ -29,7 +29,7 @@ TEST_CASE("cell table: scope prefix and equality", "[cell_table]") {
 }
 
 TEST_CASE("cell table: default cell and read", "[cell_table]") {
-  Cell c;
+  TableCell c;
   c.value_id = 7;
   c.production.kind = ProductionKind::Build;
   CHECK(c.sliced.empty());
