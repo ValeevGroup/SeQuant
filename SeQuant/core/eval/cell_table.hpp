@@ -99,6 +99,34 @@ namespace detail {
 [[nodiscard]] inline bool same_key(LoopKey const& a, LoopKey const& b) {
   return a.depth == b.depth && a.loop_slot == b.loop_slot;
 }
+
+/// The scope over which a produced cell \p s remains resident, once
+/// produced: (1) a persistent cell is resident everywhere (the root scope);
+/// (2) else, if \p s is bound (via \c s.sliced) to one instance of a loop
+/// that also appears in \c s.scope.path, it is resident only through that
+/// loop's current batch, i.e. through the prefix of \c s.scope.path ending
+/// at the DEEPEST such bound loop (it dies when that loop's batch ends); (3)
+/// else (a volatile whole cell, including a produce_if_absent cell whole on
+/// its innermost loop) it is resident exactly at \c s.scope.
+[[nodiscard]] inline CellScope residency_scope(TableCell const& s) {
+  if (s.persistent) return CellScope{};
+  std::size_t deepest = 0;
+  bool bound = false;
+  for (std::size_t i = 0; i < s.scope.path.size(); ++i) {
+    LoopKey const& here = s.scope.path[i].first;
+    for (auto const& [pos, k] : s.sliced) {
+      (void)pos;
+      if (same_key(k, here)) {
+        bound = true;
+        deepest = i;
+      }
+    }
+  }
+  if (!bound) return s.scope;
+  CellScope r;
+  r.path.assign(s.scope.path.begin(), s.scope.path.begin() + deepest + 1);
+  return r;
+}
 }  // namespace detail
 
 /// Static validation of a cell table (spec section 3). Production order is
@@ -116,9 +144,10 @@ namespace detail {
     }
 
   // (1) visibility: a source is resident at the consumer's production iff
-  // the source was produced earlier (or is a Leaf) and its scope encloses
-  // the consumer's scope (a per-batch cell of an inner loop is dead outside
-  // it), or it is persistent / produce_if_absent and at an enclosing scope.
+  // the source was produced earlier (or is a Leaf) and the source's
+  // RESIDENCY scope (detail::residency_scope; persistent -> root, bound to
+  // an enclosing loop instance -> the prefix of its scope ending at that
+  // loop, else its own scope) encloses the consumer's scope.
   {
     container::vector<bool> produced(n, false);
     for (CellId id = 0; id < n; ++id)
@@ -130,7 +159,8 @@ namespace detail {
       for (Read const& r : table.reads) {
         if (r.consumer != id) continue;
         TableCell const& s = table.cells[r.source];
-        bool const ok = produced[r.source] && s.scope.encloses(c.scope);
+        bool const ok =
+            produced[r.source] && detail::residency_scope(s).encloses(c.scope);
         if (!ok)
           out.push_back({"visibility", detail::cell_str(table, r.source) +
                                            " not resident when " +
@@ -153,8 +183,8 @@ namespace detail {
   for (CellId id = 0; id < n; ++id) {
     TableCell const& c = table.cells[id];
     if (c.production.kind != ProductionKind::Build) continue;
-    for (auto const& [cpos, L] : c.sliced) {
-      (void)cpos;
+    for (auto const& entry : c.sliced) {
+      LoopKey const& L = entry.second;
       bool any_bound = false, any_whole = false;
       for (Read const& r : table.reads) {
         if (r.consumer != id) continue;
@@ -172,7 +202,10 @@ namespace detail {
                                      "group " +
                                      std::to_string(L.depth) + " than " +
                                      detail::cell_str(table, id)});
-        (bound_here ? any_bound : any_whole) = true;
+        if (bound_here)
+          any_bound = true;
+        else if (!bound_other)
+          any_whole = true;
       }
       if (any_bound && any_whole)
         out.push_back({"form", detail::cell_str(table, id) +

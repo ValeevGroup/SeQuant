@@ -169,10 +169,87 @@ TEST_CASE(
   t.reads.push_back(Read{2, 1, 1, {}});
   auto const v = validate_cell_table(t, ScopeBlock{});
   bool form = false, visibility = false;
+  std::size_t n_form = 0;
   for (auto const& x : v) {
-    if (x.rule == "form") form = true;
+    if (x.rule == "form") {
+      form = true;
+      ++n_form;
+    }
     if (x.rule == "visibility") visibility = true;
   }
   CHECK(form);
-  CHECK(visibility);  // cell 1 lives in (1,1), not visible inside (1,0)
+  CHECK(n_form == 1);  // exactly the mismatched-instance fault, no
+                       // whole-vs-bound double-count
+  CHECK(visibility);   // cell 1 lives in (1,1), not visible inside (1,0)
+}
+
+TEST_CASE("cell table: persistent cell built inside a loop is visible at root",
+          "[cell_table]") {
+  using namespace sequant::eval;
+  CellTable t;
+  TableCell leaf;
+  leaf.value_id = 0;
+  leaf.production.kind = ProductionKind::Leaf;
+  leaf.life = 0;
+  t.cells.push_back(leaf);  // cell 0
+
+  TableCell built;  // cell 1: built inside loop (1,0), whole (not sliced)
+  built.value_id = 1;
+  built.scope.path.push_back({LoopKey{1, 0}, 0});
+  built.production.kind = ProductionKind::Build;
+  built.produce_if_absent = true;
+  built.persistent = true;
+  built.life = 1;
+  t.cells.push_back(built);  // cell 1
+
+  TableCell root_consumer;  // cell 2: root, reads cell 1 whole
+  root_consumer.value_id = 2;
+  root_consumer.production.kind = ProductionKind::Build;
+  root_consumer.life = 0;
+  t.cells.push_back(root_consumer);  // cell 2
+
+  t.reads.push_back(
+      Read{/*consumer=*/2, /*operand_value_id=*/1, /*source=*/1, {}});
+
+  {
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    CHECK(v.empty());
+  }
+
+  // flip: no longer persistent, but bound to its own (innermost) loop --
+  // it dies at the end of that loop's batch, so it is NOT visible at root.
+  t.cells[1].persistent = false;
+  t.cells[1].sliced.push_back({0, LoopKey{1, 0}});
+  {
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    std::size_t n_visibility = 0;
+    for (auto const& x : v)
+      if (x.rule == "visibility") ++n_visibility;
+    CHECK(n_visibility == 1);
+    REQUIRE(v.size() == 1);
+    CHECK(v.front().rule == "visibility");
+  }
+}
+
+TEST_CASE("cell table: empty table and out-of-range read ids", "[cell_table]") {
+  using namespace sequant::eval;
+  {
+    CellTable t;
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    CHECK(v.empty());
+  }
+  {
+    CellTable t;
+    TableCell leaf;
+    leaf.value_id = 0;
+    leaf.production.kind = ProductionKind::Leaf;
+    t.cells.push_back(leaf);  // cell 0
+    t.reads.push_back(Read{/*consumer=*/5,
+                           /*operand_value_id=*/0,
+                           /*source=*/0,
+                           {}});
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    CHECK(v.size() >= 1);
+  }
 }
