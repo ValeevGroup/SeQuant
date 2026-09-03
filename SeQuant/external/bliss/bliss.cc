@@ -4,7 +4,6 @@
 #include <cstring>
 #include "defs.hh"
 #include "graph.hh"
-#include "timer.hh"
 #include "utils.hh"
 
 /*
@@ -154,7 +153,6 @@ static void _fatal(const char* fmt, ...) {
 }
 
 int main(const int argc, const char** argv) {
-  bliss::Timer timer;
   bliss::AbstractGraph* g = 0;
 
   parse_options(argc, argv);
@@ -214,11 +212,6 @@ int main(const int argc, const char** argv) {
 
   if (!g) _fatal("Failed to read the graph, aborting");
 
-  if (verbose_level >= 2) {
-    fprintf(verbstr, "Graph read in %.2f seconds\n", timer.get_duration());
-    fflush(verbstr);
-  }
-
   bliss::Stats stats;
 
   /* Set splitting heuristics and verbose level */
@@ -256,11 +249,6 @@ int main(const int argc, const char** argv) {
 
   /* Output search statistics */
   if (verbose_level > 0 and verbstr) stats.print(verbstr);
-
-  if (verbose_level > 0) {
-    fprintf(verbstr, "Total time:\t%.2f seconds\n", timer.get_duration());
-    fflush(verbstr);
-  }
 
   delete g;
   g = 0;
