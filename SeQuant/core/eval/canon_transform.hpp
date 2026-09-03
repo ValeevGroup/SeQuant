@@ -25,9 +25,14 @@ struct CanonTransform {
   }
   /// salt for the PARENT's hash combination: conj/swap only -- phase is
   /// multiplicatively hoistable and never enters structural identity
+  /// (a product folds its children's phases into its own transform; a sum
+  /// hoists a uniform phase and salts a mixed one with phase_salt)
   [[nodiscard]] constexpr std::size_t structural_salt() const noexcept {
     return (conj ? 1u : 0u) | (braket_swap ? 2u : 0u);
   }
+  /// salt a sum combines into a negated summand's hash when its summands'
+  /// phases are mixed (disjoint from the structural_salt() bits)
+  static constexpr std::size_t phase_salt = 4u;
   friend constexpr bool operator==(CanonTransform, CanonTransform) = default;
 };
 

@@ -350,6 +350,14 @@ class TensorNetworkV3 {
     /// not interchangeable. A null (default) or empty map leaves the
     /// canonicalization at the space-only named coloring.
     const tensor_network::NamedIndexColorMap *named_index_colors = nullptr;
+    /// if true, the bra and ket slots of every tensor with (anti)symmetric
+    /// bra/ket bundles are permuted IN PLACE into their canonical order (the
+    /// order of their vertices in the canonical labeling, i.e. the order
+    /// SlotCanonicalizationMetadata::phase is defined against), so the
+    /// network's tensors leave in the spelling the metadata describes; the
+    /// phase is reported either way. Column-symmetric Nonsymm tensors and
+    /// the bra<->ket orientation are NOT touched.
+    bool apply_slot_order = false;
   };
 
   /// @sa canonicalize_slots(const container::vector<std::wstring>&, const
