@@ -573,6 +573,15 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   CanonTransform const sum_transform{
       .phase = static_cast<std::int8_t>(hoist_phase ? -1 : 1),
       .conj = hoist_conj};
+  // A sum's result LAYOUT is its first summand's (the others are permuted
+  // into it at evaluation), so the layout is part of the slot identity: the
+  // same summands added in another order hash the same set but hand up a
+  // differently laid-out array (a cache hit would serve the wrong mode
+  // order to the second consumer -- TA range assertions downstream)
+  std::size_t layout_salt = 0;
+  if (all_tensors)
+    for (auto const& ix : summands.front()->canon_indices())
+      hash::combine(layout_salt, hash::value(ix.full_label()));
 
   // Every binary Sum produced by fold_left_to_node below folds the running
   // accumulator (the chain seed, or a prior chain Sum) in as the left
@@ -581,9 +590,11 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   // place -- see EvalExpr::accumulate_in_place.
   auto make_sum = [i = 0, sum_transform,                         //
                    hs = imed_hashes(hvals) | ranges::to_vector,  //
+                   layout_salt,                                  //
                    all_tensors, &opts](EvalExpr const& left,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
+    if (layout_salt != 0) hash::combine(h, layout_salt);
     if (all_tensors) {
       // partition from the DENOTED orientation (stored canonical slots,
       // re-swapped per the child transform)
