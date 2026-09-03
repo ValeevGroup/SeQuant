@@ -323,20 +323,14 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
       Read r;
       r.consumer = cid;
       r.operand_value_id = op;
-      // Source = among this operand's forms, the one whose RESIDENCY scope
-      // (detail::residency_scope: the prefix of its scope ending at the
-      // deepest loop it is bound to, else -- a whole form -- the root
-      // scope) encloses the consumer's scope, deepest such form wins; if
-      // none is resident, fall back to the LAST form so the validator's
-      // visibility rule surfaces the gap rather than the builder hiding it.
-      std::optional<CellId> best;
-      for (CellId f : fit->second) {
-        TableCell const& fc = st.table.cells[f];
-        if (!detail::residency_scope(fc).encloses(c.scope)) continue;
-        if (!best ||
-            fc.scope.path.size() > st.table.cells[*best].scope.path.size())
-          best = f;
-      }
+      // Source = the operand's form VISIBLE at the consumer's scope, by the
+      // one shared rule (detail::deepest_visible_form, which the runtime's
+      // CellRegistry::cell_of uses too): deepest resident form wins, ties
+      // broken by emission order. If none is resident, fall back to the LAST
+      // form so the validator's visibility rule surfaces the gap rather than
+      // the builder hiding it.
+      auto const best =
+          detail::deepest_visible_form(st.table, fit->second, c.scope);
       r.source = best ? *best : fit->second.back();
       TableCell const& s = st.table.cells[r.source];
       for (auto const& [w_vid, pos, lid, consumer_vid] : in.sliced->occ_facts) {

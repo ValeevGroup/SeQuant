@@ -756,18 +756,20 @@ class ResultTensorOfTensorTA final : public Result {
   /// iteration), so the two implementations of one addition disagree on real
   /// data, and which of them a caller reaches is a LIFETIME decision (\c
   /// evaluate_impl's in-place accumulation gate), never a numerical one. This
-  /// was the mechanism behind a NaN residual on the w8 CSV-CCk wet gate once
-  /// in-place accumulation stopped being eligible: the whole residual came
-  /// back with no data at all, and its norm is then 0/0 (see SeQuant
-  /// 965e420b8, which fixed the eligibility, not this).
+  /// was the mechanism behind a not-a-number result norm in an
+  /// application-driven nested-array evaluation (an iterative solver's
+  /// residual over batched nested arrays) once in-place accumulation stopped
+  /// being eligible: the whole result came back with no data at all, and its
+  /// norm is then 0/0 (see SeQuant 965e420b8, which fixed the eligibility,
+  /// not this).
   ///
   /// The intended fix is a guard here mirroring \c add_inplace()'s -- return
   /// the surviving addend permuted into this node's layout -- but it is NOT
   /// applied yet: it awaits a nested-array reproduction. A fixture over
   /// \c TA::DistArray<TA::Tensor<TA::Tensor<double>>> does NOT reproduce the
-  /// annihilation (it already behaves as the identity there); the
-  /// application's nested arrays do. Do not ship the guard on the strength of
-  /// a fixture that passes without it.
+  /// annihilation (it already behaves as the identity there); the nested
+  /// arrays an application actually builds do. Do not ship the guard on the
+  /// strength of a fixture that passes without it.
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {

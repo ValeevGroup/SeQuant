@@ -2414,17 +2414,6 @@ struct SlicedModeAssignment {
   /// itself (sentinel axis, outside every loop) is NEVER an entry here.
   container::vector<DagScopeLevel> levels;
 
-  /// value_id -> the list of (this value's OWN sliced-mode Index, the LoopId
-  /// that slices it) pairs actually recorded for that value. A value with no
-  /// entry here (or whose list omits some Index it carries) is NOT sliced by
-  /// any loop on that mode -- participation is respected via the same
-  /// built-within gate and ectx-participant test
-  /// \c compute_sliced_mode_assignment implements below (a value built
-  /// INSIDE a loop, or one that does not itself carry that loop's occurrence
-  /// label, is left unstamped).
-  std::unordered_map<std::size_t, container::svector<std::pair<Index, LoopId>>>
-      by_value;
-
   /// CONSUMER-attributed per-occurrence sliced-mode facts (sliced-value
   /// canonical-layout / loop-coloring design, PILLAR 2): each entry is
   /// (value_id, this occurrence's own sliced-mode Index, the slicing LoopId,
@@ -2434,8 +2423,9 @@ struct SlicedModeAssignment {
   /// hence to a specific consumer. This is the raw material the cell table
   /// builder (cell_table_builder.hpp) consumes to disambiguate the
   /// w8-symmetric case (one value, one loop, two free modes bound by two
-  /// different consumers); \c by_value alone cannot express "pos0 here, pos1
-  /// there" because it folds away which occurrence bound which mode.
+  /// different consumers): a consumer-blind (value, mode) map cannot express
+  /// "pos0 here, pos1 there" because it folds away which occurrence bound
+  /// which mode.
   /// (value_id, this occurrence's own sliced-mode PHYSICAL POSITION -- its
   /// index in occ.carried, computed in THAT occurrence's own index-frame,
   /// LoopId, CONSUMER value_id). The position (not an Index label) is what the
@@ -2454,28 +2444,6 @@ struct SlicedModeAssignment {
   /// the completeness guard fires only on the latter.
   container::svector<std::tuple<std::size_t, LoopId, std::size_t>>
       occ_invariant;
-
-  /// value_id -> the loops this value is PRODUCED sliced on (from its OWN
-  /// production/`value_slot`, NOT any use-induced fact). This is the consumer-
-  /// residency oracle for use-induced slicing: at a fetch, an operand carrying
-  /// loop L's mode is sliced iff the CONSUMER is produced-sliced on L (it is
-  /// building an L-batch), so a whole-produced operand read by a batching
-  /// consumer is sliced while the SAME operand read by an invariant consumer
-  /// stays whole -- with no propagation, since each read consults the immediate
-  /// consumer's own production, never a transitively-induced slice.
-  std::unordered_map<std::size_t, container::svector<LoopId>>
-      consumer_sliced_loops;
-
-  /// \return the \c LoopId slicing \p value_id's own \p mode, or \c
-  /// std::nullopt if \p mode is not one of \p value_id's sliced modes.
-  [[nodiscard]] std::optional<LoopId> loop_of(std::size_t value_id,
-                                              Index const& mode) const {
-    auto const it = by_value.find(value_id);
-    if (it == by_value.end()) return std::nullopt;
-    for (auto const& [ix, lid] : it->second)
-      if (ix == mode) return lid;
-    return std::nullopt;
-  }
 
   /// \return the realized \c DagScopeLevel a \p loop_id names (the inverse of
   /// the canonical enumeration \c levels holds).
@@ -2568,29 +2536,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   detail::OrderedScheduleDepGraph const g =
       detail::ordered_schedule_dep_graph(rich);
 
-  // Consistency-checked write of one (value, OWN Index) -> level fact: two
-  // fetch sites disagreeing on the level for the SAME (value, mode) pair is a
-  // scheduler bug (the value should have been split), enforced by this
-  // \c stamp_raw assert. Recorded as raw \c DagScopeLevel facts first (this
-  // is the datum that must agree across fetch sites); the fold to \c LoopId
-  // happens once, at the end.
-  std::unordered_map<std::size_t,
-                     container::svector<std::pair<Index, DagScopeLevel>>>
-      raw_facts;
-  auto const stamp_raw = [&raw_facts](std::size_t w_vid, Index const& mode,
-                                      DagScopeLevel const& level) {
-    auto& facts = raw_facts[w_vid];
-    for (auto& [ix, lvl] : facts) {
-      if (!(ix == mode)) continue;
-      SEQUANT_ASSERT(
-          lvl == level &&
-          "compute_sliced_mode_assignment: divergent (value, mode) -> level "
-          "across fetch sites -- the value should have been split");
-      return;
-    }
-    facts.push_back({mode, level});
-  };
-
   // (3) PER-OCCURRENCE POSITIONAL pass (2026-08-25 loop-open design; replaces
   // the former EXACT + REGIME-2 base_key passes). For each occurrence occ of a
   // value W consumed by C, the loops the runtime crosses when fetching W are
@@ -2603,13 +2548,12 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   // base_key, no cross-frame label match, no first-match guess. Divergent
   // (relabeled) occurrences and the symmetric case (one value sliced on
   // different positions by different consumers) are handled uniformly by the
-  // consumer-keyed occ_facts. The old raw_facts / by_value path is left empty:
-  // the ordered executor always fetches under a tracked consumer, so the
-  // consumer-keyed facts cover every sliced fetch, and a value sliced on one
-  // mode by two sibling loops via two consumers has no single consumer-blind
-  // answer anyway.
-  (void)g;          // dependency graph no longer consulted by this pass
-  (void)stamp_raw;  // by_value fallback intentionally left empty (see above)
+  // consumer-keyed occ_facts. There is no consumer-blind (value, mode) ->
+  // loop fallback: the ordered executor always fetches under a tracked
+  // consumer, so the consumer-keyed facts cover every sliced fetch, and a
+  // value sliced on one mode by two sibling loops via two consumers has no
+  // single consumer-blind answer anyway.
+  (void)g;  // dependency graph no longer consulted by this pass
   std::unordered_map<std::size_t, std::size_t> point_owner;
   for (ValueCell const& vc : rich.cells)
     for (OccurrenceRec const& occ : vc.occurrences)
@@ -2719,7 +2663,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         // there. If M is a SHARED external W also carries, the C = ...*W
         // contraction binds W's M to C's sliced M -- so W must be sliced on M
         // at this loop for THIS fetch. Record it CONSUMER-KEYED in occ_facts,
-        // NOT consumer-blind by_value: W may be
+        // never consumer-blind: W may be
         // CSE-shared between C (sliced here) and a DIFFERENT consumer that
         // reads it whole (invariant), and a blind fact would wrongly slice it
         // for both. Bounded to a mode C actually slices (conformability), NOT
@@ -2858,65 +2802,6 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
               std::make_tuple(w_vid, id_of(lvl), oit->second));
       }
     }
-  }
-
-  // Consumer-residency oracle (use-induced slicing): for each value C, the
-  // loops it is PRODUCED sliced on -- an enclosing loop L (build_scope[C])
-  // whose (space, slot) C's OWN production mask (value_slot) carries. This is
-  // "C is building an L-batch," the signal a fetch consults to decide whether
-  // to slice an operand that carries L's mode. Uses C's own value_slot, so it
-  // is non-transitive: 43 (value_slot=[Κ]) is building only a Κ-batch, so it
-  // reads its i_1-carrying operands WHOLE even though 43 itself is sliced on
-  // i_1 for a DIFFERENT consumer.
-  for (ValueCell const& c : rich.cells) {
-    auto const bit = build_scope.find(c.value_id);
-    if (bit == build_scope.end()) continue;
-    auto const& cvs = value_slot[c.value_id];
-    container::svector<LoopId> loops;
-    auto const add = [&loops](LoopId lid) {
-      if (std::find(loops.begin(), loops.end(), lid) == loops.end())
-        loops.push_back(lid);
-    };
-    for (detail::ScopeBlockAxisLevel const& sbl : bit->second) {
-      bool hit = false;
-      for (std::size_t p = 0; p < c.carried.size() && p < cvs.size() && !hit;
-           ++p) {
-        if (std::wstring(c.carried[p].space().base_key()) != sbl.level.space)
-          continue;
-        // per-value slot OR any occurrence's own slot (see the per-occurrence
-        // note in the k-loop above): C is produced-sliced on this loop if
-        // ANY of its occurrences carries position p under this slot.
-        bool sliced = cvs[p] == sbl.level.loop_slot;
-        for (auto const& occ : c.occurrences)
-          if (!sliced && p < occ.loop_slot.size() &&
-              occ.loop_slot[p] == sbl.level.loop_slot)
-            sliced = true;
-        if (sliced) {
-          add(id_of(sbl.level));
-          hit = true;
-        }
-      }
-      // C REDUCES a mode under this loop: it builds a per-batch partial there,
-      // so its K-carrying operands MUST be sliced -- count the loop so the
-      // completeness guard fires on a whole-served operand instead of TA
-      // reading out of bounds.
-      for (auto const& occ : c.occurrences)
-        for (auto const& [rm, rs] : occ.reduced_slot)
-          if (rs == sbl.level.loop_slot &&
-              std::wstring(rm.space().base_key()) == sbl.level.space)
-            add(id_of(sbl.level));
-    }
-    if (!loops.empty())
-      result.consumer_sliced_loops.emplace(c.value_id, std::move(loops));
-  }
-
-  // Fold raw (value, Index) -> DagScopeLevel facts through the canonical
-  // LoopId enumeration.
-  for (auto const& [vid, facts] : raw_facts) {
-    auto& out_list = result.by_value[vid];
-    out_list.clear();
-    for (auto const& [ix, level] : facts)
-      out_list.push_back({ix, id_of(level)});
   }
 
   return result;

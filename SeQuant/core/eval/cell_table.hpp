@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -199,6 +200,40 @@ namespace detail {
   CellScope r;
   r.path.assign(s.scope.path.begin(), s.scope.path.begin() + deepest + 1);
   return r;
+}
+
+/// THE "which form of this value is visible here" rule, in one place: among
+/// \p candidates (cell ids, all of ONE value), the DEEPEST-scoped cell whose
+/// \c residency_scope ENCLOSES \p query -- the same visibility contract
+/// validator rule 1 enforces. Returns nullopt when no candidate is resident
+/// at \p query; the caller decides what that means (the table builder falls
+/// back to the last form so the validator reports the gap; the runtime
+/// throws).
+///
+/// TIE-BREAK, single rule: at equal scope depth the EARLIER candidate wins
+/// (the comparison is a strict \c >), so the answer is a deterministic
+/// function of the order the caller supplies -- the builder supplies a
+/// value's forms in emission order, and \c CellRegistry::cell_of supplies
+/// Build cells before Assemble cells, which is how it prefers a Build. On a
+/// well-formed table the tie cannot arise (rule 5 forbids two Builds of one
+/// value at one scope, and a Build and an Assemble of one value never
+/// coexist at one scope), so this only keeps hand-built tables deterministic.
+///
+/// Used by cell_table_builder.hpp's read-source selection and by \c
+/// CellRegistry::cell_of, so the static table and the runtime cannot
+/// disagree about which form a scope sees.
+template <typename Candidates>
+[[nodiscard]] inline std::optional<CellId> deepest_visible_form(
+    CellTable const& table, Candidates const& candidates,
+    CellScope const& query) {
+  std::optional<CellId> best;
+  for (CellId c : candidates) {
+    TableCell const& cell = table.cells[c];
+    if (!residency_scope(cell).encloses(query)) continue;
+    if (!best || cell.scope.path.size() > table.cells[*best].scope.path.size())
+      best = c;
+  }
+  return best;
 }
 
 /// Multiplicity of one read of a source cell by a consumer cell: one factor

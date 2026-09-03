@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>  // BatchContext
 #include <SeQuant/core/eval/cell_table.hpp>
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <functional>
 #include <optional>
@@ -96,9 +97,7 @@ class CellRegistry {
     --s.life;
     if (s.life != 0) return s.value;
     if (exhausted) *exhausted = true;
-    ResultPtr last = std::move(s.value);
-    s.value.reset();
-    return last;
+    return std::move(s.value);  // the slot is left null by the move
   }
 
   /// Batch start: drops every cell bound to loop instance \p k (see
@@ -130,39 +129,20 @@ class CellRegistry {
   }
 
   /// The value's form VISIBLE at \p scope, by RESIDENCY (not exact scope
-  /// equality) -- the table's own visibility contract (cell_table.hpp's
-  /// validator rule 1 / \c detail::residency_scope's own doc comment): the
-  /// DEEPEST-scoped (largest \c scope.path) Build or Assemble cell of \p vid
-  /// whose \c detail::residency_scope ENCLOSES \p scope. A tie at equal
-  /// depth prefers a Build cell (a Build and an Assemble of one value never
-  /// actually coexist at one scope on a well-formed table, so this never
-  /// actually arbitrates; kept for determinism). Leaf cells are not
+  /// equality) -- the table's own visibility contract, decided by the one
+  /// shared rule \c detail::deepest_visible_form states (deepest resident
+  /// form wins; at equal depth the earlier candidate does), which the table
+  /// builder's read-source selection uses too. Build cells are offered
+  /// FIRST, which is how a tie prefers a Build. Leaf cells are not
   /// candidates here (see \c leaf_cell): a leaf has no scope in this sense.
   [[nodiscard]] std::optional<CellId> cell_of(std::size_t vid,
                                               CellScope const& scope) const {
-    std::optional<CellId> best;
-    auto const consider = [&](container::svector<CellId> const& ids) {
-      for (CellId c : ids) {
-        TableCell const& cell = table_->cells[c];
-        if (!detail::residency_scope(cell).encloses(scope)) continue;
-        if (!best) {
-          best = c;
-          continue;
-        }
-        TableCell const& b = table_->cells[*best];
-        bool const deeper = cell.scope.path.size() > b.scope.path.size();
-        bool const tie_prefers_build =
-            cell.scope.path.size() == b.scope.path.size() &&
-            cell.production.kind == ProductionKind::Build &&
-            b.production.kind != ProductionKind::Build;
-        if (deeper || tie_prefers_build) best = c;
-      }
-    };
+    container::svector<CellId> candidates;
     if (auto it = build_at_.find(vid); it != build_at_.end())
-      consider(it->second);
+      candidates.assign(it->second.begin(), it->second.end());
     if (auto it = assemble_at_.find(vid); it != assemble_at_.end())
-      consider(it->second);
-    return best;
+      candidates.insert(candidates.end(), it->second.begin(), it->second.end());
+    return detail::deepest_visible_form(*table_, candidates, scope);
   }
 
  private:
@@ -223,22 +203,57 @@ template <typename OnExhausted>
 /// a scratch cache for one consumer cell at a time (\c begin_consumer resets
 /// the per-operand read cursors); \c fetch is consulted by \c evaluate_impl
 /// ahead of every other probe.
+///
+/// POSITIONAL MATCHING -- the invariant that makes a cursor per operand VALUE
+/// sufficient, and the reason a \c Read carries no leg number:
+/// 1. the table emits a consumer's \c Read entries in PRODUCTION-TREE LEG
+///    order (cell_table_builder.hpp walks \c CellTableInputs::operands_of,
+///    which is per-leg WITH repetition, left leg then right leg);
+/// 2. the executor fetches a consumer's legs in that SAME order
+///    (\c evaluate_impl requests the left operand, then the right);
+/// 3. therefore the i-th surviving \c Read of one value in \c cursor_ is the
+///    i-th leg of that value, and popping the front matches legs to reads
+///    with no leg index anywhere. \c begin_consumer asserts (1) by checking
+///    each per-value cursor is ordered by table position;
+/// 4. every table value in a consumer's production tree is a DIRECT leg. A
+///    non-leg intermediate node of that tree is a transient (not a value of
+///    the table) and \c fetch reports it as such; a table value reached from
+///    an intermediate node instead of a leg has no \c Read of its own and
+///    \c fetch throws rather than borrowing another leg's read.
 class CellReadResolver {
  public:
   CellReadResolver(
       CellRegistry& reg,
       std::function<std::optional<std::size_t>(std::size_t)> vid_of_hash)
-      : reg_(&reg), vid_of_hash_(std::move(vid_of_hash)) {}
+      : reg_(&reg), vid_of_hash_(std::move(vid_of_hash)) {
+    // Index the table's reads by consumer ONCE: begin_consumer runs before
+    // every build step and every per-batch output evaluation, and scanning
+    // the whole read list there made each step cost O(all reads).
+    auto const& t = reg_->table();
+    reads_of_.resize(t.cells.size());
+    for (std::size_t r = 0; r < t.reads.size(); ++r)
+      reads_of_[t.reads[r].consumer].push_back(r);
+  }
 
   /// Resets the per-operand read cursors to every \c Read of \p consumer, in
-  /// table order.
+  /// table order -- i.e. in the consumer's production-tree LEG order, which
+  /// is what makes the front of a per-value cursor the next leg to fetch
+  /// (see the positional-matching invariant on this class).
   void begin_consumer(CellId consumer) {
     consumer_ = consumer;
     cursor_.clear();
     auto const& t = reg_->table();
-    for (std::size_t r = 0; r < t.reads.size(); ++r)
-      if (t.reads[r].consumer == consumer)
-        cursor_[t.reads[r].operand_value_id].push_back(r);
+    if (consumer >= reads_of_.size()) return;  // a cell nothing reads for
+    for (std::size_t r : reads_of_[consumer]) {
+      auto& c = cursor_[t.reads[r].operand_value_id];
+      // Leg order == table order (invariant 1): the index is built by
+      // ascending read position, so each cursor must come out ordered.
+      SEQUANT_ASSERT(
+          (c.empty() || c.back() < r) &&
+          "CellReadResolver: a consumer's reads of one value are out of "
+          "production-tree leg order");
+      c.push_back(r);
+    }
   }
   [[nodiscard]] CellId consumer() const { return consumer_; }
 
@@ -329,6 +344,9 @@ class CellReadResolver {
   CellRegistry* reg_;
   std::function<std::optional<std::size_t>(std::size_t)> vid_of_hash_;
   CellId consumer_ = 0;
+  /// consumer cell id -> its \c Read positions, ascending (built once in the
+  /// constructor; see \c begin_consumer).
+  container::vector<container::svector<std::size_t>> reads_of_;
   std::unordered_map<std::size_t, container::svector<std::size_t>> cursor_;
   std::size_t served_ = 0;
   bool last_read_exhausted_source_ = false;

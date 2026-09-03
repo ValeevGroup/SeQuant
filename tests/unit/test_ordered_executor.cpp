@@ -3973,3 +3973,138 @@ TEST_CASE(
   // consumer has no read of that value left.
   CHECK_THROWS(resolver.fetch(x_hash, bctx));
 }
+// ===========================================================================
+// Explicit value cells, final round (I2): the input-mirrored configuration is
+// EXECUTED, not merely validated. The static gate above ("cell table: the
+// input-mirrored configuration derives a valid table") proves the table is
+// well formed under that configuration; only a run proves the executor can
+// walk it -- the level-skipping escape chain and the materialized member the
+// mirrored schedule contains are runtime shapes the default configuration
+// never produces. Same construction as the static case (peak threshold 25e9,
+// the batched time-then-space objective, set directly rather than through the
+// environment), then the strict dry-run walk the default fixture uses:
+// range/lobound checks in the backend plus the cache-fill-once tripwire.
+// The [w20-auxocc-walk] fixture keeps its environment-driven mirroring
+// unchanged; this case makes the mirrored RUN part of the default suite.
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: the input-mirrored configuration RUNS the strict "
+    "dry-run walk to completion",
+    "[ordered][cell_table]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 25e9;  // THE mirrored setting
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+  std::vector<Node> forest;
+  for (auto const& s : summands) {
+    sequant::ExprPtr const term = orderedexec_witness_flatten_product(s);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 0;
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+
+  // The strict tripwires the default walk runs under, set and RESTORED (this
+  // case does not own the process environment).
+  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  std::string const prev_strict_val = prev_strict ? prev_strict : "";
+  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+  if (prev_strict)
+    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+  else
+    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
+
+  logger.eval.level = prev_level;
+}

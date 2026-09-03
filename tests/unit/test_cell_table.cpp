@@ -775,3 +775,63 @@ TEST_CASE(
     CHECK(v.front().rule == "chain");
   }
 }
+
+// ===========================================================================
+// The symmetric case the per-occurrence (consumer-keyed) seam facts exist
+// for: ONE shared value, ONE loop instance, and TWO consumers that bind
+// DIFFERENT carried positions of it to that loop. A consumer-blind
+// (value, mode) -> loop map cannot say "position 0 here, position 1 there";
+// per-Read slices can, and the form rule must accept it -- the read is bound
+// on the loop group either way, so neither consumer sees a whole operand
+// against a bound one.
+// ===========================================================================
+TEST_CASE(
+    "cell table validator: two consumers may bind DIFFERENT positions of one "
+    "shared value to one loop instance",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  CellTable t;
+  // cell 0: the shared value 0, produced WHOLE at the root (a leaf-like
+  // input with two carried positions of the loop's own space).
+  TableCell shared;
+  shared.value_id = 0;
+  shared.production.kind = ProductionKind::Leaf;
+  shared.persistent = true;
+  t.cells.push_back(shared);
+  // cells 1 and 2: two consumers, both built inside loop instance (1,0) and
+  // both bound to it, each reading the shared value with its OWN slice.
+  for (std::size_t v : {std::size_t{1}, std::size_t{2}}) {
+    TableCell c;
+    c.value_id = v;
+    c.production.kind = ProductionKind::Build;
+    c.scope.path = {{LoopKey{1, 0}, 0}};
+    c.sliced = {{0, LoopKey{1, 0}}};
+    c.life = 0;  // root-visible results of this fixture: nobody reads them
+    t.cells.push_back(c);
+  }
+  t.reads.push_back(Read{1, 0, 0, {{0, LoopKey{1, 0}}}, {}});
+  t.reads.push_back(Read{2, 0, 0, {{1, LoopKey{1, 0}}}, {}});
+
+  auto const v = validate_cell_table(t, empty_root());
+  for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+  // No "form" violation: each consumer's single read is bound on loop group
+  // 1, so neither sees a whole operand against a bound one. (The two cells
+  // sit at a non-root scope with nobody reading them, which the life rule
+  // reports -- this fixture is about the form rule alone.)
+  std::size_t n_form = 0;
+  for (auto const& x : v)
+    if (x.rule == "form") ++n_form;
+  CHECK(n_form == 0);
+
+  // The contrast, so the check above is not vacuous: give consumer 2 a
+  // SECOND leg reading cell 1 -- a source bound to that same loop instance --
+  // and drop its own slice. One operand bound, the other undecided whole on a
+  // group the consumer is bound to: the form rule's actual target.
+  auto t2 = t;
+  t2.reads[1].slice.clear();
+  t2.reads.push_back(Read{2, 1, 1, {}, {}});
+  std::size_t n_form2 = 0;
+  for (auto const& x : validate_cell_table(t2, empty_root()))
+    if (x.rule == "form") ++n_form2;
+  CHECK(n_form2 == 1);
+}
