@@ -194,3 +194,28 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
       numerically within the block) applies unchanged to the MP1 residual
       and is now its default. dch PNS-MP1: residual 48x5 -> 28/44/28/32/48
       terms, iterations identical to 1e-12, -1.04169026965 in band.
+
+## Regression found and fixed on 2026-09-02 (evening)
+
+- **Symptom** (caught by the user from the iteration table): HSeOH PNS-CCD
+  iteration 1 took 12 s and later iterations 82 s (reference: 127 s then
+  3.5 s), with wrong energies; HSeOH PNS-MP1 diverged (iteration-1 energy
+  -0.2221 vs -0.299572965188). dch MP1 stayed in band, which is why every
+  "certification" above missed it.
+- **Two independent defects.** (1) MPQC af48aa6cf6 expanded and flattened
+  the CSV flavor sums for residuals too (R2 2201 nested -> 30324 flat
+  terms); fixed by confining the expansion and the per-term network
+  canonicalize to the fully contracted energy. (2) SeQuant PR-2 (merged
+  1bfa6dd42 + 74e596c5c): the tensor-of-tensors leaf branch took its
+  antisymmetric reorder phase from `canonicalize_slots`, which only labels
+  and never reorders a ToT tensor, so the stored spelling (what the
+  provider serves) stayed as written while the retrieval transform negated
+  it; 4 of 22 MP1 energy terms flipped sign. Localized by a two-tree bisect
+  (MPQC pinned at 5891c30019, SeQuant PR-1 good / PR-2 bad), then a
+  per-term energy diff. Fixed in 35c79f413 (ToT leaves block-canonicalize
+  the spelling in place and put antisymmetric bundles into the labeling's
+  canonical order with the parity as the phase); mirrored on PR-2.
+- **Certification rule from now on**: HSeOH PNS-MP1 (`pnsmp1_loc1e-5.json`,
+  iteration 1 = -0.299572965188) and HSeOH PNS-CCD (`pnsccd_3it.json`,
+  iterations 1-3 = -0.299572965188 / -0.320010602548 / -0.328438791575,
+  2201 terms, 3.5 s/it) in addition to dch, for every eval/trace change.
