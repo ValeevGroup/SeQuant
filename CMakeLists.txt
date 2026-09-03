@@ -379,6 +379,8 @@ set(SeQuant_symb_src
         SeQuant/core/tensor_network/v2.hpp
         SeQuant/core/tensor_network/v3.cpp
         SeQuant/core/tensor_network/v3.hpp
+        SeQuant/core/tree_index.cpp
+        SeQuant/core/tree_index.hpp
         SeQuant/core/utility/aggregate.hpp
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
@@ -386,6 +388,8 @@ set(SeQuant_symb_src
         SeQuant/core/utility/exception.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
+        SeQuant/core/utility/expr_matcher.cpp
+        SeQuant/core/utility/expr_matcher.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.cpp
         SeQuant/core/utility/macros.hpp
@@ -400,6 +404,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/swap.hpp
         SeQuant/core/utility/tensor.hpp
         SeQuant/core/utility/timer.hpp
+        SeQuant/core/utility/topological.hpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/reserved.hpp
         SeQuant/core/wick.hpp

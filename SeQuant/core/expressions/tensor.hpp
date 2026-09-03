@@ -766,6 +766,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     return *bra_hash_value_;
   }
 
+  using Expr::operator<;
   bool operator<(const AbstractTensor &other) const override final {
     auto *other_tensor = dynamic_cast<const Tensor *>(&other);
     if (other_tensor) {

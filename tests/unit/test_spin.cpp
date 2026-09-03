@@ -268,6 +268,16 @@ TEST_CASE("spin", "[spin]") {
                    EquivalentTo("-1/2 g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
     }
     {
+      // Ensure auxiliary indices are ignored
+      const ExprPtr expr = deserialize("1/4 g{p1,p2;p3,p4;p5} d{;;p5}",
+                                       {.def_perm_symm = Symmetry::Antisymm});
+      auto result = spintrace(expr, IdxGroupList{{"p1", "p3"}, {"p2", "p4"}});
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(
+              "-1/2 g{p1,p2;p4,p3;p5} d{;;p5} + g{p1,p2;p3,p4;p5} d{;;p5}"));
+    }
+    {
       // Note the provided external index pairings which is different from the
       // way this tensor is written down Also, the prefactor of -1 is important
       // as this forces the code to take a path where it traces a product which
@@ -722,6 +732,58 @@ SECTION("Symmetrize expression") {
     REQUIRE_THAT(result,
                  EquivalentTo("4 Ŝ{i1,i2;a1,a2} g{i3,i4;a3,a4}:S "
                               "t{a_1;i_3} * t{a_3;i_4} * t{a_2,a_4;i_1,i_2}"));
+  }
+}
+
+SECTION("Partial symmetrizer") {
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto expr = deserialize<ResultExpr>(
+      L"R{a1,a2;u1,i1}:A = 2 " + reserved::antisymm_label() +
+      L"{;a1,a2} Y{u2;u1}:A g{a1;a3}:A t{a2,a3;u2,i1}:A");
+  auto equivalent = deserialize<ResultExpr>(
+      "R{a1,a2;u1,i1}:A = Y{u2;u1}:A g{a1;a3}:A t{a2,a3;u2,i1}:A - Y{u2;u1}:A "
+      "g{a2;a3}:A t{a1,a3;u2,i1}:A");
+
+  REQUIRE(expand_A_op(expr.expression()) == equivalent.expression());
+
+  SECTION("closed_shell") {
+    for (bool full_expansion : {false, true}) {
+      CAPTURE(full_expansion);
+      auto res_expr = closed_shell_spintrace(expr, full_expansion);
+      auto res_equiv = closed_shell_spintrace(equivalent, full_expansion);
+
+      REQUIRE(res_expr.size() == 1);
+      REQUIRE(res_equiv.size() == 1);
+      REQUIRE_THAT(res_expr.front(), EquivalentTo(res_equiv.front()));
+    }
+  }
+  SECTION("rigorous") {
+    auto res_expr = spintrace(expr);
+    auto res_equiv = spintrace(equivalent);
+
+    REQUIRE(res_expr.size() == 1);
+    REQUIRE(res_equiv.size() == 1);
+    REQUIRE_THAT(res_expr.front(), EquivalentTo(res_equiv.front()));
+  }
+  SECTION("consent") {
+    for (bool full_expansion : {false, true}) {
+      CAPTURE(full_expansion);
+      auto res_expr = closed_shell_spintrace(expr, full_expansion);
+      auto res_equiv = closed_shell_spintrace(equivalent, full_expansion);
+      auto res_expr_rig = spintrace(expr);
+      auto res_equiv_rig = spintrace(equivalent);
+
+      REQUIRE(res_expr.size() == 1);
+      REQUIRE(res_equiv.size() == 1);
+      REQUIRE(res_expr_rig.size() == 1);
+      REQUIRE(res_equiv_rig.size() == 1);
+
+      REQUIRE_THAT(res_expr.front(), EquivalentTo(res_expr_rig.front()));
+      REQUIRE_THAT(res_equiv.front(), EquivalentTo(res_equiv_rig.front()));
+    }
   }
 }
 

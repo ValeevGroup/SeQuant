@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <concepts>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -182,7 +183,9 @@ ExprVar to_expression(T &&expression) {
   using std::begin;
   using std::end;
 
-  if constexpr (std::is_convertible_v<T, std::string>) {
+  using BaseT = std::remove_cvref_t<T>;
+
+  if constexpr (std::is_convertible_v<BaseT, std::string>) {
     std::wstring string = sequant::toUtf16(std::forward<T>(expression));
 
     if (std::find(begin(string), end(string), L'=') != end(string)) {
@@ -194,7 +197,7 @@ ExprVar to_expression(T &&expression) {
           std::string(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
-  } else if constexpr (std::is_convertible_v<T, std::wstring>) {
+  } else if constexpr (std::is_convertible_v<BaseT, std::wstring>) {
     if (std::find(begin(expression), end(expression), L'=') !=
         end(expression)) {
       return sequant::deserialize<sequant::ResultExpr>(
@@ -205,13 +208,13 @@ ExprVar to_expression(T &&expression) {
           std::wstring(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
-  } else if constexpr (std::is_convertible_v<T, sequant::ResultExpr>) {
+  } else if constexpr (std::same_as<BaseT, sequant::ResultExpr>) {
     return expression;
-  } else if constexpr (std::is_convertible_v<T, sequant::Expr>) {
+  } else if constexpr (std::same_as<BaseT, sequant::Expr>) {
     // Clone in order to not have to worry about later modification
     return expression.clone();
   } else {
-    static_assert(std::is_convertible_v<T, sequant::ExprPtr>,
+    static_assert(std::same_as<BaseT, sequant::ExprPtr>,
                   "Invalid type for expression");
 
     // Clone in order to not have to worry about later modification

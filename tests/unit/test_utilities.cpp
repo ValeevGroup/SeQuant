@@ -12,14 +12,17 @@
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
+#include <SeQuant/core/utility/topological.hpp>
 
 #include <range/v3/view/transform.hpp>
 
+#include <compare>
 #include <limits>
 #include <ranges>
 #include <string>
@@ -49,6 +52,29 @@ class S : public sequant::Singleton<S<T>> {
 };
 
 }  // namespace sequant::singleton
+
+struct Entry {
+  std::size_t id;
+  std::vector<std::size_t> deps;
+
+  bool operator==(const Entry& other) const { return id == other.id; }
+
+  std::strong_ordering operator<=>(const Entry& other) const {
+    return id <=> other.id;
+  }
+
+  friend std::ostream& operator<<(std::ostream& stream, const Entry& e) {
+    stream << "{.id=" << e.id << ", .deps={";
+    for (std::size_t i = 0; i < e.deps.size(); ++i) {
+      stream << e.deps[i];
+      if (i + 1 < e.deps.size()) {
+        stream << ", ";
+      }
+    }
+    stream << "}}";
+    return stream;
+  };
+};
 
 sequant::Tensor parse_tensor(std::wstring_view str) {
   return sequant::deserialize<sequant::ExprPtr>(str)->as<sequant::Tensor>();
@@ -380,6 +406,118 @@ TEST_CASE("utilities", "[utilities]") {
     }
   }
 
+  SECTION("ExprMatcher") {
+    SECTION("composite") {
+      // Composite expressions not yet supported
+      REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A + B")), Exception);
+      REQUIRE_THROWS_AS(ExprMatcher(*deserialize("A * B")), Exception);
+    }
+    SECTION("non-tensor") {
+      Constant c1(1);
+      Constant c2(2);
+
+      REQUIRE(c1 < c2);
+
+      SECTION("same_type") {
+        ExprMatcher c1_matcher(c1);
+
+        REQUIRE(c1_matcher == c1);
+        REQUIRE(c1 == c1_matcher);
+        REQUIRE(c1_matcher != c2);
+        REQUIRE(c2 != c1_matcher);
+        REQUIRE(c1_matcher <= c1);
+        REQUIRE(c1 <= c1_matcher);
+        REQUIRE(c1_matcher >= c1);
+        REQUIRE(c1 >= c1_matcher);
+        REQUIRE(c1_matcher < c2);
+        REQUIRE(c2 > c1_matcher);
+      }
+      SECTION("cross_type") {
+        Tensor t("t", bra({"a1"}), ket({"i1"}));
+        Variable var("a");
+        const bool var_is_less = var < c1;
+        const bool tensor_is_less = t < c1;
+        REQUIRE((var < c2) == var_is_less);
+
+        ExprMatcher m1(c1, {.tensor_cmp = TensorComparison::Block,
+                            .cross_comparisons = true});
+        ExprMatcher m2(c1, {.cross_comparisons = false});
+
+        REQUIRE((var <=> m1) == (var_is_less ? std::partial_ordering::less
+                                             : std::partial_ordering::greater));
+        REQUIRE((m1 <=> var) == (var_is_less ? std::partial_ordering::greater
+                                             : std::partial_ordering::less));
+        REQUIRE((var <=> m2) == std::partial_ordering::unordered);
+        REQUIRE((m2 <=> var) == std::partial_ordering::unordered);
+
+        REQUIRE((t <=> m1) == (tensor_is_less
+                                   ? std::partial_ordering::less
+                                   : std::partial_ordering::greater));
+        REQUIRE((m1 <=> t) == (tensor_is_less ? std::partial_ordering::greater
+                                              : std::partial_ordering::less));
+        REQUIRE((t <=> m2) == std::partial_ordering::unordered);
+        REQUIRE((m2 <=> t) == std::partial_ordering::unordered);
+
+        REQUIRE(m1 != var);
+        REQUIRE(m1 == c1);
+        REQUIRE(m1 != c2);
+        REQUIRE((m1 < var) == !var_is_less);
+        REQUIRE((m1 > var) == var_is_less);
+        REQUIRE((var < m1) <= !var_is_less);
+        REQUIRE((var > m1) >= var_is_less);
+
+        REQUIRE(m2 != var);
+        REQUIRE_FALSE(m2 == var);
+        REQUIRE(m2 == c1);
+        REQUIRE(m2 != c2);
+        REQUIRE_FALSE(m2 < var);
+        REQUIRE_FALSE(m2 > var);
+        REQUIRE_FALSE(var < m2);
+        REQUIRE_FALSE(var > m2);
+        REQUIRE_FALSE(m2 <= var);
+        REQUIRE_FALSE(m2 >= var);
+      }
+    }
+    SECTION("tensor") {
+      Tensor t1 = deserialize("T{a1;i1}")->as<Tensor>();
+      Tensor t2 = deserialize("T{a2;i2}")->as<Tensor>();
+
+      ExprMatcher m1(t1, {.tensor_cmp = TensorComparison::Identity,
+                          .cross_comparisons = false});
+
+      REQUIRE(t1 == m1);
+      REQUIRE(m1 == t1);
+      REQUIRE(t1 >= m1);
+      REQUIRE(m1 <= t1);
+      REQUIRE(t2 != m1);
+      REQUIRE(m1 != t2);
+      REQUIRE(t2 > m1);
+      REQUIRE(m1 < t2);
+
+      ExprMatcher m2(t1, {.tensor_cmp = TensorComparison::Block});
+
+      REQUIRE(t1 == m2);
+      REQUIRE(m2 == t1);
+      REQUIRE(t1 >= m2);
+      REQUIRE(m2 <= t1);
+      REQUIRE(t2 == m2);
+      REQUIRE(m2 == t2);
+      REQUIRE_FALSE(t2 < m2);
+      REQUIRE_FALSE(m2 < t2);
+      REQUIRE_FALSE(t2 > m2);
+      REQUIRE_FALSE(m2 > t2);
+
+      Variable var("a");
+      REQUIRE(m1 != var);
+      REQUIRE(var != m1);
+      REQUIRE_FALSE(m1 < var);
+      REQUIRE_FALSE(m1 <= var);
+      REQUIRE_FALSE(m1 > var);
+      REQUIRE_FALSE(m1 >= var);
+      REQUIRE(var != m1);
+    }
+  }
+
   SECTION("get_used_indices") {
     for (const auto& [input, expected] :
          std::vector<std::tuple<std::wstring, std::vector<std::wstring>>>{
@@ -396,6 +534,45 @@ TEST_CASE("utilities", "[utilities]") {
 
       REQUIRE_THAT(get_used_indices(expr),
                    Catch::Matchers::UnorderedRangeEquals(indices));
+    }
+
+    SECTION("restricted") {
+      const ExprPtr expr = deserialize("A{a1;a2;a3} B{i1<i2>;i3} C{i3}");
+
+      std::vector<Index> expected = {"a1", Index("i1", {"i2"}), "i3"};
+      std::vector<Index> actual =
+          get_used_indices<std::vector<Index>, SlotType::Bra>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"a2", "i3"};
+      actual = get_used_indices<std::vector<Index>, SlotType::Ket>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"a3"};
+      actual = get_used_indices<std::vector<Index>, SlotType::Aux>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2"};
+      actual = get_used_indices<std::vector<Index>, SlotType::Proto>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2", "a3"};
+      actual =
+          get_used_indices<std::vector<Index>, SlotType::Proto | SlotType::Aux>(
+              expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2", "a3", "a2", "i3"};
+      actual =
+          get_used_indices<std::vector<Index>, SlotType::Proto | SlotType::Aux |
+                                                   SlotType::Ket>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {"i2", "a3", "a2", "i3", "a1", Index("i1", {"i2"})};
+      actual = get_used_indices<std::vector<Index>,
+                                SlotType::Proto | SlotType::Aux |
+                                    SlotType::Ket | SlotType::Bra>(expr);
+      REQUIRE_THAT(actual, Catch::Matchers::UnorderedRangeEquals(expected));
     }
   }
 
@@ -479,6 +656,8 @@ TEST_CASE("utilities", "[utilities]") {
                {L"1 + t{a1} t{a1} t{a1}",
                 "Index a_1 appears more than 2 times"},
                {L"1 + t{a1}", "Inconsistent external indices in sum"},
+               // Allow bra/ket inconsistencies in external indices
+               {L"t{;a1} + t{a1}", ""},
            }) {
         CAPTURE(toUtf8(expr_str));
 
@@ -521,9 +700,8 @@ TEST_CASE("utilities", "[utilities]") {
                {L"R{;;a1} = Var",
                 "Aux indices of result are inconsistent with the rhs "
                 "expression"},
-               {L"R{a2;a1} = t{a1;i1} t{i1;a2}",
-                "Bra indices of result are inconsistent with the rhs "
-                "expression"},
+               // Allow bra/ket inconsistencies in external indices
+               {L"R{a2;a1} = t{a1;i1} t{i1;a2}", ""},
            }) {
         CAPTURE(toUtf8(expr_str));
 
@@ -799,6 +977,94 @@ TEST_CASE("utilities", "[utilities]") {
 
         if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
           REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
+        }
+      }
+    }
+  }
+
+  SECTION("topological") {
+    std::vector<std::pair<std::vector<Entry>, std::vector<std::size_t>>> tests;
+    // Tests with unique topological order
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 2, .deps = {1}},
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {0}},
+        },
+        std::vector<std::size_t>{1, 2, 0});
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 2, .deps = {0}},
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {0, 2}},
+        },
+        std::vector<std::size_t>{1, 0, 2});
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 2, .deps = {0}},
+            {.id = 3, .deps = {1}},
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {0, 2}},
+        },
+        std::vector<std::size_t>{2, 0, 3, 1});
+
+    // Tests with ambiguous topological order
+    const std::size_t ambiguous_start = tests.size();
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {}},
+            {.id = 2, .deps = {1}},
+            {.id = 3, .deps = {0}},
+        },
+        std::vector<std::size_t>{0, 1, 2, 3});
+    tests.emplace_back(
+        std::vector<Entry>{
+            {.id = 0, .deps = {}},
+            {.id = 1, .deps = {}},
+            {.id = 2, .deps = {0, 1, 3}},
+            {.id = 3, .deps = {0}},
+        },
+        std::vector<std::size_t>{0, 1, 3, 2});
+
+    SECTION("order") {
+      for (std::size_t i = 0; i < tests.size(); ++i) {
+        const auto& [entries, expected_order] = tests.at(i);
+        CAPTURE(entries);
+
+        auto get_deps = [&](const Entry& entry) {
+          return entry.deps |
+                 std::ranges::views::transform(
+                     [&](std::size_t idx) -> decltype(auto) {
+                       return *std::ranges::find(entries, idx, &Entry::id);
+                     });
+        };
+
+        if (i < ambiguous_start) {
+          REQUIRE(topological_order(entries, get_deps) == expected_order);
+        }
+
+        // Our tests are set up such that in case of ambiguity the entries
+        // are listed in increasing order
+        REQUIRE(topological_order(entries, get_deps, std::less<>{}) ==
+                expected_order);
+
+        if (i >= ambiguous_start) {
+          // Test validity of order by simulating an execution
+          std::set<std::size_t> processed;
+          const auto order =
+              topological_order(entries, get_deps, std::greater<>{});
+          REQUIRE(order != expected_order);
+
+          for (std::size_t current_idx : order) {
+            const Entry& current = entries.at(current_idx);
+            REQUIRE(processed.find(current.id) == processed.end());
+            for (std::size_t dep : current.deps) {
+              REQUIRE(processed.find(dep) != processed.end());
+            }
+
+            processed.emplace(current.id);
+          }
         }
       }
     }

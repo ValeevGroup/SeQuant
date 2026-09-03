@@ -1,0 +1,359 @@
+{
+	"driver_format_version": 2,
+	"index_spaces": [
+		{
+			"label": "a",
+			"size": 1000,
+			"real_valued": true
+		},
+		{
+			"label": "u",
+			"size": 5,
+			"real_valued": true
+		},
+		{
+			"label": "i",
+			"size": 80,
+			"real_valued": true
+		},
+		{
+			"label": "F",
+			"size": 1500,
+			"real_valued": true
+		}
+	],
+	"steps": [
+		{
+			"id": "input",
+			"kind": "read_input",
+			"options": {
+				"file_path": [
+					"nevpt2/nevpt2_en0.inp",
+					"nevpt2/nevpt2_en.inp",
+
+					"nevpt2/nevpt2_res1_i1.inp",
+					"nevpt2/nevpt2_res1_s0.inp",
+					"nevpt2/nevpt2_res2_s1_singles.inp",
+					"nevpt2/nevpt2_res1_s1.inp",
+
+					"nevpt2/nevpt2_res2_p0.inp",
+					"nevpt2/nevpt2_res2_p2.inp",
+					"nevpt2/nevpt2_res2_i2.inp",
+					"nevpt2/nevpt2_res2_p1.inp",
+					"nevpt2/nevpt2_res2_s1.inp",
+					"nevpt2/nevpt2_res2_s2.inp"
+				],
+				"default_symmetry": "antisymmetric"
+			},
+			"outputs": {
+				"ecc0": "0",
+				"ecc": "1",
+				"en": "0-1",
+				"res1": "2-5",
+				"res1_i1": "2",
+				"res1_s0": "3",
+				"res2_s1_singles": "4",
+				"res1_s1": "5",
+				"res2": "6-11",
+				"res2_p0": "6",
+				"res2_p2": "7",
+				"res2_i2": "8",
+				"res2_p1": "9",
+				"res2_s1": "10",
+				"res2_s2": "11",
+				"res": "2-11"
+			}
+		},
+		{
+			"kind": "validate",
+			"inputs": "input"
+		},
+		{
+			"id": "DF",
+			"kind": "density_fitting",
+			"inputs": "input",
+			"options": {
+				"auxiliary_space": "F"
+			}
+		},
+		{
+			"id": "traced",
+			"kind": "spintracing",
+			"inputs": "DF",
+			"options": {
+				"algorithm": "closed_shell"
+			}
+		},
+		{
+			"id": "biorth",
+			"kind": "project",
+			"inputs": "traced.res",
+			"options": {
+				"method": "biorthogonal"
+			}
+		},
+		{
+			"id": "opt",
+			"kind": "optimize",
+			"inputs": [
+				"traced.en",
+				"biorth"
+			]
+		},
+		{
+			"id": "treeify",
+			"kind": "to_export_tree",
+			"inputs": "opt"
+		},
+		{
+			"kind": "export",
+			"inputs": "treeify",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_v2.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				},
+				"relative_order": [
+					"ecc0",
+					"ecc",
+					"res1_i1",
+					"res1_s0",
+					"res2_s1_singles",
+					"res1_s1",
+					"res2_p0",
+					"res2_p2",
+					"res2_i2",
+					"res2_p1",
+					"res2_s1",
+					"res2_s2"
+				],
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
+		},
+		{
+			"id": "cse",
+			"kind": "cse",
+			"inputs": "treeify"
+		},
+		{
+			"id": "cse_ecc",
+			"kind": "cse",
+			"inputs": "treeify.ecc",
+			"options": {
+				"merge_inputs": true
+			},
+			"outputs": {
+				"ecc": "0"
+			}
+		},
+		{
+			"id": "cse_ecc0",
+			"kind": "cse",
+			"inputs": "treeify.ecc0",
+			"options": {
+				"merge_inputs": true
+			},
+			"outputs": {
+				"ecc0": "0"
+			}
+		},
+		{
+			"id": "cse_res",
+			"kind": "cse",
+			"inputs": [
+				"treeify.res1_i1",
+				"treeify.res1_s0",
+				"treeify.res2_s1_singles",
+				"treeify.res1_s1",
+				"treeify.res2_p0",
+				"treeify.res2_p2",
+				"treeify.res2_i2",
+				"treeify.res2_p1",
+				"treeify.res2_s1",
+				"treeify.res2_s2"
+			],
+			"options": {
+				"merge_inputs": true
+			},
+			"outputs": {
+				"res": "0"
+			}
+		},
+		{
+			"kind": "export",
+			"inputs": "cse",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_v2_cse.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				},
+				"relative_order": [
+					"ecc0",
+					"ecc",
+					"res1_i1",
+					"res1_s0",
+					"res2_s1_singles",
+					"res1_s1",
+					"res2_p0",
+					"res2_p2",
+					"res2_i2",
+					"res2_p1",
+					"res2_s1",
+					"res2_s2"
+				],
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
+		},
+		{
+			"kind": "export",
+			"inputs": [
+				"cse_ecc0",
+				"cse_ecc",
+				"cse_res"
+			],
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_v2_cse_merged.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				},
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
+		},
+		{
+			"id": "batched",
+			"kind": "batch_indices",
+			"inputs": "treeify",
+			"options": {
+				"selection_strategy": "largest"
+			}
+		},
+		{
+			"id": "batched_cse",
+			"kind": "cse",
+			"inputs": "batched"
+		},
+		{
+			"kind": "export",
+			"inputs": "batched_cse",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_v2_cse_batched.itfaa",
+				"grouping": {
+					"Energy0": "ecc0",
+					"Energy": "ecc",
+					"Residual": "res"
+				},
+				"relative_order": [
+					"res2_s1_singles",
+					"res1_s1"
+				],
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
+		}
+	]
+}
