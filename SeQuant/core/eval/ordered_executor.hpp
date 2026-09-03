@@ -726,8 +726,39 @@ void run_ordered_contracted_block(
         part = it->second;
       } else if (escaped_by_child.count(vid) && value_results[vid]) {
         // The next link of an escape chain: the partial a child block closed
-        // during THIS batch (see escaped_by_child).
+        // during THIS batch (see escaped_by_child). It is CURRENT only because
+        // a nested ScopeBlock step is never gated -- the child runs, and
+        // re-closes this output, on every batch of this block. A future
+        // cache-halt gate on CHILD BLOCKS (the BuildStep gate above already
+        // has one) would leave a stale partial here and must invalidate this
+        // branch.
         part = value_results[vid];
+        if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
+          std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
+                    << " batch=[" << e_lo << "," << e_hi
+                    << ") CHAIN-LINK from child close vid=" << vid << std::endl;
+      } else if (built_here.count(vid)) {
+        // This block BUILDS the value (a member materialized across a forced
+        // loop split) yet neither gate produced its partial. Normally
+        // unreachable, via a DIFFERENT and INDEPENDENT gate: reuse[k] above
+        // short-circuits the whole batch loop for an output already resident
+        // at its home, so this point is reached only for an output that IS
+        // being accumulated this batch, and the needed_build cache-halt that
+        // can skip a BuildStep applies to a value whose consumers are all
+        // resident -- which is exactly the reuse[k] case. Should the two ever
+        // disagree, falling through to evaluate_impl would resolve the value
+        // AS ITS OWN consumer, for which the schedule records no slice fact;
+        // fail loudly instead of fetching something the schedule never
+        // described.
+        throw Exception(
+            "evaluate_ordered_schedule: a block that BUILDS an escaping value "
+            "produced no partial for it at close (value " +
+            std::to_string(vid) + ", block depth " +
+            std::to_string(block.level.depth) + " slot " +
+            std::to_string(block.level.loop_slot) + " latitude " +
+            std::to_string(block.latitude_ordinal) + ", batch [" +
+            std::to_string(e_lo) + "," + std::to_string(e_hi) +
+            ")) -- its BuildStep did not run this batch");
       } else {
         CurrentConsumerGuard const consumer_guard{bs.cache,
                                                   bs.cache.current_consumer()};

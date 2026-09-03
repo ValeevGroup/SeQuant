@@ -11,6 +11,7 @@
 #include <SeQuant/core/eval/scope_schedule.hpp>
 #include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -1188,6 +1189,15 @@ inline ForkedSubchain fork_subchain(
 /// an \c AccumulateScatter escape output of the producer pass), lifting its
 /// home floor out of \c L.
 ///
+/// \note NOT LIVE on any schedule: \c analyze_legality takes its \c
+/// DemotionSource as an optional argument and is inert without one (\c
+/// derive_demotions returns immediately), and no caller passes one -- so this
+/// function only runs in its own unit tests. The schedule builder applies the
+/// same classification DIRECTLY, in \c build_ordered_schedule's per-value
+/// placement loop (its "MIXED-PASS MEMBER" rule, section 2), where the pass
+/// partition and the realized loop depths are both in hand; see there for the
+/// live behavior.
+///
 /// \par Why the trigger is SINGLE-SIDED (not "read from both passes")
 /// The pass closure (\c forced_split_passes) is one-directional: if \c V were
 /// in
@@ -1577,29 +1587,22 @@ forced_split_demotions(RichSchedule const& rich,
   // materialized across the split (see the mixed-pass rule in step 2), which
   // needs the pass partition in hand.
   //
-  // If the INNERMOST realized axis type
-  // (types[n-1]) is forced to split -- some cell is LoopCarried on it -- and
+  // A realized axis is forced to split when some cell is LoopCarried on it and
   // its values divide into a non-empty PRODUCER pass and a non-empty CONSUMER
   // pass (a value is in the consumer pass iff it is a strict dependency-
   // ancestor of a loop-carried value, i.e. it reads that value's completed
-  // result: see detail::forced_split_passes), the {L} loop is realized as TWO
-  // ordered sibling blocks with distinct ordinals -- a producer pass (ordinal
-  // 0, builds the loop-carried values to full via their AccumulateScatter
-  // outputs) then a consumer pass (ordinal 1, the cross-iteration reads).
+  // result: see detail::forced_split_passes); that loop is then realized as
+  // TWO ordered sibling blocks with distinct ordinals -- a producer pass
+  // (ordinal 0, builds the loop-carried values to full via their
+  // AccumulateScatter outputs) then a consumer pass (ordinal 1, the
+  // cross-iteration reads).
   //
-  // Restricted to the INNERMOST axis (d == n-1) so there is no deeper loop
-  // chain to fork across the two passes. A forced-split axis that is NOT the
-  // innermost realized axis is left UNSPLIT here (a single block, exactly as
-  // Task 3) -- a clearly-documented INERT hook deferred to a later task: the
-  // general split forks the whole enclosed sub-chain, and no current fixture
-  // (nor any consumer -- SP3's executor does not yet read this IR) exercises
-  // it, so a sound conservative single block beats an unsound partial fork.
-  // FORCED LOOP SPLIT detection (Task 4, generalized to any depth). Find the
-  // OUTERMOST realized axis forced to split (some cell LoopCarried on it) whose
-  // split is GENUINE -- both a pure producer (a carried value read only in a
-  // later pass) and a consumer (a strict ancestor of a carried value). The
-  // split is realized at that depth d*; when d* is not the innermost axis the
-  // enclosed inner sub-chain is FORKED across the two passes (fork_subchain).
+  // Detected at ANY depth, not only at the innermost axis. Find the OUTERMOST
+  // realized axis forced to split (some cell LoopCarried on it) whose split is
+  // GENUINE -- both a pure producer (a carried value read only in a later
+  // pass) and a consumer (a strict ancestor of a carried value). The split is
+  // realized at that depth d*; when d* is not the innermost axis the enclosed
+  // inner sub-chain is FORKED across the two passes (fork_subchain).
   // At most one forced axis is expected in practice (only an external axis is
   // LoopCarried; contracted axes are Reduction) -- a second, nested forced
   // split is a distinct feature and is rejected loudly rather than mis-emitted.
@@ -1776,21 +1779,33 @@ forced_split_demotions(RichSchedule const& rich,
     // it), so a per-batch cell homed anywhere on the producer side is gone by
     // the time the consumer pass runs. A value HOMED producer-side (not itself
     // in consumer_pass) with at least one direct consumer in consumer_pass is
-    // therefore classified LOOP-CARRIED here, at every level of its own nest
-    // that the split encloses: it materializes to full through the ordinary
-    // multi-level escape chain and the consumer pass reads the assembled form
-    // at the split's parent. No depth is special-cased -- the member may sit
-    // any number of levels below the split.
+    // therefore classified LOOP-CARRIED here: it materializes to full through
+    // the ordinary multi-level escape chain and the consumer pass reads the
+    // assembled form at the split's parent. No depth is special-cased -- the
+    // member may sit any number of levels below the split.
     //
-    // The levels are the value's OWN per-axis instances at or inside the split
-    // depth (within the split's own co-occurrence cluster: a member of another
-    // cluster is a sibling nest, not enclosed by the split, and needs
-    // nothing). A level the value is INVARIANT to contributes no instance and
-    // is simply skipped -- the escape chain may skip a level, as the runtime's
-    // home walk and the cell table both allow.
+    // ONLY for a value with NO role-driven escape of its own (\c escapes still
+    // empty, i.e. every \c per_axis role is \c LoopLocal). A value that
+    // already escapes by its own roles has no \c BuildStep at all -- its
+    // production IS the accumulation -- so there is nothing to materialize and
+    // nothing to keep; a role-escaping value that ALSO has a reader inside its
+    // own nest (which would miss it, since the assembled form only exists at
+    // the parent scope) is a SEPARATE, PARKED case, noted by the stage-1
+    // review and not addressed here.
+    //
+    // The escaped levels are the value's own \c LoopLocal instances from its
+    // HOME level (\c local_home_depth, the innermost one) outward to the split
+    // depth -- the complete chain, no cluster filter: skipping a level the
+    // value is bound to would leave the assembled form stranded inside the
+    // split. A level the value is INVARIANT to contributes no instance and IS
+    // legitimately skipped (the runtime home walk and the cell table both
+    // carry a value through a level it does not vary with).
     bool materialized_across_split = false;
     container::svector<Index> materialized_axes;
-    if (split_passes && !split_passes->consumer_pass.count(vid)) {
+    std::optional<std::size_t> const home_depth = local_home_depth(cl);
+    if (escapes.empty() && split_passes && home_depth &&
+        *home_depth >= *split_depth &&
+        !split_passes->consumer_pass.count(vid)) {
       auto const cons_it = g.consumers_of.find(vid);
       bool const read_by_consumer_pass =
           cons_it != g.consumers_of.end() &&
@@ -1804,17 +1819,47 @@ forced_split_demotions(RichSchedule const& rich,
           std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
           int const fs = fusion_slot(cl, pos);
           auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
-          if (!d || *d < *split_depth ||
-              type_cluster[*d] != type_cluster[*split_depth])
-            continue;
+          if (!d || *d < *split_depth || *d > *home_depth) continue;
           auto it = std::find_if(escapes.begin(), escapes.end(),
                                  [&](auto const& e) { return e.first == *d; });
+          // Every level here is being reclassified from LoopLocal to
+          // loop-CARRIED (a Reduction or LoopCarried role would have filled
+          // `escapes` already and excluded the value from this rule), so the
+          // kind is always a scatter to full -- never a sum.
           if (it == escapes.end())
             escapes.push_back({*d, OutputKind::AccumulateScatter});
           else
             it->second = OutputKind::AccumulateScatter;
           materialized_axes.push_back(cl.per_axis[pos].axis);
           materialized_across_split = true;
+        }
+        // The chain must actually run from the value's home OUT PAST the
+        // split, along ONE root-to-node nesting path: within a co-occurrence
+        // cluster a larger depth nests inside a smaller one, but two clusters
+        // are SIBLING nests at root and do not enclose each other at all. So
+        // the home level must be among the escaped levels, and every escaped
+        // level -- the split's own included -- must share the home's cluster.
+        // Anything else would leave the assembled form stranded inside the
+        // split (or in a sibling nest) while the consumer pass reads for it,
+        // which is a mis-schedule this builder must not emit silently.
+        if (materialized_across_split) {
+          bool complete =
+              type_cluster[*home_depth] == type_cluster[*split_depth];
+          bool home_escaped = false;
+          for (auto const& [d, kind] : escapes) {
+            (void)kind;
+            if (d == *home_depth) home_escaped = true;
+            if (type_cluster[d] != type_cluster[*home_depth]) complete = false;
+          }
+          if (!complete || !home_escaped)
+            throw Exception(
+                "build_ordered_schedule: cannot materialize value " +
+                std::to_string(vid) +
+                " across the forced loop split at depth " +
+                std::to_string(*split_depth) + ": its home at depth " +
+                std::to_string(*home_depth) +
+                " is not on one nesting path out of the split (escape chain "
+                "incomplete)");
         }
       }
     }
@@ -1833,17 +1878,13 @@ forced_split_demotions(RichSchedule const& rich,
       // that lists it either holds its BuildStep or is an ancestor of the one
       // that does.
       if (!materialized_across_split) continue;
-      SEQUANT_ASSERT(local_home_depth(cl).has_value() &&
-                     "build_ordered_schedule: a member materialized across a "
-                     "forced split has no loop-local home");
       built_and_escaped.emplace(vid, std::move(materialized_axes));
     }
 
     // Plain BuildStep: home at the INNERMOST loop the value is LoopLocal on
-    // (\c local_home_depth).
-    std::optional<std::size_t> const target = local_home_depth(cl);
-    if (target)
-      buckets[*target].build_ids.push_back(vid);
+    // (\c local_home_depth, computed above as \c home_depth).
+    if (home_depth)
+      buckets[*home_depth].build_ids.push_back(vid);
     else
       root_build_ids.push_back(vid);
   }
