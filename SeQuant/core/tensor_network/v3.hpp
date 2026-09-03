@@ -343,12 +343,16 @@ class TensorNetworkV3 {
     /// lazy-conj follow-up); symbolic canonicalization keeps the default.
     bool fold_conjugate_braket = true;
     /// if true, the bra and ket slots of every tensor with (anti)symmetric
-    /// bra/ket bundles are permuted IN PLACE into their canonical order (the
-    /// order of their vertices in the canonical labeling, i.e. the order
-    /// SlotCanonicalizationMetadata::phase is defined against), so the
-    /// network's tensors leave in the spelling the metadata describes; the
-    /// phase is reported either way. Column-symmetric Nonsymm tensors and
-    /// the bra<->ket orientation are NOT touched (see conjugated_tensors)
+    /// bra/ket bundles are permuted IN PLACE into their canonical order, and
+    /// SlotCanonicalizationMetadata::phase reports the parity of exactly
+    /// that reorder. The canonical order is then the NAMED-index canonical
+    /// order (the order of get_indices(): coarse groups by
+    /// named_index_compare, canonical vertex ordinal within a group;
+    /// anonymous slots after the named ones by vertex ordinal), so a
+    /// respelled leaf keeps the space order of its bundles. (Without this
+    /// option the phase is relative to the raw canonical vertex order and
+    /// nothing is permuted.) Column-symmetric Nonsymm tensors and the
+    /// bra<->ket orientation are NOT touched (see conjugated_tensors)
     bool apply_slot_order = false;
   };
 
