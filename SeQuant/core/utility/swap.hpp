@@ -55,10 +55,11 @@ struct SwapCounter {
   std::atomic<bool> even_num_of_swaps_;
   void toggle() { even_num_of_swaps_ = !even_num_of_swaps_; }
 
-  friend void swap<T>(SwapCountable<T>&, SwapCountable<T>&);
-  friend void swap<T>(const SwapCountableRef<T>&, const SwapCountableRef<T>&);
-  friend void counted_swap<T>(T& a, T& b);
-  friend void count_swap<T>();
+  friend void ::sequant::swap<T>(SwapCountable<T>&, SwapCountable<T>&);
+  friend void ::sequant::swap<T>(const SwapCountableRef<T>&,
+                                 const SwapCountableRef<T>&);
+  friend void ::sequant::counted_swap<T>(T& a, T& b);
+  friend void ::sequant::detail::count_swap<T>();
 };
 
 template <typename T>
