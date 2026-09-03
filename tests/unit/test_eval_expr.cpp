@@ -1143,8 +1143,8 @@ TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
 }
 
 TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
-  // a sum's slot must depend on ALL its summands (order-insensitively):
-  // A + B and A + C are different values, A + B and B + A the same one
+  // a sum's slot depends on ALL its summands, in order: A + B and A + C are
+  // different values; A + B and B + A hand up different layouts
   using namespace sequant;
   auto sum_of = [](std::wstring_view a, std::wstring_view b) {
     return binarize(ex<Sum>(ExprPtrList{deserialize(a), deserialize(b)}));
@@ -1152,8 +1152,12 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   auto const ab = sum_of(L"f{i_1;a_1}", L"g{i_1;a_1}");
   auto const ac = sum_of(L"f{i_1;a_1}", L"h{i_1;a_1}");
   auto const ba = sum_of(L"g{i_1;a_1}", L"f{i_1;a_1}");
+  auto const ab2 = sum_of(L"f{i_2;a_2}", L"g{i_2;a_2}");
   REQUIRE(ab->hash_value() != ac->hash_value());
-  REQUIRE(ab->hash_value() == ba->hash_value());
+  // order-sensitive: a sum's layout is its first summand's, so B + A is a
+  // different slot; a relabeled copy of the same ordered sum shares it
+  REQUIRE(ab->hash_value() != ba->hash_value());
+  REQUIRE(ab->hash_value() == ab2->hash_value());
   // the result layout is the FIRST summand's: the same summands in another
   // order with a different leading layout are a different slot (the cached
   // array would be served in the wrong mode order otherwise)
@@ -1179,20 +1183,23 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   REQUIRE(abc->hash_value() != abd->hash_value());
 }
 
-TEST_CASE("denoted_expr_is_the_as_written_spelling", "[eval_expr][denoted]") {
-  // the denoted spelling re-materializes the transform: for every channel
-  // that came with a conj (a braket-fold swap of a Conjugate tensor, the
-  // Kramers flip) the marker is taken OUT again, so the denoted tensor is
-  // the as-written one whose value the leaf hands up
+TEST_CASE("denoted_expr_is_the_parent_network_spelling",
+          "[eval_expr][denoted]") {
+  // the denoted spelling re-materializes the transform syntactically: the
+  // conj bit becomes the marker (it colors the parent's graph), a swap is
+  // swapped back, a Kramers fold is flipped back with its own marker toggle
+  // undone
   using namespace sequant;
   {
-    // flat Conjugate leaf written in the non-canonical orientation: stored
-    // swapped + {conj, swap}; denoted = as written, unmarked
+    // flat Hermitian leaf written in the non-canonical orientation: stored
+    // swapped + {conj, swap}; denoted = swapped back AND marked
     auto const w = deserialize(L"F{i_2;i_1}:N-C-S")->as<Tensor>();
     EvalExpr e{w};
     if (e.canon_transform().braket_swap) {
       REQUIRE(e.canon_transform().conj);
-      REQUIRE(e.denoted_expr()->as<Tensor>() == w);
+      auto w_marked = w;
+      w_marked.conjugate();
+      REQUIRE(e.denoted_expr()->as<Tensor>() == w_marked);
     }
     // the marked spelling of the canonical orientation: stored unmarked +
     // {conj}; denoted = as written, marked
@@ -1203,8 +1210,8 @@ TEST_CASE("denoted_expr_is_the_as_written_spelling", "[eval_expr][denoted]") {
     REQUIRE(es.denoted_expr()->as<Tensor>() == s);
   }
   {
-    // Kramers-folded leaves (fold ON): Nonsymm via the flavor flip, Conjugate
-    // via the braket move -- both denote the as-written spelling
+    // Kramers-folded Nonsymm leaf (fold ON): the flip is undone and its
+    // marker toggle with it -- the denoted spelling is the as-written one
     auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
     mbpt::add_fermi_spin(*isr);
     Context ctx = get_default_context();
@@ -1213,13 +1220,11 @@ TEST_CASE("denoted_expr_is_the_as_written_spelling", "[eval_expr][denoted]") {
         .fold_kramers_eval_leaves =
             CanonicalizeOptions::FoldKramersEvalLeaves::Yes});
     auto resetter = set_scoped_default_context(ctx);
-    for (auto bks : {BraKetSymmetry::Nonsymm, BraKetSymmetry::Conjugate}) {
-      Tensor const w(L"C", bra{Index(L"a↓_1")}, ket{Index(L"a↑_2")},
-                     Symmetry::Nonsymm, bks, ColumnSymmetry::Nonsymm,
-                     KramersSymmetry::TimeReversal);
-      EvalExpr e{w};
-      REQUIRE_FALSE(e.canon_transform().trivial());
-      REQUIRE(e.denoted_expr()->as<Tensor>() == w);
-    }
+    Tensor const w(L"C", bra{Index(L"a↓_1")}, ket{Index(L"a↑_2")},
+                   Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                   ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    EvalExpr e{w};
+    REQUIRE(e.kramers_folded());
+    REQUIRE(e.denoted_expr()->as<Tensor>() == w);
   }
 }
