@@ -87,6 +87,51 @@ template <typename node_t, typename F>
 }
 
 ///
+/// \brief SP4 Task 4: per-LOOP-INSTANCE (not per-TYPE, unlike \c
+/// ordered_n_blocks above) batch count over the whole \c ScopeBlock tree --
+/// the \c CellTableInputs::n_batches_of the cell table's life computation
+/// needs (\c detail::read_multiplicity, cell_table.hpp): a source cell read
+/// by a consumer nested inside a loop it is not resident on is re-read once
+/// per REAL batch of that loop (not once per loop, the placeholder
+/// \c n_batches_of that always returns 1 -- self-consistent for Task 3's
+/// static-only validation, since the builder and the validator used the SAME
+/// stub, but an undercount once Task 4 enforces \c life at runtime: a value
+/// read from OUTSIDE two nested batch loops of \c n \& \c m real batches is
+/// read \c n*m times, not once). Keyed by \c LoopKey::color() (the loop's
+/// stable depth+loop_slot identity, not its canonical axis label, which
+/// \c ordered_n_blocks' TYPE keying already documents as collapsing distinct
+/// same-space instances) so it is exact per realized loop, unlike
+/// \c ordered_n_blocks.
+///
+[[nodiscard]] inline std::function<std::size_t(LoopKey const&)>
+ordered_n_batches_by_loop(
+    OrderedSchedule const& ordered,
+    std::function<std::size_t(Index const&)> const& target,
+    BackendArrayOps const* aops) {
+  auto by_loop =
+      std::make_shared<std::unordered_map<std::size_t, std::size_t>>();
+  auto const add = [&](auto&& self, ScopeBlock const& b) -> void {
+    std::size_t const color = b.level.key().color();
+    if (!by_loop->count(color)) {
+      SEQUANT_ASSERT(aops &&
+                     "ordered_n_batches_by_loop: batched schedule requires "
+                     "backend array-ops (CacheManager::set_array_ops)");
+      by_loop->emplace(color,
+                       aops->axis_batches(b.axis, target(b.axis)).size());
+    }
+    for (Step const& s : b.steps)
+      if (auto const* child = std::get_if<ScopeBlock>(&s.value))
+        self(self, *child);
+  };
+  for (Step const& s : ordered.root.steps)
+    if (auto const* child = std::get_if<ScopeBlock>(&s.value)) add(add, *child);
+  return [by_loop](LoopKey const& k) -> std::size_t {
+    auto const it = by_loop->find(k.color());
+    return it == by_loop->end() ? std::size_t{1} : it->second;
+  };
+}
+
+///
 /// \brief Defensive check for the single-physical-label simplification \c
 /// run_ordered_contracted_block's own doc comment (\c \\note) documents: \p
 /// node's subtree carries \p axis's TYPE (\c IndexSpace::base_key()) at some
@@ -242,6 +287,42 @@ template <typename node_t>
              : eval::value_id_coloring(it->second);
 }
 
+/// SP4 Task 4: the \c CellScope of the current point in the schedule walk --
+/// enclosing loop instances outermost-first, one \c {level.key(),
+/// level.latitude_ordinal} entry per already-opened \p ectx level, plus (the
+/// two-argument overload) \p block's own \c {level.key(), latitude_ordinal}
+/// entry appended last -- the ONE construction every table lookup this file
+/// makes (\c build_cell_at / \c assemble_cell_at) goes through, so a scope a
+/// lookup uses here and the scope \c cell_table_builder.hpp's \c emit_cells
+/// recorded for the same point (an identical per-level construction) can
+/// never drift apart. \c BatchContextEntry has no separate flat latitude
+/// field (only \c level), so an enclosing entry reads
+/// \c level.latitude_ordinal; \p block's own entry reads its flat
+/// \c latitude_ordinal, mirroring \c emit_cells' \c child.latitude_ordinal
+/// exactly (the two are the same value by construction, but this keeps the
+/// two constructions textually identical rather than merely numerically
+/// equal).
+///
+/// \note Qualified as \c eval::BatchContext (cell_registry.hpp), not the bare
+/// \c BatchContext this namespace's OWN \c detail scope already binds to the
+/// unrelated legacy alias in peak_profile.hpp (a
+/// \c svector<pair<Index,pair<size_t,size_t>>>) -- unqualified lookup from
+/// inside \c sequant::eval::detail finds that closer name first, and it is
+/// NOT the same type as \c CacheManager<N, FHC>::BatchContext (the type \p
+/// ectx actually has at every call site here).
+[[nodiscard]] inline CellScope current_scope(eval::BatchContext const& ectx) {
+  CellScope s;
+  for (auto const& e : ectx)
+    s.path.push_back({e.level.key(), e.level.latitude_ordinal});
+  return s;
+}
+[[nodiscard]] inline CellScope current_scope(eval::BatchContext const& ectx,
+                                             ScopeBlock const& block) {
+  CellScope s = current_scope(ectx);
+  s.path.push_back({block.level.key(), block.latitude_ordinal});
+  return s;
+}
+
 template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
 void run_ordered_contracted_block(
     ScopeBlock const& block,
@@ -251,18 +332,30 @@ void run_ordered_contracted_block(
     std::function<std::size_t(Index const&)> const& target,
     typename CacheManager<N, FHC>::BatchContext const& ectx,
     container::vector<ResultPtr>& value_results, container::vector<char>& built,
-    std::function<bool(node_t const&)> const& is_volatile = {},
-    std::function<std::size_t(Index const&)> const& n_blocks = {},
+    // SP4 Task 4: is_volatile through consumer_loops lose their defaults
+    // here, alongside table/registry/resolver below: a reference parameter
+    // (registry, resolver) cannot have one, and C++ requires every parameter
+    // after the first defaulted one to also carry a default, so the whole
+    // trailing run must be all-default or all-required together. Both actual
+    // callers (the recursive call below and
+    // run_ordered_schedule_pre_results's root-scope walk) already supply
+    // every one of these explicitly, so this narrows no real call site.
+    std::function<bool(node_t const&)> const& is_volatile,
+    std::function<std::size_t(Index const&)> const& n_blocks,
     std::function<std::size_t(std::size_t, HomeScopeKey const&)> const&
-        home_reads = {},
-    container::set<std::size_t> const* needed_build = nullptr,
+        home_reads,
+    container::set<std::size_t> const* needed_build,
     std::unordered_map<std::size_t, container::set<std::size_t>> const*
-        consumer_loops = nullptr,
+        consumer_loops,
     // Explicit value cells (SP4 Task 3): the cell table built and validated
     // ONCE by run_ordered_schedule_pre_results, threaded through this
-    // function's own recursion so it reaches every block. Unused here --
-    // Task 4 is where a table-driven block runner starts consulting it.
-    CellTable const* table = nullptr) {
+    // function's own recursion so it reaches every block.
+    //
+    // SP4 Task 4: registry/resolver -- the runtime side of the table (see
+    // cell_registry.hpp), also built once by run_ordered_schedule_pre_results
+    // and threaded alongside it.
+    CellTable const* table, CellRegistry& registry,
+    CellReadResolver& resolver) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
@@ -628,6 +721,10 @@ void run_ordered_contracted_block(
       PhaseTimer::Scope _pt("C.scratch_reset");
       bs.cache.reset();
     }
+    // SP4 Task 4: registry-side counterpart of the scratch reset -- drop
+    // every cell bound to THIS block's own loop instance (the batch just
+    // ended), so a stale prior-batch cell is never read as this batch's.
+    registry.clear_bound_to(block.level.key());
     BatchContext ctx = ectx;
     ctx.push_back({block.axis, block.level, {e_lo, e_hi}, std::nullopt});
     bs.cache.set_batch_context(ctx);
@@ -677,8 +774,27 @@ void run_ordered_contracted_block(
           // already set on bs.cache (make_batched_scratch), so evaluate_impl's
           // bare-node self-store of V and its operand fetches are colored by
           // home identity.
+          // SP4 Task 4: this BuildStep's own Build cell -- at this exact
+          // scope (this block, entered from ectx) -- is the consumer every
+          // operand fetch inside the evaluate_impl call below resolves
+          // against (see CellReadResolver::fetch). A miss here means the
+          // table and the schedule tree disagree about what this step
+          // builds.
+          CellScope const build_scope = current_scope(ectx, block);
+          auto const build_cell =
+              registry.build_cell_at(build->value_id, build_scope);
+          if (!build_cell)
+            throw Exception(
+                "evaluate_ordered_schedule: no Build cell for value " +
+                std::to_string(build->value_id) +
+                " at this scope (cell table/schedule disagreement), block "
+                "depth " +
+                std::to_string(block.level.depth) + " slot " +
+                std::to_string(block.level.loop_slot));
+          resolver.begin_consumer(*build_cell);
           ResultPtr r =
               evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
+          registry.set(*build_cell, r);
           bool is_output = false;
           for (auto const& [ovid, okind] : block.outputs) {
             (void)okind;
@@ -695,7 +811,7 @@ void run_ordered_contracted_block(
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, ordered, leaf_evaluator, bs.cache, target, ctx,
             value_results, built, is_volatile, n_blocks, home_reads,
-            needed_build, consumer_loops, table);
+            needed_build, consumer_loops, table, registry, resolver);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -772,8 +888,38 @@ void run_ordered_contracted_block(
         bs.cache.set_current_consumer(out_eval_node->hash_value());
         // Task 7 (Pillar 1): the block's per-scope coloring context is already
         // set on bs.cache, coloring this escape output's self-store + operands.
-        part =
-            evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
+        // SP4 Task 4: this is the implicit per-batch Build cell for an
+        // escaping value with no BuildStep of its own in this block
+        // (emit_build_cell's !found branch, cell_table_builder.hpp) ONLY
+        // when the table synthesized one AT THIS BLOCK's OWN SCOPE. A value
+        // reaching this branch can ALSO be a multi-level (skip-chain) escape
+        // -- this block relists an ovid one of its OWN descendant blocks
+        // already escaped several levels in (cell_table_builder.hpp's
+        // emit_cells 'child_scope.encloses' search finds that DEEPER form
+        // instead of needing a fresh cell here) -- for which the table
+        // registers NO cell at this scope at all, by design (see
+        // CellTable::Read's escaping-values note). That value is, BY THE
+        // SAME SKIP-CHAIN CONSTRUCTION, already resident several cache
+        // levels up (a descendant ScopeBlock step -- never gated -- already
+        // ran and homed it earlier in this very batch's step loop, before
+        // this output loop starts): evaluate_impl's own top-frame Checked
+        // probe finds it there directly (a cache hit, no descent into
+        // out_eval_node's children, so the globally-wired resolver's
+        // per-child probe is never reached) -- exactly the legacy path this
+        // branch always took before this task. So a miss here is NOT a
+        // table/schedule disagreement; only a genuine BuildStep (which
+        // ALWAYS gets its own cell, see the BuildStep site above) enforces
+        // the table strictly.
+        CellScope const out_scope = current_scope(ectx, block);
+        if (auto const out_cell = registry.build_cell_at(vid, out_scope)) {
+          resolver.begin_consumer(*out_cell);
+          part =
+              evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
+          registry.set(*out_cell, part);
+        } else {
+          part =
+              evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
+        }
       }
       if (kind == OutputKind::AccumulateSum) {
         if (!acc[k])
@@ -847,6 +993,23 @@ void run_ordered_contracted_block(
             "evaluate_ordered_schedule: a resident output vanished from its "
             "home before block close (premature eviction / under-predicted use "
             "count in ordered_home_reads)");
+      // SP4 Task 4: record this reused (not re-accumulated) output's Assemble
+      // cell from the SAME peeked pointer, at the parent scope -- mirroring
+      // the genuine close-store site below.
+      {
+        CellScope const parent_scope = current_scope(ectx);
+        auto const assemble_cell = registry.assemble_cell_at(vid, parent_scope);
+        if (!assemble_cell)
+          throw Exception(
+              "evaluate_ordered_schedule: no Assemble cell for reused "
+              "escaping value " +
+              std::to_string(vid) +
+              " at the parent scope (cell table/schedule disagreement), "
+              "block depth " +
+              std::to_string(block.level.depth) + " slot " +
+              std::to_string(block.level.loop_slot));
+        registry.set(*assemble_cell, value_results[vid]);
+      }
       built[vid] = 1;
       continue;
     }
@@ -1031,7 +1194,26 @@ void run_ordered_contracted_block(
         std::cerr << toUtf8(m.full_label()) << " ";
       std::cerr << "}" << std::endl;
     }
-    (void)home_cache->store(value_of(vid), std::move(out));
+    ResultPtr const stored = home_cache->store(value_of(vid), std::move(out));
+    // SP4 Task 4: this output's Assemble cell -- at the PARENT scope (one
+    // level out from `block`, i.e. current_scope(ectx) without this block's
+    // own entry; this is the table's DECLARED scope for the cell regardless
+    // of which scope `home_cache` actually walked to -- see
+    // cell_table.hpp's residency_scope doc on why the two may legitimately
+    // differ) -- recorded from the SAME pointer just homed above.
+    {
+      CellScope const parent_scope = current_scope(ectx);
+      auto const assemble_cell = registry.assemble_cell_at(vid, parent_scope);
+      if (!assemble_cell)
+        throw Exception(
+            "evaluate_ordered_schedule: no Assemble cell for escaping value " +
+            std::to_string(vid) +
+            " at the parent scope (cell table/schedule disagreement), block "
+            "depth " +
+            std::to_string(block.level.depth) + " slot " +
+            std::to_string(block.level.loop_slot));
+      registry.set(*assemble_cell, stored);
+    }
     // Escape-output homing stores directly through CacheManager::store (not
     // evaluate_impl's store_after path), so without this it would land in the
     // top-level cache with NO Cache|... trace line -- making a homed value look
@@ -1272,14 +1454,61 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // describe is refused up front rather than mis-executed. A fixture whose
   // table fails validation is a real finding on that fixture: the assertion
   // is not bypassed.
-  CellTable const cell_table = build_cell_table(make_cell_table_inputs(
-      ordered, rich, sliced_mode_assignment, resolve, is_volatile));
-  assert_valid_cell_table(cell_table, ordered.root);
+  //
+  // SP4 Task 4: n_batches_of -- Task 3's own callback (make_cell_table_inputs)
+  // stubbed this at a constant 1 (self-consistent for Task 3's static-only
+  // validation: the builder and the validator both used that same stub, so
+  // life came out internally consistent regardless of whether it matched the
+  // true read count). Task 4's CellRegistry::read() is the first thing that
+  // actually enforces life at runtime, which exposed the stub as a real
+  // undercount (a value read from outside n*m nested real batches is read
+  // n*m times, not the stub's 1) -- CellRegistry::read throwing "read past
+  // its life" on a well-formed schedule. Fixed at its source
+  // (ordered_n_batches_by_loop, exact per realized loop instance), passed to
+  // BOTH the builder and the validator so their life computations (which
+  // must use the identical n_batches_of, per read_multiplicity's own doc)
+  // never diverge.
+  CellTableInputs cell_table_inputs = make_cell_table_inputs(
+      ordered, rich, sliced_mode_assignment, resolve, is_volatile);
+  cell_table_inputs.n_batches_of =
+      ordered_n_batches_by_loop(ordered, target, cache.array_ops());
+  CellTable const cell_table = build_cell_table(cell_table_inputs);
+  assert_valid_cell_table(cell_table, ordered.root,
+                          cell_table_inputs.n_batches_of);
   if (!cell_table.unresolved.empty())
     throw Exception("evaluate_ordered_schedule: the cell table has " +
                     std::to_string(cell_table.unresolved.size()) +
                     " unresolved sliced positions (see CellTable::unresolved)");
   ordered_last_cell_table_size_slot() = cell_table.cells.size();
+
+  // SP4 Task 4: the runtime side of the table -- CellRegistry (current
+  // result + remaining life per cell) and CellReadResolver (table-driven
+  // operand reads for evaluate_impl, consulted ahead of the router/access_at
+  // probes there), wired on the top-level cache for the duration of this
+  // call. vid_of_hash resolves a fetched node's hash to its rich.cells slot
+  // (its value_id); a hash absent from this map is not a value of the table
+  // (a transient of some production tree), which CellReadResolver::fetch
+  // reports as nullopt rather than mis-resolving.
+  CellRegistry registry(cell_table);
+  std::unordered_map<std::size_t, std::size_t> const cell_vid_of_hash = [&] {
+    std::unordered_map<std::size_t, std::size_t> m;
+    m.reserve(rich.cells.size());
+    for (auto const& vc : rich.cells) m.emplace(vc.hash, vc.value_id);
+    return m;
+  }();
+  CellReadResolver resolver(
+      registry,
+      [&cell_vid_of_hash](std::size_t h) -> std::optional<std::size_t> {
+        auto const it = cell_vid_of_hash.find(h);
+        if (it == cell_vid_of_hash.end()) return std::nullopt;
+        return it->second;
+      });
+  struct CellReadResolverGuard {
+    CacheManager<N, FHC>& c;
+    CellReadResolver* prev;
+    ~CellReadResolverGuard() { c.set_cell_read_resolver(prev); }
+  } const cell_read_resolver_guard{cache, cache.cell_read_resolver()};
+  cache.set_cell_read_resolver(&resolver);
 
   // Task 4: the block-count function over the WHOLE ScopeBlock tree, built
   // ONCE here (Task 2's ordered_n_blocks) and threaded through the homing
@@ -1523,7 +1752,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       {
         auto const prev_consumer = cache.current_consumer();
         cache.set_current_consumer(it->second->hash_value());
-        (void)evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
+        // SP4 Task 4: a root-scope BuildStep is a Build cell at the EMPTY
+        // scope (CellScope{} -- the root, never inside a batch loop).
+        auto const root_cell = registry.build_cell_at(vid, CellScope{});
+        if (!root_cell)
+          throw Exception(
+              "evaluate_ordered_schedule: no root Build cell for value " +
+              std::to_string(vid) + " (cell table/schedule disagreement)");
+        resolver.begin_consumer(*root_cell);
+        ResultPtr const r =
+            evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
+        registry.set(*root_cell, r);
         cache.set_current_consumer(prev_consumer);
       }
       built[vid] = 1;  // R3: this root-scope value is produced.
@@ -1531,7 +1770,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
           value_results, built, is_volatile, n_blocks, home_reads,
-          &needed_build, &consumer_loops, &cell_table);
+          &needed_build, &consumer_loops, &cell_table, registry, resolver);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.
@@ -1600,6 +1839,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       throw Exception(
           "evaluate_ordered_schedule: forest root was never produced");
   }
+
+  // SP4 Task 4 diagnostic: how many operand reads the table-driven resolver
+  // actually served this call (see CellReadResolver::served's own doc
+  // comment for what does/doesn't count).
+  if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
+    std::cerr << "[cell-registry] resolver served " << resolver.served()
+              << " reads" << std::endl;
 
   return pre_results;
 }

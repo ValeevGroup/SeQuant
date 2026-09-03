@@ -6,6 +6,7 @@
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/cell_registry.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/member_axis.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
@@ -1028,6 +1029,29 @@ ResultPtr evaluate_impl(Node const& node,         //
         // --- Checked cache wrapper: a hit returns directly; a miss on a node
         //     that exists in the map schedules a store once computed. ---
         if (f.checked) {
+          // --- Explicit value cells (SP4 Task 4): the table-driven operand
+          //     read resolver, consulted AHEAD of the router/access_at probes
+          //     below when wired (see CellReadResolver, cell_registry.hpp).
+          //     Excludes a leaf (the leaf path below has its own resolver
+          //     probe) and this call's own top node (an operand read is
+          //     always of some OTHER value, mirroring the resident-reads
+          //     probe's identical exclusion further down). A null resolver
+          //     (no CellRegistry/CellReadResolver wired -- every caller other
+          //     than the ordered executor's table-driven path, and the
+          //     ordered executor's own forest-fallback branches in this
+          //     stage) is zero-cost and leaves this block byte-identical to
+          //     before. ---
+          if (auto* rr = cache.cell_read_resolver();
+              rr && !f.node.leaf() &&
+              f.node->hash_value() != node->hash_value()) {
+            if (auto v =
+                    rr->fetch(f.node->hash_value(), cache.batch_context())) {
+              finalize(apply_phase(f.node, *v));
+              break;
+            }
+            // not a value of the table: a transient of this production tree,
+            // evaluated in place below
+          }
           // --- Router consult: an override seam ahead of the default
           //     access_at() below (see placement_router.hpp). The
           //     `router && !router->empty()` short-circuit is FIRST so an
@@ -1203,6 +1227,19 @@ ResultPtr evaluate_impl(Node const& node,         //
 
         // --- Leaf. ---
         if (f.node.leaf()) {
+          // Explicit value cells (SP4 Task 4): a recorded Leaf cell is read
+          // (and sliced per the declared Read) from the registry instead of
+          // re-running the leaf evaluator. A leaf cell's FIRST touch (nothing
+          // recorded yet) returns nullopt here -- fall through to the leaf
+          // evaluator below, whose result is recorded via record_leaf() for
+          // every later fetch of this cell.
+          if (auto* rr = cache.cell_read_resolver()) {
+            if (auto v =
+                    rr->fetch(f.node->hash_value(), cache.batch_context())) {
+              finalize(apply_phase(f.node, *v));  // recorded leaf, sliced
+              break;
+            }
+          }
           ResultPtr result;  // the FULL leaf (traced and cached full)
           auto time = detail::timed_eval_inplace(
               [&]() { result = leaf_evaluator(f.node); });
@@ -1218,6 +1255,12 @@ ResultPtr evaluate_impl(Node const& node,         //
                       log::label(f.node, cache.batch_context()));
           }
           log::release_after_op();
+          // Explicit value cells (SP4 Task 4): this is the leaf's first
+          // touch under the resolver (see the probe above) -- record it so
+          // every later fetch of this cell reads (and slices) the SAME
+          // object instead of re-running the leaf evaluator.
+          if (auto* rr = cache.cell_read_resolver())
+            rr->record_leaf(f.node->hash_value(), result);
           // Store the FULL leaf under its canonical key (a block slice would
           // corrupt the cache), then return it SLICED to the current block: a
           // freshly built leaf's lifetime is top, so every enclosing carried

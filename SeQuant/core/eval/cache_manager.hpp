@@ -49,6 +49,12 @@ namespace sequant::eval {
 template <typename TreeNode>
 class PlacementRouter;
 
+// Forward declaration only: CellReadResolver (cell_registry.hpp) is a plain,
+// non-template type, so CacheManager only needs a non-owning pointer to it
+// (mirroring the PlacementRouter forward declaration above); cell_registry.hpp
+// includes this header, not the reverse.
+class CellReadResolver;
+
 /// \brief Destination for the structured schedule dump (SCHEDULE_RUN_EVENT
 /// records) emitted by `evaluate()`. A caller sets one on the (root) cache to
 /// capture one evaluation's batched schedule to \c os; \c fired is a fire-once
@@ -1011,6 +1017,16 @@ class CacheManager {
   /// must outlive this cache.
   LoopColoredSliceSeam const* loop_colored_slice_seam_ = nullptr;
 
+  /// Explicit value cells (SP4 Task 4): the table-driven operand-read
+  /// resolver \c evaluate_impl consults ahead of the router/access_at probes
+  /// when set (see \c CellReadResolver, cell_registry.hpp). Inherited from
+  /// \c parent_ (only the top-level cache of a table-driven run is wired in
+  /// practice), mirroring \c array_ops_ / \c loop_colored_slice_seam_. Null
+  /// (default) => no resolver wired => evaluate_impl falls through to the
+  /// legacy seam/access_at probes unchanged (the forest path, in this stage).
+  /// Non-owning; the pointee must outlive this cache.
+  eval::CellReadResolver* cell_read_resolver_ = nullptr;
+
   /// The CONSUMER identity (an eval-node hash) currently fetching values under
   /// this cache (sliced-value canonical-layout / loop-coloring design, PILLAR
   /// 2). The ordered executor sets this to the hash of the member-root / output
@@ -1340,6 +1356,22 @@ class CacheManager {
     return loop_colored_slice_seam_ ? loop_colored_slice_seam_
            : parent_                ? parent_->loop_colored_slice_seam()
                                     : nullptr;
+  }
+
+  /// Sets the local cell-read resolver (see cell_read_resolver_). Pass
+  /// nullptr to detach. Non-owning; the pointee must outlive this cache.
+  void set_cell_read_resolver(eval::CellReadResolver* r) noexcept {
+    cell_read_resolver_ = r;
+  }
+
+  /// \return the local cell-read resolver if set, else the one inherited
+  ///         from \c parent_ (only the top-level cache of a table-driven run
+  ///         is wired in practice); nullptr if none is wired anywhere along
+  ///         the chain. Non-owning.
+  [[nodiscard]] eval::CellReadResolver* cell_read_resolver() const noexcept {
+    return cell_read_resolver_ ? cell_read_resolver_
+           : parent_           ? parent_->cell_read_resolver()
+                               : nullptr;
   }
 
   /// Sets the current consumer identity (see current_consumer_). Pass nullopt
