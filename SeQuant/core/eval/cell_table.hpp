@@ -149,6 +149,31 @@ namespace detail {
   r.path.assign(s.scope.path.begin(), s.scope.path.begin() + deepest + 1);
   return r;
 }
+
+/// Multiplicity of one read of a source cell by a consumer cell: one factor
+/// of \c max(1, n_batches_of(key)) per loop instance on the consumer's scope
+/// path that is NOT also on the source's scope path -- a consumer nested one
+/// extra loop deeper than its source re-reads that source once per batch of
+/// each such loop. The single place both the builder (life bookkeeping) and
+/// the validator (rule 4) compute this, so they never drift apart. A null \p
+/// n_batches_of (the validator's default) is treated as returning 1
+/// everywhere.
+[[nodiscard]] inline std::size_t read_multiplicity(
+    CellScope const& source_scope, CellScope const& consumer_scope,
+    std::function<std::size_t(LoopKey const&)> const& n_batches_of) {
+  std::size_t mult = 1;
+  for (auto const& [pk, lat] : consumer_scope.path) {
+    (void)lat;
+    bool in_source = false;
+    for (auto const& [sk, slat] : source_scope.path) {
+      (void)slat;
+      if (same_key(sk, pk)) in_source = true;
+    }
+    if (!in_source)
+      mult *= std::max<std::size_t>(1, n_batches_of ? n_batches_of(pk) : 1);
+  }
+  return mult;
+}
 }  // namespace detail
 
 /// Static validation of a cell table (spec section 3). Production order is
@@ -156,7 +181,8 @@ namespace detail {
 /// them in execution order). The block tree \p root is accepted for the
 /// Task 3 integration (it is not consulted here beyond being passed through).
 [[nodiscard]] inline container::vector<CellViolation> validate_cell_table(
-    CellTable const& table, ScopeBlock const& /*root*/) {
+    CellTable const& table, ScopeBlock const& /*root*/,
+    std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {
   container::vector<CellViolation> out;
   auto const n = table.cells.size();
   for (Read const& r : table.reads)
@@ -276,13 +302,17 @@ namespace detail {
     }
   }
 
-  // (4) life: reads (multiplicity carried in Read count) == life.
+  // (4) life: reads (weighted by the consumer's extra enclosing batches via
+  // detail::read_multiplicity, same rule the builder uses) plus one per
+  // Assemble that consumes the cell == life.
   for (CellId id = 0; id < n; ++id) {
     TableCell const& c = table.cells[id];
     if (c.production.kind == ProductionKind::Leaf) continue;
     std::size_t reads = 0;
     for (Read const& r : table.reads)
-      if (r.source == id) ++reads;
+      if (r.source == id)
+        reads += detail::read_multiplicity(
+            c.scope, table.cells[r.consumer].scope, n_batches_of);
     for (CellId o = 0; o < n; ++o)
       if (table.cells[o].production.kind == ProductionKind::Assemble &&
           table.cells[o].production.source == id)
@@ -308,9 +338,10 @@ namespace detail {
   return out;
 }
 
-inline void assert_valid_cell_table(CellTable const& table,
-                                    ScopeBlock const& root) {
-  auto const v = validate_cell_table(table, root);
+inline void assert_valid_cell_table(
+    CellTable const& table, ScopeBlock const& root,
+    std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {
+  auto const v = validate_cell_table(table, root, n_batches_of);
   if (v.empty()) return;
   std::string msg =
       "cell table invalid (" + std::to_string(v.size()) + " violation(s)):";
@@ -550,6 +581,68 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
         st.table.cells.push_back(std::move(leaf));
         st.forms_of[op].push_back(st.table.cells.size() - 1);
       }
+
+  // Reads: one per (consumer Build cell, operand value) edge.
+  auto const key_of_lid = [&](LoopId lid) {
+    return in.sliced->levels[lid].key();
+  };
+  for (CellId cid = 0; cid < st.table.cells.size(); ++cid) {
+    TableCell const& c = st.table.cells[cid];
+    if (c.production.kind != ProductionKind::Build) continue;
+    auto const dit = g.depends_on.find(c.value_id);
+    if (dit == g.depends_on.end()) continue;
+    for (std::size_t op : dit->second) {
+      Read r;
+      r.consumer = cid;
+      r.operand_value_id = op;
+      auto const fit = st.forms_of.find(op);
+      if (fit == st.forms_of.end() || fit->second.empty()) continue;
+      // Source = among this operand's forms, the one whose RESIDENCY scope
+      // (detail::residency_scope: root if persistent, else the prefix of
+      // its scope ending at the deepest loop it is bound to, else its own
+      // scope) encloses the consumer's scope, deepest such form wins; if
+      // none is resident, fall back to the LAST form so the validator's
+      // visibility rule surfaces the gap rather than the builder hiding it.
+      std::optional<CellId> best;
+      for (CellId f : fit->second) {
+        TableCell const& fc = st.table.cells[f];
+        if (!detail::residency_scope(fc).encloses(c.scope)) continue;
+        if (!best ||
+            fc.scope.path.size() > st.table.cells[*best].scope.path.size())
+          best = f;
+      }
+      r.source = best ? *best : fit->second.back();
+      TableCell const& s = st.table.cells[r.source];
+      for (auto const& [w_vid, pos, lid, consumer_vid] : in.sliced->occ_facts) {
+        if (w_vid != op || consumer_vid != c.value_id) continue;
+        LoopKey const k = key_of_lid(lid);
+        bool enclosing = false;
+        for (auto const& [pk, lat] : c.scope.path)
+          if (detail::same_key(pk, k)) enclosing = true;
+        if (!enclosing) continue;
+        bool already = false;
+        for (auto const& [sp, sk] : s.sliced)
+          if (sp == pos && detail::same_key(sk, k)) already = true;
+        for (LoopKey const& pk : s.partial_over)
+          if (detail::same_key(pk, k)) already = true;
+        if (!already) r.slice.push_back({pos, k});
+      }
+      st.table.reads.push_back(std::move(r));
+    }
+  }
+  // Lives: reads weighted by the consumer's extra enclosing batches
+  // (detail::read_multiplicity), plus one per Assemble that consumes the
+  // cell.
+  for (TableCell& c : st.table.cells) c.life = 0;
+  for (Read const& r : st.table.reads) {
+    TableCell const& s = st.table.cells[r.source];
+    TableCell const& c = st.table.cells[r.consumer];
+    st.table.cells[r.source].life +=
+        detail::read_multiplicity(s.scope, c.scope, in.n_batches_of);
+  }
+  for (TableCell const& c : st.table.cells)
+    if (c.production.kind == ProductionKind::Assemble)
+      st.table.cells[c.production.source].life += 1;
   return std::move(st.table);
 }
 

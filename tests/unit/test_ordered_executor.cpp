@@ -1630,6 +1630,35 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
         CHECK(enclosing);
       }
   }
+  // reads: exactly one per (consumer Build cell, operand) DAG edge
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  std::size_t edges = 0;
+  for (auto const& c : table.cells)
+    if (c.production.kind == sequant::eval::ProductionKind::Build)
+      if (auto it = g.depends_on.find(c.value_id); it != g.depends_on.end())
+        edges += it->second.size();
+  CHECK(table.reads.size() == edges);
+  for (auto const& r : table.reads) {
+    REQUIRE(r.source < table.cells.size());
+    CHECK(table.cells[r.source].value_id == r.operand_value_id);
+    // a declared slice never binds an instance the source is already sliced by
+    for (auto const& [p, k] : r.slice)
+      for (auto const& [sp, sk] : table.cells[r.source].sliced)
+        CHECK_FALSE(
+            (sp == p && sk.depth == k.depth && sk.loop_slot == k.loop_slot));
+  }
+  // lives: the validator's life rule holds for every non-leaf cell
+  auto const violations =
+      sequant::eval::validate_cell_table(table, ordered.root);
+  std::size_t life_violations = 0;
+  for (auto const& v : violations)
+    if (v.rule == "life") ++life_violations;
+  CHECK(life_violations == 0);
+  try {
+    sequant::eval::assert_valid_cell_table(table, ordered.root);
+  } catch (std::exception const& e) {
+    FAIL(e.what());
+  }
 }
 
 // ===========================================================================
