@@ -16,6 +16,7 @@
 #include <range/v3/algorithm/any_of.hpp>
 
 #include <cmath>
+#include <cwctype>
 #include <string_view>
 #include <type_traits>
 
