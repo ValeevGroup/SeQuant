@@ -62,22 +62,36 @@ class CellRegistry {
   [[nodiscard]] ResultPtr peek(CellId c) const { return slot(c).value; }
 
   /// Decrementing read: throws if the cell has no current result, or (for a
-  /// non-persistent cell) its life is already exhausted.
-  [[nodiscard]] ResultPtr read(CellId c) {
+  /// non-persistent cell) its life is already exhausted. The read that spends
+  /// a non-persistent cell's LAST life also DROPS the registry's own
+  /// reference (the cell has no reader left this evaluation, and holding on
+  /// would both pin the memory and make the buffer look shared to the reader
+  /// that just took it -- see \c CacheManager::entry::release, which the
+  /// scope cache's own \c access() has always done at the same point). A
+  /// later production of the cell restores both value and life via \c set.
+  [[nodiscard]] ResultPtr read(CellId c) { return read(c, nullptr); }
+
+  /// \overload As \c read(CellId), and reports through \p exhausted (when
+  /// non-null) whether this read spent the cell's last life.
+  [[nodiscard]] ResultPtr read(CellId c, bool* exhausted) {
     auto& s = slot(c);
+    if (exhausted) *exhausted = false;
     if (!s.value)
       throw std::runtime_error("CellRegistry::read: cell#" + std::to_string(c) +
                                " (value " +
                                std::to_string(table_->cells[c].value_id) +
                                ") has no current result");
-    if (!table_->cells[c].persistent) {
-      if (s.life == 0)
-        throw std::runtime_error("CellRegistry::read: cell#" +
-                                 std::to_string(c) + " read past its life " +
-                                 std::to_string(table_->cells[c].life));
-      --s.life;
-    }
-    return s.value;
+    if (table_->cells[c].persistent) return s.value;
+    if (s.life == 0)
+      throw std::runtime_error("CellRegistry::read: cell#" + std::to_string(c) +
+                               " read past its life " +
+                               std::to_string(table_->cells[c].life));
+    --s.life;
+    if (s.life != 0) return s.value;
+    if (exhausted) *exhausted = true;
+    ResultPtr last = std::move(s.value);
+    s.value.reset();
+    return last;
   }
 
   /// Batch start: drops every cell bound to loop instance \p k (see
@@ -237,7 +251,7 @@ class CellReadResolver {
           std::to_string(*vid) + ") has no current result");
     }
     it->second.erase(it->second.begin());
-    ResultPtr v = reg_->read(r.source);
+    ResultPtr v = reg_->read(r.source, &last_read_exhausted_source_);
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
       for (auto const& e : ctx)
@@ -262,6 +276,16 @@ class CellReadResolver {
       if (auto leaf = reg_->leaf_cell(*vid)) reg_->set(*leaf, std::move(r));
   }
 
+  /// Whether the most recent \c fetch that SERVED a value spent the source
+  /// cell's last declared life -- i.e. the table says nothing will read that
+  /// value again this evaluation, so every holder other than the caller must
+  /// let go (the caller releases the scope cache's own reference; the
+  /// registry has already dropped its own, see \c CellRegistry::read).
+  /// Meaningless after a fetch that returned nullopt.
+  [[nodiscard]] bool last_read_exhausted_source() const noexcept {
+    return last_read_exhausted_source_;
+  }
+
   /// Diagnostic: the number of operand fetches this resolver has actually
   /// served (table-driven, sliced-per-Read) rather than deferring to the
   /// caller (a transient, a leaf's first touch, or a value this call's
@@ -274,6 +298,7 @@ class CellReadResolver {
   CellId consumer_ = 0;
   std::unordered_map<std::size_t, container::svector<std::size_t>> cursor_;
   std::size_t served_ = 0;
+  bool last_read_exhausted_source_ = false;
 };
 
 }  // namespace sequant::eval

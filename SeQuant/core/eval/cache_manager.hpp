@@ -885,6 +885,24 @@ class CacheManager {
       }
     }
 
+    /// Drop this entry's own reference to its data WITHOUT serving it, and
+    /// spend the rest of its life -- what \c access() already does on an
+    /// entry's LAST use, reached from a reader that took the value by another
+    /// route (the cell table's own read path) and so never called \c
+    /// access(). A value nobody holds but its final consumer is what makes
+    /// the in-place accumulation in \c evaluate_impl legal (see \c
+    /// CacheManager::chain_holds_shared); an entry left holding a fully
+    /// consumed value pins its memory AND makes every later reader treat the
+    /// buffer as shared. A persistent entry is never released (its whole
+    /// point is to outlive its reads).
+    void release() noexcept {
+      if (persistent_) return;
+      life_c = 0;
+      data_p = nullptr;
+      size_bytes_.reset();
+      stored_this_eval_ = false;
+    }
+
     [[nodiscard]] bool persistent() const noexcept { return persistent_; }
 
     /// \return whether this NON-persistent entry has been \c store()'d since
@@ -1683,6 +1701,24 @@ class CacheManager {
     if (auto found = cache_map_.find(rk); found != cache_map_.end())
       if (auto data = found->second.peek()) return data;
     return parent_ ? parent_->peek_at(rk) : nullptr;
+  }
+
+  /// Release @p key's value from the nearest scope up the chain that holds
+  /// it (mirrors \c peek_at's recolor + parent walk, but calls \c
+  /// entry::release()): the chain lets go of a value it will not be asked
+  /// for again. Used by the cell table's read path, which serves a value
+  /// from the cell registry rather than through \c access_at, so nothing
+  /// else would ever spend the entry's last life -- see \c entry::release.
+  /// A persistent entry is skipped (release() is a no-op there) and the walk
+  /// continues, so a persistent home is never disturbed.
+  void release_at(cache_key_type const& key) noexcept {
+    cache_key_type const rk = recolor(key);
+    if (auto found = cache_map_.find(rk); found != cache_map_.end())
+      if (!found->second.persistent() && found->second.alive()) {
+        found->second.release();
+        return;
+      }
+    if (parent_) parent_->release_at(rk);
   }
 
   /// Fetch @p key from EXACTLY @p hops scopes up the chain (walk @p hops

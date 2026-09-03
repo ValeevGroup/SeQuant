@@ -73,6 +73,35 @@ TEST_CASE("cell registry: set, read, life and batch clearing",
   CHECK(reg.peek(0) == r);  // whole leaf: untouched
 }
 
+TEST_CASE(
+    "cell registry: the read that spends a cell's last life hands over sole "
+    "ownership",
+    "[cell_registry]") {
+  // A cell with no reader left this evaluation must not keep its value alive:
+  // the reader that took it is its only holder (the scope cache lets go
+  // through CacheManager::release_at, driven by the flag this read reports).
+  auto const t = make_table();
+  CellRegistry reg(t);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+
+  reg.set(1, r);  // cell 1: Build, non-persistent, life 1
+  bool exhausted = false;
+  CHECK(reg.read(1, &exhausted) == r);
+  CHECK(exhausted);
+  CHECK_FALSE(reg.peek(1));  // the registry has let go
+  reg.set(1, r);             // a later production restores value AND life
+  CHECK(reg.peek(1) == r);
+
+  reg.set(0, r);  // cell 0: Leaf, PERSISTENT, life 2
+  bool persistent_exhausted = true;
+  CHECK(reg.read(0, &persistent_exhausted) == r);
+  CHECK_FALSE(persistent_exhausted);  // a persistent cell never exhausts
+  CHECK(reg.peek(0) == r);
+}
+
 TEST_CASE("cell read resolver: declared slice against the batch context",
           "[cell_registry]") {
   auto const t = make_table();
@@ -103,7 +132,10 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   CHECK(sequant::eval::dryrun::detail::lobounds_of(**got0).at(0) == 2);
   auto got1 = res.fetch(1, ctx);
   REQUIRE(got1.has_value());
-  CHECK(*got1 == b1);               // whole read: same object
+  CHECK(*got1 == b1);  // whole read: same object
+  // cell 1's life was 1: that read was its last, so the caller must be told
+  // to release every other reference to the buffer.
+  CHECK(res.last_read_exhausted_source());
   CHECK_THROWS(res.fetch(1, ctx));  // no remaining Read of value 1 for cell 2
   CHECK_FALSE(res.fetch(77, ctx).has_value());  // not a value: transient
 }

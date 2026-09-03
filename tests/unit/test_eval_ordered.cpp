@@ -457,4 +457,36 @@ TEST_CASE(
     REQUIRE(val);
     CHECK_FALSE(cache.chain_holds_shared(val));
   }
+
+  SECTION("non-persistent, max_life > 1 -> shared until release_at lets go") {
+    // The cell table's read path serves a value from the cell registry, never
+    // through access_at, so nothing ever spends this entry's last life: it
+    // would keep holding the buffer for the whole evaluation and report it
+    // shared forever, disabling the in-place Sum branch that the read path it
+    // replaced enabled at exactly this point (entry::access() releases a
+    // fully consumed value). release_at is what the read path calls when the
+    // table says the value has been read for the last time.
+    svector<std::pair<ScalarNode, std::size_t>> const decaying{{node, 2}};
+    sequant::CacheManager<ScalarNode> cache{
+        decaying, [](ScalarNode const&) { return false; }};
+    ResultPtr const val =
+        cache.store(node, sequant::eval_result<ResultScalar<double>>(-7.0));
+    REQUIRE(val);
+    CHECK(cache.chain_holds_shared(val));
+    cache.release_at(node);
+    CHECK_FALSE(cache.chain_holds_shared(val));
+    CHECK_FALSE(cache.peek_at(node));
+  }
+
+  SECTION("release_at leaves a persistent entry alone") {
+    svector<std::pair<ScalarNode, std::size_t>> const decaying{{node, 2}};
+    sequant::CacheManager<ScalarNode> cache{
+        decaying, [](ScalarNode const&) { return true; }};
+    ResultPtr const val =
+        cache.store(node, sequant::eval_result<ResultScalar<double>>(-7.0));
+    REQUIRE(val);
+    cache.release_at(node);
+    CHECK(cache.peek_at(node) == val);
+    CHECK(cache.chain_holds_shared(val));
+  }
 }

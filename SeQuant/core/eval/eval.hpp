@@ -875,6 +875,14 @@ ResultPtr evaluate_impl(Node const& node,         //
               f.node->hash_value() != node->hash_value()) {
             if (auto v =
                     rr->fetch(f.node->hash_value(), cache.batch_context())) {
+              // Ownership: the table is the only reader of a table value, so
+              // when it says this was the value's LAST read, the scope cache
+              // must let go of it too -- exactly what its own access() did on
+              // an entry's last use before reads moved to the table. An entry
+              // left holding a fully consumed value pins its memory and makes
+              // the buffer look permanently shared, which silently disables
+              // the in-place accumulation below.
+              if (rr->last_read_exhausted_source()) cache.release_at(f.node);
               finalize(apply_phase(f.node, *v));
               break;
             }
@@ -1061,6 +1069,8 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (auto* rr = cache.cell_read_resolver()) {
             if (auto v =
                     rr->fetch(f.node->hash_value(), cache.batch_context())) {
+              // See the ownership note on the operand probe above.
+              if (rr->last_read_exhausted_source()) cache.release_at(f.node);
               finalize(apply_phase(f.node, *v));  // recorded leaf, sliced
               break;
             }
