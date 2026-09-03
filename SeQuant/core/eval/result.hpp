@@ -437,6 +437,10 @@ class Result {
   }
 
  private:
+  /// mutable so that a lazily transformed result can materialize itself on
+  /// first read through a const handle. NOT thread-safe: a Result is owned
+  /// by one evaluation (the serial evaluate() stack / cache); concurrent
+  /// get<>() on a pending view is not supported
   mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;

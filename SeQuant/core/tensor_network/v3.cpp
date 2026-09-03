@@ -920,47 +920,49 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   // - Reordering indices into this canonical order incurs a phase change if the
   //   index bundle is antisymmetric.
   // - Determine this phase change by determining the parity of index
-  //   permutations required to arrive at canonical form
+  //   permutations required to arrive at canonical form; with
+  //   options.apply_slot_order the same permutations are applied to the
+  //   tensors (below, after the orientation byproduct is detected), so the
+  //   phase and the spelling come from ONE sort.
   metadata.phase = 1;
-  container::svector<SwapCountable<std::size_t>> vertices;
-  for (const AbstractTensor &tensor : tensors_ | ranges::views::indirect) {
-    if (symmetry(tensor) != Symmetry::Antisymm) {
-      // Only antisymmetric tensors (or rather: their indices) can incur a phase
-      // change due to index permutation
+  // tensor ordinal -> {bra, ket} from-permutations to the canonical slot
+  // order (empty = identity or not an (anti)symmetric bundle)
+  container::svector<std::array<container::svector<std::size_t>, 2>>
+      slot_orders(options.apply_slot_order ? tensors_.size() : 0);
+  for (auto &&[tensor_ord, tensor_ptr] : ranges::views::enumerate(tensors_)) {
+    const AbstractTensor &tensor = *tensor_ptr;
+    const auto symm = symmetry(tensor);
+    // only (anti)symmetric bundles have a canonical slot order (their slots
+    // are interchangeable up to a phase); only antisymmetric ones incur one
+    if (symm != Symmetry::Antisymm &&
+        !(options.apply_slot_order && symm == Symmetry::Symm))
       continue;
-    }
 
     // Note that the current assumption is that auxiliary indices don't have
     // permutational symmetry, let alone being antisymmetric. Hence, we don't
     // have to include them in the iteration.
-    // Note2: have to create dedicated container to hold ranges as an
-    // initializer list will only return const entries upon iteration and one
-    // can't iterate over const ranges.
-    std::vector index_groups = {tensor._bra(), tensor._ket()};
-    for (auto &indices : index_groups) {
+    for (const bool bra : {true, false}) {
+      // (the slot views are not const-iterable ranges)
+      auto indices = bra ? tensor._bra() : tensor._ket();
       using ranges::size;
-      std::size_t n_indices = size(indices);
+      const std::size_t n_indices = size(indices);
 
       if (n_indices < 2) {
         // If there are < 2 indices, no two indices could have been swapped
         continue;
       }
 
-      vertices.clear();
-      vertices.reserve(n_indices);
-
-      for (const Index &idx : indices) {
-        const std::size_t vertex = idx_to_vertex.at(idx);
-        vertices.emplace_back(canonize_perm[vertex]);
-      }
-
-      reset_ts_swap_counter<std::size_t>();
-      bubble_sort(vertices.begin(), vertices.end());
-      if (!ts_swap_counter_is_even<std::size_t>()) {
-        // Performed an uneven amount of pairwise exchanges -> this incurs a
-        // phase change
-        metadata.phase *= -1;
-      }
+      // canonical vertex ordinals of the slots, in slot order ...
+      container::svector<std::size_t> perm;
+      perm.reserve(n_indices);
+      for (const Index &idx : indices)
+        perm.emplace_back(canonize_perm[idx_to_vertex.at(idx)]);
+      // ... sorted: perm becomes the from-permutation that puts the slots
+      // into canonical order, with its parity
+      const int parity = sort_then_replace_by_ordinals(perm);
+      if (symm == Symmetry::Antisymm) metadata.phase *= parity;
+      if (options.apply_slot_order && !ranges::is_sorted(perm))
+        slot_orders[tensor_ord][bra ? 0 : 1] = std::move(perm);
     }
   }
 
@@ -1008,6 +1010,29 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
                          tensors_[tensor_ord]->_ket())) {
         metadata.conjugated_tensors.push_back(tensor_ord);
       }
+    }
+  }
+
+  // apply the canonical slot order (after the orientation detection above,
+  // which compares bra and ket bundles as spelled)
+  if (options.apply_slot_order) {
+    bool applied = false;
+    for (auto &&[tensor_ord, orders] : ranges::views::enumerate(slot_orders)) {
+      auto &[bra_order, ket_order] = orders;
+      AbstractTensor &tensor = *tensors_[tensor_ord];
+      if (!bra_order.empty()) {
+        tensor._permute_bra(std::span(bra_order.data(), bra_order.size()));
+        applied = true;
+      }
+      if (!ket_order.empty()) {
+        tensor._permute_ket(std::span(ket_order.data(), ket_order.size()));
+        applied = true;
+      }
+    }
+    // the edges record slot positions: rebuild them on next use
+    if (applied) {
+      edges_.clear();
+      have_edges_ = false;
     }
   }
 

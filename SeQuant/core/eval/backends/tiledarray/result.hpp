@@ -427,8 +427,10 @@ class ResultTensorTA final : public Result {
     if (view_->trivial()) view_.reset();
   }
 
-  /// @return whether this result is a lazy view (pending transform) of a
-  ///         shared array; get<>() materializes it
+  /// @return whether this result is a lazy view -- a {phase, conj, perm}
+  ///         transform pending on an array shared with another result (the
+  ///         cache's canonical value); get<>() / logical_array() materialize
+  ///         it into a private array on first read, raw<>() does not
   [[nodiscard]] bool is_view() const noexcept { return view_.has_value(); }
 
  private:
@@ -528,16 +530,11 @@ class ResultTensorTA final : public Result {
     view_.reset();
   }
 
-  /// a handle to the array in the view's logical layout: the stored array
-  /// itself if not a view, else a materialized temporary
-  [[nodiscard]] ArrayT logical_array() const {
-    if (!view_) return raw<ArrayT>();
-    auto const rank = raw<ArrayT>().trange().rank();
-    auto const ann = TA::detail::dummy_annotation(rank);
-    ArrayT r;
-    with_expr(ann, [&](auto&& e) { r(ann) = e; });
-    ArrayT::wait_for_lazy_cleanup(r.world());
-    return r;
+  /// the array in the view's logical layout: a pending view is
+  /// materialized (and memoized) first, so repeated reads pay once
+  [[nodiscard]] ArrayT const& logical_array() const {
+    ensure_materialized();
+    return raw<ArrayT>();
   }
 
   /// a plain contraction (every index in exactly two of {l, r, c}) is what
@@ -897,7 +894,7 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr apply_transform(
       CanonTransform t, std::array<std::any, 2> const& ann) const override {
     // fused phase * conj * relabel in ONE TA expression (conj elided for a
-    // real numeric_type, exactly as adjoint() above)
+    // real numeric_type)
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
     detail::log_ta(post_annot, " = apply_transform(", pre_annot, ")\n");

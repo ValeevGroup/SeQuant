@@ -970,3 +970,100 @@ TEST_CASE("tot_leaf_canonical_spelling_and_phase", "[eval_expr][tot][phase]") {
   REQUIRE_FALSE(e23.canon_transform().conj);
   REQUIRE_FALSE(e32.canon_transform().conj);
 }
+
+TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
+  // Products and sums that differ only by the slot order of an antisymmetric
+  // ToT leaf: the leaf's reorder parity is a child TRANSFORM (its hash is
+  // phase-blind), so the parents occupy ONE slot. A product carries the
+  // parity in its own transform (phases hoist multiplicatively); a sum
+  // hoists a uniform parity and salts a mixed one -- otherwise one slot
+  // would hold sign-different values for the two spellings.
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↓_1");
+  const Index a2(L"a↑_2", {i1, i2}), a3(L"a↑_3", {i1, i2});
+  auto t = [&](Index const& x, Index const& y) {
+    return ex<Tensor>(L"t", bra{x, y}, ket{i1, i2}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto g = [&](std::wstring_view lbl) {
+    return ex<Tensor>(lbl, bra{i1, i2}, ket{a2, a3}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto prod = [&](std::wstring_view lbl, Index const& x, Index const& y) {
+    return ex<Product>(ExprPtrList{g(lbl), t(x, y)});
+  };
+
+  auto p23 = binarize(prod(L"g", a2, a3));
+  auto p32 = binarize(prod(L"g", a3, a2));
+  // the leaves share a slot and differ by the reorder parity ...
+  REQUIRE(p23.right()->hash_value() == p32.right()->hash_value());
+  REQUIRE(p23.right()->canon_phase() * p32.right()->canon_phase() == -1);
+  // ... and so do the products, the parity hoisted into their transforms
+  REQUIRE(p23->hash_value() == p32->hash_value());
+  REQUIRE(p23->canon_phase() * p32->canon_phase() == -1);
+
+  auto sum = [&](ExprPtr a, ExprPtr b) {
+    return binarize(ex<Sum>(ExprPtrList{std::move(a), std::move(b)}));
+  };
+  auto s23 = sum(prod(L"g", a2, a3), prod(L"h", a2, a3));
+  auto s32 = sum(prod(L"g", a3, a2), prod(L"h", a3, a2));
+  auto s_mixed = sum(prod(L"g", a2, a3), prod(L"h", a3, a2));
+  // uniform parity: one slot, the parity hoisted
+  REQUIRE(s23->hash_value() == s32->hash_value());
+  REQUIRE(s23->canon_phase() * s32->canon_phase() == -1);
+  // mixed parity: not a whole-node transform -> its own slot
+  REQUIRE(s_mixed->hash_value() != s23->hash_value());
+  REQUIRE(s_mixed->canon_phase() == 1);
+}
+
+TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
+  // a sum's slot must depend on ALL its summands (order-insensitively):
+  // A + B and A + C are different values, A + B and B + A the same one
+  using namespace sequant;
+  auto sum_of = [](std::wstring_view a, std::wstring_view b) {
+    return binarize(ex<Sum>(ExprPtrList{deserialize(a), deserialize(b)}));
+  };
+  auto const ab = sum_of(L"f{i_1;a_1}", L"g{i_1;a_1}");
+  auto const ac = sum_of(L"f{i_1;a_1}", L"h{i_1;a_1}");
+  auto const ba = sum_of(L"g{i_1;a_1}", L"f{i_1;a_1}");
+  REQUIRE(ab->hash_value() != ac->hash_value());
+  REQUIRE(ab->hash_value() == ba->hash_value());
+  // three summands: the LAST one must count too
+  auto const abc = binarize(ex<Sum>(ExprPtrList{deserialize(L"f{i_1;a_1}"),
+                                                deserialize(L"g{i_1;a_1}"),
+                                                deserialize(L"h{i_1;a_1}")}));
+  auto const abd = binarize(ex<Sum>(ExprPtrList{deserialize(L"f{i_1;a_1}"),
+                                                deserialize(L"g{i_1;a_1}"),
+                                                deserialize(L"k{i_1;a_1}")}));
+  REQUIRE(abc->hash_value() != abd->hash_value());
+}
+
+TEST_CASE("denoted_expr_is_the_as_written_spelling", "[eval_expr][denoted]") {
+  // the denoted spelling re-materializes the transform: for every channel
+  // that came with a conj (a braket-fold swap of a Conjugate tensor, the
+  // Kramers flip) the marker is taken OUT again, so the denoted tensor is
+  // the as-written one whose value the leaf hands up
+  using namespace sequant;
+  {
+    // flat Conjugate leaf written in the non-canonical orientation: stored
+    // swapped + {conj, swap}; denoted = as written, unmarked
+    auto const w = deserialize(L"F{i_2;i_1}:N-C-S")->as<Tensor>();
+    EvalExpr e{w};
+    if (e.canon_transform().braket_swap) {
+      REQUIRE(e.canon_transform().conj);
+      REQUIRE(e.denoted_expr()->as<Tensor>() == w);
+    }
+    // the marked spelling of the canonical orientation: stored unmarked +
+    // {conj}; denoted = as written, marked
+    auto s = deserialize(L"F{i_1;i_2}:N-C-S")->as<Tensor>();
+    s.conjugate();
+    EvalExpr es{s};
+    REQUIRE(es.canon_transform().conj);
+    REQUIRE(es.denoted_expr()->as<Tensor>() == s);
+  }
+}
