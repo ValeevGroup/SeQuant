@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa556cc7820bb870a7a90813af16cac11:
+
+Function sequant::toUtf16(char)
+===============================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toUtf16(char)
+   :project: SeQuant

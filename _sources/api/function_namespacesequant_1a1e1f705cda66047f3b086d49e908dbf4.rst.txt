@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1e1f705cda66047f3b086d49e908dbf4:
+
+Template Function sequant::replace(ExprPtr&, const ExprPtr&, const ExprPtr&, EqualityComparator)
+================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::replace(ExprPtr&, const ExprPtr&, const ExprPtr&, EqualityComparator)
+   :project: SeQuant

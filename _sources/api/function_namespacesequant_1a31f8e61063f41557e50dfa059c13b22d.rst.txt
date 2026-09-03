@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a31f8e61063f41557e50dfa059c13b22d:
+
+Function sequant::factorial
+===========================
+
+- Defined in :ref:`file_SeQuant_core_math.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::factorial(std::size_t)
+   :project: SeQuant

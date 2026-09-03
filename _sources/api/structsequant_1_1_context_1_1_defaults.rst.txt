@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_context_1_1_defaults:
+
+Struct Context::Defaults
+========================
+
+- Defined in :ref:`file_SeQuant_core_context.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_context`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Context::Defaults
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

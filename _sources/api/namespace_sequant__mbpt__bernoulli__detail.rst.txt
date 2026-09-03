@@ -1,0 +1,35 @@
+
+.. _namespace_sequant__mbpt__bernoulli__detail:
+
+Namespace sequant::mbpt::bernoulli::detail
+==========================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__mbpt__bernoulli__detail__@185`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a9fa90d18b9f005e891cd13594a3b342c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a643c6090569ae8ef7a69a08d5897f58d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a5beae2388958da5a78b10a7efd2205c1`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a2ff1045638a99f041e140add0e29a0da`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1adc423782a53d6b587ff9b35f9ea3f4df`

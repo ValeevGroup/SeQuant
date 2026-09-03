@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1bad__any__comparable__cast:
+
+Class bad_any_comparable_cast
+=============================
+
+- Defined in :ref:`file_SeQuant_core_tag.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public std::bad_any_cast``
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::bad_any_comparable_cast
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

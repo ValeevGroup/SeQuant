@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a765c822a29eeadfb7de1a396d37b229e:
+
+Function sequant::detail::space_counts
+======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::space_counts(Tensor const&)
+   :project: SeQuant

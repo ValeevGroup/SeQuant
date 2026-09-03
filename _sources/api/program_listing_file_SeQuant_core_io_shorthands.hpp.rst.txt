@@ -1,0 +1,57 @@
+
+.. _program_listing_file_SeQuant_core_io_shorthands.hpp:
+
+Program Listing for File shorthands.hpp
+=======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_io_shorthands.hpp>` (``SeQuant/core/io/shorthands.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_IO_SHORTHANDS_HPP
+   #define SEQUANT_CORE_IO_SHORTHANDS_HPP
+   
+   
+   #include <SeQuant/core/expr_fwd.hpp>
+   #include <SeQuant/core/io/concepts.hpp>
+   #include <SeQuant/core/io/latex/latex.hpp>
+   #include <SeQuant/core/io/serialization/serialization.hpp>
+   
+   #include <string_view>
+   
+   namespace sequant {
+   
+   template <typename T>
+     requires(io::convertible_to_latex<T>)
+   decltype(auto) to_latex(T &&expr) {
+     return io::latex::to_string(std::forward<T>(expr));
+   }
+   
+   template <typename T>
+     requires(io::serializable<T>)
+   decltype(auto) serialize(
+       T &&t, const io::serialization::SerializationOptions &options = {}) {
+     return io::serialization::to_string(std::forward<T>(t), options);
+   }
+   
+   template <typename T = ExprPtr>
+     requires(io::deserializable<T>)
+   decltype(auto) deserialize(
+       std::string_view input,
+       const io::serialization::DeserializationOptions &options = {}) {
+     return io::serialization::from_string<T>(input, options);
+   }
+   
+   template <typename T = ExprPtr>
+     requires(io::deserializable<T>)
+   decltype(auto) deserialize(
+       std::wstring_view input,
+       const io::serialization::DeserializationOptions &options = {}) {
+     return io::serialization::from_string<T>(input, options);
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_IO_SHORTHANDS_HPP

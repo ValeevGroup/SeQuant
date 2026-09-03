@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1mbpt_1_1detail_1ad226cc657699d642d5bbea7f5a5db6c3:
+
+Variable sequant::mbpt::detail::pert_superscripts
+=================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::mbpt::detail::pert_superscripts
+   :project: SeQuant

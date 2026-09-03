@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1affaf52dbe035a2da16ffe15803b8dfbf:
+
+Typedef sequant::ProductPtr
+===========================
+
+- Defined in :ref:`file_SeQuant_core_expr_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ProductPtr
+   :project: SeQuant

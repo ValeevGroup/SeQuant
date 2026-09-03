@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ae7fab4a48222a255f4ecffc0e7dc92a0:
+
+Template Function sequant::detail::invoke_tree_visitor
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::invoke_tree_visitor(Visitor&&, Node&&, TreeTraversal)
+   :project: SeQuant

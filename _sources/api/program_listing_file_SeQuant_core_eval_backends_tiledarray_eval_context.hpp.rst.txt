@@ -1,0 +1,98 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_tiledarray_eval_context.hpp:
+
+Program Listing for File eval_context.hpp
+=========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_tiledarray_eval_context.hpp>` (``SeQuant/core/eval/backends/tiledarray/eval_context.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_BACKENDS_TILEDARRAY_EVAL_CONTEXT_HPP
+   #define SEQUANT_EVAL_BACKENDS_TILEDARRAY_EVAL_CONTEXT_HPP
+   
+   #ifdef SEQUANT_HAS_TILEDARRAY
+   
+   #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
+   #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
+   #include <SeQuant/core/eval/cache_manager.hpp>
+   
+   #include <tiledarray.h>
+   
+   #include <any>
+   #include <functional>
+   #include <optional>
+   
+   namespace sequant {
+   
+   struct TAEvalContext {
+     std::function<std::optional<TA::SparseShape<float>>(
+         FullBinaryNode<EvalExprTA> const& node,
+         TA::TiledRange const& result_outer_trange)>
+         result_shape_provider;
+   
+     template <typename NumericT, typename PolicyT,
+               typename InnerTileT = TA::Tensor<NumericT>>
+     static CacheManager<FullBinaryNode<EvalExprTA>>::shaped_product_hook_type
+     make_hook(TAEvalContext const& ctx) {
+       // Capture the provider BY VALUE so the hook owns its copy and does not
+       // dangle on ctx.
+       auto provider = ctx.result_shape_provider;
+       return
+           [provider = std::move(provider)](
+               std::any const& node_any, Result const& left, Result const& right,
+               std::array<std::any, 3> const& annot) -> ResultPtr {
+             if (!provider) return nullptr;
+   
+             auto const& node =
+                 std::any_cast<
+                     std::reference_wrapper<FullBinaryNode<EvalExprTA> const>>(
+                     node_any)
+                     .get();
+   
+             // The result's outer TiledRange computation (below) reads each
+             // operand's array via a kind-dispatched get<>(); it handles only the
+             // flat (ResultTensorTA) and nested (ResultTensorOfTensorTA) kinds.  A
+             // product may legitimately have a SCALAR operand (ResultScalar),
+             // which carries no TiledRange and would mis-cast.  Such a product has
+             // no outer tensor result to shape, so decline early before computing
+             // the trange.
+             using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+             using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
+             using FlatResult = ResultTensorTA<FlatArray>;
+             using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+             auto is_tensor_like = [](Result const& r) {
+               return r.is<FlatResult>() || r.is<ToTResult>();
+             };
+             if (!is_tensor_like(left) || !is_tensor_like(right)) return nullptr;
+   
+             // The result's outer TiledRange, over which the provider builds a
+             // shape.
+             auto const trange =
+                 result_outer_trange_from_results<NumericT, PolicyT, InnerTileT>(
+                     left, right, annot);
+   
+             auto shape = provider(node, trange);
+             if (!shape) return nullptr;  // decline => unshaped prod()
+   
+             // de_nest: ToT * ToT -> flat (both operands nested, result is not).
+             // Read from the IR node, matching the eval site's computation.
+             bool const de_nest =
+                 node.left()->tot() && node.right()->tot() && !node->tot();
+   
+             // shape must outlive the assignment inside apply_shaped_product (TA
+             // holds it by pointer); it does (local here, passed by const&, used
+             // fully within the call which fences before returning).
+             return apply_shaped_product<NumericT, PolicyT, InnerTileT>(
+                 left, right, annot, *shape, de_nest);
+           };
+     }
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_HAS_TILEDARRAY
+   
+   #endif  // SEQUANT_EVAL_BACKENDS_TILEDARRAY_EVAL_CONTEXT_HPP

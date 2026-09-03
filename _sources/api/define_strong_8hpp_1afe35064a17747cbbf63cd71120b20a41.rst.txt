@@ -1,0 +1,14 @@
+.. _exhale_define_strong_8hpp_1afe35064a17747cbbf63cd71120b20a41:
+
+Define DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_strong.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE
+   :project: SeQuant

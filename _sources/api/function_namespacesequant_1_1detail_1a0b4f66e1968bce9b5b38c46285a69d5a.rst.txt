@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a0b4f66e1968bce9b5b38c46285a69d5a:
+
+Function sequant::detail::annot_label
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::annot_label(std::int64_t)
+   :project: SeQuant

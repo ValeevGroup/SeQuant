@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_l_t_r_uncontracted_indices:
+
+Template Struct LTRUncontractedIndices
+======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::LTRUncontractedIndices
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

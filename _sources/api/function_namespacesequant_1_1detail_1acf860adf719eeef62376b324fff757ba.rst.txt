@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1acf860adf719eeef62376b324fff757ba:
+
+Template Function sequant::detail::visit
+========================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::visit(Node&&, Visitor&&, NodeType)
+   :project: SeQuant

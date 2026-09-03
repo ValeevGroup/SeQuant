@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a41a87bca7db2b0db779bc9cd64417451:
+
+Function sequant::pop_tensor
+============================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::pop_tensor(ExprPtr&, std::wstring_view)
+   :project: SeQuant

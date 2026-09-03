@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a9856c2b550b72bf65e7c16ede41cfc52:
+
+Template Function sequant::opt::eliminate_common_subexpressions(VectorLike&, std::size_t, std::size_t, const Transformer&, const CSEOptions<std::ranges::range_value_t<VectorLike>>)
+====================================================================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::eliminate_common_subexpressions(VectorLike&, std::size_t, std::size_t, const Transformer&, const CSEOptions<std::ranges::range_value_t<VectorLike>>)
+   :project: SeQuant

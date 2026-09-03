@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a38e1e232c0d81c6119d57edc4527a898:
+
+Function sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux)
+=================================================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux)
+   :project: SeQuant

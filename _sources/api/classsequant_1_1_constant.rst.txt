@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_constant:
+
+Class Constant
+==============
+
+- Defined in :ref:`file_SeQuant_core_expressions_constant.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Expr`` (:ref:`exhale_class_classsequant_1_1_expr`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Constant
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

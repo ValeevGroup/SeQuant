@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4abee359177884294557c7160825804c:
+
+Template Function sequant::binarize(ExprPtr const&, IndexSet const&, const BinarizationOptions&)
+================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::binarize(ExprPtr const&, IndexSet const&, const BinarizationOptions&)
+   :project: SeQuant

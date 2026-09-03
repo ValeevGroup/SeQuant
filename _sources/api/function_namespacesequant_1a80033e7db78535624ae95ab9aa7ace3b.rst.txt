@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a80033e7db78535624ae95ab9aa7ace3b:
+
+Template Function sequant::make_batched_custom_evaluator
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_batched_custom_evaluator(F, std::function<std::size_t(Index const&)>, IndexPredicate, ScopeGuardFactory, IsVolatile, bool)
+   :project: SeQuant

@@ -1,0 +1,725 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+        <link rel="prefetch" href="../../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Outer-product (disconnected-subgraph) pruning for the single-term DP - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../user/guide/evaluation.html">Evaluation Trace Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../user/utilities/index.html">Utilities</a><input aria-label="Toggle navigation of Utilities" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../user/utilities/external_interface.html">External interface</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../../_sources/dev/specs/2026-07-08-outer-product-dp-pruning-design.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section class="tex2jax_ignore mathjax_ignore" id="outer-product-disconnected-subgraph-pruning-for-the-single-term-dp">
+<h1>Outer-product (disconnected-subgraph) pruning for the single-term DP<a class="headerlink" href="#outer-product-disconnected-subgraph-pruning-for-the-single-term-dp" title="Link to this heading">¶</a></h1>
+<p><strong>Goal:</strong> Prune the single-term contraction-ordering DP so it never spends work
+on <em>outer products</em> – bipartitions whose two parts share no <strong>contractible</strong>
+index (an index that is summed somewhere in the term). This collapses the
+per-term search from ~3^n (n = number of tensors) to the number of <em>connected</em>
+subnetworks, which is polynomial for the path/tree-shaped tensor networks CC
+residual terms actually produce. Hadamard/partial contractions over a shared
+index that is summed only later (a hyperedge) are <strong>kept</strong> – they are legitimate
+intermediates, not outer products. The optimal factorization of a connected
+network is unchanged (loss-free); only the search space shrinks.</p>
+<p><strong>Architecture:</strong> Precompute, once per term, a pairwise <strong>contractible-index
+adjacency</strong> over the tensors (edge <code class="docutils literal notranslate"><span class="pre">i-j</span></code> iff they share an index that is not an
+output/target index), and from it the connected components (union-find) and a
+per-subset connectivity table <code class="docutils literal notranslate"><span class="pre">connected[n]</span></code>. In the generic DP driver
+<code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code> (<code class="docutils literal notranslate"><span class="pre">SeQuant/core/optimize/cost_model.hpp</span></code>), skip disconnected
+subsets and relax a bipartition <code class="docutils literal notranslate"><span class="pre">(lp,</span> <span class="pre">rp)</span></code> only when both parts are connected
+subnetworks. In the CSE metadata precompute (<code class="docutils literal notranslate"><span class="pre">build_subnet_metadata</span></code>,
+<code class="docutils literal notranslate"><span class="pre">single_term_detail.hpp</span></code>, additive objectives) skip the same disconnected
+subsets, so no outer-product subnetwork is ever canonicalized. A term whose
+adjacency graph has more than one component is a genuine <strong>product</strong> – which
+CC residual summands never are (linked-cluster theorem) – and is recognized up
+front from <code class="docutils literal notranslate"><span class="pre">connected[full]</span></code>; there the guards go inert and the term is
+optimized by the original unpruned enumeration. The relax-loop prune is fully
+model-independent; the only per-model touch is a uniform <code class="docutils literal notranslate"><span class="pre">connected[]</span></code> parameter
+threaded through <code class="docutils literal notranslate"><span class="pre">build_context</span></code>.</p>
+<p><strong>Tech stack:</strong> SeQuant C++20, <code class="docutils literal notranslate"><span class="pre">SeQuant/core/optimize/</span></code>.</p>
+<hr class="docutils" />
+<section id="problem-and-motivation">
+<h2>Problem and motivation<a class="headerlink" href="#problem-and-motivation" title="Link to this heading">¶</a></h2>
+<p>The generic single-term DP driver (<code class="docutils literal notranslate"><span class="pre">cost_model.hpp:27</span></code> <code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code>)
+enumerates, for every subset <code class="docutils literal notranslate"><span class="pre">n</span></code> of the tensors, every bipartition <code class="docutils literal notranslate"><span class="pre">(lp,</span> <span class="pre">rp)</span></code>
+and calls <code class="docutils literal notranslate"><span class="pre">m.relax(...)</span></code>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">st</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">popcount</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">leaf</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">);</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="k">typename</span><span class="w"> </span><span class="nc">Model</span><span class="o">::</span><span class="n">State</span><span class="w"> </span><span class="n">acc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">[</span><span class="n">lp</span><span class="p">,</span><span class="w"> </span><span class="n">rp</span><span class="p">]</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">bits</span><span class="o">::</span><span class="n">bipartitions</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">rp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">relax</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">lp</span><span class="p">,</span><span class="w"> </span><span class="n">rp</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">lp</span><span class="p">],</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">rp</span><span class="p">],</span><span class="w"> </span><span class="n">acc</span><span class="p">);</span>
+<span class="w">  </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">acc</span><span class="p">);</span>
+<span class="w">  </span><span class="n">m</span><span class="p">.</span><span class="n">finalize</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For the batched objective (<code class="docutils literal notranslate"><span class="pre">PeakBatchedModel::relax</span></code>, <code class="docutils literal notranslate"><span class="pre">cost_model.hpp:694</span></code>) each
+<code class="docutils literal notranslate"><span class="pre">relax</span></code> iterates over all <code class="docutils literal notranslate"><span class="pre">2^m</span></code> sliced-set contexts <code class="docutils literal notranslate"><span class="pre">B</span></code> (m = number of batchable
+aux indices) and, per <code class="docutils literal notranslate"><span class="pre">B</span></code>, all subsets of <code class="docutils literal notranslate"><span class="pre">Acand</span></code> – <strong>before</strong> it ever inspects
+the child frontiers. So every outer-product bipartition still pays the full
+<code class="docutils literal notranslate"><span class="pre">2^m</span> <span class="pre">*</span> <span class="pre">2^|Acand|</span></code> inner cost even though it can never be part of an optimal
+schedule. The number of <code class="docutils literal notranslate"><span class="pre">(subset,</span> <span class="pre">bipartition)</span></code> pairs is <code class="docutils literal notranslate"><span class="pre">~3^n</span></code>, and a large
+fraction of them are outer products (splits across a disconnection).</p>
+<section id="evidence">
+<h3>Evidence<a class="headerlink" href="#evidence" title="Link to this heading">¶</a></h3>
+<p>Under the faithful C60 pVDZ-F12 regime (<code class="docutils literal notranslate"><span class="pre">test_eval_dryrun.cpp</span></code>), a <strong>single</strong>
+13-tensor residual term optimized under the perf-first <code class="docutils literal notranslate"><span class="pre">DenseTimeSpaceBatched</span></code>
+objective <strong>did not complete in 38 minutes</strong>. The full 55-term residual is
+therefore un-sweepable, and – more importantly – MPQC’s own end-to-end
+perf-first path inherits the same wall-clock cost. Perf-first uses no CSE, so
+the cost is entirely these wasted relaxes, not per-subset canonicalization.</p>
+</section>
+</section>
+<section id="the-pruning-rule-connected-subgraph-dp">
+<h2>The pruning rule: connected-subgraph DP<a class="headerlink" href="#the-pruning-rule-connected-subgraph-dp" title="Link to this heading">¶</a></h2>
+<p>A bipartition <code class="docutils literal notranslate"><span class="pre">(lp,</span> <span class="pre">rp)</span></code> of a subset <code class="docutils literal notranslate"><span class="pre">n</span></code> is an <strong>outer product</strong> iff <code class="docutils literal notranslate"><span class="pre">lp</span></code> and
+<code class="docutils literal notranslate"><span class="pre">rp</span></code> share no index that is ever summed – i.e. no <em>contractible</em> index. Merging
+them is then a pure tensor product that only inflates rank and can never be part
+of an optimal schedule of a connected term. Sharing an index that survives to
+the result (an output/spectator index) does <strong>not</strong> save a merge: nothing is
+combined, it is still an outer product.</p>
+<p>Crucially, a merge that shares a contractible index which is summed only <em>later</em>
+(a <strong>hyperedge</strong> – an index on three-plus tensors, or on two tensors whose
+result is consumed further up) is <strong>not</strong> an outer product. It is a legitimate
+Hadamard/partial-contraction intermediate on the way to that later sum, and it
+is kept. Requiring a merge to <em>share a contractible index</em> (rather than to
+<em>sum one immediately</em>) is exactly what keeps these and removes the need for any
+whole-network fallback (see below).</p>
+<p>Model the tensors as a graph with an edge between two tensors iff they share a
+contractible index (adjacency below). Then:</p>
+<ol class="arabic simple">
+<li><p>A subset <code class="docutils literal notranslate"><span class="pre">n</span></code> is <strong>connected</strong> iff the subgraph induced on its tensors is
+connected. A connected subset can always be assembled by allowed merges
+(grow it one tensor at a time; connectivity guarantees each addition shares a
+contractible index with the current group). A <strong>disconnected</strong> subset can
+only be formed by an outer product across its components – never wanted.</p></li>
+<li><p>The optimal contraction tree of a connected network is built entirely from
+connected subsets: its root split <code class="docutils literal notranslate"><span class="pre">(lp,</span> <span class="pre">rp)</span></code> has both parts connected (a
+disconnected part would itself need an internal outer product), recursively.</p></li>
+</ol>
+<p>The rule follows:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// precompute</span>
+<span class="n">connected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">connected_subsets</span><span class="p">(</span><span class="n">adjacency</span><span class="p">,</span><span class="w"> </span><span class="n">nt</span><span class="p">);</span><span class="w">   </span><span class="c1">// vector&lt;char&gt;, size 2^nt</span>
+<span class="kt">bool</span><span class="w"> </span><span class="n">full_connected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">connected</span><span class="p">[(</span><span class="mi">1u</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">nt</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">];</span>
+
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">st</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">popcount</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">leaf</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">);</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">full_connected</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">connected</span><span class="p">[</span><span class="n">n</span><span class="p">])</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w">   </span><span class="c1">// never form a disconnected subset</span>
+<span class="w">  </span><span class="k">typename</span><span class="w"> </span><span class="nc">Model</span><span class="o">::</span><span class="n">State</span><span class="w"> </span><span class="n">acc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">[</span><span class="n">lp</span><span class="p">,</span><span class="w"> </span><span class="n">rp</span><span class="p">]</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">bits</span><span class="o">::</span><span class="n">bipartitions</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">rp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">        </span><span class="p">(</span><span class="o">!</span><span class="n">full_connected</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="n">connected</span><span class="p">[</span><span class="n">lp</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">connected</span><span class="p">[</span><span class="n">rp</span><span class="p">])))</span>
+<span class="w">      </span><span class="n">m</span><span class="p">.</span><span class="n">relax</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">lp</span><span class="p">,</span><span class="w"> </span><span class="n">rp</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">lp</span><span class="p">],</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">rp</span><span class="p">],</span><span class="w"> </span><span class="n">acc</span><span class="p">);</span>
+<span class="w">  </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">acc</span><span class="p">);</span>
+<span class="w">  </span><span class="n">m</span><span class="p">.</span><span class="n">finalize</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>When the full network is connected (<code class="docutils literal notranslate"><span class="pre">full_connected</span></code>, the only case that arises
+for CC – see “Product terms” below), disconnected subsets are skipped entirely
+(no <code class="docutils literal notranslate"><span class="pre">init</span></code>/<code class="docutils literal notranslate"><span class="pre">relax</span></code>/<code class="docutils literal notranslate"><span class="pre">finalize</span></code> – they pay nothing), and a connected subset is
+relaxed only through bipartitions whose <strong>both</strong> children are connected, so its
+skipped disconnected neighbours are never read as children. When the full
+network is <em>not</em> connected, the guards are inert and the loop is the original
+unpruned enumeration.</p>
+<section id="adjacency-share-a-contractible-non-target-index">
+<h3>Adjacency: share a contractible (non-target) index<a class="headerlink" href="#adjacency-share-a-contractible-non-target-index" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">contractible_adjacency(network,</span> <span class="pre">tidxs)</span></code>: tensors <code class="docutils literal notranslate"><span class="pre">i</span></code> and <code class="docutils literal notranslate"><span class="pre">j</span></code> are adjacent iff
+they share at least one index that is <strong>not</strong> an output/target index of the term
+(<code class="docutils literal notranslate"><span class="pre">x</span></code> with <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">not</span> <span class="pre">in</span> <span class="pre">tidxs</span></code>). Such an <code class="docutils literal notranslate"><span class="pre">x</span></code> is summed somewhere in the term – now,
+if it is private to <code class="docutils literal notranslate"><span class="pre">i,j</span></code>, or later, when the last of its carriers is contracted
+in.</p>
+<p>This is a genuine <strong>pairwise, context-independent</strong> graph. The target list is
+consulted only to <em>classify each index</em> (contractible vs. output) – a property
+of the index, not a per-merge context.</p>
+<ul class="simple">
+<li><p>A <strong>hyperedge</strong> – a contractible index on three-plus tensors – makes all its
+carriers mutually adjacent (a clique). This is what lets the DP form the
+necessary Hadamard intermediates. Example: <code class="docutils literal notranslate"><span class="pre">A{i;;r}</span> <span class="pre">B{j;;r}</span> <span class="pre">C{k;;r}</span></code> with
+targets <code class="docutils literal notranslate"><span class="pre">{i,j,k}</span></code> and <code class="docutils literal notranslate"><span class="pre">r</span></code> contractible. <code class="docutils literal notranslate"><span class="pre">r</span></code> links <code class="docutils literal notranslate"><span class="pre">A,B,C</span></code> into one component;
+the DP is free to form <code class="docutils literal notranslate"><span class="pre">AB{i,j,r}</span></code> (a Hadamard over <code class="docutils literal notranslate"><span class="pre">r</span></code>) and sum <code class="docutils literal notranslate"><span class="pre">r</span></code> when <code class="docutils literal notranslate"><span class="pre">C</span></code>
+joins. No merge here is a disconnected outer product.</p></li>
+<li><p>A <strong>spectator / output</strong> index – an external occupied index carried only as a
+composite protoindex, an aux (mu-tilde / K) index that survives to the output
+– is in <code class="docutils literal notranslate"><span class="pre">tidxs</span></code>, so it is <strong>not</strong> contractible and creates <strong>no</strong> edge. Two
+branches that share <em>only</em> the external occ <code class="docutils literal notranslate"><span class="pre">i,j</span></code> are not adjacent: their
+occ-Hadamard product is never formed early. (“Sharing batched/spectator
+indices only is still an outer product.”)</p></li>
+</ul>
+<p>Adjacency compares indices at the granularity they contract, so two tensors
+carrying different composites with the same protoindices (<code class="docutils literal notranslate"><span class="pre">a&lt;i,j&gt;</span></code> vs <code class="docutils literal notranslate"><span class="pre">b&lt;i,j&gt;</span></code>)
+are <strong>not</strong> adjacent through the shared occupied protos – those protos are
+outputs, never summed.</p>
+</section>
+<section id="precompute-index-degree-target-flag">
+<h3>Precompute: index degree + target flag<a class="headerlink" href="#precompute-index-degree-target-flag" title="Link to this heading">¶</a></h3>
+<p>One pass over all tensor slots yields, per index: its <strong>degree</strong> (number of
+slots it occupies) and whether it <strong>is a target</strong> (<code class="docutils literal notranslate"><span class="pre">in</span> <span class="pre">tidxs</span></code>). From these:</p>
+<ul class="simple">
+<li><p><strong>adjacency / classification:</strong> an index is contractible iff it is not a
+target (and degree &gt;= 2, i.e. actually shared). <code class="docutils literal notranslate"><span class="pre">contractible_adjacency</span></code> and
+the component union-find are built directly from the per-index carrier lists.</p></li>
+<li><p><strong>open-set membership in O(1):</strong> index <code class="docutils literal notranslate"><span class="pre">x</span></code> is <em>excluded from</em> <code class="docutils literal notranslate"><span class="pre">open[n]</span></code> (i.e.
+summed / internal to <code class="docutils literal notranslate"><span class="pre">n</span></code>) iff <code class="docutils literal notranslate"><span class="pre">x</span></code> is not a target <strong>and</strong> all <code class="docutils literal notranslate"><span class="pre">degree(x)</span></code> of
+its slots lie in <code class="docutils literal notranslate"><span class="pre">n</span></code>. The memorized degree is exactly what decides “is it
+internal yet?” for hyperedges without rescanning; targets are always open.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">connected_subsets(adjacency,</span> <span class="pre">nt)</span></code> then fills <code class="docutils literal notranslate"><span class="pre">connected[n]</span></code> for all <code class="docutils literal notranslate"><span class="pre">2^nt</span></code>
+subsets of a component by a BFS/union-find over the induced subgraph. Cost is
+<code class="docutils literal notranslate"><span class="pre">O(2^nt</span> <span class="pre">*</span> <span class="pre">nt^2)</span></code> (n=13: ~1.4M boolean ops), negligible against the DP it guards.
+It is computed <strong>once per component</strong> and shared by every consumer (it depends
+only on <code class="docutils literal notranslate"><span class="pre">network</span></code> and <code class="docutils literal notranslate"><span class="pre">tidxs</span></code>): built in the <code class="docutils literal notranslate"><span class="pre">run_single_term_opt</span></code> /
+<code class="docutils literal notranslate"><span class="pre">run_single_term_opt_axes</span></code> entry points and handed to both <code class="docutils literal notranslate"><span class="pre">build_context</span></code> (CSE
+metadata) and <code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code> (relax loop).</p>
+</section>
+<section id="product-terms-detected-up-front-pruning-simply-disabled">
+<h3>Product terms: detected up front, pruning simply disabled<a class="headerlink" href="#product-terms-detected-up-front-pruning-simply-disabled" title="Link to this heading">¶</a></h3>
+<p>Whether a term is a single connected network or a product of several components
+is read off <code class="docutils literal notranslate"><span class="pre">connected[(1&lt;&lt;nt)-1]</span></code> – i.e. up front, not by filling the <code class="docutils literal notranslate"><span class="pre">2^nt</span></code>
+table and discovering a dead end at the top.</p>
+<ul class="simple">
+<li><p><strong>One component</strong> (every CC residual summand – the linked-cluster theorem
+guarantees CC residual diagrams are connected – and every case the perf-first
+blowup comes from): <code class="docutils literal notranslate"><span class="pre">full_connected</span> <span class="pre">==</span> <span class="pre">true</span></code>, the pruned DP runs.</p></li>
+<li><p><strong>More than one component</strong> (a genuine product; does not arise for CC
+residuals): <code class="docutils literal notranslate"><span class="pre">full_connected</span> <span class="pre">==</span> <span class="pre">false</span></code>, and the guards above are inert, so the
+driver and the CSE metadata both fall back to the original unpruned
+enumeration for that term. It is correct and, because such terms do not occur
+in the target workload, its cost is irrelevant.</p></li>
+</ul>
+<p>Note this is <em>not</em> the over-pruning fallback we started from: the contractible-
+index adjacency already keeps every Hadamard/hyperedge merge, so connected terms
+(including hyperedge terms like <code class="docutils literal notranslate"><span class="pre">A{i;;r}B{j;;r}C{k;;r}</span></code>) are fully pruned with
+<strong>no</strong> fallback. Only genuinely disconnected products – which CC never produces
+– take the unpruned path, and they are recognized in <code class="docutils literal notranslate"><span class="pre">O(nt^2)</span></code> before any DP
+work. Optimizing each component separately (and combining by outer products) is
+a possible future refinement, deferred as unnecessary for the target workload.</p>
+</section>
+<section id="cse-metadata-skips-disconnected-subsets-too">
+<h3>CSE metadata skips disconnected subsets too<a class="headerlink" href="#cse-metadata-skips-disconnected-subsets-too" title="Link to this heading">¶</a></h3>
+<p>The CSE-enabled additive objectives precompute, per subset of size &gt;= 2, a
+canonical-subnet id via <code class="docutils literal notranslate"><span class="pre">build_subnet_metadata</span></code> (<code class="docutils literal notranslate"><span class="pre">single_term_detail.hpp:445</span></code>),
+which builds and bliss-canonicalizes a <code class="docutils literal notranslate"><span class="pre">TensorNetwork</span></code> for <strong>every</strong> such
+subset. A disconnected subset is an outer product the pruned DP never forms, so
+its canonical cost is <strong>never looked up</strong> – canonicalizing it is pure waste
+(a bliss-graph build is not cheap). The same pruning applies here:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">results</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">popcount</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">connected</span><span class="p">[</span><span class="n">n</span><span class="p">])</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w">            </span><span class="c1">// outer-product subset: never an intermediate</span>
+<span class="w">  </span><span class="p">...</span><span class="w"> </span><span class="n">canonicalize</span><span class="p">,</span><span class="w"> </span><span class="n">assign</span><span class="w"> </span><span class="n">meta</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="p">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Disconnected subsets keep the <code class="docutils literal notranslate"><span class="pre">numeric_limits&lt;size_t&gt;::max()</span></code> sentinel <code class="docutils literal notranslate"><span class="pre">meta_id</span></code>
+(exactly as singletons do today). <code class="docutils literal notranslate"><span class="pre">finalize</span></code> (<code class="docutils literal notranslate"><span class="pre">cost_model.hpp:204</span></code>) reads
+<code class="docutils literal notranslate"><span class="pre">ctx.meta_ids[n]</span></code> only for subsets the driver actually DPs – now connected-only
+– so no sentinel id is ever dereferenced.</p>
+</section>
+<section id="reconstruct-skips-the-unrelaxed-pruned-subsets">
+<h3>Reconstruct skips the unrelaxed (pruned) subsets<a class="headerlink" href="#reconstruct-skips-the-unrelaxed-pruned-subsets" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">AdditiveModel::reconstruct</span></code> walks <strong>every</strong> subset to rebuild the winning
+expression from the DP table’s <code class="docutils literal notranslate"><span class="pre">lp</span></code>/<code class="docutils literal notranslate"><span class="pre">rp</span></code> back-pointers. A pruned subset was
+never relaxed, so its entry keeps the <code class="docutils literal notranslate"><span class="pre">lp</span> <span class="pre">==</span> <span class="pre">0,</span> <span class="pre">rp</span> <span class="pre">==</span> <span class="pre">0</span></code> sentinel; feeding that
+to the reconstruction arithmetic aborts. The reconstruct loop therefore skips
+the same subsets the driver pruned, keyed off the sentinel rather than
+recomputing connectivity:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">popcount</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">].</span><span class="n">lp</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">].</span><span class="n">rp</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w">   </span><span class="c1">// pruned: never relaxed</span>
+<span class="w">  </span><span class="p">...</span><span class="w"> </span><span class="n">rebuild</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">].</span><span class="n">lp</span><span class="p">,</span><span class="w"> </span><span class="n">st</span><span class="p">[</span><span class="n">n</span><span class="p">].</span><span class="n">rp</span><span class="w"> </span><span class="p">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This is safe because singletons are handled earlier (the <code class="docutils literal notranslate"><span class="pre">popcount</span> <span class="pre">==</span> <span class="pre">1</span></code>
+branch), a genuinely relaxed subset always has non-zero <code class="docutils literal notranslate"><span class="pre">lp</span></code>/<code class="docutils literal notranslate"><span class="pre">rp</span></code> (bit 0 can
+never be a standalone left/right part of a &gt;= 2-bit split), and the connected
+root is always relaxed, so the final expression is always populated. The parity
+test exercises this path: the connected “star” fixture is the one term whose
+<code class="docutils literal notranslate"><span class="pre">{t,t}</span></code> subset is left unrelaxed, so a mishandled sentinel here surfaces as a
+parity mismatch.</p>
+</section>
+</section>
+<section id="correctness">
+<h2>Correctness<a class="headerlink" href="#correctness" title="Link to this heading">¶</a></h2>
+<p><strong>Loss-free for connected components (under the standard property).</strong> Every
+schedule the pruned DP removes contains a <em>disconnected</em> intermediate – an
+outer product <code class="docutils literal notranslate"><span class="pre">A(x)B</span></code> between two groups sharing no contractible index, which
+materializes the full index union of both. For the dense flop / footprint / peak
+objectives here, forming such an intermediate strictly increases both the
+intermediate size and the subsequent contraction’s flops relative to a connected
+split whenever one exists. Under this <em>no-beneficial-outer-product</em> property, the
+unpruned optimum of a connected component is built entirely from connected
+subsets through connected-child splits (statement (2)), so
+<code class="docutils literal notranslate"><span class="pre">pruned-optimal</span> <span class="pre">==</span> <span class="pre">unpruned-optimal</span></code> – identical factorization <em>and</em> cost – for
+every objective. Hadamard/partial-contraction intermediates over hyperedges are
+<strong>not</strong> removed (they share a contractible index), so nothing legitimate is lost.</p>
+<p>This is the same heuristic <code class="docutils literal notranslate"><span class="pre">opt_einsum</span></code>/<code class="docutils literal notranslate"><span class="pre">netcon</span></code> apply by default. It is not
+<em>unconditionally</em> identical to exhaustive search: there exist pathological
+networks where an outer-product intermediate lowers total cost. Those do not
+arise for the CC/DF-PNO terms this optimizer targets, and the <strong>parity test
+(below) is the empirical guarantee</strong>: it asserts pruned == unpruned on the real
+terms we rely on. A parity failure would flag a genuine outer-product-optimal
+case for reconsideration rather than silently mis-optimizing.</p>
+<p><strong>Product terms are handled by the unpruned path.</strong> A multi-component term
+(<code class="docutils literal notranslate"><span class="pre">full_connected</span> <span class="pre">==</span> <span class="pre">false</span></code>) disables the guards, so it is optimized exactly as
+today – no pruning, no change in result. Correctness there is trivially the
+status quo.</p>
+<p><strong>Scope of the change.</strong> The prune is in the shared driver, so it applies to
+every objective (<code class="docutils literal notranslate"><span class="pre">DenseFLOPs</span></code>, <code class="docutils literal notranslate"><span class="pre">DenseSize</span></code>, <code class="docutils literal notranslate"><span class="pre">DenseSpaceTime</span></code>,
+<code class="docutils literal notranslate"><span class="pre">DenseSpaceTimeBatched</span></code>, <code class="docutils literal notranslate"><span class="pre">DenseTimeSpaceBatched</span></code>) and both the sequence-only
+(<code class="docutils literal notranslate"><span class="pre">run_single_term_opt</span></code>) and axes-reporting (<code class="docutils literal notranslate"><span class="pre">run_single_term_opt_axes</span></code>) entry
+points, which share <code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code>.</p>
+</section>
+<section id="testing">
+<h2>Testing<a class="headerlink" href="#testing" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><strong>Parity (the primary gate).</strong> For a battery of existing multi-tensor test
+terms (the small optimize-test networks and a handful of real CC terms),
+assert the pruned DP returns the byte-identical optimal <code class="docutils literal notranslate"><span class="pre">EvalSequence</span></code> <strong>and</strong>
+modelled cost as the unpruned DP, for <strong>each</strong> objective. Implemented by
+running the DP twice behind a temporary “disable pruning” switch (test-only)
+and comparing. This is the correctness net for the whole change.</p></li>
+<li><p><strong>Adjacency / connectivity unit tests.</strong> <code class="docutils literal notranslate"><span class="pre">contractible_adjacency</span></code> /
+<code class="docutils literal notranslate"><span class="pre">connected_subsets</span></code> on hand-built networks: a path; a star; the
+<code class="docutils literal notranslate"><span class="pre">A{i;;r}B{j;;r}C{k;;r}</span></code> hyperedge (must be <strong>one</strong> component and the DP must
+form the <code class="docutils literal notranslate"><span class="pre">AB{i,j,r}</span></code> Hadamard intermediate); a term sharing only a spectator
+(output) index (must <strong>not</strong> create an edge); a genuine two-component product.</p></li>
+<li><p><strong>Product-term (multi-component) safety net.</strong> A deliberately disconnected
+two-component term optimizes to the same result as before the change
+(<code class="docutils literal notranslate"><span class="pre">full_connected</span> <span class="pre">==</span> <span class="pre">false</span></code> disables the guards). Confirms the unpruned path is
+intact and <code class="docutils literal notranslate"><span class="pre">connected[full]</span></code> correctly detects the product.</p></li>
+<li><p><strong>Performance.</strong> The 13-tensor C60 term that did not finish in 38 min under
+perf-first now optimizes in seconds (assert an upper bound on wall time, or
+simply that it completes within the test’s normal budget).</p></li>
+</ol>
+</section>
+<section id="results-c60-dry-run-and-the-build-context-correction">
+<h2>Results (C60 dry-run) and the build_context correction<a class="headerlink" href="#results-c60-dry-run-and-the-build-context-correction" title="Link to this heading">¶</a></h2>
+<p>Measuring the pruned DP on the real C60 term revealed that the DP-level
+subset skip (<code class="docutils literal notranslate"><span class="pre">solve_single_term</span></code>) alone was <strong>not</strong> where the wall time went.
+Two follow-on changes, landed with this PR, were needed to actually realize the
+speedup; the dry-run spike (<code class="docutils literal notranslate"><span class="pre">test_eval_dryrun.cpp</span></code>, local/uncommitted)
+quantified each.</p>
+<section id="the-dominant-cost-was-build-context-not-the-relax-loop">
+<h3>The dominant cost was <code class="docutils literal notranslate"><span class="pre">build_context</span></code>, not the relax loop<a class="headerlink" href="#the-dominant-cost-was-build-context-not-the-relax-loop" title="Link to this heading">¶</a></h3>
+<p>The motivation section above framed the waste as outer-product <em>relaxes</em>. In
+practice, for the batched objective the dominant cost is
+<code class="docutils literal notranslate"><span class="pre">build_context</span></code>: <code class="docutils literal notranslate"><span class="pre">sliced_footprints</span></code> builds <code class="docutils literal notranslate"><span class="pre">2^m</span></code> copies (one per sliced-set
+<code class="docutils literal notranslate"><span class="pre">B</span></code>) of the full <code class="docutils literal notranslate"><span class="pre">2^N</span></code>-subset footprint table, and <code class="docutils literal notranslate"><span class="pre">init_results</span></code> /
+<code class="docutils literal notranslate"><span class="pre">subset_target_indices</span></code> build the per-subset index sets for all <code class="docutils literal notranslate"><span class="pre">2^N</span></code> subsets.
+The DP-level subset skip does not touch any of this – it runs <em>after</em>
+<code class="docutils literal notranslate"><span class="pre">build_context</span></code> – so pruning alone left ~<code class="docutils literal notranslate"><span class="pre">2^N/connected</span></code> (~ 43x on term 0,
+8192 subsets vs ~190 connected) of the work in place.</p>
+<p>The fix (see <code class="docutils literal notranslate"><span class="pre">cost_model.hpp</span></code> build_contexts) threads the <code class="docutils literal notranslate"><span class="pre">connected</span></code> mask into
+<code class="docutils literal notranslate"><span class="pre">init_results</span></code> / <code class="docutils literal notranslate"><span class="pre">subset_footprints</span></code> / <code class="docutils literal notranslate"><span class="pre">sliced_footprints</span></code> so tables are built
+only for the subsets the DP will form. Because <code class="docutils literal notranslate"><span class="pre">sliced_footprints</span></code> is
+<code class="docutils literal notranslate"><span class="pre">2^m</span> <span class="pre">*</span> <span class="pre">2^N</span></code>, cutting <code class="docutils literal notranslate"><span class="pre">2^N</span></code> to the connected count also cuts the <code class="docutils literal notranslate"><span class="pre">2^m</span></code> factor –
+so the skip <strong>does</strong> attack the batched machinery’s cost, contra the initial
+expectation that pruning was orthogonal to <code class="docutils literal notranslate"><span class="pre">2^m</span></code>. <code class="docutils literal notranslate"><span class="pre">open_aux</span></code> is deliberately
+left unpruned: <code class="docutils literal notranslate"><span class="pre">PeakBatchedModel::is_spectator_axis</span></code> scans it over the full
+subset lattice.</p>
+</section>
+<section id="fast-per-subset-flop-cost">
+<h3>Fast per-subset flop cost<a class="headerlink" href="#fast-per-subset-flop-cost" title="Link to this heading">¶</a></h3>
+<p>The residual per-relax cost (rebuilding a deduplicated index set and running
+range-v3 views through a <code class="docutils literal notranslate"><span class="pre">std::function</span></code> on every bipartition) is removed by
+<code class="docutils literal notranslate"><span class="pre">Context::fast_flops</span></code>, a precomputed sorted-union merge over per-subset integer
+atom IDs, bit-identical to <code class="docutils literal notranslate"><span class="pre">flops_of</span></code> by construction (gated by
+<code class="docutils literal notranslate"><span class="pre">[optimize][fast-flops-parity]</span></code>).</p>
+</section>
+<section id="measured-relwithdebinfo-faithful-c60-regime-pao-batching-on-m-7">
+<h3>Measured (RelWithDebInfo, faithful C60 regime, PAO batching on, m = 7)<a class="headerlink" href="#measured-relwithdebinfo-faithful-c60-regime-pao-batching-on-m-7" title="Link to this heading">¶</a></h3>
+<p>All configurations produce the <strong>byte-identical</strong> optimum
+(<code class="docutils literal notranslate"><span class="pre">biggest_realized</span> <span class="pre">=</span> <span class="pre">20.916354976744188</span> <span class="pre">GB</span></code> on term 0), confirming loss-free.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>term 0 configuration (fast_flops on)</p></th>
+<th class="head"><p>wall</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>unpruned (no DP skip, no build_context skip)</p></td>
+<td><p>430.4 s</p></td>
+</tr>
+<tr class="row-odd"><td><p>pruned + build_context skip</p></td>
+<td><p>2.47 s</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>That is ~174x on a single term; before these changes term 0 alone did not
+finish in 10 min. The <strong>full 55-term C60 residual</strong> now sweeps in <strong>~50 s</strong>
+(all terms complete), versus previously un-sweepable. Isolating the
+build_context skip alone (PAO off, m = 1) it is ~15x on top of the DP skip; the
+remaining gain at m = 7 comes from the <code class="docutils literal notranslate"><span class="pre">2^m</span></code> interaction above.</p>
+<p>(The remaining over-budget <em>peak-memory</em> verdicts in the sweep are a separate
+axis – node footprint vs the memory budget – addressed by external-occ forest
+batching, not by this DP-speed work.)</p>
+</section>
+</section>
+<section id="non-goals-future-work">
+<h2>Non-goals / future work<a class="headerlink" href="#non-goals-future-work" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>No change to any objective’s cost formula, selection policy, or the batched
+sliced-set (<code class="docutils literal notranslate"><span class="pre">B</span></code>/<code class="docutils literal notranslate"><span class="pre">Acand</span></code>) machinery (the build_context skip changes only
+<em>which</em> subsets’ tables are built, not their values).</p></li>
+<li><p><strong>Per-component optimization of product terms.</strong> Multi-component terms disable
+pruning (unpruned DP). Optimizing each component separately and combining by
+outer products is a possible future refinement, deferred because CC residual
+summands are always single-component (linked-cluster) so it would never run.</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Sep 3, 2026 9:46:35 AM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Outer-product (disconnected-subgraph) pruning for the single-term DP</a><ul>
+<li><a class="reference internal" href="#problem-and-motivation">Problem and motivation</a><ul>
+<li><a class="reference internal" href="#evidence">Evidence</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-pruning-rule-connected-subgraph-dp">The pruning rule: connected-subgraph DP</a><ul>
+<li><a class="reference internal" href="#adjacency-share-a-contractible-non-target-index">Adjacency: share a contractible (non-target) index</a></li>
+<li><a class="reference internal" href="#precompute-index-degree-target-flag">Precompute: index degree + target flag</a></li>
+<li><a class="reference internal" href="#product-terms-detected-up-front-pruning-simply-disabled">Product terms: detected up front, pruning simply disabled</a></li>
+<li><a class="reference internal" href="#cse-metadata-skips-disconnected-subsets-too">CSE metadata skips disconnected subsets too</a></li>
+<li><a class="reference internal" href="#reconstruct-skips-the-unrelaxed-pruned-subsets">Reconstruct skips the unrelaxed (pruned) subsets</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#correctness">Correctness</a></li>
+<li><a class="reference internal" href="#testing">Testing</a></li>
+<li><a class="reference internal" href="#results-c60-dry-run-and-the-build-context-correction">Results (C60 dry-run) and the build_context correction</a><ul>
+<li><a class="reference internal" href="#the-dominant-cost-was-build-context-not-the-relax-loop">The dominant cost was <code class="docutils literal notranslate"><span class="pre">build_context</span></code>, not the relax loop</a></li>
+<li><a class="reference internal" href="#fast-per-subset-flop-cost">Fast per-subset flop cost</a></li>
+<li><a class="reference internal" href="#measured-relwithdebinfo-faithful-c60-regime-pao-batching-on-m-7">Measured (RelWithDebInfo, faithful C60 regime, PAO batching on, m = 7)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#non-goals-future-work">Non-goals / future work</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

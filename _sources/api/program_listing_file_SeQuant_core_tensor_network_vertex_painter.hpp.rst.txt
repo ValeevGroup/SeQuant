@@ -1,0 +1,180 @@
+
+.. _program_listing_file_SeQuant_core_tensor_network_vertex_painter.hpp:
+
+Program Listing for File vertex_painter.hpp
+===========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_tensor_network_vertex_painter.hpp>` (``SeQuant/core/tensor_network/vertex_painter.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_TENSOR_NETWORK_VERTEX_PAINTER_H
+   #define SEQUANT_TENSOR_NETWORK_VERTEX_PAINTER_H
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expressions/abstract_tensor.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/tensor_network/v2.hpp>
+   
+   #include <utility>
+   #include <variant>
+   
+   namespace sequant {
+   
+   using ProtoBundle =
+       std::decay_t<decltype(std::declval<const Index &>().proto_indices())>;
+   
+   struct BraGroup {
+     explicit BraGroup(std::size_t id) : id(id) {}
+   
+     std::size_t id;
+   };
+   struct KetGroup {
+     explicit KetGroup(std::size_t id) : id(id) {}
+   
+     std::size_t id;
+   };
+   struct AuxGroup {
+     explicit AuxGroup(std::size_t id) : id(id) {}
+   
+     std::size_t id;
+   };
+   struct ColumnGroup {
+     explicit ColumnGroup(std::size_t id, std::size_t size = 1,
+                          Symmetry symmetry = Symmetry::Nonsymm)
+         : id(id), size(size), symmetry(symmetry) {}
+   
+     std::size_t id;
+     std::size_t size;
+     Symmetry symmetry;
+   };
+   
+   class VertexPainterImpl {
+    public:
+     using Color = tensor_network::VertexColor;
+     using NamedIndexSet = tensor_network::NamedIndexSet;
+     using VertexData =
+         std::variant<const AbstractTensor *, Index, const ProtoBundle *, BraGroup,
+                      KetGroup, AuxGroup, ColumnGroup>;
+     using ColorMap = container::map<Color, VertexData>;
+   
+     VertexPainterImpl(const NamedIndexSet &named_indices,
+                       bool distinct_named_indices = true);
+   
+     const ColorMap &used_colors() const;
+   
+     Color operator()(const Index &idx);
+     Color operator()(const ProtoBundle &bundle);
+   
+     Color operator()(const BraGroup &group);
+     Color operator()(const KetGroup &group);
+     Color operator()(const AuxGroup &group);
+     Color operator()(const ColumnGroup &group);
+   
+     void apply_shade(std::size_t shade);
+   
+     Color apply_shade(const AbstractTensor &t);
+   
+     void reset_shade();
+   
+    protected:
+     ColorMap used_colors_;
+     const NamedIndexSet &named_indices_;
+     bool distinct_named_indices_ = true;
+     std::optional<std::size_t> salt_;
+   
+     std::size_t salt() const { return salt_ ? *salt_ : default_salt; }
+   
+     // Due to the way we compute the input color, different colors might only
+     // differ by a value of 1. This is fine for the algorithmic purpose (after
+     // all, colors need only be different - by how much is irrelevant), but
+     // sometimes we'll want to use those colors as actual colors to show to a
+     // human being. In those cases, having larger differences makes it easier to
+     // recognize different colors. Therefore, we hash-combine with an
+     // arbitrarily chosen salt with the goal that this will uniformly spread out
+     // all input values and therefore increase color differences.
+     constexpr static std::size_t default_salt = 0x43d2c59cb15b73f0;
+   
+     // combines hashes, injecting salt between first and second hashes
+     std::size_t to_hash_value(
+         std::initializer_list<std::size_t> hash_values) const;
+   
+   
+     std::size_t to_hash_value(const AbstractTensor &tensor) const;
+   
+     Color to_color(std::size_t color) const;
+   
+     Color to_color(std::initializer_list<std::size_t> hash_values) const;
+   
+     template <typename T>
+     Color ensure_uniqueness(Color color, const T &val) {
+       auto it = used_colors_.find(color);
+       while (it != used_colors_.end() && !may_have_same_color(it->second, val)) {
+         // Color collision: val was computed to have the same color
+         // as another object, but these objects do not compare equal (for
+         // the purpose of color assigning).
+         // -> Need to modify color until conflict is resolved.
+         color++;
+         it = used_colors_.find(color);
+       }
+   
+       if (it == used_colors_.end()) {
+         // We have not yet seen this color before -> add it to cache
+         if constexpr (std::is_same_v<T, AbstractTensor> ||
+                       std::is_same_v<T, ProtoBundle>) {
+           used_colors_[color] = &val;
+         } else {
+           used_colors_[color] = val;
+         }
+       }
+   
+       return color;
+     }
+   
+     bool may_have_same_color(const VertexData &data,
+                              const AbstractTensor &tensor);
+     bool may_have_same_color(const VertexData &data, const BraGroup &group);
+     bool may_have_same_color(const VertexData &data, const KetGroup &group);
+     bool may_have_same_color(const VertexData &data, const AuxGroup &group);
+     bool may_have_same_color(const VertexData &data, const ColumnGroup &group);
+     bool may_have_same_color(const VertexData &data, const Index &idx);
+     bool may_have_same_color(const VertexData &data, const ProtoBundle &bundle);
+   };
+   
+   template <typename TN>
+   class VertexPainter : public VertexPainterImpl {
+    public:
+     using VertexPainterImpl::VertexPainterImpl;
+   };
+   
+   // Template specializations vor TNv1 and TNv2, which still require
+   // operator()(const AbstractTensor &) (refactoring would require changing tests
+   // as well)
+   class TensorNetworkV1;
+   class TensorNetworkV2;
+   
+   template <>
+   class VertexPainter<TensorNetworkV1> : public VertexPainterImpl {
+    public:
+     using VertexPainterImpl::VertexPainterImpl;
+   
+     using VertexPainterImpl::operator();
+   
+     VertexPainterImpl::Color operator()(const AbstractTensor &tensor) {
+       Color color = to_color(hash::value(label(tensor)));
+   
+       return ensure_uniqueness(color, tensor);
+     }
+   };
+   
+   template <>
+   class VertexPainter<TensorNetworkV2> : public VertexPainter<TensorNetworkV1> {
+    public:
+     using VertexPainter<TensorNetworkV1>::VertexPainter;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_TENSOR_NETWORK_VERTEX_PAINTER_H

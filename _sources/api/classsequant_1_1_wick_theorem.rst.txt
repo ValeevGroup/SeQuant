@@ -1,0 +1,29 @@
+.. _exhale_class_classsequant_1_1_wick_theorem:
+
+Template Class WickTheorem
+==========================
+
+- Defined in :ref:`file_SeQuant_core_wick.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_wick_theorem_1_1_nontensor_wick_state`
+- :ref:`exhale_class_classsequant_1_1_wick_theorem_1_1_stats`
+- :ref:`exhale_struct_structsequant_1_1_wick_theorem_1_1access__by`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::WickTheorem
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

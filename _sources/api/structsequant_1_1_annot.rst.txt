@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_annot:
+
+Template Struct Annot
+=====================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Annot
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

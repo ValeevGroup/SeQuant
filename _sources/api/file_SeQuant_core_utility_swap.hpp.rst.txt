@@ -1,0 +1,91 @@
+
+.. _file_SeQuant_core_utility_swap.hpp:
+
+File swap.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/swap.hpp``)
+----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_swap.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``atomic`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_swap_counter`
+
+- :ref:`exhale_class_classsequant_1_1_swap_countable`
+
+- :ref:`exhale_class_classsequant_1_1_swap_countable_ref`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a6c126d28102f914490a9f0a370f8bfa0`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a2c97759fbfac3617e06077487324f528`
+
+- :ref:`exhale_function_namespacesequant_1a5932badad5fd28ad43c6bede9349c780`
+
+- :ref:`exhale_function_namespacesequant_1aa9cc423ac0dc6c792f34030f10e77050`
+
+- :ref:`exhale_function_namespacesequant_1a6a0cc04d98310f257e9db9f9e7f20ba0`
+
+- :ref:`exhale_function_namespacesequant_1ac7deeccd0c79f0bee84caad38cd8cb8b`
+
+- :ref:`exhale_function_namespacesequant_1a63c3e6ca6ca5a90217cf4543c5b69ea0`
+
+- :ref:`exhale_function_namespacesequant_1ad05cdbcfe9f11d10525a67cdaa9abbfc`
+

@@ -1,0 +1,14 @@
+.. _exhale_define_strong_8hpp_1a847f24bbcb3f34e1404593242b2ed7c1:
+
+Define DEFINE_STRONG_TYPE_FOR_INTEGER
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_strong.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: DEFINE_STRONG_TYPE_FOR_INTEGER
+   :project: SeQuant

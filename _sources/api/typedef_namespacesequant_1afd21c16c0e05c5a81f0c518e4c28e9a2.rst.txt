@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1afd21c16c0e05c5a81f0c518e4c28e9a2:
+
+Typedef sequant::BOp
+====================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::BOp
+   :project: SeQuant

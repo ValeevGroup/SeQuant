@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a1969e5cc033752b79c72e442df9d166d:
+
+Function sequant::opt::clusters(Sum const&, container::vector<FullBinaryNode<EvalExpr>> const&)
+===============================================================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_sum.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::clusters(Sum const&, container::vector<FullBinaryNode<EvalExpr>> const&)
+   :project: SeQuant

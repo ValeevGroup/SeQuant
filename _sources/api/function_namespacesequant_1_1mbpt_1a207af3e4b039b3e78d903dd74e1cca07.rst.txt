@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a207af3e4b039b3e78d903dd74e1cca07:
+
+Function sequant::mbpt::make_space
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::make_space(const IndexSpace::Type&)
+   :project: SeQuant

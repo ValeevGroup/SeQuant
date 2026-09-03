@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a40cd8000e0c301c7ef21afd6ec0f3ac5:
+
+Function sequant::assert_failed
+===============================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::assert_failed(const std::string&, const std::source_location)
+   :project: SeQuant

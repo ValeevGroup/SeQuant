@@ -1,0 +1,31 @@
+
+.. _program_listing_file_SeQuant_version.cpp:
+
+Program Listing for File version.cpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_version.cpp>` (``SeQuant/version.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 10/14/22.
+   //
+   
+   #include <SeQuant/version.hpp>
+   
+   namespace sequant {
+   
+   const char* git_revision() noexcept {
+     static const char revision[] = SEQUANT_GIT_REVISION;
+     return revision;
+   }
+   
+   const char* git_description() noexcept {
+     static const char description[] = SEQUANT_GIT_DESCRIPTION;
+     return description;
+   }
+   
+   }  // namespace sequant
