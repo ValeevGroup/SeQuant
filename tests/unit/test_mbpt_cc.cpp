@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
@@ -281,7 +282,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     // ... and the ansatz must be unitary
     REQUIRE_THROWS_AS(CC(2).eom_r(nₚ(2), nₕ(2), quccsd), Exception);
 
-    // Public API contract: under Bernoulli these are the same blocked request.
+    // Public API contract: under Bernoulli these are the same projected-H̄
+    // request.
     // Check both returned manifolds; this does not claim BCH equivalence, since
     // no matrix takes the commutator path instead.
     const auto uniform = cc.eom_r(nₚ(2), nₕ(2));
@@ -308,17 +310,34 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     }
   }  // SECTION("energy")
 
-  SECTION("hbar_comm_rank") {
+  SECTION("with") {
     const auto N = 2;
-    REQUIRE(CC(N, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2})
-                .hbar_comm_rank() == 2);
+    const CC::Options opts{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
+    auto bch2 = CC(N, opts);
+    auto bch3 = bch2.with([](auto& o) { o.hbar_comm_rank = 3; });
+    REQUIRE(bch2.hbar_comm_rank() == 2);
+    REQUIRE(bch3.hbar_comm_rank() == 3);
+    REQUIRE(
+        bch2.with([](auto& o) { o.ansatz = CC::Ansatz::oU; }).skip_singles());
     // rank 0 is a valid truncation (H̄ = H); only CC::λ rejects it, since it
     // derives at rank - 1
     REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U}), Exception);
+    REQUIRE(bch2.with([](auto& o) { o.hbar_comm_rank = 0; }).hbar_comm_rank() ==
+            0);
+    REQUIRE_THROWS_AS(bch2.with([](auto& o) {
+      o.ansatz = CC::Ansatz::oU;
+      o.skip_singles = false;
+    }),
+                      Exception);
+    REQUIRE_THROWS_AS(CC(N, {.ansatz = CC::Ansatz::U,
+                             .hbar_comm_rank = 2,
+                             .hbar_singles_comm_rank = 1,
+                             .hbar_expansion = CC::HbarExpansion::Bernoulli}),
+                      Exception);
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
     }
-  }  // SECTION("hbar_comm_rank")
+  }  // SECTION("with")
 
   SECTION("rdm") {
     constexpr auto N = 2;
@@ -410,6 +429,44 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     }
   }  // SECTION("rdm")
 
+  SECTION("extra singles commutators") {
+    // hbar_singles_comm_rank wraps H̄_R with a factored t1 similarity transform
+    // to order K:  H̄ = Σ_a (1/a!) [H̄_R, t1−t1†]_a.
+    const auto N = 2;
+    const CC::Options base{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
+    const auto hbar_R = CC(N, base).hbar();  // K unset == the R=2 baseline
+
+    // anti-Hermitian singles generator σ1 = t1 − t1†
+    const auto sigma1 = op::t(1) - adjoint(op::t(1));
+    // commutator built independently of mbpt::lst (plain expression arithmetic)
+    const auto comm = [](const ExprPtr& A, const ExprPtr& B) {
+      auto r = A * B - B * A;
+      simplify(r);
+      return r;
+    };
+
+    SECTION("K=1: extra term is exactly [H̄_R, σ1]") {
+      CC::Options k1 = base;
+      k1.hbar_singles_comm_rank = 1;
+      const auto hbar_k1 = CC(N, k1).hbar();
+
+      // the wrap genuinely adds terms not present in the baseline
+      const auto extra = comm(hbar_R, sigma1);
+      REQUIRE(size(extra) > 0);
+
+      REQUIRE_THAT(hbar_k1, EquivalentTo(hbar_R + extra));
+    }
+
+    SECTION("K=2: increment is (1/2!)[[H̄_R, σ1], σ1]") {
+      CC::Options k2 = base;
+      k2.hbar_singles_comm_rank = 2;
+      const auto expected =
+          hbar_R + comm(hbar_R, sigma1) +
+          ex<Constant>(rational{1, 2}) * comm(comm(hbar_R, sigma1), sigma1);
+      REQUIRE_THAT(CC(N, k2).hbar(), EquivalentTo(expected));
+    }
+  }  // SECTION("extra singles commutators")
+
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};
   SECTION("EE-EOM-CCSD R") {
@@ -440,6 +497,45 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(eqs[0]) == 9);
     REQUIRE(size(eqs[1]) == 32);
+  }
+
+  SECTION("EOM assembly") {
+    const auto tcc = CC{2};
+    const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
+    const auto ee_np = nₚ(2);
+    const auto ee_nh = nₕ(2);
+    const std::vector<std::size_t> uniform_ranks = {2, 2, 2, 2};
+
+    REQUIRE_THAT(
+        tcc.eom_r(ee_np, ee_nh, {}, CC::UCCEOMAssembly::Commutator).at(2),
+        EquivalentTo(tcc.eom_r(ee_np, ee_nh).at(2)));
+    REQUIRE_THROWS_AS(
+        tcc.eom_r(ee_np, ee_nh, {}, CC::UCCEOMAssembly::ProjectedHbar),
+        Exception);
+
+    const auto ucc_commutator =
+        ucc.eom_r(ee_np, ee_nh, uniform_ranks, CC::UCCEOMAssembly::Commutator);
+    const auto ucc_projected = ucc.eom_r(ee_np, ee_nh, uniform_ranks,
+                                         CC::UCCEOMAssembly::ProjectedHbar);
+    REQUIRE_THAT(ucc_commutator.at(2),
+                 EquivalentTo(ucc.eom_r(ee_np, ee_nh).at(2)));
+    REQUIRE_THAT(ucc_projected.at(2),
+                 EquivalentTo(ucc.eom_r(ee_np, ee_nh, uniform_ranks).at(2)));
+    REQUIRE_THAT(ucc_commutator.at(2), !EquivalentTo(ucc_projected.at(2)));
+
+    // An asymmetric matrix pins the row-major mapping: lowering only H_SD
+    // changes the singles bra row, not the doubles row.
+    const auto ucc_row_mixed =
+        ucc.eom_r(ee_np, ee_nh, {2, 1, 2, 2}, CC::UCCEOMAssembly::Commutator);
+    REQUIRE_THAT(ucc_row_mixed.at(1), !EquivalentTo(ucc_commutator.at(1)));
+    REQUIRE_THAT(ucc_row_mixed.at(2), EquivalentTo(ucc_commutator.at(2)));
+
+    const auto bern = CC(2, {.ansatz = CC::Ansatz::U,
+                             .hbar_comm_rank = 2,
+                             .hbar_expansion = CC::HbarExpansion::Bernoulli});
+    REQUIRE_THROWS_AS(
+        bern.eom_r(nₚ(1), nₕ(1), {}, CC::UCCEOMAssembly::Commutator),
+        Exception);
   }
 
   SECTION("EE-EOM-CCSD L") {
@@ -485,7 +581,8 @@ SECTION("ucc") {
       for (auto k = 0; k <= N; ++k) {
         REQUIRE(t_eqs[k]);
       }
-      // these are numerically verified against http://arxiv.org/abs/2503.00617
+      // these are numerically verified against
+      // http://arxiv.org/abs/2503.00617
       const auto energy_nterms = size(t_eqs[0]);
       if (c == 2) REQUIRE(energy_nterms == 20);
       if (c == 3) REQUIRE(energy_nterms == 74);

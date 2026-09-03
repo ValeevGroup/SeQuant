@@ -78,10 +78,15 @@ Equation-of-Motion Coupled-Cluster
 
 .. code-block:: cpp
 
-   std::vector<ExprPtr> eom_r(nₚ np, nₕ nh);
+   std::vector<ExprPtr> eom_r(
+       nₚ np, nₕ nh,
+       const std::vector<std::size_t>& block_ranks = {},
+       std::optional<UCCEOMAssembly> assembly = std::nullopt);
    std::vector<ExprPtr> eom_l(nₚ np, nₕ nh);
 
-Derives equation-of-motion coupled-cluster (EOM-CC) equations for excited states. The ``eom_r`` method generates equations for the right eigenvectors, while ``eom_l`` generates equations for the left eigenvectors.
+Derives equation-of-motion coupled-cluster (EOM-CC) equations for excited states. The ``eom_r`` method generates equations for the right eigenvectors, while ``eom_l`` generates equations for the left eigenvectors. Traditional CC always uses the connected H̄R product. For UCC, passing ``CC::UCCEOMAssembly::Commutator`` or ``CC::UCCEOMAssembly::ProjectedHbar`` explicitly selects the right-hand assembly. Without that argument, a Bernoulli expansion or non-empty ``block_ranks`` selects projected-H̄ assembly; otherwise, a BCH expansion selects commutator assembly.
+
+For UCC, the optional ``block_ranks`` argument gives the per-block truncation orders as a row-major matrix over the EOM manifolds: nested-commutator order for BCH and :math:`\bar{H}^{k}` order for Bernoulli. Traditional CC does not support block ranks or projected-H̄ assembly; Bernoulli does not support commutator assembly.
 
 Examples
 --------
@@ -137,6 +142,8 @@ The similarity-transformed Hamiltonian is built by ``mbpt::lst``, see :ref:`mbpt
    :end-before: end-snippet-4
    :dedent: 2
 
+For BCH expansions, ``Options::hbar_singles_comm_rank`` applies an additional singles-only similarity transform after the primary expansion. Unitary ansätze use :math:`\sigma_1 = T_1 - T_1^\dagger`, while non-unitary ansätze use :math:`T_1`. A zero rank disables this transform; Bernoulli expansions reject a positive rank.
+
 .. _cc-hbar-connectivity:
 
 Using :math:`\bar{H}` outside the CC class
@@ -156,9 +163,11 @@ Using :math:`\bar{H}` outside the CC class
    // WRONG: empty connectivity keeps terms the commutator would have cancelled
    auto bad = op::ref_av(op::P(nₚ(2)) * cc.hbar(), {.connect = {}});
 
-   // also correct: ask lst for the explicit commutator form, which needs
-   // no connectivity
+   // also correct when no additional singles transform is configured: ask lst
+   // for the explicit commutator form, which needs no connectivity
    auto hbar = lst(op::H(), op::T(2), 4);
+
+When ``hbar_singles_comm_rank`` is positive, reproducing a non-unitary :math:`\bar{H}` explicitly requires a second ``lst`` call for the configured singles transform.
 
 Note that ``op::ref_av(expr)`` and ``op::ref_av(expr, {})`` are *not* the same call: the connectivity defaults to ``default_op_connections()`` only when the argument is omitted entirely, since ``EVOptions::connect`` is itself empty by default.
 

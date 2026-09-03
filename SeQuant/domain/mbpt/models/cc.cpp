@@ -37,59 +37,69 @@ namespace sequant::mbpt {
 
 CC::CC(size_t n) : CC(n, Options{}) {}
 
-CC::CC(size_t n, const Options& opts)
-    : N(n),
-      ansatz_(opts.ansatz),
-      skip_singles_(opts.skip_singles.value_or(ansatz_ == Ansatz::oT ||
-                                               ansatz_ == Ansatz::oU)),
-      screen_(opts.screen),
-      use_topology_(opts.use_topology),
-      hbar_comm_rank_(opts.hbar_comm_rank),
-      pertbar_comm_rank_(opts.pertbar_comm_rank),
-      hbar_expansion_(opts.hbar_expansion) {
-  if (hbar_expansion_ == HbarExpansion::Bernoulli && ansatz_ != Ansatz::U)
+CC::CC(size_t n, const Options& opts) : N(n), opts_(opts) {
+  if (opts_.hbar_expansion == HbarExpansion::Bernoulli &&
+      opts_.ansatz != Ansatz::U)
     throw Exception("CC: Bernoulli expansion requires the U ansatz");
-  if (unitary() && !hbar_comm_rank_)
+  if (opts_.hbar_expansion == HbarExpansion::Bernoulli &&
+      opts_.hbar_singles_comm_rank > 0)
+    throw Exception(
+        "CC: hbar_singles_comm_rank is not supported with Bernoulli");
+  if (unitary() && !opts_.hbar_comm_rank)
     throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
-  if (ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU)
-    SEQUANT_ASSERT(skip_singles_,
-                   "CC: skip_singles must be true for orbital-optimized "
-                   "ansatz");
+  if ((opts_.ansatz == Ansatz::oT || opts_.ansatz == Ansatz::oU) &&
+      !skip_singles())
+    throw Exception(
+        "CC: skip_singles must be true for orbital-optimized ansatz");
 }
 
-CC::Ansatz CC::ansatz() const { return ansatz_; }
+CC::Ansatz CC::ansatz() const { return opts_.ansatz; }
 
 bool CC::unitary() const {
-  return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
+  return opts_.ansatz == Ansatz::U || opts_.ansatz == Ansatz::oU;
 }
 
-std::optional<size_t> CC::hbar_comm_rank() const { return hbar_comm_rank_; }
+std::optional<size_t> CC::hbar_comm_rank() const {
+  return opts_.hbar_comm_rank;
+}
 
-CC::HbarExpansion CC::hbar_expansion() const { return hbar_expansion_; }
+CC::HbarExpansion CC::hbar_expansion() const { return opts_.hbar_expansion; }
 
-bool CC::skip_singles() const { return skip_singles_; }
+bool CC::skip_singles() const {
+  return opts_.skip_singles.value_or(opts_.ansatz == Ansatz::oT ||
+                                     opts_.ansatz == Ansatz::oU);
+}
 
-bool CC::screen() const { return screen_; }
+bool CC::screen() const { return opts_.screen; }
 
-bool CC::use_topology() const { return use_topology_; }
+bool CC::use_topology() const { return opts_.use_topology; }
 
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
-  const auto truncation = truncation_rank.value_or(hbar_comm_rank_.value_or(4));
+  const auto truncation =
+      truncation_rank.value_or(opts_.hbar_comm_rank.value_or(4));
 
-  if (hbar_expansion_ == HbarExpansion::Bernoulli)
+  if (opts_.hbar_expansion == HbarExpansion::Bernoulli)
     return bernoulli::hbar(N, truncation, skip_singles());
 
   // for a non-unitary ansatz this is the cheaper connected-product form, which
   // is only equivalent to the commutator once the caller supplies operator
   // connectivity to ref_av (see lst_options() and the @warning on hbar())
-  return mbpt::lst(H(), T(N, skip_singles()), truncation, lst_options());
+  auto result = mbpt::lst(H(), T(N, skip_singles()), truncation, lst_options());
+
+  // Apply the optional singles-only transform after the primary BCH series.
+  if (opts_.hbar_singles_comm_rank > 0) {
+    auto opts = lst_options();
+    opts.skip_clone = true;
+    result = mbpt::lst(result, op::t(1), opts_.hbar_singles_comm_rank, opts);
+  }
+  return result;
 }
 
 ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
   // Bernoulli: the hbar expansion is at tensor level, call the tensor level
   // ref_av directly. No connectivity or screening.
-  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
-    const auto erank = comm_rank.value_or(hbar_comm_rank_.value());
+  if (opts_.hbar_expansion == HbarExpansion::Bernoulli) {
+    const auto erank = comm_rank.value_or(opts_.hbar_comm_rank.value());
     return op::tensor::ref_av(this->hbar(erank));
   }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
@@ -106,7 +116,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
 
   // Bernoulli: the hbar expansion is at tensor level, project and call the
   // tensor level ref_av directly.
-  if (hbar_expansion_ == HbarExpansion::Bernoulli) {
+  if (opts_.hbar_expansion == HbarExpansion::Bernoulli) {
     const auto hbar = this->hbar();
     std::vector<ExprPtr> result(pmax + 1);
     for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
@@ -134,7 +144,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     std::shared_ptr<Sum>
         hbar_le_p;  // keeps products that can produce excitations rank <=p
 
-    if (screen_) {  // if operator level screening is on
+    if (opts_.screen) {  // if operator level screening is on
       for (auto& term : *hbar) {
         SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
         if (raises_vacuum_up_to_rank(term, p)) {
@@ -168,7 +178,7 @@ std::vector<ExprPtr> CC::λ() const {
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λ for unitary ansatz");
 
   // construct hbar
-  const auto commutator_rank = hbar_comm_rank_.value_or(4);
+  const auto commutator_rank = opts_.hbar_comm_rank.value_or(4);
   SEQUANT_ASSERT(commutator_rank >= 1, "CC::λ: hbar_comm_rank must be >= 1");
   auto hbar = this->hbar(commutator_rank -
                          1);  // -1 because of the connection with the projector
@@ -201,8 +211,8 @@ std::vector<ExprPtr> CC::λ() const {
     std::shared_ptr<Sum>
         lhbar_for_vev;  // keeps products that can produce non-zero VEV
     std::shared_ptr<Sum>
-        lhbar_le_p;  // keeps products that can produce excitations rank <=p
-    if (screen_) {   // if operator level screening is enabled
+        lhbar_le_p;      // keeps products that can produce excitations rank <=p
+    if (opts_.screen) {  // if operator level screening is enabled
       for (auto& term : *lhbar) {  // pick terms from lhbar
         SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
 
@@ -233,7 +243,7 @@ std::vector<ExprPtr> CC::λ() const {
 }
 
 ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
-  SEQUANT_ASSERT(hbar_expansion_ != HbarExpansion::Bernoulli,
+  SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::rdm: the Bernoulli expansion is not supported yet");
 
   // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
@@ -251,7 +261,7 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // connected-product form; the {ã,t} connectivity handed to ref_av below is
   // what makes it equivalent to the explicit commutator.
   const auto commutator_rank = comm_rank.value_or(
-      unitary() ? hbar_comm_rank_.value() : std::min(2 * rank, rank + N));
+      unitary() ? opts_.hbar_comm_rank.value() : std::min(2 * rank, rank + N));
   auto bar =
       mbpt::lst(replacer, T(N, skip_singles()), commutator_rank, lst_options());
 
@@ -275,22 +285,23 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
   if (unitary())
-    SEQUANT_ASSERT(pertbar_comm_rank_,
+    SEQUANT_ASSERT(opts_.pertbar_comm_rank,
                    "pertbar_comm_rank must be specified for unitary ansatz");
-  SEQUANT_ASSERT(hbar_expansion_ != HbarExpansion::Bernoulli,
+  SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::tʼ: the Bernoulli expansion is not supported yet");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
   // for two-body perturbation operator; unless specified otherwise
   const auto h1_truncate_default = rank == 1 ? 2 : 4;
-  const auto h1_truncate_at = pertbar_comm_rank_.value_or(h1_truncate_default);
+  const auto h1_truncate_at =
+      opts_.pertbar_comm_rank.value_or(h1_truncate_default);
   const auto h1_bar =
       mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
                 T(N, skip_singles()), h1_truncate_at, lst_options());
 
   // construct [hbar, Tʼ(1)]
-  const auto hbar_truncate_at = hbar_comm_rank_.value_or(
+  const auto hbar_truncate_at = opts_.hbar_comm_rank.value_or(
       3);  // notice 3 instead of 4 here, this is because of the commutator with
            // T'(1). In case 4 is used, it will generate more terms but they
            // will not contribute.
@@ -337,7 +348,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
                  "sequant::mbpt::CC::λʼ(): only one-body perturbation "
                  "operator is supported now");
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λʼ for unitary ansatz");
-  SEQUANT_ASSERT(ansatz_ == Ansatz::T,
+  SEQUANT_ASSERT(opts_.ansatz == Ansatz::T,
                  "CC::λʼ: only traditional ansatz is supported");
 
   // construct hbar
@@ -346,8 +357,8 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
   // for two-body perturbation operator; unless specified otherwise
-  const auto h1_truncate_at = (rank == 1) ? pertbar_comm_rank_.value_or(2)
-                                          : pertbar_comm_rank_.value_or(4);
+  const auto h1_truncate_at = (rank == 1) ? opts_.pertbar_comm_rank.value_or(2)
+                                          : opts_.pertbar_comm_rank.value_or(4);
   // connected form (this path is non-unitary, see the assert above); the
   // op_connect built below is a superset of default_op_connections() and so
   // supplies the connectivity that makes it equivalent to the commutator
@@ -411,26 +422,39 @@ container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
 }
 }  // namespace
 
-// Per-block-truncated EOM sigma equations. For the qUCCSD ranks see
+// UCC EOM sigma equations. For the qUCCSD ranks see
 // 10.1063/5.0062090 Sec. II C, Eqs. (29)-(48); for IP/EA,
 // 10.1021/acs.jctc.5c01991 Fig. 1.
 //
 // Eq. (10) splits the single physical E_gr from the normal-ordered components
-// that build the blocks of Eq. (7). Each cumulative H̄^(k) used below still
-// carries its rank-dependent scalar part, so remove that same scalar on the
-// diagonal before assembling the separately truncated components.
-std::vector<ExprPtr> CC::eom_r_blocked(
-    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
-  if (!unitary())
-    throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
+// that build the blocks of Eq. (7). In projected-H̄ UCC assembly, each
+// cumulative H̄^(k) still carries its rank-dependent scalar part, so remove
+// that same scalar on the diagonal.
+std::vector<ExprPtr> CC::assemble_ucc_eom(
+    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks,
+    UCCEOMAssembly assembly) const {
+  if (assembly == UCCEOMAssembly::Commutator &&
+      opts_.hbar_expansion == HbarExpansion::Bernoulli)
+    throw Exception("CC::eom_r: Bernoulli requires projected Hbar assembly");
+
+  using std::min;
+  if (assembly == UCCEOMAssembly::Commutator && block_ranks.empty()) {
+    const auto hbar_R = commutator(hbar(), R(np, nh, eom_norm));
+    std::vector<ExprPtr> result(min(np, nh) + 1);
+    for (const auto& [rp, rh] : eom_manifolds(np, nh))
+      result.at(min(rp, rh)) = ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, {});
+    return result;
+  }
 
   const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();
   // `block_ranks` is read at i * K + j, so the ascending order above is what
-  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty means uniform hbar_comm_rank
+  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty means the configured H̄ rank,
+  // or the fourth commutator when no rank is configured.
   const std::vector<size_t> ranks =
-      block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
-                          : block_ranks;
+      block_ranks.empty()
+          ? std::vector<size_t>(K * K, hbar_comm_rank().value_or(4))
+          : block_ranks;
   if (ranks.size() != K * K)
     throw Exception(
         "CC::eom_r: block_ranks must be a K x K row-major matrix, "
@@ -439,7 +463,7 @@ std::vector<ExprPtr> CC::eom_r_blocked(
   // Bernoulli H̄ is tensor-level, BCH H̄ operator-level; the bra/ket/vev trio
   // below must match it. Connectivity is empty either way, as everywhere on the
   // unitary path; only the operator-level vev forwards screen/use_topology.
-  const bool tensor_level = hbar_expansion_ == HbarExpansion::Bernoulli;
+  const bool tensor_level = opts_.hbar_expansion == HbarExpansion::Bernoulli;
 
   // One H̄ per distinct truncation order, reduced to its R part (Bernoulli only;
   // BCH H̄ is operator-level and has no N/R split). The N part is the amplitude
@@ -465,11 +489,10 @@ std::vector<ExprPtr> CC::eom_r_blocked(
   auto vev = [tensor_level, this](const ExprPtr& e) {
     return tensor_level ? op::tensor::ref_av(e)
                         : op::ref_av(e, {.connect = {},
-                                         .screen = screen_,
-                                         .use_topology = use_topology_});
+                                         .screen = opts_.screen,
+                                         .use_topology = opts_.use_topology});
   };
 
-  using std::min;
   std::vector<ExprPtr> result(min(np, nh) + 1);
   for (size_t i = 0; i < K; ++i) {
     const auto [bp, bh] = manifolds[i];
@@ -479,13 +502,17 @@ std::vector<ExprPtr> CC::eom_r_blocked(
       const auto [kp, kh] = manifolds[j];
       const auto& hbar_ij = hbars.at(ranks.at(i * K + j));
       const auto ket = ket_of(kp, kh);
-      acc->append(vev(bra * hbar_ij * ket));
-      // Remove the scalar part of this block's temporary H̄^(k_ii). This is
-      // not a block-dependent physical E_gr: it leaves the normal-ordered
-      // coefficients selected for this block in Eq. (10). Written as
-      // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the block's
-      // external ones.
-      if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
+      if (assembly == UCCEOMAssembly::Commutator) {
+        acc->append(vev(bra * commutator(hbar_ij, ket)));
+      } else {
+        acc->append(vev(bra * hbar_ij * ket));
+        // Remove the scalar part of this block's temporary H̄^(k_ii). This is
+        // not a block-dependent physical E_gr: it leaves the normal-ordered
+        // coefficients selected for this block in Eq. (10). Written as
+        // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the
+        // block's external ones.
+        if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
+      }
     }
     result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc});
   }
@@ -493,44 +520,36 @@ std::vector<ExprPtr> CC::eom_r_blocked(
 }
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
-                               const std::vector<size_t>& block_ranks) const {
+                               const std::vector<size_t>& block_ranks,
+                               std::optional<UCCEOMAssembly> assembly) const {
   SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
   if (np != nh)
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
 
-  // Bernoulli always takes the blocked path: the uniform one below commutes H̄
-  // with an operator-level R, which a tensor-level H̄ cannot take part in.
-  if (!block_ranks.empty() || hbar_expansion_ == HbarExpansion::Bernoulli)
-    return eom_r_blocked(np, nh, block_ranks);
+  const auto selected_assembly = assembly.value_or(
+      (!block_ranks.empty() || opts_.hbar_expansion == HbarExpansion::Bernoulli)
+          ? UCCEOMAssembly::ProjectedHbar
+          : UCCEOMAssembly::Commutator);
+  if (unitary())
+    return assemble_ucc_eom(np, nh, block_ranks, selected_assembly);
 
-  // construct hbar
+  if (!block_ranks.empty())
+    throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
+  if (selected_assembly == UCCEOMAssembly::ProjectedHbar)
+    throw Exception(
+        "CC::eom_r: projected Hbar assembly requires a unitary ansatz");
+
   const auto hbar = this->hbar();
+  const auto hbar_R = hbar * R(np, nh, eom_norm);
+  const auto op_connect = concat(default_op_connections(),
+                                 {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
 
-  // construct [hbar, R]
-  ExprPtr hbar_R;
-  // for unitary ansatz, we need to compute the commutator [hbar, R], otherwise
-  // just hbar * R is sufficient because ref_av uses connectivity
-  if (this->unitary()) {
-    hbar_R = commutator(hbar, R(np, nh, eom_norm));
-  } else {
-    hbar_R = hbar * R(np, nh, eom_norm);
-  }
-
-  // connectivity: empty for unitary ansatz, build otherwise
-  OpConnections<std::wstring> op_connect;
-  if (!this->unitary()) {
-    // default connections + connect R with {h,f,g}
-    op_connect = concat(default_op_connections(),
-                        {{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
-  }
   using std::min;
-  std::vector<ExprPtr> result(min(np, nh) + 1);  // for EE element 0 stays null
-  // project with <rp, rh| (δl for consistent normalization) and compute VEV
+  std::vector<ExprPtr> result(min(np, nh) + 1);
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
-    result.at(min(rp, rh)) =
-        this->ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    result.at(min(rp, rh)) = ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
 
   return result;
 }
