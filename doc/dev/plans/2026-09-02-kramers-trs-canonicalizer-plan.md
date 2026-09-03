@@ -125,7 +125,7 @@ Files: `SeQuant/domain/mbpt/spinor.hpp/.cpp`, `rules/csv.cpp`, `rules/df.cpp`,
       early-returns under a folding context. No `OpMaker` change: marking
       at the trace output keeps non-Kramers hashes untouched.
 
-### Task 4b: Kramers-aware braket orientation (DONE, a62e52365)
+### Task 4b: Kramers-aware braket orientation (DONE, 0ade69912)
 
 Found by Task 6: see design §4 "Braket orientation is Kramers-aware".
 Tests: `kramers_block_fold` (orientation preference), eval leaf for a
@@ -147,7 +147,7 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
       canonical hashes of the term and its conjugate.
 - [x] Default flipped (fold on for the Kramers-CSV path, MPQC
       `MPQC_CCK_NO_KRAMERS_FOLD` opts out); `kramers_internal_rebase`
-      retired (SeQuant 574d3a4f8). Default-path dch: −1.0416902697, 10 it.
+      retired (SeQuant 159739551). Default-path dch: −1.0416902697, 10 it.
 - [x] Residual census (exact, `[cck-eqs/census]`): blocks unchanged by the
       fold (26/46/82/50/70 non-canonical leaves of 256) — each residual term
       is one component anchored to the externals; the leftover down leaves
@@ -155,17 +155,17 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
       Twin fold on the self-conjugate block: still 0/48.
 - [x] T20 (wrapped-summand eval): RESOLVED — Re/Im wrapper factors are
       transparent to the optimizer and the wrapper's inner batch axes are
-      re-keyed under the summand (9165b6f8a); dch folded energy 1.70 GB
+      re-keyed under the summand (650b9ba92); dch folded energy 1.70 GB
       peak (was 14 GB), MPQC CSV energy fold default-on.
-- [x] T19 layer 1 (28e75cf39): lazy {phase, conj, perm} views on
+- [x] T19 layer 1 (bc449ff28): lazy {phase, conj, perm} views on
       `ResultTensorTA` (TA `.conj()`/scaling are lazy expressions; flat
       tensors only — `ResultTensorOfTensorTA::apply_transform` still
       materializes one ToT copy per application).
-- [x] T19 layer 2 (1758ad78d): under `fold_kramers_eval_leaves` a
+- [x] T19 layer 2 (ad05f6ce8): under `fold_kramers_eval_leaves` a
       Kramers-noncanonical leaf stores the up-row spelling in `expr()`
       (what a provider fetches) and the as-written labels in
       `canon_indices()`; `kramers_folded()`, `denoted_spelling()`.
-      LANDMINE fixed on the way (1b77b067d, also on PR-2):
+      LANDMINE fixed on the way (7baa8bfa7, also on PR-2):
       `CanonicalizeOptions::operator==` compared only `method`, so a scoped
       context differing only in a fold flag was a silent no-op
       (`set_scoped_default_context` skips equal contexts).
@@ -212,7 +212,7 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
   provider serves) stayed as written while the retrieval transform negated
   it; 4 of 22 MP1 energy terms flipped sign. Localized by a two-tree bisect
   (MPQC pinned at 5891c30019, SeQuant PR-1 good / PR-2 bad), then a
-  per-term energy diff. Fixed in 35c79f413 (ToT leaves block-canonicalize
+  per-term energy diff. Fixed in c66a2aed2 (ToT leaves block-canonicalize
   the spelling in place and put antisymmetric bundles into the labeling's
   canonical order with the parity as the phase); mirrored on PR-2.
 - **Certification rule from now on**: HSeOH PNS-MP1 (`pnsmp1_loc1e-5.json`,
@@ -260,10 +260,10 @@ phase led to these changes:
   equality defaulted; docs on `Result::value_` (not thread-safe), `is_view`.
 - **A sum's layout is part of its slot identity.** A sum hands up its
   FIRST summand's layout, so A + B and B + A must not share a slot; the
-  prefix hashes are order-sensitive (first tried as a label salt, 68c573341,
+  prefix hashes are order-sensitive (first tried as a label salt, c196d43c7,
   which lost the sharing of relabeled sub-sums: 5208 -> 7955 distinct
   intermediates and a 20 GB cache high-water on HSeOH PNS-CCD).
-- **The denoted marker rule of 230e93b00 was wrong and is reverted**: the
+- **The denoted marker rule of 88aaacda2 was wrong and is reverted**: the
   reviewer's "take the marker out for every channel that came with a conj"
   makes a swapped Hermitian leaf denote unmarked, which is value-correct in
   isolation but removes the conj color from the PARENT network's graph;
@@ -273,7 +273,7 @@ phase led to these changes:
   changes, one build, five runs) -- the denoted spelling is an identity
   convention of the parent network, not a value statement; documented on
   `EvalExpr::denoted_expr`.
-- **apply_slot_order applies the NAMED-index canonical order** (0b5003d6d).
+- **apply_slot_order applies the NAMED-index canonical order** (4872f372e).
   The raw canonical vertex ordinals order same-color cells by the color
   hash, so a mixed-flavor antisymmetric bundle came out as `a↓,a↑` (288
   such t spellings in the HSeOH PNS-CCD trace); the PNS provider stores
@@ -285,6 +285,6 @@ phase led to these changes:
 - Deferred: lazy views for `ResultTensorOfTensorTA` (T19 layer 1 does not
   reach the PNS hot path yet); the TA `eval_with_tiledarray/real/
   summation` test fails on this branch since before these commits
-  (verified at e7354e653; PR-2's copy of the test file passes) -- the
+  (verified at 78841916f; PR-2's copy of the test file passes) -- the
   round-2 test file's NonHermitian deserialization plus the
   orientation-canonicalizing `tensor_to_key` fixture, to be reconciled.
