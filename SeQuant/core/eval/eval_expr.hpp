@@ -259,10 +259,14 @@ class EvalExpr {
   [[nodiscard]] CanonTransform canon_transform() const noexcept;
 
   /// \return For a tensor-valued node: its DENOTED spelling -- the stored
-  /// canonical spelling with the transform re-materialized syntactically
-  /// (bra<->ket swapped back, the conjugation marker restored), i.e. the tensor
-  /// whose value the leaf hands up to its parent (the phase, a scalar, is not
-  /// spelled). \pre is_tensor()
+  /// canonical spelling with the transform re-materialized syntactically:
+  /// bra<->ket swapped back when braket_swap is set and the conj bit spelled
+  /// as the conjugation marker. This is the spelling the PARENT network is
+  /// built from (the marker colors its graph); for a Hermitian leaf written
+  /// in the non-canonical orientation it is C^*{swapped}, which equals the
+  /// as-written value only through the Hermiticity the network does not use
+  /// -- an identity convention, not a value statement. The phase, a scalar,
+  /// is not spelled. \pre is_tensor()
   [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///

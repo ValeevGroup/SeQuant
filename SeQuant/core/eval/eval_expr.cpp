@@ -362,12 +362,18 @@ ExprPtr EvalExpr::denoted_expr() const {
   SEQUANT_ASSERT(is_tensor());
   auto t = expr_->as<Tensor>();
   auto const tr = canon_transform_;
-  // undo normalize_leaf's channels in reverse order: the slot swap first.
-  // The marker is what is left of the conj bit once the channel that came
-  // WITH a conj is taken out: every swap in the transform (an adjoint
-  // label, or the braket fold of a Conjugate tensor)
+  // Re-materialize the transform syntactically: the slot swap, and the conj
+  // bit spelled as the marker WHETHER OR NOT it came with the swap: a
+  // Hermitian leaf written in its non-canonical orientation denotes as
+  // C^*{swapped} -- value-equivalent to the as-written spelling only up to
+  // the Hermiticity the parent network does not see -- because the marker
+  // COLORS the parent's graph, which is what keeps mixed products such as
+  // C.C^* and C.C identity-distinct and their canonical layouts right.
+  // (Spelling the swapped Hermitian leaf unmarked was tried on 2026-09-03:
+  // it broke a PNS-CCD residual in iteration 2 -- a cached intermediate
+  // served in the wrong layout -- while the unit suites stayed green.)
   if (tr.braket_swap) static_cast<AbstractTensor&>(t)._swap_bra_ket();
-  if (tr.conj != tr.braket_swap) t.conjugate();
+  if (tr.conj) t.conjugate();
   return ex<Tensor>(std::move(t));
 }
 
@@ -424,19 +430,22 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
 }
 }  // namespace
 
-/// Prefix slot hashes of a range of summand hashes: element i is the
-/// order-insensitive hash of summands 0..i, i.e. the slot of the sum node
-/// that combines them (the left fold's i-th intermediate). Computed eagerly
-/// and sequentially -- a lazily sliced prefix view evaluated by random
-/// access saw only the summands BEFORE the last one, so A + B and A + C
-/// shared a slot (fixed 2026-09-03).
+/// Prefix slot hashes of a range of summand hashes: element i is the hash of
+/// summands 0..i IN ORDER, i.e. the slot of the sum node that combines them
+/// (the left fold's i-th intermediate). Order-sensitive on purpose: a sum
+/// hands up its FIRST summand's layout (the others are permuted into it at
+/// evaluation), so A + B and B + A are different slots -- while relabeled
+/// copies of the same ordered sum (isomorphic summands, hence isomorphic
+/// leading layouts) share one. Computed eagerly and sequentially: a lazily
+/// sliced prefix view evaluated by random access saw only the summands
+/// BEFORE the last one, so A + B and A + C shared a slot (fixed 2026-09-03).
 template <typename Rng>
 container::svector<size_t> imed_hashes(Rng const& rng) {
   container::svector<size_t> result;
   container::svector<size_t> prefix;
   for (auto&& h : rng) {
     prefix.push_back(h);
-    result.push_back(hash::range_unordered(prefix.begin(), prefix.end()));
+    result.push_back(hash::range(prefix.begin(), prefix.end()));
   }
   return result;
 }
@@ -553,23 +562,11 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   CanonTransform const sum_transform{
       .phase = static_cast<std::int8_t>(hoist_phase ? -1 : 1),
       .conj = hoist_conj};
-  // A sum's result LAYOUT is its first summand's (the others are permuted
-  // into it at evaluation), so the layout is part of the slot identity: the
-  // same summands added in another order hash the same set but hand up a
-  // differently laid-out array (a cache hit would serve the wrong mode
-  // order to the second consumer -- TA range assertions downstream)
-  std::size_t layout_salt = 0;
-  if (all_tensors)
-    for (auto const& ix : summands.front()->canon_indices())
-      hash::combine(layout_salt, hash::value(ix.full_label()));
-
   auto make_sum = [i = 0, sum_transform,     //
                    hs = imed_hashes(hvals),  //
-                   layout_salt,              //
                    all_tensors, &opts](EvalExpr const& left,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
-    if (layout_salt != 0) hash::combine(h, layout_salt);
     if (all_tensors) {
       // partition from the DENOTED orientation (stored canonical slots,
       // re-swapped per the child transform)

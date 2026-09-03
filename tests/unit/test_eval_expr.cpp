@@ -1040,8 +1040,12 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   auto const ab = sum_of(L"f{i_1;a_1}", L"g{i_1;a_1}");
   auto const ac = sum_of(L"f{i_1;a_1}", L"h{i_1;a_1}");
   auto const ba = sum_of(L"g{i_1;a_1}", L"f{i_1;a_1}");
+  auto const ab2 = sum_of(L"f{i_2;a_2}", L"g{i_2;a_2}");
   REQUIRE(ab->hash_value() != ac->hash_value());
-  REQUIRE(ab->hash_value() == ba->hash_value());
+  // order-sensitive: a sum's layout is its first summand's, so B + A is a
+  // different slot; a relabeled copy of the same ordered sum shares it
+  REQUIRE(ab->hash_value() != ba->hash_value());
+  REQUIRE(ab->hash_value() == ab2->hash_value());
   // the result layout is the FIRST summand's: the same summands in another
   // order with a different leading layout are a different slot (the cached
   // array would be served in the wrong mode order otherwise)
@@ -1067,27 +1071,27 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   REQUIRE(abc->hash_value() != abd->hash_value());
 }
 
-TEST_CASE("denoted_expr_is_the_as_written_spelling", "[eval_expr][denoted]") {
-  // the denoted spelling re-materializes the transform: for every channel
-  // that came with a conj (a braket-fold swap of a Conjugate tensor, the
-  // Kramers flip) the marker is taken OUT again, so the denoted tensor is
-  // the as-written one whose value the leaf hands up
+TEST_CASE("denoted_expr_is_the_parent_network_spelling",
+          "[eval_expr][denoted]") {
+  // the denoted spelling re-materializes the transform syntactically: the
+  // conj bit becomes the marker (it colors the parent's graph), a swap is
+  // swapped back
   using namespace sequant;
-  {
-    // flat Conjugate leaf written in the non-canonical orientation: stored
-    // swapped + {conj, swap}; denoted = as written, unmarked
-    auto const w = deserialize(L"F{i_2;i_1}:N-C-S")->as<Tensor>();
-    EvalExpr e{w};
-    if (e.canon_transform().braket_swap) {
-      REQUIRE(e.canon_transform().conj);
-      REQUIRE(e.denoted_expr()->as<Tensor>() == w);
-    }
-    // the marked spelling of the canonical orientation: stored unmarked +
-    // {conj}; denoted = as written, marked
-    auto s = deserialize(L"F{i_1;i_2}:N-C-S")->as<Tensor>();
-    s.conjugate();
-    EvalExpr es{s};
-    REQUIRE(es.canon_transform().conj);
-    REQUIRE(es.denoted_expr()->as<Tensor>() == s);
+  // flat Hermitian leaf written in the non-canonical orientation: stored
+  // swapped + {conj, swap}; denoted = swapped back AND marked
+  auto const w = deserialize(L"F{i_2;i_1}:N-C-S")->as<Tensor>();
+  EvalExpr e{w};
+  if (e.canon_transform().braket_swap) {
+    REQUIRE(e.canon_transform().conj);
+    auto w_marked = w;
+    w_marked.conjugate();
+    REQUIRE(e.denoted_expr()->as<Tensor>() == w_marked);
   }
+  // the marked spelling of the canonical orientation: stored unmarked +
+  // {conj}; denoted = as written, marked
+  auto s = deserialize(L"F{i_1;i_2}:N-C-S")->as<Tensor>();
+  s.conjugate();
+  EvalExpr es{s};
+  REQUIRE(es.canon_transform().conj);
+  REQUIRE(es.denoted_expr()->as<Tensor>() == s);
 }
