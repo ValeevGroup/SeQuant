@@ -593,7 +593,7 @@ target_link_libraries(SeQuant-symb
         SeQuant-bliss
         Threads::Threads
         libperm::libperm
-        $<BUILD_LOCAL_INTERFACE:utfcpp>
+        $<BUILD_LOCAL_INTERFACE:utf8cpp::utf8cpp>
         Eigen3::Eigen)
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant-symb PUBLIC
