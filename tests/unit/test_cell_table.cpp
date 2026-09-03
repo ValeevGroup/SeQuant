@@ -291,65 +291,194 @@ TEST_CASE(
       if (x.rule == "form") ++n_form;
     CHECK(n_form == 1);
   }
+  // a read that is BOTH bound to another instance of the group AND marked
+  // invariant on this instance: still its own "bound to another instance"
+  // violation (invariant does not suppress that), but the invariant record
+  // still keeps it out of the whole-vs-bound double count.
+  t.cells[1].sliced.push_back({0, LoopKey{1, 1}});  // b now bound to (1,1)
+  t.reads.back().invariant_on.push_back(LoopKey{1, 0});
+  {
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    std::size_t n_form = 0;
+    for (auto const& x : v)
+      if (x.rule == "form") ++n_form;
+    CHECK(n_form == 1);
+  }
 }
 
-TEST_CASE("cell table: persistent cell built inside a loop is visible at root",
-          "[cell_table]") {
+TEST_CASE(
+    "cell table: a whole Assemble is resident at root; a plain Build inside "
+    "a loop is confined to its own scope regardless of persistent",
+    "[cell_table]") {
   using namespace sequant::eval;
-  CellTable t;
-  TableCell leaf;
-  leaf.value_id = 0;
-  leaf.production.kind = ProductionKind::Leaf;
-  leaf.life = 0;
-  t.cells.push_back(leaf);  // cell 0
 
-  TableCell built;  // cell 1: built inside loop (1,0), whole (not sliced)
-  built.value_id = 1;
-  built.scope.path.push_back({LoopKey{1, 0}, 0});
-  built.production.kind = ProductionKind::Build;
-  built.produce_if_absent = true;
-  built.persistent = true;
-  built.life = 1;
-  t.cells.push_back(built);  // cell 1
-
-  TableCell root_consumer;  // cell 2: root, reads cell 1 whole
-  root_consumer.value_id = 2;
-  root_consumer.production.kind = ProductionKind::Build;
-  root_consumer.life = 0;
-  t.cells.push_back(root_consumer);  // cell 2
-
-  t.reads.push_back(
-      Read{/*consumer=*/2, /*operand_value_id=*/1, /*source=*/1, {}});
-
+  // valid: a whole Assemble (kind Assemble, bound to none of its own
+  // enclosing loops) is resident EVERYWHERE, including root, no matter how
+  // deeply nested its own scope is -- the runtime's close-store walk homes
+  // a finished block output that far out.
   {
+    CellTable t;
+    TableCell inner;  // cell 0: value 1, built inside (1,0)/(2,0), a partial
+                      // sum over the depth-2 instance (bound via
+                      // partial_over)
+    inner.value_id = 1;
+    inner.scope.path.push_back({LoopKey{1, 0}, 0});
+    inner.scope.path.push_back({LoopKey{2, 0}, 0});
+    inner.partial_over.push_back(LoopKey{2, 0});
+    inner.production.kind = ProductionKind::Build;
+    inner.life = 1;            // read once, by the Assemble
+    t.cells.push_back(inner);  // cell 0
+
+    TableCell assembled;  // cell 1: Sum-assemble at depth 1, whole (no
+                          // instances of its own bound) -- residency root
+    assembled.value_id = 1;
+    assembled.scope.path.push_back({LoopKey{1, 0}, 0});
+    assembled.production.kind = ProductionKind::Assemble;
+    assembled.production.assemble = AssembleKind::Sum;
+    assembled.production.source = 0;
+    assembled.life = 1;
+    t.cells.push_back(assembled);  // cell 1
+
+    TableCell root_consumer;  // cell 2: root, reads cell 1 (the Assemble)
+                              // whole
+    root_consumer.value_id = 2;
+    root_consumer.production.kind = ProductionKind::Build;
+    root_consumer.life = 0;
+    t.cells.push_back(root_consumer);  // cell 2
+
+    t.reads.push_back(
+        Read{/*consumer=*/2, /*operand_value_id=*/1, /*source=*/1, {}, {}});
+
     auto const v = validate_cell_table(t, ScopeBlock{});
     for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
     CHECK(v.empty());
   }
 
-  // residency is decided by bound instances alone: the SAME whole cell is
-  // resident at root even when NOT persistent (e.g. it carries a volatile
-  // leaf) -- persistent decides only survival across evaluations, not
-  // where within one evaluation a cell lives.
-  t.cells[1].persistent = false;
-  {
-    auto const v = validate_cell_table(t, ScopeBlock{});
-    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
-    CHECK(v.empty());
-  }
+  // invalid: a PLAIN Build cell (not an Assemble) at depth 1, whole, read by
+  // a root Build -- a step's value is stored in its own block's cache and
+  // dies with that block, so it is NEVER visible at root, regardless of
+  // persistent (checked both ways).
+  for (bool persistent : {false, true}) {
+    CellTable t2;
+    TableCell built;  // cell 0: plain Build inside (1,0), whole
+    built.value_id = 3;
+    built.scope.path.push_back({LoopKey{1, 0}, 0});
+    built.production.kind = ProductionKind::Build;
+    built.persistent = persistent;
+    built.life = 1;
+    t2.cells.push_back(built);  // cell 0
 
-  // flip: bound to its own (innermost) loop instead -- it dies at the end
-  // of that loop's batch, so it is NOT visible at root, regardless of
-  // persistent.
-  t.cells[1].sliced.push_back({0, LoopKey{1, 0}});
-  {
-    auto const v = validate_cell_table(t, ScopeBlock{});
+    TableCell root_consumer2;  // cell 1: root, reads cell 0 whole
+    root_consumer2.value_id = 4;
+    root_consumer2.production.kind = ProductionKind::Build;
+    root_consumer2.life = 0;
+    t2.cells.push_back(root_consumer2);  // cell 1
+
+    t2.reads.push_back(
+        Read{/*consumer=*/1, /*operand_value_id=*/3, /*source=*/0, {}, {}});
+
+    auto const v = validate_cell_table(t2, ScopeBlock{});
     std::size_t n_visibility = 0;
     for (auto const& x : v)
       if (x.rule == "visibility") ++n_visibility;
     CHECK(n_visibility == 1);
     REQUIRE(v.size() == 1);
     CHECK(v.front().rule == "visibility");
+  }
+}
+
+TEST_CASE(
+    "cell table validator: life weighs a read by the consumer's extra "
+    "batches against the SOURCE'S RESIDENCY scope, not its raw scope",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  auto const n_batches_of = [](LoopKey const& k) -> std::size_t {
+    return k.depth == 1 ? 3 : 1;
+  };
+
+  // source Build at root, consumer Build inside (1,0) reading it whole: the
+  // consumer's own loop is not on the source's (root) residency path, so
+  // the read is weighted by n_batches_of((1,0)) = 3.
+  {
+    CellTable t;
+    TableCell src;  // cell 0: value 0, Build at root
+    src.value_id = 0;
+    src.life = 3;
+    t.cells.push_back(src);  // cell 0
+    TableCell consumer;      // cell 1: value 1, Build inside (1,0), reads src
+                             // whole
+    consumer.value_id = 1;
+    consumer.scope.path.push_back({LoopKey{1, 0}, 0});
+    t.cells.push_back(consumer);  // cell 1
+    t.reads.push_back(Read{/*consumer=*/1,
+                           /*operand_value_id=*/0,
+                           /*source=*/0,
+                           {},
+                           {}});
+
+    {
+      auto const v = validate_cell_table(t, ScopeBlock{}, n_batches_of);
+      for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+      CHECK(v.empty());
+    }
+    t.cells[0].life = 1;
+    {
+      auto const v = validate_cell_table(t, ScopeBlock{}, n_batches_of);
+      std::size_t n_life = 0;
+      for (auto const& x : v)
+        if (x.rule == "life") ++n_life;
+      CHECK(n_life == 1);
+    }
+  }
+
+  // a whole Assemble at depth 1 (residency root, per the kind-based rule)
+  // read by a consumer at depth 1 inside a SIBLING nest (1,1): the
+  // consumer's loop instance is not in the Assemble's RESIDENCY path (root),
+  // even though the Assemble's own SCOPE is depth 1 -- multiplicity 3.
+  {
+    CellTable t;
+    TableCell inner;  // cell 0: value 0, partial sum over depth-2 loop
+                      // (2,0), built inside depth-1 loop (1,0)
+    inner.value_id = 0;
+    inner.scope.path.push_back({LoopKey{1, 0}, 0});
+    inner.scope.path.push_back({LoopKey{2, 0}, 0});
+    inner.partial_over.push_back(LoopKey{2, 0});
+    inner.life = 1;
+    t.cells.push_back(inner);  // cell 0
+
+    TableCell assembled;  // cell 1: Sum-assemble at depth 1, whole
+    assembled.value_id = 0;
+    assembled.scope.path.push_back({LoopKey{1, 0}, 0});
+    assembled.production.kind = ProductionKind::Assemble;
+    assembled.production.assemble = AssembleKind::Sum;
+    assembled.production.source = 0;
+    assembled.life = 3;            // one read, multiplicity 3
+    t.cells.push_back(assembled);  // cell 1
+
+    TableCell consumer;  // cell 2: value 1, Build inside sibling (1,1)
+    consumer.value_id = 1;
+    consumer.scope.path.push_back({LoopKey{1, 1}, 0});
+    t.cells.push_back(consumer);  // cell 2
+
+    t.reads.push_back(Read{/*consumer=*/2,
+                           /*operand_value_id=*/0,
+                           /*source=*/1,
+                           {},
+                           {}});
+
+    {
+      auto const v = validate_cell_table(t, ScopeBlock{}, n_batches_of);
+      for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+      CHECK(v.empty());
+    }
+    t.cells[1].life = 1;
+    {
+      auto const v = validate_cell_table(t, ScopeBlock{}, n_batches_of);
+      std::size_t n_life = 0;
+      for (auto const& x : v)
+        if (x.rule == "life") ++n_life;
+      CHECK(n_life == 1);
+    }
   }
 }
 

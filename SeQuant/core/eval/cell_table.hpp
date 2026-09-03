@@ -32,7 +32,10 @@ struct CellScope {
   container::svector<std::pair<LoopKey, int>> path;
 
   /// true iff this scope is the root or a strict/equal prefix of \p inner
-  /// (same loop instances AND same passes along the prefix).
+  /// (same loop instances AND same passes along the prefix). Compares full
+  /// (LoopKey, latitude) entries -- LAYOUT -- by design: residency and
+  /// multiplicity instead compare loop IDENTITY alone via \c same_key,
+  /// ignoring latitude.
   [[nodiscard]] bool encloses(CellScope const& inner) const noexcept {
     if (path.size() > inner.path.size()) return false;
     for (std::size_t i = 0; i < path.size(); ++i)
@@ -81,9 +84,12 @@ struct Read {
   CellId source = 0;
   /// operand positions to slice to the current batch of that loop instance.
   container::svector<std::pair<std::size_t, LoopKey>> slice;
-  /// loop instances the consumer is sliced by on which this read is
-  /// explicitly whole (the operand does not carry that loop's mode in the
-  /// consumer's frame); empty = no explicit decision.
+  /// loop instances the consumer is sliced by on which the schedule seam
+  /// (\c SlicedModeAssignment::occ_invariant) recorded an explicit fact:
+  /// an explicit record that no slicing decision bound this read on that
+  /// instance; the form rule accepts it as whole, so this table check is
+  /// necessary, not sufficient -- the dry-run range check remains the
+  /// ground truth. Empty = no such record.
   container::svector<LoopKey> invariant_on;
 };
 
@@ -127,18 +133,22 @@ namespace detail {
 }
 
 /// The scope over which a produced cell \p s remains resident, once
-/// produced: (1) if \p s is bound (\c bound_instances) to one instance of a
-/// loop that also appears in \c s.scope.path, it is resident only through
-/// that loop's current batch, i.e. through the prefix of \c s.scope.path
-/// ending at the DEEPEST such bound loop (it dies when that loop's batch
-/// ends); (2) else (\p s is bound to NONE of its enclosing loops -- a WHOLE
-/// cell, invariant to every loop on its own scope path) it is resident
-/// EVERYWHERE, i.e. the root scope: an escaping value the runtime homes out
-/// through every enclosing loop it does not carry the mode of, all the way
-/// to the chain root, regardless of whether the cell is volatile. \c
-/// persistent is a SEPARATE property (survival across evaluations, not
-/// where within one evaluation a cell lives) and is NOT consulted here.
+/// produced -- decided by \c s.production.kind, exactly three cases:
+/// (1) \c Assemble: the prefix of \c s.scope.path ending at the DEEPEST
+/// instance in \c bound_instances(s) (it dies when that loop's batch ends);
+/// the root scope (empty path) when \p s is bound to NONE of its enclosing
+/// loops -- the runtime's close-store walk homes a whole block output that
+/// far out, all the way to the chain root; (2) \c Build (plain and implicit
+/// per-batch alike): always \c s.scope itself, bound or whole -- a step's
+/// value is stored in its OWN block's cache and dies with that block, so
+/// even a whole Build cell spans only that block's batches, never further
+/// out; (3) \c Leaf: the root scope. \c persistent and \c produce_if_absent
+/// are SEPARATE properties (survival across evaluations / first-visit
+/// production, not where within one evaluation a cell lives) and are NOT
+/// consulted here.
 [[nodiscard]] inline CellScope residency_scope(TableCell const& s) {
+  if (s.production.kind == ProductionKind::Leaf) return CellScope{};
+  if (s.production.kind == ProductionKind::Build) return s.scope;
   auto const bi = bound_instances(s);
   std::size_t deepest = 0;
   bool bound = false;
@@ -159,20 +169,26 @@ namespace detail {
 
 /// Multiplicity of one read of a source cell by a consumer cell: one factor
 /// of \c max(1, n_batches_of(key)) per loop instance on the consumer's scope
-/// path that is NOT also on the source's scope path -- a consumer nested one
-/// extra loop deeper than its source re-reads that source once per batch of
-/// each such loop. The single place both the builder (life bookkeeping) and
-/// the validator (rule 4) compute this, so they never drift apart. A null \p
-/// n_batches_of (the validator's default) is treated as returning 1
-/// everywhere.
+/// path that is NOT on the source's RESIDENCY scope path (\c
+/// residency_scope(source), not its raw \c scope -- an Assemble's residency
+/// can extend past its own scope, and a read must be weighted against where
+/// the source actually still lives, not merely where it was produced) -- a
+/// consumer nested one extra (non-resident) loop deeper re-reads the source
+/// once per batch of each such loop. Takes the source \p source as a whole
+/// \c TableCell (never a bare scope) so this is the only place residency is
+/// applied to multiplicity; the single place both the builder (life
+/// bookkeeping) and the validator (rule 4) compute this, so they never
+/// drift apart. A null \p n_batches_of (the validator's default) is treated
+/// as returning 1 everywhere.
 [[nodiscard]] inline std::size_t read_multiplicity(
-    CellScope const& source_scope, CellScope const& consumer_scope,
+    TableCell const& source, CellScope const& consumer_scope,
     std::function<std::size_t(LoopKey const&)> const& n_batches_of) {
+  CellScope const source_residency = residency_scope(source);
   std::size_t mult = 1;
   for (auto const& [pk, lat] : consumer_scope.path) {
     (void)lat;
     bool in_source = false;
-    for (auto const& [sk, slat] : source_scope.path) {
+    for (auto const& [sk, slat] : source_residency.path) {
       (void)slat;
       if (same_key(sk, pk)) in_source = true;
     }
@@ -234,14 +250,16 @@ namespace detail {
 
   // (2) form: per consumer and per loop group it is sliced by, every operand
   // bound to that group must be bound to the SAME instance; an UNDECIDED
-  // whole operand (one with no explicit invariant decision) on a group that
-  // another operand is bound to is a mismatch. A read the seam explicitly
-  // marked invariant on this instance (\c Read::invariant_on, from
-  // SlicedModeAssignment::occ_invariant: the operand legitimately does not
-  // carry this loop's mode in the consumer's frame) is neither "bound" nor
-  // "whole" for this rule -- it is a THIRD, deliberate classification and
-  // never contributes to the mismatch. A read bound to another instance of
-  // the SAME group is still always its own violation, invariant or not.
+  // whole operand (one with no explicit invariant record) on a group that
+  // another operand is bound to is a mismatch. A read the seam recorded as
+  // invariant on this instance (\c Read::invariant_on, from \c
+  // SlicedModeAssignment::occ_invariant: an explicit record that no slicing
+  // decision bound this read on that instance) is neither "bound" nor
+  // "whole" for this rule -- the form rule accepts it as whole, so this
+  // check is necessary, not sufficient (the dry-run range check remains the
+  // ground truth), and it never contributes to the mismatch. A read bound
+  // to another instance of the SAME group is still always its own
+  // violation, invariant or not.
   for (CellId id = 0; id < n; ++id) {
     TableCell const& c = table.cells[id];
     if (c.production.kind != ProductionKind::Build) continue;
@@ -328,8 +346,8 @@ namespace detail {
     std::size_t reads = 0;
     for (Read const& r : table.reads)
       if (r.source == id)
-        reads += detail::read_multiplicity(
-            c.scope, table.cells[r.consumer].scope, n_batches_of);
+        reads += detail::read_multiplicity(c, table.cells[r.consumer].scope,
+                                           n_batches_of);
     for (CellId o = 0; o < n; ++o)
       if (table.cells[o].production.kind == ProductionKind::Assemble &&
           table.cells[o].production.source == id)
@@ -599,7 +617,9 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
         st.forms_of[op].push_back(st.table.cells.size() - 1);
       }
 
-  // Reads: one per (consumer Build cell, operand value) edge.
+  // Reads: one per (consumer Build cell, operand value) edge. The
+  // occ_facts/occ_invariant scans below are linear per read (O(reads x
+  // facts)); acceptable at this stage.
   auto const key_of_lid = [&](LoopId lid) {
     return in.sliced->levels[lid].key();
   };
@@ -608,12 +628,17 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     if (c.production.kind != ProductionKind::Build) continue;
     auto const dit = g.depends_on.find(c.value_id);
     if (dit == g.depends_on.end()) continue;
+    auto const c_bound = detail::bound_instances(c);
     for (std::size_t op : dit->second) {
+      auto const fit = st.forms_of.find(op);
+      if (fit == st.forms_of.end() || fit->second.empty())
+        throw std::logic_error("cell table: operand value " +
+                               std::to_string(op) + " of consumer value " +
+                               std::to_string(c.value_id) +
+                               " has no registered form");
       Read r;
       r.consumer = cid;
       r.operand_value_id = op;
-      auto const fit = st.forms_of.find(op);
-      if (fit == st.forms_of.end() || fit->second.empty()) continue;
       // Source = among this operand's forms, the one whose RESIDENCY scope
       // (detail::residency_scope: the prefix of its scope ending at the
       // deepest loop it is bound to, else -- a whole form -- the root
@@ -642,21 +667,27 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
           if (sp == pos && detail::same_key(sk, k)) already = true;
         for (LoopKey const& pk : s.partial_over)
           if (detail::same_key(pk, k)) already = true;
-        if (!already) r.slice.push_back({pos, k});
+        if (already) continue;
+        bool dup = false;
+        for (auto const& [ep, ek] : r.slice)
+          if (ep == pos && detail::same_key(ek, k)) dup = true;
+        if (!dup) r.slice.push_back({pos, k});
       }
-      // Explicit invariant decisions: this consumer's read of op is
-      // correctly whole on a loop the CONSUMER itself is bound to (the
-      // schedule's seam recorded op as not carrying that loop's mode in
-      // this consumer's frame), so it is not a form mismatch even though
-      // another operand may be bound to that same loop.
-      auto const c_bound = detail::bound_instances(c);
+      // Explicit invariant records: the seam found no slicing decision
+      // binding this consumer's read of op on a loop the CONSUMER itself is
+      // bound to, so the form rule accepts it as whole even though another
+      // operand may be bound to that same loop (see Read::invariant_on).
       for (auto const& [w_vid, lid, consumer_vid] : in.sliced->occ_invariant) {
         if (w_vid != op || consumer_vid != c.value_id) continue;
         LoopKey const k = key_of_lid(lid);
         bool in_consumer_bound = false;
         for (LoopKey const& ck : c_bound)
           if (detail::same_key(ck, k)) in_consumer_bound = true;
-        if (in_consumer_bound) r.invariant_on.push_back(k);
+        if (!in_consumer_bound) continue;
+        bool dup = false;
+        for (LoopKey const& ek : r.invariant_on)
+          if (detail::same_key(ek, k)) dup = true;
+        if (!dup) r.invariant_on.push_back(k);
       }
       st.table.reads.push_back(std::move(r));
     }
@@ -669,7 +700,7 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     TableCell const& s = st.table.cells[r.source];
     TableCell const& c = st.table.cells[r.consumer];
     st.table.cells[r.source].life +=
-        detail::read_multiplicity(s.scope, c.scope, in.n_batches_of);
+        detail::read_multiplicity(s, c.scope, in.n_batches_of);
   }
   for (TableCell const& c : st.table.cells)
     if (c.production.kind == ProductionKind::Assemble)

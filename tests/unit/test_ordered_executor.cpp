@@ -1647,86 +1647,17 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
         CHECK_FALSE(
             (sp == p && sk.depth == k.depth && sk.loop_slot == k.loop_slot));
   }
-  // lives: the validator's life rule holds for every non-leaf cell
+  // Validate the derived table once; reuse the same violations both for the
+  // life-rule count and the final full-table check.
   auto const violations =
       sequant::eval::validate_cell_table(table, ordered.root);
   std::size_t life_violations = 0;
   for (auto const& v : violations)
     if (v.rule == "life") ++life_violations;
   CHECK(life_violations == 0);
-  // Temporary diagnostic for the two "visibility" violations reported by
-  // the fix-round-1 investigation (set SEQUANT_UT_CELL_DIAG=1 to print).
-  if (std::getenv("SEQUANT_UT_CELL_DIAG")) {
-    auto const kind_str = [](sequant::eval::ProductionKind k) {
-      return k == sequant::eval::ProductionKind::Build      ? "Build"
-             : k == sequant::eval::ProductionKind::Assemble ? "Assemble"
-                                                            : "Leaf";
-    };
-    auto const print_cells_of = [&](std::size_t V) {
-      std::cerr << "-- cells of value " << V << " --\n";
-      for (std::size_t i = 0; i < table.cells.size(); ++i) {
-        auto const& cc = table.cells[i];
-        if (cc.value_id != V) continue;
-        std::cerr << "cell#" << i << " kind=" << kind_str(cc.production.kind)
-                  << " scope=[";
-        for (auto const& [k, lat] : cc.scope.path)
-          std::cerr << "(depth=" << k.depth << ",slot=" << k.loop_slot
-                    << ",lat=" << lat << ") ";
-        std::cerr << "] sliced=[";
-        for (auto const& [p, k] : cc.sliced)
-          std::cerr << "(pos=" << p << "->depth=" << k.depth
-                    << ",slot=" << k.loop_slot << ") ";
-        std::cerr << "] partial_over=[";
-        for (auto const& k : cc.partial_over)
-          std::cerr << "(depth=" << k.depth << ",slot=" << k.loop_slot << ") ";
-        std::cerr << "] persistent=" << cc.persistent
-                  << " produce_if_absent=" << cc.produce_if_absent
-                  << " life=" << cc.life << "\n";
-      }
-      std::cerr << "volatile_of(" << V << ")=" << in.volatile_of(V) << "\n";
-    };
-    auto const print_outputs_of = [&](std::size_t V) {
-      std::function<void(sequant::eval::ScopeBlock const&, std::size_t)> walk =
-          [&](sequant::eval::ScopeBlock const& b, std::size_t depth) {
-            for (auto const& [ovid, okind] : b.outputs)
-              if (ovid == V)
-                std::cerr << "block at depth=" << depth << " lists value " << V
-                          << " as output, kind="
-                          << (okind == sequant::eval::OutputKind::AccumulateSum
-                                  ? "Sum"
-                                  : "Scatter")
-                          << "\n";
-            for (auto const& st : b.steps)
-              if (auto const* child =
-                      std::get_if<sequant::eval::ScopeBlock>(&st.value))
-                walk(*child, depth + 1);
-          };
-      walk(ordered.root, 0);
-    };
-    auto const print_reads_of = [&](std::size_t V) {
-      for (auto const& r : table.reads)
-        if (r.operand_value_id == V)
-          std::cerr << "read: consumer#" << r.consumer << "(value "
-                    << table.cells[r.consumer].value_id << ", depth "
-                    << table.cells[r.consumer].scope.path.size()
-                    << ") <- source#" << r.source << "(value "
-                    << table.cells[r.source].value_id << ", depth "
-                    << table.cells[r.source].scope.path.size() << ")\n";
-    };
-    for (std::size_t V : {std::size_t{45}, std::size_t{48}, std::size_t{108},
-                          std::size_t{109}}) {
-      print_cells_of(V);
-      print_outputs_of(V);
-      print_reads_of(V);
-    }
-    for (auto const& v : violations)
-      std::cerr << "[" << v.rule << "] " << v.what << "\n";
-  }
-  try {
-    sequant::eval::assert_valid_cell_table(table, ordered.root);
-  } catch (std::exception const& e) {
-    FAIL(e.what());
-  }
+  for (auto const& v : violations)
+    UNSCOPED_INFO("[" << v.rule << "] " << v.what);
+  REQUIRE(violations.empty());
 }
 
 // ===========================================================================
