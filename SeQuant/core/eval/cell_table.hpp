@@ -387,56 +387,81 @@ inline void set_residency_flags(
   cell.produce_if_absent = !path.empty() && !bound_on_innermost;
 }
 
+/// Builds and registers the \c Build cell for value \p vid at the current
+/// scope (\p path / \p path_spaces / \p block_stack): \c sliced via \c
+/// slicing_instance for each of its own carried positions; \c partial_over =
+/// the \c level.key() of every block on \p block_stack (its enclosing
+/// blocks, innermost included) that lists \c (vid, AccumulateSum) among its
+/// own outputs -- so a value with a genuine \c BuildStep gets the same
+/// treatment as one synthesized for an escape with no in-block form of its
+/// own; residency flags via \c set_residency_flags. Returns the new cell's
+/// id.
+[[nodiscard]] inline CellId emit_build_cell(
+    CellTableInputs const& in, std::size_t vid,
+    container::svector<std::pair<LoopKey, int>> const& path,
+    container::svector<std::wstring> const& path_spaces,
+    container::svector<ScopeBlock const*> const& block_stack,
+    CellBuildState& st) {
+  RichSchedule const& rich = *in.rich;
+  TableCell cell;
+  cell.value_id = vid;
+  cell.scope.path = path;
+  cell.production.kind = ProductionKind::Build;
+  auto const sm = in.sliced_modes_of(vid);
+  ValueCell const& vc = rich.cells[vid];
+  for (std::size_t p = 0; p < vc.carried.size(); ++p) {
+    bool const in_sm =
+        std::find(sm.begin(), sm.end(), vc.carried[p]) != sm.end();
+    if (!in_sm) continue;
+    if (auto k = slicing_instance(rich, vid, p, path, path_spaces))
+      cell.sliced.push_back({p, *k});
+  }
+  for (ScopeBlock const* b : block_stack)
+    if (has_accumulate_sum_output(*b, vid))
+      cell.partial_over.push_back(b->level.key());
+  set_residency_flags(cell, in.volatile_of(vid), path);
+  st.table.cells.push_back(std::move(cell));
+  st.forms_of[vid].push_back(st.table.cells.size() - 1);
+  return st.table.cells.size() - 1;
+}
+
 inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
                        container::svector<std::pair<LoopKey, int>>& path,
                        container::svector<std::wstring>& path_spaces,
                        container::svector<ScopeBlock const*>& block_stack,
                        CellBuildState& st) {
-  RichSchedule const& rich = *in.rich;
   for (Step const& step : block.steps) {
     if (auto const* b = std::get_if<BuildStep>(&step.value)) {
-      std::size_t const vid = b->value_id;
-      TableCell cell;
-      cell.value_id = vid;
-      cell.scope.path = path;
-      cell.production.kind = ProductionKind::Build;
-      auto const sm = in.sliced_modes_of(vid);
-      ValueCell const& vc = rich.cells[vid];
-      for (std::size_t p = 0; p < vc.carried.size(); ++p) {
-        bool const in_sm =
-            std::find(sm.begin(), sm.end(), vc.carried[p]) != sm.end();
-        if (!in_sm) continue;
-        if (auto k = slicing_instance(rich, vid, p, path, path_spaces))
-          cell.sliced.push_back({p, *k});
-      }
-      set_residency_flags(cell, in.volatile_of(vid), path);
-      st.table.cells.push_back(std::move(cell));
-      st.forms_of[vid].push_back(st.table.cells.size() - 1);
+      (void)emit_build_cell(in, b->value_id, path, path_spaces, block_stack,
+                            st);
       continue;
     }
     auto const& child = std::get<ScopeBlock>(step.value);
     path.push_back({child.level.key(), child.latitude_ordinal});
     path_spaces.push_back(std::wstring{child.axis.space().base_key()});
     block_stack.push_back(&child);
-    // the number of forms already registered for each of the child's own
-    // escapes BEFORE walking the child: a nested (deeper) escape of the same
-    // value registers a NEW form during the recursive walk below, at the
-    // child's own scope -- distinguishing that from "nothing registered".
-    std::unordered_map<std::size_t, std::size_t> before_count;
-    for (auto const& [ovid, okind] : child.outputs) {
-      (void)okind;
-      before_count[ovid] = st.forms_of[ovid].size();
-    }
     emit_cells(in, child, path, path_spaces, block_stack, st);
     // the child's outputs assemble at THIS scope
+    CellScope const child_scope{path};  // path currently has child on top
     for (auto const& [ovid, okind] : child.outputs) {
       LoopKey const inst = child.level.key();
-      auto const& forms = st.forms_of[ovid];
-      CellId src;
-      if (forms.size() > before_count[ovid]) {
-        // a nested escape already produced ovid's form at the child's scope.
-        src = forms.back();
-      } else {
+      // a form of ovid registered EXACTLY at the child's own scope (a
+      // BuildStep there, an implicit Build synthesized below, or an
+      // Assemble registered at the child's scope for a grandchild escape)
+      // is ovid's own cell inside the child; a sibling block's forms live
+      // at a different scope (a different loop_slot or latitude even at
+      // the same depth), so full CellScope equality -- not just depth --
+      // rules those out.
+      CellId src = 0;
+      bool found = false;
+      if (auto const fit = st.forms_of.find(ovid); fit != st.forms_of.end())
+        for (CellId id : fit->second)
+          if (st.table.cells[id].scope == child_scope) {
+            src = id;
+            found = true;
+            break;
+          }
+      if (!found) {
         // ovid never got its own cell inside the child: its production
         // fuses the reduction/scatter with an operand contraction (the
         // escaped value's hash differs from any single operand's by
@@ -444,33 +469,19 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
         // plain BuildStep for it. The per-batch partial is nonetheless a
         // real form of ovid itself, realized once per batch at the child's
         // own scope; synthesize its Build cell here.
-        TableCell cell;
-        cell.value_id = ovid;
-        cell.scope.path = path;  // path currently has child on top
-        cell.production.kind = ProductionKind::Build;
-        auto const sm = in.sliced_modes_of(ovid);
-        ValueCell const& vc = rich.cells[ovid];
-        for (std::size_t p = 0; p < vc.carried.size(); ++p) {
-          bool const in_sm =
-              std::find(sm.begin(), sm.end(), vc.carried[p]) != sm.end();
-          if (!in_sm) continue;
-          if (auto k = slicing_instance(rich, ovid, p, path, path_spaces))
-            cell.sliced.push_back({p, *k});
-        }
-        for (std::size_t i = 0; i < path.size(); ++i)
-          if (has_accumulate_sum_output(*block_stack[i], ovid))
-            cell.partial_over.push_back(path[i].first);
-        set_residency_flags(cell, in.volatile_of(ovid), path);
-        st.table.cells.push_back(std::move(cell));
-        st.forms_of[ovid].push_back(st.table.cells.size() - 1);
-        src = st.table.cells.size() - 1;
+        src = emit_build_cell(in, ovid, path, path_spaces, block_stack, st);
       }
       TableCell const& s = st.table.cells[src];
+      // Unreachable by construction: every entry under forms_of[ovid] is a
+      // cell this builder itself registered under key ovid with
+      // value_id == ovid (emit_build_cell's own cell, or an Assemble's
+      // a.value_id = ovid below); kept as a loud guard against a future
+      // emission bug rather than a silent cross-value assemble.
       if (s.value_id != ovid)
         throw std::logic_error(
-            "cell table: no same-value source found for escaping value " +
-            std::to_string(ovid) + " at block depth " +
-            std::to_string(child.level.depth));
+            "cell table: value_id mismatch between escaping value " +
+            std::to_string(ovid) + " and its registered form (value_id " +
+            std::to_string(s.value_id) + ")");
       TableCell a;
       a.value_id = ovid;
       a.production.kind = ProductionKind::Assemble;
@@ -517,6 +528,10 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
 /// some computed value. Reads and lives are left empty/zero here; Task 4
 /// fills them in.
 [[nodiscard]] inline CellTable build_cell_table(CellTableInputs const& in) {
+  if (!in.ordered || !in.rich || !in.sliced_modes_of || !in.volatile_of)
+    throw std::invalid_argument(
+        "build_cell_table: ordered, rich, sliced_modes_of and volatile_of "
+        "are all required");
   detail::CellBuildState st;
   container::svector<std::pair<LoopKey, int>> path;
   container::svector<std::wstring> path_spaces;

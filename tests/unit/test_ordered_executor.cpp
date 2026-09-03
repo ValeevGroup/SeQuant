@@ -1545,6 +1545,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   // (a nested escape, whose own Build/Assemble already covers it); one
   // Assemble per output entry; Leaf cells.
   std::size_t builds = 0, outputs = 0, implicit = 0;
+  std::size_t scatter_outputs = 0, blocks_with_sum_output = 0;
   std::function<void(sequant::eval::ScopeBlock const&)> count =
       [&](sequant::eval::ScopeBlock const& b) {
         std::unordered_set<std::size_t> own_builds, child_outputs;
@@ -1561,8 +1562,15 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
           }
         }
         outputs += b.outputs.size();
-        for (auto const& [ovid, okind] : b.outputs)
+        bool has_sum_output = false;
+        for (auto const& [ovid, okind] : b.outputs) {
           if (!own_builds.count(ovid) && !child_outputs.count(ovid)) ++implicit;
+          if (okind == sequant::eval::OutputKind::AccumulateScatter)
+            ++scatter_outputs;
+          if (okind == sequant::eval::OutputKind::AccumulateSum)
+            has_sum_output = true;
+        }
+        if (has_sum_output) ++blocks_with_sum_output;
       };
   count(ordered.root);
   std::size_t nb = 0, na = 0, nl = 0;
@@ -1574,6 +1582,26 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   CHECK(nb == builds + implicit);
   CHECK(na == outputs);
   CHECK(nl > 0);
+  // non-vacuous: the walk actually exercises sliced Build cells, Scatter
+  // assembly with a real scatter map (when the tree has any Scatter output
+  // at all), and partial-sum Build cells (at least one per block with a Sum
+  // output).
+  std::size_t n_sliced_builds = 0, n_scatter_with_map = 0,
+              n_partial_over_builds = 0;
+  for (auto const& c : table.cells) {
+    if (c.production.kind == sequant::eval::ProductionKind::Build) {
+      if (!c.sliced.empty()) ++n_sliced_builds;
+      if (!c.partial_over.empty()) ++n_partial_over_builds;
+    }
+    if (c.production.kind == sequant::eval::ProductionKind::Assemble &&
+        c.production.assemble == sequant::eval::AssembleKind::Scatter &&
+        !c.production.scatter_map.empty())
+      ++n_scatter_with_map;
+  }
+  CHECK(n_sliced_builds > 0);
+  if (scatter_outputs > 0) CHECK(n_scatter_with_map > 0);
+  CHECK(n_partial_over_builds >= blocks_with_sum_output);
+  CHECK(n_partial_over_builds > 0);
   // every Assemble encloses its source strictly, assembles a form of its
   // OWN value, and (for a Sum) the source records the closing instance as
   // partial-summed over; every Build cell's sliced entries name enclosing
