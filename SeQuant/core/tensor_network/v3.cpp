@@ -956,6 +956,25 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   // order (empty = identity or not an (anti)symmetric bundle)
   container::svector<std::array<container::svector<std::size_t>, 2>>
       slot_orders(options.apply_slot_order ? tensors_.size() : 0);
+  // With apply_slot_order the order applied (and the phase reported) is the
+  // NAMED-index canonical order -- what get_indices() reports: coarse groups
+  // by named_index_compare (space-major), canonical vertex ordinal within a
+  // group -- so a respelled leaf keeps the space order of its bundles (the
+  // raw vertex ordinals order same-color cells by the color hash, which for
+  // a mixed-space bundle is arbitrary). Anonymous slots follow the named
+  // ones by vertex ordinal.
+  container::map<Index, std::size_t> named_rank;
+  if (options.apply_slot_order)
+    for (auto &&[r, it] :
+         ranges::views::enumerate(metadata.named_indices_canonical))
+      named_rank.emplace(*it, r);
+  const auto slot_key = [&](const Index &idx) -> std::size_t {
+    const std::size_t ord = canonize_perm[idx_to_vertex.at(idx)];
+    if (!options.apply_slot_order) return ord;
+    if (auto it = named_rank.find(idx); it != named_rank.end())
+      return it->second;
+    return named_rank.size() + ord;
+  };
   for (auto &&[tensor_ord, tensor_ptr] : ranges::views::enumerate(tensors_)) {
     const AbstractTensor &tensor = *tensor_ptr;
     const auto symm = symmetry(tensor);
@@ -979,11 +998,10 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
         continue;
       }
 
-      // canonical vertex ordinals of the slots, in slot order ...
+      // canonical keys of the slots, in slot order ...
       container::svector<std::size_t> perm;
       perm.reserve(n_indices);
-      for (const Index &idx : indices)
-        perm.emplace_back(canonize_perm[idx_to_vertex.at(idx)]);
+      for (const Index &idx : indices) perm.emplace_back(slot_key(idx));
       // ... sorted: perm becomes the from-permutation that puts the slots
       // into canonical order, with its parity
       const int parity = sort_then_replace_by_ordinals(perm);

@@ -1081,6 +1081,15 @@ TEST_CASE("tot_leaf_canonical_spelling_and_phase", "[eval_expr][tot][phase]") {
   REQUIRE(e23.canon_transform().phase * e32.canon_transform().phase == -1);
   REQUIRE_FALSE(e23.canon_transform().conj);
   REQUIRE_FALSE(e32.canon_transform().conj);
+  // a MIXED-flavor bundle is stored space-major (up before down: the named
+  // canonical order), whichever way it was written -- the raw canonical
+  // vertex order sorts colors by their hash, which a provider cannot follow
+  const Index b3(L"a↓_3", {i1, i2});
+  EvalExpr eud{mk(a2, b3)}, edu{mk(b3, a2)};
+  REQUIRE(eud.as_tensor().bra()[0].label() == L"a↑_2");
+  REQUIRE(edu.as_tensor().bra()[0].label() == L"a↑_2");
+  REQUIRE(eud.hash_value() == edu.hash_value());
+  REQUIRE(eud.canon_transform().phase * edu.canon_transform().phase == -1);
 }
 
 TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
