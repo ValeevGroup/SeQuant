@@ -258,5 +258,16 @@ phase led to these changes:
   `ResultTensorTA::logical_array` materializes through
   `ensure_materialized` (memoized); `CanonicalizeOptions`/`SimplifyOptions`
   equality defaulted; docs on `Result::value_` (not thread-safe), `is_view`.
+- **A sum's layout is part of its slot identity** (68c573341). Found by
+  the HSeOH PNS-CCD certification of the fixes above: with correct prefix
+  hashes, two sums over the same summands with different leading layouts
+  (a sum hands up its FIRST summand's layout) shared a slot, and the
+  cached array reached the second consumer in the wrong mode order (TA
+  range-congruence assertion in a ToT contraction, iteration 2). The sum
+  hash is salted with the leading summand's index labels.
 - Deferred: lazy views for `ResultTensorOfTensorTA` (T19 layer 1 does not
-  reach the PNS hot path yet).
+  reach the PNS hot path yet); the TA `eval_with_tiledarray/real/
+  summation` test fails on this branch since before these commits
+  (verified at e7354e653; PR-2's copy of the test file passes) -- the
+  round-2 test file's NonHermitian deserialization plus the
+  orientation-canonicalizing `tensor_to_key` fixture, to be reconciled.
