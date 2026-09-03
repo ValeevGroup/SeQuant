@@ -11,6 +11,7 @@
 #include <range/v3/view/slice.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <functional>
 #include <iterator>
 #include <tuple>
