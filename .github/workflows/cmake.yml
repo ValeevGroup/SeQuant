@@ -96,7 +96,7 @@ jobs:
 
     - name: Install prerequisite MacOS packages
       if: ${{ startswith(matrix.os, 'macos') }}
-      run: brew install boost eigen open-mpi ccache
+      run: brew install boost eigen open-mpi ccache boost
 
     - name: Install prerequisites Ubuntu packages
       if: ${{ startswith(matrix.os, 'ubuntu') }}
