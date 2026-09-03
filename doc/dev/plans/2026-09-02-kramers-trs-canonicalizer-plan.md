@@ -258,13 +258,21 @@ phase led to these changes:
   `ResultTensorTA::logical_array` materializes through
   `ensure_materialized` (memoized); `CanonicalizeOptions`/`SimplifyOptions`
   equality defaulted; docs on `Result::value_` (not thread-safe), `is_view`.
-- **A sum's layout is part of its slot identity** (68c573341). Found by
-  the HSeOH PNS-CCD certification of the fixes above: with correct prefix
-  hashes, two sums over the same summands with different leading layouts
-  (a sum hands up its FIRST summand's layout) shared a slot, and the
-  cached array reached the second consumer in the wrong mode order (TA
-  range-congruence assertion in a ToT contraction, iteration 2). The sum
-  hash is salted with the leading summand's index labels.
+- **A sum's layout is part of its slot identity.** A sum hands up its
+  FIRST summand's layout, so A + B and B + A must not share a slot; the
+  prefix hashes are order-sensitive (first tried as a label salt, 68c573341,
+  which lost the sharing of relabeled sub-sums: 5208 -> 7955 distinct
+  intermediates and a 20 GB cache high-water on HSeOH PNS-CCD).
+- **The denoted marker rule of 230e93b00 was wrong and is reverted**: the
+  reviewer's "take the marker out for every channel that came with a conj"
+  makes a swapped Hermitian leaf denote unmarked, which is value-correct in
+  isolation but removes the conj color from the PARENT network's graph;
+  HSeOH PNS-CCD then served a cached intermediate in the wrong layout in
+  iteration 2 (TA range-congruence abort) while every unit suite stayed
+  green. Localized by a toggle bisect (env switches for the three eval
+  changes, one build, five runs) -- the denoted spelling is an identity
+  convention of the parent network, not a value statement; documented on
+  `EvalExpr::denoted_expr`.
 - **apply_slot_order applies the NAMED-index canonical order** (0b5003d6d).
   The raw canonical vertex ordinals order same-color cells by the color
   hash, so a mixed-flavor antisymmetric bundle came out as `a↓,a↑` (288
