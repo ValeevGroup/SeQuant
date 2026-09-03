@@ -219,3 +219,44 @@ the three dch energy twin pairs in `kramers_symmetry_propagation`.
   iteration 1 = -0.299572965188) and HSeOH PNS-CCD (`pnsccd_3it.json`,
   iterations 1-3 = -0.299572965188 / -0.320010602548 / -0.328438791575,
   2201 terms, 3.5 s/it) in addition to dch, for every eval/trace change.
+
+## Review fixes, 2026-09-03
+
+Two reviews (a SeQuant reviewer on the four T19/regression commits, an
+MPQC multi-angle review) plus the follow-up investigation of the ToT leaf
+phase led to these changes:
+
+- **Slot order applied by the labeling itself.** `CanonicalizeSlotsOptions::
+  apply_slot_order` makes `canonicalize_slots` permute every (anti)symmetric
+  bra/ket bundle into its canonical vertex order in place; the parity comes
+  from the same sort (`sort_then_replace_by_ordinals`) that defines
+  `metadata.phase`, so the two cannot disagree (the hand-rolled reorder in
+  the ToT leaf branch sorted by the named-index order instead and asserted
+  agreement). The ToT leaf branch now just asks for it.
+- **Child phases hoist into their parents.** A leaf's reorder phase is a
+  transform (hash-blind), so the two spellings share one slot -- but the
+  parent hashed the network of canonical child spellings while computing
+  its value from the DENOTED hand-ups, so `g * t{a2,a1}` and `g * t{a1,a2}`
+  shared a slot holding sign-different values. Products now fold the
+  children's phases into their own transform (the spec's "multiplicatively
+  hoistable" rule, previously only applied to the scalar wrap); sums hoist a
+  uniform phase and salt a mixed one (`CanonTransform::phase_salt`); the
+  Re/Im wrapper hoists the inner phase.
+- **Sum slot identity covered only the summands before the last.** The
+  prefix hashes came from `inits()` -- a lazily sliced view driven by a
+  stateful lambda -- evaluated by random access in `make_sum`, so the
+  n-summand node hashed n-1 summands: `A + B` and `A + C` had one hash.
+  Pre-existing (5b64bdd27); `imed_hashes` is eager now, `inits` removed.
+  Test `sum_slot_identity_covers_every_summand`.
+- **Denoted spelling.** `EvalExpr::denoted_expr()` (public; replaces the
+  file-local `denoted_spelling`) undoes the normalization channels in
+  reverse order and takes the marker out for every channel that came with
+  a conj (a swap, the Kramers flip): a Conjugate leaf written in its
+  non-canonical orientation denotes as written, unmarked (it was marked).
+- **Cleanups.** One `normalize_leaf` helper serves the flat and ToT
+  branches; `kramers_flip(index_vector&, isr)` next to `kramers_flipped`;
+  `ResultTensorTA::logical_array` materializes through
+  `ensure_materialized` (memoized); `CanonicalizeOptions`/`SimplifyOptions`
+  equality defaulted; docs on `Result::value_` (not thread-safe), `is_view`.
+- Deferred: lazy views for `ResultTensorOfTensorTA` (T19 layer 1 does not
+  reach the PNS hot path yet).

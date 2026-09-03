@@ -1267,6 +1267,20 @@ inline std::optional<Index> kramers_flipped(const Index& idx,
   return idx.with_space(*partner, std::move(protos));
 }
 
+/// @brief flips every index of @p ixs that has a Kramers partner to its
+/// image (see kramers_flipped) in place; ordinals and order are kept
+/// @return whether any index was flipped
+inline bool kramers_flip(Index::index_vector& ixs,
+                         const IndexSpaceRegistry& isr) {
+  bool flipped = false;
+  for (auto& ix : ixs)
+    if (auto f = kramers_flipped(ix, isr)) {
+      ix = std::move(*f);
+      flipped = true;
+    }
+  return flipped;
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_INDEX_H

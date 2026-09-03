@@ -16,8 +16,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
-#include <algorithm>
-#include <numeric>
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/find.hpp>
@@ -27,7 +25,6 @@
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/move.hpp>
 #include <range/v3/view/transform.hpp>
-#include <span>
 
 #include <algorithm>
 #include <cmath>
@@ -153,18 +150,11 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
 }
 
 namespace {
-/// Normalizes a leaf tensor's SPELLING channels into transform bits:
-/// strips a '⁺' adjoint label (adjoint = conj ∘ swap) and converts the
-/// elementwise-conjugation marker to a PURE {conj} bit (slots untouched;
-/// orientation deltas belong to the canonicalizer fold alone). Symm markers
-/// are value-redundant and dropped. Returns the accumulated transform.
 /// maps a folded leaf's canonical indices back to the as-written flavors
 /// (the Kramers flip is an involution; ordinals and order are kept)
 void kramers_flip_indices_as_written(EvalExpr::index_vector& ixs) {
-  const auto isr = get_default_context().index_space_registry();
-  if (!isr) return;
-  for (auto& ix : ixs)
-    if (auto f = kramers_flipped(ix, *isr)) ix = std::move(*f);
+  if (const auto isr = get_default_context().index_space_registry())
+    kramers_flip(ixs, *isr);
 }
 
 /// the eval-leaf Kramers fold is an explicit context opt-in (see
@@ -174,6 +164,11 @@ bool fold_kramers_leaf() {
          CanonicalizeOptions::FoldKramersEvalLeaves::Yes;
 }
 
+/// Normalizes a leaf tensor's SPELLING channels into transform bits:
+/// strips a '⁺' adjoint label (adjoint = conj ∘ swap) and converts the
+/// elementwise-conjugation marker to a PURE {conj} bit (slots untouched;
+/// orientation deltas belong to the canonicalizer fold alone). Symm markers
+/// are value-redundant and dropped. Returns the accumulated transform.
 CanonTransform normalize_leaf_spelling(Tensor& t) {
   CanonTransform tr{};
   if (!t.label().empty() && t.label().back() == adjoint_label) {
@@ -187,6 +182,46 @@ CanonTransform normalize_leaf_spelling(Tensor& t) {
   }
   return tr;
 }
+
+struct LeafNormalization {
+  CanonTransform transform;    ///< maps the stored spelling to the as-written
+  bool kramers_fired = false;  ///< the Kramers fold respelled the leaf
+};
+
+/// Respells a leaf tensor IN PLACE as its canonical block form and returns
+/// the retrieval transform, composing the channels in this order (their
+/// inverse, in reverse order, is EvalExpr::denoted_expr):
+///   1. spelling channels (normalize_leaf_spelling): adjoint label,
+///      conjugation marker -> {conj, swap} / {conj} bits;
+///   2. the eval-leaf Kramers fold (explicit opt-in): a down-first leaf is
+///      respelled as its up-first partner; the fold's marker is a pure
+///      {conj} bit and its phase multiplies in;
+///   3. block canonicalization WITH the braket fold (the block
+///      canonicalizer's own Kramers fold stays off): the antisymmetric
+///      reorder phase multiplies in; a braket-fold marker (the fold swapped
+///      a Conjugate tensor INTO its canonical orientation) becomes
+///      {conj, swap}, the canonical slots are kept.
+/// The stored spelling is unmarked, up-row, block-canonical: what a leaf
+/// provider serves.
+LeafNormalization normalize_leaf(Tensor& t) {
+  LeafNormalization result;
+  auto& tr = result.transform;
+  tr = compose(tr, normalize_leaf_spelling(t));
+  const int kramers_phase = fold_kramers_leaf() ? canonicalize_kramers(t) : 1;
+  result.kramers_fired = t.conjugated();
+  if (result.kramers_fired) {
+    tr = compose(tr, {.conj = true});
+    t.conjugate();
+  }
+  const auto block_byproduct = TensorBlockCanonicalizer{}.apply(t);
+  tr = compose(tr, {.phase = static_cast<std::int8_t>(
+                        (block_byproduct ? -1 : 1) * kramers_phase)});
+  if (t.conjugated()) {
+    tr = compose(tr, {.conj = true, .braket_swap = true});
+    t.conjugate();
+  }
+  return result;
+}
 }  // namespace
 
 EvalExpr::EvalExpr(Tensor const& tnsr)
@@ -194,146 +229,52 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
+  // the stored spelling is canonical (unmarked, up-row, block-canonical);
+  // every spelling channel becomes a CanonTransform byproduct applied on
+  // retrieval, so every route to one canonical spelling lands on one slot
+  auto const [transform, kramers_fired] = normalize_leaf(expr_->as<Tensor>());
+  canon_transform_ = transform;
   if (is_tot(tnsr)) {
-    // ToT leaf: normalize the spelling channels first, then let the
-    // slot-canonicalization (fold ON, the default) report the orientation
-    // fold via conjugated_tensors; respell to the canonical orientation so
-    // the stored spelling is canonical for flat and ToT leaves alike.
-    auto& t0 = expr_->as<Tensor>();
-    canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t0));
-    // Kramers fold: a down-first leaf is respelled as its up-first partner;
-    // the marker it produces is a pure {conj} bit (no slot swap) and the
-    // phase multiplies the slot-canonicalization phase below
-    const int kramers_phase =
-        fold_kramers_leaf() ? canonicalize_kramers(t0) : 1;
-    const bool kramers_fired = t0.conjugated();
-    if (kramers_fired) {
-      canon_transform_ = compose(canon_transform_, {.conj = true});
-      t0.conjugate();
-    }
-    // Block-canonicalize the SPELLING in place, exactly as the flat branch
-    // does: the stored tensor is what a leaf provider serves, so the slot
-    // order it carries must be the canonical one and the antisymmetric
-    // reorder phase a true byproduct of that reorder. (The slot
-    // canonicalization below only LABELS: it never reorders a
-    // tensor-of-tensors, so recording its phase against the as-written
-    // spelling negated correctly served leaves -- HSeOH PNS sign
-    // regression, 2026-09-02.)
-    auto const block_phase = TensorBlockCanonicalizer{}.apply(t0);
-    canon_transform_.phase = (block_phase ? -1 : 1) * kramers_phase;
-    if (t0.conjugated()) {  // fold byproduct: canonicalize_braket swapped the
-      // slots INTO the canonical orientation and marked; convert the marker
-      // to transform bits and keep the canonical slots
-      canon_transform_ =
-          compose(canon_transform_, {.conj = true, .braket_swap = true});
-      t0.conjugate();
-    }
     // slot identity: the canonical labeling of the block-canonical spelling.
     // The block canonicalizer is label-blind (same-space slots keep their
-    // order), so finish the reorder here: an ANTISYMMETRIC bra/ket bundle
-    // is put into the labeling's canonical slot order (the order the
-    // labeling's phase is defined against), with the permutation parity as
+    // order), so the labeling finishes the reorder: every (anti)symmetric
+    // bra/ket bundle is put into the labeling's canonical slot order (the
+    // order its phase is defined against) with the permutation parity as
     // the phase -- so the two spellings t{a2,a3;..} and t{a3,a2;..} store
     // ONE spelling, share one slot, and differ by the retrieval phase only.
+    // (The network clones its tensors: adopt the respelled one.)
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
-             TensorCanonicalizer::cardinal_tensor_labels()});
+             TensorCanonicalizer::cardinal_tensor_labels(),
+         .apply_slot_order = true});
     hash_value_ = md.hash_value();
-    if (t0.symmetry() == Symmetry::Antisymm) {
-      auto const canon_order = md.get_indices<index_vector>();
-      auto rank_of = [&](Index const& ix) -> std::size_t {
-        auto it = ranges::find(canon_order, ix);
-        return it == canon_order.end() ? canon_order.size()
-                                       : std::size_t(it - canon_order.begin());
-      };
-      int parity = 1;
-      auto reorder = [&](auto&& slots, auto&& permute) {
-        std::size_t const n = ranges::size(slots);
-        if (n < 2) return;
-        container::svector<std::size_t> perm(n);
-        std::iota(perm.begin(), perm.end(), std::size_t{0});
-        container::svector<std::size_t> ranks;
-        for (auto const& ix : slots) ranks.push_back(rank_of(ix));
-        std::stable_sort(
-            perm.begin(), perm.end(),
-            [&](std::size_t a, std::size_t b) { return ranks[a] < ranks[b]; });
-        // parity of the from-permutation (cycle decomposition)
-        container::svector<char> seen(n, 0);
-        for (std::size_t i = 0; i < n; ++i) {
-          if (seen[i]) continue;
-          std::size_t len = 0;
-          for (std::size_t j = i; !seen[j]; j = perm[j]) {
-            seen[j] = 1;
-            ++len;
-          }
-          if (len % 2 == 0) parity = -parity;
-        }
-        permute(std::span<const std::size_t>(perm.data(), n));
-      };
-      auto& at = static_cast<AbstractTensor&>(t0);
-      reorder(t0.bra(), [&](auto p) { at._permute_bra(p); });
-      reorder(t0.ket(), [&](auto p) { at._permute_ket(p); });
-      SEQUANT_ASSERT(parity == md.phase &&
-                     "ToT leaf: reorder parity disagrees with the slot "
-                     "canonicalization phase");
-      canon_transform_.phase =
-          static_cast<std::int8_t>(canon_transform_.phase * parity);
-    }
+    canon_transform_ = compose(canon_transform_, {.phase = md.phase});
+    expr_ = std::dynamic_pointer_cast<Expr>(tn.tensors().front());
+    SEQUANT_ASSERT(expr_ && expr_->is<Tensor>());
     // array-faithful indices in the Nested (outer;inner) convention: a ToT
     // array's outer modes are the plain slots PLUS the proto constituents,
     // deterministically ordered by NestedTensorIndices (the md list is the
     // same set in named-canonical order, which annots must not depend on)
-    // T19 layer 2 contract: expr() keeps the FOLDED (up-row) spelling --
-    // what a leaf provider fetches -- while canon_indices() (the parent's
-    // contraction labels; TA matches annotations, not spellings) carries
-    // the as-written flavors in the same canonical order, so the served
-    // up block + {conj, phase} denotes the as-written value
-    auto const slot_ixs = t0.const_indices() | ranges::to<index_vector>;
+    auto const slot_ixs =
+        expr_->as<Tensor>().const_indices() | ranges::to<index_vector>;
     auto const nti = tot_indices<index_vector>(slot_ixs);
     canon_indices_ =
         ranges::views::concat(nti.outer, nti.inner) | ranges::to<index_vector>;
-    if (kramers_fired) kramers_flip_indices_as_written(canon_indices_);
-    kramers_folded_ = kramers_fired;
     connectivity_ = std::move(md.graph);
   } else {
-    // Single (protoindex-free) tensor leaf: normalize to the canonical
-    // unmarked spelling; every conjugation channel becomes a CanonTransform
-    // byproduct applied on retrieval. Transform bits compose syntactically:
-    // marker => conj, slot swap relative to canonical => braket_swap (for a
-    // Conjugate tensor the two compose to adjoint, the identity on Hermitian
-    // values -- every spelling route lands on one slot + a correct map).
-    auto& t = expr_->as<Tensor>();
-    canon_transform_ = compose(canon_transform_, normalize_leaf_spelling(t));
-    // 2. Kramers fold first: its marker is a pure {conj} bit (no slot swap),
-    //    distinct from the braket fold's marker converted below
-    const int kramers_phase = fold_kramers_leaf() ? canonicalize_kramers(t) : 1;
-    const bool kramers_fired = t.conjugated();
-    if (kramers_fired) {
-      canon_transform_ = compose(canon_transform_, {.conj = true});
-      t.conjugate();
-    }
-    // 3. block-canonicalize WITH the braket fold (the block canonicalizer's
-    //    own Kramers fold is opt-in and stays off here);
-    //    a braket fold performed here toggles the marker, which converts to
-    //    transform bits the same way
-    auto phase = TensorBlockCanonicalizer{}.apply(t);
-    canon_transform_.phase = (phase ? -1 : 1) * kramers_phase;
-    if (t.conjugated()) {  // fold byproduct: canonicalize_braket swapped the
-      // slots INTO the canonical orientation and marked; convert the marker
-      // to transform bits and keep the canonical slots
-      canon_transform_ =
-          compose(canon_transform_, {.conj = true, .braket_swap = true});
-      t.conjugate();
-    }
+    auto const& t = expr_->as<Tensor>();
     hash_value_ = hash_terminal_tensor(t);
-    // T19 layer 2 contract (see the ToT branch): expr() keeps the folded
-    // spelling, canon_indices() the as-written labels
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
-    if (kramers_fired) kramers_flip_indices_as_written(canon_indices_);
-    kramers_folded_ = kramers_fired;
   }
+  // T19 layer 2 contract: expr() keeps the FOLDED (up-row) spelling -- what
+  // a leaf provider fetches -- while canon_indices() (the parent's
+  // contraction labels; TA matches annotations, not spellings) carries the
+  // as-written flavors in the same canonical order, so the served up block
+  // + {conj, phase} denotes the as-written value
+  if (kramers_fired) kramers_flip_indices_as_written(canon_indices_);
+  kramers_folded_ = kramers_fired;
 }
 
 EvalExpr::EvalExpr(Constant const& c)
@@ -468,6 +409,22 @@ std::int8_t EvalExpr::canon_phase() const noexcept {
   return canon_transform_.phase;
 }
 
+ExprPtr EvalExpr::denoted_expr() const {
+  SEQUANT_ASSERT(is_tensor() && is_primary());
+  auto t = expr_->as<Tensor>();
+  auto const tr = canon_transform_;
+  // undo normalize_leaf's channels in reverse order: the slot swap, then the
+  // Kramers flip (flavors back to as-written). The marker is what is left
+  // of the conj bit once the two channels that came WITH a conj are taken
+  // out: every swap in the transform (an adjoint label, or the braket fold
+  // of a Conjugate tensor) and the Kramers fold
+  if (tr.braket_swap) static_cast<AbstractTensor&>(t)._swap_bra_ket();
+  if (kramers_folded_) kramers_flip_slots(static_cast<AbstractTensor&>(t));
+  const bool marked = (tr.conj != tr.braket_swap) != kramers_folded_;
+  if (marked) t.conjugate();
+  return ex<Tensor>(std::move(t));
+}
+
 CanonTransform EvalExpr::canon_transform() const noexcept {
   return canon_transform_;
 }
@@ -521,17 +478,21 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
 }
 }  // namespace
 
-///
-/// \brief Calls canon_hash on all inits subranges.
-/// \see inits
-/// \see canon_hash
-///
+/// Prefix slot hashes of a range of summand hashes: element i is the
+/// order-insensitive hash of summands 0..i, i.e. the slot of the sum node
+/// that combines them (the left fold's i-th intermediate). Computed eagerly
+/// and sequentially -- a lazily sliced prefix view evaluated by random
+/// access saw only the summands BEFORE the last one, so A + B and A + C
+/// shared a slot (fixed 2026-09-03).
 template <typename Rng>
-auto imed_hashes(Rng const& rng) {
-  using std::views::transform;
-  return inits(rng) | transform([](auto&& v) {
-           return hash::range_unordered(ranges::begin(v), ranges::end(v));
-         });
+container::svector<size_t> imed_hashes(Rng const& rng) {
+  container::svector<size_t> result;
+  container::svector<size_t> prefix;
+  for (auto&& h : rng) {
+    prefix.push_back(h);
+    result.push_back(hash::range_unordered(prefix.begin(), prefix.end()));
+  }
+  return result;
 }
 
 struct ExprWithHash {
@@ -559,27 +520,6 @@ IndexSet all_indices(ExprPtr const& expr) {
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
 ///        sub-tree, or, at the root node of a sum sub-tree.
 ///
-/// the leaf's DENOTED symbolic spelling: the stored canonical spelling with
-/// the transform re-materialized syntactically -- bra<->ket swapped back when
-/// braket_swap is set, the conjugation marker restored when conj is set. TN
-/// building and slot counting must see the orientation and conjugation the
-/// surrounding expression wrote (the marker also colors the TN graph, which
-/// keeps mixed-conj products like C·C^* identity-distinct).
-inline ExprPtr denoted_spelling(EvalExpr const& ee) {
-  auto t = ee.expr()->as<Tensor>();
-  auto const tr = ee.canon_transform();
-  if (tr.braket_swap) static_cast<AbstractTensor&>(t)._swap_bra_ket();
-  if (tr.conj) t.conjugate();
-  // a Kramers-folded leaf (T19 layer 2) stores the up-row partner: flip the
-  // flavors back and undo the fold's marker toggle (its conj is already in
-  // tr.conj, so toggling again restores the as-written marker)
-  if (ee.kramers_folded()) {
-    kramers_flip_slots(static_cast<AbstractTensor&>(t));
-    t.conjugate();
-  }
-  return ex<Tensor>(std::move(t));
-}
-
 /// a child's structural identity: slot hash + conj/swap salt (0 for a
 /// trivial transform, keeping marker-free hashes byte-stable)
 inline size_t salted_hash(EvalExprNode const& n) {
@@ -598,7 +538,7 @@ void collect_tensor_factors(EvalExprNode const& node,  //
       node->is_tensor() && (!op || *op == EvalOp::Sum)) {
     // Leaf tensors enter in their DENOTED spelling (transform re-materialized
     // syntactically); a Sum-rooted subtree contributes its result tensor.
-    auto e = (!op && node->expr()->is<Tensor>()) ? denoted_spelling(*node)
+    auto e = (!op && node->expr()->is<Tensor>()) ? node->denoted_expr()
                                                  : node->expr();
     collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
                                       .hash = salted_hash(node)});
@@ -658,17 +598,29 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       !ranges::empty(summands) && ranges::all_of(summands, [](auto&& n) {
         return n->canon_transform().conj;
       });
-  auto hvals = summands | transform([hoist_conj](auto&& n) {
+  // a summand's phase (its hand-up is the DENOTED value) hoists the same
+  // way: uniform -> a whole-node phase; mixed -> no transform of the
+  // unsigned sum (A - B vs A + B), so the negated summands salt the slot
+  auto const negated = [](auto&& n) { return n->canon_phase() == -1; };
+  bool const hoist_phase =
+      !ranges::empty(summands) && ranges::all_of(summands, negated);
+  bool const mixed_phase = !hoist_phase && ranges::any_of(summands, negated);
+  auto hvals = summands | transform([hoist_conj, mixed_phase](auto&& n) {
                  auto h = n->hash_value();
                  auto tr = n->canon_transform();
                  if (hoist_conj) tr.conj = false;
                  if (auto salt = tr.structural_salt(); salt != 0)
                    hash::combine(h, salt);
+                 if (mixed_phase && n->canon_phase() == -1)
+                   hash::combine(h, CanonTransform::phase_salt);
                  return h;
                });
+  CanonTransform const sum_transform{
+      .phase = static_cast<std::int8_t>(hoist_phase ? -1 : 1),
+      .conj = hoist_conj};
 
   auto make_sum =
-      [i = 0, hoist_conj,        //
+      [i = 0, sum_transform,     //
        hs = imed_hashes(hvals),  //
        align = std::size_t{0},   //
        all_tensors,
@@ -678,23 +630,23 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
     if (all_tensors) {
       // partition from the DENOTED orientation (stored canonical slots,
       // re-swapped per the child transform)
-      auto const t = denoted_spelling(left)->as<Tensor>();
+      auto const t = left.denoted_expr()->as<Tensor>();
       return {
           EvalOp::Sum,         //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           left.canon_indices(),                             //
-          CanonTransform{.conj = hoist_conj},               //
+          sum_transform,                                    //
           h,                                                //
           nullptr};
     } else {
-      return {EvalOp::Sum,                         //
-              ResultType::Scalar,                  //
-              detail::make_variable(),             //
-              {},                                  //
-              CanonTransform{.conj = hoist_conj},  //
-              h,                                   //
+      return {EvalOp::Sum,              //
+              ResultType::Scalar,       //
+              detail::make_variable(),  //
+              {},                       //
+              sum_transform,            //
+              h,                        //
               nullptr};
     }
   };
@@ -823,8 +775,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
-      auto const t =
-          denoted_spelling(*tl)->as<Tensor>();  // denoted orientation
+      auto const t = tl->denoted_expr()->as<Tensor>();  // denoted orientation
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
@@ -882,14 +833,22 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
            .named_indices = &named_indices});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
+      // the children hand up their DENOTED values (transforms applied) while
+      // the network above is spelled with their canonical slots: their
+      // phases hoist multiplicatively onto this node (A * (-B) = -(A * B)),
+      // so the slot -- phase-blind, shared by the spellings that differ by
+      // a child's antisymmetric reorder -- holds one canonical value
+      CanonTransform const transform{
+          .phase = static_cast<std::int8_t>(canon.phase * left->canon_phase() *
+                                            right->canon_phase()),
+          .conj = hoist_conj};
       EvalExpr result =
           scalar_result
               ? EvalExpr{EvalOp::Product,          //
                          ResultType::Scalar,       //
                          detail::make_variable(),  //
                          {},                       //
-                         CanonTransform{.phase = canon.phase,
-                                        .conj = hoist_conj},  //
+                         transform,                //
                          h,
                          std::move(canon.graph)}
               : EvalExpr{EvalOp::Product,     //
@@ -898,8 +857,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                              opts, bra(target_indices.bra),
                              ket(target_indices.ket), aux(target_indices.aux)),
                          canon.get_indices<Index::index_vector>(),  //
-                         CanonTransform{.phase = canon.phase,
-                                        .conj = hoist_conj},  //
+                         transform,                                 //
                          h,
                          std::move(canon.graph)};
       // This is a genuine contraction (DP) node: the optimizer's
@@ -930,7 +888,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto right = binarize(Constant{prod.scalar()});
 
     auto expr = left->is_tensor()
-                    ? detail::make_tensor(denoted_spelling(*left)->as<Tensor>(),
+                    ? detail::make_tensor(left->denoted_expr()->as<Tensor>(),
                                           false, opts)
                 : left->is_constant() ? (left->expr() * right->expr())
                                       : detail::make_variable();
@@ -989,8 +947,13 @@ EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
   if (auto salt = inner_node->canon_transform().structural_salt(); salt != 0)
     hash::combine(h, salt);
   hash::combine(h, static_cast<size_t>(op));
-  EvalExpr wrap{op,     ResultType::Scalar, detail::make_variable(),
-                {},     CanonTransform{},   h,
+  // the inner phase hoists through the projection (Re(-x) = -Re(x))
+  EvalExpr wrap{op,
+                ResultType::Scalar,
+                detail::make_variable(),
+                {},
+                CanonTransform{.phase = inner_node->canon_phase()},
+                h,
                 nullptr};
   EvalExprNode sentinel{EvalExpr{Constant{1}}};
   return EvalExprNode{std::move(wrap), std::move(inner_node),
