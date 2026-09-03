@@ -3735,3 +3735,53 @@ TEST_CASE(
   CHECK(*s_by_r2.begin() == sequant::index_position(S, *for_r2).value());
 }
 #endif  // loop-open-vs-sliced-mask Task 4 rewrite pending
+
+// ===========================================================================
+// A value MATERIALIZED across a forced loop split is built in its home block
+// (its in-nest readers take the per-batch cell) and escapes from that same
+// block outward (the other pass takes the assembled form). well_formed admits
+// exactly that: every block listing the value in `outputs` either holds its
+// BuildStep or is an ancestor of the block that does. Any other combination
+// of build and escape sites is still duplicate production.
+// ===========================================================================
+TEST_CASE("well_formed accepts a value built and escaped in its home block",
+          "[ordered][escape-chain]") {
+  using sequant::eval::BuildStep;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::OutputKind;
+  using sequant::eval::ScopeBlock;
+  using sequant::eval::Step;
+  using sequant::eval::well_formed;
+
+  // outer loop { inner loop { build 1; escape 1 } escape 1 }
+  auto const make = [](bool build_in_inner) {
+    ScopeBlock inner;
+    inner.axis = sequant::Index{L"i_2"};
+    inner.latitude_ordinal = 0;
+    if (build_in_inner) inner.steps.push_back(Step{BuildStep{1}});
+    inner.outputs.push_back({1, OutputKind::AccumulateScatter});
+
+    ScopeBlock sibling;
+    sibling.axis = sequant::Index{L"i_2"};
+    sibling.latitude_ordinal = 1;  // distinct ordinal: sibling, not a chain
+    if (!build_in_inner) sibling.steps.push_back(Step{BuildStep{1}});
+
+    ScopeBlock outer;
+    outer.axis = sequant::Index{L"i_1"};
+    outer.latitude_ordinal = 0;
+    outer.steps.push_back(Step{std::move(inner)});
+    outer.steps.push_back(Step{std::move(sibling)});
+    outer.outputs.push_back({1, OutputKind::AccumulateScatter});
+
+    OrderedSchedule sched;
+    sched.root.steps.push_back(Step{std::move(outer)});
+    sched.num_values = 2;
+    return sched;
+  };
+
+  // built where it escapes; the outer escape is an ancestor of that block
+  CHECK(well_formed(make(/*build_in_inner=*/true)));
+  // the same escape chain, but the BuildStep moved to a SIBLING block: the
+  // inner escape is neither the home block nor an ancestor of it
+  CHECK_FALSE(well_formed(make(/*build_in_inner=*/false)));
+}

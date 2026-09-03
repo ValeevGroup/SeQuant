@@ -482,6 +482,30 @@ void run_ordered_contracted_block(
   // consumed only by a nested block (within-block count 1) or read by a
   // co-member under a different frame's label (inconsistent signature) got no
   // slot and every consumer missed.
+
+  // The value_ids this block BUILDS with a step of its own -- needed twice
+  // below: a value that is both built here and listed among this block's
+  // outputs (a member materialized across a forced loop split) is a real
+  // scratch member whose per-batch cell the close read consumes.
+  std::unordered_set<std::size_t> built_here;
+  for (Step const& s : block.steps)
+    if (auto const* b = std::get_if<BuildStep>(&s.value))
+      built_here.insert(b->value_id);
+
+  // The value_ids a DIRECT child block of this one escapes: for those, this
+  // block's own escape is the next link of a chain, and the link's input is
+  // the result the child just closed (\c value_results), not an operand read.
+  // Taking it from there rather than re-resolving the node through the cache
+  // keeps the outer link from resolving the value AS ITS OWN consumer, for
+  // which the schedule records no slice fact.
+  std::unordered_set<std::size_t> escaped_by_child;
+  for (Step const& s : block.steps)
+    if (auto const* c = std::get_if<ScopeBlock>(&s.value))
+      for (auto const& [ovid, okind] : c->outputs) {
+        (void)okind;
+        escaped_by_child.insert(ovid);
+      }
+
   std::function<std::size_t(node_t const&)> member_life;
   if (home_reads) {
     std::unordered_map<std::size_t, std::size_t> life_by_hash;
@@ -489,9 +513,12 @@ void run_ordered_contracted_block(
       if (auto const* b = std::get_if<BuildStep>(&s.value)) {
         node_t const& nd = resolve(b->value_id);
         if (!nd.leaf())
-          // A block-member BuildStep is single-cell (not an escape output), so
-          // its home key never matches an intermediate-escape cell -- pass the
-          // block's own scope; home_reads falls through to the collapsed count.
+          // A block-member BuildStep's home key never matches an
+          // intermediate-escape cell -- pass the block's own scope; home_reads
+          // falls through to the collapsed count. A member that is ALSO an
+          // output of this block needs no extra life for its close: the close
+          // reuses the step's own result (escaped_build_results) rather than
+          // reading the scratch again.
           life_by_hash[nd->hash_value()] =
               home_reads(b->value_id, HomeScopeKey{});
       }
@@ -509,6 +536,11 @@ void run_ordered_contracted_block(
   std::unordered_set<std::size_t> escape_output_hashes;
   for (auto const& [ovid, okind] : block.outputs) {
     (void)okind;
+    // ... unless this block also BUILDS it: then the value is an ordinary
+    // per-batch scratch member (its in-nest consumers read that cell every
+    // batch) that additionally escapes. Denying it a slot would make the
+    // BuildStep's store a no-op and every in-nest read miss.
+    if (built_here.count(ovid)) continue;
     escape_output_hashes.insert(rich.cells[ovid].hash);
   }
   auto bs = [&]() {
@@ -593,6 +625,15 @@ void run_ordered_contracted_block(
     ctx.push_back({block.axis, block.level, {e_lo, e_hi}, std::nullopt});
     bs.cache.set_batch_context(ctx);
 
+    // This batch's results for the values this block both BUILDS and ESCAPES
+    // (the mixed-pass members of a forced loop split): the BuildStep IS the
+    // per-batch partial the escape accumulates, so the close below takes it
+    // straight from here. Re-fetching it through the cache instead would
+    // resolve the value AS ITS OWN consumer, for which the schedule records no
+    // slice fact (the seam keys facts on DAG edges) -- the fetch is not a read
+    // by another value, it is this step's own result.
+    std::unordered_map<std::size_t, ResultPtr> escaped_build_results;
+
     for (Step const& step : block.steps) {
       if (auto const* build = std::get_if<BuildStep>(&step.value)) {
         // Cache-halt: skip a dead loop-local Transient -- one whose value is
@@ -629,7 +670,15 @@ void run_ordered_contracted_block(
           // already set on bs.cache (make_batched_scratch), so evaluate_impl's
           // bare-node self-store of V and its operand fetches are colored by
           // home identity.
-          (void)evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
+          ResultPtr r =
+              evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
+          bool is_output = false;
+          for (auto const& [ovid, okind] : block.outputs) {
+            (void)okind;
+            if (ovid == build->value_id) is_output = true;
+          }
+          if (is_output)
+            escaped_build_results.emplace(build->value_id, std::move(r));
         }
         // R3: record this loop-local Transient as produced (it is built fresh
         // every batch on the scratch and never lands in value_results, so the
@@ -670,7 +719,16 @@ void run_ordered_contracted_block(
       // throwing evaluate_impl.
       node_t const& out_eval_node = resolve(vid);
       ResultPtr part;
-      {
+      if (auto const it = escaped_build_results.find(vid);
+          it != escaped_build_results.end()) {
+        // Built by a step of this very block this batch: that result IS the
+        // partial (see escaped_build_results).
+        part = it->second;
+      } else if (escaped_by_child.count(vid) && value_results[vid]) {
+        // The next link of an escape chain: the partial a child block closed
+        // during THIS batch (see escaped_by_child).
+        part = value_results[vid];
+      } else {
         CurrentConsumerGuard const consumer_guard{bs.cache,
                                                   bs.cache.current_consumer()};
         bs.cache.set_current_consumer(out_eval_node->hash_value());
