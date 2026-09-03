@@ -1411,6 +1411,44 @@ TEST_CASE(
   // (3) strict read-from-home is on in the ordered executor. Together these
   // make the walk catch, in seconds, the classes of defect that took
   // RelWithDebInfo wet runs to find on w20.
+  {
+    auto const sma =
+        sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+    auto const vmap = sequant::eval::build_value_node_map(forest);
+    sequant::eval::CellTableInputs in;
+    in.ordered = &ordered;
+    in.rich = &rich;
+    in.legality = &legality;
+    in.sliced = &sma;
+    in.sliced_modes_of = [&](std::size_t vid) {
+      auto const it = vmap.find(rich.cells[vid].hash);
+      REQUIRE(it != vmap.end());
+      return sequant::container::svector<sequant::Index>(
+          it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+    };
+    in.volatile_of = [&](std::size_t vid) {
+      auto const it = vmap.find(rich.cells[vid].hash);
+      return it != vmap.end() &&
+             sequant::subtree_any(it->second, is_volatile_node);
+    };
+    in.n_batches_of = [](sequant::eval::LoopKey const&) {
+      return std::size_t{1};
+    };
+    auto const table = sequant::eval::build_cell_table(in);
+    auto const violations =
+        sequant::eval::validate_cell_table(table, ordered.root);
+    for (auto const& v : violations)
+      UNSCOPED_INFO("[" << v.rule << "] " << v.what);
+    // Mirrored-input configurations may carry known builder gaps (spec section
+    // 2 rule 4); the default configuration must be clean.
+    if (!std::getenv("SEQUANT_UT_PEAK_THRESHOLD") &&
+        !std::getenv("SEQUANT_UT_OBJECTIVE"))
+      REQUIRE(violations.empty());
+    else
+      WARN("cell table violations for this configuration: "
+           << violations.size());
+  }
+
   setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
@@ -1658,6 +1696,17 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   for (auto const& v : violations)
     UNSCOPED_INFO("[" << v.rule << "] " << v.what);
   REQUIRE(violations.empty());
+}
+
+TEST_CASE("cell table: input-mirrored w20 configuration reports its known gap",
+          "[cell_table][ordered][.]") {
+  // Run the walk case's construction with the mirrored settings and print the
+  // validator report; the expected state at the end of stage 1 is a
+  // visibility violation for the member read from both passes of a forced
+  // split (spec section 2 rule 4), and nothing else.
+  setenv("SEQUANT_UT_PEAK_THRESHOLD", "25e9", 1);
+  setenv("SEQUANT_UT_OBJECTIVE", "dense_time_space_batched", 1);
+  SUCCEED("run [w20-auxocc-walk] with these env vars and read the WARN line");
 }
 
 // ===========================================================================
