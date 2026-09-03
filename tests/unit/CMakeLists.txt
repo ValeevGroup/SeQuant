@@ -242,7 +242,7 @@ if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
 
-target_set_warning_flags(unit_tests-sequant)
+target_set_compiler_flags(unit_tests-sequant)
 
 if (SEQUANT_TESTS)
     catch_discover_tests(
