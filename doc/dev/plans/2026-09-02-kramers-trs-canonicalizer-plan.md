@@ -265,6 +265,15 @@ phase led to these changes:
   cached array reached the second consumer in the wrong mode order (TA
   range-congruence assertion in a ToT contraction, iteration 2). The sum
   hash is salted with the leading summand's index labels.
+- **apply_slot_order applies the NAMED-index canonical order** (0b5003d6d).
+  The raw canonical vertex ordinals order same-color cells by the color
+  hash, so a mixed-flavor antisymmetric bundle came out as `a↓,a↑` (288
+  such t spellings in the HSeOH PNS-CCD trace); the PNS provider stores
+  representative Kramers configurations only, and the mismatched
+  configuration request aborted iteration 2 (TA range congruence in a ToT
+  contraction). In apply mode the order applied -- and the phase reported
+  -- is the named-index canonical order (space-major, vertex ordinal within
+  a group), the order the hand-rolled reorder had used.
 - Deferred: lazy views for `ResultTensorOfTensorTA` (T19 layer 1 does not
   reach the PNS hot path yet); the TA `eval_with_tiledarray/real/
   summation` test fails on this branch since before these commits
