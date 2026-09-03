@@ -276,11 +276,11 @@ class EvalExpr {
   ///
   [[nodiscard]] CanonTransform canon_transform() const noexcept;
 
-  /// \return For a tensor leaf: its DENOTED spelling -- the stored canonical
-  /// spelling with the transform re-materialized syntactically (bra<->ket
-  /// swapped back, Kramers flavors flipped back, the conjugation marker
-  /// restored), i.e. the tensor whose value the leaf hands up to its parent
-  /// (the phase, a scalar, is not spelled). \pre is_tensor() && is_primary()
+  /// \return For a tensor-valued node: its DENOTED spelling -- the stored
+  /// canonical spelling with the transform re-materialized syntactically
+  /// (bra<->ket swapped back, Kramers flavors flipped back, the conjugation
+  /// marker restored), i.e. the tensor whose value the leaf hands up to its
+  /// parent (the phase, a scalar, is not spelled). \pre is_tensor()
   [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///

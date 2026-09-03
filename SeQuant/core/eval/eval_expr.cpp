@@ -410,7 +410,7 @@ std::int8_t EvalExpr::canon_phase() const noexcept {
 }
 
 ExprPtr EvalExpr::denoted_expr() const {
-  SEQUANT_ASSERT(is_tensor() && is_primary());
+  SEQUANT_ASSERT(is_tensor());
   auto t = expr_->as<Tensor>();
   auto const tr = canon_transform_;
   // undo normalize_leaf's channels in reverse order: the slot swap, then the
