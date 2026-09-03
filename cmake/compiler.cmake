@@ -26,6 +26,8 @@ function(target_set_compiler_flags TARGET)
 		# By default MSVC does not set the __cplusplus macro to the correct value
 		# That breaks any code that tries to be compatible with different C++ standards
 		target_compile_options("${TARGET}" PUBLIC "/Zc:__cplusplus")
+		# Don't error due to object files being too big
+		target_compile_options("${TARGET}" PRIVATE "/bigobj")
 	endif()
 
     if (NOT PROJECT_IS_TOP_LEVEL)
