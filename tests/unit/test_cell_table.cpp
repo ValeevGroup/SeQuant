@@ -246,6 +246,53 @@ TEST_CASE(
   CHECK(visibility);   // cell 1 lives in (1,1), not visible inside (1,0)
 }
 
+TEST_CASE(
+    "cell table validator: an explicitly invariant read is not a form "
+    "mismatch, but the same read without the marker is",
+    "[cell_table]") {
+  using namespace sequant::eval;
+  CellTable t;
+  TableCell a;  // value 0, sliced by (1,0)
+  a.value_id = 0;
+  a.sliced.push_back({0, LoopKey{1, 0}});
+  a.scope.path.push_back({LoopKey{1, 0}, 0});
+  a.life = 1;
+  t.cells.push_back(a);  // cell 0
+  TableCell b;  // value 1, whole -- does not carry loop (1,0)'s mode at all
+  b.value_id = 1;
+  b.life = 1;
+  t.cells.push_back(b);  // cell 1
+  TableCell c;           // value 2 = a * b, sliced by (1,0), built inside (1,0)
+  c.value_id = 2;
+  c.sliced.push_back({0, LoopKey{1, 0}});
+  c.scope.path.push_back({LoopKey{1, 0}, 0});
+  t.cells.push_back(c);  // cell 2
+  t.reads.push_back(Read{2, 0, 0, {}, {}});
+  Read r_b{2, 1, 1, {}, {}};
+  r_b.invariant_on.push_back(LoopKey{1, 0});
+  t.reads.push_back(r_b);
+
+  {
+    // b's read is explicitly marked invariant on (1,0): not a mismatch even
+    // though a is bound to (1,0).
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    std::size_t n_form = 0;
+    for (auto const& x : v)
+      if (x.rule == "form") ++n_form;
+    CHECK(n_form == 0);
+  }
+  // clearing the invariant marker restores the undecided-whole-vs-bound
+  // mismatch.
+  t.reads.back().invariant_on.clear();
+  {
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    std::size_t n_form = 0;
+    for (auto const& x : v)
+      if (x.rule == "form") ++n_form;
+    CHECK(n_form == 1);
+  }
+}
+
 TEST_CASE("cell table: persistent cell built inside a loop is visible at root",
           "[cell_table]") {
   using namespace sequant::eval;
@@ -280,9 +327,20 @@ TEST_CASE("cell table: persistent cell built inside a loop is visible at root",
     CHECK(v.empty());
   }
 
-  // flip: no longer persistent, but bound to its own (innermost) loop --
-  // it dies at the end of that loop's batch, so it is NOT visible at root.
+  // residency is decided by bound instances alone: the SAME whole cell is
+  // resident at root even when NOT persistent (e.g. it carries a volatile
+  // leaf) -- persistent decides only survival across evaluations, not
+  // where within one evaluation a cell lives.
   t.cells[1].persistent = false;
+  {
+    auto const v = validate_cell_table(t, ScopeBlock{});
+    for (auto const& x : v) UNSCOPED_INFO(x.rule << ": " << x.what);
+    CHECK(v.empty());
+  }
+
+  // flip: bound to its own (innermost) loop instead -- it dies at the end
+  // of that loop's batch, so it is NOT visible at root, regardless of
+  // persistent.
   t.cells[1].sliced.push_back({0, LoopKey{1, 0}});
   {
     auto const v = validate_cell_table(t, ScopeBlock{});

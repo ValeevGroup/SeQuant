@@ -81,6 +81,10 @@ struct Read {
   CellId source = 0;
   /// operand positions to slice to the current batch of that loop instance.
   container::svector<std::pair<std::size_t, LoopKey>> slice;
+  /// loop instances the consumer is sliced by on which this read is
+  /// explicitly whole (the operand does not carry that loop's mode in the
+  /// consumer's frame); empty = no explicit decision.
+  container::svector<LoopKey> invariant_on;
 };
 
 struct CellTable {
@@ -123,15 +127,18 @@ namespace detail {
 }
 
 /// The scope over which a produced cell \p s remains resident, once
-/// produced: (1) a persistent cell is resident everywhere (the root scope);
-/// (2) else, if \p s is bound (\c bound_instances) to one instance of a loop
-/// that also appears in \c s.scope.path, it is resident only through that
-/// loop's current batch, i.e. through the prefix of \c s.scope.path ending
-/// at the DEEPEST such bound loop (it dies when that loop's batch ends); (3)
-/// else (a volatile whole cell, including a produce_if_absent cell whole on
-/// its innermost loop) it is resident exactly at \c s.scope.
+/// produced: (1) if \p s is bound (\c bound_instances) to one instance of a
+/// loop that also appears in \c s.scope.path, it is resident only through
+/// that loop's current batch, i.e. through the prefix of \c s.scope.path
+/// ending at the DEEPEST such bound loop (it dies when that loop's batch
+/// ends); (2) else (\p s is bound to NONE of its enclosing loops -- a WHOLE
+/// cell, invariant to every loop on its own scope path) it is resident
+/// EVERYWHERE, i.e. the root scope: an escaping value the runtime homes out
+/// through every enclosing loop it does not carry the mode of, all the way
+/// to the chain root, regardless of whether the cell is volatile. \c
+/// persistent is a SEPARATE property (survival across evaluations, not
+/// where within one evaluation a cell lives) and is NOT consulted here.
 [[nodiscard]] inline CellScope residency_scope(TableCell const& s) {
-  if (s.persistent) return CellScope{};
   auto const bi = bound_instances(s);
   std::size_t deepest = 0;
   bool bound = false;
@@ -144,7 +151,7 @@ namespace detail {
       }
     }
   }
-  if (!bound) return s.scope;
+  if (!bound) return CellScope{};
   CellScope r;
   r.path.assign(s.scope.path.begin(), s.scope.path.begin() + deepest + 1);
   return r;
@@ -193,9 +200,9 @@ namespace detail {
 
   // (1) visibility: a source is resident at the consumer's production iff
   // the source was produced earlier (or is a Leaf) and the source's
-  // RESIDENCY scope (detail::residency_scope; persistent -> root, bound to
-  // an enclosing loop instance -> the prefix of its scope ending at that
-  // loop, else its own scope) encloses the consumer's scope.
+  // RESIDENCY scope (detail::residency_scope: bound to an enclosing loop
+  // instance -> the prefix of its scope ending at that loop, else -- a
+  // whole cell -- the root scope) encloses the consumer's scope.
   {
     container::vector<bool> produced(n, false);
     for (CellId id = 0; id < n; ++id)
@@ -226,8 +233,15 @@ namespace detail {
   }
 
   // (2) form: per consumer and per loop group it is sliced by, every operand
-  // bound to that group must be bound to the SAME instance; an operand whole
-  // on a group that another operand is bound to is a mismatch.
+  // bound to that group must be bound to the SAME instance; an UNDECIDED
+  // whole operand (one with no explicit invariant decision) on a group that
+  // another operand is bound to is a mismatch. A read the seam explicitly
+  // marked invariant on this instance (\c Read::invariant_on, from
+  // SlicedModeAssignment::occ_invariant: the operand legitimately does not
+  // carry this loop's mode in the consumer's frame) is neither "bound" nor
+  // "whole" for this rule -- it is a THIRD, deliberate classification and
+  // never contributes to the mismatch. A read bound to another instance of
+  // the SAME group is still always its own violation, invariant or not.
   for (CellId id = 0; id < n; ++id) {
     TableCell const& c = table.cells[id];
     if (c.production.kind != ProductionKind::Build) continue;
@@ -250,9 +264,12 @@ namespace detail {
                                      "group " +
                                      std::to_string(L.depth) + " than " +
                                      detail::cell_str(table, id)});
+        bool invariant_here = false;
+        for (LoopKey const& k : r.invariant_on)
+          if (detail::same_key(k, L)) invariant_here = true;
         if (bound_here)
           any_bound = true;
-        else if (!bound_other)
+        else if (!bound_other && !invariant_here)
           any_whole = true;
       }
       if (any_bound && any_whole)
@@ -598,8 +615,8 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
       auto const fit = st.forms_of.find(op);
       if (fit == st.forms_of.end() || fit->second.empty()) continue;
       // Source = among this operand's forms, the one whose RESIDENCY scope
-      // (detail::residency_scope: root if persistent, else the prefix of
-      // its scope ending at the deepest loop it is bound to, else its own
+      // (detail::residency_scope: the prefix of its scope ending at the
+      // deepest loop it is bound to, else -- a whole form -- the root
       // scope) encloses the consumer's scope, deepest such form wins; if
       // none is resident, fall back to the LAST form so the validator's
       // visibility rule surfaces the gap rather than the builder hiding it.
@@ -626,6 +643,20 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
         for (LoopKey const& pk : s.partial_over)
           if (detail::same_key(pk, k)) already = true;
         if (!already) r.slice.push_back({pos, k});
+      }
+      // Explicit invariant decisions: this consumer's read of op is
+      // correctly whole on a loop the CONSUMER itself is bound to (the
+      // schedule's seam recorded op as not carrying that loop's mode in
+      // this consumer's frame), so it is not a form mismatch even though
+      // another operand may be bound to that same loop.
+      auto const c_bound = detail::bound_instances(c);
+      for (auto const& [w_vid, lid, consumer_vid] : in.sliced->occ_invariant) {
+        if (w_vid != op || consumer_vid != c.value_id) continue;
+        LoopKey const k = key_of_lid(lid);
+        bool in_consumer_bound = false;
+        for (LoopKey const& ck : c_bound)
+          if (detail::same_key(ck, k)) in_consumer_bound = true;
+        if (in_consumer_bound) r.invariant_on.push_back(k);
       }
       st.table.reads.push_back(std::move(r));
     }
