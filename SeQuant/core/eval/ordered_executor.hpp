@@ -4,6 +4,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/cell_table.hpp>
+#include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/forest_combine.hpp>
@@ -255,7 +257,12 @@ void run_ordered_contracted_block(
         home_reads = {},
     container::set<std::size_t> const* needed_build = nullptr,
     std::unordered_map<std::size_t, container::set<std::size_t>> const*
-        consumer_loops = nullptr) {
+        consumer_loops = nullptr,
+    // Explicit value cells (SP4 Task 3): the cell table built and validated
+    // ONCE by run_ordered_schedule_pre_results, threaded through this
+    // function's own recursion so it reaches every block. Unused here --
+    // Task 4 is where a table-driven block runner starts consulting it.
+    CellTable const* table = nullptr) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   using member_t = std::pair<node_t const*, Index>;
@@ -688,7 +695,7 @@ void run_ordered_contracted_block(
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, ordered, leaf_evaluator, bs.cache, target, ctx,
             value_results, built, is_volatile, n_blocks, home_reads,
-            needed_build, consumer_loops);
+            needed_build, consumer_loops, table);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -1037,6 +1044,67 @@ void run_ordered_contracted_block(
   }
 }
 
+inline std::size_t& ordered_last_cell_table_size_slot() {
+  static std::size_t n = 0;
+  return n;
+}
+/// Diagnostic: number of cells in the table built by the most recent
+/// \c run_ordered_schedule_pre_results call (test-facing; not thread-safe).
+[[nodiscard]] inline std::size_t ordered_last_cell_table_size() {
+  return ordered_last_cell_table_size_slot();
+}
+
+/// Assembles the \c CellTableInputs the cell table builder needs from what
+/// \c run_ordered_schedule_pre_results already has in hand: the finished
+/// schedule (\p ordered, \p rich), the seam it derives the per-occurrence
+/// slicing facts from (\p sma), the value-id -> forest-node accessor every
+/// homing site in this file already uses (\p resolve), and the node-level
+/// volatility predicate (\p is_volatile, possibly empty). \c operands_of is
+/// built here from the value's own production tree (its canonical node's two
+/// children, resolved back to value ids via a hash -> value-id map built
+/// once) so a value contracted with itself contributes one operand entry per
+/// LEG, matching the runtime's own per-leg home accesses (see \c
+/// CellTableInputs::operands_of's own note on why the de-duplicated
+/// dependency graph cannot express that).
+template <typename Resolve, typename IsVolatile>
+CellTableInputs make_cell_table_inputs(OrderedSchedule const& ordered,
+                                       RichSchedule const& rich,
+                                       SlicedModeAssignment const& sma,
+                                       Resolve const& resolve,
+                                       IsVolatile const& is_volatile) {
+  CellTableInputs in;
+  in.ordered = &ordered;
+  in.rich = &rich;
+  in.sliced = &sma;
+  in.sliced_modes_of = [&](std::size_t vid) {
+    auto const& nd = resolve(vid);
+    return container::svector<Index>(nd->sliced_modes().begin(),
+                                     nd->sliced_modes().end());
+  };
+  in.volatile_of = [&](std::size_t vid) {
+    return is_volatile && subtree_any(resolve(vid), is_volatile);
+  };
+  // Built ONCE here (not per call of the lambda below), then captured BY
+  // VALUE: a reference into this function's own stack would dangle once it
+  // returns, and both the caller's use of CellTableInputs (build_cell_table)
+  // and CellTableInputs itself never outlive this call chain, so a value copy
+  // is cheap and correct.
+  std::unordered_map<std::size_t, std::size_t> vid_of_hash;
+  for (auto const& vc : rich.cells) vid_of_hash.emplace(vc.hash, vc.value_id);
+  in.operands_of = [&resolve, vid_of_hash](std::size_t vid) {
+    container::svector<std::size_t> out;
+    auto const& nd = resolve(vid);
+    if (nd.leaf()) return out;
+    for (auto const* child : {&nd.left(), &nd.right()})
+      if (auto it = vid_of_hash.find((*child)->hash_value());
+          it != vid_of_hash.end())
+        out.push_back(it->second);
+    return out;
+  };
+  in.n_batches_of = [](LoopKey const&) { return std::size_t{1}; };
+  return in;
+}
+
 ///
 /// \brief Task 4 (multi-root single-DAG eval): the shared CORE every ordered
 /// whole-forest entry point (\c evaluate_ordered_schedule's forest-wide SUM
@@ -1184,6 +1252,34 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
   // to the forest node evaluate_impl builds.
   auto const vmap = build_value_node_map(forest);
+
+  // value_id -> forest node: the same lookup run_ordered_contracted_block's
+  // own `resolve` performs (see its definition above this function), built
+  // again here since that one closes over the block function's own
+  // parameters, not this function's locals.
+  auto const resolve = [&](std::size_t vid) -> node_t const& {
+    auto const hash = rich.cells[vid].hash;
+    auto const it = vmap.find(hash);
+    SEQUANT_ASSERT(it != vmap.end() &&
+                   "evaluate_ordered_schedule: a value_id was not found in "
+                   "the forest's value-node map");
+    return it->second;
+  };
+
+  // Explicit value cells (SP4 Task 3): build and statically validate the cell
+  // table once per call, consuming the sliced_mode_assignment seam just
+  // built above -- before any block runs, so a schedule this table cannot
+  // describe is refused up front rather than mis-executed. A fixture whose
+  // table fails validation is a real finding on that fixture: the assertion
+  // is not bypassed.
+  CellTable const cell_table = build_cell_table(make_cell_table_inputs(
+      ordered, rich, sliced_mode_assignment, resolve, is_volatile));
+  assert_valid_cell_table(cell_table, ordered.root);
+  if (!cell_table.unresolved.empty())
+    throw Exception("evaluate_ordered_schedule: the cell table has " +
+                    std::to_string(cell_table.unresolved.size()) +
+                    " unresolved sliced positions (see CellTable::unresolved)");
+  ordered_last_cell_table_size_slot() = cell_table.cells.size();
 
   // Task 4: the block-count function over the WHOLE ScopeBlock tree, built
   // ONCE here (Task 2's ordered_n_blocks) and threaded through the homing
@@ -1435,7 +1531,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
           value_results, built, is_volatile, n_blocks, home_reads,
-          &needed_build, &consumer_loops);
+          &needed_build, &consumer_loops, &cell_table);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.

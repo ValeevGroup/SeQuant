@@ -211,6 +211,37 @@ TEST_CASE(
   CHECK(got_val == Catch::Approx(expected));
 }
 
+// Explicit value cells (SP4 Task 3): evaluate_ordered_schedule now builds and
+// statically validates a cell table before evaluating a schedule at all --
+// same fixture as the case above, corrupting nothing, so the run must succeed
+// and the test-facing diagnostic must report the table's own cell count.
+TEST_CASE("ordered executor asserts the cell table before evaluating",
+          "[ordered][cell_table]") {
+  std::vector<ScalarNode> forest{scalar_tree(L"2 * a * b - c"),
+                                 scalar_tree(L"a * a + 3 * b - 2 * c")};
+
+  ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
+
+  sequant::BatchPolicy const policy;
+
+  SizeRegime const regime;
+  CostModel const cm{regime};
+  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  auto ordered_cache = sequant::CacheManager<ScalarNode>::empty();
+  std::function<std::size_t(Index const&)> const target =
+      [](Index const&) -> std::size_t { return 1; };
+  ResultPtr const got = evaluate_ordered_schedule(forest, ordered, rich,
+                                                  ScalarEvalExpr::annot_t{},
+                                                  yield, ordered_cache, target);
+  REQUIRE(got);
+  CHECK(sequant::eval::detail::ordered_last_cell_table_size() > 0);
+}
+
 // The same equivalence, but reached through the BatchPolicy-gated dispatch
 // entry (sequant::evaluate(Nodes const&, BatchPolicy const&, ...),
 // scope_executor.hpp) with policy.scheduler == BatchScheduler::ordered -- the
