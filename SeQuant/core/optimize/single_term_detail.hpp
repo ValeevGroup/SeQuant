@@ -482,7 +482,9 @@ inline container::vector<char> outer_product_connectivity(
     TensorNetwork const& network, TIdxs const& tidxs, bool prune = true) {
   std::size_t const nt = network.tensors().size();
   std::size_t const sz = std::size_t{1} << nt;
-  if (!prune || std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING"))
+  const char* disable_env_var =
+      std::getenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  if (!prune || (disable_env_var && *disable_env_var != '\0'))
     return container::vector<char>(sz, 1);
   auto mask = connected_subsets(contractible_adjacency(network, tidxs), nt);
   if (!mask.empty() && !mask.back())  // full network disconnected: disable
