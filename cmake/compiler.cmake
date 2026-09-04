@@ -28,6 +28,8 @@ function(target_set_compiler_flags TARGET)
 		target_compile_options("${TARGET}" PUBLIC "/Zc:__cplusplus")
 		# Don't error due to object files being too big
 		target_compile_options("${TARGET}" PRIVATE "/bigobj")
+		# Make MSVC use and understand UTF-8 encoding in source files
+		target_compile_options("${TARGET}" PUBLIC "/utf-8")
 	endif()
 
     if (NOT PROJECT_IS_TOP_LEVEL)
