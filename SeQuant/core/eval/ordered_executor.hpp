@@ -1381,8 +1381,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     // NEXT evaluation from root0 + root1, and two forest roots resolving to
     // one cell would double one of them. Hand out a private copy. (The
     // phase-shifting branch is not a substitute: a backend's \c
-    // mult_by_phase may return a shallow handle onto the same tiles.)
-    ptr = ptr->clone();
+    // mult_by_phase may return a shallow handle onto the same tiles.) Only
+    // the FIRST root's buffer is mutated (it becomes the accumulator); the
+    // other roots are read-only addends, so they are handed out as-is: one
+    // copy per evaluation, not one per root.
+    if (i == 0) ptr = ptr->clone();
     // Orient the stored value to this root's phase, matching evaluate_impl's
     // own canonical->orientation return convention (apply_phase).
     auto const ph = roots[i]->canon_phase();
