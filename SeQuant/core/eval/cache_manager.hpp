@@ -696,18 +696,6 @@ class CacheManager {
   /// as before; only the ordered executor passes a genuinely colored key.
   using cache_key_type = eval::CachedValue<TreeNode>;
 
-  /// Pillar 1 / Task 7: a per-build coloring context -- node hash -> the
-  /// home-slice coloring of the VALUE that node represents in the current
-  /// build. The ordered executor sets one (RAII) before each `evaluate_impl`
-  /// build, from `operand_vids` + `home_mode_depth`; the map-keying methods
-  /// re-color an EMPTY-coloring key from it so `evaluate_impl`'s bare-node
-  /// store/access build the right home-colored `CachedValue`. Per-build =>
-  /// node->coloring is 1:1.
-  using ValueColoringCtx =
-      std::unordered_map<std::size_t, eval::ValueIdColoring>;
-  /// value hash -> the value's canonical node (see recolor()).
-  using CanonicalNodeCtx = std::unordered_map<std::size_t, TreeNode>;
-
   /// A custom evaluator type. `evaluate()` consults the cache's custom
   /// evaluator (if set) before applying its standard recursive scheme to each
   /// *non-leaf* node, invoking it as `custom_evaluator(node, cache)`:
@@ -942,30 +930,6 @@ class CacheManager {
       }
     }
 
-    /// Drop this entry's own reference to its data WITHOUT serving it, and
-    /// spend the rest of its life -- what \c access() already does on an
-    /// entry's LAST use, reached from a reader that took the value by another
-    /// route (the cell table's own read path) and so never called \c
-    /// access(). A value nobody holds but its final consumer is what makes
-    /// the in-place accumulation in \c evaluate_impl legal (see \c
-    /// CacheManager::chain_holds_shared); an entry left holding a fully
-    /// consumed value pins its memory AND makes every later reader treat the
-    /// buffer as shared. A persistent entry is never released (its whole
-    /// point is to outlive its reads).
-    ///
-    /// STAGE-3 SEAM: this exists solely to keep the legacy \c
-    /// chain_holds_shared check honest under table-driven reads, keyed by the
-    /// same canonical node as every production site; the next stage
-    /// re-derives in-place eligibility from the cell table's own \c life /
-    /// \c persistent and deletes it.
-    void release() noexcept {
-      if (persistent_) return;
-      life_c = 0;
-      data_p = nullptr;
-      size_bytes_.reset();
-      stored_this_eval_ = false;
-    }
-
     [[nodiscard]] bool persistent() const noexcept { return persistent_; }
 
     /// \return whether this NON-persistent entry has been \c store()'d since
@@ -999,36 +963,6 @@ class CacheManager {
     [[nodiscard]] bool holds(ResultPtr const& other) const noexcept {
       return data_p && data_p.get() == other.get();
     }
-
-    /// Upgrade this entry to an unbounded (resident-until-reset) non-persistent
-    /// life, preserving any currently stored data and its cached size. Used to
-    /// re-home an existing finite-life CSE entry at a scope where the value
-    /// must survive ALL of its (possibly per-block-repeated) reads within one
-    /// evaluation, so a partially drained entry becomes resident again rather
-    /// than being freed and rebuilt by a later consumer. See \c
-    /// CacheManager::ensure_home_slot.
-    void make_resident() noexcept {
-      max_life = std::numeric_limits<size_t>::max();
-      life_c = std::numeric_limits<size_t>::max();
-    }
-
-    /// Set (or reset) this entry's bounded life to exactly @p count uses,
-    /// preserving any currently stored data. Used by \c
-    /// CacheManager::ensure_home_slot(key, use_count, persistent) to home a
-    /// value with a genuine use-count-bounded lifetime -- released at its
-    /// count-th access -- rather than \c make_resident's unconditional
-    /// unbounded pin.
-    void set_life(size_t count) noexcept {
-      max_life = count;
-      life_c = count;
-    }
-
-    /// Upgrade this entry to persistent (never drained on access, survives
-    /// reset()), preserving any currently stored data. Used by \c
-    /// CacheManager::ensure_home_slot(key, use_count, persistent) to promote
-    /// an existing entry when a later caller discovers the key is actually
-    /// iteration-invariant.
-    void make_persistent() noexcept { persistent_ = true; }
 
    private:
     [[nodiscard]] int decay() noexcept {
@@ -1149,48 +1083,6 @@ class CacheManager {
   /// \c parent_ (only the root cache is wired in practice). The pointee must
   /// outlive this cache.
   eval::PlacementRouter<TreeNode> const* placement_router_ = nullptr;
-
-  /// Pillar 1 / Task 7: the LOCAL per-build coloring context (see \c
-  /// ValueColoringCtx). Non-owning, set by the ordered executor around an
-  /// `evaluate_impl` build. LOCAL only (NOT inherited through the parent
-  /// chain): a map-keying method builds its key using THIS cache's context, and
-  /// access_at then walks parents with that already-built key. Null (default)
-  /// => no re-color => byte-identical.
-  ValueColoringCtx const* value_coloring_ctx_ = nullptr;
-  CanonicalNodeCtx const* canonical_node_ctx_ = nullptr;
-
-  /// Pillar 1 / Task 7: re-color an EMPTY-coloring key from the local per-build
-  /// coloring context, so a bare-node key (`evaluate_impl` passes nodes, which
-  /// implicit-convert to an empty-coloring `CachedValue`) picks up the home
-  /// coloring of the value that node represents in this build. A key that
-  /// already carries a coloring (the executor's own `value_of(vid)` calls) is
-  /// respected as-is; a node absent from the context, or a null context,
-  /// returns the key unchanged => byte-identical without a context.
-  [[nodiscard]] cache_key_type recolor(cache_key_type const& key) const {
-    if (value_coloring_ctx_ && key.coloring.empty()) {
-      auto const it = value_coloring_ctx_->find(key.node->hash_value());
-      if (it != value_coloring_ctx_->end() && !it->second.empty()) {
-        // FRAME-CANONICAL key (2026-09-02): a sliced value's key compares
-        // colored occurrence graphs, and the scope coloring is keyed by the
-        // VALUE-frame labels. A consumer tree's node for the same value may
-        // carry the same labels on PERMUTED positions (w20 10288:
-        // [i_2 i_1 K a_1<i_1,i_2>] in one consumer, [i_1 i_2 K a_2<i_1,i_2>]
-        // in another), so coloring THAT node by label swaps the loop colors
-        // and the key no longer folds -- the second consumer misses a value
-        // resident with lives to spare. Key every probe of a hash in this
-        // scope by the value's ONE canonical node (the cell's node) so all
-        // occurrences coincide; the stored data is frame-invariant
-        // (canonical positions are the same physical modes).
-        if (canonical_node_ctx_) {
-          auto const cit = canonical_node_ctx_->find(key.node->hash_value());
-          if (cit != canonical_node_ctx_->end())
-            return cache_key_type{cit->second, it->second};
-        }
-        return cache_key_type{key.node, it->second};
-      }
-    }
-    return key;
-  }
 
   /// Non-owning hierarchy-wide co-resident high-water tracker (see
   /// \c eval::PeakMonitor). Null (default) => \c note_working_set() only
@@ -1316,44 +1208,6 @@ class CacheManager {
   /// to detach. Non-owning; the pointee must outlive this cache.
   void set_placement_router(eval::PlacementRouter<TreeNode> const* r) noexcept {
     placement_router_ = r;
-  }
-
-  /// Sets the local per-build coloring context (see value_coloring_ctx_). Pass
-  /// nullptr to detach. Non-owning; the pointee must outlive the build. LOCAL
-  /// (not inherited): the RAII guard is the ordered executor's.
-  /// See recolor(): value hash -> the value's canonical node, so every
-  /// occurrence's probe keys by one node regardless of its tree's labels.
-  void set_canonical_node_ctx(CanonicalNodeCtx const* ctx) noexcept {
-    canonical_node_ctx_ = ctx;
-  }
-  [[nodiscard]] CanonicalNodeCtx const* canonical_node_ctx() const noexcept {
-    return canonical_node_ctx_;
-  }
-
-  void set_value_coloring_ctx(ValueColoringCtx const* ctx) noexcept {
-    value_coloring_ctx_ = ctx;
-  }
-
-  /// \return the LOCAL per-build coloring context (or null). No parent
-  /// fall-through: keys are colored using the cache that builds them.
-  [[nodiscard]] ValueColoringCtx const* value_coloring_ctx() const noexcept {
-    return value_coloring_ctx_;
-  }
-
-  /// Pillar 1 / Task 7: re-key every registered entry through the current
-  /// coloring context, so a scratch whose members were registered by bare
-  /// (uncolored) node becomes genuinely VALUE-keyed -- each member entry keyed
-  /// by its home-slice-colored value-id, matching the colored store/access.
-  /// Call once, right after construction, with the per-scope context set. A
-  /// null context (or a scope with nothing sliced) leaves every key unchanged
-  /// => byte-identical.
-  void recolor_registered_entries() {
-    if (!value_coloring_ctx_) return;
-    std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
-        rekeyed;
-    rekeyed.reserve(cache_map_.size());
-    for (auto& [k, e] : cache_map_) rekeyed.emplace(recolor(k), std::move(e));
-    cache_map_ = std::move(rekeyed);
   }
 
   /// Takes OWNERSHIP of a placement router (see owned_router_) and wires it as
@@ -1508,48 +1362,6 @@ class CacheManager {
   void ensure_hoist_slot(cache_key_type const& key) {
     cache_map_.try_emplace(
         key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
-  }
-
-  /// Ensure @p key has a RESIDENT home slot at THIS cache: an unbounded
-  /// non-persistent life (like \c ensure_hoist_slot -- lives until the next
-  /// \c reset()), so the value, once stored, is read by every consumer rather
-  /// than drained and rebuilt. Unlike \c ensure_hoist_slot (which is a no-op
-  /// on an existing entry), this UPGRADES an existing finite-life CSE entry to
-  /// the same unbounded life via \c entry::make_resident, preserving any
-  /// stored data. Used by the ordered executor (\c ordered_executor.hpp) to
-  /// home a root-scope \c BuildStep value (its \c CellLegality::home_floor is
-  /// empty -- a whole-nest invariant) at the root cache so it is built ONCE
-  /// and read by every consumer, including a block-internal consumer reaching
-  /// it through the scope chain -- the "de-alias the composite to root"
-  /// property the ordered schedule's per-value homing exists to provide, and
-  /// which the plain per-forest CSE life (drained after its unbatched use
-  /// count) does not, since a realized batch loop reads a root-homed invariant
-  /// once per block.
-  void ensure_home_slot(cache_key_type const& key) {
-    auto [it, inserted] = cache_map_.try_emplace(
-        key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
-    if (!inserted) it->second.make_resident();
-  }
-
-  /// Home @p key with a bounded (use-count) or persistent lifetime, instead
-  /// of \c ensure_home_slot(key)'s unconditional \c make_resident pin. A
-  /// persistent slot survives \c reset() (iteration-invariant); a
-  /// non-persistent slot is released at its @p use_count-th access (its
-  /// genuine last use) rather than living unbounded until the next reset().
-  /// Idempotent like \c ensure_home_slot(key): an already-present entry is
-  /// upgraded in place (to persistent, or to the new bounded life) rather
-  /// than replaced, preserving any stored data.
-  void ensure_home_slot(cache_key_type const& key, std::size_t use_count,
-                        bool persistent) {
-    auto [it, inserted] = cache_map_.try_emplace(
-        key, entry{persistent ? std::numeric_limits<size_t>::max() : use_count,
-                   persistent});
-    if (!inserted) {
-      if (persistent)
-        it->second.make_persistent();
-      else
-        it->second.set_life(use_count);
-    }
   }
 
   /// Default persistence classifier: every entry is non-persistent (NP).
@@ -1773,8 +1585,8 @@ class CacheManager {
   ///     std::move(data_p)), so once it has been read as an operand it no
   ///     longer \c holds() it -- and even were it somehow still alive, \c
   ///     max_life > 1 excludes it.
-  /// A value homed RESIDENT (\c ensure_home_slot, \c max_life == SIZE_MAX) or
-  /// with a genuine multi-use count (\c max_life > 1, e.g. a subexpression
+  /// A value homed RESIDENT (\c max_life == SIZE_MAX) or with a genuine
+  /// multi-use count (\c max_life > 1, e.g. a subexpression
   /// shared across two roots, or a per-batch-reread home) is never drained by
   /// a single read, so it stays held and IS reported here -- the case the
   /// elided \c SEQUANT_ASSERT could not catch at runtime. A PERSISTENT entry
@@ -1811,14 +1623,8 @@ class CacheManager {
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
   [[nodiscard]] AccessResult access_at(cache_key_type const& key) noexcept {
-    // Task 7: color the key from THIS cache's per-build context (no-op without
-    // one), then look up AND walk parents with the ALREADY-colored key. The
-    // cache genuinely keys by VALUE: two values of one node coexist as distinct
-    // colored entries (a home value found by its own home identity, never a
-    // same-node sibling), which is the whole point of the value-keyed cache.
-    cache_key_type const rk = recolor(key);
     if (auto found =
-            eval::LookupMeter::timed([&] { return cache_map_.find(rk); });
+            eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
       static long const _ax_target = [] {
         char const* dh = std::getenv("SEQUANT_COUNT_ACCESS");
@@ -1856,7 +1662,7 @@ class CacheManager {
       }
     }
     if (!parent_) return {nullptr, 0};
-    auto up = parent_->access_at(rk);
+    auto up = parent_->access_at(key);
     return {up.ptr, up.hops + 1};  // count the link we just crossed
   }
 
@@ -1869,43 +1675,13 @@ class CacheManager {
 
   /// Non-decrementing chain lookup: return @p key's held value from the nearest
   /// scope up the chain that holds it, WITHOUT decaying any lifetime (mirrors
-  /// \c access_at's recolor + parent walk, but reads via \c entry::peek()).
-  /// For a reuse/probe of an already-homed value that must not spend a life
+  /// \c access_at's parent walk, but reads via \c entry::peek()). For a
+  /// reuse/probe of an already-homed value that must not spend a life
   /// reserved for the value's genuine consumers.
   [[nodiscard]] ResultPtr peek_at(cache_key_type const& key) noexcept {
-    cache_key_type const rk = recolor(key);
-    if (auto found = cache_map_.find(rk); found != cache_map_.end())
+    if (auto found = cache_map_.find(key); found != cache_map_.end())
       if (auto data = found->second.peek()) return data;
-    return parent_ ? parent_->peek_at(rk) : nullptr;
-  }
-
-  /// Release @p key's value from the nearest scope up the chain that holds
-  /// it (mirrors \c peek_at's recolor + parent walk, but calls \c
-  /// entry::release()): the chain lets go of a value it will not be asked
-  /// for again. Used by the cell table's read path, which serves a value
-  /// from the cell registry rather than through \c access_at, so nothing
-  /// else would ever spend the entry's last life -- see \c entry::release.
-  ///
-  /// The walk STOPS at the first scope holding a live entry for @p key,
-  /// whatever its persistence -- exactly where \c access_at and \c peek_at
-  /// stop, so all three agree on WHICH scope owns a value. A persistent
-  /// entry found there is left untouched (\c entry::release is a no-op on
-  /// one) and the walk still ends: a persistent home is never disturbed, and
-  /// never bypassed in favour of a stale outer copy of the same key.
-  ///
-  /// STAGE-3 SEAM: this exists solely to keep the legacy \c
-  /// chain_holds_shared check honest under table-driven reads, keyed by the
-  /// same canonical node as every production site; the next stage
-  /// re-derives in-place eligibility from the cell table's own \c life /
-  /// \c persistent and deletes it.
-  void release_at(cache_key_type const& key) noexcept {
-    cache_key_type const rk = recolor(key);
-    if (auto found = cache_map_.find(rk); found != cache_map_.end())
-      if (found->second.alive()) {
-        found->second.release();  // a no-op on a persistent entry
-        return;
-      }
-    if (parent_) parent_->release_at(rk);
+    return parent_ ? parent_->peek_at(key) : nullptr;
   }
 
   /// Fetch @p key from EXACTLY @p hops scopes up the chain (walk @p hops
@@ -1923,12 +1699,11 @@ class CacheManager {
   ///         scope does not currently hold @p key.
   [[nodiscard]] ResultPtr access_at_hops(cache_key_type const& key,
                                          std::size_t hops) noexcept {
-    cache_key_type const rk = recolor(key);  // Task 7: color at THIS cache
     CacheManager* c = this;
     for (std::size_t i = 0; i < hops && c; ++i) c = c->parent_;
     if (!c) return nullptr;
     if (auto found =
-            eval::LookupMeter::timed([&] { return c->cache_map_.find(rk); });
+            eval::LookupMeter::timed([&] { return c->cache_map_.find(key); });
         found != c->cache_map_.end()) {
       auto data = found->second.access();
       static long const _axh_target = [] {
@@ -1969,9 +1744,8 @@ class CacheManager {
   // NOT noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
   [[nodiscard]] ResultPtr store(cache_key_type const& key, ResultPtr data) {
-    cache_key_type const rk = recolor(key);  // Task 7: color at this cache
     if (auto found =
-            eval::LookupMeter::timed([&] { return cache_map_.find(rk); });
+            eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
       // INSTRUMENTATION (SEQUANT_REBUILD_TRACE, analysis-only): a store onto an
       // entry that is ALREADY alive means the value was still resident in cache
@@ -1995,7 +1769,7 @@ class CacheManager {
   ///        exists
   ///
   [[nodiscard]] bool exists(cache_key_type const& key) const noexcept {
-    return cache_map_.find(recolor(key)) != cache_map_.end();
+    return cache_map_.find(key) != cache_map_.end();
   }
 
   ///

@@ -3349,8 +3349,8 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
 
   // DIAGNOSTIC: hashes still ALIVE on the root cache AFTER the run == pinned
   // home entries (tier-A composites + block escape outputs the executor homes
-  // at root via ensure_home_slot). A genuinely use-counted (LoopLocal
-  // transient) value was released at its last use and is NOT alive here. This
+  // at root). A genuinely use-counted (LoopLocal transient) value was
+  // released at its last use and is NOT alive here. This
   // is the true discriminator for the tier-B sanity check: "dead-but-retained"
   // is EXPECTED for a pinned entry, but a NON-pinned (use-counted) entry that
   // looks dead-but-retained at peak signals a missed read path.
@@ -3605,8 +3605,8 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   //       (a) genuine LoopLocal transients ([build]) -- use-counted, released
   //           at last use, NOT alive post-run; and
   //       (b) block ESCAPE outputs ([out:Sum]/[out:Scatter]) -- which the
-  //           executor HOMES at the root cache (ensure_home_slot, pinned) on
-  //           block close, so they behave exactly like tier-A.
+  //           executor HOMES at the root cache (pinned) on block close, so
+  //           they behave exactly like tier-A.
   //     Only (a) is use-counted, so only (a) must have last_access >=
   //     peak_clock when alive at peak. Discriminate with pinned_now (alive on
   //     root post- run): a pinned entry that looks dead-but-retained is
@@ -3676,88 +3676,6 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   CHECK(mon.hwmark_bytes > 0);
 }
 
-// Task 1 of the eager-home-release plan (the sequel to this file's own
-// ordered-executor design): the bounded/persistent CacheManager::
-// ensure_home_slot(key, use_count, persistent) overload, which later tasks
-// use to replace the unconditional SIZE_MAX pin the zero-arg
-// ensure_home_slot(key) installs (see its call site's doc comment above,
-// "at root via ensure_home_slot"). Proves both lifetimes directly against
-// entry::access()/store()/reset(), independent of the ordered executor
-// itself: a volatile (non-persistent) slot is released at its genuine
-// use_count-th access, and a persistent slot is never drained and survives
-// reset().
-TEST_CASE(
-    "ensure_home_slot bounds life for volatile and persists for invariant",
-    "[ordered-executor]") {
-  // A realistic ScalarNode cache key: the root of a scalar-forest tree (see
-  // scalar_tree above), a non-leaf node like the ones the ordered executor
-  // actually homes.
-  ScalarNode const n = scalar_tree(L"2 * a * b - c");
-  REQUIRE_FALSE(n.leaf());
-
-  // Volatile: bounded life == use_count, non-persistent, released at its
-  // genuine last use. CacheManager::store() itself performs an implicit
-  // access() (see its doc comment: "Implictly accesses the stored data,
-  // hence, decays the lifetime"), so the store below IS use 1 of 2; one more
-  // explicit access_at() is use 2 of 2 and drains the entry.
-  auto cache = sequant::CacheManager<ScalarNode>::empty();
-  cache.ensure_home_slot(n, /*use_count=*/2, /*persistent=*/false);
-  (void)cache.store(
-      n, sequant::eval_result<ResultScalar<double>>(1.0));  // use 1 of 2
-  CHECK(cache.access_at(n).ptr);        // use 2 of 2 -> drains
-  CHECK_FALSE(cache.access_at(n).ptr);  // released after last use
-
-  // Persistent: never drained regardless of use_count, and survives reset().
-  auto cache2 = sequant::CacheManager<ScalarNode>::empty();
-  cache2.ensure_home_slot(n, /*use_count=*/1, /*persistent=*/true);
-  (void)cache2.store(n, sequant::eval_result<ResultScalar<double>>(2.0));
-  CHECK(cache2.access_at(n).ptr);
-  CHECK(
-      cache2.access_at(n).ptr);  // still alive despite use_count=1 (persistent)
-  cache2.reset();
-  CHECK(cache2.access_at(n).ptr);  // survives reset()
-
-  // Upgrade-existing-entry branch (the `!inserted` arm): a SECOND
-  // ensure_home_slot call on the SAME key in the SAME cache must re-arm the
-  // already-present entry via set_life()/make_persistent(), not leave its
-  // original (possibly already-exhausted) count in place. Task 4 relies on
-  // this branch to re-home a node the base cache_manager may have already
-  // registered, so it must be exercised, not merely inspected.
-
-  // (a) insert bounded life=1, then UPGRADE to bounded life=3 on the same
-  // key/cache. If the upgrade were a no-op (stale life=1 left in place), the
-  // store() below -- which itself performs an implicit access() -- would
-  // already be the 1-of-1 last use and drain the entry on the spot, so the
-  // very next access_at() would immediately return nullptr. Instead it must
-  // survive two more explicit reads and drain only at the upgraded 3rd.
-  auto cache3 = sequant::CacheManager<ScalarNode>::empty();
-  cache3.ensure_home_slot(n, /*use_count=*/1, /*persistent=*/false);  // insert
-  cache3.ensure_home_slot(n, /*use_count=*/3,
-                          /*persistent=*/false);  // upgrade: set_life(3)
-  (void)cache3.store(
-      n, sequant::eval_result<ResultScalar<double>>(3.0));  // use 1 of 3
-  CHECK(cache3.access_at(n).ptr);        // use 2 of 3 (would be dead if stale)
-  CHECK(cache3.access_at(n).ptr);        // use 3 of 3 -> drains
-  CHECK_FALSE(cache3.access_at(n).ptr);  // released at the UPGRADED bound
-
-  // (b) insert bounded life=1, then UPGRADE to persistent on the same
-  // key/cache. If the upgrade were a no-op (stale non-persistent life=1),
-  // store()'s implicit access() would again already be the last use and
-  // drain the entry, so the very next access_at() would return nullptr.
-  // Instead it must survive repeated reads past the original count=1 AND a
-  // reset(), proving make_persistent() latched on the pre-existing entry.
-  auto cache4 = sequant::CacheManager<ScalarNode>::empty();
-  cache4.ensure_home_slot(n, /*use_count=*/1, /*persistent=*/false);  // insert
-  cache4.ensure_home_slot(n, /*use_count=*/1,
-                          /*persistent=*/true);  // upgrade: make_persistent()
-  (void)cache4.store(n, sequant::eval_result<ResultScalar<double>>(4.0));
-  CHECK(cache4.access_at(n).ptr);
-  CHECK(cache4.access_at(n).ptr);  // past the original count=1 (would be dead
-                                   // if stale)
-  cache4.reset();
-  CHECK(cache4.access_at(n).ptr);  // survives reset() too
-}
-
 // ===========================================================================
 // A value MATERIALIZED across a forced loop split is built in its home block
 // (its in-nest readers take the per-batch cell) and escapes from that same
@@ -3822,6 +3740,52 @@ concept has_loop_colored_slice_seam =
 TEST_CASE("ordered executor has no slice seam", "[ordered][cell_table]") {
   static_assert(!has_loop_colored_slice_seam<sequant::CacheManager<ScalarNode>>,
                 "the loop-colored slice seam must be gone from the cache");
+  SUCCEED();
+}
+
+// Task 5 (Stage 3): the value-keyed cache machinery (home slots, coloring,
+// the release bridge) that only the ordered path used is gone now that the
+// executor runs entirely on cells. Same SFINAE-friendly-lookup rationale as
+// the slice-seam concept above: a plain out-of-line `requires` expression
+// would be a hard compile error on a genuinely absent member, not a `false`
+// result, so each check is wrapped in its own concept.
+namespace {
+template <typename Cache>
+concept has_ensure_home_slot_1 =
+    requires(Cache& c, typename Cache::cache_key_type const& k) {
+      c.ensure_home_slot(k);
+    };
+template <typename Cache>
+concept has_ensure_home_slot_3 =
+    requires(Cache& c, typename Cache::cache_key_type const& k) {
+      c.ensure_home_slot(k, std::size_t{1}, false);
+    };
+template <typename Cache>
+concept has_release_at = requires(
+    Cache& c, typename Cache::cache_key_type const& k) { c.release_at(k); };
+template <typename Cache>
+concept has_recolor = requires(
+    Cache& c, typename Cache::cache_key_type const& k) { c.recolor(k); };
+template <typename Schedule>
+concept has_home_mode_depth = requires(Schedule& s) { s.home_mode_depth; };
+}  // namespace
+
+TEST_CASE(
+    "cache manager and ordered schedule have no legacy value-keyed cache "
+    "machinery",
+    "[ordered][cell_table]") {
+  static_assert(!has_ensure_home_slot_1<sequant::CacheManager<ScalarNode>>,
+                "ensure_home_slot(key) must be gone from the cache");
+  static_assert(
+      !has_ensure_home_slot_3<sequant::CacheManager<ScalarNode>>,
+      "ensure_home_slot(key, use_count, persistent) must be gone from the "
+      "cache");
+  static_assert(!has_release_at<sequant::CacheManager<ScalarNode>>,
+                "release_at must be gone from the cache");
+  static_assert(!has_recolor<sequant::CacheManager<ScalarNode>>,
+                "recolor must be gone from the cache");
+  static_assert(!has_home_mode_depth<OrderedSchedule>,
+                "home_mode_depth must be gone from the ordered schedule");
   SUCCEED();
 }
 

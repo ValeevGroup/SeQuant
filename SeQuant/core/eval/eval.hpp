@@ -1011,24 +1011,8 @@ ResultPtr evaluate_impl(Node const& node,         //
                           << lvl.level.latitude_ordinal << " ";
               std::cerr << "]" << std::endl;
               // What IS stored for this hash anywhere up the chain (key
-              // mismatch vs genuine absence), and the probe's own coloring.
-              {
-                auto const* vctx = cache.value_coloring_ctx();
-                auto const vit = vctx ? vctx->find(f.node->hash_value())
-                                      : decltype(vctx->end()){};
-                std::cerr << "  [chain-dump] probe coloring={";
-                if (vctx && vit != vctx->end())
-                  for (auto const& m : vit->second.ctx_modes)
-                    std::cerr << toUtf8(m.full_label()) << ":"
-                              << (vit->second.colors.count(m)
-                                      ? vit->second.colors.at(m)
-                                      : std::size_t(-1))
-                              << " ";
-                else
-                  std::cerr << "(none: hash not in this scope's coloring ctx)";
-                std::cerr << "}" << std::endl;
-                cache.dump_entries_for_hash(f.node->hash_value());
-              }
+              // mismatch vs genuine absence).
+              cache.dump_entries_for_hash(f.node->hash_value());
               throw Exception(
                   "evaluate_impl: a read-from-home value vanished before use. "
                   "The value must be RESIDENT here but is not -- one of: (a) "
@@ -2054,13 +2038,7 @@ struct BatchedScratch {
 template <typename TreeNode, bool FHC, typename Members>
 [[nodiscard]] BatchedScratch<TreeNode, FHC> make_batched_scratch(
     Members const& members, CacheManager<TreeNode, FHC> const& real,
-    bool read_from_home = false,
-    typename CacheManager<TreeNode, FHC>::ValueColoringCtx const* coloring =
-        nullptr,
-    std::function<std::size_t(TreeNode const&)> member_life = nullptr,
-    std::unordered_set<std::size_t> const* escape_output_hashes = nullptr,
-    typename CacheManager<TreeNode, FHC>::CanonicalNodeCtx const*
-        canonical_nodes = nullptr) {
+    bool read_from_home = false) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -2185,18 +2163,6 @@ template <typename TreeNode, bool FHC, typename Members>
       // copied in. Single access discipline, no seeds. See the \p
       // read_from_home doc above.
       if (!e.sig && !carries_ext && real.resident_in_chain(*ptr)) continue;
-      // Skip this block's ESCAPE OUTPUTS: an escape output is homed at block
-      // CLOSE (parent_cache.store, one level out) after the batch loop -- it is
-      // NOT built into the scratch each batch. Registering it here creates an
-      // empty scratch slot (life = within-block count) that the batch loop's
-      // assembly then PROBES (miss -- data absent, the escape has not closed
-      // yet) and, on the value-id chain, falls through UP to the value's real
-      // (outer/root) home, draining THAT before its true consumer reads it. So
-      // the escape output must not get a scratch slot; its residency is owned
-      // by the escape-home mechanism alone.
-      if (escape_output_hashes &&
-          escape_output_hashes->count((*ptr)->hash_value()))
-        continue;
       // Cache EVERY read subnode (count >= 1), not only repeated ones: the
       // recompute-vs-cache CSE threshold (was >= 2) leaves a once-used subnode
       // un-homed, so it is built inline within its parent -- which makes the
@@ -2221,45 +2187,10 @@ template <typename TreeNode, bool FHC, typename Members>
       }
     }
   }
-  // A block-internal HOMED value (a member ROOT that is built here, not read
-  // from an outer scope) must be materialized at its home REGARDLESS of the
-  // CSE sharing heuristic above -- that heuristic governs only whether a
-  // NON-homed, repeated SUBNODE is worth caching vs recomputing, not whether a
-  // scheduled homed value gets a slot. Its life is the SCHEDULED `home_reads`
-  // (build store + every direct-DAG-parent read over the ordered scopes,
-  // nested consumers included), NOT the within-block encounter count: a homed
-  // value consumed only by a NESTED block has within-block count 1, and a
-  // co-member reading it under a different frame's physical label trips the
-  // `consistent` guard, yet it is still homed here and its store()/reads must
-  // land in a slot. Without this, store() silently no-ops (it is a no-op for an
-  // unregistered key) and every consumer misses. `insert_or_assign` overrides
-  // any count-based life the loop above gave a member root with the scheduled
-  // one. A value already resident up the chain (homed at an OUTER scope, read
-  // from there each batch -- the read-from-home discipline) is skipped, exactly
-  // as the subnode branch skips it. recolor_registered_entries below colors
-  // these home slots the same as the rest.
-  if (read_from_home && member_life) {
-    for (auto const& [root, mode] : members) {
-      if (root->leaf() || real.resident_in_chain(*root)) continue;
-      if (std::size_t const life = member_life(*root); life > 0)
-        reg.insert_or_assign(*root, life);
-    }
-  }
   auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {
     return seed_keys.contains(n);
   };
   CacheManager<TreeNode, FHC> scratch{std::move(reg), std::move(is_persistent)};
-  // Pillar 1 / Task 7: this sub-top scratch is VALUE-keyed. `reg` above
-  // registered its members by bare node; re-key them through the per-scope
-  // coloring context so each becomes its home-slice-colored value-id --
-  // matching the colored store/access. Set the context so runtime store/access
-  // recolor through it too. Null context => unchanged (byte-identical top-level
-  // path).
-  if (coloring) {
-    scratch.set_value_coloring_ctx(coloring);
-    scratch.set_canonical_node_ctx(canonical_nodes);
-    scratch.recolor_registered_entries();
-  }
   // Read-from-home scratches statically pre-schedule every value and read
   // batch-invariant operands from home each batch (no seeding); a miss on such
   // an operand is a real defect (premature eviction / under-predicted use

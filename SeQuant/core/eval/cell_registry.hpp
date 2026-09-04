@@ -159,9 +159,9 @@ class CellRegistry {
   /// a non-persistent cell's LAST life also DROPS the registry's own
   /// reference (the cell has no reader left this evaluation, and holding on
   /// would both pin the memory and make the buffer look shared to the reader
-  /// that just took it -- see \c CacheManager::entry::release, which the
-  /// scope cache's own \c access() has always done at the same point). A
-  /// later production of the cell restores both value and life via \c set.
+  /// that just took it -- the same thing \c CacheManager::entry::access()
+  /// has always done at the same point for the scope cache). A later
+  /// production of the cell restores both value and life via \c set.
   [[nodiscard]] ResultPtr read(CellId c) { return read(c, nullptr); }
 
   /// \overload As \c read(CellId), and reports through \p exhausted (when

@@ -714,7 +714,6 @@ void run_ordered_contracted_block(
   // backend/resolver/monitor hooks fall through to the parent chain.
   auto bs_cache = Cache::empty();
   bs_cache.set_parent(&parent_cache);
-  bs_cache.set_require_resident_reads(true);
 
   // Batch chunks over the loop axis, sourced per-space by the backend (no
   // carrier array is consulted).
@@ -1274,22 +1273,6 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // steps produce the cells its outputs escape into. Every result lives in
   // the registry; nothing is homed in, or read back from, a scope cache.
   typename CacheManager<N, FHC>::BatchContext const root_ectx;
-
-  // DAG-eval invariant: EVERY value must be resident when read. A non-top,
-  // non-leaf value that misses must NOT be silently rebuilt inline -- an
-  // inline rebuild re-reads that value's own operands, so those reads are
-  // absent from the table's declared lives, which then under-provisions the
-  // operands and drops them early. Under the table-driven path the read
-  // resolver is itself that guard (it throws naming the consumer, the source
-  // cell and the value); this flag keeps the same strictness on any read that
-  // still reaches the legacy probe. RAII-restored so the caller's cache is
-  // left as it was found.
-  struct ResidentReadsGuard {
-    CacheManager<N, FHC>& c;
-    bool const prev;
-    ~ResidentReadsGuard() { c.set_require_resident_reads(prev); }
-  } const resident_reads_guard{cache, cache.require_resident_reads()};
-  cache.set_require_resident_reads(true);
 
   for (Step const& step : ordered.root.steps) {
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {

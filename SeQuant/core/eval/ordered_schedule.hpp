@@ -155,16 +155,6 @@ struct Step {
 struct OrderedSchedule {
   ScopeBlock root{};
   std::size_t num_values = 0;
-  /// Pillar 1 (slice-colored value identity): per value_id, the value's
-  /// home-sliced modes paired with the DAG-scope DEPTH at which each is sliced
-  /// -- recorded ONCE here, at home placement, in the value's OWN index-frame
-  /// (keys are `rich.cells[vid].carried` indices, never a foreign frame or
-  /// base_key). This is the authoritative mode->depth source the value-id
-  /// coloring consumes; it is NOT re-derived from ectx. A value with no
-  /// home-sliced modes has no entry (unsliced => empty coloring => value-id ==
-  /// node-id). Distinct from Pillar-2 `occ_facts` (use-scope, per consumer).
-  std::unordered_map<std::size_t, container::svector<std::pair<Index, int>>>
-      home_mode_depth{};
   /// Pillar 1 / B-full: per value_id, the value_ids of its DIRECT operands --
   /// the value/occurrence DAG edges the value-driven ordered executor consumes
   /// to fetch each operand by its OWN home-colored key. Recorded here from
@@ -747,9 +737,9 @@ ordered_home_reads(OrderedSchedule const& ordered, RichSchedule const& rich,
       // d20 could never read it ("read-from-home value vanished"). Test the
       // loop's COLOR against the value's home coloring instead.
       // Residency (sliced_modes, INCLUDING self-opened loops) mapped to loop
-      // identity via the occurrence's per-position fusion slot; NOT
-      // home_mode_depth, which excludes a scatter root's own loops and sent a
-      // multi-level escape's inner partial to the root.
+      // identity via the occurrence's per-position fusion slot -- not a
+      // per-value home-coloring record, which would exclude a scatter root's
+      // own loops and send a multi-level escape's inner partial to the root.
       auto const& sm = vit->second->sliced_modes();
       ValueCell const& cell = rich.cells[vid];
       auto const sliced_on_loop = [&](Index const& ax, LoopKey const& k) {
@@ -2163,111 +2153,6 @@ forced_split_demotions(RichSchedule const& rich,
   }
   out.root.steps = detail::ordered_schedule_topo_sort_steps(
       std::move(root_items), root_meta);
-
-  // Pillar 1: record each value's home-sliced-mode -> DAG-scope depth, ONCE, in
-  // the value's OWN frame. Walk the realized block tree accumulating the
-  // enclosing levels (axis + depth); a BuildStep homes inside all of them, an
-  // escape output homes one level OUT (mirrors ordered_home_reads' home_scope).
-  // For each value pair its OWN `carried` (value frame) with those levels by
-  // space + nest position -- the same frame-safe routing occ_facts uses -- and
-  // keep only modes that are the value's `home_modes` (its home-sliced set).
-  {
-    // A value's home coloring names only the loops it is LoopLocal on: a
-    // loop it ESCAPES (LoopCarried/Reduction -> its assembled form at the
-    // parent scope is unsliced on it) must not color the key, else a reader
-    // in a LATER PASS of that loop (latitude > 0) probes a colored per-batch
-    // cell that no longer exists instead of the resident root form (w20
-    // pVDZ-F12 strict walk: 28705 read by 66997 at i#d1s0 lat 1 ->
-    // "vanished" while the root cell was alive).
-    std::unordered_map<std::size_t, CellLegality const*> legality_of_hash;
-    for (CellLegality const& cl : legality.cells)
-      legality_of_hash.emplace(cl.hash, &cl);
-    auto const record =
-        [&out, &rich, &legality_of_hash, &built_and_escaped](
-            std::size_t vid,
-            container::svector<std::pair<Index, int>> const& levels) {
-          if (vid >= rich.cells.size()) return;
-          ValueCell const& c = rich.cells[vid];
-          // SINGLE-SOURCE-OF-TRUTH home: the value's coloring may only name
-          // modes in its residency home (\c home_modes), NOT every carried mode
-          // that shares a space with an enclosing loop. Pairing a carried mode
-          // with a loop it is INVARIANT to (e.g. an occ-reduction carrying i_3
-          // that is invariant to the i_1 loop it happens to be nested under)
-          // colors it on that loop, so its escape store keys under {i_3} while
-          // its true (root) home reads it uncolored -- a key mismatch that
-          // vanishes the value. Filtering to \c home_modes leaves such an
-          // invariant value uncolored, matching where the close-store actually
-          // homes it.
-          auto const& hm = c.home_modes;
-          CellLegality const* cl = nullptr;
-          if (auto const lit = legality_of_hash.find(c.hash);
-              lit != legality_of_hash.end())
-            cl = lit->second;
-          // A member MATERIALIZED across a forced split escapes modes its
-          // legality still calls LoopLocal (the rule is a property of the
-          // realized pass structure, not of the value's own roles), so the
-          // role test alone would colour its key by a loop its assembled form
-          // is whole on -- the same key mismatch the LoopCarried filter below
-          // exists to prevent. Exclude those modes explicitly.
-          auto const mit = built_and_escaped.find(vid);
-          auto const is_home_mode = [&hm, cl, &mit,
-                                     &built_and_escaped](Index const& m) {
-            if (std::find(hm.begin(), hm.end(), m) == hm.end()) return false;
-            if (mit != built_and_escaped.end() &&
-                std::find(mit->second.begin(), mit->second.end(), m) !=
-                    mit->second.end())
-              return false;
-            if (!cl) return true;
-            for (AxisClass const& ac : cl->per_axis)
-              if (ac.axis == m) return ac.role == LoopRole::LoopLocal;
-            return true;  // no legality entry for this mode: unchanged
-          };
-          container::svector<std::pair<Index, int>> mode_depth;
-          container::svector<bool> consumed(c.carried.size(), false);
-          for (auto const& [axis, depth] : levels) {
-            auto const space = axis.space().base_key();
-            for (std::size_t j = 0; j < c.carried.size(); ++j) {
-              if (consumed[j]) continue;
-              if (std::wstring(c.carried[j].space().base_key()) != space)
-                continue;
-              if (!is_home_mode(c.carried[j])) continue;
-              consumed[j] = true;
-              mode_depth.push_back({c.carried[j], depth});
-              break;
-            }
-          }
-          if (!mode_depth.empty())
-            out.home_mode_depth[vid] = std::move(mode_depth);
-        };
-    std::function<void(ScopeBlock const&,
-                       container::svector<std::pair<Index, int>> const&)>
-        walk = [&](ScopeBlock const& b,
-                   container::svector<std::pair<Index, int>> const& enc) {
-          for (Step const& s : b.steps) {
-            if (auto const* build = std::get_if<BuildStep>(&s.value)) {
-              record(build->value_id, enc);
-            } else if (auto const* child = std::get_if<ScopeBlock>(&s.value)) {
-              container::svector<std::pair<Index, int>> inner = enc;
-              // Store the FULL loop identity color (depth AND loop_slot), not
-              // depth alone: one cache per LOOP (LoopKey::color), so the value-
-              // id coloring and the home-scope filter distinguish same-group
-              // sibling loops.
-              inner.push_back(
-                  {child->axis, static_cast<int>(child->level.key().color())});
-              walk(*child, inner);
-            }
-          }
-          // escape output homes one level OUT (enc minus this block's own
-          // axis).
-          container::svector<std::pair<Index, int>> out_scope = enc;
-          if (!out_scope.empty()) out_scope.pop_back();
-          for (auto const& [vid, kind] : b.outputs) {
-            (void)kind;
-            record(vid, out_scope);
-          }
-        };
-    walk(out.root, {});
-  }
 
   // Pillar 1 / B-full: persist the value/occurrence DAG edges (each value's
   // direct operand value_ids) the value-driven ordered executor consumes. `g`

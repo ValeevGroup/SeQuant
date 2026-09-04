@@ -81,8 +81,8 @@ TEST_CASE(
     "ownership",
     "[cell_registry]") {
   // A cell with no reader left this evaluation must not keep its value alive:
-  // the reader that took it is its only holder (the scope cache lets go
-  // through CacheManager::release_at, driven by the flag this read reports).
+  // the reader that took it is its only holder, driven by the flag this
+  // read reports.
   auto const t = make_table();
   CellRegistry reg(t);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
@@ -137,8 +137,7 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   REQUIRE(got1.has_value());
   CHECK(*got1 == b1);  // whole read: same object
   // cell 1's life was 1: that read was its last, so the registry no longer
-  // holds it -- operand_drained() (Stage 3's replacement for the deleted
-  // last_read_exhausted_source()) reports the source cell itself as drained.
+  // holds it -- operand_drained() reports the source cell itself as drained.
   CHECK(res.operand_drained(1));
   CHECK_THROWS(res.fetch(1, ctx));  // no remaining Read of value 1 for cell 2
   CHECK_FALSE(res.fetch(77, ctx).has_value());  // not a value: transient

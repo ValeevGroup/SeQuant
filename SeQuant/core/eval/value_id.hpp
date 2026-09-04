@@ -19,30 +19,19 @@ namespace sequant::eval {
 /// \details `ctx_modes` are the sliced modes in scope (the value's home-sliced
 /// modes for a value-id; a use-site's sliced modes for an occurrence-id), and
 /// `colors` maps each to its DAG-scope DEPTH. Both are in the SAME canonical
-/// index-frame as the nodes this coloring keys (value frame for a value-id) --
-/// built directly from `OrderedSchedule::home_mode_depth`, whose keys are the
-/// value's own `carried` indices, so no cross-frame match is ever performed
-/// (the loop-open lesson). An empty coloring is the unsliced degenerate case:
-/// keying reduces byte-for-byte to the plain node-id (`hash::value`).
+/// index-frame as the nodes this coloring keys (value frame for a value-id),
+/// so no cross-frame match is ever performed (the loop-open lesson). An empty
+/// coloring is the unsliced degenerate case: keying reduces byte-for-byte to
+/// the plain node-id (`hash::value`). Nothing in the ordered executor
+/// populates a non-empty coloring any more (see \c CachedValue below); the
+/// type remains the forest-path cache key and the occurrence-key tests'
+/// fixture.
 struct ValueIdColoring {
   container::svector<Index> ctx_modes;        //!< sliced modes (frame keys)
   tensor_network::NamedIndexColorMap colors;  //!< mode -> DAG-depth color
 
   [[nodiscard]] bool empty() const noexcept { return ctx_modes.empty(); }
 };
-
-/// \brief Build a \c ValueIdColoring from an \c
-/// OrderedSchedule::home_mode_depth
-///        entry (a value's home-sliced mode -> depth pairs, value frame).
-[[nodiscard]] inline ValueIdColoring value_id_coloring(
-    container::svector<std::pair<Index, int>> const& mode_depth) {
-  ValueIdColoring c;
-  for (auto const& [m, d] : mode_depth) {
-    c.ctx_modes.push_back(m);
-    c.colors.emplace(m, static_cast<std::size_t>(d));
-  }
-  return c;
-}
 
 /// \brief The value-id HASH of \p node under \p coloring.
 ///
