@@ -734,8 +734,8 @@ void run_ordered_contracted_block(
     // accumulate this output at all -- so there is no life to spend and
     // nothing holding the buffer. (A source that WAS produced always has one.)
     if (!registry.peek(src)) return;
-    ResultPtr const spent = eval::table_read(
-        registry, src, [&]() { bs.cache.release_at(resolve(vid)); });
+    eval::TableRead const spent = eval::table_read(registry, src);
+    if (spent.exhausted) bs.cache.release_at(resolve(vid));
     (void)spent;  // the value itself already reached the caller by hand
   };
 

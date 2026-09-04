@@ -23,14 +23,43 @@ using BatchContextEntry = sequant::BatchContextEntry;
 using BatchContext = container::svector<BatchContextEntry>;
 using DagScopeLevel = sequant::DagScopeLevel;
 
+/// Wiring \c CellRegistry needs from its owner (the ordered executor's
+/// Stage-3 storage move) but must not construct itself: the cross-call \c
+/// PersistentValueStore (Task 1's addition to \c CacheManager, one instance
+/// per top-level evaluation call, outliving any one \c CellRegistry), the map
+/// from a table value id to the canonical hash the store and the legacy scope
+/// caches both key persistence on, and an optional metering hook. Every field
+/// defaults to "off": a \c CellRegistry built with a default-constructed \c
+/// CellRegistryHooks behaves exactly as it did before persistence/bytes
+/// tracking existed (persistent cells are simply never seeded or published,
+/// and \c live_bytes stays a bookkeeping-only counter nobody observes).
+struct CellRegistryHooks {
+  /// Cross-call persistence store; \c seed_persistent reads it, \c set
+  /// publishes to it. Null disables both.
+  PersistentValueStore* persistent = nullptr;
+  /// A table value id's canonical hash, the key \c persistent is addressed
+  /// by. Required (alongside \c persistent) for seeding/publishing; a null
+  /// function disables both exactly as a null \c persistent does.
+  std::function<std::size_t(std::size_t value_id)> hash_of;
+  /// Metering: invoked with the new \c live_bytes total after every change.
+  /// May be empty -- \c CellRegistry does not require a metering consumer.
+  std::function<void(std::size_t live_bytes)> on_bytes_changed;
+};
+
 /// Runtime side of the cell table: the current result of each cell and its
-/// remaining life. Storage ownership stays with the scope caches in this
-/// stage; the registry holds a second reference so that reads resolve by cell
-/// id. Bound cells are cleared at the start of every batch of a loop instance
-/// they are bound to (the per-batch scratch reset, expressed on cells).
+/// remaining life. This is the OWNER of those results (Stage 3 of the
+/// explicit-value-cells design): it tracks the live byte total across held
+/// slots, enforces fill-once (a non-persistent cell produced twice without an
+/// intervening clear is a duplicate producer -- a bug, not a legitimate
+/// replay), and seeds/publishes persistent cells through a \c
+/// PersistentValueStore so they survive across top-level evaluation calls
+/// without depending on the legacy scope caches' own persistence. Bound cells
+/// are cleared at the start of every batch of a loop instance they are bound
+/// to (the per-batch scratch reset, expressed on cells).
 class CellRegistry {
  public:
-  explicit CellRegistry(CellTable const& table) : table_(&table) {
+  explicit CellRegistry(CellTable const& table, CellRegistryHooks hooks = {})
+      : table_(&table), hooks_(std::move(hooks)) {
     slots_.resize(table.cells.size());
     for (CellId c = 0; c < table.cells.size(); ++c)
       slots_[c].life = table.cells[c].life;
@@ -50,13 +79,65 @@ class CellRegistry {
     }
   }
 
+  /// Seeds every persistent cell whose canonical hash is currently held by
+  /// \c hooks_.persistent with the store's value, WITHOUT spending life (the
+  /// value just arrived from a prior top-level call; nothing has read it
+  /// yet this call). A no-op for a cell the store does not (yet) hold, and
+  /// entirely a no-op when \c hooks_.persistent or \c hooks_.hash_of is
+  /// unset. Intended to run once, right after construction, before the first
+  /// read of this evaluation call (see \c run_ordered_schedule_pre_results).
+  void seed_persistent() {
+    if (!hooks_.persistent || !hooks_.hash_of) return;
+    for (CellId c = 0; c < slots_.size(); ++c) {
+      TableCell const& cell = table_->cells[c];
+      if (!cell.persistent) continue;
+      ResultPtr v = hooks_.persistent->get(hooks_.hash_of(cell.value_id));
+      if (!v) continue;
+      Slot& s = slots_[c];
+      if (s.value)
+        account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+      s.value = std::move(v);
+      s.life = cell.life;
+      s.filled_since_clear = true;
+      account(static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+    }
+  }
+
   /// Production: overwrites the cell's current result and restores its life
   /// from the table (a new batch's/iteration's production of a cell whose
-  /// prior life was drained starts fresh).
+  /// prior life was drained starts fresh). FILL-ONCE: a NON-persistent cell
+  /// already holding a value it was not read past nor cleared since (\c
+  /// filled_since_clear) is a duplicate producer -- see \c
+  /// eval::strict_fill_once (throws a named \c std::runtime_error under \c
+  /// SEQUANT_UT_STRICT_FILL_ONCE; a plain \c SEQUANT_ASSERT otherwise,
+  /// compiled out in Release). PERSISTENT cells are excluded from this check,
+  /// exactly as \c CacheManager::entry::store excludes its own persistent
+  /// entries: they legitimately re-store across batch replays and repeated
+  /// top-level evaluation calls (e.g. successive CC iterations), often with
+  /// no table-declared clear between productions. A persistent cell is
+  /// published to \c hooks_.persistent (when set) on every production,
+  /// mirroring what it now holds.
   void set(CellId c, ResultPtr v) {
     auto& s = slot(c);
+    TableCell const& cell = table_->cells[c];
+    if (!cell.persistent && s.filled_since_clear) {
+      if (strict_fill_once())
+        throw std::runtime_error(
+            "CellRegistry::set: cell#" + std::to_string(c) + " (value " +
+            std::to_string(cell.value_id) +
+            ") filled twice without an intervening clear (duplicate "
+            "producer) -- cache-fill-once violated");
+      SEQUANT_ASSERT(!s.filled_since_clear &&
+                     "CellRegistry::set: fill-once violated");
+    }
+    if (s.value)
+      account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
     s.value = std::move(v);
-    s.life = table_->cells[c].life;
+    s.life = cell.life;
+    s.filled_since_clear = true;
+    if (s.value) account(static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+    if (cell.persistent && hooks_.persistent && hooks_.hash_of)
+      hooks_.persistent->put(hooks_.hash_of(cell.value_id), s.value);
   }
 
   /// Non-decrementing peek: the cell's current result, or null if unset.
@@ -97,19 +178,77 @@ class CellRegistry {
     --s.life;
     if (s.life != 0) return s.value;
     if (exhausted) *exhausted = true;
+    // The value is fully consumed and about to be released, so a later set()
+    // of this cell is a fresh re-production (a new batch's/iteration's), not
+    // a duplicate -- clear the fill-once mark along with the byte accounting,
+    // mirroring CacheManager::entry::access's stored_this_eval_ reset on the
+    // same draining access.
+    s.filled_since_clear = false;
+    account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
     return std::move(s.value);  // the slot is left null by the move
   }
 
-  /// Batch start: drops every cell bound to loop instance \p k (see
-  /// detail::bound_instances) -- the per-batch scratch reset, expressed on
-  /// cells instead of on a whole scope's storage.
+  /// Batch start: drops every cell bound to loop instance \p k -- the
+  /// per-batch scratch reset, expressed on cells instead of on a whole
+  /// scope's storage. A cell is bound to \p k either explicitly (\c
+  /// detail::bound_instances: a carried \c sliced position or a \c
+  /// partial_over reduction on \p k) or IMPLICITLY, for a non-persistent
+  /// cell whose own DECLARED home scope's deepest loop instance is \p k: the
+  /// executor re-runs whatever this cell's tree position computes fresh
+  /// every batch of that position's innermost enclosing loop (a step's own
+  /// block for a Build; a block-close aggregation for an Assemble),
+  /// independent of whether the value it holds happens to carry \p k as a
+  /// mode or a reduced axis -- a "whole" cell unsliced and unsummed on its
+  /// own home loop is still re-run every batch of it, only its declared
+  /// life/persistence say how long the RESULT is then read for. A PERSISTENT
+  /// cell is never cleared here (by definition it is bound to no loop
+  /// instance -- see \c TableCell::persistent -- so neither check ever
+  /// matches it; the explicit \c continue is a defensive redundant guard).
+  /// Also resets the fill-once mark of every cell it clears: the boundary
+  /// this crosses is exactly the one \c set's fill-once check must not treat
+  /// as a duplicate producer across.
   void clear_bound_to(LoopKey const& k) {
-    for (CellId c = 0; c < slots_.size(); ++c)
-      for (LoopKey const& b : detail::bound_instances(table_->cells[c]))
+    for (CellId c = 0; c < slots_.size(); ++c) {
+      TableCell const& cell = table_->cells[c];
+      if (cell.persistent) continue;
+      bool bound = false;
+      for (LoopKey const& b : detail::bound_instances(cell))
         if (detail::same_key(b, k)) {
-          slots_[c].value.reset();
+          bound = true;
           break;
         }
+      if (!bound && !cell.scope.path.empty() &&
+          detail::same_key(cell.scope.path.back().first, k))
+        bound = true;
+      if (!bound) continue;
+      Slot& s = slots_[c];
+      if (s.value)
+        account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+      s.value.reset();
+      s.filled_since_clear = false;
+    }
+  }
+
+  /// \return the sum of \c Result::size_in_bytes() over every slot currently
+  /// holding a value (persistent and non-persistent alike).
+  [[nodiscard]] std::size_t live_bytes() const { return live_bytes_; }
+
+  /// Invokes \p f(CellId, ResultPtr const&) for every slot currently holding
+  /// a value -- the registry-side source \c on_peak_liveset walks once
+  /// storage moves fully onto the table.
+  template <typename F>
+  void for_each_live(F&& f) const {
+    for (CellId c = 0; c < slots_.size(); ++c)
+      if (slots_[c].value) f(c, slots_[c].value);
+  }
+
+  /// \return whether cell \p c is a spent non-persistent cell: no value held
+  /// and no life left to spend. A persistent cell is never drained, so it is
+  /// never reported as drained even when it happens to hold no value yet
+  /// (e.g. before its first production this evaluation).
+  [[nodiscard]] bool drained(CellId c) const {
+    Slot const& s = slot(c);
+    return !table_->cells[c].persistent && s.life == 0 && !s.value;
   }
 
   [[nodiscard]] CellTable const& table() const { return *table_; }
@@ -149,6 +288,10 @@ class CellRegistry {
   struct Slot {
     ResultPtr value;
     std::size_t life = 0;
+    /// Fill-once tripwire: true once \c value has been \c set() since the
+    /// last time this slot was emptied (by \c clear_bound_to, or by a \c
+    /// read that spent the cell's last life). See \c set.
+    bool filled_since_clear = false;
   };
   Slot& slot(CellId c) {
     if (c >= slots_.size())
@@ -168,35 +311,51 @@ class CellRegistry {
     return std::nullopt;
   }
 
+  /// Applies \p delta (signed) to \c live_bytes_ and, when \c
+  /// hooks_.on_bytes_changed is set, reports the new total.
+  void account(std::ptrdiff_t delta) {
+    live_bytes_ = static_cast<std::size_t>(
+        static_cast<std::ptrdiff_t>(live_bytes_) + delta);
+    if (hooks_.on_bytes_changed) hooks_.on_bytes_changed(live_bytes_);
+  }
+
   CellTable const* table_;
+  CellRegistryHooks hooks_;
   container::vector<Slot> slots_;
   std::unordered_map<std::size_t, container::svector<CellId>> build_at_,
       assemble_at_;
   std::unordered_map<std::size_t, CellId> leaf_of_;
+  std::size_t live_bytes_ = 0;
+};
+
+/// The value and exhaustion flag of one \c table_read.
+struct TableRead {
+  ResultPtr value;
+  /// Whether this read spent \c source's LAST declared life (always \c false
+  /// for a persistent cell, which never exhausts).
+  bool exhausted = false;
 };
 
 /// The OWNERSHIP half of one table-driven read of \p source, shared by every
 /// site that spends a table-declared life so none of them can drift: spend
-/// one life of \p source in \p reg and, when that read spent the cell's LAST
-/// life, invoke \p on_exhausted -- the caller's cue to make the legacy scope
-/// chain let go of the same value too (\c CacheManager::release_at on the
-/// canonical node every production site keys on). Two kinds of site call it:
-/// \c CellReadResolver::fetch, for a consumer's operand reads, and the
-/// ordered executor's block-close handoffs, for the read an \c Assemble
-/// declares of its \c production.source. A read the executor serves from
-/// somewhere other than the registry still owes the table that life: skipping
-/// it leaves the source's scope entry holding a fully consumed buffer, which
-/// pins the memory and makes every later reader see the value as shared.
+/// one life of \p source in \p reg and report whether that read spent the
+/// cell's LAST life. Two kinds of site call it: \c CellReadResolver::fetch,
+/// for a consumer's operand reads, and the ordered executor's block-close
+/// handoffs, for the read an \c Assemble declares of its \c
+/// production.source. A read the executor serves from somewhere other than
+/// the registry still owes the table that life: skipping it leaves the
+/// source's scope entry holding a fully consumed buffer, which pins the
+/// memory and makes every later reader see the value as shared.
 ///
-/// STAGE-3 SEAM: only the \p on_exhausted call is legacy-cache business; the
-/// stage that moves storage onto the table drops it and keeps the read.
-template <typename OnExhausted>
-[[nodiscard]] inline ResultPtr table_read(CellRegistry& reg, CellId source,
-                                          OnExhausted&& on_exhausted) {
-  bool exhausted = false;
-  ResultPtr v = reg.read(source, &exhausted);
-  if (exhausted) on_exhausted();
-  return v;
+/// STAGE-3 SEAM: the caller's own use of \c TableRead::exhausted -- e.g. to
+/// drive the legacy \c CacheManager::release_at on the same canonical node
+/// every production site keys on -- is legacy-cache business; the stage that
+/// moves storage fully onto the table drops those callers' use of it and
+/// keeps the read itself.
+[[nodiscard]] inline TableRead table_read(CellRegistry& reg, CellId source) {
+  TableRead r;
+  r.value = reg.read(source, &r.exhausted);
+  return r;
 }
 
 /// Resolves one consumer cell's operand fetches to table reads. Installed on
@@ -297,9 +456,9 @@ class CellReadResolver {
           std::to_string(*vid) + ") has no current result");
     }
     it->second.erase(it->second.begin());
-    last_read_exhausted_source_ = false;
-    ResultPtr v = table_read(*reg_, r.source,
-                             [this]() { last_read_exhausted_source_ = true; });
+    TableRead tr = table_read(*reg_, r.source);
+    last_read_exhausted_source_ = tr.exhausted;
+    ResultPtr v = std::move(tr.value);
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
       for (auto const& e : ctx)

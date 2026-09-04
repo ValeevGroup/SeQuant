@@ -3,6 +3,9 @@
 #include <SeQuant/core/eval/backends/dryrun/result.hpp>
 #include <SeQuant/core/eval/cell_registry.hpp>
 
+#include <cstdlib>
+#include <string>
+
 using sequant::eval::CellId;
 using sequant::eval::CellReadResolver;
 using sequant::eval::CellRegistry;
@@ -243,8 +246,9 @@ TEST_CASE("table_read spends one declared life and reports exhaustion once",
   // read an Assemble declares of its production.source (a close that takes
   // the per-batch value from a step's own result, a child's closed result or
   // a resident home still owes the table that read). The two must not drift:
-  // the callback fires on the read that spends the LAST life and on no
-  // other, and never for a persistent cell.
+  // TableRead::exhausted is set on the read that spends the LAST life and on
+  // no other, and never for a persistent cell -- the caller (not table_read
+  // itself, since Task 2) decides what to do with that flag.
   auto const t = make_table();
   CellRegistry reg(t);
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
@@ -254,13 +258,105 @@ TEST_CASE("table_read spends one declared life and reports exhaustion once",
 
   std::size_t released = 0;
   reg.set(1, r);  // cell 1: Build, non-persistent, life 1
-  CHECK(sequant::eval::table_read(reg, 1, [&] { ++released; }) == r);
+  {
+    auto const tr = sequant::eval::table_read(reg, 1);
+    CHECK(tr.value == r);
+    CHECK(tr.exhausted);
+    if (tr.exhausted) ++released;
+  }
   CHECK(released == 1);
   CHECK_FALSE(reg.peek(1));  // sole ownership handed to the reader
 
   reg.set(0, r);  // cell 0: Leaf, PERSISTENT, life 2
-  CHECK(sequant::eval::table_read(reg, 0, [&] { ++released; }) == r);
-  CHECK(sequant::eval::table_read(reg, 0, [&] { ++released; }) == r);
+  {
+    auto const tr1 = sequant::eval::table_read(reg, 0);
+    auto const tr2 = sequant::eval::table_read(reg, 0);
+    CHECK(tr1.value == r);
+    CHECK(tr2.value == r);
+    if (tr1.exhausted) ++released;
+    if (tr2.exhausted) ++released;
+  }
   CHECK(released == 1);  // a persistent cell never exhausts
   CHECK(reg.peek(0) == r);
+}
+
+TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
+          "[cell_registry]") {
+  // Set (and later restore) SEQUANT_UT_STRICT_FILL_ONCE at the very start of
+  // the case, before anything in this process can call strict_fill_once()
+  // for the first time: that function caches its env lookup in a static
+  // bool on first call, so a setenv anywhere later would be too late to
+  // change what it returns for the rest of this process.
+  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  std::string const prev_strict_val = prev_strict ? prev_strict : "";
+  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+
+  // A separate small table (not make_table()'s): cell 0 Leaf persistent;
+  // cell 1 Build non-persistent bound to (1,0), life 1; cell 2 Build
+  // persistent (whole -- unbound), life 2.
+  CellTable t;
+  TableCell leaf;
+  leaf.value_id = 0;
+  leaf.production.kind = ProductionKind::Leaf;
+  leaf.persistent = true;
+  leaf.life = 2;
+  t.cells.push_back(leaf);
+  TableCell b1;
+  b1.value_id = 1;
+  b1.production.kind = ProductionKind::Build;
+  b1.scope.path = {{LoopKey{1, 0}, 0}};
+  b1.sliced = {{0, LoopKey{1, 0}}};  // bound_instances reads `sliced`, not
+                                     // `scope.path` -- this is what makes
+                                     // clear_bound_to(LoopKey{1, 0}) reach it
+  b1.life = 1;
+  t.cells.push_back(b1);
+  TableCell b2;
+  b2.value_id = 2;
+  b2.production.kind = ProductionKind::Build;
+  b2.persistent = true;
+  b2.life = 2;
+  t.cells.push_back(b2);
+
+  sequant::eval::PersistentValueStore store;
+  std::size_t bytes_seen = 0;
+  sequant::eval::CellRegistryHooks hooks;
+  hooks.persistent = &store;
+  hooks.hash_of = [](std::size_t vid) { return 1000 + vid; };
+  hooks.on_bytes_changed = [&](std::size_t b) { bytes_seen = b; };
+  sequant::eval::CellRegistry reg(t, hooks);
+
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  sequant::ResultPtr r1 = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+  sequant::ResultPtr r2 = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+      sequant::container::svector<sequant::Index>{sequant::Index{L"i_2"}}, cm);
+
+  reg.set(1, r1);
+  CHECK(reg.live_bytes() == r1->size_in_bytes());
+  CHECK(bytes_seen == reg.live_bytes());
+  CHECK_THROWS(reg.set(1, r1));  // fill-once: cell 1 not read/cleared since
+  reg.clear_bound_to(sequant::eval::LoopKey{1, 0});
+  CHECK(reg.live_bytes() == 0);
+  reg.set(1, r1);  // allowed again after the clearing boundary
+  reg.set(2, r2);
+  CHECK(store.holds(1002));  // persistent cell published
+  CHECK(store.get(1002) == r2);
+  bool ex = false;
+  auto got = reg.read(1, &ex);
+  CHECK(ex);
+  CHECK(got == r1);
+  CHECK_FALSE(reg.peek(1));
+  CHECK(reg.drained(1));
+  CHECK(reg.live_bytes() == r2->size_in_bytes());
+
+  sequant::eval::CellRegistry reg2(t, hooks);
+  reg2.seed_persistent();
+  CHECK(reg2.peek(2) == r2);  // seeded from the store
+  CHECK_FALSE(reg2.peek(1));
+
+  if (prev_strict)
+    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+  else
+    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
 }
