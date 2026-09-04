@@ -4070,3 +4070,261 @@ TEST_CASE(
 
   logger.eval.level = prev_level;
 }
+// ===========================================================================
+// An Assemble step's destination is sized from ITS OWN CELL'S FORM (the
+// table), never inferred from where the escaped axis happens to sit on the
+// node: the descriptor is the value's own canonical index list, narrowed by
+// exactly the (position, loop instance) pairs the Assemble cell declares in
+// its `sliced` -- which, at the root scope, is none at all, so the
+// destination is the value's FULL extent with lobound 0 on every mode. The
+// deleted alternative walked the enclosing batch context and narrowed by
+// whatever positions matched a loop's space and fusion slot, which is a
+// different (inferred) answer whenever the two disagree.
+//
+// The fixture is the aux+occ water-20 residual: aux (Κ) is batchable-
+// contracted and occ is batchable-external, so the schedule nests loops of
+// both kinds and a value reduced on an inner loop is carried (scattered) on
+// an outer one -- the two-level shape this rule is about.
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: an Assemble step's scatter destination is sized from "
+    "its own cell form",
+    "[ordered][assemble-dest]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (auto const& s : summands) {
+    sequant::ExprPtr const term = orderedexec_witness_flatten_product(s);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 0;
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+
+  // ---- The table the executor will run on, derived exactly as it derives
+  // it, so the structural claims below are about the very same cells.
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+  sequant::eval::CellTableInputs in;
+  in.ordered = &ordered;
+  in.rich = &rich;
+  in.sliced = &sma;
+  in.sliced_modes_of = [&](std::size_t vid) {
+    auto const it = vmap.find(rich.cells[vid].hash);
+    REQUIRE(it != vmap.end());
+    return sequant::container::svector<sequant::Index>(
+        it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+  };
+  in.volatile_of = [&](std::size_t vid) {
+    auto const it = vmap.find(rich.cells[vid].hash);
+    return it != vmap.end() &&
+           sequant::subtree_any(it->second, is_volatile_node);
+  };
+  in.n_batches_of =
+      sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
+  in.operands_of = orderedexec_per_leg_operands(rich, vmap);
+  auto const table = sequant::eval::build_cell_table(in);
+  REQUIRE(
+      sequant::eval::validate_cell_table(table, ordered.root, in.n_batches_of)
+          .empty());
+
+  // (1) The two-level shape is present: a Scatter Assemble at the ROOT scope
+  // whose per-batch source is itself a partial (reduced on an inner loop, or
+  // assembled one level in), and at least one Assemble living INSIDE a loop
+  // (whose destination therefore IS narrowed, by its own declared `sliced`).
+  std::size_t n_root_scatter = 0, n_nested_assemble = 0, n_two_level = 0;
+  for (sequant::eval::CellId c = 0; c < table.cells.size(); ++c) {
+    auto const& a = table.cells[c];
+    if (a.production.kind != sequant::eval::ProductionKind::Assemble) continue;
+    if (!a.scope.path.empty()) ++n_nested_assemble;
+    if (a.production.assemble != sequant::eval::AssembleKind::Scatter) continue;
+    if (!a.scope.path.empty()) continue;
+    ++n_root_scatter;
+    auto const& src = table.cells[a.production.source];
+    if (!src.partial_over.empty() ||
+        src.production.kind == sequant::eval::ProductionKind::Assemble)
+      ++n_two_level;
+  }
+  REQUIRE(n_root_scatter > 0);
+  REQUIRE(n_nested_assemble > 0);
+  REQUIRE(n_two_level > 0);
+
+  // (2) The sizing rule's own precondition, stated on the table: every
+  // position an Assemble cell declares sliced names a loop instance that is
+  // OPEN at that cell's scope (so the executor can bind it to a batch range),
+  // and a root-scope Assemble declares none -- its destination is the value's
+  // full extent.
+  for (sequant::eval::CellId c = 0; c < table.cells.size(); ++c) {
+    auto const& a = table.cells[c];
+    if (a.production.kind != sequant::eval::ProductionKind::Assemble) continue;
+    for (auto const& [pos, key] : a.sliced) {
+      bool on_path = false;
+      for (auto const& [pk, lat] : a.scope.path)
+        if (sequant::eval::detail::same_key(pk, key)) on_path = true;
+      INFO("cell#" << c << " (value " << a.value_id << ") slices position "
+                   << pos << " on a loop instance not open at its scope");
+      CHECK(on_path);
+    }
+    if (a.scope.path.empty()) {
+      INFO("root-scope Assemble cell#" << c << " (value " << a.value_id
+                                       << ") declares a narrowed form");
+      CHECK(a.sliced.empty());
+    }
+  }
+
+  // (3) Every destination the run allocates is created at the value's OWN
+  // full index list, with no extent override and no lobound -- the narrowing,
+  // where the table declares one, is applied on top of that afterwards and is
+  // never baked into what make_zeros is asked for.
+  // Snapshotted AT CREATION: the destination object itself is then narrowed
+  // (where the table declares a narrowing) and scattered into, and
+  // write_into_slice records that coverage ON it, so its state after the run
+  // says nothing about how it was SIZED.
+  struct MadeZeros {
+    sequant::container::vector<sequant::Index> descriptor;
+    sequant::eval::dryrun::ExtentOverrides overrides, lobounds;
+  };
+  std::vector<MadeZeros> zeros;
+  auto const make_zeros_inner = aops.make_zeros;
+  aops.make_zeros =
+      [&](sequant::container::vector<sequant::Index> const& d) -> ResultPtr {
+    auto r = make_zeros_inner(d);
+    zeros.push_back(MadeZeros{d,
+                              sequant::eval::dryrun::detail::overrides_of(*r),
+                              sequant::eval::dryrun::detail::lobounds_of(*r)});
+    return r;
+  };
+
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  std::string const prev_strict_val = prev_strict ? prev_strict : "";
+  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+  if (prev_strict)
+    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+  else
+    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  logger.eval.level = prev_level;
+
+  REQUIRE(!zeros.empty());  // the run really did assemble by scattering
+  for (auto const& z : zeros) {
+    // The descriptor is some escaping value's own canonical index list.
+    bool matches_a_value = false;
+    for (auto const& a : table.cells) {
+      if (a.production.kind != sequant::eval::ProductionKind::Assemble ||
+          a.production.assemble != sequant::eval::AssembleKind::Scatter)
+        continue;
+      auto const it = vmap.find(rich.cells[a.value_id].hash);
+      if (it == vmap.end()) continue;
+      auto const& ci = it->second->canon_indices();
+      if (sequant::container::vector<sequant::Index>(ci.begin(), ci.end()) ==
+          z.descriptor)
+        matches_a_value = true;
+    }
+    CHECK(matches_a_value);
+    // Full extent, lobound 0: the destination is created whole, on the
+    // value's own index list -- no extent override and no lobound anywhere.
+    CHECK(z.overrides.empty());
+    CHECK(z.lobounds.empty());
+  }
+}
