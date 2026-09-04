@@ -13,8 +13,8 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
-#include <iostream>
 #include <new>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -34,8 +34,8 @@ TEST_CASE("math", "[elements]") {
       REQUIRE(to_rational(1. / 3, 0.) ==
               rational{6004799503160661ull, 18014398509481984ull});
       REQUIRE(to_rational(1. / 7) == rational{1, 7});
-      REQUIRE(to_rational(M_PI) == rational{99023, 31520});
-      REQUIRE(to_rational(M_E) == rational{23225, 8544});
+      REQUIRE(to_rational(std::numbers::pi) == rational{99023, 31520});
+      REQUIRE(to_rational(std::numbers::e) == rational{23225, 8544});
       REQUIRE_THROWS_AS(to_rational(std::nan("NaN")), Exception);
     }
   }
