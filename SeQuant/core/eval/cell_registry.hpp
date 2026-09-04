@@ -156,12 +156,16 @@ class CellRegistry {
   /// \overload As \c read(CellId), and reports through \p exhausted (when
   /// non-null) whether this read spent the cell's last life.
   ///
-  /// STAGE-3 SEAM: the \p exhausted output exists solely to let the caller
-  /// keep the legacy \c CacheManager::chain_holds_shared check honest under
-  /// table-driven reads (it drives \c CacheManager::release_at on the same
-  /// canonical node every production site keys on); the next stage re-derives
-  /// in-place eligibility from this table's own \c life / \c persistent and
-  /// deletes it.
+  /// Stage 3 re-derives in-place eligibility from this table's own \c life /
+  /// \c persistent directly (see \c CellReadResolver::operand_drained,
+  /// which queries \c drained() rather than this flag) instead of routing it
+  /// through the legacy \c CacheManager::chain_holds_shared check. The \p
+  /// exhausted output remains for the one caller that still owes the legacy
+  /// cache a \c CacheManager::release_at on the same canonical node --
+  /// \c run_ordered_contracted_block's \c spend_assemble_source, a block
+  /// close's OWNERSHIP step for its Assemble cell's \c production.source --
+  /// until the stage that removes the legacy scope caches entirely deletes
+  /// that call too.
   [[nodiscard]] ResultPtr read(CellId c, bool* exhausted) {
     auto& s = slot(c);
     if (exhausted) *exhausted = false;
@@ -347,11 +351,13 @@ struct TableRead {
 /// source's scope entry holding a fully consumed buffer, which pins the
 /// memory and makes every later reader see the value as shared.
 ///
-/// STAGE-3 SEAM: the caller's own use of \c TableRead::exhausted -- e.g. to
-/// drive the legacy \c CacheManager::release_at on the same canonical node
-/// every production site keys on -- is legacy-cache business; the stage that
-/// moves storage fully onto the table drops those callers' use of it and
-/// keeps the read itself.
+/// \c CellReadResolver::fetch no longer consults \c TableRead::exhausted
+/// itself (Stage 3: \c CellReadResolver::operand_drained re-derives in-place
+/// eligibility straight from \c CellRegistry::drained instead); the ordered
+/// executor's \c spend_assemble_source still does, to drive the legacy \c
+/// CacheManager::release_at on the same canonical node every production
+/// site keys on, until the stage that removes the legacy scope caches
+/// entirely drops that use too and keeps the read itself.
 [[nodiscard]] inline TableRead table_read(CellRegistry& reg, CellId source) {
   TableRead r;
   r.value = reg.read(source, &r.exhausted);
@@ -456,9 +462,13 @@ class CellReadResolver {
           std::to_string(*vid) + ") has no current result");
     }
     it->second.erase(it->second.begin());
-    TableRead tr = table_read(*reg_, r.source);
-    last_read_exhausted_source_ = tr.exhausted;
-    ResultPtr v = std::move(tr.value);
+    // Stage 3: record WHICH cell this vid's read was most recently served
+    // from -- operand_drained() below re-derives exhaustion from the
+    // registry's own current state (life/value) at that cell instead of a
+    // cached bool, so it can never drift from what the registry actually
+    // holds.
+    last_served_source_[*vid] = r.source;
+    ResultPtr v = table_read(*reg_, r.source).value;
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
       for (auto const& e : ctx)
@@ -483,14 +493,39 @@ class CellReadResolver {
       if (auto leaf = reg_->leaf_cell(*vid)) reg_->set(*leaf, std::move(r));
   }
 
-  /// Whether the most recent \c fetch that SERVED a value spent the source
-  /// cell's last declared life -- i.e. the table says nothing will read that
-  /// value again this evaluation, so every holder other than the caller must
-  /// let go (the caller releases the scope cache's own reference; the
-  /// registry has already dropped its own, see \c CellRegistry::read).
-  /// Meaningless after a fetch that returned nullopt.
-  [[nodiscard]] bool last_read_exhausted_source() const noexcept {
-    return last_read_exhausted_source_;
+  /// Stage 3: whether \p operand_node_hash's operand is currently safe for
+  /// in-place accumulation -- the registry-derived replacement for the
+  /// legacy \c CacheManager::chain_holds_shared(f.left) check \c eval.hpp's
+  /// in-place gate used before storage moved onto the table.
+  ///
+  /// True in exactly two cases:
+  ///  - \p operand_node_hash is not a value of this table at all (a private
+  ///    transient of the current production tree, e.g. an intermediate
+  ///    running total of an accumulate-in-place \c Sum chain that was never
+  ///    promoted to its own cell) -- no table cell could possibly be sharing
+  ///    it, exactly as \c chain_holds_shared() reports "not held" for the
+  ///    analogous untracked case; or
+  ///  - it IS a table value, has been \c fetch()'d at least once, and its
+  ///    MOST RECENT fetch's source cell (\c last_served_source_) is
+  ///    currently \c CellRegistry::drained -- i.e. that read spent the
+  ///    source's last declared life (never true for a persistent cell, which
+  ///    never drains) and the registry has already let go of its own
+  ///    reference (\c CellRegistry::read moves the value out on that read),
+  ///    so nothing this evaluation will read it again.
+  ///
+  /// A table value never yet \c fetch()'d through this resolver (no entry in
+  /// \c last_served_source_) is also reported drained: by construction every
+  /// non-leaf, non-top node evaluate_impl visits is routed through \c fetch
+  /// before its result can reach a gate that asks this question, so the only
+  /// way to reach here with no record is a node this resolver was never
+  /// asked about at all -- indistinguishable, for this purpose, from "no
+  /// table cell to worry about".
+  [[nodiscard]] bool operand_drained(std::size_t operand_node_hash) const {
+    auto const vid = vid_of_hash_(operand_node_hash);
+    if (!vid) return true;
+    auto const it = last_served_source_.find(*vid);
+    if (it == last_served_source_.end()) return true;
+    return reg_->drained(it->second);
   }
 
   /// Diagnostic: the number of operand fetches this resolver has actually
@@ -508,7 +543,11 @@ class CellReadResolver {
   container::vector<container::svector<std::size_t>> reads_of_;
   std::unordered_map<std::size_t, container::svector<std::size_t>> cursor_;
   std::size_t served_ = 0;
-  bool last_read_exhausted_source_ = false;
+  /// value id -> the CellId its most recent \c fetch was served from (see
+  /// \c operand_drained). Never reset per-consumer (begin_consumer leaves it
+  /// alone): "most recent" is global across the whole resolver's lifetime,
+  /// not scoped to one consumer's reads.
+  std::unordered_map<std::size_t, CellId> last_served_source_;
 };
 
 }  // namespace sequant::eval

@@ -1199,6 +1199,24 @@ class CacheManager {
   /// pointee must outlive this cache.
   eval::PeakMonitor* peak_monitor_ = nullptr;
 
+  /// Stage 3 (explicit value cells): optional source of bytes held OUTSIDE
+  /// this cache hierarchy's own \c cache_map_ entries that must still count
+  /// toward \c chain_residency() -- the ordered executor's \c CellRegistry,
+  /// once storage moves onto the table (see \c set_external_residency).
+  /// Looked up along the parent chain like \c array_ops_ (only the root
+  /// cache is wired in practice); empty (default) => \c chain_residency()
+  /// is byte-identical to before this field existed.
+  std::function<std::size_t()> external_residency_{};
+
+  /// Stage 3: optional source of an EXTERNAL alive-entry enumeration (hash,
+  /// bytes) to fold into \c note_working_set()'s diagnostic liveset capture
+  /// alongside this hierarchy's own \c cache_map_ entries -- the counterpart
+  /// of \c external_residency_ for \c PeakMonitor::on_peak_liveset. Looked
+  /// up along the parent chain the same way. Empty (default) => the liveset
+  /// capture is unchanged (this hierarchy's own entries only).
+  std::function<void(std::function<void(std::size_t hash, std::size_t bytes)>)>
+      external_liveset_{};
+
   /// Optional OWNING backing for \c placement_router_. A router built by a
   /// pre-pass (e.g. the remat placement pass) is a local at the build site; a
   /// CacheManager returned BY VALUE from such a builder must carry the router
@@ -1428,6 +1446,54 @@ class CacheManager {
                                : nullptr;
   }
 
+  /// Sets the external residency source (see \c external_residency_). Pass
+  /// an empty \c std::function to detach.
+  void set_external_residency(std::function<std::size_t()> f) noexcept {
+    external_residency_ = std::move(f);
+  }
+
+  /// \return the RAW external-residency hook visible from this cache (local
+  ///         if set, else \c parent_'s, like \c array_ops() / \c
+  ///         cell_read_resolver()) -- an empty \c std::function if none is
+  ///         wired anywhere along the chain. \c chain_residency() invokes
+  ///         this only where its own recursion bottoms out (\c parent_ ==
+  ///         nullptr), so whichever single frame the hook resolves to is
+  ///         folded in exactly once per \c chain_residency() call regardless
+  ///         of which scope in the chain that call started from. Also lets a
+  ///         caller (e.g. an RAII install guard) save the hook currently in
+  ///         effect before overriding it locally and restore exactly that
+  ///         afterward, the same way \c CellReadResolverGuard saves/restores
+  ///         \c cell_read_resolver().
+  [[nodiscard]] std::function<std::size_t()> const& external_residency_hook()
+      const noexcept {
+    if (external_residency_) return external_residency_;
+    static std::function<std::size_t()> const empty{};
+    return parent_ ? parent_->external_residency_hook() : empty;
+  }
+
+  /// Sets the external liveset source (see \c external_liveset_). Pass an
+  /// empty \c std::function to detach.
+  void set_external_liveset(
+      std::function<
+          void(std::function<void(std::size_t hash, std::size_t bytes)>)>
+          f) noexcept {
+    external_liveset_ = std::move(f);
+  }
+
+  /// \return the local external-liveset source if set, else the one
+  ///         inherited from \c parent_; an empty \c std::function if none is
+  ///         wired anywhere along the chain. Looked up like \c
+  ///         external_residency() / \c array_ops().
+  [[nodiscard]] std::function<
+      void(std::function<void(std::size_t hash, std::size_t bytes)>)> const&
+  external_liveset() const noexcept {
+    if (external_liveset_) return external_liveset_;
+    static std::function<void(
+        std::function<void(std::size_t hash, std::size_t bytes)>)> const
+        empty{};
+    return parent_ ? parent_->external_liveset() : empty;
+  }
+
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
   /// intermediate can be stored here (store() is a no-op for an unregistered
   /// key). The slot is NON-persistent with an effectively unbounded life, so it
@@ -1557,6 +1623,14 @@ class CacheManager {
         for (CacheManager const* c = this; c; c = c->parent_)
           for (auto const& [k, e] : c->cache_map_)
             if (e.alive()) live.push_back({k->hash_value(), e.size_in_bytes()});
+        // Stage 3: fold in the external liveset (the ordered executor's
+        // CellRegistry, once wired via set_external_liveset) alongside this
+        // hierarchy's own cache_map_ entries, exactly as external_residency()
+        // folds into chain_residency() above.
+        if (auto const& ext = external_liveset())
+          ext([&live](std::size_t hash, std::size_t bytes) {
+            live.push_back({hash, bytes});
+          });
         m->on_peak_liveset(current_bytes, live);
       }
       m->observe(current_bytes, op_hash);
@@ -1648,10 +1722,18 @@ class CacheManager {
     return s;
   }
   /// current_residency() of this cache plus every ancestor along the scope
-  /// chain (parent_): the total live residency visible at this scope at one
-  /// instant.
+  /// chain (parent_), PLUS -- exactly where the chain walk bottoms out
+  /// (parent_ == nullptr) -- the external residency hook's bytes: the total
+  /// live residency visible at this scope at one instant, table-owned
+  /// storage (Stage 3's \c CellRegistry, once wired via \c
+  /// set_external_residency) included. Adding it only at the walk's base,
+  /// rather than at every recursive level, is what keeps a single external
+  /// total from being folded in once per scope on the chain -- see \c
+  /// external_residency_hook()'s own doc comment.
   [[nodiscard]] size_t chain_residency() const noexcept {
-    return current_residency() + (parent_ ? parent_->chain_residency() : 0);
+    if (parent_) return current_residency() + parent_->chain_residency();
+    auto const& ext = external_residency_hook();
+    return current_residency() + (ext ? ext() : 0);
   }
 
   /// \return true iff some ALIVE entry on this cache or any ancestor along the

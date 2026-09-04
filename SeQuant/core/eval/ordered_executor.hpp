@@ -1459,6 +1459,56 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   } const cell_read_resolver_guard{cache, cache.cell_read_resolver()};
   cache.set_cell_read_resolver(&resolver);
 
+  // Stage 3 (explicit value cells): the registry's bytes feed the peak
+  // metering the same way the legacy scope caches' own cache_map_ entries
+  // do -- CacheManager::chain_residency() folds in whatever
+  // set_external_residency installs, and note_working_set()'s diagnostic
+  // liveset capture folds in whatever set_external_liveset installs. Both
+  // are looked up by resolve()'s own value_id -> hash convention (cell.
+  // value_id indexes rich.cells, exactly as every other value_id in this
+  // function does), so a live cell's reported hash matches the hash every
+  // other liveset/coloring probe in this file already keys by.
+  //
+  // Double-counting guard (temporary, until the stage that removes the
+  // legacy scope caches entirely): a table cell homed via ensure_home_slot
+  // (e.g. a root-scope composite read by more than one block) is held by
+  // BOTH this registry's own slot AND a legacy cache_map_ entry at the same
+  // time -- the two have not been unified yet. Counting the registry's
+  // bytes unconditionally would double the memory those values already
+  // contribute via current_residency()'s walk of cache_map_, so a live
+  // cell's bytes are only added here when NO alive legacy entry anywhere on
+  // the chain holds that same buffer by pointer identity (cache.chain_holds,
+  // read-only -- unlike chain_holds_shared it decays no lifetime and does
+  // not care whether the legacy entry is shared).
+  auto const cell_hash = [&](CellId c) -> std::size_t {
+    return rich.cells[cell_table.cells[c].value_id].hash;
+  };
+  struct ExternalMeteringGuard {
+    CacheManager<N, FHC>& c;
+    std::function<std::size_t()> prev_residency;
+    std::function<void(std::function<void(std::size_t, std::size_t)>)>
+        prev_liveset;
+    ~ExternalMeteringGuard() {
+      c.set_external_residency(std::move(prev_residency));
+      c.set_external_liveset(std::move(prev_liveset));
+    }
+  } const external_metering_guard{cache, cache.external_residency_hook(),
+                                  cache.external_liveset()};
+  cache.set_external_residency([&registry, &cache]() -> std::size_t {
+    std::size_t bytes = 0;
+    registry.for_each_live([&](CellId, ResultPtr const& v) {
+      if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
+    });
+    return bytes;
+  });
+  cache.set_external_liveset(
+      [&registry, &cache,
+       cell_hash](std::function<void(std::size_t, std::size_t)> emit) {
+        registry.for_each_live([&](CellId c, ResultPtr const& v) {
+          if (!cache.chain_holds(v)) emit(cell_hash(c), v->size_in_bytes());
+        });
+      });
+
   // Task 4: the block-count function over the WHOLE ScopeBlock tree, built
   // ONCE here (Task 2's ordered_n_blocks) and threaded through the homing
   // sites -- both the root-composite site below and, via

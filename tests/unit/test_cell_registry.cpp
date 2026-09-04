@@ -136,11 +136,15 @@ TEST_CASE("cell read resolver: declared slice against the batch context",
   auto got1 = res.fetch(1, ctx);
   REQUIRE(got1.has_value());
   CHECK(*got1 == b1);  // whole read: same object
-  // cell 1's life was 1: that read was its last, so the caller must be told
-  // to release every other reference to the buffer.
-  CHECK(res.last_read_exhausted_source());
+  // cell 1's life was 1: that read was its last, so the registry no longer
+  // holds it -- operand_drained() (Stage 3's replacement for the deleted
+  // last_read_exhausted_source()) reports the source cell itself as drained.
+  CHECK(res.operand_drained(1));
   CHECK_THROWS(res.fetch(1, ctx));  // no remaining Read of value 1 for cell 2
   CHECK_FALSE(res.fetch(77, ctx).has_value());  // not a value: transient
+  // A hash the table has no value for at all is reported drained too: it is
+  // a private transient no table cell could ever be sharing.
+  CHECK(res.operand_drained(77));
 }
 
 TEST_CASE(

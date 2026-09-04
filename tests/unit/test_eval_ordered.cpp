@@ -35,6 +35,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <functional>
 #include <map>
@@ -43,6 +44,7 @@
 #include <unordered_map>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace {
 
@@ -423,39 +425,53 @@ TEST_CASE(
 
 TEST_CASE(
     "table-driven reads flip in-place eligibility: a homed value is shared "
-    "while the table still has reads of it, and released by its last one",
+    "while the table still has reads of it, and drained by its last one",
     "[eval][ordered]") {
-  // End-to-end pin for the ownership seam eval.hpp opens at its two
-  //   if (rr->last_read_exhausted_source()) cache.release_at(f.node);
-  // sites. The table-driven read serves a value from the cell registry and
-  // never through access_at, so nothing else ever spends the scope entry's
-  // last life -- entry::access() did that, and it is what makes a fully
-  // consumed value exclusively owned by its final consumer. Without the
-  // release the entry holds the buffer for the whole evaluation, and
-  // chain_holds_shared() then reports EVERY operand as shared forever, which
-  // silently disables the in-place accumulation branch of every Sum.
+  // End-to-end pin for the Stage-3 ownership seam: the in-place gate in
+  // eval.hpp now asks eval::CellReadResolver::operand_drained() directly
+  // (rather than the legacy CacheManager::chain_holds_shared(f.left), which
+  // Stage 2 already stopped keeping honest for table-served reads -- nothing
+  // decrements the legacy home entry's own life any more once a value is
+  // read through the registry instead of access_at, so chain_holds_shared()
+  // now reports EVERY table-homed value as permanently shared, which is
+  // exactly why this test no longer asserts on it). operand_drained()
+  // instead re-derives eligibility from the registry's own life/value state
+  // (CellRegistry::drained), which the registry keeps honest on every
+  // read -- see cell_registry.hpp.
   //
   // The same fixture as the in-place hazard case above: A = a*b is CSE'd
   // across the two roots, so the ordered executor homes it multi-use, and one
   // leaf is declared VOLATILE so A's table cell is non-persistent and
   // therefore has a finite, spendable life (a cell the table marks persistent
-  // is never exhausted and, by design, never released). That makes the two
-  // halves of the flip directly observable through existing accessors:
-  //   * WHILE the table still has reads of A pending, A's home is alive and
-  //     chain_holds_shared(A) is true -- the guard correctly refuses to let
-  //     (A + c) accumulate into the shared buffer;
-  //   * AFTER A's last table read, the home has let go, so the same
-  //     predicate is false again and a later accumulation into A would be
-  //     eligible.
-  // Nothing spends the home entry's life any more (every read of A goes
-  // through the cell registry, not access_at), so the second half holds ONLY
-  // because release_at ran: delete the operand-probe call site and the
-  // post-run checks below fail.
+  // is never exhausted, so operand_drained() never reports it drained). That
+  // makes the flip directly observable through the custom-evaluator hook:
+  //   * WHILE the table still has reads of A pending, operand_drained(A) is
+  //     false -- the guard correctly refuses to let (A + c) accumulate into
+  //     the shared buffer;
+  //   * ONCE every declared read of A has been served, operand_drained(A) is
+  //     true again and a later accumulation into A would be eligible.
+  // Delete CellReadResolver::operand_drained's own registry query (fall back
+  // to some cached bool instead) and the post-run checks below fail.
+  //
+  // root2 carries a trailing "+ (e * f)" term beyond the minimal "(a*b)*d"
+  // hazard fixture: A's LAST table read (its third and final one) happens
+  // partway through root2's own build, and every Enter-stage node visited
+  // AFTER that point in the walk is what makes the post-drain observation
+  // below reachable through the custom-evaluator hook (Enter fires BEFORE a
+  // node's own children are read, so the state a hook observes always
+  // reflects reads that happened STRICTLY BEFORE that node -- root2's own
+  // trailing "e * f" term is visited only after "(a*b)*d" has fully
+  // finished, i.e. after A's exhausting read). "e"/"f" are otherwise inert
+  // (unrelated to A, added only to create that observation point).
   ScalarNode const root1 = scalar_tree(L"((a * b) + c) * (a * b)");
-  ScalarNode const root2 = scalar_tree(L"(a * b) * d");
+  ScalarNode const root2 = scalar_tree(L"(a * b) * d + (e * f)");
   ScalarNode const shared = scalar_tree(L"a * b");  // the CSE'd value A
-  ScalarLeafEvaluator const yield{
-      {{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}, {L"d", 1.5}}};
+  ScalarLeafEvaluator const yield{{{L"a", 2.0},
+                                   {L"b", -3.5},
+                                   {L"c", 7.25},
+                                   {L"d", 1.5},
+                                   {L"e", 2.0},
+                                   {L"f", 0.5}}};
 
   // Leaf "a" is VOLATILE, so every value carrying it -- A included -- is a
   // non-persistent cell with a finite, spendable life, exactly as an
@@ -484,16 +500,30 @@ TEST_CASE(
 
   // Mid-run probe: the custom-evaluator hook is consulted at the Enter stage
   // of every non-leaf node with the live cache, and DECLINES (null return),
-  // so it observes without changing what runs.
+  // so it observes without changing what runs. Every invocation records
+  // (a) the resolver's operand_drained(A) at that instant and (b) whether
+  // CacheManager::chain_residency() (Stage 3: now folding in the registry's
+  // own bytes, minus whatever a legacy entry already double-counts -- see
+  // ordered_executor.hpp's external-residency install) is at least as large
+  // as A's own buffer while A is resident ANYWHERE -- a [meter]-style sanity
+  // floor: the peak metering must never under-count a value known to be
+  // alive, registry-only bytes included.
   bool seen_alive_and_shared = false;
   ResultPtr shared_buffer;  // A's homed buffer, captured while it is alive
+  std::size_t const shared_hash = shared->hash_value();
+  std::vector<bool> drained_observations;
+  bool residency_covers_shared = true;
   cache.set_custom_evaluator(
       [&](ScalarNode const&,
           sequant::CacheManager<ScalarNode>& c) -> ResultPtr {
         if (ResultPtr const held = c.peek_at(shared)) {
           shared_buffer = held;
           if (c.chain_holds_shared(held)) seen_alive_and_shared = true;
+          if (c.chain_residency() < held->size_in_bytes())
+            residency_covers_shared = false;
         }
+        if (auto* rr = c.cell_read_resolver())
+          drained_observations.push_back(rr->operand_drained(shared_hash));
         return nullptr;  // decline
       });
 
@@ -501,18 +531,29 @@ TEST_CASE(
       roots, ordered, rich, ScalarEvalExpr::annot_t{}, yield, cache, target,
       sequant::make_no_scope_guard{}, is_volatile);
 
-  // The run itself is unchanged: root1 = (A + c) * A = -1.75, root2 = A * d
-  // = -10.5, and this entry point returns the forest-wide sum.
-  CHECK(got->as<ResultScalar<double>>().value() == Catch::Approx(-12.25));
+  // root1 = (A + c) * A = -1.75, root2 = A * d + (e * f) = -10.5 + 1.0 =
+  // -9.5, and this entry point returns the forest-wide sum.
+  CHECK(got->as<ResultScalar<double>>().value() == Catch::Approx(-11.25));
 
-  // Before A's last table read: homed, alive, and reported shared.
+  // Before A's last table read: homed, alive, and reported shared (still
+  // true forever once observed -- see the header comment on why
+  // chain_holds_shared is no longer used to gate anything).
   CHECK(seen_alive_and_shared);
   REQUIRE(shared_buffer);
+  CHECK(residency_covers_shared);
 
-  // After it: the home let go, so the predicate that gates in-place
-  // accumulation has flipped for that very buffer.
-  CHECK_FALSE(cache.peek_at(shared));
-  CHECK_FALSE(cache.chain_holds_shared(shared_buffer));
+  // The flip itself: at least one observation while A's three declared
+  // table reads (the Sum's own operand, root1's own second operand, and
+  // root2's operand) are still in progress finds it NOT drained -- the
+  // in-place gate correctly refusing to reuse a still-shared buffer -- and
+  // the LAST observation, taken after root2's trailing "e * f" term (visited
+  // only once "(a*b)*d" -- A's own last read -- has fully finished), finds
+  // it drained.
+  REQUIRE(drained_observations.size() >= 3);
+  CHECK(std::any_of(drained_observations.begin(),
+                    std::prev(drained_observations.end()),
+                    [](bool d) { return !d; }));
+  CHECK(drained_observations.back());
 }
 
 TEST_CASE(

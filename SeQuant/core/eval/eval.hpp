@@ -875,14 +875,12 @@ ResultPtr evaluate_impl(Node const& node,         //
               f.node->hash_value() != node->hash_value()) {
             if (auto v =
                     rr->fetch(f.node->hash_value(), cache.batch_context())) {
-              // Ownership: the table is the only reader of a table value, so
-              // when it says this was the value's LAST read, the scope cache
-              // must let go of it too -- exactly what its own access() did on
-              // an entry's last use before reads moved to the table. An entry
-              // left holding a fully consumed value pins its memory and makes
-              // the buffer look permanently shared, which silently disables
-              // the in-place accumulation below.
-              if (rr->last_read_exhausted_source()) cache.release_at(f.node);
+              // Stage 3: ownership of a table value's exhaustion is now the
+              // registry's own affair (CellRegistry::read drops its
+              // reference on the draining read) -- the in-place gate below
+              // consults CellReadResolver::operand_drained() directly rather
+              // than needing the legacy scope cache to let go of a mirror
+              // entry, so there is nothing to release here any more.
               finalize(apply_phase(f.node, *v));
               break;
             }
@@ -1069,18 +1067,13 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (auto* rr = cache.cell_read_resolver()) {
             if (auto v =
                     rr->fetch(f.node->hash_value(), cache.batch_context())) {
-              // See the ownership note on the operand probe above. NOTE this
-              // one cannot bite TODAY, and no test pins it: this branch is
-              // reached only after the Checked probe's access_at MISSED for
-              // this very node, and an access_at miss means no scope in the
-              // chain holds the value -- so there is nothing here for
-              // release_at to let go of. It is kept because the two probes
-              // must not drift apart, and because it is already the correct
-              // wiring for the ordering the design asks for (section 4:
-              // leaves are cells, read with declared slices like any other
-              // cell, with no separate leaf path) -- once this probe runs
-              // AHEAD of access_at, a leaf's home is live right here.
-              if (rr->last_read_exhausted_source()) cache.release_at(f.node);
+              // See the Stage-3 ownership note on the operand probe above:
+              // this branch is kept because the two probes must not drift
+              // apart, and because it is already the correct wiring for the
+              // ordering the design asks for (section 4: leaves are cells,
+              // read with declared slices like any other cell, with no
+              // separate leaf path) -- once this probe runs AHEAD of
+              // access_at, a leaf's home is live right here.
               finalize(apply_phase(f.node, *v));  // recorded leaf, sliced
               break;
             }
@@ -1125,9 +1118,8 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (auto* rr = cache.cell_read_resolver()) {
             if (auto v =
                     rr->fetch(f.node->hash_value(), cache.batch_context())) {
-              // See the ownership note on the operand probe above: the table
-              // says whether this read was the value's last.
-              if (rr->last_read_exhausted_source()) cache.release_at(f.node);
+              // See the Stage-3 ownership note on the operand probe above:
+              // nothing to release here any more.
               finalize(apply_phase(f.node, *v));
               break;
             }
@@ -1220,6 +1212,16 @@ ResultPtr evaluate_impl(Node const& node,         //
         //    moves its buffer out on its sole read, so it no longer holds it),
         //    so in-place still fires for the private common case -- see
         //    CacheManager::chain_holds_shared's own doc comment.
+        //  - Explicit value cells (Stage 3): when a CellReadResolver is
+        //    wired (the ordered executor's table-driven path), the same
+        //    provenance question is answered from the table's own life
+        //    instead -- eval::CellReadResolver::operand_drained(hash) is
+        //    true iff the LEFT operand's most recent table read spent its
+        //    source's last life (a private/transient value, never a table
+        //    read at all, is reported drained too: nothing else could be
+        //    sharing it, exactly as chain_holds_shared() reports "not held"
+        //    for the same case) -- see that method's own doc comment. The
+        //    forest path (no resolver wired) keeps chain_holds_shared.
         // A marked Sum whose left child IS a leaf (the common case for the
         // innermost Sum of a chain, whose left is the chain seed), OR whose
         // left operand is a shared cache-resident value, therefore falls back
@@ -1228,11 +1230,16 @@ ResultPtr evaluate_impl(Node const& node,         //
         // private) Sum in the chain still accumulates in place from there on,
         // since each already-computed running total is a fresh,
         // evaluation-local buffer.
+        auto* const rr_gate = cache.cell_read_resolver();
         bool const inplace_eligible =
             f.node->op_type() == EvalOp::Sum && f.node->accumulate_in_place() &&
-            !f.node.left().leaf() && !cache.chain_holds_shared(f.left);
+            !f.node.left().leaf() &&
+            (rr_gate ? rr_gate->operand_drained(f.node.left()->hash_value())
+                     : !cache.chain_holds_shared(f.left));
         if (inplace_eligible) {
-          SEQUANT_ASSERT(!cache.chain_holds_shared(f.left));
+          SEQUANT_ASSERT(
+              rr_gate ? rr_gate->operand_drained(f.node.left()->hash_value())
+                      : !cache.chain_holds_shared(f.left));
 
           // The accumulator (f.left) is used AS IS, in its own layout --
           // never repermuted -- since binarize() pins a marked Sum's
