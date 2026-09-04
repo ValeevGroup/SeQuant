@@ -6274,3 +6274,131 @@ TEST_CASE(
   INFO("relative L2 diff (ordered vs forest descent, phased value) = " << rel);
   CHECK(rel < 1e-12);
 }
+
+// The root results the ordered executor hands back must never ALIAS the
+// storage it still holds. The root combine (forest_combine.hpp) accumulates
+// the forest's roots IN PLACE into the first one, and a root cell that is
+// persistent is also published to the cache handle's PersistentValueStore --
+// so handing out the registry's own buffer leaves root0 + root1 in the store,
+// and the NEXT evaluation of the same schedule (which cache-halt serves
+// straight from the store) starts from the corrupted value.
+//
+// Only a DEFAULT-constructed layout exposes it: with a real layout the combine
+// permutes each root first, which allocates a fresh buffer. Real TA data is
+// required -- the DryRun backend carries no numbers and cannot witness a
+// double-counted addend.
+TEST_CASE(
+    "evaluate_ordered_schedule: a root result never aliases the persistent "
+    "store",
+    "[eval][ordered]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+
+  // Two INDEPENDENT roots over the same externals {i_1,i_2}. Nothing here is
+  // volatile, so each root cell is persistent -- a root has no consumer at
+  // all, which is exactly the "constant term" case cache-halt must serve from
+  // the store instead of recomputing.
+  auto const t1 =
+      sequant::deserialize<sequant::ExprPtr>(L"g{a_1;i_1} * h{i_2;a_1}");
+  auto const t2 =
+      sequant::deserialize<sequant::ExprPtr>(L"p{a_1;i_1} * q{i_2;a_1}");
+  std::vector<node_t> forest{eval_node(t1), eval_node(t2)};
+  REQUIRE(forest.front()->annot() == forest.back()->annot());
+  std::string const annot = forest.front()->annot();
+  // The stored value is the CANONICAL orientation; keeping both roots at
+  // phase +1 lets the store's content be compared to the evaluated root
+  // directly.
+  REQUIRE(forest.front()->canon_phase() == 1);
+  // DEFAULT layout: combine_forest_roots does not permute, so root 0's own
+  // buffer IS the accumulator.
+  std::string const layout{};
+
+  // Ground truth by forest descent: the whole sum, and root 0 alone (the leaf
+  // yield caches by label, so every evaluation below sees the same numbers).
+  auto const ref_sum =
+      TA::clone(evaluate(forest, layout, yield_)->get<TArrayD>());
+  std::vector<node_t> const root0_only{forest.front()};
+  auto const ref_root0 =
+      TA::clone(evaluate(root0_only, layout, yield_)->get<TArrayD>());
+  REQUIRE(TA::norm2(ref_root0) > 0.0);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  // ONE cache handle across both evaluations -- the persistent value store
+  // lives on it, and is what carries a value from one evaluation to the next.
+  auto cache = sequant::CacheManager<node_t>::empty();
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+
+  auto const first =
+      TA::clone(evaluate_ordered_schedule(forest, ordered, rich, layout, yield_,
+                                          cache, target_batch)
+                    ->get<TArrayD>());
+  {
+    TArrayD diff;
+    diff(annot) = first(annot) - ref_sum(annot);
+    double const rel = TA::norm2(diff) / TA::norm2(ref_sum);
+    INFO("relative L2 diff (ordered, first evaluation vs forest descent) = "
+         << rel);
+    CHECK(rel < 1e-12);
+  }
+
+  // The store still holds root 0 ALONE. With an aliased root result the
+  // combine's add_inplace would have made this root0 + root1.
+  auto const& store = cache.persistent_values();
+  REQUIRE(store.holds(forest.front()->hash_value()));
+  {
+    auto const stored = store.get(forest.front()->hash_value());
+    REQUIRE(stored);
+    TArrayD diff;
+    diff(annot) = stored->get<TArrayD>()(annot) - ref_root0(annot);
+    double const rel = TA::norm2(diff) / TA::norm2(ref_root0);
+    INFO(
+        "relative L2 diff (persistent store's root 0 after the combine vs "
+        "root 0 alone) = "
+        << rel);
+    CHECK(rel < 1e-12);
+  }
+
+  // The second evaluation is served from the store (both roots are persistent
+  // and held, so cache-halt skips their production) and must reproduce the
+  // first exactly -- with an aliased root 0 it would come out as
+  // root0 + root1 + root1.
+  auto const second =
+      TA::clone(evaluate_ordered_schedule(forest, ordered, rich, layout, yield_,
+                                          cache, target_batch)
+                    ->get<TArrayD>());
+  {
+    TArrayD diff;
+    diff(annot) = second(annot) - first(annot);
+    double const rel = TA::norm2(diff) / TA::norm2(first);
+    INFO("relative L2 diff (second evaluation vs first, one cache handle) = "
+         << rel);
+    CHECK(rel < 1e-12);
+  }
+}

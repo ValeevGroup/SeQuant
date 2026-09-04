@@ -1748,14 +1748,48 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
             (sp == p && sk.depth == k.depth && sk.loop_slot == k.loop_slot));
   }
   // residency flags: both kinds occur, and each means what it says.
+  //
+  // Persistence is the FRONTIER of the invariant region (TableCell::
+  // persistent, detail::apply_persistence_frontier): the CANDIDATES are the
+  // cells carrying no volatile leaf and bound to no enclosing loop, and a
+  // candidate stays persistent only if some CONSUMER of it is volatile, or it
+  // has no consumer at all (a forest root). Consumers are counted by SOURCE
+  // CELL -- the reads sourcing the cell, plus the Assembles sourcing it --
+  // exactly the edge set the runtime's cache-halt closure walks.
+  std::size_t const n_cells = table.cells.size();
+  std::vector<char> has_consumer(n_cells, 0), has_volatile_consumer(n_cells, 0);
+  {
+    auto const note = [&](std::size_t source, std::size_t consumer) {
+      has_consumer[source] = 1;
+      if (in.volatile_of(table.cells[consumer].value_id))
+        has_volatile_consumer[source] = 1;
+    };
+    for (auto const& r : table.reads) note(r.source, r.consumer);
+    for (std::size_t c = 0; c < n_cells; ++c)
+      if (table.cells[c].production.kind ==
+          sequant::eval::ProductionKind::Assemble)
+        note(table.cells[c].production.source, c);
+  }
+  std::size_t n_persistent_candidates = 0;
+  for (auto const& c : table.cells)
+    if (!in.volatile_of(c.value_id) &&
+        sequant::eval::detail::bound_instances(c).empty())
+      ++n_persistent_candidates;
+
   std::size_t n_persistent = 0, n_produce_if_absent = 0;
-  for (auto const& c : table.cells) {
+  for (std::size_t cid = 0; cid < n_cells; ++cid) {
+    auto const& c = table.cells[cid];
     if (c.persistent) {
       ++n_persistent;
       // cross-evaluation invariance: bound to no loop instance, no volatile
       // leaf underneath
       CHECK(sequant::eval::detail::bound_instances(c).empty());
       CHECK_FALSE(in.volatile_of(c.value_id));
+      // ... and a reader on a LATER evaluation: a volatile consumer, or no
+      // consumer at all. Without this, a whole invariant sub-DAG whose every
+      // consumer is itself skipped on the warm evaluation would be held in
+      // the persistent value store for the life of the cache handle.
+      CHECK((has_volatile_consumer[cid] || !has_consumer[cid]));
     }
     if (c.produce_if_absent) {
       ++n_produce_if_absent;
@@ -1776,6 +1810,16 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   }
   CHECK(n_persistent > 0);
   CHECK(n_produce_if_absent > 0);
+  // The frontier is a strict subset of the candidates on this fixture: the
+  // invariant region really does run deeper than one level here, so the
+  // demotion has something to do (and the numbers are reported so a change in
+  // either is visible).
+  WARN("persistent cells " << n_persistent << " of " << n_persistent_candidates
+                           << " candidates (no volatile leaf, bound to no "
+                              "enclosing loop), out of "
+                           << n_cells << " cells");
+  CHECK(n_persistent <= n_persistent_candidates);
+  CHECK(n_persistent < n_persistent_candidates);
 
   // Validate the derived table once; reuse the same violations both for the
   // life-rule count and the final full-table check.

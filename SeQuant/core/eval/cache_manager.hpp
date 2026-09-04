@@ -587,6 +587,15 @@ struct DefUseMeter {
 /// persistence flag is scoped to one \c cache_map_ and drained/rebuilt by
 /// \c reset(). The batched executor's registry is the sole intended writer;
 /// readers are the same registry resolving a persistent cell's operand read.
+///
+/// WHAT IT HOLDS is the FRONTIER of the invariant region, not all of it: the
+/// table marks a cell persistent only when some consumer of it is volatile,
+/// or it is a forest root (see \c TableCell::persistent and \c
+/// detail::apply_persistence_frontier), so what accumulates here is the values
+/// that feed the next evaluation's volatile work plus its results -- not every
+/// invariant intermediate behind them. NOTHING here is dropped by \c reset()
+/// by design; its lifetime is bounded by \c clear_persistent_values() or by
+/// the cache handle itself going away.
 class PersistentValueStore {
  public:
   /// Store (or overwrite) the value for @p hash.

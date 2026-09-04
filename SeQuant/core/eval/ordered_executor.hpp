@@ -231,9 +231,16 @@ template <typename node_t>
 ///     Assemble that closes it is dead as soon as that Assemble is -- even
 ///     though the assembled form of the SAME value is still read elsewhere.
 ///
-/// A cell with NO consumer at all is never skipped: those are the schedule's
-/// own results, read by whoever asked for the evaluation (validator rule 4
-/// admits a zero-read cell only at the root scope).
+/// A cell with NO consumer at all is never skipped BY RULE 2 -- the closure
+/// below only ever adds a cell all of whose consumers are skipped, and a cell
+/// with no consumer has none to skip. Those cells are the schedule's own
+/// results (validator rule 4 admits a zero-read cell only at the root scope),
+/// and RULE 1 does reach them: a non-volatile forest root -- a constant term,
+/// held by the persistent store from the previous evaluation -- is skipped
+/// exactly as any other held persistent cell is, which is the whole point of
+/// cache-halt. What the caller then receives for such a root is a private
+/// COPY of the held value, never the stored buffer itself (see the root
+/// results in \c run_ordered_schedule_pre_results).
 ///
 /// Rule 2 is a fixpoint over the table's dependency edges: skipping a
 /// resident persistent composite makes its own prerequisites dead, and so on
@@ -965,9 +972,10 @@ inline std::size_t& ordered_last_cell_table_size_slot() {
 /// live byte total; \c persistent is the part held by cells the table marks
 /// persistent (they survive on purpose, into the next evaluation); \c roots
 /// is the part held by the forest roots' own cells -- the exact CELLS the
-/// results were taken from, not every cell of a root's value (handed to the
-/// caller as \c pre_results, and read by nobody in the table, so those cells
-/// keep holding them until the registry dies with the call). \c live beyond
+/// results were taken from, not every cell of a root's value (the caller's \c
+/// pre_results are private COPIES of them, and nobody in the table reads
+/// them, so those cells keep holding their own until the registry dies with
+/// the call). \c live beyond
 /// those two is a non-persistent intermediate that never reached the end of its
 /// declared life -- exactly what a missing \c CellRegistry::forgo at a
 /// skipped production leaves behind.
@@ -1387,6 +1395,18 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       throw Exception("evaluate_ordered_schedule: forest root value " +
                       std::to_string(vid) + " (cell#" + std::to_string(*cell) +
                       ") holds no result at the combine read");
+    // NEVER hand out a buffer the registry still holds. The read above is a
+    // PEEK: it does not move the value out, so the cell -- and, for a
+    // persistent cell, the PersistentValueStore it was published to, and any
+    // caller cache entry holding the same buffer -- is still pointing at it.
+    // The combine (forest_combine.hpp) accumulates the forest's roots IN
+    // PLACE into the first one, so handing out the registry's own buffer
+    // would mutate the stored value: a persistent root would then seed the
+    // NEXT evaluation from root0 + root1, and two forest roots resolving to
+    // one cell would double one of them. Hand out a private copy. (The
+    // phase-shifting branch is not a substitute: a backend's \c
+    // mult_by_phase may return a shallow handle onto the same tiles.)
+    ptr = ptr->clone();
     // Orient the stored value to this root's phase, matching evaluate_impl's
     // own canonical->orientation return convention (apply_phase).
     auto const ph = roots[i]->canon_phase();

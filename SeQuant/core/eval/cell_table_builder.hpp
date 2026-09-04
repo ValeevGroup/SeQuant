@@ -87,12 +87,18 @@ struct CellBuildState {
   return false;
 }
 
-/// Sets the \c persistent / \c produce_if_absent flags of \p cell from its
-/// bound instances (\c bound_instances) against the current \p path: a cell
-/// is persistent iff it carries no volatile leaf and is bound to none of its
-/// enclosing loops; it is produced only on first visit (\c produce_if_absent)
-/// iff its scope is nested inside a loop it is NOT bound to on that loop's
-/// own instance.
+/// Sets the \c produce_if_absent flag and the persistence CANDIDACY of \p
+/// cell from its bound instances (\c bound_instances) against the current \p
+/// path: a cell is a persistence candidate iff it carries no volatile leaf and
+/// is bound to none of its enclosing loops; it is produced only on first visit
+/// (\c produce_if_absent) iff its scope is nested inside a loop it is NOT
+/// bound to on that loop's own instance.
+///
+/// \note Candidacy, not the final answer: persistence is the FRONTIER of the
+/// invariant region, not all of it, and the remaining condition (at least one
+/// volatile consumer, or no consumer at all) can only be decided once the
+/// table's reads exist. \c apply_persistence_frontier demotes the rest at the
+/// end of \c build_cell_table.
 inline void set_residency_flags(
     TableCell& cell, bool volatile_value,
     container::svector<std::pair<LoopKey, int>> const& path) {
@@ -250,6 +256,66 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     }
   }
 }
+/// Demotes every persistence CANDIDATE (\c set_residency_flags: no volatile
+/// leaf, bound to no enclosing loop) that is not on the FRONTIER of the
+/// invariant region, so that
+///
+///   \c persistent == carries no volatile leaf
+///                 AND is bound to no enclosing loop instance
+///                 AND (some CONSUMER of it holds a volatile value
+///                      OR it has no consumer at all -- a forest root;
+///                      validator rule 4 admits a zero-consumer cell only at
+///                      the root scope).
+///
+/// The CONSUMERS of a cell are the consumer cells of every \c Read whose \c
+/// source is it, plus every \c Assemble whose \c production.source is it --
+/// the SAME edge set the runtime's cache-halt closure walks, by SOURCE CELL
+/// and not by value, so the two cannot disagree about what reads a form.
+///
+/// Why the frontier and not the whole invariant region: a persistent cell is
+/// held across evaluations and skipped by cache-halt on every later one. A
+/// non-volatile cell all of whose consumers are non-volatile is therefore
+/// never READ again -- each such consumer is itself either persistent-and-held
+/// (skipped by cache-halt rule 1) or demoted here and, by induction from the
+/// roots, skipped by rule 2 because ALL of ITS consumers are skipped. Keeping
+/// such a cell resident across evaluations buys nothing and costs its bytes in
+/// the persistent value store for the life of the cache handle. Only the cells
+/// feeding volatile work -- and the forest's own results -- have a reader on a
+/// later evaluation.
+///
+/// Leaves follow the same rule: an input tensor whose every consumer is
+/// non-volatile is re-fetched on the (rare) evaluation that actually needs it
+/// rather than held forever.
+inline void apply_persistence_frontier(
+    CellTable& table, std::function<bool(std::size_t)> const& volatile_of) {
+  std::size_t const n = table.cells.size();
+  container::vector<char> has_consumer(n, 0), has_volatile_consumer(n, 0);
+  // volatile_of walks the value's whole production subtree; memoize it, since
+  // one value is the consumer of many reads.
+  std::unordered_map<std::size_t, bool> vol_of;
+  auto const is_vol = [&](std::size_t vid) {
+    auto const it = vol_of.find(vid);
+    if (it != vol_of.end()) return it->second;
+    bool const v = volatile_of(vid);
+    vol_of.emplace(vid, v);
+    return v;
+  };
+  auto const note = [&](CellId source, CellId consumer) {
+    if (source >= n || consumer >= n) return;
+    has_consumer[source] = 1;
+    if (is_vol(table.cells[consumer].value_id))
+      has_volatile_consumer[source] = 1;
+  };
+  for (Read const& r : table.reads) note(r.source, r.consumer);
+  for (CellId c = 0; c < n; ++c)
+    if (table.cells[c].production.kind == ProductionKind::Assemble)
+      note(table.cells[c].production.source, c);
+  for (CellId c = 0; c < n; ++c) {
+    TableCell& cell = table.cells[c];
+    if (cell.persistent && has_consumer[c] && !has_volatile_consumer[c])
+      cell.persistent = false;
+  }
+}
 }  // namespace detail
 
 /// Derives the cell table's PRODUCTIONS from an ordered schedule already
@@ -298,6 +364,8 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
       TableCell leaf;
       leaf.value_id = vc.value_id;
       leaf.production.kind = ProductionKind::Leaf;
+      // Candidacy only, like every other cell's: apply_persistence_frontier
+      // below demotes a leaf whose every consumer is non-volatile.
       leaf.persistent = !in.volatile_of(vc.value_id);
       st.table.cells.push_back(std::move(leaf));
       st.forms_of[vc.value_id].push_back(st.table.cells.size() - 1);
@@ -370,6 +438,10 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
       st.table.reads.push_back(std::move(r));
     }
   }
+  // Persistence is the FRONTIER of the invariant region, and the frontier is
+  // only knowable once the reads exist: demote every candidate whose every
+  // consumer is itself non-volatile (see apply_persistence_frontier).
+  detail::apply_persistence_frontier(st.table, in.volatile_of);
   // Lives: reads weighted by the consumer's extra enclosing batches
   // (detail::read_multiplicity), plus one per Assemble that consumes the
   // cell.
