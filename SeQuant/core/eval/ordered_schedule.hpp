@@ -1406,6 +1406,103 @@ forced_split_demotions(RichSchedule const& rich,
             if (d == *home_depth) home_escaped = true;
             if (type_cluster[d] != type_cluster[*home_depth]) complete = false;
           }
+          // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE): on an incomplete
+          // chain, print the value's axes, its consumers and the split's
+          // carried set with their home depths and clusters, so a failure on
+          // a real input can be diagnosed without a debugger.
+          if ((!complete || !home_escaped) &&
+              std::getenv("SEQUANT_DUMP_SCHEDULE")) {
+            std::unordered_map<std::size_t, CellLegality const*> cl_by_vid;
+            for (CellLegality const& c2 : legality.cells) {
+              auto const it2 = value_id_of.find(c2.hash);
+              if (it2 != value_id_of.end()) cl_by_vid.emplace(it2->second, &c2);
+            }
+            auto const role_str = [](LoopRole r) -> wchar_t const* {
+              switch (r) {
+                case LoopRole::LoopLocal:
+                  return L"L";
+                case LoopRole::Reduction:
+                  return L"R";
+                case LoopRole::LoopCarried:
+                  return L"C";
+                default:
+                  return L"I";
+              }
+            };
+            auto const describe = [&](std::size_t v) {
+              auto const it2 = cl_by_vid.find(v);
+              std::wcerr << L"v" << v;
+              if (it2 == cl_by_vid.end()) {
+                std::wcerr << L"(no legality)";
+                return;
+              }
+              CellLegality const& c2 = *it2->second;
+              auto const hd = local_home_depth(c2);
+              std::wcerr << L"(home=";
+              if (hd)
+                std::wcerr << *hd << L"/cl" << type_cluster[*hd];
+              else
+                std::wcerr << L"root";
+              std::wcerr << L" axes={";
+              for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
+                std::wstring const bk2{c2.per_axis[p2].axis.space().base_key()};
+                int const fs2 = fusion_slot(c2, p2);
+                auto const d2 = depth_of_instance(bk2, fs2 >= 0 ? fs2 : 0);
+                std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
+                           << role_str(c2.per_axis[p2].role) << L"@slot" << fs2
+                           << L"->d";
+                if (d2)
+                  std::wcerr << *d2;
+                else
+                  std::wcerr << L"?";
+                std::wcerr << L" ";
+              }
+              std::wcerr << L"}"
+                         << (split_passes->consumer_pass.count(v) ? L" CONS"
+                                                                  : L" prod")
+                         << (split_passes->carried.count(v) ? L" CARRIED" : L"")
+                         << L")";
+            };
+            std::wcerr << L"[sched-split-diag] split_depth=" << *split_depth
+                       << L"/cl" << type_cluster[*split_depth] << L" value: ";
+            describe(vid);
+            std::wcerr << L"\n[sched-split-diag]   escapes={";
+            for (auto const& [d, kind] : escapes) {
+              (void)kind;
+              std::wcerr << d << L"/cl" << type_cluster[d] << L" ";
+            }
+            std::wcerr << L"} complete=" << complete << L" home_escaped="
+                       << home_escaped << L"\n";
+            if (cons_it != g.consumers_of.end())
+              for (std::size_t c3 : cons_it->second) {
+                std::wcerr << L"[sched-split-diag]   consumer ";
+                describe(c3);
+                std::wcerr << L"\n";
+              }
+            for (std::size_t cv : split_passes->carried) {
+              std::wcerr << L"[sched-split-diag]   carried ";
+              describe(cv);
+              std::wcerr << L"\n";
+            }
+            std::map<std::wstring, std::size_t> hist;
+            for (std::size_t pv : split_passes->consumer_pass) {
+              auto const it2 = cl_by_vid.find(pv);
+              std::wstring key = L"none";
+              if (it2 != cl_by_vid.end()) {
+                auto const hd = local_home_depth(*it2->second);
+                key = hd ? (L"d" + std::to_wstring(*hd) + L"/cl" +
+                            std::to_wstring(type_cluster[*hd]))
+                         : L"root";
+              }
+              ++hist[key];
+            }
+            std::wcerr << L"[sched-split-diag]   consumer_pass homes:";
+            for (auto const& [k, cnt] : hist)
+              std::wcerr << L" " << k << L"=" << cnt;
+            std::wcerr << L" (total " << split_passes->consumer_pass.size()
+                       << L", carried " << split_passes->carried.size()
+                       << L")\n";
+          }
           if (!complete || !home_escaped)
             throw Exception(
                 "build_ordered_schedule: cannot materialize value " +
