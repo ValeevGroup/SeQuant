@@ -987,49 +987,6 @@ ResultPtr evaluate_impl(Node const& node,         //
                   slice_to_use(apply_phase(f.node, m.ptr), f.node, m.hops));
               break;
             }
-            // Resident-reads invariant (read-from-home ordered scratches): a
-            // non-leaf value other than this call's own top node MUST already
-            // be resident -- it was statically scheduled and built by a prior
-            // step. A miss here means it vanished (premature eviction /
-            // under-predicted use count in ordered_home_reads), which must be a
-            // hard error, never a silent recompute or empty-array serve that
-            // hangs a downstream contraction. Leaves (evaluated fresh) and the
-            // top node (being built now) legitimately miss.
-            if (cache.require_resident_reads() && !f.node.leaf() &&
-                f.node->hash_value() != node->hash_value()) {
-              std::string lbl;
-              for (auto const& ix : f.node->canon_indices())
-                lbl += toUtf8(ix.full_label()) + " ";
-              std::cerr << "[evict] vanished hash="
-                        << (f.node->hash_value() % 100000u) << " canon=[" << lbl
-                        << "] top=" << (node->hash_value() % 100000u)
-                        << " scope=[";
-              for (auto const& lvl : cache.batch_context())
-                std::cerr << toUtf8(std::wstring(lvl.axis.space().base_key()))
-                          << "#d" << lvl.level.depth << "s"
-                          << lvl.level.loop_slot << "o"
-                          << lvl.level.latitude_ordinal << " ";
-              std::cerr << "]" << std::endl;
-              // What IS stored for this hash anywhere up the chain (key
-              // mismatch vs genuine absence).
-              cache.dump_entries_for_hash(f.node->hash_value());
-              throw Exception(
-                  "evaluate_impl: a read-from-home value vanished before use. "
-                  "The value must be RESIDENT here but is not -- one of: (a) "
-                  "evicted early (under-predicted use count in "
-                  "ordered_home_reads); "
-                  "(b) never built (the schedule ordered a consumer before its "
-                  "producer); or (c) homed full/OUT of a loop while this "
-                  "consumer "
-                  "reads it INSIDE that loop (an escape's full form is not yet "
-                  "assembled in-loop; the in-loop consumer must read the "
-                  "sliced "
-                  "inner form). A missing value must never be served as an "
-                  "empty "
-                  "array (it would silently hang a downstream contraction). "
-                  "canon=[" +
-                  lbl + "]");
-            }
             f.store_after = cache.exists(f.node);
           }  // if (!rr)
         }
@@ -1984,12 +1941,9 @@ template <typename Node, typename Pred>
 namespace detail {
 
 /// The scratch cache for one batched replay pass, plus the alive persistent
-/// real-cache entries to pre-seed it with. In the DEFAULT (seeding) mode those
-/// seeds are registered persistent in the scratch so they survive the per-batch
-/// reset(); the caller copies their values in before the batch loop. In the
-/// \c read_from_home mode (ordered executor) there is no seed set -- a
-/// batch-invariant home-resident subnode is read straight from the parent chain
-/// each batch instead (see make_batched_scratch's \p read_from_home).
+/// real-cache entries to pre-seed it with: the seeds are registered persistent
+/// in the scratch so they survive the per-batch reset(), and the caller copies
+/// their values in before the batch loop.
 template <typename TreeNode, bool FHC>
 struct BatchedScratch {
   CacheManager<TreeNode, FHC> cache;
@@ -2019,26 +1973,17 @@ struct BatchedScratch {
 /// Subnodes whose signature is consistently 'absent' (no leaf below carries
 /// the mode -- the mode is contracted at the member's root, so a subtree
 /// containing a mode-carrying leaf carries the mode free in its
-/// canon_indices()) have batch-invariant full values; in the DEFAULT mode those
-/// that are alive persistent entries of \p real are returned as seeds and the
-/// caller copies their values into the scratch before the batch loop.
+/// canon_indices()) have batch-invariant full values; those that are alive
+/// persistent entries of \p real are returned as seeds and the caller copies
+/// their values into the scratch before the batch loop.
 ///
-/// \param read_from_home ORDERED-executor discipline (default off --
-/// whole-scope and forest-descent keep the seeding behavior verbatim, so MPQC's
-/// current batched CC is byte-unchanged). When ON: (1) a batch-invariant
-/// subnode ALREADY RESIDENT anywhere up \p real's chain is NEITHER registered
-/// here NOR seeded -- \c evaluate_impl reads it straight from the parent chain
-/// each batch (access_at falls through an empty local entry), the single
-/// read-from-home access discipline; and (2) member ROOTS are registered too
-/// (not just their subnodes), so a member consuming another member reads it
-/// from the scratch rather than re-evaluating it. Together these remove every
-/// non-cached node class, making a homed value's home read count exactly its
-/// direct-DAG-parent count over the ordered scopes (see ordered_schedule.hpp
-/// ordered_home_reads).
+/// \note The ordered (table-driven) executor does not come through here: it
+/// resolves every operand read from the cell table's own storage, so the
+/// seeding discipline below is the whole-scope / forest-descent one and the
+/// only one.
 template <typename TreeNode, bool FHC, typename Members>
 [[nodiscard]] BatchedScratch<TreeNode, FHC> make_batched_scratch(
-    Members const& members, CacheManager<TreeNode, FHC> const& real,
-    bool read_from_home = false) {
+    Members const& members, CacheManager<TreeNode, FHC> const& real) {
   using Hasher = TreeNodeHasher<TreeNode, FHC>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
@@ -2116,15 +2061,9 @@ template <typename TreeNode, bool FHC, typename Members>
   };
   for (auto const& [root, mode] : members) {
     if (root->leaf()) continue;
-    if (read_from_home) {
-      // ordered: register the member ROOT too, so a member consuming another
-      // member reads it from the scratch instead of re-evaluating it.
-      visit(visit, *root, mode);
-    } else {
-      // default: member roots are accumulated by the caller, not cached here.
-      visit(visit, root->left(), mode);
-      visit(visit, root->right(), mode);
-    }
+    // member roots are accumulated by the caller, not cached here.
+    visit(visit, root->left(), mode);
+    visit(visit, root->right(), mode);
   }
 
   std::unordered_map<TreeNode, std::size_t, Hasher, Comp> reg;
@@ -2142,11 +2081,7 @@ template <typename TreeNode, bool FHC, typename Members>
                 << " sig=" << (e.sig ? static_cast<long>(*e.sig) : -1L)
                 << " carries_ext=" << cext
                 << " resident_in_chain=" << real.resident_in_chain(*ptr)
-                << " read_from_home=" << read_from_home << " -> registered="
-                << (e.consistent &&
-                    !(read_from_home && !e.sig && !cext &&
-                      real.resident_in_chain(*ptr)) &&
-                    e.count >= 2)
+                << " -> registered=" << (e.consistent && e.count >= 2)
                 << std::endl;
     }
     if (!e.consistent) continue;  // ambiguous slicing: never share
@@ -2156,47 +2091,22 @@ template <typename TreeNode, bool FHC, typename Members>
     bool const carries_ext =
         std::any_of(e.ext_sig.begin(), e.ext_sig.end(),
                     [](auto const& p) { return p.has_value(); });
-    if (read_from_home) {
-      // ORDERED: a batch-invariant subnode already resident anywhere up the
-      // chain is read straight from home each batch -- neither registered here
-      // (a registered-but-reset local entry would rebuild every batch) nor
-      // copied in. Single access discipline, no seeds. See the \p
-      // read_from_home doc above.
-      if (!e.sig && !carries_ext && real.resident_in_chain(*ptr)) continue;
-      // Cache EVERY read subnode (count >= 1), not only repeated ones: the
-      // recompute-vs-cache CSE threshold (was >= 2) leaves a once-used subnode
-      // un-homed, so it is built inline within its parent -- which makes the
-      // read-from-home use-count walk (ordered_home_reads, direct-DAG-parent
-      // based) miscount reads of a value the inline subnode consumes. With
-      // exact use-count tracking there is no cost to homing everything; the
-      // threshold was a hack papering over that miscount.
-      if (e.count >= 1) reg.emplace(*ptr, e.count);
-    } else {
-      // DEFAULT (whole-scope / forest-descent): seed an alive PERSISTENT
-      // batch-invariant real entry into the scratch (persistent so it survives
-      // reset()), else register a repeated subnode. Byte-identical to the
-      // pre-read-from-home behavior MPQC's batched CC relies on.
-      bool const seedable =
-          !e.sig && !carries_ext && real.persistent(*ptr) && real.alive(*ptr);
-      if (seedable) {
-        seeds.push_back(ptr);
-        seed_keys.insert(*ptr);
-        reg.emplace(*ptr, e.count);  // count ignored for persistent entries
-      } else if (e.count >= 2) {
-        reg.emplace(*ptr, e.count);
-      }
+    // Seed an alive PERSISTENT batch-invariant real entry into the scratch
+    // (persistent so it survives reset()), else register a repeated subnode.
+    bool const seedable =
+        !e.sig && !carries_ext && real.persistent(*ptr) && real.alive(*ptr);
+    if (seedable) {
+      seeds.push_back(ptr);
+      seed_keys.insert(*ptr);
+      reg.emplace(*ptr, e.count);  // count ignored for persistent entries
+    } else if (e.count >= 2) {
+      reg.emplace(*ptr, e.count);
     }
   }
   auto is_persistent = [seed_keys = std::move(seed_keys)](TreeNode const& n) {
     return seed_keys.contains(n);
   };
   CacheManager<TreeNode, FHC> scratch{std::move(reg), std::move(is_persistent)};
-  // Read-from-home scratches statically pre-schedule every value and read
-  // batch-invariant operands from home each batch (no seeding); a miss on such
-  // an operand is a real defect (premature eviction / under-predicted use
-  // count), so require it to surface as a hard error rather than an empty-array
-  // hang. Seeded scratches (read_from_home=false) keep miss=>compute.
-  if (read_from_home) scratch.set_require_resident_reads(true);
   return {std::move(scratch), std::move(seeds)};
 }
 

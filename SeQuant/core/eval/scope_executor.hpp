@@ -61,11 +61,10 @@ namespace sequant::eval {
 /// build_scope_schedule's value->node assignment), so an occurrence that binds
 /// a loop mode under a different physical ordinal is still counted.
 ///
-/// \note Used by the whole-scope executor's homing (below). The ordered
-/// executor instead uses \c detail::ordered_home_reads (ordered_schedule.hpp),
-/// which counts exact home reads from the ORDERED schedule's realized scopes
-/// under the read-from-home discipline, rather than the boulevard occurrence
-/// ectx this reads.
+/// \note Used by the whole-scope executor's homing (below), and by it alone.
+/// The ordered executor does not compute a use count at all any more: every
+/// read of a value is a declared \c Read of the cell table, and a cell's \c
+/// life is the count (cell_table.hpp).
 ///
 /// \param cell the value whose life is computed.
 /// \param n_blocks the batch-block count of a loop mode (1 for a mode that is
@@ -866,9 +865,10 @@ ResultPtr evaluate(Nodes const& forest, BatchPolicy const& policy,
     // schedule-analysis co-pass, not a hot-path step).
 
     // NODE-level lift of policy.is_volatile_leaf, exactly as make_evaluator's
-    // own is_volatile_node lift (eval.hpp) computes it -- threaded into the
-    // ordered executor for a later task's home-value volatile-vs-persistent
-    // classification; not yet consulted there.
+    // own is_volatile_node lift (eval.hpp) computes it. The ordered executor
+    // consults it: it is the cell table's volatility predicate, and so decides
+    // which cells are persistent (TableCell::persistent -- the frontier of the
+    // invariant region) and what cache-halt may skip on a later evaluation.
     using node_t = std::ranges::range_value_t<Nodes>;
     auto is_volatile_node =
         [p = policy.is_volatile_leaf](node_t const& n) -> bool {

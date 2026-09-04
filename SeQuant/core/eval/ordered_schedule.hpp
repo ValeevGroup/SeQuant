@@ -572,14 +572,20 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 }
 
 ///
-/// \brief READ-FROM-HOME home use-count: the exact number of times a homed
-/// value's HOME cache entry is accessed during ordered-scope eval, computed
-/// from the ORDERED schedule's realized scopes (NOT the boulevard's occurrence
-/// ectx that \c weighted_use_count reads).
+/// \brief Home use-count: how many times a homed value's HOME cache entry
+/// would be accessed during ordered-scope eval, computed from the ORDERED
+/// schedule's realized scopes (NOT the boulevard's occurrence ectx that \c
+/// weighted_use_count reads).
 ///
-/// \details Under the single read-from-home access discipline (see \c
-/// make_batched_scratch: a batch-invariant home-resident operand is read from
-/// the parent chain each batch, never seeded), a consumer \c W reads operand
+/// \note NOT on the runtime read path: the table-driven executor takes every
+/// operand read's count from the cell table's own \c life (cell_table.hpp),
+/// and nothing in the executor calls this any more. It is kept for the
+/// schedule-analysis work of a later stage; when that stage decides otherwise,
+/// this and \c HomeScopeKey go together.
+///
+/// \details Under a read-from-home access discipline (a batch-invariant
+/// home-resident operand read from the parent chain each batch, never seeded),
+/// a consumer \c W reads operand
 /// \c V's home ONCE per batch of every loop on the path (home(V), scope(W)] --
 /// exactly \c weighted_use_count's per-batch arithmetic, but each consumer's
 /// enclosing loops come from where \c build_ordered_schedule actually PLACES
@@ -602,7 +608,11 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// entry per enclosing loop of the home, as \c (depth, loop_slot,
 /// latitude_ordinal) -- IDENTITY (depth, loop_slot) plus the PROCON LAYOUT
 /// coordinate (latitude), so two cells of one value that differ ONLY by pass
-/// are distinct. The executor builds this from the scope at each home site.
+/// are distinct.
+///
+/// \note No longer built by the executor: storage is the cell table's, and a
+/// cell IS the per-scope identity this key used to stand in for. Kept as \c
+/// ordered_home_reads' parameter type, with the same fate as that function.
 using HomeScopeKey = container::svector<std::tuple<std::size_t, int, int>>;
 
 template <typename node_t>

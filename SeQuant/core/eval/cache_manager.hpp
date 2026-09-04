@@ -1075,18 +1075,6 @@ class CacheManager {
   /// per-loop-iteration structural, re-set each block by the evaluator).
   BatchContext batch_context_{};
 
-  /// When true, \c evaluate_impl treats a cache MISS on a non-leaf, non-top
-  /// node as a hard error (\c sequant::Exception) instead of silently
-  /// recomputing or serving an empty/unfilled array. The ordered read-from-home
-  /// discipline statically pre-schedules every value, so a vanished operand
-  /// (premature eviction -- e.g. an under-predicted use count in \c
-  /// ordered_home_reads) is a real defect that must surface loudly, never hang
-  /// a downstream contraction waiting on tiles that will never be produced.
-  /// Set on every read-from-home scratch (see \c make_batched_scratch);
-  /// parent-inheriting so nested scratches enforce the same invariant. Default
-  /// false => forest/recursive evaluation (miss => compute) is unchanged.
-  bool require_resident_reads_ = false;
-
   /// Non-owning placement router (see \c placement_router.hpp). Null
   /// (default) => no override wired; \c placement_router() falls through to
   /// \c parent_ (only the root cache is wired in practice). The pointee must
@@ -1189,20 +1177,6 @@ class CacheManager {
   /// \return the batch context (empty if none is set).
   [[nodiscard]] BatchContext const& batch_context() const noexcept {
     return batch_context_;
-  }
-
-  /// Enable/disable the resident-reads invariant (see \c
-  /// require_resident_reads_). Set true on read-from-home scratches.
-  void set_require_resident_reads(bool v) noexcept {
-    require_resident_reads_ = v;
-  }
-
-  /// \return whether a non-leaf, non-top cache miss must be a hard error --
-  ///         this cache's own flag, else inherited from the parent chain.
-  [[nodiscard]] bool require_resident_reads() const noexcept {
-    return require_resident_reads_
-               ? true
-               : (parent_ ? parent_->require_resident_reads() : false);
   }
 
   /// Sets the scope-chain parent (see parent_). Pass nullptr to detach.
@@ -1311,7 +1285,17 @@ class CacheManager {
 
   /// Sets the external residency source (see \c external_residency_). Pass
   /// an empty \c std::function to detach.
+  ///
+  /// Installed on the CHAIN-ROOT handle only, and asserted so: \c
+  /// chain_residency() folds the hook in exactly where its parent walk bottoms
+  /// out (\c parent_ == nullptr), and the lookup that finds it walks UPWARD,
+  /// so a hook installed on a child would never be folded in at all -- its
+  /// bytes would silently vanish from every residency and peak figure.
   void set_external_residency(std::function<std::size_t()> f) noexcept {
+    SEQUANT_ASSERT(parent_ == nullptr &&
+                   "CacheManager::set_external_residency: the external "
+                   "residency hook must be installed on the chain-root handle "
+                   "(chain_residency() folds it in only there)");
     external_residency_ = std::move(f);
   }
 
@@ -1335,11 +1319,15 @@ class CacheManager {
   }
 
   /// Sets the external liveset source (see \c external_liveset_). Pass an
-  /// empty \c std::function to detach.
+  /// empty \c std::function to detach. Installed on the CHAIN-ROOT handle
+  /// only, and asserted so, for the same reason \c set_external_residency is.
   void set_external_liveset(
       std::function<
           void(std::function<void(std::size_t hash, std::size_t bytes)>)>
           f) noexcept {
+    SEQUANT_ASSERT(parent_ == nullptr &&
+                   "CacheManager::set_external_liveset: the external liveset "
+                   "hook must be installed on the chain-root handle");
     external_liveset_ = std::move(f);
   }
 
@@ -1594,11 +1582,10 @@ class CacheManager {
   ///     std::move(data_p)), so once it has been read as an operand it no
   ///     longer \c holds() it -- and even were it somehow still alive, \c
   ///     max_life > 1 excludes it.
-  /// A value homed RESIDENT (\c max_life == SIZE_MAX) or with a genuine
-  /// multi-use count (\c max_life > 1, e.g. a subexpression
-  /// shared across two roots, or a per-batch-reread home) is never drained by
-  /// a single read, so it stays held and IS reported here -- the case the
-  /// elided \c SEQUANT_ASSERT could not catch at runtime. A PERSISTENT entry
+  /// A value with a genuine multi-use count (\c max_life > 1, e.g. a
+  /// subexpression shared across two roots) is never drained by a single read,
+  /// so it stays held and IS reported here -- the case the elided \c
+  /// SEQUANT_ASSERT could not catch at runtime. A PERSISTENT entry
   /// (registered via the \c CacheManager(Iterable&&, PersistencePred) ctor,
   /// e.g. the \c make_batched_scratch path) is ALSO reported even when its
   /// \c max_life == 1: \c entry::access() never drains a persistent entry, so

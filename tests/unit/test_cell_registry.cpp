@@ -285,15 +285,12 @@ TEST_CASE("table_read spends one declared life and reports exhaustion once",
 
 TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
           "[cell_registry]") {
-  // Set (and later restore) SEQUANT_UT_STRICT_FILL_ONCE at the very start of
-  // the case, before anything in this process can call strict_fill_once()
-  // for the first time: that function caches its env lookup in a static
-  // bool on first call, so a setenv anywhere later would be too late to
-  // change what it returns for the rest of this process.
-  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
-  std::string const prev_strict_val = prev_strict ? prev_strict : "";
-  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
-
+  // Strictness is asked for HERE, on this registry's own hooks (see
+  // CellRegistryHooks::strict_fill_once), rather than through the environment:
+  // eval::strict_fill_once() latches its env lookup on the first call anywhere
+  // in the process, so a setenv from inside a test case is a coin flip on the
+  // order the cases ran in.
+  //
   // A separate small table (not make_table()'s): cell 0 Leaf persistent;
   // cell 1 Build non-persistent bound to (1,0), life 1; cell 2 Build
   // persistent (whole -- unbound), life 2.
@@ -326,6 +323,7 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   hooks.persistent = &store;
   hooks.hash_of = [](std::size_t vid) { return 1000 + vid; };
   hooks.on_bytes_changed = [&](std::size_t b) { bytes_seen = b; };
+  hooks.strict_fill_once = true;  // a fill-once violation must THROW here
   sequant::eval::CellRegistry reg(t, hooks);
 
   auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
@@ -357,11 +355,6 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   reg2.seed_persistent();
   CHECK(reg2.peek(2) == r2);  // seeded from the store
   CHECK_FALSE(reg2.peek(1));
-
-  if (prev_strict)
-    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
-  else
-    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
 }
 
 TEST_CASE(

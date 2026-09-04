@@ -44,6 +44,12 @@ struct CellRegistryHooks {
   /// Metering: invoked with the new \c live_bytes total after every change.
   /// May be empty -- \c CellRegistry does not require a metering consumer.
   std::function<void(std::size_t live_bytes)> on_bytes_changed;
+  /// Whether a fill-once violation THROWS (see \c CellRegistry::set). The
+  /// default is the process-wide env gate \c eval::strict_fill_once(), which
+  /// is latched on ITS first call anywhere in the process -- so a test that
+  /// needs strictness sets this field instead of the environment, which by
+  /// then may be too late to have any effect.
+  bool strict_fill_once = eval::strict_fill_once();
 };
 
 /// Runtime side of the cell table: the current result of each cell and its
@@ -119,20 +125,20 @@ class CellRegistry {
   /// prior life was drained starts fresh). FILL-ONCE: a NON-persistent cell
   /// already holding a value it was not read past nor cleared since (\c
   /// filled_since_clear) is a duplicate producer -- see \c
-  /// eval::strict_fill_once (throws a named \c std::runtime_error under \c
-  /// SEQUANT_UT_STRICT_FILL_ONCE; a plain \c SEQUANT_ASSERT otherwise,
-  /// compiled out in Release). PERSISTENT cells are excluded from this check,
-  /// exactly as \c CacheManager::entry::store excludes its own persistent
-  /// entries: they legitimately re-store across batch replays and repeated
-  /// top-level evaluation calls (e.g. successive CC iterations), often with
-  /// no table-declared clear between productions. A persistent cell is
+  /// CellRegistryHooks::strict_fill_once (throws a named \c
+  /// std::runtime_error, defaulting to the \c SEQUANT_UT_STRICT_FILL_ONCE env
+  /// gate; a plain \c SEQUANT_ASSERT otherwise). PERSISTENT cells are excluded
+  /// from this check, exactly as \c CacheManager::entry::store excludes its own
+  /// persistent entries: they legitimately re-store across batch replays and
+  /// repeated top-level evaluation calls (e.g. successive CC iterations), often
+  /// with no table-declared clear between productions. A persistent cell is
   /// published to \c hooks_.persistent (when set) on every production,
   /// mirroring what it now holds.
   void set(CellId c, ResultPtr v) {
     auto& s = slot(c);
     TableCell const& cell = table_->cells[c];
     if (!cell.persistent && s.filled_since_clear) {
-      if (strict_fill_once())
+      if (hooks_.strict_fill_once)
         throw std::runtime_error(
             "CellRegistry::set: cell#" + std::to_string(c) + " (value " +
             std::to_string(cell.value_id) +

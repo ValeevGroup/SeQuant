@@ -4591,9 +4591,9 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   };
 
   // POST-FIX: P carries the batched External mode, so it is NOT seeded (it will
-  // be recomputed under the external slice). This exercises the DEFAULT
-  // (seeding) make_batched_scratch mode -- the ordered executor's
-  // read_from_home mode has no seed set.
+  // be recomputed under the external slice). This is the seeding discipline
+  // make_batched_scratch has -- the ordered (table-driven) executor does not
+  // come through here at all.
   auto const bs = sequant::detail::make_batched_scratch(members, real);
   REQUIRE_FALSE(seeds_P(bs));
 

@@ -130,52 +130,6 @@ ordered_n_batches_by_loop(
   };
 }
 
-///
-/// \brief Defensive check for the single-physical-label simplification \c
-/// run_ordered_contracted_block's own doc comment (\c \\note) documents: \p
-/// node's subtree carries \p axis's TYPE (\c IndexSpace::base_key()) at some
-/// leaf, but \p node's own subtree never carries the EXACT \p axis \c Index
-/// (identity: space + ordinal + proto-indices) anywhere below it.
-///
-/// \details \c run_ordered_contracted_block slices/accumulates every value
-/// in its block by \p axis's exact identity (\c ctx.push_back({block.axis,
-/// ...})); \c evaluate_impl's Enter-stage \c slice_to_use then looks up that
-/// EXACT \c Index on each fetched node (\c index_position(nd, block.axis)).
-/// A member that instead carries a DIFFERENT physical label of the SAME
-/// TYPE (e.g. a forest whose cells name the aux space under both \c x_1 and
-/// \c x_2) would silently fail that lookup -- \c index_position returns
-/// \c nullopt, so the node is never sliced, builds FULL every batch, and is
-/// \c add_inplace'd once per batch: an N-fold-inflated reduction with NO
-/// diagnostic. This predicate lets the caller turn that into a loud \c
-/// SEQUANT_ASSERT instead, mirroring the AccumulateScatter/External asserts
-/// already in this file.
-///
-template <typename node_t>
-[[nodiscard]] bool ordered_axis_label_mismatch(node_t const& node,
-                                               Index const& axis) {
-  auto const base = axis.space().base_key();
-  bool carries_type = false;
-  bool carries_exact = false;
-  auto const walk = [&](auto&& self, node_t const& n) -> void {
-    if (carries_exact) return;  // already proven safe; no need to keep going
-    if (n.leaf()) {
-      for (Index const& ix : n->canon_indices()) {
-        if (ix.space().base_key() != base) continue;
-        carries_type = true;
-        if (ix == axis) {
-          carries_exact = true;
-          return;
-        }
-      }
-      return;
-    }
-    self(self, n.left());
-    self(self, n.right());
-  };
-  walk(walk, node);
-  return carries_type && !carries_exact;
-}
-
 /// SP4 Task 4: the \c CellScope of the current point in the schedule walk --
 /// enclosing loop instances outermost-first, one \c {level.key(),
 /// level.latitude_ordinal} entry per already-opened \p ectx level, plus (the
@@ -812,7 +766,11 @@ void run_ordered_contracted_block(
           ordered_forgo_visit(registry, forgo_plan, *build_cell);
           continue;
         }
-        if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
+        // Read the env ONCE per translation unit, not once per step of every
+        // batch of every block.
+        static bool const block_diag_build =
+            std::getenv("SEQUANT_UT_BLOCK_DIAG") != nullptr;
+        if (block_diag_build)
           std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
                     << " batch=[" << e_lo << "," << e_hi
                     << ") BUILD vid=" << build->value_id
@@ -861,7 +819,9 @@ void run_ordered_contracted_block(
       TableCell const& a = table->cells[out_cells[k]];
       CellId const src = a.production.source;
       TableCell const& s = table->cells[src];
-      if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
+      static bool const block_diag_assemble =
+          std::getenv("SEQUANT_UT_BLOCK_DIAG") != nullptr;
+      if (block_diag_assemble)
         std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
                   << " batch=[" << e_lo << "," << e_hi
                   << ") ASSEMBLE vid=" << vid << " cell=" << out_cells[k]
@@ -923,6 +883,18 @@ void run_ordered_contracted_block(
           throw Exception("evaluate_ordered_schedule: Assemble cell#" +
                           std::to_string(out_cells[k]) + " (value " +
                           std::to_string(vid) + ") scatters nothing");
+        // Exactly ONE scattered position per Assemble. The loop below writes
+        // the SAME per-batch partial at every position of the map, which is
+        // only the right thing when there is one: a source sliced at two
+        // positions by one loop instance is a joint sub-block, and writing it
+        // twice (once per position, each time over the full extent of the
+        // other) would be wrong. The builder emits one entry per instance and
+        // an instance slices one position of a value here, so a second entry
+        // means a schedule shape this executor does not implement.
+        SEQUANT_ASSERT(a.production.scatter_map.size() == 1 &&
+                       "evaluate_ordered_schedule: an Assemble scattering more "
+                       "than one position would need a joint sub-block write "
+                       "(unsupported)");
         for (auto const& [pos, key] : a.production.scatter_map) {
           auto const range = ordered_range_of(ctx, key);
           if (!range)
@@ -1231,6 +1203,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   cache.set_external_residency([&registry, &cache]() -> std::size_t {
     std::size_t bytes = 0;
     registry.for_each_live([&](CellId, ResultPtr const& v) {
+      // chain_holds protects ONLY buffers a CALLER put in its own scope cache
+      // before this run: under the cell-read resolver the executor never
+      // stores into a scope cache itself, so on a run this executor drives
+      // alone this test never fires and every live cell is counted here.
       if (!cache.chain_holds(v)) bytes += v->size_in_bytes();
     });
     return bytes;
