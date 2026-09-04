@@ -866,3 +866,25 @@ TEST_CASE("cache_manager chain_holds pointer identity", "[cache_manager]") {
   REQUIRE_FALSE(parent.alive(X));
   REQUIRE_FALSE(child.chain_holds(vX));
 }
+
+TEST_CASE("persistent value store survives reset and is local to the handle",
+          "[cache_manager][persistent_store]") {
+  auto cache = manager_type::empty();
+  auto& store = cache.persistent_values();
+  CHECK(store.size() == 0);
+  CHECK_FALSE(store.holds(42));
+  auto r = sequant::eval_result<sequant::ResultScalar<double>>(3.0);
+  store.put(42, r);
+  CHECK(store.holds(42));
+  CHECK(store.get(42) == r);
+  CHECK(store.bytes() == r->size_in_bytes());
+  cache.reset();
+  CHECK(store.holds(42));
+  auto child = manager_type::empty();
+  child.set_parent(&cache);
+  CHECK_FALSE(child.persistent_values().holds(42));  // not chained
+  store.erase(42);
+  CHECK_FALSE(store.holds(42));
+  cache.clear_persistent_values();
+  CHECK(store.size() == 0);
+}

@@ -572,6 +572,63 @@ struct DefUseMeter {
   inline static Reporter reporter_{};
 };
 
+/// \brief Values that survive \c CacheManager::reset() across repeated
+///        evaluations, keyed by the value's canonical hash.
+///
+/// Owned as a plain value member of the cache handle (see
+/// \c CacheManager::persistent_values()) -- NOT chained through \c parent_,
+/// so each handle's store is local to it, unlike the router/array-ops/
+/// peak-monitor hooks that fall through to the scope-chain parent. It exists
+/// so a value whose CELL is marked persistent by the table-driven batched
+/// executor's registry (Stage 3 of the explicit-value-cells design; see
+/// \c CellReadResolver, cell_registry.hpp) can be written once and read back
+/// across repeated evaluations (e.g. successive CC iterations) without being
+/// reconstructed from the per-node \c entry lifetime bookkeeping above, whose
+/// persistence flag is scoped to one \c cache_map_ and drained/rebuilt by
+/// \c reset(). The batched executor's registry is the sole intended writer;
+/// readers are the same registry resolving a persistent cell's operand read.
+class PersistentValueStore {
+ public:
+  /// Store (or overwrite) the value for @p hash.
+  void put(std::size_t hash, ResultPtr v) { map_[hash] = std::move(v); }
+
+  /// \return the value stored for @p hash, or null if absent.
+  [[nodiscard]] ResultPtr get(std::size_t hash) const {
+    auto const it = map_.find(hash);
+    return it == map_.end() ? nullptr : it->second;
+  }
+
+  /// \return whether a value is currently stored for @p hash.
+  [[nodiscard]] bool holds(std::size_t hash) const {
+    return map_.find(hash) != map_.end();
+  }
+
+  /// Drop the value stored for @p hash, if any.
+  void erase(std::size_t hash) { map_.erase(hash); }
+
+  /// Drop every stored value.
+  void clear() { map_.clear(); }
+
+  /// \return the number of values currently stored.
+  [[nodiscard]] std::size_t size() const { return map_.size(); }
+
+  /// \return the sum of \c Result::size_in_bytes() over every stored value.
+  [[nodiscard]] std::size_t bytes() const {
+    std::size_t total = 0;
+    for (auto const& [h, v] : map_) total += v->size_in_bytes();
+    return total;
+  }
+
+  /// Invoke \p f(hash, ResultPtr const&) for every stored value.
+  template <typename F>
+  void for_each(F&& f) const {
+    for (auto const& [h, v] : map_) f(h, v);
+  }
+
+ private:
+  std::unordered_map<std::size_t, ResultPtr> map_;
+};
+
 }  // namespace sequant::eval
 
 namespace sequant {
@@ -1028,6 +1085,16 @@ class CacheManager {
   /// pointee must outlive this cache.
   BackendArrayOps const* array_ops_ = nullptr;
 
+  /// Persistent value store local to THIS handle (see
+  /// \c eval::PersistentValueStore) -- unlike \c array_ops_ and the other
+  /// hooks above, deliberately NOT chained through \c parent_: a child
+  /// scratch's store is its own, not the root's. Written by the table-driven
+  /// batched executor's registry for cells it has marked persistent; \c
+  /// reset() leaves it untouched by design (see \c reset()), so a value
+  /// placed here survives across repeated evaluations of this handle (e.g.
+  /// successive CC iterations) until \c clear_persistent_values() is called.
+  eval::PersistentValueStore persistent_values_;
+
   /// Explicit value cells (SP4 Task 4): the table-driven operand-read
   /// resolver \c evaluate_impl consults ahead of the router/access_at probes
   /// when set (see \c CellReadResolver, cell_registry.hpp). Inherited from
@@ -1329,6 +1396,22 @@ class CacheManager {
     return array_ops_ ? array_ops_ : parent_ ? parent_->array_ops() : nullptr;
   }
 
+  /// \return the persistent value store local to this handle (see
+  ///         \c persistent_values_). NOT inherited from \c parent_ -- each
+  ///         handle's store is its own.
+  [[nodiscard]] eval::PersistentValueStore& persistent_values() noexcept {
+    return persistent_values_;
+  }
+  [[nodiscard]] eval::PersistentValueStore const& persistent_values()
+      const noexcept {
+    return persistent_values_;
+  }
+
+  /// Explicitly drop every value in the persistent store (see
+  /// \c persistent_values_). \c reset() does NOT do this by design: the
+  /// persistent store outlives repeated evaluations of this handle.
+  void clear_persistent_values() noexcept { persistent_values_.clear(); }
+
   /// Sets the local cell-read resolver (see cell_read_resolver_). Pass
   /// nullptr to detach. Non-owning; the pointee must outlive this cache.
   void set_cell_read_resolver(eval::CellReadResolver* r) noexcept {
@@ -1444,6 +1527,11 @@ class CacheManager {
 
   ///
   /// Resets all cached data.
+  ///
+  /// Does NOT touch \c persistent_values_ (see \c persistent_values()): that
+  /// store is a separate, explicitly-managed handle-local cache meant to
+  /// survive repeated evaluations; use \c clear_persistent_values() to drop
+  /// it deliberately.
   ///
   void reset() noexcept {
     for (auto&& [k, v] : cache_map_) v.reset();
