@@ -552,20 +552,19 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
 // survived -- a bug (see entry::store() / stored_this_eval_ in
 // cache_manager.hpp).
 //
-// Exercised here as BEHAVIOR through store()/reset() rather than the (now
-// gone) test-facing flag accessor: under
-// SEQUANT_UT_STRICT_FILL_ONCE a duplicate store() with no intervening
-// reset() throws std::runtime_error unconditionally, regardless of
-// SEQUANT_ASSERT_BEHAVIOR (the SEQUANT_ASSERT alone is a no-op unless
-// SEQUANT_ASSERT_ENABLED is #defined, so it alone is not observable in this
-// project's default Release/Debug configs).
-//
-// NOTE: eval::strict_fill_once() latches its env lookup on the first call
-// anywhere in this process (see the same caveat in test_cell_registry.cpp),
-// so the env var below only takes effect if nothing earlier in this
-// process's run has already triggered a genuine duplicate-store scenario;
-// no earlier TEST_CASE in this file does, so this is the first such trigger
-// when run under the "[cache_manager]" tag.
+// Exercised here as BEHAVIOR through store()/reset(), with strictness set
+// directly on the CacheManager instance via set_strict_fill_once() -- the
+// per-instance knob cache_manager.hpp added to mirror
+// CellRegistryHooks::strict_fill_once (see cell_registry.hpp). This is
+// deterministic and order-independent: unlike the process-wide env gate
+// eval::strict_fill_once() (which latches its getenv lookup on the first
+// call anywhere in the process -- see the caveat in test_cell_registry.cpp),
+// a per-instance setter has no cross-test or cross-instance effect. Under
+// strict mode a duplicate store() with no intervening reset() throws
+// std::runtime_error unconditionally, regardless of SEQUANT_ASSERT_BEHAVIOR
+// (the SEQUANT_ASSERT alone is a no-op unless SEQUANT_ASSERT_ENABLED is
+// #defined, so it alone is not observable in this project's default
+// Release/Debug configs).
 TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
   using hasher_t = sequant::TreeNodeHasher<node_type>;
   using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
@@ -583,10 +582,7 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
   comp_t eq;
   auto is_persistent = [&p, &eq](node_type const& k) { return eq(k, p); };
   auto man = manager_type(std::move(counts), is_persistent);
-
-  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
-  std::string const prev_strict_val = prev_strict ? prev_strict : "";
-  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  man.set_strict_fill_once(true);
 
   SECTION("non-persistent: a re-store with an intervening reset() is fine") {
     REQUIRE_NOTHROW(man.store(np, eval_result(1)));
@@ -613,11 +609,6 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
     REQUIRE_NOTHROW(man.store(p, eval_result(20)));  // re-store, no reset()
     REQUIRE_NOTHROW(man.store(p, eval_result(30)));
   }
-
-  if (prev_strict)
-    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
-  else
-    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
 
   SECTION("assert-enabled + THROW: re-store without reset() throws") {
     if (sequant::assert_behavior() != sequant::AssertBehavior::Throw) {

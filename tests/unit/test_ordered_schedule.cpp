@@ -20,7 +20,6 @@
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/scope_executor.hpp>
-#include <SeQuant/core/eval/value_id.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -1569,11 +1568,11 @@ TEST_CASE(
   }
 }
 
-// Pillar 1 / B-full (Task 6): each value's DIRECT operand value_ids are
-// persisted on the schedule, so the value-driven ordered executor can fetch
-// each operand by its OWN home-colored key. The persisted edges are exactly the
-// dep graph the topo-sort used (derived from every OccurrenceRec's
-// consumer_point), and only computed (non-leaf) values carry operands.
+// Each value's DIRECT operand value_ids are persisted on the schedule, so the
+// value-driven ordered executor can fetch each operand by its own cell id.
+// The persisted edges are exactly the dep graph the topo-sort used (derived
+// from every OccurrenceRec's consumer_point), and only computed (non-leaf)
+// values carry operands.
 TEST_CASE(
     "build_ordered_schedule persists operand_vids (value/occurrence DAG edges)",
     "[ordered-schedule][value-id]") {

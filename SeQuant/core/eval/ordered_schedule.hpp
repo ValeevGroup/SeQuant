@@ -155,13 +155,13 @@ struct Step {
 struct OrderedSchedule {
   ScopeBlock root{};
   std::size_t num_values = 0;
-  /// Pillar 1 / B-full: per value_id, the value_ids of its DIRECT operands --
-  /// the value/occurrence DAG edges the value-driven ordered executor consumes
-  /// to fetch each operand by its OWN home-colored key. Recorded here from
-  /// `ordered_schedule_dep_graph(rich).depends_on`, whose edges come from every
-  /// `OccurrenceRec`'s `consumer_point` (so split operands resolve to the
-  /// specific consumed value, not an ambiguous node hash). A leaf value (no
-  /// operands) has no entry.
+  /// Per value_id, the value_ids of its DIRECT operands -- the value/
+  /// occurrence DAG edges the value-driven ordered executor consumes to fetch
+  /// each operand by its OWN cell id (see \c CellTable / \c CellRegistry).
+  /// Recorded here from `ordered_schedule_dep_graph(rich).depends_on`, whose
+  /// edges come from every `OccurrenceRec`'s `consumer_point` (so split
+  /// operands resolve to the specific consumed value, not an ambiguous node
+  /// hash). A leaf value (no operands) has no entry.
   std::unordered_map<std::size_t, container::svector<std::size_t>>
       operand_vids{};
 };
@@ -1213,15 +1213,10 @@ forced_split_demotions(RichSchedule const& rich,
   container::vector<detail::OrderedScheduleDepthBucket> buckets(n);
   container::svector<std::size_t> root_build_ids;
   // Values that keep their BuildStep AND escape it (the mixed-pass members of
-  // a forced split, below), each mapped to the axes it escapes ONLY by that
-  // rule -- its \c per_axis role for them is still \c LoopLocal, so nothing
-  // downstream can rediscover them from the legality alone. The schedule TREE
-  // states the shape (a block that both builds a value and lists it as an
-  // output) and \c well_formed and the executor read it from there; this map
-  // exists for the one question the tree cannot answer, namely which of the
-  // value's own modes its HOME key may still be colored by (see the home
-  // coloring below: a mode the value escapes is whole in its assembled form).
-  std::unordered_map<std::size_t, container::svector<Index>> built_and_escaped;
+  // a forced split, below): dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) --
+  // the live signal downstream is the per-value \c materialized_across_split
+  // bool below, not this list.
+  container::svector<std::size_t> materialized_across_split_ids;
 
   // The home depth of a value's plain BuildStep: the INNERMOST loop it is
   // LoopLocal on, resolved PER-INSTANCE by fusion loop_slot -- NOT by
@@ -1363,7 +1358,6 @@ forced_split_demotions(RichSchedule const& rich,
     // legitimately skipped (the runtime home walk and the cell table both
     // carry a value through a level it does not vary with).
     bool materialized_across_split = false;
-    container::svector<Index> materialized_axes;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
     if (escapes.empty() && split_passes && home_depth &&
         *home_depth >= *split_depth &&
@@ -1392,7 +1386,6 @@ forced_split_demotions(RichSchedule const& rich,
             escapes.push_back({*d, OutputKind::AccumulateScatter});
           else
             it->second = OutputKind::AccumulateScatter;
-          materialized_axes.push_back(cl.per_axis[pos].axis);
           materialized_across_split = true;
         }
         // The chain must actually run from the value's home OUT PAST the
@@ -1440,7 +1433,7 @@ forced_split_demotions(RichSchedule const& rich,
       // that lists it either holds its BuildStep or is an ancestor of the one
       // that does.
       if (!materialized_across_split) continue;
-      built_and_escaped.emplace(vid, std::move(materialized_axes));
+      materialized_across_split_ids.push_back(vid);
     }
 
     // Plain BuildStep: home at the INNERMOST loop the value is LoopLocal on
@@ -1451,13 +1444,13 @@ forced_split_demotions(RichSchedule const& rich,
       root_build_ids.push_back(vid);
   }
 
-  if (std::getenv("SEQUANT_DUMP_SCHEDULE") && !built_and_escaped.empty()) {
-    std::wcerr << L"[sched-materialize] " << built_and_escaped.size()
+  if (std::getenv("SEQUANT_DUMP_SCHEDULE") &&
+      !materialized_across_split_ids.empty()) {
+    std::wcerr << L"[sched-materialize] "
+               << materialized_across_split_ids.size()
                << L" member(s) built AND escaped across the forced split:";
-    for (auto const& [v, ax] : built_and_escaped) {
-      (void)ax;
+    for (std::size_t v : materialized_across_split_ids)
       std::wcerr << L" v" << v;
-    }
     std::wcerr << L"\n";
   }
 
@@ -1726,11 +1719,12 @@ forced_split_demotions(RichSchedule const& rich,
   out.root.steps = detail::ordered_schedule_topo_sort_steps(
       std::move(root_items), root_meta);
 
-  // Pillar 1 / B-full: persist the value/occurrence DAG edges (each value's
-  // direct operand value_ids) the value-driven ordered executor consumes. `g`
-  // is the same dep graph the topo-sort used above; its `depends_on` edges are
-  // derived from every OccurrenceRec's consumer_point, so a split operand
-  // resolves to the specific consumed value (not an ambiguous node hash).
+  // Persist the value/occurrence DAG edges (each value's direct operand
+  // value_ids) the value-driven ordered executor consumes to fetch each
+  // operand by its own cell id. `g` is the same dep graph the topo-sort used
+  // above; its `depends_on` edges are derived from every OccurrenceRec's
+  // consumer_point, so a split operand resolves to the specific consumed
+  // value (not an ambiguous node hash).
   out.operand_vids = g.depends_on;
 
   SEQUANT_ASSERT(well_formed(out));

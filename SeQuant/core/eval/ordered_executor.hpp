@@ -1475,8 +1475,8 @@ ResultPtr evaluate_ordered_schedule(
         is_volatile = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
 
-  // Task 4: the schedule walk itself (Tasks 1-3, plus the block-count/
-  // home-reads setup and the run-completeness assert) is factored into
+  // Task 4: the schedule walk itself (Tasks 1-3, plus the cell table
+  // derivation and the run-completeness assert) is factored into
   // detail::run_ordered_schedule_pre_results, shared byte-for-byte with
   // evaluate_ordered_multiroot below -- see that function's own doc comment.
   // Nothing about the walk changes here; only what happens to its per-root

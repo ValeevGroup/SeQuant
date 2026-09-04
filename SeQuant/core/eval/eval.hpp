@@ -646,7 +646,7 @@ template <typename Node>
 // overloads (below); internal re-entries (the scatter/contraction per-block
 // re-evaluations and the hoisted-invariant builds) call evaluate_impl directly.
 
-/// \brief Pillar 1 / B-full stage A: the single-op COMPUTE kernel.
+/// \brief The single-op COMPUTE kernel.
 ///
 /// \details The raw op applied to already-evaluated operand results, dispatched
 /// by \p node's op type, with the contraction annotation computed from \p node.

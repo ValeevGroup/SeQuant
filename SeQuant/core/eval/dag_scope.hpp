@@ -24,9 +24,9 @@ using LoopId = std::size_t;
 /// \brief The STABLE identity of a batch loop: which loop-GROUP (\c depth) and
 ///        which member-SLOT within that group (\c loop_slot).
 ///
-/// \details The seam, value-id / occurrence-id coloring, and the per-occurrence
-/// mode<->loop atlas all key on this identity; the layout (\c altitude_ordinal
-/// /
+/// \details The cell table, the per-occurrence mode<->loop atlas, and
+/// \c ordered_n_batches_by_loop (see ordered_executor.hpp) all key on this
+/// identity; the layout (\c altitude_ordinal /
 /// \c latitude_ordinal on \c DagScopeLevel) never enters it. \c depth
 /// distinguishes even two groups of the SAME space (an "external" and a
 /// "contracted" group of one space); \c loop_slot distinguishes the members of
@@ -37,11 +37,11 @@ struct LoopKey {
 
   /// \brief A single opaque color encoding the FULL loop identity (\c depth AND
   /// \c loop_slot), for use where one \c std::size_t must distinguish loops:
-  /// the value-id coloring (one cache PER LOOP, not per loop-group -- two
-  /// members of one group are DISTINCT loops with distinct caches) and the
-  /// home-scope filter that matches a home-sliced mode's loop against the
-  /// enclosing scope. Keying on \c depth alone would conflate same-group
-  /// sibling loops. (\c loop_slot < 4096 in every realized schedule.)
+  /// \c ordered_n_batches_by_loop (one batch count PER LOOP, not per
+  /// loop-group -- two members of one group are DISTINCT loops with distinct
+  /// batch counts; see ordered_executor.hpp). Keying on \c depth alone would
+  /// conflate same-group sibling loops. (\c loop_slot < 4096 in every
+  /// realized schedule.)
   [[nodiscard]] std::size_t color() const {
     return (depth << 12) | static_cast<std::size_t>(loop_slot);
   }

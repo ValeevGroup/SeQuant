@@ -693,7 +693,8 @@ class CacheManager {
  public:
   /// The NODE type. Used for everything node-facing: the custom evaluator, the
   /// whole-scope / multiroot drivers, the persistence predicate, and
-  /// \c for_each_key -- all of which see forest nodes, unchanged by Pillar 1.
+  /// \c for_each_key -- all of which see plain forest nodes, distinct from the
+  /// CACHE-MAP key (\c cache_key_type, see below).
   using key_type = TreeNode;
 
   /// The CACHE-MAP key. \c CachedValue wraps a node; its identity on the
@@ -893,17 +894,19 @@ class CacheManager {
       return data_p;
     }
 
-    /// Non-decrementing read: return the held value WITHOUT decaying its
-    /// lifetime or releasing it. For a reuse/probe that must leave the entry's
-    /// remaining life intact for its genuine consumers.
-    [[nodiscard]] ResultPtr peek() const noexcept { return data_p; }
-
     // NOT noexcept: SEQUANT_ASSERT below can throw (SEQUANT_ASSERT_BEHAVIOR
     // = THROW) -- see the tripwire comment on stored_this_eval_. In every
     // default build config (IGNORE, or Debug's ABORT) this never actually
     // throws, so callers written against the historical noexcept contract
     // are unaffected in practice.
-    void store(ResultPtr&& data) {
+    /// @param strict_fill_once whether a duplicate-producer store on a
+    ///        non-persistent entry throws; the caller (CacheManager::store)
+    ///        passes its own \c strict_fill_once() (per-instance, defaulting
+    ///        to the env gate \c eval::strict_fill_once() -- see there),
+    ///        rather than this function reading the env gate directly, so
+    ///        tests can flip strictness deterministically without a
+    ///        process-wide static latch.
+    void store(ResultPtr&& data, bool strict_fill_once) {
       // Regression tripwire: a NON-persistent entry re-stored without an
       // intervening reset() means the same value was produced twice within
       // one evaluation (a duplicate producer). PERSISTENT entries are
@@ -914,9 +917,9 @@ class CacheManager {
         // above is compiled out in Release/RelWithDebInfo, so a duplicate
         // producer (the same value cell built twice without an intervening
         // reset -- e.g. a frame-sensitive key that made a consumer miss a
-        // resident value and rebuild it) passes silently. Under
-        // SEQUANT_UT_STRICT_FILL_ONCE it is a hard error.
-        if (stored_this_eval_ && eval::strict_fill_once())
+        // resident value and rebuild it) passes silently. Under strict mode
+        // it is a hard error.
+        if (stored_this_eval_ && strict_fill_once)
           throw std::runtime_error(
               "CacheManager::entry::store: value cell stored twice without an "
               "intervening reset() (duplicate producer / a consumer missed the "
@@ -971,8 +974,8 @@ class CacheManager {
 
   // NOT noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
-  static ResultPtr store(entry& ent, ResultPtr&& data) {
-    ent.store(std::move(data));
+  ResultPtr store(entry& ent, ResultPtr&& data) {
+    ent.store(std::move(data), strict_fill_once_);
     return ent.access();
   }
 
@@ -1110,7 +1113,27 @@ class CacheManager {
   /// outlive this cache.
   eval::ScheduleSink* schedule_sink_ = nullptr;
 
+  /// Per-instance cache-fill-once strictness (see entry::store), consulted
+  /// instead of reading \c eval::strict_fill_once() directly. Defaults to
+  /// that same env gate (\c SEQUANT_UT_STRICT_FILL_ONCE), so behavior is
+  /// unchanged for every caller that never touches this field; a test can
+  /// override it per-instance with \c set_strict_fill_once, deterministically
+  /// and without the process-wide static latch \c eval::strict_fill_once()
+  /// carries (mirrors \c CellRegistryHooks::strict_fill_once, the same fix
+  /// for the same hazard -- see cell_registry.hpp).
+  bool strict_fill_once_ = eval::strict_fill_once();
+
  public:
+  /// Sets the cache-fill-once strictness (see strict_fill_once_).
+  void set_strict_fill_once(bool strict) noexcept {
+    strict_fill_once_ = strict;
+  }
+
+  /// \return the cache-fill-once strictness (see strict_fill_once_).
+  [[nodiscard]] bool strict_fill_once() const noexcept {
+    return strict_fill_once_;
+  }
+
   /// Sets the custom evaluator (see custom_evaluator_type). Pass an empty
   /// std::function to clear it.
   void set_custom_evaluator(custom_evaluator_type fn) noexcept {
