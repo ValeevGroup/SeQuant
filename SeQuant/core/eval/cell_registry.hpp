@@ -158,14 +158,13 @@ class CellRegistry {
   ///
   /// Stage 3 re-derives in-place eligibility from this table's own \c life /
   /// \c persistent directly (see \c CellReadResolver::operand_drained,
-  /// which queries \c drained() rather than this flag) instead of routing it
-  /// through the legacy \c CacheManager::chain_holds_shared check. The \p
-  /// exhausted output remains for the one caller that still owes the legacy
-  /// cache a \c CacheManager::release_at on the same canonical node --
-  /// \c run_ordered_contracted_block's \c spend_assemble_source, a block
-  /// close's OWNERSHIP step for its Assemble cell's \c production.source --
-  /// until the stage that removes the legacy scope caches entirely deletes
-  /// that call too.
+  /// which queries \c drained() rather than this flag). The \p exhausted
+  /// output tells a reader whether it took OWNERSHIP of the buffer: the
+  /// ordered executor's Assemble step seeds its running sum with the first
+  /// batch's partial when this read exhausted the source, and with a \c
+  /// Result::clone of it otherwise (a source with life left, or a persistent
+  /// one, is still going to be read again from that very buffer, so
+  /// accumulating into it would corrupt every later read).
   [[nodiscard]] ResultPtr read(CellId c, bool* exhausted) {
     auto& s = slot(c);
     if (exhausted) *exhausted = false;
@@ -208,9 +207,16 @@ class CellRegistry {
   /// cell is never cleared here (by definition it is bound to no loop
   /// instance -- see \c TableCell::persistent -- so neither check ever
   /// matches it; the explicit \c continue is a defensive redundant guard).
-  /// Also resets the fill-once mark of every cell it clears: the boundary
-  /// this crosses is exactly the one \c set's fill-once check must not treat
-  /// as a duplicate producer across.
+  /// A \c produce_if_absent cell is the ONE exception to the implicit rule:
+  /// it is precisely a cell whose home scope sits inside a loop it is NOT
+  /// bound to, and the table says it is produced on first visit and REUSED on
+  /// every later batch of that loop (the executor's Build step skips its
+  /// production while it is resident), so the implicit "its scope's innermost
+  /// loop is \p k" clear would defeat the flag by dropping it at every batch
+  /// boundary. Such a cell is cleared only on an instance it is genuinely
+  /// bound to. Also resets the fill-once mark of every cell it clears: the
+  /// boundary this crosses is exactly the one \c set's fill-once check must
+  /// not treat as a duplicate producer across.
   void clear_bound_to(LoopKey const& k) {
     for (CellId c = 0; c < slots_.size(); ++c) {
       TableCell const& cell = table_->cells[c];
@@ -221,7 +227,7 @@ class CellRegistry {
           bound = true;
           break;
         }
-      if (!bound && !cell.scope.path.empty() &&
+      if (!bound && !cell.produce_if_absent && !cell.scope.path.empty() &&
           detail::same_key(cell.scope.path.back().first, k))
         bound = true;
       if (!bound) continue;
@@ -340,24 +346,20 @@ struct TableRead {
   bool exhausted = false;
 };
 
-/// The OWNERSHIP half of one table-driven read of \p source, shared by every
-/// site that spends a table-declared life so none of them can drift: spend
-/// one life of \p source in \p reg and report whether that read spent the
-/// cell's LAST life. Two kinds of site call it: \c CellReadResolver::fetch,
-/// for a consumer's operand reads, and the ordered executor's block-close
-/// handoffs, for the read an \c Assemble declares of its \c
-/// production.source. A read the executor serves from somewhere other than
-/// the registry still owes the table that life: skipping it leaves the
-/// source's scope entry holding a fully consumed buffer, which pins the
-/// memory and makes every later reader see the value as shared.
+/// The OWNERSHIP half of one table-driven read of \p source: spend one life
+/// of \p source in \p reg and report whether that read spent the cell's
+/// LAST life. \c CellReadResolver::fetch calls it for a consumer's operand
+/// reads; an \c Assemble step reads its \c production.source through \c
+/// CellRegistry::read directly, for the same accounting. A read served from
+/// somewhere other than the registry would still owe the table that life:
+/// skipping it leaves the source holding a fully consumed buffer, which pins
+/// the memory and makes every later reader see the value as shared.
 ///
 /// \c CellReadResolver::fetch no longer consults \c TableRead::exhausted
 /// itself (Stage 3: \c CellReadResolver::operand_drained re-derives in-place
-/// eligibility straight from \c CellRegistry::drained instead); the ordered
-/// executor's \c spend_assemble_source still does, to drive the legacy \c
-/// CacheManager::release_at on the same canonical node every production
-/// site keys on, until the stage that removes the legacy scope caches
-/// entirely drops that use too and keeps the read itself.
+/// eligibility straight from \c CellRegistry::drained instead); an Assemble
+/// step does, to decide whether the partial it just read is its own to
+/// accumulate into (see \c CellRegistry::read's overload).
 [[nodiscard]] inline TableRead table_read(CellRegistry& reg, CellId source) {
   TableRead r;
   r.value = reg.read(source, &r.exhausted);
@@ -421,6 +423,12 @@ class CellReadResolver {
     }
   }
   [[nodiscard]] CellId consumer() const { return consumer_; }
+
+  /// The registry this resolver reads from -- the storage the table owns.
+  /// Read-only: a caller that wants to OBSERVE what a cell currently holds
+  /// (a test probe, a diagnostic) goes through here; production is the
+  /// executor's business.
+  [[nodiscard]] CellRegistry const& registry() const noexcept { return *reg_; }
 
   /// \return nullopt when \p operand_node_hash is not a value of the table
   /// (a transient of this production tree, evaluated in place by the
@@ -514,17 +522,17 @@ class CellReadResolver {
   ///    so nothing this evaluation will read it again.
   ///
   /// A table value never yet \c fetch()'d through this resolver (no entry in
-  /// \c last_served_source_) is also reported drained: by construction every
-  /// non-leaf, non-top node evaluate_impl visits is routed through \c fetch
-  /// before its result can reach a gate that asks this question, so the only
-  /// way to reach here with no record is a node this resolver was never
-  /// asked about at all -- indistinguishable, for this purpose, from "no
-  /// table cell to worry about".
+  /// \c last_served_source_) is reported NOT drained -- the safe default. The
+  /// registry may well be holding that value for other readers (it is a
+  /// table cell, so some cell owns it), and this resolver has no evidence
+  /// either way; answering "drained" would license an in-place mutation of a
+  /// buffer this evaluation is going to read again. Out-of-place costs one
+  /// allocation; the wrong answer corrupts a shared value.
   [[nodiscard]] bool operand_drained(std::size_t operand_node_hash) const {
     auto const vid = vid_of_hash_(operand_node_hash);
     if (!vid) return true;
     auto const it = last_served_source_.find(*vid);
-    if (it == last_served_source_.end()) return true;
+    if (it == last_served_source_.end()) return false;
     return reg_->drained(it->second);
   }
 

@@ -724,62 +724,6 @@ TEST_CASE(
               << e.what() << "\n";
   }
 
-  // ---- Task 4 exactness gate: predicted (ordered_home_reads) == measured.
-  // A second ordered run with a NON-EVICTING home life lets us read the ACTUAL
-  // number of times each homed value's home entry is accessed (max_life - life)
-  // and compare it to the static home_reads prediction. If they differ, the
-  // static model is WRONG (an undercount rebuilds; an overcount over-retains)
-  // -- this is the ground truth the payoff must satisfy.
-  {
-    auto meas_cache = sequant::cache_manager(forest);
-    meas_cache.set_array_ops(&aops);
-    std::function<std::size_t(std::size_t)> const huge =
-        [](std::size_t) -> std::size_t { return 1000000000ull; };
-    try {
-      (void)sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
-          forest, ordered, rich, layout, yield, meas_cache, target, {},
-          is_volatile_node, huge);
-    } catch (std::exception const&) {
-    }
-    auto const n_blocks_m = sequant::eval::detail::ordered_n_blocks<Node>(
-        ordered, rich, vmap, yield, target, /*aops=*/&aops);
-    auto const predicted = sequant::eval::detail::ordered_home_reads<Node>(
-        ordered, rich, vmap, n_blocks_m);
-    std::size_t n_checked = 0, n_mismatch = 0;
-    for (auto const& vc : rich.cells) {
-      auto const vit = vmap.find(vc.hash);
-      if (vit == vmap.end() || vit->second.leaf()) continue;
-      if (!sequant::subtree_any(vit->second, is_volatile_node)) continue;
-      // Only ROOT-homed composites live in the root meas_cache and so are
-      // measurable post-run; a block-homed value's entry is in a transient
-      // scratch (gone by now), so measuring it against the root cache is a
-      // false 0. Restrict the exactness gate to root-level BuildSteps.
-      if (!orderedexec_index_of_build_step(ordered.root, vc.value_id)
-               .has_value())
-        continue;
-      int const ml = meas_cache.max_life(vit->second);
-      int const lf = meas_cache.life(vit->second);
-      if (ml <= 0) continue;  // never homed non-persistently (persistent path)
-      std::size_t const measured = std::size_t(ml - lf);
-      // Root-level BuildStep home scope is ROOT (empty key); per-cell
-      // ordered_home_reads takes the home-scope key.
-      std::size_t const pred = predicted(vc.value_id, {});
-      ++n_checked;
-      if (pred != measured) {
-        ++n_mismatch;
-        if (std::getenv("SEQUANT_UT_T4_DIAG"))
-          std::wcerr << L"    [HRDIAG] vid=" << vc.value_id << L" predicted="
-                     << pred << L" measured=" << measured << L"\n";
-      }
-    }
-    std::wcerr << L"  home_reads exactness: checked " << n_checked
-               << L" volatile homed composites, " << n_mismatch
-               << L" mismatches\n";
-    INFO("home_reads predicted vs measured: " << n_mismatch << "/" << n_checked
-                                              << " mismatch");
-    CHECK(n_mismatch == 0);
-  }
-
   // ---- (2) whole-scope executor, SAME forest/rich. ----
   std::ostringstream ws_trace;
   logger.eval.stream = &ws_trace;
@@ -2390,28 +2334,46 @@ TEST_CASE(
   // composites.
   run_iter();
 
-  // Collect the composites the executor homed PERSISTENT and their iter-1 build
-  // counts. The cache-halt gate must not cause any of them to be rebuilt in
-  // iteration 2 (they survive reset() and are read, not re-formed).
+  // Stage 3: persistence is the TABLE's own classification (no volatile leaf,
+  // bound to no loop instance) and lives in the cache handle's cross-call
+  // PersistentValueStore, which the cell registry publishes to on every
+  // production of such a cell and seeds itself from at the next call's entry.
+  // So the composites that must not be re-formed are exactly the ones the
+  // store now holds -- collect them and their iteration-1 build counts.
+  auto const& store = cache.persistent_values();
+  REQUIRE(store.size() > 0);  // iteration 1 actually filled the store
   std::vector<std::pair<Node, std::size_t>> persistent_b1;
   for (auto const& vc : rich.cells) {
     auto const it = vmap.find(vc.hash);
     if (it == vmap.end() || it->second.leaf()) continue;
-    if (cache.entry_is_persistent(it->second))
-      persistent_b1.emplace_back(
-          it->second,
-          orderedexec_builds_of(cache.recompute_tally(), it->second));
+    if (!store.holds(vc.hash)) continue;
+    persistent_b1.emplace_back(
+        it->second, orderedexec_builds_of(cache.recompute_tally(), it->second));
   }
   REQUIRE(
       !persistent_b1.empty());  // fixture actually has persistent composites
+  {
+    // One specific known-persistent value, held by its own canonical hash:
+    // the composite is genuinely batch-invariant (carries no volatile leaf),
+    // which is what makes it eligible to survive between evaluations at all.
+    Node const& known = persistent_b1.front().first;
+    CHECK(store.holds(known->hash_value()));
+    CHECK_FALSE(sequant::subtree_any(known, is_volatile_node));
+  }
 
   cache.reset();
+  // reset() leaves the persistent store alone by design -- that is what makes
+  // the next evaluation's seeding (and so the cache-halt below) possible.
+  CHECK(store.size() > 0);
 
-  // Replicate the executor's needed_build gate: BFS from the volatile roots,
-  // halting at cache-alive (resident persistent) nodes. A NON-LEAF BuildStep
-  // inside a {Κ} ScopeBlock whose node is NOT in this set is a DEAD
-  // prerequisite
-  // -- the cache-halt fix must not re-form it in iteration 2.
+  // Replicate the executor's cache-halt skip set (ordered_cache_halt_skip:
+  // a cell is skipped when it is persistent and already held, or when every
+  // consumer of its value is skipped) projected onto the value DAG, which is
+  // what this fixture can observe: descend from the roots and halt at any
+  // value the store holds -- a value the descent never reaches is one whose
+  // every consumer chain was cut by a held persistent, i.e. skipped. A
+  // NON-LEAF BuildStep inside a {Κ} ScopeBlock whose node is NOT in this set
+  // is a DEAD prerequisite -- it must not be re-formed in iteration 2.
   sequant::container::set<std::size_t> needed;
   {
     sequant::container::svector<Node> stack;
@@ -2422,7 +2384,7 @@ TEST_CASE(
       stack.pop_back();
       if (n.leaf()) continue;
       if (!visited.insert(n->hash_value()).second) continue;
-      if (cache.alive(n)) continue;  // resident: read, do not descend
+      if (store.holds(n->hash_value())) continue;  // held: read, do not descend
       needed.insert(n->hash_value());
       stack.push_back(n.left());
       stack.push_back(n.right());

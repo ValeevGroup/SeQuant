@@ -498,32 +498,47 @@ TEST_CASE(
 
   auto cache = sequant::CacheManager<ScalarNode>::empty();
 
+  // A's OWN CELL: the whole fixture is unbatched, so every value has exactly
+  // one Build cell, at the root scope. Stage 3 moved storage onto the table,
+  // so this -- not the legacy cache's own map -- is where A's buffer lives.
+  std::size_t const shared_hash = shared->hash_value();
+  std::size_t shared_vid = rich.cells.size();
+  for (auto const& vc : rich.cells)
+    if (vc.hash == shared_hash) shared_vid = vc.value_id;
+  REQUIRE(shared_vid != rich.cells.size());
+
   // Mid-run probe: the custom-evaluator hook is consulted at the Enter stage
   // of every non-leaf node with the live cache, and DECLINES (null return),
   // so it observes without changing what runs. Every invocation records
   // (a) the resolver's operand_drained(A) at that instant and (b) whether
-  // CacheManager::chain_residency() (Stage 3: now folding in the registry's
-  // own bytes, minus whatever a legacy entry already double-counts -- see
-  // ordered_executor.hpp's external-residency install) is at least as large
-  // as A's own buffer while A is resident ANYWHERE -- a [meter]-style sanity
-  // floor: the peak metering must never under-count a value known to be
-  // alive, registry-only bytes included.
+  // CacheManager::chain_residency() (Stage 3: fed by the registry's own live
+  // bytes -- see ordered_executor.hpp's external-residency install) is at
+  // least as large as A's own buffer while A is held -- a [meter]-style
+  // sanity floor: the peak metering must never under-count a value known to
+  // be alive, registry-owned bytes included.
   bool seen_alive_and_shared = false;
-  ResultPtr shared_buffer;  // A's homed buffer, captured while it is alive
-  std::size_t const shared_hash = shared->hash_value();
+  ResultPtr shared_buffer;  // A's buffer, captured from its cell while alive
   std::vector<bool> drained_observations;
   bool residency_covers_shared = true;
   cache.set_custom_evaluator(
       [&](ScalarNode const&,
           sequant::CacheManager<ScalarNode>& c) -> ResultPtr {
-        if (ResultPtr const held = c.peek_at(shared)) {
-          shared_buffer = held;
-          if (c.chain_holds_shared(held)) seen_alive_and_shared = true;
-          if (c.chain_residency() < held->size_in_bytes())
-            residency_covers_shared = false;
+        auto* const rr = c.cell_read_resolver();
+        if (!rr) return nullptr;  // decline (not the table-driven path)
+        auto const cell = rr->registry().build_cell_at(
+            shared_vid, sequant::eval::CellScope{});
+        if (cell) {
+          if (ResultPtr const held = rr->registry().peek(*cell)) {
+            shared_buffer = held;
+            // "Shared" on the table: the cell still holds the buffer AND has
+            // reads left to serve from it, which is exactly what
+            // operand_drained() reports as not-drained.
+            if (!rr->operand_drained(shared_hash)) seen_alive_and_shared = true;
+            if (c.chain_residency() < held->size_in_bytes())
+              residency_covers_shared = false;
+          }
         }
-        if (auto* rr = c.cell_read_resolver())
-          drained_observations.push_back(rr->operand_drained(shared_hash));
+        drained_observations.push_back(rr->operand_drained(shared_hash));
         return nullptr;  // decline
       });
 
@@ -535,9 +550,9 @@ TEST_CASE(
   // -9.5, and this entry point returns the forest-wide sum.
   CHECK(got->as<ResultScalar<double>>().value() == Catch::Approx(-11.25));
 
-  // Before A's last table read: homed, alive, and reported shared (still
-  // true forever once observed -- see the header comment on why
-  // chain_holds_shared is no longer used to gate anything).
+  // Before A's last table read: held by its cell with reads still pending,
+  // i.e. observably shared (see the header comment on why chain_holds_shared
+  // is no longer used to gate anything).
   CHECK(seen_alive_and_shared);
   REQUIRE(shared_buffer);
   CHECK(residency_covers_shared);

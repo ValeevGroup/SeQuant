@@ -351,6 +351,19 @@ class Result {
   virtual void add_inplace(Result const&) = 0;
 
   ///
+  /// \brief An independently owned DEEP copy of this result.
+  ///
+  /// The copy shares no mutable state with this object: \c add_inplace() or
+  /// \c write_into_slice() on either one leaves the other unchanged. Needed
+  /// wherever an accumulation takes ownership of a buffer it does not own --
+  /// the ordered executor's Assemble step seeds its running sum from the
+  /// first batch's partial, which may still be read again (the producing cell
+  /// has life left, or is persistent across evaluations) and so must not be
+  /// mutated in place.
+  ///
+  [[nodiscard]] virtual ResultPtr clone() const = 0;
+
+  ///
   /// \brief Particle symmetrize the eval result
   ///
   [[nodiscard]] virtual ResultPtr symmetrize() const = 0;
@@ -480,6 +493,10 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     return eval_result<ResultScalar<T>>(value() * T(factor));
+  }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<ResultScalar<T>>(value());
   }
 
  private:

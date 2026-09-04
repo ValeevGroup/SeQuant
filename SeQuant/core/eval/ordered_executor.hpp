@@ -9,7 +9,6 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/forest_combine.hpp>
-#include <SeQuant/core/eval/member_axis.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/result.hpp>
@@ -177,116 +176,6 @@ template <typename node_t>
   return carries_type && !carries_exact;
 }
 
-///
-/// \brief SP3 Tasks 2-3: realize one \c ScopeBlock's batch loop against
-/// \p parent_cache -- the ordered-schedule counterpart of \c
-/// scope_executor.hpp's \c detail::walk_scope, simplified to the shape the
-/// \c OrderedSchedule IR already gives: \p block's own \c steps are a
-/// topologically ORDERED interleaving of \c BuildStep's (values homed AT
-/// this block -- \c LoopRole::LoopLocal, "Transient" per \c
-/// ordered_schedule.hpp's \c OutputKind doc comment: built fresh every batch
-/// on the per-batch scratch and simply dropped by the next \c reset(), never
-/// stored anywhere) and nested child \c ScopeBlock steps (realized
-/// recursively, in full, once per iteration of THIS loop -- an outer loop
-/// with an inner child re-runs the WHOLE inner loop every outer batch,
-/// exactly as \c walk_scope's nested case does); \p block's own \c outputs
-/// list the values that escape it on close, either \c AccumulateSum
-/// (reduction: summed via \c add_inplace across every batch -- Task 2) or \c
-/// AccumulateScatter (loop-carried: written into a disjoint slice of a
-/// pre-sized destination every batch -- Task 3, mirroring \c walk_scope's
-/// External branch's \c pre_sized_zeros_over_mode / \c write_into_slice
-/// pair). A block may mix both kinds of output freely (and \c BuildStep
-/// Transients alongside them): the batch loop is the SAME either way -- only
-/// how each output's per-batch \c part is folded into its own running result
-/// differs by its \c OutputKind. Every output, once closed, is stored at \p
-/// parent_cache -- the scope one level OUT of this loop, i.e. where the \c
-/// ScopeBlock step itself sits in ITS OWN enclosing block's \c steps -- so a
-/// later step at that level reads it whole via the ordinary Checked cache
-/// probe, and mirrored into \p value_results (keyed by the SAME global \c
-/// value_id space \c evaluate_ordered_schedule's root walk uses) so the
-/// final per-root combine can resolve a forest root produced INSIDE a loop
-/// block exactly as it resolves one produced by a plain root \c BuildStep.
-///
-/// \details Per batch: \c bs.cache.reset() (drops every Transient/LoopLocal
-/// value from the PRIOR batch), the batch context is extended by this
-/// block's own axis over the batch's element range, then \p block's own \c
-/// steps run in schedule order (a \c BuildStep evaluated on the scratch; a
-/// nested \c ScopeBlock realized recursively, its own full loop nested
-/// inside this single batch), and finally each output is (re)built on the
-/// SAME scratch (its operands -- this block's own \c BuildStep values and/or
-/// a nested block's already-closed output, both alive on \c bs.cache for
-/// this batch -- are already resolved): an \c AccumulateSum output is summed
-/// into its running accumulator; an \c AccumulateScatter output is \c
-/// write_into_slice'd into its running destination (built once, on the FIRST
-/// nonempty batch, via \c pre_sized_zeros_over_mode against the SAME carrier
-/// leaf \c mode_batches itself was sourced from -- sound because of the \c
-/// \note below: every value in this block, escape output included, shares
-/// ONE physical axis identity, hence one tiling). \c make_batched_scratch's
-/// shared-scratch CSE dedups any sub-intermediate repeated across this
-/// block's own \c BuildStep/\c outputs production sites (co-evaluated as one
-/// \p members group, mirroring \c walk_scope's single-aux-loop \c group),
-/// the same mechanism \c walk_scope's Task-3 leaf case relies on -- and,
-/// because that CSE and the batch partition are shared across BOTH output
-/// kinds here (unlike \c walk_scope's External branch, which cannot share a
-/// scratch or a batch partition across members that may bind independently-
-/// labeled physical axes -- see the \note below for why \c OrderedSchedule's
-/// members can), a mixed-kind block realizes its \c AccumulateSum and \c
-/// AccumulateScatter outputs in the SAME single pass over \c batches, not
-/// two.
-///
-/// \par Forced-split producer/consumer passes (SP2 Task 4)
-/// A forced split realizes its axis as TWO sibling \c ScopeBlock \c Step's
-/// at the SAME nesting level (ordinal 0 the producer, ordinal 1 the
-/// consumer) rather than one nested inside the other -- see \c
-/// build_ordered_schedule's step 2b. No special-casing is needed here for
-/// that shape: \c evaluate_ordered_schedule's root walk (and this function's
-/// own \c steps loop, for a split at a non-root level) already runs sibling
-/// \c Step's in \p block.steps SEQUENTIALLY, and \c
-/// ordered_schedule_topo_sort_steps already guarantees the consumer pass
-/// sorts AFTER the producer pass (the consumer's \c requires_ names the
-/// producer's escaped -- now \c AccumulateScatter'd to FULL -- outputs, a
-/// real dependency edge). Since each pass, on closing, \c stores its outputs
-/// at THIS level's shared \p parent_cache (or \c cache at the root) before
-/// the next sibling step begins, the consumer pass's own inner \c BuildStep
-/// probes find the producer's completed value there via the ordinary
-/// Checked cache lookup -- reading it WHOLE, exactly as design intends. This
-/// is the identical mechanism Task 2 already relies on for a plain nested
-/// child block reading an enclosing block's homed value; a forced split
-/// changes only which axis realizes two blocks instead of one, not how
-/// cross-step visibility works.
-///
-/// \note Every value inside \p block is keyed off \p block's own \c axis (a
-/// single canonical \c Index, not a per-value physical remap) -- unlike \c
-/// walk_scope's \c member_contracted_axis / \c member_external_axis, which
-/// map the schedule's canonical mode to EACH member's own physical label
-/// because \c ScopeSchedule's members are independently-labeled forest
-/// ROOTS. \c OrderedSchedule's own bucketing (\c build_ordered_schedule's
-/// step 2) instead groups by axis TYPE across the WHOLE forest, so a
-/// schedule built from a forest whose cells name that TYPE under more than
-/// one physical \c Index would need the same remap \c walk_scope applies;
-/// \c ordered_axis_label_mismatch defensively asserts against that case (see
-/// its own doc comment) rather than silently mis-evaluating -- no fixture
-/// exercises the multi-label case yet (every current fixture, including
-/// External/\c AccumulateScatter ones, names its batch axis under a single
-/// literal \c Index throughout), so the remap itself is not implemented
-/// here -- a later task's job if it becomes live.
-///
-/// \note \p is_volatile (trailing, defaulted) is the NODE-level lift of \c
-/// BatchPolicy::is_volatile_leaf -- see \c evaluate_ordered_schedule's own
-/// doc comment for where it is produced. Threaded through this function's
-/// own recursion (the nested \c ScopeBlock call below) so it reaches every
-/// level, but not yet CONSULTED here -- a later task's job.
-///
-/// Task 7 (Pillar 1): value \p vid's home-slice coloring (empty if the value is
-/// unsliced / top-homed => byte-identical node-id keying).
-[[nodiscard]] inline eval::ValueIdColoring ordered_value_home_coloring(
-    OrderedSchedule const& ordered, std::size_t vid) {
-  auto const it = ordered.home_mode_depth.find(vid);
-  return it == ordered.home_mode_depth.end()
-             ? eval::ValueIdColoring{}
-             : eval::value_id_coloring(it->second);
-}
-
 /// SP4 Task 4: the \c CellScope of the current point in the schedule walk --
 /// enclosing loop instances outermost-first, one \c {level.key(),
 /// level.latitude_ordinal} entry per already-opened \p ectx level, plus (the
@@ -323,6 +212,156 @@ template <typename node_t>
   return s;
 }
 
+/// Stage 3 cache-halt, computed ONCE per evaluation call over the table
+/// (replacing the forest BFS over the legacy cache's alive entries): the set
+/// of cells whose production this call may skip.
+///
+/// A cell is skipped when
+///  1. it is PERSISTENT and the registry already HOLDS it -- it survived from
+///     a previous evaluation of this schedule through the persistent value
+///     store and was seeded back in (\c CellRegistry::seed_persistent), so
+///     re-producing it would be pure waste (and, for an accumulating
+///     Assemble, would corrupt the held value by summing it into itself); or
+///  2. every CONSUMER of it is itself skipped -- nothing left this call will
+///     read it. The consumers of a cell are the consumer cells of every
+///     \c Read whose \c source is it, plus every \c Assemble whose \c
+///     production.source is it. The edge is by SOURCE CELL, not by value:
+///     a read names the exact form it consumes and the resolver serves that
+///     form and no other, so an in-block partial whose only reader is the
+///     Assemble that closes it is dead as soon as that Assemble is -- even
+///     though the assembled form of the SAME value is still read elsewhere.
+///
+/// A cell with NO consumer at all is never skipped: those are the schedule's
+/// own results, read by whoever asked for the evaluation (validator rule 4
+/// admits a zero-read cell only at the root scope).
+///
+/// Rule 2 is a fixpoint over the table's dependency edges: skipping a
+/// resident persistent composite makes its own prerequisites dead, and so on
+/// down. This is the table-side statement of what forest descent does by
+/// halting its descent at a cache hit.
+[[nodiscard]] inline container::vector<char> ordered_cache_halt_skip(
+    CellTable const& table, CellRegistry const& registry) {
+  std::size_t const n = table.cells.size();
+  container::vector<char> skip(n, 0);
+  container::vector<container::svector<CellId>> consumers(n);
+  for (Read const& r : table.reads)
+    if (r.source < n) consumers[r.source].push_back(r.consumer);
+  for (CellId c = 0; c < n; ++c)
+    if (table.cells[c].production.kind == ProductionKind::Assemble &&
+        table.cells[c].production.source < n)
+      consumers[table.cells[c].production.source].push_back(c);
+
+  for (CellId c = 0; c < n; ++c)
+    if (table.cells[c].persistent && registry.peek(c)) skip[c] = 1;
+
+  for (bool changed = true; changed;) {
+    changed = false;
+    for (CellId c = 0; c < n; ++c) {
+      if (skip[c] || consumers[c].empty()) continue;
+      bool all = true;
+      for (CellId x : consumers[c])
+        if (!skip[x]) {
+          all = false;
+          break;
+        }
+      if (all) {
+        skip[c] = 1;
+        changed = true;
+      }
+    }
+  }
+  return skip;
+}
+
+/// Whether the cache-halt skip set covers EVERY production \p block realizes
+/// -- its own \c BuildStep cells at \p parent_scope + \p block, every nested
+/// block's productions (recursively), and the \c Assemble cell of each of its
+/// outputs at \p parent_scope. Such a block has nothing to do this call: its
+/// results are all resident already and its whole batch loop is skipped. A
+/// production the table has no cell for is reported NOT skipped, so the block
+/// still runs and the step's own lookup raises the table/schedule
+/// disagreement with its full diagnostic.
+[[nodiscard]] inline bool ordered_block_fully_skipped(
+    CellRegistry const& registry, container::vector<char> const& skip,
+    ScopeBlock const& block, CellScope const& parent_scope) {
+  CellScope inner = parent_scope;
+  inner.path.push_back({block.level.key(), block.latitude_ordinal});
+  for (Step const& step : block.steps) {
+    if (auto const* b = std::get_if<BuildStep>(&step.value)) {
+      auto const c = registry.build_cell_at(b->value_id, inner);
+      if (!c || !skip[*c]) return false;
+    } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
+      if (!ordered_block_fully_skipped(registry, skip, *child, inner))
+        return false;
+    } else {
+      return false;
+    }
+  }
+  for (auto const& [ovid, okind] : block.outputs) {
+    (void)okind;
+    auto const a = registry.assemble_cell_at(ovid, parent_scope);
+    if (!a || !skip[*a]) return false;
+  }
+  return true;
+}
+
+/// The current batch range of loop instance \p key, read off \p ctx (the
+/// enclosing realized loops plus, inside a block's batch loop, that block's
+/// own entry). Nullopt when the loop is not open here -- which every caller
+/// turns into a throw naming what it was trying to bind.
+[[nodiscard]] inline std::optional<std::pair<std::size_t, std::size_t>>
+ordered_range_of(eval::BatchContext const& ctx, LoopKey const& key) {
+  for (auto const& e : ctx)
+    if (detail::same_key(e.level.key(), key)) return e.range;
+  return std::nullopt;
+}
+
+///
+/// \brief Realize one \c ScopeBlock's batch loop against \p parent_cache --
+/// the ordered-schedule counterpart of \c scope_executor.hpp's \c
+/// detail::walk_scope, executed ENTIRELY on the cell table (the
+/// explicit-value-cells design, section 4).
+///
+/// \details \p block's own \c steps are a topologically ORDERED interleaving
+/// of \c BuildStep's (each one produces the value's Build CELL at this
+/// block's exact scope) and nested child \c ScopeBlock steps (realized
+/// recursively, in full, once per batch of THIS loop). \p block's \c outputs
+/// are its ASSEMBLE steps: each names the cell -- at the PARENT scope -- that
+/// this block's batches assemble, either by summing the per-batch partials
+/// (\c AccumulateSum: a reduced axis) or by scattering them into disjoint
+/// slices of one destination (\c AccumulateScatter: a carried axis). Both
+/// read the per-batch form from the table (\c Production::source), so a
+/// block-close handoff spends the same declared life any other read does.
+///
+/// Per batch: every cell bound to this loop instance is dropped from the
+/// registry (\c CellRegistry::clear_bound_to -- the per-batch reset,
+/// expressed on cells), the batch context is extended by this block's axis
+/// over the batch's element range, the steps run in schedule order, and each
+/// output folds its per-batch partial into its running result. At close each
+/// output's running result becomes its Assemble cell's value. There is no
+/// home walk, no home slot, no reuse table and no store into a scope cache:
+/// the registry owns every result, and the table says where each lives and
+/// how long.
+///
+/// The per-block scratch is a BARE child cache: it holds no entries at all
+/// (the table owns storage) and exists only to carry this block's batch
+/// context and to let the hook lookups -- backend array-ops, the cell read
+/// resolver, the peak monitor -- fall through to \p parent_cache.
+///
+/// \par Forced-split producer/consumer passes
+/// A forced split realizes its axis as TWO sibling \c ScopeBlock \c Step's at
+/// the SAME nesting level (ordinal 0 the producer, ordinal 1 the consumer)
+/// rather than one nested inside the other. No special-casing is needed:
+/// sibling steps run sequentially, the topological sort puts the consumer
+/// pass after the producer pass, and the consumer's reads name the producer's
+/// assembled cell explicitly (scopes carry their latitude, so the two passes'
+/// cells are distinct).
+///
+/// \param skip The cache-halt skip set over cells (\c
+///        ordered_cache_halt_skip), computed once per call.
+/// \param built The run-completeness ledger, marked at the exact site each
+///        scheduled value is produced (or deliberately skipped).
+///
 template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
 void run_ordered_contracted_block(
     ScopeBlock const& block,
@@ -331,34 +370,20 @@ void run_ordered_contracted_block(
     F const& leaf_evaluator, CacheManager<N, FHC>& parent_cache,
     std::function<std::size_t(Index const&)> const& target,
     typename CacheManager<N, FHC>::BatchContext const& ectx,
-    container::vector<ResultPtr>& value_results, container::vector<char>& built,
-    // SP4 Task 4: is_volatile through consumer_loops lose their defaults
-    // here, alongside table/registry/resolver below: a reference parameter
-    // (registry, resolver) cannot have one, and C++ requires every parameter
-    // after the first defaulted one to also carry a default, so the whole
-    // trailing run must be all-default or all-required together. Both actual
-    // callers (the recursive call below and
-    // run_ordered_schedule_pre_results's root-scope walk) already supply
-    // every one of these explicitly, so this narrows no real call site.
+    container::vector<char>& built,
     std::function<bool(node_t const&)> const& is_volatile,
-    std::function<std::size_t(Index const&)> const& n_blocks,
-    std::function<std::size_t(std::size_t, HomeScopeKey const&)> const&
-        home_reads,
-    container::set<std::size_t> const* needed_build,
-    std::unordered_map<std::size_t, container::set<std::size_t>> const*
-        consumer_loops,
-    // Explicit value cells (SP4 Task 3): the cell table built and validated
-    // ONCE by run_ordered_schedule_pre_results, threaded through this
-    // function's own recursion so it reaches every block.
-    //
-    // SP4 Task 4: registry/resolver -- the runtime side of the table (see
-    // cell_registry.hpp), also built once by run_ordered_schedule_pre_results
-    // and threaded alongside it.
-    CellTable const* table, CellRegistry& registry,
-    CellReadResolver& resolver) {
+    CellTable const* table, CellRegistry& registry, CellReadResolver& resolver,
+    container::vector<char> const& skip) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
-  using member_t = std::pair<node_t const*, Index>;
+  // Threaded for symmetry with the entry point and for the recursion below;
+  // this block consults neither (the table already carries every
+  // volatility-derived decision: persistence and lives are its own).
+  (void)is_volatile;
+  SEQUANT_ASSERT(table && &registry.table() == table &&
+                 "run_ordered_contracted_block: the registry and the table "
+                 "passed here must be the same table");
+
   // Backend array-ops (zero destination + axis chunking), sourced from the
   // cache chain (the backend -- mpqc's registries or a test's leaf source --
   // wires the root cache). A batched block cannot be realized without it.
@@ -367,13 +392,11 @@ void run_ordered_contracted_block(
                  "evaluate_ordered_schedule: batched eval requires backend "
                  "array-ops (CacheManager::set_array_ops)");
 
-  // R4 (SP3 Task 5): loud guard on this block's batch-mode kind. The batch-loop
-  // primitive below realizes Contracted and External blocks UNIFORMLY (their
-  // difference is carried entirely by each escape output's OutputKind, handled
-  // per-output below), so both are supported; any OTHER BatchModeType value is
-  // a schedule this executor cannot interpret and must refuse loudly rather
-  // than silently mis-run. (An assert -- not a switch/default -- so the 2-value
-  // enum does not trip -Wcovered-switch-default.)
+  // R4: loud guard on this block's batch-mode kind. The batch-loop primitive
+  // below realizes Contracted and External blocks UNIFORMLY (their difference
+  // is carried entirely by each Assemble cell's own kind), so both are
+  // supported; any OTHER BatchModeType value is a schedule this executor
+  // cannot interpret and must refuse loudly rather than silently mis-run.
   SEQUANT_ASSERT((block.kind == BatchModeType::Contracted ||
                   block.kind == BatchModeType::External) &&
                  "evaluate_ordered_schedule: unsupported ScopeBlock batch-mode "
@@ -388,278 +411,81 @@ void run_ordered_contracted_block(
     return it->second;
   };
 
-  // Task 7 (Pillar 1): the home-colored cache key for value `vid` -- what the
-  // executor's OWN explicit cache calls (output/escape access/store/home) pass,
-  // so a sliced value keys by its distinct home coloring. Unsliced => empty
-  // coloring => byte-identical to node keying.
-  //
-  // SCOPE-CONSISTENT coloring (2026-08-31): a value's home coloring must
-  // reflect only the modes SLICED WITHIN THIS BLOCK'S HOME SCOPE (`ectx`, one
-  // level out
-  // -- where an escape output lands), NOT the value's full `home_mode_depth`.
-  // A MULTI-LEVEL escape homes ONE value at several scopes: the OUTER
-  // (shallower) level is LESS sliced than the deepest home. At ROOT (`ectx`
-  // empty) the value is the COMPLETE form and must key by PLAIN node-id (empty
-  // coloring) -- exactly how a root consumer keys it (`value_is_sliced` is
-  // false when the mode is out of the batch context). Storing the full under
-  // the per-vid coloring `{i}` while a root reader keys it `∅` is a silent
-  // store-vs-read key mismatch -> the consumer misses a value that WAS stored.
-  // Filter the per-vid coloring to the (depth,slot) identities present in
-  // `ectx`.
-  auto const value_of = [&](std::size_t vid) -> typename Cache::cache_key_type {
-    node_t const& nd = resolve(vid);
-    auto const it = ordered.home_mode_depth.find(vid);
-    if (it == ordered.home_mode_depth.end())
-      return {nd, eval::ValueIdColoring{}};
-    eval::ValueIdColoring col;
-    for (auto const& [m, dc] : it->second) {
-      // `dc` is the mode's home LOOP color (LoopKey::color -- depth AND
-      // loop_slot, stored by home_mode_depth). A mode is sliced WITHIN this
-      // home scope iff its loop is one of the enclosing loops (`ectx`), matched
-      // by FULL loop identity, not depth alone (one cache per loop).
-      bool in_scope = false;
-      for (auto const& lvl : ectx)
-        if (static_cast<std::size_t>(dc) == lvl.level.key().color()) {
-          in_scope = true;
-          break;
-        }
-      if (in_scope) {
-        col.ctx_modes.push_back(m);
-        col.colors.emplace(m, static_cast<std::size_t>(dc));
-      }
-    }
-    return {nd, std::move(col)};
-  };
+  CellScope const parent_scope = current_scope(ectx);
+  CellScope const block_scope = current_scope(ectx, block);
 
-  // members co-evaluated within one batch pass: this block's own direct
-  // BuildStep values plus its own escape output values (AccumulateSum AND
-  // AccumulateScatter alike -- see this function's own doc comment for why
-  // they share one scratch/one batch partition here, unlike walk_scope's
-  // External branch). Each member is defensively checked against the
-  // single-physical-label simplification this function's own doc comment
-  // (\note) documents: see ordered_axis_label_mismatch's doc comment for why
-  // a silent skip here would otherwise be a silently N-fold-inflated
-  // reduction, not a crash.
-  // Map the block's DAG-scope axis (a SPACE) to each member's OWN physical mode
-  // (member_axis.hpp). Index labels are tree-local, so a member is sliced /
-  // scattered on the physical label IT carries for the space, never the block's
-  // canonical representative reused across members. A Contracted member (and an
-  // AccumulateSum output, which reduces the space away) reads it off its own
-  // node_slice_mask()/carrying leaf (member_contracted_axis, leaf-side); an
-  // External member (and an AccumulateScatter output, which carries the space
-  // FREE on its result) reads it off its result (member_external_axis). Falling
-  // back to block.axis when the member carries no mode of the space leaves a
-  // space-invariant member unsliced (correct). This replaces the former
-  // ordered_axis_label_mismatch assert: the multi-label case it guarded against
-  // is now HANDLED (per-member remap), not rejected.
-  auto const base = std::wstring(block.axis.space().base_key());
-  bool const block_external = block.kind == BatchModeType::External;
-  auto const member_axis = [&](node_t const& nd, bool external) -> Index {
-    auto const ax = external ? member_external_axis(nd, base)
-                             : member_contracted_axis(nd, base);
-    return ax.value_or(block.axis);
-  };
-
-  std::vector<member_t> members;
-  for (Step const& step : block.steps)
-    if (auto const* build = std::get_if<BuildStep>(&step.value)) {
-      node_t const& nd = resolve(build->value_id);
-      members.push_back({&nd, member_axis(nd, block_external)});
-    }
-
-  // dm[k]: for an AccumulateScatter output, the position of its OWN escape axis
-  // on ITS OWN result (computed once here, outside the batch loop, since a
-  // value's structural mode order is the same across every batch). Left at
-  // nullopt (and unused) for an AccumulateSum output, which reduces its space
-  // away at its own node and so never carries it on its own result.
-  container::vector<std::optional<std::size_t>> dm(block.outputs.size());
-  for (std::size_t k = 0; k != block.outputs.size(); ++k) {
-    auto const vid = block.outputs[k].first;
-    auto const kind = block.outputs[k].second;
-    SEQUANT_ASSERT(kind == OutputKind::AccumulateSum ||
-                   kind == OutputKind::AccumulateScatter);
-    node_t const& nd = resolve(vid);
-    bool const scatter = kind == OutputKind::AccumulateScatter;
-    Index mx = member_axis(nd, scatter);
-    // Per-LEVEL escape axis for a multi-level scatter. member_axis() is
-    // level-blind: it returns the SAME external axis at every level of a value
-    // escaping through nested loops (e.g. the i_2-inner / i_1-outer scatter of
-    // a doubles residual), so the outer level would scatter its inner-assembled
-    // partial (already full on the inner mode) into the INNER mode's slice --
-    // a block_extent mismatch. The identity-correct axis for THIS block is the
-    // carried position whose fusion loop_slot is this block's slot (the same
-    // per-position loop_slot compute_sliced_mode_assignment's value_slot reads
-    // off the value's occurrences). The block's canonical axis label cannot
-    // disambiguate (every i-loop is labeled i_1); only the loop identity can.
-    if (scatter) {
-      ValueCell const& c = rich.cells[vid];
-      std::wstring const bspace{block.axis.space().base_key()};
-      std::optional<std::size_t> per_level;
-      for (std::size_t p = 0; p < c.carried.size() && !per_level; ++p) {
-        if (std::wstring(c.carried[p].space().base_key()) != bspace) continue;
-        for (OccurrenceRec const& occ : c.occurrences)
-          if (p < occ.loop_slot.size() &&
-              occ.loop_slot[p] == block.level.loop_slot) {
-            per_level = p;
-            break;
-          }
-      }
-      if (per_level) mx = c.carried[*per_level];
-    }
-    members.push_back({&nd, mx});
-    if (scatter) {
-      dm[k] = index_position(nd, mx);
-      if (char const* dh = std::getenv("SEQUANT_DUMP_DM");
-          dh && (nd->hash_value() % 100000u) == std::strtoul(dh, nullptr, 10))
-        std::cerr << "[dm] out h=" << (nd->hash_value() % 100000u)
-                  << " block(axis=" << toUtf8(block.axis.full_label())
-                  << " depth=" << block.level.depth
-                  << " slot=" << block.level.loop_slot
-                  << ") member_axis=" << toUtf8(mx.full_label())
-                  << " -> dm=" << (dm[k] ? std::to_string(*dm[k]) : "none")
-                  << " carried=[" <<
-            [&] {
-              std::string r;
-              for (auto const& x : nd->canon_indices())
-                r += toUtf8(x.full_label()) + " ";
-              return r;
-            }() << "]"
-                  << std::endl;
-      SEQUANT_ASSERT(dm[k] &&
-                     "evaluate_ordered_schedule: an AccumulateScatter output "
-                     "does not carry its own escape axis on its result");
-    }
+  // Cache-halt at BLOCK granularity: every production of this block (its own
+  // steps', its descendants' and its outputs') is already resident, so the
+  // whole batch loop is dead work this call. Mark the productions accounted
+  // for so the run-completeness ledger does not mistake the skip for a gap.
+  if (ordered_block_fully_skipped(registry, skip, block, parent_scope)) {
+    container::vector<std::size_t> ids;
+    collect_production_ids(block, ids);
+    for (std::size_t vid : ids)
+      if (vid < built.size()) built[vid] = 1;
+    return;
   }
 
-  // Task 7 (Pillar 1): the per-SCOPE coloring context for this block's scratch
-  // -- every value this block builds/reads (its BuildSteps and escape outputs,
-  // plus their direct operands), keyed by node hash -> home-slice coloring. The
-  // scratch is VALUE-keyed by it (make_batched_scratch recolors its member
-  // registration, and store/access recolor through it), so a sliced value in
-  // the scratch is keyed by its distinct home identity. It must OUTLIVE `bs`
-  // (the scratch holds a non-owning pointer). Empty (nothing sliced) =>
-  // byte-identical.
-  typename Cache::ValueColoringCtx scope_ctx;
-  typename Cache::CanonicalNodeCtx scope_nodes;  // hash -> canonical node
-  {
-    auto add_v = [&](std::size_t vid) {
-      if (vid >= rich.cells.size()) return;
-      auto col = ordered_value_home_coloring(ordered, vid);
-      if (!col.empty()) {
-        scope_ctx.emplace(rich.cells[vid].hash, std::move(col));
-        scope_nodes.emplace(rich.cells[vid].hash, resolve(vid));
-      }
-    };
-    auto add_with_ops = [&](std::size_t vid) {
-      add_v(vid);
-      if (auto const it = ordered.operand_vids.find(vid);
-          it != ordered.operand_vids.end())
-        for (auto const op : it->second) add_v(op);
-    };
-    for (Step const& s : block.steps)
-      if (auto const* b = std::get_if<BuildStep>(&s.value))
-        add_with_ops(b->value_id);
-    for (auto const& [ovid, okind] : block.outputs) add_with_ops(ovid);
-  }
-
-  // A block-internal homed value's home slot must EXIST (store() is a no-op
-  // for an unregistered key) with the SCHEDULED life -- its home_reads over the
-  // ordered scopes (build store + every direct-DAG-parent read, nested-block
-  // consumers included) -- NOT the scratch's within-block CSE encounter count.
-  // Map each BuildStep member's node to its home_reads life so
-  // make_batched_scratch registers it unconditionally (see the member-root
-  // registration there). Root-level BuildSteps already get this via
-  // ensure_home_slot; block-internal ones had no such call, so a homed value
-  // consumed only by a nested block (within-block count 1) or read by a
-  // co-member under a different frame's label (inconsistent signature) got no
-  // slot and every consumer missed.
-
-  // The value_ids this block BUILDS with a step of its own -- needed twice
-  // below: a value that is both built here and listed among this block's
-  // outputs (a member materialized across a forced loop split) is a real
-  // scratch member whose per-batch cell the close read consumes.
+  // The value_ids this block BUILDS with a step of its own: an output whose
+  // per-batch source cell is a Build at THIS scope that no step builds is an
+  // IMPLICIT per-batch build (the schedule fuses the reduction/scatter with an
+  // operand contraction, so it emits no BuildStep of its own) and is evaluated
+  // by the Assemble step itself.
   std::unordered_set<std::size_t> built_here;
   for (Step const& s : block.steps)
     if (auto const* b = std::get_if<BuildStep>(&s.value))
       built_here.insert(b->value_id);
 
-  // The value_ids a DIRECT child block of this one escapes: for those, this
-  // block's own escape is the next link of a chain, and the link's input is
-  // the result the child just closed (\c value_results), not an operand read.
-  // Taking it from there rather than re-resolving the node through the cache
-  // keeps the outer link from resolving the value AS ITS OWN consumer, for
-  // which the schedule records no slice fact.
-  std::unordered_set<std::size_t> escaped_by_child;
-  for (Step const& s : block.steps)
-    if (auto const* c = std::get_if<ScopeBlock>(&s.value))
-      for (auto const& [ovid, okind] : c->outputs) {
-        (void)okind;
-        escaped_by_child.insert(ovid);
-      }
-
-  std::function<std::size_t(node_t const&)> member_life;
-  if (home_reads) {
-    std::unordered_map<std::size_t, std::size_t> life_by_hash;
-    for (Step const& s : block.steps)
-      if (auto const* b = std::get_if<BuildStep>(&s.value)) {
-        node_t const& nd = resolve(b->value_id);
-        if (!nd.leaf())
-          // A block-member BuildStep's home key never matches an
-          // intermediate-escape cell -- pass the block's own scope; home_reads
-          // falls through to the collapsed count. A member that is ALSO an
-          // output of this block needs no extra life for its close: the close
-          // reuses the step's own result (escaped_build_results) rather than
-          // reading the scratch again.
-          life_by_hash[nd->hash_value()] =
-              home_reads(b->value_id, HomeScopeKey{});
-      }
-    member_life =
-        [lh = std::move(life_by_hash)](node_t const& n) -> std::size_t {
-      auto const it = lh.find(n->hash_value());
-      return it == lh.end() ? std::size_t{0} : it->second;
-    };
+  // This block's ASSEMBLE steps: one cell per output entry, at the parent
+  // scope, resolved once (a miss is a table/schedule disagreement, which must
+  // be loud before any batch runs rather than half way through the loop).
+  container::vector<CellId> out_cells(block.outputs.size(), 0);
+  container::vector<char> out_skip(block.outputs.size(), 0);
+  for (std::size_t k = 0; k != block.outputs.size(); ++k) {
+    auto const vid = block.outputs[k].first;
+    SEQUANT_ASSERT((block.outputs[k].second == OutputKind::AccumulateSum ||
+                    block.outputs[k].second == OutputKind::AccumulateScatter) &&
+                   "evaluate_ordered_schedule: unsupported escape OutputKind");
+    auto const a = registry.assemble_cell_at(vid, parent_scope);
+    if (!a)
+      throw Exception(
+          "evaluate_ordered_schedule: no Assemble cell for escaping value " +
+          std::to_string(vid) +
+          " at the parent scope (cell table/schedule disagreement), block "
+          "depth " +
+          std::to_string(block.level.depth) + " slot " +
+          std::to_string(block.level.loop_slot));
+    out_cells[k] = *a;
+    // Skip this Assemble step when the cache-halt set covers its cell, and
+    // ALSO when the cell is `produce_if_absent` and the registry already
+    // holds it: such a cell is invariant to the loop its scope sits inside
+    // (this block's parent loop), so the enclosing loop's later batches
+    // re-enter this block and must REUSE the assembled value rather than
+    // assemble it a second time (the Build step's rule below, applied to the
+    // other production kind -- spec section 4 item 2).
+    out_skip[k] = skip[*a] || (table->cells[*a].produce_if_absent &&
+                               registry.peek(*a) != nullptr);
   }
 
-  // This block's ESCAPE OUTPUT hashes: they are homed at block CLOSE (one level
-  // out), NOT built into the scratch each batch, so make_batched_scratch must
-  // not give them a scratch slot (an empty slot the assembly probes then falls
-  // through to the value's real home, draining it -- the 75735 class of crash).
-  std::unordered_set<std::size_t> escape_output_hashes;
-  for (auto const& [ovid, okind] : block.outputs) {
-    (void)okind;
-    // ... unless this block also BUILDS it: then the value is an ordinary
-    // per-batch scratch member (its in-nest consumers read that cell every
-    // batch) that additionally escapes. Denying it a slot would make the
-    // BuildStep's store a no-op and every in-nest read miss.
-    if (built_here.count(ovid)) continue;
-    escape_output_hashes.insert(rich.cells[ovid].hash);
-  }
-  auto bs = [&]() {
-    PhaseTimer::Scope _pt("A.make_scratch");
-    return sequant::detail::make_batched_scratch(
-        members, parent_cache, /*read_from_home=*/true,
-        scope_ctx.empty() ? nullptr : &scope_ctx, member_life,
-        &escape_output_hashes, scope_nodes.empty() ? nullptr : &scope_nodes);
-  }();
-  bs.cache.set_parent(&parent_cache);
+  // The per-block scratch: a BARE child cache. It registers nothing and
+  // stores nothing (with a resolver wired, evaluate_impl neither probes nor
+  // fills a scope cache); it carries this block's batch context and lets the
+  // backend/resolver/monitor hooks fall through to the parent chain.
+  auto bs_cache = Cache::empty();
+  bs_cache.set_parent(&parent_cache);
+  bs_cache.set_require_resident_reads(true);
 
   // Batch chunks over the loop axis, sourced per-space by the backend (no
   // carrier array is consulted).
   container::svector<std::pair<std::size_t, std::size_t>> const batches =
       aops->axis_batches(block.axis, target(block.axis));
 
-  // Loop-structure trace. The ordered executor previously emitted NO
-  // batch-execution marker (unlike scope_executor.hpp's whole-scope BatchGroup
-  // and eval.hpp's forest SCHEDULE_RUN_GROUP), so whether batching engaged was
-  // invisible. log::printing()-gated first-class marker, plus a structured
-  // SEQUANT_SCHED_DUMP line for scriptable confirmation that this path realizes
-  // batch blocks (block axis + batch count).
   if (log::printing()) {
     BatchContext s = ectx;
     s.push_back({block.axis, block.level, {0, 0}, std::nullopt});
     log::log("BatchGroup", "Begin",
-             std::format("{} members co-evaluated over {} batches of {} {}",
-                         members.size(), batches.size(),
+             std::format("{} steps over {} batches of {} {}",
+                         block.steps.size(), batches.size(),
                          toUtf8(std::wstring(block.axis.space().base_key())),
                          log::scope_annot(s)));
   }
@@ -674,161 +500,71 @@ void run_ordered_contracted_block(
                 << ",\"slot\":" << block.level.loop_slot
                 << ",\"lat\":" << block.latitude_ordinal
                 << ",\"blocks\":" << batches.size()
-                << ",\"members\":" << members.size() << ",\"outs\":[";
-      for (std::size_t k = 0; k != block.outputs.size(); ++k) {
-        auto const ovid = block.outputs[k].first;
-        std::cerr << (k ? "," : "")
-                  << "{\"h\":" << (rich.cells[ovid].hash % 100000)
-                  << ",\"reuse\":"
-                  << (int)parent_cache.resident_in_chain(value_of(ovid)) << "}";
-      }
+                << ",\"steps\":" << block.steps.size() << ",\"outs\":[";
+      for (std::size_t k = 0; k != block.outputs.size(); ++k)
+        std::cerr << (k ? "," : "") << "{\"h\":"
+                  << (rich.cells[block.outputs[k].first].hash % 100000)
+                  << ",\"cell\":" << out_cells[k]
+                  << ",\"skip\":" << (int)out_skip[k] << "}";
       std::cerr << "]}\n";
     }
   }
 
+  // Running results of this block's Assemble steps: a summed accumulator or a
+  // scattered-into destination, one per output.
   container::vector<ResultPtr> acc(block.outputs.size());
   container::vector<ResultPtr> dest(block.outputs.size());
 
-  // An escape output that is ALREADY RESIDENT at its home -- a PERSISTENT,
-  // batch-invariant output (it contracts/reduces the batch axis, so its result
-  // does not carry it) that was built in a PRIOR CC iteration and kept across
-  // cache.reset() -- must be REUSED, not re-accumulated. Re-running the batch
-  // loop for it would read its full homed value as EACH batch's "partial" (the
-  // per-batch evaluate_impl below resolves the output node from its home) and
-  // sum it N_batches-fold, corrupting the persistent entry into the next
-  // iteration. So skip such outputs here and reuse the resident value at close;
-  // the block still runs for the volatile (and first-iteration) outputs and for
-  // its loop-local Transients. On the first iteration nothing is resident yet,
-  // so every output is accumulated normally.
-  container::vector<char> reuse(block.outputs.size(), 0);
-  for (std::size_t k = 0; k != block.outputs.size(); ++k)
-    reuse[k] = parent_cache.resident_in_chain(value_of(block.outputs[k].first))
-                   ? 1
-                   : 0;
-
-  // SP4 Task 4 (final round): the block close's OWNERSHIP step. The Assemble
-  // cell this block's close produces at the parent scope declares a read of
-  // its `production.source` -- the per-batch form -- and the table charged
-  // that source +1 life for it. Three of the close's four ways of obtaining
-  // that per-batch value hand it over from somewhere other than the registry
-  // (a step's own result, a child's already-closed result, a resident home),
-  // and each of them still owes the table that read: leaving it unspent
-  // means the source's scope entry keeps holding a fully consumed buffer,
-  // which pins the memory AND makes every later reader see the value as
-  // shared -- disabling `evaluate_impl`'s in-place accumulation for exactly
-  // these values (the mechanism of the stage's wet-gate defect, section 8.4
-  // of the design). Routed through eval::table_read, the same helper
-  // CellReadResolver::fetch uses, so the two cannot drift.
-  //
-  // The release names the SOURCE's canonical node -- the same node every
-  // production site stores under -- and starts from this block's own scratch,
-  // so release_at's chain walk reaches whichever scope actually holds it,
-  // exactly as the operand-read path does from inside evaluate_impl.
-  auto spend_assemble_source = [&](std::size_t vid,
-                                   CellScope const& parent_scope) {
-    auto const assemble_cell = registry.assemble_cell_at(vid, parent_scope);
-    if (!assemble_cell) return;  // reported by the close-store site itself
-    CellId const src = registry.table().cells[*assemble_cell].production.source;
-    // A source with no current result was never produced this call -- the
-    // reuse path below is reached exactly when the batch loop did not
-    // accumulate this output at all -- so there is no life to spend and
-    // nothing holding the buffer. (A source that WAS produced always has one.)
-    if (!registry.peek(src)) return;
-    eval::TableRead const spent = eval::table_read(registry, src);
-    if (spent.exhausted) bs.cache.release_at(resolve(vid));
-    (void)spent;  // the value itself already reached the caller by hand
-  };
-
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
-    {
-      PhaseTimer::Scope _pt("C.scratch_reset");
-      bs.cache.reset();
-    }
-    // SP4 Task 4: registry-side counterpart of the scratch reset -- drop
-    // every cell bound to THIS block's own loop instance (the batch just
-    // ended), so a stale prior-batch cell is never read as this batch's.
+    // The per-batch reset, expressed on cells: drop every cell bound to THIS
+    // block's own loop instance (the batch just ended), so a stale prior-batch
+    // cell is never read as this batch's.
     registry.clear_bound_to(block.level.key());
     BatchContext ctx = ectx;
     ctx.push_back({block.axis, block.level, {e_lo, e_hi}, std::nullopt});
-    bs.cache.set_batch_context(ctx);
-
-    // This batch's results for the values this block both BUILDS and ESCAPES
-    // (the mixed-pass members of a forced loop split): the BuildStep IS the
-    // per-batch partial the escape accumulates, so the close below takes it
-    // straight from here. Re-fetching it through the cache instead would
-    // resolve the value AS ITS OWN consumer, for which the schedule records no
-    // slice fact (the seam keys facts on DAG edges) -- the fetch is not a read
-    // by another value, it is this step's own result.
-    std::unordered_map<std::size_t, ResultPtr> escaped_build_results;
+    bs_cache.set_batch_context(ctx);
 
     for (Step const& step : block.steps) {
       if (auto const* build = std::get_if<BuildStep>(&step.value)) {
-        // Cache-halt: skip a dead loop-local Transient -- one whose value is
-        // not read this iteration because its only (transitive) consumers are
-        // persistent nodes already resident in the cache. This is the SAME gate
-        // the top-level scope applies to its BuildSteps (see
-        // run_ordered_schedule_pre_results): the needed_build set is the forest
-        // BFS that halts at cache-alive nodes, so a resident composite's
-        // batch-loop prerequisites are absent from it after iteration 1 and are
-        // not re-formed. built[] is marked so the R3 completeness check
-        // accounts for the intentional skip. Without a gate (needed_build ==
-        // nullptr) the step runs unconditionally -- byte-identical to before.
-        if (needed_build &&
-            !needed_build->count(rich.cells[build->value_id].hash)) {
-          built[build->value_id] = 1;
+        // This BuildStep's own Build cell -- at this exact scope (this block,
+        // entered from ectx) -- is the consumer every operand fetch inside the
+        // evaluate_impl call below resolves against (CellReadResolver::fetch).
+        // A miss means the table and the schedule tree disagree about what
+        // this step builds.
+        auto const build_cell =
+            registry.build_cell_at(build->value_id, block_scope);
+        if (!build_cell)
+          throw Exception(
+              "evaluate_ordered_schedule: no Build cell for value " +
+              std::to_string(build->value_id) +
+              " at this scope (cell table/schedule disagreement), block "
+              "depth " +
+              std::to_string(block.level.depth) + " slot " +
+              std::to_string(block.level.loop_slot));
+        built[build->value_id] = 1;
+        if (skip[*build_cell]) continue;  // cache-halt: nothing reads it
+        // A loop-invariant cell homed inside a loop is produced on its FIRST
+        // visit and reused by every later batch (the table's own flag; the
+        // registry keeps it until an instance it IS bound to clears it).
+        if (table->cells[*build_cell].produce_if_absent &&
+            registry.peek(*build_cell))
           continue;
-        }
         if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
           std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
                     << " batch=[" << e_lo << "," << e_hi
                     << ") BUILD vid=" << build->value_id
+                    << " cell=" << *build_cell
                     << " hash=" << (rich.cells[build->value_id].hash % 100000u)
                     << std::endl;
-        node_t const& build_node = resolve(build->value_id);
-        {
-          // Task 7 (Pillar 1): the block's per-scope coloring context is
-          // already set on bs.cache (make_batched_scratch), so evaluate_impl's
-          // bare-node self-store of V and its operand fetches are colored by
-          // home identity.
-          // SP4 Task 4: this BuildStep's own Build cell -- at this exact
-          // scope (this block, entered from ectx) -- is the consumer every
-          // operand fetch inside the evaluate_impl call below resolves
-          // against (see CellReadResolver::fetch). A miss here means the
-          // table and the schedule tree disagree about what this step
-          // builds.
-          CellScope const build_scope = current_scope(ectx, block);
-          auto const build_cell =
-              registry.build_cell_at(build->value_id, build_scope);
-          if (!build_cell)
-            throw Exception(
-                "evaluate_ordered_schedule: no Build cell for value " +
-                std::to_string(build->value_id) +
-                " at this scope (cell table/schedule disagreement), block "
-                "depth " +
-                std::to_string(block.level.depth) + " slot " +
-                std::to_string(block.level.loop_slot));
-          resolver.begin_consumer(*build_cell);
-          ResultPtr r =
-              evaluate_impl<EvalTrace>(build_node, leaf_evaluator, bs.cache);
-          registry.set(*build_cell, r);
-          bool is_output = false;
-          for (auto const& [ovid, okind] : block.outputs) {
-            (void)okind;
-            if (ovid == build->value_id) is_output = true;
-          }
-          if (is_output)
-            escaped_build_results.emplace(build->value_id, std::move(r));
-        }
-        // R3: record this loop-local Transient as produced (it is built fresh
-        // every batch on the scratch and never lands in value_results, so the
-        // built ledger is the only faithful "was built" slot for it).
-        built[build->value_id] = 1;
+        resolver.begin_consumer(*build_cell);
+        registry.set(*build_cell,
+                     evaluate_impl<EvalTrace>(resolve(build->value_id),
+                                              leaf_evaluator, bs_cache));
       } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
         run_ordered_contracted_block<EvalTrace>(
-            *child, vmap, rich, ordered, leaf_evaluator, bs.cache, target, ctx,
-            value_results, built, is_volatile, n_blocks, home_reads,
-            needed_build, consumer_loops, table, registry, resolver);
+            *child, vmap, rich, ordered, leaf_evaluator, bs_cache, target, ctx,
+            built, is_volatile, table, registry, resolver, skip);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -838,411 +574,101 @@ void run_ordered_contracted_block(
       }
     }
 
+    // ---- Assemble steps: fold this batch's partial into each output. ----
     for (std::size_t k = 0; k != block.outputs.size(); ++k) {
-      if (reuse[k])
-        continue;  // resident persistent output: reuse, don't re-sum
+      if (out_skip[k]) continue;
       auto const vid = block.outputs[k].first;
-      auto const kind = block.outputs[k].second;
+      TableCell const& a = table->cells[out_cells[k]];
+      CellId const src = a.production.source;
+      TableCell const& s = table->cells[src];
       if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
         std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
-                  << " batch=[" << e_lo << "," << e_hi << ") OUTPUT vid=" << vid
-                  << " kind="
-                  << (kind == OutputKind::AccumulateSum       ? "SUM"
-                      : kind == OutputKind::AccumulateScatter ? "SCATTER"
-                                                              : "?")
+                  << " batch=[" << e_lo << "," << e_hi
+                  << ") ASSEMBLE vid=" << vid << " cell=" << out_cells[k]
+                  << " src=" << src << " kind="
+                  << (a.production.assemble == AssembleKind::Sum ? "SUM"
+                                                                 : "SCATTER")
                   << std::endl;
-      node_t const& out_eval_node = resolve(vid);
-      ResultPtr part;
-      if (auto const it = escaped_build_results.find(vid);
-          it != escaped_build_results.end()) {
-        // Built by a step of this very block this batch: that result IS the
-        // partial (see escaped_build_results). Spend the read the Assemble
-        // declares of that Build cell (see spend_assemble_source).
-        part = it->second;
-        spend_assemble_source(vid, current_scope(ectx));
-      } else if (escaped_by_child.count(vid) && value_results[vid]) {
-        // The next link of an escape chain: the partial a child block closed
-        // during THIS batch (see escaped_by_child). It is CURRENT only because
-        // a nested ScopeBlock step is never gated -- the child runs, and
-        // re-closes this output, on every batch of this block. A future
-        // cache-halt gate on CHILD BLOCKS (the BuildStep gate above already
-        // has one) would leave a stale partial here and must invalidate this
-        // branch.
-        part = value_results[vid];
-        // The Assemble's declared read of the child's cell (the sibling of
-        // the registry.read the level-skipping branch below performs).
-        spend_assemble_source(vid, current_scope(ectx));
-        if (std::getenv("SEQUANT_UT_BLOCK_DIAG"))
-          std::cerr << "[BLOCK] axis=" << toUtf8(block.axis.full_label())
-                    << " batch=[" << e_lo << "," << e_hi
-                    << ") CHAIN-LINK from child close vid=" << vid << std::endl;
-      } else if (built_here.count(vid)) {
-        // This block BUILDS the value (a member materialized across a forced
-        // loop split) yet neither gate produced its partial. Normally
-        // unreachable, via a DIFFERENT and INDEPENDENT gate: reuse[k] above
-        // short-circuits the whole batch loop for an output already resident
-        // at its home, so this point is reached only for an output that IS
-        // being accumulated this batch, and the needed_build cache-halt that
-        // can skip a BuildStep applies to a value whose consumers are all
-        // resident -- which is exactly the reuse[k] case. Should the two ever
-        // disagree, falling through to evaluate_impl would resolve the value
-        // AS ITS OWN consumer, for which the schedule records no slice fact;
-        // fail loudly instead of fetching something the schedule never
-        // described.
-        throw Exception(
-            "evaluate_ordered_schedule: a block that BUILDS an escaping value "
-            "produced no partial for it at close (value " +
-            std::to_string(vid) + ", block depth " +
-            std::to_string(block.level.depth) + " slot " +
-            std::to_string(block.level.loop_slot) + " latitude " +
-            std::to_string(block.latitude_ordinal) + ", batch [" +
-            std::to_string(e_lo) + "," + std::to_string(e_hi) +
-            ")) -- its BuildStep did not run this batch");
-      } else {
-        // Task 7 (Pillar 1): the block's per-scope coloring context is already
-        // set on bs.cache, coloring this escape output's self-store + operands.
-        // SP4 Task 4 fix1: the value's form visible at THIS block's own
-        // scope, found by RESIDENCY (CellRegistry::cell_of), not exact
-        // scope equality -- a Build cell exactly here (the genuine implicit
-        // per-batch Build, cell_table_builder.hpp's emit_build_cell !found
-        // branch) is built fresh via evaluate_impl; an Assemble cell whose
-        // residency reaches this scope (a level-skipping escape: a
-        // descendant's close, earlier in this very batch's step loop,
-        // already recorded it -- Task 2's escaped_by_child handoff covers
-        // the direct-child case above, this covers the rest) is consumed
-        // directly, no fresh evaluation. Throws (naming the value and this
-        // scope) when neither exists: a genuine table/schedule
-        // disagreement.
-        CellScope const out_scope = current_scope(ectx, block);
-        auto const out_cell = registry.cell_of(vid, out_scope);
-        if (!out_cell)
-          throw Exception(
-              "evaluate_ordered_schedule: no form of escaping value " +
-              std::to_string(vid) +
-              " visible at this scope (cell table/schedule disagreement), "
-              "block depth " +
-              std::to_string(block.level.depth) + " slot " +
-              std::to_string(block.level.loop_slot));
-        if (registry.table().cells[*out_cell].production.kind ==
-            ProductionKind::Build) {
-          resolver.begin_consumer(*out_cell);
-          part =
-              evaluate_impl<EvalTrace>(out_eval_node, leaf_evaluator, bs.cache);
-          registry.set(*out_cell, part);
-        } else {
-          // Assemble: a descendant's close already recorded this value this
-          // batch; consume it as this block's own per-batch use (the +1
-          // life the table's chain rule already budgets for this
-          // Assemble-to-Assemble link).
-          part = registry.read(*out_cell);
-        }
+      // An IMPLICIT per-batch build: the source is this value's own Build cell
+      // at this block's scope, but no step of this block builds it (the
+      // schedule fuses the reduction/scatter with an operand contraction, so
+      // it emits no BuildStep). Produce it here, as its own consumer's step
+      // would have.
+      if (s.production.kind == ProductionKind::Build &&
+          s.scope == block_scope && !built_here.count(vid)) {
+        resolver.begin_consumer(src);
+        registry.set(src, evaluate_impl<EvalTrace>(resolve(vid), leaf_evaluator,
+                                                   bs_cache));
       }
-      if (kind == OutputKind::AccumulateSum) {
-        if (!acc[k])
-          acc[k] = std::move(part);
-        else
+      // The read the Assemble DECLARES of its source (the table charged the
+      // source +1 life for it): spending it here is what lets the source's
+      // storage be released at its true last use.
+      bool exhausted = false;
+      ResultPtr part = registry.read(src, &exhausted);
+      if (a.production.assemble == AssembleKind::Sum) {
+        if (!acc[k]) {
+          // The first batch's partial SEEDS the accumulator, which every later
+          // batch then mutates in place. That is only safe when this read took
+          // ownership: a source with life left, or a persistent one, is still
+          // going to be read again from the very same buffer.
+          acc[k] = exhausted ? std::move(part) : part->clone();
+        } else {
           acc[k]->add_inplace(*part);
-      } else if (kind == OutputKind::AccumulateScatter) {
-        // The full-extent zero destination is shaped by the node's own
-        // (unsliced) index list; the backend realizes it from the spaces alone
-        // -- no carrier, no Result-type reconciliation.
+        }
+      } else {
         if (!dest[k]) {
+          // The destination is sized from the ASSEMBLE CELL'S OWN FORM: the
+          // value's full index list, narrowed to the current batch of every
+          // loop instance the cell itself is sliced by (its enclosing loops --
+          // the instance being assembled is in the scatter map, not here). No
+          // inference from the escaped axis's position on the node.
           dest[k] = aops->make_zeros(resolve(vid)->canon_indices());
-          // A multi-level scatter's INNER destination lives inside the
-          // enclosing batches, so size it to the enclosing loops' CURRENT
-          // slices on the modes the value carries there (identity: the
-          // per-position fusion loop_slot equals the enclosing loop's slot).
-          // make_zeros sizes every mode at regime, which is right only for a
-          // root-level (single-level) scatter; an inner partial left at regime
-          // on an enclosing batched mode is then scattered by the OUTER level
-          // expecting that batch's extent -> block_extent mismatch (and, in a
-          // wet backend, an over-allocated destination). A value carrying no
-          // enclosing batched mode is untouched (byte-identical).
-          ValueCell const& c = rich.cells[vid];
-          for (auto const& lvl : ectx) {
-            std::wstring const lspace{lvl.axis.space().base_key()};
-            for (std::size_t p = 0; p < c.carried.size(); ++p) {
-              if (std::wstring(c.carried[p].space().base_key()) != lspace)
-                continue;
-              bool hit = false;
-              for (OccurrenceRec const& occ : c.occurrences)
-                if (p < occ.loop_slot.size() &&
-                    occ.loop_slot[p] == lvl.level.loop_slot) {
-                  hit = true;
-                  break;
-                }
-              if (!hit) continue;
-              dest[k] =
-                  dest[k]->slice_mode(p, lvl.range.first, lvl.range.second);
-              break;
-            }
+          for (auto const& [pos, key] : a.sliced) {
+            auto const range = ordered_range_of(ctx, key);
+            if (!range)
+              throw Exception("evaluate_ordered_schedule: Assemble cell#" +
+                              std::to_string(out_cells[k]) + " (value " +
+                              std::to_string(vid) + ") slices position " +
+                              std::to_string(pos) +
+                              " on a loop instance not in the batch context");
+            dest[k] = dest[k]->slice_mode(pos, range->first, range->second);
           }
         }
-        dest[k]->write_into_slice(*part, *dm[k], e_lo, e_hi);
-      } else {
-        // R4: an escape output is AccumulateSum or AccumulateScatter (a
-        // Transient never appears in outputs -- see OutputKind's doc comment);
-        // any other kind is a construct this batch fold cannot realize.
-        SEQUANT_ASSERT(false &&
-                       "evaluate_ordered_schedule: unsupported escape "
-                       "OutputKind in batch fold");
+        if (a.production.scatter_map.empty())
+          throw Exception("evaluate_ordered_schedule: Assemble cell#" +
+                          std::to_string(out_cells[k]) + " (value " +
+                          std::to_string(vid) + ") scatters nothing");
+        for (auto const& [pos, key] : a.production.scatter_map) {
+          auto const range = ordered_range_of(ctx, key);
+          if (!range)
+            throw Exception("evaluate_ordered_schedule: Assemble cell#" +
+                            std::to_string(out_cells[k]) + " (value " +
+                            std::to_string(vid) + ") scatters position " +
+                            std::to_string(pos) +
+                            " from a loop instance not in the batch context");
+          dest[k]->write_into_slice(*part, pos, range->first, range->second);
+        }
       }
     }
   }
 
+  // ---- Block close: each Assemble step's running result IS its cell. ----
   for (std::size_t k = 0; k != block.outputs.size(); ++k) {
     auto const vid = block.outputs[k].first;
-    auto const kind = block.outputs[k].second;
-    // Resident persistent output (see the reuse note above): reuse its home
-    // value untouched -- it survives reset() and is invariant across CC
-    // iterations -- rather than re-home/re-store it. It was NOT re-accumulated
-    // in the loop, so acc[k]/dest[k] are null here.
-    if (reuse[k]) {
-      // Reuse the resident home value UNTOUCHED: peek (non-decrementing), never
-      // access() -- spending a life here drains the entry meant for the value's
-      // genuine consumers (an invariant escape re-visited each enclosing-loop
-      // batch would otherwise burn its whole life on reuse and vanish before
-      // its real reader).
-      value_results[vid] = parent_cache.peek_at(value_of(vid));
-      if (!value_results[vid])
-        throw Exception(
-            "evaluate_ordered_schedule: a resident output vanished from its "
-            "home before block close (premature eviction / under-predicted use "
-            "count in ordered_home_reads)");
-      // SP4 Task 4: record this reused (not re-accumulated) output's Assemble
-      // cell from the SAME peeked pointer, at the parent scope -- mirroring
-      // the genuine close-store site below.
-      {
-        CellScope const parent_scope = current_scope(ectx);
-        auto const assemble_cell = registry.assemble_cell_at(vid, parent_scope);
-        if (!assemble_cell)
-          throw Exception(
-              "evaluate_ordered_schedule: no Assemble cell for reused "
-              "escaping value " +
-              std::to_string(vid) +
-              " at the parent scope (cell table/schedule disagreement), "
-              "block depth " +
-              std::to_string(block.level.depth) + " slot " +
-              std::to_string(block.level.loop_slot));
-        registry.set(*assemble_cell, value_results[vid]);
-      }
-      // The Assemble's declared read of its source, like every other close
-      // (a no-op when the batch loop produced no per-batch form for this
-      // reused output, which is the usual case here).
-      spend_assemble_source(vid, current_scope(ectx));
-      built[vid] = 1;
-      continue;
-    }
-    // R4: exhaustive on OutputKind before selecting the running result to home.
-    SEQUANT_ASSERT((kind == OutputKind::AccumulateSum ||
-                    kind == OutputKind::AccumulateScatter) &&
-                   "evaluate_ordered_schedule: unsupported escape OutputKind "
-                   "at block close");
-    ResultPtr& out = (kind == OutputKind::AccumulateSum) ? acc[k] : dest[k];
+    built[vid] = 1;
+    if (out_skip[k]) continue;  // cache-halt: the resident cell stands
+    ResultPtr& out =
+        table->cells[out_cells[k]].production.assemble == AssembleKind::Sum
+            ? acc[k]
+            : dest[k];
     SEQUANT_ASSERT(out &&
                    "evaluate_ordered_schedule: a loop block realized zero "
-                   "batches for an escape output");
-    value_results[vid] = out;
-    built[vid] = 1;  // R3: this escape output is produced (homed below).
-    // Home the closed output at the scope one level OUT with a RESIDENT slot
-    // so a later step there reads it WHOLE (via the ordinary Checked probe)
-    // instead of re-descending and rebuilding it -- for an AccumulateSum
-    // reduction that means rebuilding the FULL un-batched contraction (the
-    // very peak this loop batched away). store() is a no-op on an unregistered
-    // key, so without homing the output first, a consumer used only once (not
-    // a CSE candidate) would silently recompute it.
-    node_t const& out_node = resolve(vid);
-    // Layer 1 (residency-driven escape homing): the mechanical home is "one
-    // level OUT" (`parent_cache`, the innermost enclosing scope `ectx`). But an
-    // escape output INVARIANT to an enclosing loop -- its mode is absent from
-    // `sliced_modes` -- belongs SHALLOWER, at its residency home: homing it at
-    // `parent_cache` strands it inside a loop it does not vary with, so a
-    // consumer at the residency scope reads its home once that loop has closed
-    // and finds it gone (the w20 "vanished home value").
-    //
-    // Walk `parent_cache` OUT to the residency home, deciding per ACTUAL
-    // runtime cache level rather than a schedule-derived hop count:
-    // `parent_cache`'s `batch_context()` is `ectx`, and each `parent()` hop
-    // drops the innermost enclosing loop, so a nest-depth shift (a single-batch
-    // sliced mode the runtime did not realize as a loop) cannot desync a count.
-    // Stop as soon as the value is SLICED on the loop this cache sits directly
-    // inside (its residency floor), or at the chain root. A value sliced on the
-    // innermost enclosing loop stops immediately => byte-identical
-    // one-level-out; a value invariant to every enclosing loop homes at the
-    // chain root. The passthrough is a SCHEDULED home, not runtime motion: the
-    // invariant value is identical across the skipped loops' batches (each
-    // batch re-homes the same value), so the outermost store wins.
-    // ONE truth for "sliced on this loop" (residency + fusion slot), used by
-    // the home walk AND the per-batch persistence decision below.
-    ValueCell const& cell = rich.cells[vid];
-    auto sliced_on_level = [&](DagScopeLevel const& level) {
-      if (out_node.leaf()) return false;
-      auto const& sm = out_node->sliced_modes();
-      auto const& canon = out_node->canon_indices();
-      for (std::size_t p = 0; p < canon.size() && p < cell.carried.size();
-           ++p) {
-        if (std::find(sm.begin(), sm.end(), canon[p]) == sm.end()) continue;
-        if (std::wstring(cell.carried[p].space().base_key()) != level.space)
-          continue;
-        for (auto const& occ : cell.occurrences)
-          if (p < occ.loop_slot.size() && occ.loop_slot[p] == level.loop_slot)
-            return true;
-      }
-      return false;
-    };
-    Cache* home_cache = &parent_cache;
-    if (!out_node.leaf()) {
-      // IDENTITY-based (2026-09-02): "sliced on the loop this cache sits in"
-      // is decided by the loop's COLOR against the value's home coloring, not
-      // by the loop's canonical axis LABEL (every i-loop is labeled i_1 --
-      // a label test stopped the walk at the innermost same-space loop and
-      // homed a value below its only consumer; see the schedule-side walk).
-      // The value's RESIDENCY (sliced_modes: every mode it is sliced on,
-      // INCLUDING the loops it opens itself as a scatter root -- home_modes /
-      // home_mode_depth EXCLUDE those and would send a multi-level escape's
-      // inner partial to the root, colliding across outer batches) mapped to
-      // loop identity by the occurrence's per-position fusion slot.
-      // Loops that a CONSUMER of this value reads it inside (by loop color).
-      // Relocating the value ABOVE such a loop would strand that in-loop
-      // consumer: it reads the value from the shallower home WITHOUT the loop's
-      // batch context, so a full (un-sliced) value meets a loop-sliced
-      // contraction and the shapes mismatch (the wet is_range_set_congruent /
-      // dry write_into_slice crash). So the value's home may rise only through
-      // loops it is BOTH invariant to AND has no consumer inside -- exactly the
-      // w20 root-consumer case; a value whose consumers live in the loop (the
-      // w8 case) stays one level out, where the seam already slices its reads.
-      container::set<std::size_t> const* cl = nullptr;
-      if (consumer_loops) {
-        auto const it = consumer_loops->find(vid);
-        if (it != consumer_loops->end()) cl = &it->second;
-      }
-      for (;;) {
-        auto const& ctx = home_cache->batch_context();
-        if (ctx.empty()) break;  // at the chain root
-        if (sliced_on_level(ctx.back().level))
-          break;  // sliced on the loop this cache sits directly inside
-        if (cl && cl->count(ctx.back().level.key().color()))
-          break;  // a consumer reads it inside => stay
-        Cache* const up = home_cache->parent();
-        if (!up) break;  // chain root reached (short chain)
-        home_cache = up;
-      }
-    }
-    // The residency home's own enclosing loops (this cache's context), used to
-    // key the escape's use-count at the scope where it is actually homed/read.
-    auto const& home_ectx = home_cache->batch_context();
-    // Task 4: classify this homed escape output volatile-vs-persistent and set
-    // its cache life. A subtree carrying a volatile leaf (is_volatile) is
-    // NON-persistent -- released at its genuine last use (home_reads: the exact
-    // number of times its home entry is accessed under read-from-home, from the
-    // ordered schedule's realized scopes) rather than pinned resident; a
-    // persistent (invariant) composite survives reset() and is built once, its
-    // life ignored by the overload. With no volatility policy (is_volatile
-    // empty) fall back to the unconditional resident pin, the pre-Task-4
-    // behavior.
-    if (!out_node.leaf()) {
-      if (is_volatile) {
-        bool const vol = subtree_any(out_node, is_volatile);
-        // Per-cell home key at the RESIDENCY home scope (`home_ectx` = the home
-        // cache's own enclosing loops), NOT the full one-level-out `ectx`: a
-        // value walked OUT to a shallower home is read there, so its (depth,
-        // slot, latitude) signature -- which selects THIS cell's use count --
-        // must name the loops enclosing that home. A value homed one-level-out
-        // (not walked) has home_ectx == ectx, unchanged.
-        HomeScopeKey esc_home_key;
-        for (auto const& lvl : home_ectx)
-          esc_home_key.push_back({lvl.level.depth, lvl.level.loop_slot,
-                                  lvl.level.latitude_ordinal});
-        std::size_t const life = home_reads ? home_reads(vid, esc_home_key) : 1;
-        if (char const* dh = std::getenv("SEQUANT_DUMP_ESCAPE_HOME");
-            dh && (out_node->hash_value() % 100000u) ==
-                      std::strtoul(dh, nullptr, 10)) {
-          std::cerr << "[esc-home] hash=" << (out_node->hash_value() % 100000u)
-                    << " life=" << life << " vol=" << (int)vol << " kind="
-                    << (kind == OutputKind::AccumulateSum ? "SUM" : "SCATTER")
-                    << " block(depth=" << block.level.depth
-                    << " slot=" << block.level.loop_slot
-                    << " lat=" << block.latitude_ordinal
-                    << ") ectx.size=" << ectx.size()
-                    << " home_ectx.size=" << home_ectx.size() << std::endl;
-        }
-        // (the [esc-home] dump above prints before the classification; the
-        // per-batch decision is visible via SEQUANT_SCHED_DUMP's reuse flag)
-        // A value SLICED ON THE LOOP IT IS HOMED IN (its home coloring names
-        // the home cache's own loop) is a PER-BATCH cell: it must not survive
-        // that loop's per-batch reset(), else the next batch finds the
-        // previous batch's slice resident (resident_in_chain) and reuses it
-        // stale -- an i_1=[8,24) slice contracted against [24,40) partners
-        // (w8: TA einsum a[k]==b[k] / is_range_set_congruent, a Release
-        // deadlock). Persistence (survive reset() across CC iterations) is
-        // only for a value INVARIANT to its home loop -- the case the reuse
-        // path was written for.
-        auto const home_key = value_of(vid);
-        // SINGLE TRUTH: "sliced on the loop this cache sits in" is the
-        // residency+slot oracle used by the home walk above (sliced_on_level),
-        // NOT the key coloring -- the coloring names only LoopLocal loops
-        // (an escape's assembled form is unsliced on the loops it escapes),
-        // so a multi-level escape's INNER partial, sliced on the enclosing
-        // outer loop, has no color for it and would be classified persistent,
-        // survive the outer scratch's reset, and be scattered stale into the
-        // next outer batch (strict walk: block lobound 0 into slice 16).
-        bool const sliced_on_home_loop =
-            !home_ectx.empty() && sliced_on_level(home_ectx.back().level);
-        bool const persistent = !vol && !sliced_on_home_loop;
-        home_cache->ensure_home_slot(home_key, life, persistent);
-      } else {
-        home_cache->ensure_home_slot(value_of(vid));
-      }
-    }
-    // (a) key instrumentation: the coloring this store keys under, so a
-    // store-vs-read key mismatch (a value-id split across slots) is visible.
-    if (char const* dh = std::getenv("SEQUANT_DUMP_KEY");
-        dh &&
-        (out_node->hash_value() % 100000u) == std::strtoul(dh, nullptr, 10)) {
-      auto const full_col = ordered_value_home_coloring(ordered, vid);
-      auto const key = value_of(vid);  // FILTERED (scope-consistent) coloring
-      std::cerr << "[store-key] hash=" << (out_node->hash_value() % 100000u)
-                << " block(depth=" << block.level.depth
-                << " slot=" << block.level.loop_slot
-                << ") ectx.size=" << ectx.size() << " ectx_depths={";
-      for (auto const& lvl : ectx) std::cerr << lvl.level.depth << " ";
-      std::cerr << "} full_modes={";
-      for (auto const& m : full_col.ctx_modes)
-        std::cerr << toUtf8(m.full_label()) << " ";
-      std::cerr << "} filtered_modes={";
-      for (auto const& m : key.coloring.ctx_modes)
-        std::cerr << toUtf8(m.full_label()) << " ";
-      std::cerr << "}" << std::endl;
-    }
-    ResultPtr const stored = home_cache->store(value_of(vid), std::move(out));
-    // SP4 Task 4: this output's Assemble cell -- at the PARENT scope (one
-    // level out from `block`, i.e. current_scope(ectx) without this block's
-    // own entry; this is the table's DECLARED scope for the cell regardless
-    // of which scope `home_cache` actually walked to -- see
-    // cell_table.hpp's residency_scope doc on why the two may legitimately
-    // differ) -- recorded from the SAME pointer just homed above.
-    {
-      CellScope const parent_scope = current_scope(ectx);
-      auto const assemble_cell = registry.assemble_cell_at(vid, parent_scope);
-      if (!assemble_cell)
-        throw Exception(
-            "evaluate_ordered_schedule: no Assemble cell for escaping value " +
-            std::to_string(vid) +
-            " at the parent scope (cell table/schedule disagreement), block "
-            "depth " +
-            std::to_string(block.level.depth) + " slot " +
-            std::to_string(block.level.loop_slot));
-      registry.set(*assemble_cell, stored);
-    }
-    // Escape-output homing stores directly through CacheManager::store (not
-    // evaluate_impl's store_after path), so without this it would land in the
-    // top-level cache with NO Cache|... trace line -- making a homed value look
-    // like it was never stored. Emit the same structured event here so a homed
-    // escape output is visible in the trace like any other cache store.
+                   "batches for an Assemble step");
+    registry.set(out_cells[k], std::move(out));
     if constexpr (::sequant::detail::trace(EvalTrace))
-      log::cache(
-          out_node, parent_cache,
-          log::label(out_node, parent_cache.batch_context()) + " [homed]");
+      log::cache(resolve(vid), parent_cache,
+                 log::label(resolve(vid), parent_cache.batch_context()) +
+                     " [assembled]");
   }
 }
 
@@ -1319,8 +745,8 @@ CellTableInputs make_cell_table_inputs(OrderedSchedule const& ordered,
 /// \c combine_forest_roots expects, computed but NOT yet consumed by it. Pure
 /// extraction of \c evaluate_ordered_schedule's original body (SP3 Tasks 1-4
 /// through the original's own \c pre_results loop): no upstream logic
-/// (schedule walk, \c ordered_n_blocks, \c ordered_home_reads, the
-/// run-completeness assert) is touched -- see this file's own \note on why a
+/// (schedule walk, cell table derivation, the run-completeness assert) is
+/// touched -- see this file's own \note on why a
 /// concatenated multi-root forest gets cross-root CSE for free from
 /// \c compute_dag_boulevard's hash-keyed \c ValueCell bucketing (built
 /// upstream of this function, in \p rich) with NO new dedup logic needed
@@ -1348,8 +774,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
-        is_volatile = {},
-    std::function<std::size_t(std::size_t)> const& home_life_override = {}) {
+        is_volatile = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
   static_assert(std::is_same_v<node_t, N>,
                 "the forest's node type and the cache's node type must match");
@@ -1421,24 +846,21 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // (its value_id); a hash absent from this map is not a value of the table
   // (a transient of some production tree), which CellReadResolver::fetch
   // reports as nullopt rather than mis-resolving.
-  CellRegistry registry(cell_table);
-  // SP4 Task 4 fix1 item 2: seed the registry from the top-level cache for
-  // every table cell the table marks persistent -- a value that survives
-  // cache reset() across CC iterations may already be resident from a PRIOR
-  // call; this registry (rebuilt fresh every call) otherwise has no record
-  // of that, which would make CellReadResolver::fetch's strict throw fire on
-  // a value the cache-halt gate (needed_build) correctly skipped rebuilding
-  // this call. A persistent TableCell is, by its own definition, bound to no
-  // loop instance (detail::bound_instances empty), so its home coloring is
-  // trivially the plain (uncolored) node key -- peek_at with a bare node
-  // implicitly converts to that key, the same key the reuse[k] site's
-  // (scope-filtered, degenerately empty at an unbound value) value_of would
-  // compute.
-  for (CellId c = 0; c < cell_table.cells.size(); ++c) {
-    if (!cell_table.cells[c].persistent) continue;
-    if (auto p = cache.peek_at(resolve(cell_table.cells[c].value_id)))
-      registry.set(c, p);
-  }
+  //
+  // Stage 3: the registry OWNS every result, and it is wired to the cache
+  // handle's cross-call PersistentValueStore -- it publishes a persistent
+  // cell there on every production and seeds itself from it at entry, so a
+  // value that survives between repeated evaluations of this schedule (e.g.
+  // successive iterations of an iterative solver) comes back without any
+  // scope cache having to hold it. The store is keyed by the canonical hash
+  // every value id resolves to.
+  CellRegistryHooks registry_hooks;
+  registry_hooks.persistent = &cache.persistent_values();
+  registry_hooks.hash_of = [&rich](std::size_t vid) -> std::size_t {
+    return rich.cells[vid].hash;
+  };
+  CellRegistry registry(cell_table, std::move(registry_hooks));
+  registry.seed_persistent();
   std::unordered_map<std::size_t, std::size_t> const cell_vid_of_hash = [&] {
     std::unordered_map<std::size_t, std::size_t> m;
     m.reserve(rich.cells.size());
@@ -1469,15 +891,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // function does), so a live cell's reported hash matches the hash every
   // other liveset/coloring probe in this file already keys by.
   //
-  // Double-counting guard (temporary, until the stage that removes the
-  // legacy scope caches entirely): a table cell homed via ensure_home_slot
-  // (e.g. a root-scope composite read by more than one block) is held by
-  // BOTH this registry's own slot AND a legacy cache_map_ entry at the same
-  // time -- the two have not been unified yet. Counting the registry's
-  // bytes unconditionally would double the memory those values already
-  // contribute via current_residency()'s walk of cache_map_, so a live
-  // cell's bytes are only added here when NO alive legacy entry anywhere on
-  // the chain holds that same buffer by pointer identity (cache.chain_holds,
+  // Double-counting guard (kept until the stage that removes the legacy
+  // scope caches entirely): the table-driven path stores nothing in a scope
+  // cache any more, but a caller's own cache handle may still hold a buffer
+  // this registry also holds (e.g. a value the caller stored itself before
+  // the run). Counting the registry's bytes unconditionally would double the
+  // memory those values already contribute via current_residency()'s walk of
+  // cache_map_, so a live cell's bytes are only added here when NO alive
+  // legacy entry anywhere on the chain holds that same buffer by pointer
+  // identity (cache.chain_holds,
   // read-only -- unlike chain_holds_shared it decays no lifetime and does
   // not care whether the legacy entry is shared).
   auto const cell_hash = [&](CellId c) -> std::size_t {
@@ -1509,160 +931,47 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         });
       });
 
-  // Task 4: the block-count function over the WHOLE ScopeBlock tree, built
-  // ONCE here (Task 2's ordered_n_blocks) and threaded through the homing
-  // sites -- both the root-composite site below and, via
-  // run_ordered_contracted_block's recursion, every escape-output site. It
-  // feeds home_reads (the per-batch loop factors) below. Cheap and
-  // side-effect-free (it just sizes each realized loop axis's mode_batches
-  // once).
-  std::function<std::size_t(Index const&)> const n_blocks = [&]() {
+  // Stage 3 cache-halt: the skip set over CELLS, computed once here from the
+  // table's own dependency edges against what the registry already holds
+  // after the persistent seeding above (see ordered_cache_halt_skip). It
+  // replaces the forest BFS over the legacy cache's alive entries: a
+  // persistent cell that survived the previous evaluation is not re-produced,
+  // and neither is any cell whose every consumer is itself skipped.
+  container::vector<char> const skip = [&]() {
     PhaseTimer::Scope _pt("B.sched_setup");
-    return ordered_n_blocks<node_t>(ordered, rich, vmap, leaf_evaluator, target,
-                                    cache.array_ops());
+    return ordered_cache_halt_skip(cell_table, registry);
   }();
-
-  // Task 4: the EXACT home use-count for each homed value under read-from-home,
-  // computed ONCE from the ordered schedule's realized scopes + the DAG (with
-  // multiplicity) -- see detail::ordered_home_reads. This is the non-persistent
-  // life of a volatile homed value: it frees at its genuine last use instead
-  // of being pinned resident. A test may inject home_life_override (a
-  // non-evicting life) to MEASURE the actual home reads and assert them equal
-  // to home_reads -- the "predicted == measured" gate.
-  // Per-cell home use-count (vid + home-scope key). A test's home_life_override
-  // is the legacy 1-arg (vid-only) form -- wrap it to ignore the home key so a
-  // MEASURE test keeps injecting a non-evicting life per value.
-  std::function<std::size_t(std::size_t, HomeScopeKey const&)> const
-      home_reads =
-          home_life_override
-              ? std::function<std::size_t(std::size_t, HomeScopeKey const&)>(
-                    [ov = home_life_override](
-                        std::size_t vid, HomeScopeKey const&) -> std::size_t {
-                      return ov(vid);
-                    })
-              : [&]() {
-                  PhaseTimer::Scope _pt("B.sched_setup");
-                  return ordered_home_reads<node_t>(ordered, rich, vmap,
-                                                    n_blocks);
-                }();
-
-  // Consumer-loop map for residency-driven escape homing (consumed by
-  // run_ordered_contracted_block's close-store walk): for each value, the loop
-  // COLORS that a CONSUMER reads it inside. An escape output's home may rise
-  // above a loop only when NO consumer reads it inside that loop -- else the
-  // relocated (shallower, un-sliced) value meets a loop-sliced use and the
-  // shapes mismatch. `build_scope` is exactly the loops a value's operands are
-  // read inside; a value V's consumers are its DAG parents W, so V is read
-  // inside every loop of build_scope[W].
-  std::unordered_map<std::size_t, container::set<std::size_t>> consumer_loops;
-  {
-    std::unordered_map<std::size_t,
-                       container::svector<detail::ScopeBlockAxisLevel>>
-        build_scope;
-    detail::populate_build_scope_walk(ordered.root, {}, build_scope);
-    std::unordered_map<std::size_t, std::size_t> vid_of_hash;
-    vid_of_hash.reserve(rich.cells.size());
-    for (ValueCell const& c : rich.cells)
-      vid_of_hash.emplace(c.hash, c.value_id);
-    for (ValueCell const& wc : rich.cells) {
-      auto const wit = vmap.find(wc.hash);
-      if (wit == vmap.end() || wit->second.leaf()) continue;
-      auto const bs_it = build_scope.find(wc.value_id);
-      if (bs_it == build_scope.end()) continue;
-      auto const add_child = [&](node_t const& child) {
-        auto const cv = vid_of_hash.find(child->hash_value());
-        if (cv == vid_of_hash.end()) return;
-        auto& cset = consumer_loops[cv->second];
-        for (auto const& lvl : bs_it->second)
-          cset.insert(lvl.level.key().color());
-      };
-      add_child(wit->second.left());
-      add_child(wit->second.right());
-    }
+  if (std::getenv("SEQUANT_UT_BLOCK_DIAG")) {
+    std::size_t n_skip = 0;
+    for (char const c : skip) n_skip += c ? 1 : 0;
+    std::cerr << "[cell-registry] cache-halt skips " << n_skip << " of "
+              << skip.size() << " cells" << std::endl;
   }
 
-  // Per-value results, indexed by value_id (== a ValueCell's own slot in
-  // rich.cells -- see peak_profile.hpp's ValueCell::value_id doc comment),
-  // so the pre_results resolution below reads a forest root's own build
-  // directly rather than re-resolving it through the cache.
-  container::vector<ResultPtr> value_results(ordered.num_values);
-
-  // R3 (SP3 Task 5): executor-side run-completeness ledger. Set to 1 at the
-  // EXACT site each scheduled value is actually built -- a root-level BuildStep
-  // below, a loop-local Transient BuildStep, or a block escape output's close
-  // (see run_ordered_contracted_block). This is the true "was built" slot for
-  // the completeness assert at the tail (value_results holds only root-scope
-  // escaping values, so a loop-local Transient never lands there).
+  // R3: executor-side run-completeness ledger. Set to 1 at the EXACT site
+  // each scheduled value is produced -- a root-scope BuildStep below, a
+  // block-local BuildStep, or a block's Assemble step at its close (see
+  // run_ordered_contracted_block) -- or where the cache-halt skip set
+  // deliberately leaves it to the resident cell it already has.
   container::vector<char> built(ordered.num_values, 0);
 
-  // -------- Tasks 1-3: walk the root block's own steps, in order. --------
-  // A BuildStep is built directly (Task 1); a child ScopeBlock (a realized
-  // batch loop, Contracted or External alike) is run via
-  // detail::run_ordered_contracted_block (Task 2 AccumulateSum, Task 3
-  // AccumulateScatter), which mirrors its own outputs into value_results so
-  // the pre_results resolution below resolves a forest root produced inside a
-  // loop block exactly like one produced by a plain root BuildStep.
+  // -------- Walk the root block's own steps, in order. --------
+  // A root-scope BuildStep produces that value's Build cell at the EMPTY
+  // scope; a child ScopeBlock (a realized batch loop, Contracted or External
+  // alike) is run via detail::run_ordered_contracted_block, whose Assemble
+  // steps produce the cells its outputs escape into. Every result lives in
+  // the registry; nothing is homed in, or read back from, a scope cache.
   typename CacheManager<N, FHC>::BatchContext const root_ectx;
-  // A forest root's ONLY reader is the pre_results combine below -- it has zero
-  // DAG consumers (else it would not be a root). That combine read is a real
-  // read of the value from its home, so it is charged here as +1 on the root's
-  // home life: with it, evaluate_impl's own production store-access drains the
-  // root to a still-live cache entry, and the combine's cache read drains it to
-  // zero -- one holder (the cache), exact use-count, roots no longer special.
-  // Without it (life == 1) the store-access drains the root immediately and the
-  // cache holds nothing, which is why the executor used to keep a PARALLEL
-  // value_results reference to every produced value -- a ref living PAST the
-  // cache node removal (it held every intermediate to end-of-iteration even
-  // after the cache drained it at its genuine last use, absent in forest
-  // descent). We no longer retain it: non-root consumers read from the cache
-  // (home_reads life), and roots read from the cache too (this +1). Escape
-  // outputs produced inside a batch block are still mirrored into value_results
-  // by run_ordered_contracted_block (their home is one scope out); pre_results
-  // prefers that mirror when present and falls back to the cache otherwise.
-  container::set<std::size_t> forest_root_hashes;
-  for (auto&& n : forest) forest_root_hashes.insert(n->hash_value());
 
-  // "Needed this iteration" gate. The schedule lists every BuildStep, but a
-  // non-persistent intermediate whose consumers are ALL persistent-and-cached
-  // is read only in iteration 1 (when those persistent consumers are built);
-  // thereafter the consumers are cache hits and never re-read it, so rebuilding
-  // it each iteration is wasted work (the reason the DAG used to over-persist
-  // it via !vol). Mirror forest descent's "stop at cache hits": BFS from the
-  // volatile roots, descending only through nodes NOT currently alive in the
-  // cache. An alive (persistent, still-holding) node is read but not rebuilt
-  // and does NOT propagate need to its children. Computed ONCE per call against
-  // the cache state at entry (persistent survivors alive, everything else
-  // drained by the per-term reset), so in iteration 1 (nothing cached) it
-  // admits every node, and in later iterations it prunes the
-  // persistent-shadowed subtrees.
-  container::set<std::size_t> needed_build;
-  {
-    container::svector<node_t> stack;
-    container::set<std::size_t> visited;
-    for (auto&& n : forest) stack.push_back(n);
-    while (!stack.empty()) {
-      node_t const n = stack.back();
-      stack.pop_back();
-      if (n.leaf()) continue;
-      if (!visited.insert(n->hash_value()).second) continue;
-      if (cache.alive(n)) continue;  // cache hit: read, not rebuilt, no descend
-      needed_build.insert(n->hash_value());
-      stack.push_back(n.left());
-      stack.push_back(n.right());
-    }
-  }
-
-  // DAG-eval invariant: EVERY value must be homed and RESIDENT when read. A
-  // non-top, non-leaf value that misses the cache must NOT be silently rebuilt
-  // inline -- an inline rebuild re-reads that value's own operands, so those
-  // reads never appear in ordered_home_reads' direct-DAG-parent count, which
-  // then under-provisions the operands' home life and evicts them early (the
-  // 83845 class of crash). Enforce residency at the ROOT scope too (blocks
-  // already do via make_batched_scratch's read_from_home): a miss becomes the
-  // hard "vanished before use" error, surfacing the real homing/ordering bug
-  // instead of hiding it behind a recompute. RAII-restored so the caller's
-  // (persistent, cross-iteration, also-used-for-the-energy-observable) cache
-  // is left as it was found.
+  // DAG-eval invariant: EVERY value must be resident when read. A non-top,
+  // non-leaf value that misses must NOT be silently rebuilt inline -- an
+  // inline rebuild re-reads that value's own operands, so those reads are
+  // absent from the table's declared lives, which then under-provisions the
+  // operands and drops them early. Under the table-driven path the read
+  // resolver is itself that guard (it throws naming the consumer, the source
+  // cell and the value); this flag keeps the same strictness on any read that
+  // still reaches the legacy probe. RAII-restored so the caller's cache is
+  // left as it was found.
   struct ResidentReadsGuard {
     CacheManager<N, FHC>& c;
     bool const prev;
@@ -1674,95 +983,31 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
       std::size_t const vid = build->value_id;
       SEQUANT_ASSERT(vid < rich.cells.size());
-      auto const hash = rich.cells[vid].hash;
-      auto const it = vmap.find(hash);
+      auto const it = vmap.find(rich.cells[vid].hash);
       SEQUANT_ASSERT(it != vmap.end() &&
                      "evaluate_ordered_schedule: BuildStep value not found "
                      "in the forest's value-node map");
-      // Home this root-scope value at the root cache with a RESIDENT slot
-      // (unbounded life until the per-term reset), so it is built ONCE and
-      // read whole by every later consumer -- a root-level ancestor BuildStep
-      // that would otherwise re-descend and rebuild it (the plain per-forest
-      // CSE life, if any, is drained by its unbatched use count), and a
-      // block-internal consumer reaching it up the scope chain (which reads a
-      // root-homed invariant once per batch block). Without this, each such
-      // consumer recomputes the composite; ensure_home_slot is what makes a
-      // Κ-free home={} composite (I(i,i;a,a)) build exactly once. Leaves need
-      // no slot (the leaf evaluator just hands back a precomputed input), so
-      // this targets only the internal-node BuildSteps the schedule homes here.
-      // Task 4: classify this root-homed composite volatile-vs-persistent and
-      // seed its cache life (see the escape-output site in
-      // run_ordered_contracted_block for the same pattern). A subtree carrying
-      // a volatile leaf is NON-persistent (released at its genuine last use);
-      // an invariant composite is persistent (built once, survives reset). With
-      // no volatility policy (is_volatile empty) keep the unconditional
-      // resident pin -- the pre-Task-4 behavior every non-volatility-aware
-      // caller relies on.
-      bool const is_root = forest_root_hashes.count(hash) != 0;
-      // Skip a BuildStep the "needed" gate pruned: its value is not read this
-      // iteration (all consumers are persistent cache hits), so rebuilding it
-      // is wasted work. Roots are always needed (volatile, never cached). A
-      // skipped value is intentionally not produced this iteration -- mark it
-      // accounted for so the completeness check does not mistake the prune for
-      // a gap.
-      if (!it->second.leaf() && !needed_build.count(hash)) {
-        built[vid] = 1;
+      // A root-scope BuildStep is a Build cell at the EMPTY scope (the root,
+      // never inside a batch loop). The resolver carries this cell as the
+      // consumer for the operand reads inside evaluate_impl.
+      auto const root_cell = registry.build_cell_at(vid, CellScope{});
+      if (!root_cell)
+        throw Exception(
+            "evaluate_ordered_schedule: no root Build cell for value " +
+            std::to_string(vid) + " (cell table/schedule disagreement)");
+      built[vid] = 1;  // R3: produced, or deliberately skipped, either way
+                       // accounted for.
+      if (skip[*root_cell]) continue;  // cache-halt: nothing reads it
+      if (cell_table.cells[*root_cell].produce_if_absent &&
+          registry.peek(*root_cell))
         continue;
-      }
-      if (!it->second.leaf()) {
-        if (is_volatile) {
-          // Persistence is the shared cache's classification (non-volatile AND
-          // has a volatile DIRECT consumer), which sequant::cache_manager
-          // already computed and stamped on the entry -- NOT the local !vol,
-          // which over-enrolls a non-volatile value with no volatile consumer.
-          // With the "needed" gate above, un-persisting such a value no longer
-          // forces a rebuild: it is built once (iteration 1) and pruned after.
-          bool const persistent = cache.entry_is_persistent(it->second);
-          // +1 for the pre_results combine read of a forest root (see the block
-          // comment above); non-roots carry only their DAG consumers' reads.
-          // Root BuildStep: homed at the root cache, home-scope = {} (empty).
-          std::size_t const life =
-              home_reads(vid, HomeScopeKey{}) + (is_root ? 1u : 0u);
-          cache.ensure_home_slot(it->second, life, persistent);
-        } else {
-          // No volatility policy: the root-homed value is pinned resident until
-          // reset() anyway, so it is trivially still in the cache for the
-          // combine read; no life bump is needed.
-          cache.ensure_home_slot(it->second);
-        }
-      }
-      // Build the value; it self-stores into its cache home (evaluate_impl's
-      // finish_phase_b). Discard the returned pointer: the cache is the single
-      // holder now -- consumers (and, for a root, the combine) read it back
-      // from the cache. Retaining it in value_results is exactly the dead
-      // reference that kept every intermediate alive past its cache drain.
-      // Task 7 (Pillar 1): a root value is top-homed (empty coloring), but its
-      // operands may be sliced below scope -- set the per-build coloring
-      // context The root (top-level) cache is uncolored: a root value and its
-      // operands are unsliced (sliced values live in sub-scopes and escape
-      // unsliced), so node-id == value-id here -- no coloring context is
-      // needed.
-      {
-        // SP4 Task 4: a root-scope BuildStep is a Build cell at the EMPTY
-        // scope (CellScope{} -- the root, never inside a batch loop). The
-        // resolver carries this cell as the consumer for the operand reads
-        // inside evaluate_impl (Task 5: no cache-level consumer identity).
-        auto const root_cell = registry.build_cell_at(vid, CellScope{});
-        if (!root_cell)
-          throw Exception(
-              "evaluate_ordered_schedule: no root Build cell for value " +
-              std::to_string(vid) + " (cell table/schedule disagreement)");
-        resolver.begin_consumer(*root_cell);
-        ResultPtr const r =
-            evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
-        registry.set(*root_cell, r);
-      }
-      built[vid] = 1;  // R3: this root-scope value is produced.
+      resolver.begin_consumer(*root_cell);
+      registry.set(*root_cell,
+                   evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache));
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
-          value_results, built, is_volatile, n_blocks, home_reads,
-          &needed_build, &consumer_loops, &cell_table, registry, resolver);
+          built, is_volatile, &cell_table, registry, resolver, skip);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.
@@ -1808,25 +1053,28 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
                    "evaluate_ordered_schedule: forest root not found in the "
                    "schedule's value map");
     std::size_t const vid = vid_it->second;
-    if (value_results[vid]) {
-      // Produced inside a batch block and mirrored out by
-      // run_ordered_contracted_block (its home is one scope out of this level).
-      pre_results[i] = std::move(value_results[vid]);
-    } else {
-      // Produced by a plain root BuildStep: it lives in the cache (self-stored
-      // by evaluate_impl, kept for this combine read by the +1 on its home
-      // life). access_at drains that last read and hands back the CANONICAL
-      // stored value; orient it to this root's phase, matching evaluate_impl's
-      // own canonical->orientation return convention (apply_phase).
-      auto ptr = cache.access_at(roots[i]).ptr;
-      if (!ptr)
-        throw Exception(
-            "evaluate_ordered_schedule: forest root not resident in the cache "
-            "at the combine read (premature eviction / under-predicted use "
-            "count in ordered_home_reads)");
-      auto const ph = roots[i]->canon_phase();
-      pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
-    }
+    // A forest root's ONLY reader is the combine below -- it has zero DAG
+    // consumers (else it would not be a root), so its cell is read by nobody
+    // in the table and its life is zero. PEEK it (non-decrementing): the cell
+    // is the root's Build cell at the root scope, or, for a root produced
+    // inside a batch loop and escaped out of it, the Assemble cell the
+    // block's close produced at the same root scope.
+    auto cell = registry.build_cell_at(vid, CellScope{});
+    if (!cell) cell = registry.assemble_cell_at(vid, CellScope{});
+    if (!cell)
+      throw Exception(
+          "evaluate_ordered_schedule: forest root value " +
+          std::to_string(vid) +
+          " has no root-scope cell (cell table/schedule disagreement)");
+    ResultPtr ptr = registry.peek(*cell);
+    if (!ptr)
+      throw Exception("evaluate_ordered_schedule: forest root value " +
+                      std::to_string(vid) + " (cell#" + std::to_string(*cell) +
+                      ") holds no result at the combine read");
+    // Orient the stored value to this root's phase, matching evaluate_impl's
+    // own canonical->orientation return convention (apply_phase).
+    auto const ph = roots[i]->canon_phase();
+    pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
     if (!pre_results[i])
       throw Exception(
           "evaluate_ordered_schedule: forest root was never produced");
@@ -1908,8 +1156,7 @@ ResultPtr evaluate_ordered_schedule(
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
-        is_volatile = {},
-    std::function<std::size_t(std::size_t)> const& home_life_override = {}) {
+        is_volatile = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
 
   // Task 4: the schedule walk itself (Tasks 1-3, plus the block-count/
@@ -1921,7 +1168,7 @@ ResultPtr evaluate_ordered_schedule(
   container::svector<ResultPtr> pre_results =
       detail::run_ordered_schedule_pre_results<EvalTrace>(
           forest, ordered, rich, leaf_evaluator, cache, target,
-          make_scope_guard, is_volatile, home_life_override);
+          make_scope_guard, is_volatile);
 
   container::svector<node_t> roots;
   for (auto&& n : forest) roots.push_back(n);
@@ -1951,7 +1198,7 @@ ResultPtr evaluate_ordered_schedule(
 /// \details Runs the identical schedule walk \c evaluate_ordered_schedule
 /// runs (via the same \c detail::run_ordered_schedule_pre_results this
 /// function and \c evaluate_ordered_schedule both delegate to -- \c
-/// ordered_home_reads, \c ordered_n_blocks, and the run-completeness assert
+/// the cell table derivation and the run-completeness assert
 /// are UNCHANGED, exercised over the combined schedule exactly as they
 /// already are for a multi-summand forest), so a value shared across two
 /// \e independent roots is built exactly once for the identical reason a
@@ -1987,14 +1234,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     std::function<std::size_t(Index const&)> const& target,
     [[maybe_unused]] ScopeGuardFactory const& make_scope_guard = {},
     std::function<bool(std::ranges::range_value_t<Nodes> const&)> const&
-        is_volatile = {},
-    std::function<std::size_t(std::size_t)> const& home_life_override = {}) {
+        is_volatile = {}) {
   using node_t = std::ranges::range_value_t<Nodes>;
 
   container::svector<ResultPtr> pre_results =
       detail::run_ordered_schedule_pre_results<EvalTrace>(
           roots, ordered, rich, leaf_evaluator, cache, target, make_scope_guard,
-          is_volatile, home_life_override);
+          is_volatile);
 
   container::svector<node_t> root_nodes;
   for (auto&& n : roots) root_nodes.push_back(n);

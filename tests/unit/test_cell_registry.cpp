@@ -364,3 +364,88 @@ TEST_CASE("cell registry owns results: bytes, fill-once, persistence",
   else
     unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
 }
+
+TEST_CASE(
+    "cell registry: clear_bound_to clears an implicitly bound cell but leaves "
+    "a produce_if_absent cell for its instance alone",
+    "[cell_registry]") {
+  // Three non-persistent Build cells at the SAME scope [(1,0)], differing
+  // only in how they relate to that loop instance:
+  //   cell 0 -- sliced by (1,0): EXPLICITLY bound (detail::bound_instances).
+  //   cell 1 -- whole, not produce_if_absent: IMPLICITLY bound, because its
+  //             own scope's innermost entry is (1,0) -- the executor re-runs
+  //             whatever its tree position computes every batch of that loop.
+  //   cell 2 -- whole and produce_if_absent: invariant to (1,0), produced on
+  //             the first visit and REUSED by every later batch, so the
+  //             implicit rule must NOT reach it.
+  CellTable t;
+  auto add = [&t](bool sliced, bool pia) {
+    TableCell c;
+    c.value_id = t.cells.size();
+    c.production.kind = ProductionKind::Build;
+    c.scope.path = {{LoopKey{1, 0}, 0}};
+    if (sliced) c.sliced = {{0, LoopKey{1, 0}}};
+    c.produce_if_absent = pia;
+    c.life = 1;
+    t.cells.push_back(c);
+  };
+  add(/*sliced=*/true, /*pia=*/false);
+  add(/*sliced=*/false, /*pia=*/false);
+  add(/*sliced=*/false, /*pia=*/true);
+
+  CellRegistry reg(t);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+  reg.set(0, r);
+  reg.set(1, r);
+  reg.set(2, r);
+
+  // A DIFFERENT loop instance's batch boundary touches none of them.
+  reg.clear_bound_to(LoopKey{2, 0});
+  CHECK(reg.peek(0) == r);
+  CHECK(reg.peek(1) == r);
+  CHECK(reg.peek(2) == r);
+
+  reg.clear_bound_to(LoopKey{1, 0});
+  CHECK_FALSE(reg.peek(0));  // explicitly bound: cleared
+  CHECK_FALSE(reg.peek(1));  // implicitly bound (scope's innermost): cleared
+  CHECK(reg.peek(2) == r);   // produce_if_absent: kept for reuse
+
+  // A produce_if_absent cell IS cleared on an instance it is genuinely bound
+  // to: give one a sliced position on an OUTER instance it is not homed in.
+  CellTable t2;
+  TableCell c;
+  c.value_id = 0;
+  c.production.kind = ProductionKind::Build;
+  c.scope.path = {{LoopKey{1, 0}, 0}, {LoopKey{2, 0}, 0}};
+  c.sliced = {{0, LoopKey{1, 0}}};  // bound to the OUTER loop
+  c.produce_if_absent = true;       // invariant to its own innermost loop
+  c.life = 1;
+  t2.cells.push_back(c);
+  CellRegistry reg2(t2);
+  reg2.set(0, r);
+  reg2.clear_bound_to(LoopKey{2, 0});
+  CHECK(reg2.peek(0) == r);  // its own innermost loop: kept
+  reg2.clear_bound_to(LoopKey{1, 0});
+  CHECK_FALSE(reg2.peek(0));  // an instance it IS bound to: cleared
+}
+
+TEST_CASE(
+    "cell read resolver: a table value never fetched is NOT reported drained",
+    "[cell_registry]") {
+  // operand_drained() gates in-place accumulation. With no record of ever
+  // having served this value, the safe answer is "not drained" (some cell may
+  // still be holding it for another reader): out-of-place costs one
+  // allocation, the wrong answer corrupts a shared buffer. A hash that is not
+  // a table value at all is still reported drained -- nothing could share it.
+  auto const t = make_table();
+  CellRegistry reg(t);
+  CellReadResolver rr(reg, [](std::size_t h) -> std::optional<std::size_t> {
+    if (h == 100) return std::size_t{1};  // value 1 (a Build cell)
+    return std::nullopt;                  // anything else: not a table value
+  });
+  CHECK_FALSE(rr.operand_drained(100));  // table value, never fetched here
+  CHECK(rr.operand_drained(999));        // not a table value: private
+}

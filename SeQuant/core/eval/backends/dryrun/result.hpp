@@ -620,6 +620,12 @@ class ResultDryRun final : public Result {
     return eval_result<ResultDryRun>(indices_, cm_, overrides_, lobounds_);
   }
 
+  /// A dry-run token owns only bookkeeping (indices, extent overrides,
+  /// lobounds, assembled coverage), so its copy IS the deep copy.
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultDryRun>(*this);
+  }
+
   [[nodiscard]] std::size_t size_in_bytes() const final {
     return cm_->memsize(indices_, overrides_);
   }
@@ -771,6 +777,11 @@ class ResultDryRunNested final : public Result {
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t /*factor*/) const override {
     return eval_result<ResultDryRunNested>(outer_, inner_, cm_, overrides_,
                                            indices_, lobounds_);
+  }
+
+  /// See \c ResultDryRun::clone: bookkeeping only, so the copy is deep.
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultDryRunNested>(*this);
   }
 
   [[nodiscard]] std::size_t size_in_bytes() const final {

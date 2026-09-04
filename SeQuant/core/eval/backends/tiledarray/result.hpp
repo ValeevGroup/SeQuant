@@ -623,6 +623,14 @@ class ResultTensorTA final : public Result {
     return eval_result<this_type>(std::move(pre));
   }
 
+  /// Deep copy: \c TA::DistArray's own copy is a shallow (reference-counted)
+  /// handle onto the same tiles, so an in-place accumulation into the copy
+  /// would be seen by every other holder -- \c TA::clone allocates and copies
+  /// the tiles.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+  }
+
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
@@ -925,6 +933,12 @@ class ResultTensorOfTensorTA final : public Result {
     TA::scale(pre, numeric_type(factor));
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(pre));
+  }
+
+  /// Deep copy; see \c ResultTensorTA::clone. \c TA::clone deep-copies the
+  /// (nested) tiles too, so the copy shares no inner tensor with this one.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<this_type>(TA::clone(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr permute(

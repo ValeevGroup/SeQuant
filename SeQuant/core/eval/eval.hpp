@@ -858,9 +858,9 @@ ResultPtr evaluate_impl(Node const& node,         //
         // --- Checked cache wrapper: a hit returns directly; a miss on a node
         //     that exists in the map schedules a store once computed. ---
         if (f.checked) {
-          // --- Explicit value cells (SP4 Task 4): the table-driven operand
-          //     read resolver, consulted AHEAD of the router/access_at probes
-          //     below when wired (see CellReadResolver, cell_registry.hpp).
+          // --- Explicit value cells: the table-driven operand read
+          //     resolver, which REPLACES the router/access_at probes below
+          //     when wired (see CellReadResolver, cell_registry.hpp).
           //     Excludes a leaf (the leaf path below has its own resolver
           //     probe) and this call's own top node (an operand read is
           //     always of some OTHER value, mirroring the resident-reads
@@ -870,8 +870,8 @@ ResultPtr evaluate_impl(Node const& node,         //
           //     ordered executor's own forest-fallback branches in this
           //     stage) is zero-cost and leaves this block byte-identical to
           //     before. ---
-          if (auto* rr = cache.cell_read_resolver();
-              rr && !f.node.leaf() &&
+          auto* const rr = cache.cell_read_resolver();
+          if (rr && !f.node.leaf() &&
               f.node->hash_value() != node->hash_value()) {
             if (auto v =
                     rr->fetch(f.node->hash_value(), cache.batch_context())) {
@@ -887,144 +887,167 @@ ResultPtr evaluate_impl(Node const& node,         //
             // not a value of the table: a transient of this production tree,
             // evaluated in place below
           }
-          // --- Router consult: an override seam ahead of the default
-          //     access_at() below (see placement_router.hpp). The
-          //     `router && !router->empty()` short-circuit is FIRST so an
-          //     empty/null router (the Phase 2 default, and every production
-          //     eval) never computes an occurrence_key -- zero hot-path cost
-          //     and byte-identical behavior (the `routed` flag stays false,
-          //     and the default path immediately below is untouched). ---
-          bool routed = false;
-          // Only a value the remat pass actually MOVED can have a router
-          // override -- and the build keys occurrence_key ONLY for such nodes
-          // (placement_remat.hpp). Gate on moved() first: it is a hash-set
-          // lookup (no occurrence_key), so a non-moved node route()-misses
-          // exactly as before (byte-identical), but we never compute an
-          // occurrence_key for a node the router could not have keyed. This
-          // also keeps occurrence_key off Sum (and other non-tensorial) nodes,
-          // which are never moved and are not tensor networks.
-          if (auto const* router = cache.placement_router();
-              router && !router->empty() &&
-              router->moved(f.node->hash_value())) {
-            auto const& ctx = cache.batch_context();
-            container::svector<Index> ctx_modes;
-            for (auto const& e : ctx) ctx_modes.push_back(e.axis);
-            auto const key = eval::occurrence_key(f.node, ctx_modes);
-            if (auto const* home = router->route(key)) {
-              std::size_t const use_depth = ctx.size();
-              std::size_t const hd = router->home_depth(*home, ctx, key);
-              SEQUANT_ASSERT(hd <= use_depth);
-              // LIVE defense-in-depth guard (design sec.4, RELEASE-safe): the
-              // router-directed fetch keys by CANONICAL hash at the resolved
-              // scope, so serving is only sound if the resolution is CONSISTENT
-              // with THIS occurrence (home_resolution_consistent -- the live
-              // loop at hd is one of this occurrence's own batched indices
-              // whose space the overlay names). By construction home_depth
-              // returns only such an hd, so on every correct schedule this
-              // holds and the fetch proceeds byte-identically. If a future
-              // overlay/home_depth regression resolved an occurrence to a scope
-              // it does not bind (collapsing two divergently-relabeled
-              // occurrences onto ONE entry -- the hole the DAG-scope resolution
-              // closes), the share is REFUSED here: `routed` stays false and
-              // the default access_at path below serves this occurrence its OWN
-              // value (recompute), never a wrong-slice entry -- in release, not
-              // only under an assert. The hoist split keeps consistent
-              // occurrences shareable.
-              if (router->home_resolution_consistent(*home, ctx, hd, key)) {
-                std::size_t const hops = use_depth - hd;
-                if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
-                  if constexpr (detail::trace(EvalTrace))
-                    log::cache(f.node, cache,
-                               log::label(f.node, cache.batch_context()));
+          // --- Explicit value cells (Stage 3): with a resolver wired, the
+          //     table is the ONLY model of storage -- every value the
+          //     schedule produces lives in a cell of the registry, and every
+          //     read of one is the fetch above. So the legacy probes below
+          //     (the placement router's override seam, the scope-chain
+          //     access_at probe and its resident-reads tripwire) have nothing
+          //     left to find, and nothing may be stored back into a scope
+          //     cache (`store_after` stays false, so `finish_phase_b` passes
+          //     the freshly computed result straight through). What reaches
+          //     this point under a resolver is exactly a TRANSIENT of the
+          //     current production tree -- a node the table holds no cell for
+          //     -- which is computed in place, right here, as it always was;
+          //     any table value that is missing or non-resident has already
+          //     thrown out of `fetch`, naming the consumer, the source cell
+          //     and the value. Leaves keep their own path below unchanged. ---
+          if (!rr) {
+            // --- Router consult: an override seam ahead of the default
+            //     access_at() below (see placement_router.hpp). The
+            //     `router && !router->empty()` short-circuit is FIRST so an
+            //     empty/null router (the Phase 2 default, and every production
+            //     eval) never computes an occurrence_key -- zero hot-path cost
+            //     and byte-identical behavior (the `routed` flag stays false,
+            //     and the default path immediately below is untouched). ---
+            bool routed = false;
+            // Only a value the remat pass actually MOVED can have a router
+            // override -- and the build keys occurrence_key ONLY for such nodes
+            // (placement_remat.hpp). Gate on moved() first: it is a hash-set
+            // lookup (no occurrence_key), so a non-moved node route()-misses
+            // exactly as before (byte-identical), but we never compute an
+            // occurrence_key for a node the router could not have keyed. This
+            // also keeps occurrence_key off Sum (and other non-tensorial)
+            // nodes, which are never moved and are not tensor networks.
+            if (auto const* router = cache.placement_router();
+                router && !router->empty() &&
+                router->moved(f.node->hash_value())) {
+              auto const& ctx = cache.batch_context();
+              container::svector<Index> ctx_modes;
+              for (auto const& e : ctx) ctx_modes.push_back(e.axis);
+              auto const key = eval::occurrence_key(f.node, ctx_modes);
+              if (auto const* home = router->route(key)) {
+                std::size_t const use_depth = ctx.size();
+                std::size_t const hd = router->home_depth(*home, ctx, key);
+                SEQUANT_ASSERT(hd <= use_depth);
+                // LIVE defense-in-depth guard (design sec.4, RELEASE-safe): the
+                // router-directed fetch keys by CANONICAL hash at the resolved
+                // scope, so serving is only sound if the resolution is
+                // CONSISTENT with THIS occurrence (home_resolution_consistent
+                // -- the live loop at hd is one of this occurrence's own
+                // batched indices whose space the overlay names). By
+                // construction home_depth returns only such an hd, so on every
+                // correct schedule this holds and the fetch proceeds
+                // byte-identically. If a future overlay/home_depth regression
+                // resolved an occurrence to a scope it does not bind
+                // (collapsing two divergently-relabeled occurrences onto ONE
+                // entry -- the hole the DAG-scope resolution closes), the share
+                // is REFUSED here: `routed` stays false and the default
+                // access_at path below serves this occurrence its OWN value
+                // (recompute), never a wrong-slice entry -- in release, not
+                // only under an assert. The hoist split keeps consistent
+                // occurrences shareable.
+                if (router->home_resolution_consistent(*home, ctx, hd, key)) {
+                  std::size_t const hops = use_depth - hd;
+                  if (ResultPtr ptr = cache.access_at_hops(f.node, hops); ptr) {
+                    if constexpr (detail::trace(EvalTrace))
+                      log::cache(f.node, cache,
+                                 log::label(f.node, cache.batch_context()));
 #ifdef SEQUANT_ROUTER_SHADOW
-                  // Dev-only correctness check (default OFF): for a NO-OP
-                  // override (residency == the value's ACTUAL current home),
-                  // the router-directed fetch must reproduce access_at()
-                  // pointer-for-pointer. Not safe to enable in production: this
-                  // extra access_at() call decays a non-persistent entry's
-                  // lifetime a second time.
-                  {
-                    auto const shadow = cache.access_at(f.node);
-                    SEQUANT_ASSERT(shadow.ptr.get() == ptr.get());
-                  }
+                    // Dev-only correctness check (default OFF): for a NO-OP
+                    // override (residency == the value's ACTUAL current home),
+                    // the router-directed fetch must reproduce access_at()
+                    // pointer-for-pointer. Not safe to enable in production:
+                    // this extra access_at() call decays a non-persistent
+                    // entry's lifetime a second time.
+                    {
+                      auto const shadow = cache.access_at(f.node);
+                      SEQUANT_ASSERT(shadow.ptr.get() == ptr.get());
+                    }
 #endif
-                  finalize(
-                      slice_to_use(apply_phase(f.node, ptr), f.node, hops));
-                  routed = true;
+                    finalize(
+                        slice_to_use(apply_phase(f.node, ptr), f.node, hops));
+                    routed = true;
+                  }
                 }
               }
             }
-          }
-          if (routed) break;
-          if (auto m = cache.access_at(f.node); m.ptr) {
-            if constexpr (detail::trace(EvalTrace))
-              log::cache(f.node, cache,
-                         log::label(f.node, cache.batch_context()));
-            // Slice-on-use: a value fetched `m.hops` scopes up does not have
-            // this scope's (and any intervening) batch slices baked in, so
-            // slice it to the current block for the loops the fetch crossed. A
-            // local hit (hops == 0) or the OFF path (empty batch_context) is a
-            // no-op, so this stays byte-identical to apply_phase() alone there.
-            finalize(slice_to_use(apply_phase(f.node, m.ptr), f.node, m.hops));
-            break;
-          }
-          // Resident-reads invariant (read-from-home ordered scratches): a
-          // non-leaf value other than this call's own top node MUST already be
-          // resident -- it was statically scheduled and built by a prior step.
-          // A miss here means it vanished (premature eviction / under-predicted
-          // use count in ordered_home_reads), which must be a hard error, never
-          // a silent recompute or empty-array serve that hangs a downstream
-          // contraction. Leaves (evaluated fresh) and the top node (being built
-          // now) legitimately miss.
-          if (cache.require_resident_reads() && !f.node.leaf() &&
-              f.node->hash_value() != node->hash_value()) {
-            std::string lbl;
-            for (auto const& ix : f.node->canon_indices())
-              lbl += toUtf8(ix.full_label()) + " ";
-            std::cerr << "[evict] vanished hash="
-                      << (f.node->hash_value() % 100000u) << " canon=[" << lbl
-                      << "] top=" << (node->hash_value() % 100000u)
-                      << " scope=[";
-            for (auto const& lvl : cache.batch_context())
-              std::cerr << toUtf8(std::wstring(lvl.axis.space().base_key()))
-                        << "#d" << lvl.level.depth << "s" << lvl.level.loop_slot
-                        << "o" << lvl.level.latitude_ordinal << " ";
-            std::cerr << "]" << std::endl;
-            // What IS stored for this hash anywhere up the chain (key
-            // mismatch vs genuine absence), and the probe's own coloring.
-            {
-              auto const* vctx = cache.value_coloring_ctx();
-              auto const vit = vctx ? vctx->find(f.node->hash_value())
-                                    : decltype(vctx->end()){};
-              std::cerr << "  [chain-dump] probe coloring={";
-              if (vctx && vit != vctx->end())
-                for (auto const& m : vit->second.ctx_modes)
-                  std::cerr
-                      << toUtf8(m.full_label()) << ":"
-                      << (vit->second.colors.count(m) ? vit->second.colors.at(m)
-                                                      : std::size_t(-1))
-                      << " ";
-              else
-                std::cerr << "(none: hash not in this scope's coloring ctx)";
-              std::cerr << "}" << std::endl;
-              cache.dump_entries_for_hash(f.node->hash_value());
+            if (routed) break;
+            if (auto m = cache.access_at(f.node); m.ptr) {
+              if constexpr (detail::trace(EvalTrace))
+                log::cache(f.node, cache,
+                           log::label(f.node, cache.batch_context()));
+              // Slice-on-use: a value fetched `m.hops` scopes up does not have
+              // this scope's (and any intervening) batch slices baked in, so
+              // slice it to the current block for the loops the fetch crossed.
+              // A local hit (hops == 0) or the OFF path (empty batch_context)
+              // is a no-op, so this stays byte-identical to apply_phase() alone
+              // there.
+              finalize(
+                  slice_to_use(apply_phase(f.node, m.ptr), f.node, m.hops));
+              break;
             }
-            throw Exception(
-                "evaluate_impl: a read-from-home value vanished before use. "
-                "The value must be RESIDENT here but is not -- one of: (a) "
-                "evicted early (under-predicted use count in "
-                "ordered_home_reads); "
-                "(b) never built (the schedule ordered a consumer before its "
-                "producer); or (c) homed full/OUT of a loop while this "
-                "consumer "
-                "reads it INSIDE that loop (an escape's full form is not yet "
-                "assembled in-loop; the in-loop consumer must read the sliced "
-                "inner form). A missing value must never be served as an empty "
-                "array (it would silently hang a downstream contraction). "
-                "canon=[" +
-                lbl + "]");
-          }
-          f.store_after = cache.exists(f.node);
+            // Resident-reads invariant (read-from-home ordered scratches): a
+            // non-leaf value other than this call's own top node MUST already
+            // be resident -- it was statically scheduled and built by a prior
+            // step. A miss here means it vanished (premature eviction /
+            // under-predicted use count in ordered_home_reads), which must be a
+            // hard error, never a silent recompute or empty-array serve that
+            // hangs a downstream contraction. Leaves (evaluated fresh) and the
+            // top node (being built now) legitimately miss.
+            if (cache.require_resident_reads() && !f.node.leaf() &&
+                f.node->hash_value() != node->hash_value()) {
+              std::string lbl;
+              for (auto const& ix : f.node->canon_indices())
+                lbl += toUtf8(ix.full_label()) + " ";
+              std::cerr << "[evict] vanished hash="
+                        << (f.node->hash_value() % 100000u) << " canon=[" << lbl
+                        << "] top=" << (node->hash_value() % 100000u)
+                        << " scope=[";
+              for (auto const& lvl : cache.batch_context())
+                std::cerr << toUtf8(std::wstring(lvl.axis.space().base_key()))
+                          << "#d" << lvl.level.depth << "s"
+                          << lvl.level.loop_slot << "o"
+                          << lvl.level.latitude_ordinal << " ";
+              std::cerr << "]" << std::endl;
+              // What IS stored for this hash anywhere up the chain (key
+              // mismatch vs genuine absence), and the probe's own coloring.
+              {
+                auto const* vctx = cache.value_coloring_ctx();
+                auto const vit = vctx ? vctx->find(f.node->hash_value())
+                                      : decltype(vctx->end()){};
+                std::cerr << "  [chain-dump] probe coloring={";
+                if (vctx && vit != vctx->end())
+                  for (auto const& m : vit->second.ctx_modes)
+                    std::cerr << toUtf8(m.full_label()) << ":"
+                              << (vit->second.colors.count(m)
+                                      ? vit->second.colors.at(m)
+                                      : std::size_t(-1))
+                              << " ";
+                else
+                  std::cerr << "(none: hash not in this scope's coloring ctx)";
+                std::cerr << "}" << std::endl;
+                cache.dump_entries_for_hash(f.node->hash_value());
+              }
+              throw Exception(
+                  "evaluate_impl: a read-from-home value vanished before use. "
+                  "The value must be RESIDENT here but is not -- one of: (a) "
+                  "evicted early (under-predicted use count in "
+                  "ordered_home_reads); "
+                  "(b) never built (the schedule ordered a consumer before its "
+                  "producer); or (c) homed full/OUT of a loop while this "
+                  "consumer "
+                  "reads it INSIDE that loop (an escape's full form is not yet "
+                  "assembled in-loop; the in-loop consumer must read the "
+                  "sliced "
+                  "inner form). A missing value must never be served as an "
+                  "empty "
+                  "array (it would silently hang a downstream contraction). "
+                  "canon=[" +
+                  lbl + "]");
+            }
+            f.store_after = cache.exists(f.node);
+          }  // if (!rr)
         }
 
         // --- Custom-evaluator interception (non-leaf only): a non-null result

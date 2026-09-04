@@ -235,6 +235,12 @@ class ResultTensorTAPP final : public Result {
     return eval_result<ResultTensorTAPP<T>>(std::move(pre));
   }
 
+  /// Deep copy: the backing tensor type owns its elements, so its copy
+  /// constructor already produces an independently owned buffer.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<ResultTensorTAPP<T>>(get<T>());
+  }
+
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<annot_t>(ann[0]);
