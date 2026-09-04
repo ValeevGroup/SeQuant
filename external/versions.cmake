@@ -27,7 +27,11 @@ set(SEQUANT_OLDEST_JSON_VERSION 3)
 #   Recent stdlibs have removed this class when using C++17 (e.g. Apple Clang 15)
 # - MSVC requires https://github.com/boostorg/spirit/commit/43112c3f055fa109f20b8e8e6e50d0a016da742a due to
 #   a compiler bug: https://github.com/boostorg/spirit/issues/782
+if (MSVC)
 set(SEQUANT_OLDEST_BOOST_VERSION 1.85)
+else()
+set(SEQUANT_OLDEST_BOOST_VERSION 1.81)
+endif()
 
 set(SEQUANT_TRACKED_CATCH2_TAG v3.9.1)
 set(SEQUANT_OLDEST_CATCH2_VERSION 3.3)
