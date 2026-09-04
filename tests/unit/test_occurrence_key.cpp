@@ -16,17 +16,14 @@
 #include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
-#include <SeQuant/core/eval/value_id.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
-#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <optional>
-#include <unordered_map>
 
 namespace {
 namespace container = sequant::container;
@@ -221,11 +218,11 @@ TEST_CASE(
 }
 
 // ---------------------------------------------------------------------------
-// Pillar 1 (value identity): the loop-COLORED occurrence_key (3-arg
-// NamedIndexColorMap) is the value-id substrate. These pin that the depth
-// coloring DISTINGUISHES which slot a loop slices for a non-symmetric tensor,
-// FOLDS it for a symmetric one, and that an empty color map is byte-identical
-// to the 2-arg (space-only) key.
+// The loop-COLORED occurrence_key (3-arg NamedIndexColorMap) remains a
+// general capability of occurrence_key itself (the router's occurrence-key
+// use of the 2-arg form is the production path; no production caller passes
+// a non-null color map any more). This pins that the depth coloring
+// DISTINGUISHES which slot a loop slices for a non-symmetric tensor.
 // ---------------------------------------------------------------------------
 
 TEST_CASE(
@@ -254,149 +251,4 @@ TEST_CASE(
   auto k1 = occurrence_key(n, ctx, &c1);
   auto k2 = occurrence_key(n, ctx, &c2);
   CHECK_FALSE(RouterKeyEqual{}(k1, k2));  // depth distinguishes the slicing
-}
-
-TEST_CASE("value-id: symmetric tensor folds the two depth assignments",
-          "[occurrence_key][value-id]") {
-  // Same as above but B is bra-symmetric: swapping the two slots is a symmetry,
-  // so (i1@d0,i2@d1) and (i1@d1,i2@d0) are the SAME sliced value -- the colored
-  // canonicalization must FOLD them to one key (no duplication).
-  Index i1{L"i_1"}, i2{L"i_2"};
-  auto t = ex<sequant::Tensor>(
-      L"B", bra(sequant::container::svector<Index>{i1, i2}), ket{},
-      Symmetry::Symm, std::nullopt, ColumnSymmetry::Symm);
-  auto n = leaf_node(t);
-  sequant::container::svector<Index> ctx{i1, i2};
-
-  sequant::tensor_network::NamedIndexColorMap c1;
-  c1.emplace(i1, 0);
-  c1.emplace(i2, 1);
-  sequant::tensor_network::NamedIndexColorMap c2;
-  c2.emplace(i1, 1);
-  c2.emplace(i2, 0);
-
-  auto k1 = occurrence_key(n, ctx, &c1);
-  auto k2 = occurrence_key(n, ctx, &c2);
-  CHECK(RouterKeyEqual{}(k1, k2));  // symmetry folds
-}
-
-TEST_CASE("value-id: empty color map is byte-identical to the 2-arg key",
-          "[occurrence_key][value-id]") {
-  // The #1 non-regression anchor: an EMPTY (but non-null) color map must
-  // canonicalize identically to the space-only 2-arg key -- so an unsliced
-  // value's id is unchanged.
-  Index i1{L"i_1"}, i2{L"i_2"};
-  auto t = ex<sequant::Tensor>(
-      L"B", bra(sequant::container::svector<Index>{i1, i2}), ket{},
-      Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
-  auto n = leaf_node(t);
-  sequant::container::svector<Index> ctx{i1};
-
-  sequant::tensor_network::NamedIndexColorMap empty;
-  auto k_colored_empty = occurrence_key(n, ctx, &empty);
-  auto k_2arg = occurrence_key(n, ctx);
-  CHECK(RouterKeyEqual{}(k_colored_empty, k_2arg));
-  CHECK(RouterKeyHash{}(k_colored_empty) == RouterKeyHash{}(k_2arg));
-}
-
-// Pillar 1 (value identity), Task 3: value_id_hash distinguishes which slot
-// carries the loop var (I(i,_) vs I(_,i)) via ONE per-scope coloring, and its
-// unsliced path is byte-identical to the plain node-id (hash::value) that
-// TreeNodeHasher uses -- so the coloring-aware hasher is safe to install.
-TEST_CASE("value-id: value_id_hash distinguishes slot slicing; null == node-id",
-          "[value-id][cache]") {
-  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
-  auto mk = [](Index const& a, Index const& b) {
-    return ex<sequant::Tensor>(
-        L"B", bra(sequant::container::svector<Index>{a, b}), ket{},
-        Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Nonsymm);
-  };
-  Index i1{L"i_1"}, i2{L"i_2"};
-  node_t nA = leaf_node(mk(i1, i2));  // loop var i_1 in slot 0
-  node_t nB = leaf_node(mk(i2, i1));  // loop var i_1 in slot 1
-
-  // ONE per-scope coloring: the loop var i_1 sliced at depth 0.
-  sequant::eval::ValueIdColoring col;
-  col.ctx_modes = sequant::container::svector<Index>{i1};
-  col.colors.emplace(i1, 0);
-
-  // Colored: nA and nB differ (i_1 in a different slot) -- distinct cache keys.
-  CHECK(sequant::eval::value_id_hash(nA, &col) !=
-        sequant::eval::value_id_hash(nB, &col));
-
-  // Null coloring: byte-identical to the plain node-id TreeNodeHasher uses.
-  CHECK(sequant::eval::value_id_hash(nA, nullptr) == sequant::hash::value(*nA));
-  CHECK(sequant::eval::value_id_hash(nB, nullptr) == sequant::hash::value(*nB));
-  // (The colored value-id keying itself is exercised via CachedValueHasher /
-  // CachedValueEqual in the "CachedValue keys a map ..." test above; the
-  // runtime cache keys by CachedValue, not by a hasher override.)
-}
-
-// Pillar 1 (value identity), Task 3: CachedValue is the value-keyed cache key.
-// Its hash is value_id_hash(node, coloring) and its equality is the colored
-// occurrence_key graph compare (sliced) or the structural comparator
-// (unsliced). Two values of one node sliced on DIFFERENT slots occupy DISTINCT
-// map entries; with an EMPTY coloring a CachedValue is byte-identical to its
-// plain node (same hash, structural fold preserved, distinct nodes NOT folded);
-// a slot-symmetric node folds the two slot slicings to one entry.
-TEST_CASE("value-id: CachedValue keys a map by home-slice-colored value-id",
-          "[value-id][cache]") {
-  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
-  using sequant::eval::CachedValue;
-  using sequant::eval::CachedValueEqual;
-  using sequant::eval::CachedValueHasher;
-  auto mk = [](Index const& a, Index const& b, Symmetry sym) {
-    return ex<sequant::Tensor>(
-        L"B", bra(sequant::container::svector<Index>{a, b}), ket{}, sym,
-        std::nullopt,
-        sym == Symmetry::Symm ? ColumnSymmetry::Symm : ColumnSymmetry::Nonsymm);
-  };
-  Index i1{L"i_1"}, i2{L"i_2"};
-
-  sequant::eval::ValueIdColoring col;  // loop var i_1 sliced at depth 0
-  col.ctx_modes = sequant::container::svector<Index>{i1};
-  col.colors.emplace(i1, 0);
-
-  using Map =
-      std::unordered_map<CachedValue<node_t>, int, CachedValueHasher<node_t>,
-                         CachedValueEqual<node_t>>;
-
-  // (a) non-symmetric: B(i_1,_) and B(_,i_1) are DIFFERENT values -> two
-  // entries.
-  {
-    node_t nA = leaf_node(mk(i1, i2, Symmetry::Nonsymm));  // i_1 in slot 0
-    node_t nB = leaf_node(mk(i2, i1, Symmetry::Nonsymm));  // i_1 in slot 1
-    Map m;
-    m[CachedValue<node_t>{nA, col}] = 1;
-    m[CachedValue<node_t>{nB, col}] = 2;
-    CHECK(m.size() == 2);
-  }
-
-  // (b) empty coloring == plain node keying (the #1 non-regression anchor).
-  // The SAME two nodes as (a): at node-id level B(i_1,i_2) and B(i_2,i_1)
-  // genericize to ONE node (bound labels don't distinguish) -- so with an empty
-  // coloring they FOLD to one entry, exactly as today's node keying does. It is
-  // precisely this collapse that coloring in (a) rescues. The hash is
-  // byte-identical to the plain node-id.
-  {
-    sequant::eval::ValueIdColoring empty;  // no ctx_modes -> unsliced
-    node_t nA = leaf_node(mk(i1, i2, Symmetry::Nonsymm));
-    node_t nB = leaf_node(mk(i2, i1, Symmetry::Nonsymm));
-    CHECK(CachedValueHasher<node_t>{}(CachedValue<node_t>{nA, empty}) ==
-          sequant::hash::value(*nA));
-    Map m;
-    m[CachedValue<node_t>{nA, empty}] = 1;
-    m[CachedValue<node_t>{nB, empty}] = 2;
-    CHECK(m.size() == 1);  // node-id folds them (as today)
-  }
-
-  // (c) slot-symmetric: the two slot slicings FOLD -> ONE entry.
-  {
-    node_t nA = leaf_node(mk(i1, i2, Symmetry::Symm));
-    node_t nB = leaf_node(mk(i2, i1, Symmetry::Symm));
-    Map m;
-    m[CachedValue<node_t>{nA, col}] = 1;
-    m[CachedValue<node_t>{nB, col}] = 2;
-    CHECK(m.size() == 1);
-  }
 }

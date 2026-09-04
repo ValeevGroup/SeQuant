@@ -14,10 +14,10 @@ namespace sequant {
 /// Functor to compute the hash of a given (evaluation) tree node.
 ///
 /// This is the NODE-id hasher (\c hash::value): batching-blind, used by
-/// \c compute_dag_boulevard / CSE and the top-level cache. The
-/// home-slice-colored VALUE-id keying lives in \c CachedValueHasher (\c
-/// value_id.hpp); the runtime cache keys by \c CachedValue, not by this functor
-/// + an override.
+/// \c compute_dag_boulevard / CSE and the top-level cache. The runtime cache
+/// keys by \c CachedValue (\c value_id.hpp), whose hasher (\c
+/// CachedValueHasher) and equality (\c CachedValueEqual) reduce to this
+/// hasher and \c TreeNodeEqualityComparator on the wrapped node.
 template <typename TreeNode, bool force_hash_collisions = false>
 struct TreeNodeHasher {
   /// Trait used by the C++ STL allowing heterogenous lookups

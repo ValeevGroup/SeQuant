@@ -3793,6 +3793,10 @@ concept has_stored_this_eval =
 template <typename M2L>
 concept has_mode_of =
     requires(M2L const& m, sequant::DagScopeLevel const& l) { m.mode_of(l); };
+// Task 2 (explicit cells, cache key): the value-id slice coloring is gone --
+// CachedValue holds only the node.
+template <typename CV>
+concept has_coloring_member = requires(CV const& v) { v.coloring; };
 }  // namespace
 
 TEST_CASE(
@@ -3821,6 +3825,10 @@ TEST_CASE(
                 "stored_this_eval(key) must be gone from the cache");
   static_assert(!has_mode_of<sequant::ModeToLevel>,
                 "ModeToLevel::mode_of must be gone");
+  static_assert(
+      !has_coloring_member<sequant::eval::CachedValue<ScalarNode>>,
+      "CachedValue must hold only the node -- the value-id slice coloring "
+      "must be gone");
   SUCCEED();
 }
 

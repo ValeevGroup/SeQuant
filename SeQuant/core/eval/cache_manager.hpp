@@ -696,13 +696,11 @@ class CacheManager {
   /// \c for_each_key -- all of which see forest nodes, unchanged by Pillar 1.
   using key_type = TreeNode;
 
-  /// Pillar 1 (slice-colored value identity): the CACHE-MAP key. A
-  /// \c CachedValue pairs a node with its recorded home-slice coloring, so two
-  /// values of one node sliced on different slots occupy distinct entries; an
-  /// unsliced value (empty coloring) is byte-identical to keying by the node.
-  /// \c CachedValue is IMPLICITLY constructible from a node, so every existing
-  /// call site that passes a bare node keeps compiling and keys the map exactly
-  /// as before; only the ordered executor passes a genuinely colored key.
+  /// The CACHE-MAP key. \c CachedValue wraps a node; its identity on the
+  /// forest-descent path is the node's canonical hash (\c hash::value). The
+  /// batched (table-driven) executor never uses this map for values -- it
+  /// keys by cell id instead. \c CachedValue is IMPLICITLY constructible from
+  /// a node, so every call site that passes a bare node keeps compiling.
   using cache_key_type = eval::CachedValue<TreeNode>;
 
   /// A custom evaluator type. `evaluate()` consults the cache's custom
@@ -1741,7 +1739,7 @@ class CacheManager {
     requires std::invocable<F&, key_type const&>
   void for_each_key(F&& fn) const {
     // The map key is a CachedValue; callers enumerate NODES (key_type), so hand
-    // them the node. The coloring is a cache-internal identity detail.
+    // them the node.
     for (auto const& [k, v] : cache_map_) fn(k.node);
   }
 
