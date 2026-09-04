@@ -6179,3 +6179,98 @@ TEST_CASE("node_level_external_placement_correctness",
   CHECK(err_off < 1e-10);
   CHECK(err_on < 1e-10);
 }
+
+// A value whose canonicalization carries a PHASE (an antisymmetric tensor
+// written with an odd permutation of its bra/ket: EvalExpr canonicalizes it
+// in place and records canon_phase() == -1) must come out of the ordered
+// executor with the same sign as it does out of forest descent.
+//
+// The orientation convention is the scope cache's, unchanged since before the
+// cell table existed: the STORE holds the CANONICAL value and every READER
+// applies the node's own phase once (eval.hpp's `cache.store(node,
+// apply_phase(node, rb))` against the readers' `apply_phase`, and the root
+// combine's `mult_by_phase`). Storage now lives in the cell registry, so its
+// productions have to convert the same way -- evaluate_impl hands back the
+// ORIENTED result and the phase is an involution, so a production multiplies
+// it back in (ordered_executor.hpp's `canonical`, and eval.hpp's record_leaf).
+// Store the oriented value instead and every read double-applies the phase:
+// every value canonicalized through an odd permutation comes back with the
+// wrong sign. Real TA data is required -- the DryRun backend carries no
+// numbers and cannot witness a sign.
+TEST_CASE(
+    "evaluate_ordered_schedule applies a canonicalization phase exactly once",
+    "[eval][ordered-executor]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(4);
+
+  // g is ANTISYMMETRIC and written with its two bra indices out of canonical
+  // order, so its own leaf node canonicalizes to g{a_1,a_2;...} and carries
+  // canon_phase() == -1; t is written canonically and carries +1.
+  sequant::io::serialization::DeserializationOptions const antisymm{
+      .def_perm_symm = sequant::Symmetry::Antisymm};
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"g{a_2,a_1;i_3,i_4} * t{i_3,i_4;i_1,i_2}", antisymm);
+  std::vector<node_t> forest{eval_node(t1)};
+  std::string const target = "a_1,a_2,i_1,i_2";
+
+  // Non-vacuous: at least one node of the forest really does carry a phase.
+  std::size_t n_phased = 0;
+  auto count_phases = [&](auto&& self, node_t const& n) -> void {
+    if (n->canon_phase() != 1) ++n_phased;
+    if (n.leaf()) return;
+    self(self, n.left());
+    self(self, n.right());
+  };
+  for (auto const& n : forest) count_phases(count_phases, n);
+  // MEASURED on this fixture: the phase sits on the PRODUCT node (binarize
+  // gives a contraction the phase of its canonicalized tensor operand), which
+  // is this forest's root -- so it is the root production and the root
+  // combine's own mult_by_phase that have to agree about the orientation the
+  // registry holds. Undo the conversion at the root production and this case
+  // fails with a relative difference of exactly 2, an outright sign flip.
+  REQUIRE(n_phased > 0);
+
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const&) {
+    return false;
+  };
+  policy.is_batchable_external_index = [](sequant::Index const&) {
+    return false;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 4; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {});
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 4; };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<TArrayD>();
+
+  // Same sign, same values: a double-applied phase shows up here as a
+  // relative difference of 2 (the sign flip), not as FP noise.
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff (ordered vs forest descent, phased value) = " << rel);
+  CHECK(rel < 1e-12);
+}

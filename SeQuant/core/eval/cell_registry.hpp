@@ -56,6 +56,17 @@ struct CellRegistryHooks {
 /// without depending on the legacy scope caches' own persistence. Bound cells
 /// are cleared at the start of every batch of a loop instance they are bound
 /// to (the per-batch scratch reset, expressed on cells).
+///
+/// ORIENTATION CONVENTION (the legacy scope cache's, kept verbatim): a cell
+/// holds the value in its node's CANONICAL orientation, and every reader
+/// applies that node's own \c canon_phase once. A producer therefore stores
+/// \c apply_phase(node, result) -- \c evaluate_impl hands back the ORIENTED
+/// result, and the phase is an involution -- exactly as \c
+/// CacheManager::store did (\c cache.store(node, apply_phase(node, rb)),
+/// readers \c apply_phase again, roots \c mult_by_phase). Storing the
+/// oriented value here instead would double-apply the phase at every read
+/// and flip the sign of every value whose canonicalization needed an odd
+/// permutation.
 class CellRegistry {
  public:
   explicit CellRegistry(CellTable const& table, CellRegistryHooks hooks = {})
@@ -237,6 +248,50 @@ class CellRegistry {
       s.value.reset();
       s.filled_since_clear = false;
     }
+  }
+
+  /// Spends \p count of cell \p c's declared reads WITHOUT taking the value:
+  /// the accounting half of a read the executor decided not to perform. A
+  /// consumer the runtime cache-halt skipped (nothing left this evaluation
+  /// reads its result, or a \c produce_if_absent cell that is resident and so
+  /// is not re-produced) never calls \c read, so without this its source's
+  /// life would never reach zero -- the source would stay resident to the end
+  /// of the evaluation (pinning the memory) and keep looking shared to every
+  /// later reader, which is exactly what disables in-place accumulation.
+  ///
+  /// Releases the value when the life reaches zero, exactly as the draining
+  /// \c read does (bytes accounted, fill-once mark cleared so a later
+  /// production of the cell is a fresh one). A no-op for a persistent cell,
+  /// which never drains, and for \p count == 0. THROWS when \p count exceeds
+  /// the remaining life: forgoing more reads than the table declared is an
+  /// accounting bug in the caller, and silently saturating would release a
+  /// value another consumer is still owed (see \c remaining_life, which the
+  /// ordered executor consults for the one case where a skipped consumer's
+  /// visits legitimately outnumber one production's budget).
+  void forgo(CellId c, std::size_t count) {
+    if (count == 0) return;
+    auto& s = slot(c);
+    if (table_->cells[c].persistent) return;
+    if (count > s.life)
+      throw std::runtime_error(
+          "CellRegistry::forgo: cell#" + std::to_string(c) + " (value " +
+          std::to_string(table_->cells[c].value_id) + ") forgoes " +
+          std::to_string(count) + " reads but only " + std::to_string(s.life) +
+          " of its declared life " + std::to_string(table_->cells[c].life) +
+          " remain");
+    s.life -= count;
+    if (s.life != 0) return;
+    s.filled_since_clear = false;
+    if (s.value) {
+      account(-static_cast<std::ptrdiff_t>(s.value->size_in_bytes()));
+      s.value.reset();
+    }
+  }
+
+  /// \return cell \p c's remaining declared life (0 for a spent cell; a
+  /// persistent cell's life is never spent, so this is informational there).
+  [[nodiscard]] std::size_t remaining_life(CellId c) const {
+    return slot(c).life;
   }
 
   /// \return the sum of \c Result::size_in_bytes() over every slot currently

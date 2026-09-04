@@ -2432,6 +2432,24 @@ TEST_CASE(
     CHECK(b2 == b1);
   }
 
+  // Skipped consumers spend the reads they will not perform (CellRegistry::
+  // forgo, called at every skip site -- see ordered_forgo_reads): so when the
+  // walk is over, the ONLY things the registry is still holding are the cells
+  // that are held ON PURPOSE -- the persistent ones (they survive into the
+  // next evaluation) and the forest roots (just handed to the caller as
+  // pre_results, read by nobody in the table). Anything else would be a
+  // non-persistent intermediate whose declared life never ran out: it would
+  // pin its memory for the rest of the evaluation and keep looking shared to
+  // every later reader, which is what disables in-place accumulation.
+  {
+    auto const res = sequant::eval::detail::ordered_last_registry_residency();
+    INFO("registry residency after iteration 2: live="
+         << res.live << " persistent=" << res.persistent
+         << " roots=" << res.roots);
+    CHECK(res.persistent > 0);  // the fixture really does have persistents
+    CHECK(res.live == res.persistent + res.roots);
+  }
+
   WARN("Kblocks=" << n_Kblocks
                   << " dead_transient_found=" << dead_transient.has_value());
   if (dead_transient) {
@@ -4246,6 +4264,56 @@ TEST_CASE(
   REQUIRE(n_nested_assemble > 0);
   REQUIRE(n_two_level > 0);
 
+  // (1b) The NARROWED case is present too, and the narrowing is a real one:
+  // a Scatter Assemble whose own `sliced` is non-empty is a destination that
+  // lives INSIDE an enclosing loop, so it covers only that loop's current
+  // batch of the sliced position. Assert the executor's own two steps --
+  // make_zeros on the value's full index list, then slice_mode(pos, range) --
+  // land exactly on that batch: extent = the batch's width, lobound = its
+  // start. (Reproduced here on the very descriptor and range the executor
+  // uses; the destination object itself is internal to the run.)
+  {
+    std::size_t n_narrowed = 0;
+    for (sequant::eval::CellId c = 0; c < table.cells.size(); ++c) {
+      auto const& a = table.cells[c];
+      if (a.production.kind != sequant::eval::ProductionKind::Assemble ||
+          a.production.assemble != sequant::eval::AssembleKind::Scatter ||
+          a.sliced.empty())
+        continue;
+      auto const nit = vmap.find(rich.cells[a.value_id].hash);
+      if (nit == vmap.end()) continue;
+      auto const [pos, key] = a.sliced.front();
+      // The enclosing loop instance the position is narrowed by, and its own
+      // batch partition (the same one the executor iterates).
+      std::optional<sequant::Index> axis;
+      std::function<void(sequant::eval::ScopeBlock const&)> find =
+          [&](sequant::eval::ScopeBlock const& b) {
+            if (!axis && sequant::eval::detail::same_key(b.level.key(), key))
+              axis = b.axis;
+            for (auto const& st : b.steps)
+              if (auto const* ch =
+                      std::get_if<sequant::eval::ScopeBlock>(&st.value))
+                find(*ch);
+          };
+      find(ordered.root);
+      REQUIRE(axis.has_value());  // the table names a loop the schedule has
+      auto const batches = aops.axis_batches(*axis, target(*axis));
+      REQUIRE(batches.size() > 1);  // a genuine narrowing, not the whole axis
+      auto const [lo, hi] = batches.front();
+      auto const full = aops.make_zeros(nit->second->canon_indices());
+      auto const narrowed = full->slice_mode(pos, lo, hi);
+      auto const ov = sequant::eval::dryrun::detail::overrides_of(*narrowed);
+      auto const lb = sequant::eval::dryrun::detail::lobounds_of(*narrowed);
+      REQUIRE(ov.count(pos) == 1);
+      CHECK(ov.at(pos) == hi - lo);
+      REQUIRE(lb.count(pos) == 1);
+      CHECK(lb.at(pos) == lo);
+      ++n_narrowed;
+    }
+    INFO("Scatter Assembles with a declared narrowing: " << n_narrowed);
+    REQUIRE(n_narrowed > 0);
+  }
+
   // (2) The sizing rule's own precondition, stated on the table: every
   // position an Assemble cell declares sliced names a loop instance that is
   // OPEN at that cell's scope (so the executor can bind it to a batch range),
@@ -4327,4 +4395,193 @@ TEST_CASE(
     CHECK(z.overrides.empty());
     CHECK(z.lobounds.empty());
   }
+}
+
+// ===========================================================================
+// A nested block whose every production is already resident is not ENTERED at
+// all on the enclosing loop's later batches.
+//
+// The case that makes this matter: a block whose escape is loop-invariant to
+// the loop its Assemble cell sits in -- the table marks that cell
+// `produce_if_absent`, so it is assembled on the first visit and REUSED
+// afterwards. The steps that feed it are then dead on every later visit: with
+// the Assemble treated as a skipped consumer, the by-source closure marks
+// them skipped too, and the whole batch loop is elided rather than re-run to
+// produce partials nobody will fold. (Before that, the block ran in full
+// every visit and only the Assemble itself was skipped.)
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: a block whose productions are all resident is not "
+    "entered again",
+    "[ordered][block-skip]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // aux+occ: Κ batchable-contracted, occ batchable-external -- nested loops,
+  // which is what makes a block-inside-a-block (and so a loop-invariant
+  // escape) possible at all.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (auto const& s : summands) {
+    sequant::ExprPtr const term = orderedexec_witness_flatten_product(s);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+
+  // Precondition: the table really does have a loop-invariant escape -- an
+  // Assemble cell INSIDE a loop (non-root scope) that the builder marked
+  // `produce_if_absent`, i.e. one whose value does not vary with the loop its
+  // own scope sits in.
+  {
+    auto const sma =
+        sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+    sequant::eval::CellTableInputs in;
+    in.ordered = &ordered;
+    in.rich = &rich;
+    in.sliced = &sma;
+    in.sliced_modes_of = [&](std::size_t vid) {
+      auto const it = vmap.find(rich.cells[vid].hash);
+      REQUIRE(it != vmap.end());
+      return sequant::container::svector<sequant::Index>(
+          it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+    };
+    in.volatile_of = [&](std::size_t vid) {
+      auto const it = vmap.find(rich.cells[vid].hash);
+      return it != vmap.end() &&
+             sequant::subtree_any(it->second, is_volatile_node);
+    };
+    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
+        ordered, target, &aops);
+    in.operands_of = orderedexec_per_leg_operands(rich, vmap);
+    auto const table = sequant::eval::build_cell_table(in);
+    std::size_t n_invariant_escapes = 0;
+    for (auto const& c : table.cells)
+      if (c.production.kind == sequant::eval::ProductionKind::Assemble &&
+          !c.scope.path.empty() && c.produce_if_absent)
+        ++n_invariant_escapes;
+    INFO("loop-invariant escapes in the table: " << n_invariant_escapes);
+    REQUIRE(n_invariant_escapes > 0);
+  }
+
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+  ordered_cache.set_recompute_tally_enabled(true);
+  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  std::string const prev_strict_val = prev_strict ? prev_strict : "";
+  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+  if (prev_strict)
+    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+  else
+    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
+
+  // THE assertion: at least one nested batch loop was skipped OUTRIGHT --
+  // every production it would have made was already resident, so it was not
+  // entered.
+  CHECK(sequant::eval::detail::ordered_last_block_skips() > 0);
+
+  // The build tally cannot localize the elision any further on this fixture:
+  // MEASURED here, the block that gets skipped whole holds no value whose
+  // ONLY production site is inside it (every one of them is also built by a
+  // step of another block or another pass), so no per-value build count is
+  // below what the loop nesting alone implies. The skip counter above is the
+  // direct statement of the same fact -- the block was not entered -- and the
+  // strict-fill-once walk above is what says the elision changed nothing else.
 }

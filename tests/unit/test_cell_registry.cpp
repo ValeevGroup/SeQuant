@@ -449,3 +449,40 @@ TEST_CASE(
   CHECK_FALSE(rr.operand_drained(100));  // table value, never fetched here
   CHECK(rr.operand_drained(999));        // not a table value: private
 }
+
+TEST_CASE("cell registry: forgo spends a read the executor will not perform",
+          "[cell_registry]") {
+  // make_table(): cell 0 is a PERSISTENT Leaf (life 2), cell 1 a
+  // non-persistent Build with life 1, cell 2 a Build with life 0.
+  auto const t = make_table();
+  CellRegistry reg(t);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      cell_registry_test_regime());
+  sequant::ResultPtr r = std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+      sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}}, cm);
+
+  // Forgoing a non-persistent cell's LAST life releases the value, exactly as
+  // the draining read does: bytes accounted, slot emptied, drained.
+  reg.set(1, r);
+  CHECK(reg.remaining_life(1) == 1);
+  CHECK(reg.live_bytes() == r->size_in_bytes());
+  reg.forgo(1, 0);  // no-op
+  CHECK(reg.remaining_life(1) == 1);
+  reg.forgo(1, 1);
+  CHECK(reg.remaining_life(1) == 0);
+  CHECK_FALSE(reg.peek(1));
+  CHECK(reg.drained(1));
+  CHECK(reg.live_bytes() == 0);
+  // ... and the fill-once mark went with it, so the next batch's production
+  // is a fresh one rather than a duplicate.
+  CHECK_NOTHROW(reg.set(1, r));
+
+  // A persistent cell never drains, so forgoing it is a no-op.
+  reg.set(0, r);
+  reg.forgo(0, 5);
+  CHECK(reg.peek(0) == r);
+
+  // Forgoing more reads than the table declared is an accounting bug in the
+  // caller: it would release a value another consumer is still owed.
+  CHECK_THROWS(reg.forgo(1, 2));
+}

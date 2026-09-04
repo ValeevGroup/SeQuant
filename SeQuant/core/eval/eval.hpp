@@ -1119,9 +1119,14 @@ ResultPtr evaluate_impl(Node const& node,         //
           // Explicit value cells (SP4 Task 4): this is the leaf's first
           // touch under the resolver (see the probe above) -- record it so
           // every later fetch of this cell reads (and slices) the SAME
-          // object instead of re-running the leaf evaluator.
+          // object instead of re-running the leaf evaluator. Recorded in the
+          // CANONICAL orientation, the registry's convention (see
+          // CellRegistry's own doc): the leaf evaluator hands back the
+          // node's oriented value and every fetch of the cell applies the
+          // node's phase, exactly as the scope cache's store/read pair did.
+          // The value this frame returns stays the ORIENTED `result`.
           if (auto* rr = cache.cell_read_resolver())
-            rr->record_leaf(f.node->hash_value(), result);
+            rr->record_leaf(f.node->hash_value(), apply_phase(f.node, result));
           // Store the FULL leaf under its canonical key (a block slice would
           // corrupt the cache), then return it SLICED to the current block: a
           // freshly built leaf's lifetime is top, so every enclosing carried
