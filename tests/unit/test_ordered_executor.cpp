@@ -4585,3 +4585,265 @@ TEST_CASE(
   // direct statement of the same fact -- the block was not entered -- and the
   // strict-fill-once walk above is what says the elision changed nothing else.
 }
+
+// ===========================================================================
+// A `produce_if_absent` cell that is BOUND to an enclosing loop instance is
+// re-produced on every batch of that loop.
+//
+// Such a cell is invariant to the loop it is homed in (that is what the flag
+// says) but NOT to an outer one, so the outer loop's per-batch reset
+// (CellRegistry::clear_bound_to) empties it, and the next visit has to build
+// it again. The hazard is the per-visit skip set: it is computed once at a
+// block's entry from the cells the registry then holds and is consulted
+// across every batch of that block and inside every nested block, so a cell
+// seeded there and cleared afterwards would be skipped while unproduced --
+// its consumers would then read a value that is not there. Only cells that no
+// clear can reach (bound to no loop instance at all) are seeded.
+//
+// The INPUT-MIRRORED configuration is the one whose schedule has such a cell
+// (MEASURED: the default configuration's produce_if_absent cells are all
+// unbound), so this case sets that configuration directly.
+// ===========================================================================
+TEST_CASE(
+    "ordered executor: a produce-if-absent cell bound to an enclosing loop is "
+    "re-produced on that loop's batches",
+    "[ordered][pia-rebind]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedexec_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  auto regime = orderedexec_witness_df_regime(kOrderedExecWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"Κ";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 25e9;  // THE mirrored setting
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+  std::vector<Node> forest;
+  for (auto const& s : summands) {
+    sequant::ExprPtr const term = orderedexec_witness_flatten_product(s);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(sequant::Index const&)> const target =
+      [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"Κ" ? 256 : 16;
+  };
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+
+  // The cell this case is about, from the schedule's own derived table.
+  auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+  sequant::eval::CellTableInputs in;
+  in.ordered = &ordered;
+  in.rich = &rich;
+  in.sliced = &sma;
+  in.sliced_modes_of = [&](std::size_t vid) {
+    auto const it = vmap.find(rich.cells[vid].hash);
+    REQUIRE(it != vmap.end());
+    return sequant::container::svector<sequant::Index>(
+        it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+  };
+  in.volatile_of = [&](std::size_t vid) {
+    auto const it = vmap.find(rich.cells[vid].hash);
+    return it != vmap.end() &&
+           sequant::subtree_any(it->second, is_volatile_node);
+  };
+  in.n_batches_of =
+      sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
+  in.operands_of = orderedexec_per_leg_operands(rich, vmap);
+  auto const table = sequant::eval::build_cell_table(in);
+
+  std::optional<sequant::eval::CellId> bound_pia;
+  for (sequant::eval::CellId c = 0; c < table.cells.size() && !bound_pia; ++c) {
+    auto const& tc = table.cells[c];
+    if (!tc.produce_if_absent) continue;
+    if (sequant::eval::detail::bound_instances(tc).empty()) continue;
+    bound_pia = c;
+  }
+  REQUIRE(bound_pia.has_value());  // this configuration really has one
+  auto const& pia = table.cells[*bound_pia];
+  auto const bound_key = sequant::eval::detail::bound_instances(pia).front();
+  // The loop it is bound to is a real, MULTI-batch loop of this schedule --
+  // otherwise "once per batch of the enclosing loop" and "once" coincide and
+  // the assertion below would be vacuous.
+  std::size_t const n_bound_batches = in.n_batches_of(bound_key);
+  INFO("produce_if_absent cell#"
+       << *bound_pia << " (value " << pia.value_id << ", scope depth "
+       << pia.scope.path.size() << ") is bound to a loop of " << n_bound_batches
+       << " batches");
+  REQUIRE(n_bound_batches > 1);
+
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+  ordered_cache.set_recompute_tally_enabled(true);
+  auto& logger = sequant::Logger::instance();
+  auto const prev_level = logger.eval.level;
+  logger.eval.level = 1;  // arms the build tally
+  std::ostringstream sink;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.stream = &sink;
+  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  std::string const prev_strict_val = prev_strict ? prev_strict : "";
+  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
+  if (prev_strict)
+    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+  else
+    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  // The cell's own value is produced once per batch of the loop it is bound
+  // to -- NOT once. (Its production is the per-batch form the Assemble folds,
+  // which the executor evaluates through the same evaluate_impl the build
+  // tally counts.)
+  auto const nit = vmap.find(rich.cells[pia.value_id].hash);
+  REQUIRE(nit != vmap.end());
+  std::size_t const builds =
+      orderedexec_builds_of(ordered_cache.recompute_tally(), nit->second);
+  INFO("value " << pia.value_id << " built " << builds << " times; the loop it "
+                << "is bound to has " << n_bound_batches << " batches");
+  CHECK(builds >= n_bound_batches);
+}
+
+// The rule that closes the hazard the case above characterizes, on a
+// hand-built table so the two halves of it are visible side by side: a
+// `produce_if_absent` cell BOUND to a loop instance loses its value when that
+// loop advances, so it must never be marked skipped for a whole visit (the
+// mark outlives the clear); an UNBOUND one is reachable by no clear and so may
+// be. Before the fix the seeding rule was "produce_if_absent and currently
+// held", which admits the bound cell and elides its re-production.
+TEST_CASE(
+    "ordered executor: only an unbound produce-if-absent cell may be seeded "
+    "into a per-visit skip set",
+    "[ordered][pia-rebind]") {
+  using sequant::eval::CellRegistry;
+  using sequant::eval::CellTable;
+  using sequant::eval::LoopKey;
+  using sequant::eval::ProductionKind;
+  using sequant::eval::TableCell;
+
+  LoopKey const outer{1, 0}, inner{2, 0};
+  CellTable t;
+  // cell 0: homed inside the INNER loop, sliced by the OUTER one -- invariant
+  // to its own loop (so produce_if_absent) but not to the outer one.
+  TableCell bound;
+  bound.value_id = 0;
+  bound.production.kind = ProductionKind::Build;
+  bound.scope.path = {{outer, 0}, {inner, 0}};
+  bound.sliced = {{0, outer}};
+  bound.produce_if_absent = true;
+  bound.life = 1;
+  t.cells.push_back(bound);
+  // cell 1: same home, bound to nothing at all.
+  TableCell unbound;
+  unbound.value_id = 1;
+  unbound.production.kind = ProductionKind::Build;
+  unbound.scope.path = {{outer, 0}, {inner, 0}};
+  unbound.produce_if_absent = true;
+  unbound.life = 1;
+  t.cells.push_back(unbound);
+
+  CellRegistry reg(t);
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 8}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  sequant::ResultPtr const r =
+      std::make_shared<sequant::eval::dryrun::ResultDryRun>(
+          sequant::container::svector<sequant::Index>{sequant::Index{L"i_1"}},
+          cm);
+  reg.set(0, r);
+  reg.set(1, r);
+
+  // The inner loop's own batch boundary keeps both (that is what
+  // produce_if_absent means); the OUTER loop's boundary empties the bound one.
+  reg.clear_bound_to(inner);
+  CHECK(reg.peek(0) == r);
+  CHECK(reg.peek(1) == r);
+  reg.clear_bound_to(outer);
+  CHECK_FALSE(reg.peek(0));  // cleared: it must be produced again
+  CHECK(reg.peek(1) == r);   // no clear can reach it
+
+  // ... which is exactly what the seeding rule has to encode, since a
+  // per-visit mark is decided before those clears and consulted after them.
+  CHECK_FALSE(sequant::eval::detail::ordered_visit_skip_seedable(t.cells[0]));
+  CHECK(sequant::eval::detail::ordered_visit_skip_seedable(t.cells[1]));
+}

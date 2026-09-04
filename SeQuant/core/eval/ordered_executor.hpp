@@ -378,6 +378,25 @@ inline std::size_t& ordered_last_block_skips_slot() {
   return ordered_last_block_skips_slot();
 }
 
+/// Whether \p c may be SEEDED into a per-visit skip set (\c
+/// run_ordered_contracted_block's own, at block entry).
+///
+/// Two conditions, and the second is the one that is easy to lose: the cell
+/// must be \c produce_if_absent (its production is elided precisely while it
+/// stays resident), and it must be bound to NO loop instance. A per-visit set
+/// is computed once at a block's entry and consulted across every batch of
+/// that block and inside every nested block, while \c
+/// CellRegistry::clear_bound_to empties the cells bound to a loop instance
+/// whenever that loop advances -- this block's own loop at each of its
+/// batches, a nested loop at each of its. A bound cell can therefore lose its
+/// value under a mark that still says "skip", and its production would be
+/// elided while its consumers still need it. An unbound \c produce_if_absent
+/// cell is reachable by no clear at all (the implicit "its scope's innermost
+/// loop" rule exempts exactly these), so a mark on it stays true.
+[[nodiscard]] inline bool ordered_visit_skip_seedable(TableCell const& c) {
+  return c.produce_if_absent && detail::bound_instances(c).empty();
+}
+
 /// \overload A skipped VISIT of \p c: one read per leg.
 inline void ordered_forgo_visit(CellRegistry& registry, ForgoPlan const& plan,
                                 CellId c) {
@@ -586,27 +605,32 @@ void run_ordered_contracted_block(
   // the node's phase once more and so sees the oriented value again.
   auto const canonical = [](node_t const& nd, ResultPtr r) -> ResultPtr {
     auto const ph = nd->canon_phase();
-    return ph == 1 ? std::move(r) : r->mult_by_phase(ph);
+    // Null passes through untouched (never dereferenced): a missing result is
+    // diagnosed where it is read, not here.
+    return (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph);
   };
 
   CellScope const parent_scope = current_scope(ectx);
   CellScope const block_scope = current_scope(ectx, block);
 
-  // THIS VISIT's skip set: the call-wide one plus every `produce_if_absent`
-  // cell the registry currently holds -- such a cell is not re-produced on
-  // this visit, so it is a skipped consumer for the purpose of deciding
-  // whether anything downstream of it still has to run -- closed under the
-  // same by-source consumer rule. Recomputed per entry because holding is
-  // runtime state; it can only grow during one visit (a cell bound to a loop
-  // this block opens is cleared per batch, but a produce_if_absent cell is
-  // by definition not bound to its own innermost loop), so deciding it once
-  // at entry is conservative in the safe direction.
+  // THIS VISIT's skip set: the call-wide one plus the `produce_if_absent`
+  // cells the registry currently holds -- such a cell is not re-produced
+  // while it is resident, so it is a skipped consumer for the purpose of
+  // deciding whether anything downstream of it still has to run -- closed
+  // under the same by-source consumer rule.
+  //
+  // A seed must be a cell that CANNOT LOSE its value while this set is in
+  // use -- and this set is in use for every batch of this block AND inside
+  // every nested block, since it is handed down to them. That is exactly what
+  // `ordered_visit_skip_seedable` decides (see its own doc comment). The
+  // call-wide set is untouched by all this: it is decided from persistence
+  // and consumer death, neither of which a per-batch clear can invalidate.
   container::vector<char> local_skip_storage;
   container::vector<char> const* skip_p = &skip;
   {
     bool seeded = false;
     for (CellId c = 0; c < table->cells.size(); ++c) {
-      if (skip[c] || !table->cells[c].produce_if_absent) continue;
+      if (skip[c] || !ordered_visit_skip_seedable(table->cells[c])) continue;
       if (!registry.peek(c)) continue;
       if (!seeded) {
         local_skip_storage = skip;
@@ -760,17 +784,25 @@ void run_ordered_contracted_block(
               std::to_string(block.level.depth) + " slot " +
               std::to_string(block.level.loop_slot));
         built[build->value_id] = 1;
-        if (vskip[*build_cell]) {
-          // Cache-halt: nothing reads it this visit. The reads this
-          // production will not perform are still owed to their sources.
-          ordered_forgo_visit(registry, forgo_plan, *build_cell);
-          continue;
-        }
         // A loop-invariant cell homed inside a loop is produced on its FIRST
         // visit and reused by every later batch (the table's own flag; the
         // registry keeps it until an instance it IS bound to clears it).
-        if (table->cells[*build_cell].produce_if_absent &&
-            registry.peek(*build_cell)) {
+        // RESIDENCY decides this FIRST, ahead of the skip set: a
+        // `produce_if_absent` cell that a per-batch clear has emptied must be
+        // re-produced, whatever an enclosing scope's per-visit set -- computed
+        // before that clear -- still says about it.
+        bool const pia_resident = table->cells[*build_cell].produce_if_absent &&
+                                  registry.peek(*build_cell) != nullptr;
+        // Cache-halt second: nothing reads this cell this visit. (A
+        // `produce_if_absent` cell that is NOT resident still falls through to
+        // here, so a cell the call-wide set has genuinely killed is not
+        // rebuilt for nobody -- but a cell that is merely marked by some
+        // enclosing scope's per-visit seed can no longer elide a production
+        // the clear above made necessary, because such a cell is never seeded
+        // any more: see the per-visit set at this block's entry.)
+        if (pia_resident || vskip[*build_cell]) {
+          // Resident and reused, or cache-halted. Either way the reads this
+          // production will not perform are still owed to their sources.
           ordered_forgo_visit(registry, forgo_plan, *build_cell);
           continue;
         }
@@ -933,10 +965,11 @@ inline std::size_t& ordered_last_cell_table_size_slot() {
 /// \c run_ordered_schedule_pre_results call returned. \c live is the whole
 /// live byte total; \c persistent is the part held by cells the table marks
 /// persistent (they survive on purpose, into the next evaluation); \c roots
-/// is the part held by the forest roots' own cells (handed to the caller as
-/// \c pre_results, and read by nobody in the table, so their cells keep
-/// holding them until the registry dies with the call). \c live beyond those
-/// two is a non-persistent intermediate that never reached the end of its
+/// is the part held by the forest roots' own cells -- the exact CELLS the
+/// results were taken from, not every cell of a root's value (handed to the
+/// caller as \c pre_results, and read by nobody in the table, so those cells
+/// keep holding them until the registry dies with the call). \c live beyond
+/// those two is a non-persistent intermediate that never reached the end of its
 /// declared life -- exactly what a missing \c CellRegistry::forgo at a
 /// skipped production leaves behind.
 struct OrderedRegistryResidency {
@@ -1291,7 +1324,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         auto const ph = it->second->canon_phase();
         ResultPtr r =
             evaluate_impl<EvalTrace>(it->second, leaf_evaluator, cache);
-        registry.set(*root_cell, ph == 1 ? std::move(r) : r->mult_by_phase(ph));
+        // A null result is recorded as null rather than dereferenced here, so
+        // the diagnostic stays the "forest root was never produced" throw at
+        // the combine below instead of a crash in the phase conversion.
+        registry.set(*root_cell,
+                     (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph));
       }
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(
@@ -1337,6 +1374,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   for (auto&& n : forest) roots.push_back(n);
 
   container::svector<ResultPtr> pre_results(roots.size());
+  // The CELLS the roots' results were taken from -- the residency diagnostic
+  // below buckets by these, not by the roots' value ids: another cell of a
+  // root's value (an in-block form of it, say) is an ordinary intermediate
+  // and its retention must not be excused as "that is just the root".
+  container::set<CellId> root_cells;
   for (std::size_t i = 0; i != roots.size(); ++i) {
     auto const vid_it = hash_to_vid.find(roots[i]->hash_value());
     SEQUANT_ASSERT(vid_it != hash_to_vid.end() &&
@@ -1356,6 +1398,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           "evaluate_ordered_schedule: forest root value " +
           std::to_string(vid) +
           " has no root-scope cell (cell table/schedule disagreement)");
+    root_cells.insert(*cell);
     ResultPtr ptr = registry.peek(*cell);
     if (!ptr)
       throw Exception("evaluate_ordered_schedule: forest root value " +
@@ -1374,18 +1417,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // (see OrderedRegistryResidency). Computed before the registry dies with
   // this call, and only from what it already tracks.
   {
-    container::set<std::size_t> root_vids;
-    for (auto const& r : roots) {
-      auto const it = hash_to_vid.find(r->hash_value());
-      if (it != hash_to_vid.end()) root_vids.insert(it->second);
-    }
     OrderedRegistryResidency res;
     registry.for_each_live([&](CellId c, ResultPtr const& v) {
       std::size_t const b = v->size_in_bytes();
       res.live += b;
       if (cell_table.cells[c].persistent)
         res.persistent += b;
-      else if (root_vids.count(cell_table.cells[c].value_id))
+      else if (root_cells.count(c))
         res.roots += b;
     });
     ordered_last_registry_residency_slot() = res;
@@ -1397,7 +1435,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     if (std::getenv("SEQUANT_UT_RESIDENCY_DIAG"))
       registry.for_each_live([&](CellId c, ResultPtr const& v) {
         TableCell const& tc = cell_table.cells[c];
-        if (tc.persistent || root_vids.count(tc.value_id)) return;
+        if (tc.persistent || root_cells.count(c)) return;
         std::cerr << "[resid] cell#" << c << " value " << tc.value_id
                   << " kind=" << (int)tc.production.kind
                   << " scope_depth=" << tc.scope.path.size()
