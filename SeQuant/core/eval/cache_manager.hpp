@@ -989,8 +989,8 @@ class CacheManager {
   /// forest replay).
   // Keyed by NODE identity (not the cache's value-id): a per-DISTINCT-value
   // build diagnostic the dry-run costing rolls up, consumed node-by-node by the
-  // eval tests. Pillar 1's slice-colored value identity lives in cache_map_
-  // (correctness); this rollup stays node-keyed (byte-identical to before).
+  // eval tests. The node-keyed value identity lives in cache_map_
+  // (correctness); this rollup is node-keyed as well.
   std::unordered_map<TreeNode, BuildTally,
                      TreeNodeHasher<TreeNode, force_hash_collisions>,
                      TreeNodeEqualityComparator<TreeNode>>
