@@ -1175,10 +1175,9 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
       return closed_shell_CC_spintrace_v1(expr, options);
     case BiorthogonalizationMethod::V2:
       return closed_shell_CC_spintrace_v2(expr, options);
-    default:
-      SEQUANT_ASSERT(false && "unreachable code reached");
-      abort();
   }
+
+  SEQUANT_UNREACHABLE;
 }
 
 Tensor swap_spin(const Tensor& t) {

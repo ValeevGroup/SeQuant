@@ -580,14 +580,14 @@ ExprPtr OpMaker<S>::operator()(
   if (!dep && csv) {
     if (opclass == OpClass::Ex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : cre_spaces_) {
+        for ([[maybe_unused]] const auto& s : cre_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
       dep = UseDepIdx::Bra;
     } else if (opclass == OpClass::Deex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : ann_spaces_) {
+        for ([[maybe_unused]] const auto& s : ann_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
@@ -609,7 +609,7 @@ ExprPtr OpMaker<S>::operator()(
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt, full_label, op_herm](
+        [opsymm_opt, full_label, op_herm](
             const auto& creidxs, const auto& annidxs, const auto& batchidxs,
             Symmetry opsymm) {
           return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
@@ -621,8 +621,8 @@ ExprPtr OpMaker<S>::operator()(
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt, full_label, op_herm](
-          const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
+      [opsymm_opt, full_label, op_herm](const auto& creidxs,
+                                        const auto& annidxs, Symmetry opsymm) {
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm, op_herm);
       },

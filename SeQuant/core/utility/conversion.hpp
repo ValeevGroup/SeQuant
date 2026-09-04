@@ -26,8 +26,8 @@ template <typename T, typename Arg>
 T string_to_impl(std::string_view str, Arg &&arg) {
   T val = 0;
 
-  std::from_chars_result result =
-      std::from_chars(str.begin(), str.end(), val, std::forward<Arg>(arg));
+  std::from_chars_result result = std::from_chars(
+      str.data(), str.data() + str.size(), val, std::forward<Arg>(arg));
 
   // Note: Beware that typeid(T).name() yields something implementation defined,
   // which may or may not be useful for a human
@@ -46,7 +46,7 @@ T string_to_impl(std::string_view str, Arg &&arg) {
     }
   }
 
-  if (result.ptr != str.end()) {
+  if (result.ptr != str.data() + str.size()) {
     // Incomplete parse
     throw ConversionException("'" + std::string(str) +
                               "' could not be fully parsed as a '" +

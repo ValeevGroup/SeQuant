@@ -16,8 +16,21 @@ function(target_warnings_as_errors TARGET)
     endif()
 endfunction()
 
-function(target_set_warning_flags TARGET)
+function(target_set_compiler_flags TARGET)
     __check_gnu_like_compiler()
+
+	if (MSVC)
+		# By default MSVC is not standard-compliant in its preprocessor implementation
+		# but we need it to be (partially in headers, which is why this is a public option)
+		target_compile_options("${TARGET}" PUBLIC "/Zc:preprocessor")
+		# By default MSVC does not set the __cplusplus macro to the correct value
+		# That breaks any code that tries to be compatible with different C++ standards
+		target_compile_options("${TARGET}" PUBLIC "/Zc:__cplusplus")
+		# Don't error due to object files being too big
+		target_compile_options("${TARGET}" PRIVATE "/bigobj")
+		# Make MSVC use and understand UTF-8 encoding in source files
+		target_compile_options("${TARGET}" PUBLIC "/utf-8")
+	endif()
 
     if (NOT PROJECT_IS_TOP_LEVEL)
         if (IS_GNU_LIKE_COMPILER)

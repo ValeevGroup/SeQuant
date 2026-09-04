@@ -26,6 +26,21 @@
 #include <memory>
 #include <vector>
 
+void disable_outer_product_pruning() {
+#ifdef _WIN32
+  putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1");
+#else
+  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+#endif
+}
+void reenable_outer_product_pruning() {
+#ifdef _WIN32
+  putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "");
+#else
+  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+#endif
+}
+
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {
   using namespace sequant;
@@ -2183,9 +2198,9 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
     if (f->is<Tensor>()) v.push_back(f);
   TensorNetwork tn{v};
   std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}};
-  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  disable_outer_product_pruning();
   auto m_off = o::outer_product_connectivity(tn, tgt);
-  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  reenable_outer_product_pruning();
   for (auto val : m_off) CHECK(val == 1);
 }
 
@@ -2237,7 +2252,6 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   // disconnected proper subset -- i.e. its mask really does prune something.
   {
     namespace o = sequant::opt::detail;
-    unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
     auto star = deserialize(L"g_{i1,i2}^{a1,a2} t_{a1}^{i1} t_{a2}^{i2}",
                             {.def_perm_symm = Symmetry::Antisymm});
     container::vector<ExprPtr> sv;
@@ -2254,13 +2268,10 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   }
 
   auto run = [&](std::wstring const& term, ObjectiveFunction obj, bool prune) {
-    if (prune)
-      unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
-    else
-      setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+    if (!prune) disable_outer_product_pruning();
     auto expr = deserialize(term, {.def_perm_symm = Symmetry::Antisymm});
     auto out = optimize(expr, opts_for(obj));
-    unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+    reenable_outer_product_pruning();
     REQUIRE(out);
     return to_latex(out);
   };
@@ -2303,9 +2314,9 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
   auto no_prune = to_latex(optimize(expr, opts_for(false)));
   CHECK(with_prune == no_prune);
   // prune_outer_products == false must reproduce the env force-disable path.
-  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  disable_outer_product_pruning();
   auto env_disabled = to_latex(optimize(expr, opts_for(true)));
-  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  reenable_outer_product_pruning();
   CHECK(no_prune == env_disabled);
 }
 
@@ -2342,7 +2353,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   std::function<double(Index const&, std::size_t)> const ip_off = {};
 
   bool composite_inner_checked = false;
-  for (std::wstring const term :
+  for (std::wstring const& term :
        {std::wstring(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
         std::wstring(L"g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
     for (auto const* ip : {&ip_on, &ip_off}) {
@@ -2440,8 +2451,8 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
     return ix.nonnull() ? ix.space().approximate_size() : 1;
   };
   auto with = to_latex(optimize(prod, opt));
-  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
+  disable_outer_product_pruning();
   auto without = to_latex(optimize(prod, opt));
-  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
+  reenable_outer_product_pruning();
   CHECK(with == without);
 }
