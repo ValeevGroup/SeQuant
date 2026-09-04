@@ -422,11 +422,11 @@ TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {
   using ranges::views::join;
   using ranges::views::transform;
 
-  constexpr auto emplace_into = [](Container& target, auto&& value) {
-    if constexpr (requires { target.emplace_back(value); }) {
+  constexpr auto emplace_into = [](auto&& target, auto&& value) {
+    if constexpr (meta::can_emplace_back<decltype(target), decltype(value)>) {
       // for sequence containers like vectors, lists
       target.emplace_back(value);
-    } else if constexpr (requires { target.emplace(value); }) {
+    } else if constexpr (meta::can_emplace<decltype(target), decltype(value)>) {
       // for associative containers like set
       target.emplace(value);
     } else {
