@@ -98,15 +98,6 @@ struct ModeToLevel {
   /// indexed by canon_indices position; nullopt where that mode does not run
   /// under any DAG-scope loop.
   container::svector<std::optional<DagScopeLevel>> by_mode;
-
-  /// \return the mode (position in \c by_mode) that runs under \p level, or
-  ///         nullopt if no mode does.
-  [[nodiscard]] std::optional<std::size_t> mode_of(
-      DagScopeLevel const& level) const {
-    for (std::size_t i = 0; i < by_mode.size(); ++i)
-      if (by_mode[i] && *by_mode[i] == level) return i;
-    return std::nullopt;
-  }
 };
 
 }  // namespace sequant

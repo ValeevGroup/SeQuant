@@ -650,47 +650,6 @@ TEST_CASE(
   REQUIRE(orderedexec_index_of_build_step(ordered.root, parent_value_id)
               .has_value());
 
-  // Task 2 (eager-home-release plan): detail::ordered_n_blocks reports > 1
-  // blocks for the batched Κ (aux) axis at target 256 (matches this test's
-  // own batch_target_size policy above), and exactly 1 for an unbatched
-  // index TYPE (never realized as a ScopeBlock axis anywhere in `ordered`).
-  {
-    std::optional<sequant::Index> kappa_index;
-    std::function<void(sequant::eval::ScopeBlock const&)> find_kappa_axis =
-        [&](sequant::eval::ScopeBlock const& b) {
-          if (kappa_index) return;
-          if (b.axis.space().base_key() == L"Κ") {
-            kappa_index = b.axis;
-            return;
-          }
-          for (auto const& s : b.steps)
-            if (auto const* child =
-                    std::get_if<sequant::eval::ScopeBlock>(&s.value))
-              find_kappa_axis(*child);
-        };
-    for (auto const& s : ordered.root.steps)
-      if (auto const* child = std::get_if<sequant::eval::ScopeBlock>(&s.value))
-        find_kappa_axis(*child);
-    REQUIRE(kappa_index.has_value());
-
-    std::optional<sequant::Index> unbatched_index;
-    for (auto const& vc : rich.cells) {
-      for (sequant::Index const& ix : vc.carried) {
-        if (ix.space().base_key() != L"Κ") {
-          unbatched_index = ix;
-          break;
-        }
-      }
-      if (unbatched_index) break;
-    }
-    REQUIRE(unbatched_index.has_value());
-
-    auto const nb = sequant::eval::detail::ordered_n_blocks(
-        ordered, rich, vmap, yield, target, /*aops=*/&aops);
-    CHECK(nb(*kappa_index) > 1);
-    CHECK(nb(*unbatched_index) == 1);
-  }
-
   std::ostringstream ord_trace;
   logger.eval.stream = &ord_trace;
   auto ordered_cache = sequant::cache_manager(forest);
@@ -3812,6 +3771,28 @@ concept has_recolor = requires(
     Cache& c, typename Cache::cache_key_type const& k) { c.recolor(k); };
 template <typename Schedule>
 concept has_home_mode_depth = requires(Schedule& s) { s.home_mode_depth; };
+// Stage 4 (explicit-cells): the residency/role inference machinery that no
+// production path consults any more (verified zero-callers). Same
+// SFINAE-friendly-lookup rationale as above.
+template <typename Cache>
+concept has_peek_at = requires(
+    Cache& c, typename Cache::cache_key_type const& k) { c.peek_at(k); };
+template <typename Cache>
+concept has_entry_is_persistent =
+    requires(Cache const& c, typename Cache::cache_key_type const& k) {
+      c.entry_is_persistent(k);
+    };
+template <typename Cache>
+concept has_dump_entries_for_hash =
+    requires(Cache const& c) { c.dump_entries_for_hash(std::size_t{0}); };
+template <typename Cache>
+concept has_stored_this_eval =
+    requires(Cache const& c, typename Cache::cache_key_type const& k) {
+      c.stored_this_eval(k);
+    };
+template <typename M2L>
+concept has_mode_of =
+    requires(M2L const& m, sequant::DagScopeLevel const& l) { m.mode_of(l); };
 }  // namespace
 
 TEST_CASE(
@@ -3830,6 +3811,16 @@ TEST_CASE(
                 "recolor must be gone from the cache");
   static_assert(!has_home_mode_depth<OrderedSchedule>,
                 "home_mode_depth must be gone from the ordered schedule");
+  static_assert(!has_peek_at<sequant::CacheManager<ScalarNode>>,
+                "peek_at must be gone from the cache");
+  static_assert(!has_entry_is_persistent<sequant::CacheManager<ScalarNode>>,
+                "entry_is_persistent must be gone from the cache");
+  static_assert(!has_dump_entries_for_hash<sequant::CacheManager<ScalarNode>>,
+                "dump_entries_for_hash must be gone from the cache");
+  static_assert(!has_stored_this_eval<sequant::CacheManager<ScalarNode>>,
+                "stored_this_eval(key) must be gone from the cache");
+  static_assert(!has_mode_of<sequant::ModeToLevel>,
+                "ModeToLevel::mode_of must be gone");
   SUCCEED();
 }
 

@@ -941,15 +941,6 @@ class CacheManager {
 
     [[nodiscard]] bool persistent() const noexcept { return persistent_; }
 
-    /// \return whether this NON-persistent entry has been \c store()'d since
-    ///         its last \c reset() -- the re-store tripwire's flag state, used
-    ///         by tests to observe the guard without depending on assert
-    ///         behavior (which is elided unless \c SEQUANT_ASSERT_ENABLED).
-    ///         Always \c false for a persistent entry (never set).
-    [[nodiscard]] bool stored_this_eval() const noexcept {
-      return stored_this_eval_;
-    }
-
     [[nodiscard]] size_t life_count() const noexcept { return life_c; }
 
     [[nodiscard]] size_t max_life_count() const noexcept { return max_life; }
@@ -1382,24 +1373,6 @@ class CacheManager {
       cache_map_.try_emplace(k, entry{c, is_persistent(k)});
   }
 
-  /// \return whether @p key's cache entry (this cache or an ancestor) is
-  ///         classified PERSISTENT. The shared cache builder
-  ///         (\c sequant::cache_manager) computes the correct persistence
-  ///         predicate -- non-volatile AND has a volatile DIRECT consumer --
-  ///         and stamps it here at construction. The ordered executor's
-  ///         home-slot seeding consults this instead of re-deriving
-  ///         persistence, so it cannot over-enroll a non-volatile value that
-  ///         has no volatile consumer. \c false when the key has no entry (the
-  ///         shared cache chose not to register it, i.e. it is not persistent).
-  [[nodiscard]] bool entry_is_persistent(
-      cache_key_type const& key) const noexcept {
-    for (CacheManager const* c = this; c; c = c->parent_) {
-      auto const it = c->cache_map_.find(key);
-      if (it != c->cache_map_.end()) return it->second.persistent();
-    }
-    return false;
-  }
-
   ///
   /// Resets all cached data.
   ///
@@ -1669,17 +1642,6 @@ class CacheManager {
     return access_at(key).ptr;
   }
 
-  /// Non-decrementing chain lookup: return @p key's held value from the nearest
-  /// scope up the chain that holds it, WITHOUT decaying any lifetime (mirrors
-  /// \c access_at's parent walk, but reads via \c entry::peek()). For a
-  /// reuse/probe of an already-homed value that must not spend a life
-  /// reserved for the value's genuine consumers.
-  [[nodiscard]] ResultPtr peek_at(cache_key_type const& key) noexcept {
-    if (auto found = cache_map_.find(key); found != cache_map_.end())
-      if (auto data = found->second.peek()) return data;
-    return parent_ ? parent_->peek_at(key) : nullptr;
-  }
-
   /// Fetch @p key from EXACTLY @p hops scopes up the chain (walk @p hops
   /// parent links, then one LOCAL entry::access() there), rather than
   /// searching the chain like access_at() does. Used by a router-directed
@@ -1815,27 +1777,6 @@ class CacheManager {
   ///         already resident at its home is read from there each batch (the
   ///         parent-chain fall-through), so it is neither registered nor
   ///         rebuilt in the per-batch scratch.
-  /// DIAGNOSTIC: print every entry in this cache and its ancestors whose node
-  /// hash equals @p hash (any coloring), with coloring, residency and life --
-  /// for a read-from-home miss, shows whether the value is stored under a
-  /// DIFFERENT key (coloring/scope mismatch) or genuinely absent.
-  void dump_entries_for_hash(std::size_t hash, std::size_t depth = 0) const {
-    for (auto const& [key, ent] : cache_map_) {
-      if (key.node->hash_value() != hash) continue;
-      std::cerr << "  [chain-dump] depth=" << depth
-                << " hash=" << (hash % 100000u) << " coloring={";
-      for (auto const& m : key.coloring.ctx_modes)
-        std::cerr << toUtf8(m.full_label()) << ":"
-                  << (key.coloring.colors.count(m) ? key.coloring.colors.at(m)
-                                                   : std::size_t(-1))
-                  << " ";
-      std::cerr << "} alive=" << (int)ent.alive()
-                << " life=" << ent.life_count() << "/" << ent.max_life_count()
-                << " persistent=" << (int)ent.persistent() << std::endl;
-    }
-    if (parent_) parent_->dump_entries_for_hash(hash, depth + 1);
-  }
-
   [[nodiscard]] bool resident_in_chain(
       cache_key_type const& key) const noexcept {
     if (auto iter =
@@ -1850,17 +1791,6 @@ class CacheManager {
   [[nodiscard]] bool persistent(cache_key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.persistent();
-  }
-
-  /// \return true iff the key is registered, NON-persistent, and has been
-  ///         \c store()'d since its last \c reset() -- the re-store
-  ///         tripwire's flag state (see \c entry::store()). Test-facing
-  ///         accessor; always \c false for a persistent key or an
-  ///         unregistered one.
-  [[nodiscard]] bool stored_this_eval(
-      cache_key_type const& key) const noexcept {
-    auto iter = cache_map_.find(key);
-    return iter != cache_map_.end() && iter->second.stored_this_eval();
   }
 
   /// \return size in bytes of the data currently held for @p key, or 0 if

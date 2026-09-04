@@ -4,9 +4,11 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <range/v3/view/zip.hpp>
+#include <string>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -550,15 +552,20 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
 // survived -- a bug (see entry::store() / stored_this_eval_ in
 // cache_manager.hpp).
 //
-// NOTE on build config: SEQUANT_ASSERT compiles to a no-op unless
-// SEQUANT_ASSERT_ENABLED is #defined (not the case for this project's
-// default Release config: SEQUANT_ASSERT_BEHAVIOR=IGNORE there; Debug
-// defaults to ABORT, which is also not catchable). So the PRIMARY assertion
-// here is the FLAG STATE itself (store() sets it, reset() clears it), which
-// is meaningful in every build config. The actual throw is exercised only
-// when this build happens to be configured with
-// -DSEQUANT_ASSERT_BEHAVIOR=THROW (checked at runtime via
-// sequant::assert_behavior(), following the pattern in test_macros.cpp).
+// Exercised here as BEHAVIOR through store()/reset() rather than the (now
+// gone) test-facing flag accessor: under
+// SEQUANT_UT_STRICT_FILL_ONCE a duplicate store() with no intervening
+// reset() throws std::runtime_error unconditionally, regardless of
+// SEQUANT_ASSERT_BEHAVIOR (the SEQUANT_ASSERT alone is a no-op unless
+// SEQUANT_ASSERT_ENABLED is #defined, so it alone is not observable in this
+// project's default Release/Debug configs).
+//
+// NOTE: eval::strict_fill_once() latches its env lookup on the first call
+// anywhere in this process (see the same caveat in test_cell_registry.cpp),
+// so the env var below only takes effect if nothing earlier in this
+// process's run has already triggered a genuine duplicate-store scenario;
+// no earlier TEST_CASE in this file does, so this is the first such trigger
+// when run under the "[cache_manager]" tag.
 TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
   using hasher_t = sequant::TreeNodeHasher<node_type>;
   using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
@@ -577,40 +584,47 @@ TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
   auto is_persistent = [&p, &eq](node_type const& k) { return eq(k, p); };
   auto man = manager_type(std::move(counts), is_persistent);
 
-  SECTION("flag state: set on store, cleared on reset (non-persistent)") {
-    REQUIRE_FALSE(man.stored_this_eval(np));
+  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
+  std::string const prev_strict_val = prev_strict ? prev_strict : "";
+  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
 
-    (void)man.store(np, eval_result(1));
-    REQUIRE(man.stored_this_eval(np));
-
-    // reset() clears the flag -- a subsequent store() is the legitimate
-    // (non-flagged) case.
+  SECTION("non-persistent: a re-store with an intervening reset() is fine") {
+    REQUIRE_NOTHROW(man.store(np, eval_result(1)));
+    // reset() clears the tripwire -- a subsequent store() is the legitimate
+    // (non-duplicate) case, even under strict fill-once.
     man.reset();
-    REQUIRE_FALSE(man.stored_this_eval(np));
-
-    (void)man.store(np, eval_result(2));
-    REQUIRE(man.stored_this_eval(np));
+    REQUIRE_NOTHROW(man.store(np, eval_result(2)));
   }
 
-  SECTION("persistent entries never set (or need) the flag") {
-    REQUIRE_FALSE(man.stored_this_eval(p));
+  SECTION(
+      "non-persistent: a re-store with NO intervening reset() throws under "
+      "strict fill-once") {
+    REQUIRE_NOTHROW(man.store(np, eval_result(1)));
+    REQUIRE_THROWS(man.store(np, eval_result(2)));  // 2nd, no reset(): flagged
+  }
 
+  SECTION(
+      "persistent entries legitimately re-store with no reset(), even under "
+      "strict fill-once") {
     // A persistent entry legitimately re-stores across batch replays with no
-    // intervening reset() -- this must never flag, and the flag stays false
-    // throughout (it is not even consulted for persistent entries).
-    (void)man.store(p, eval_result(10));
-    REQUIRE_FALSE(man.stored_this_eval(p));
-    (void)man.store(p, eval_result(20));  // re-store, no reset(): legitimate
-    REQUIRE_FALSE(man.stored_this_eval(p));
-    (void)man.store(p, eval_result(30));
-    REQUIRE_FALSE(man.stored_this_eval(p));
+    // intervening reset() -- this must never throw (the tripwire is not even
+    // consulted for persistent entries).
+    REQUIRE_NOTHROW(man.store(p, eval_result(10)));
+    REQUIRE_NOTHROW(man.store(p, eval_result(20)));  // re-store, no reset()
+    REQUIRE_NOTHROW(man.store(p, eval_result(30)));
   }
+
+  if (prev_strict)
+    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+  else
+    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
 
   SECTION("assert-enabled + THROW: re-store without reset() throws") {
     if (sequant::assert_behavior() != sequant::AssertBehavior::Throw) {
       // Default build config (Release: IGNORE: no-op; Debug: ABORT: not
-      // catchable) -- nothing to observe via REQUIRE_THROWS here. The flag-
-      // state sections above already exercise the guard's logic.
+      // catchable) -- nothing to observe via REQUIRE_THROWS here. The
+      // strict-fill-once sections above already exercise the guard's logic
+      // deterministically across build configs.
       return;
     }
     (void)man.store(np,

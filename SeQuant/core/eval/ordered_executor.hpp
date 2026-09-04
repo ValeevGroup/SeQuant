@@ -31,76 +31,19 @@ namespace sequant::eval {
 namespace detail {
 
 ///
-/// \brief Task 2 of the eager-home-release plan: a TYPE-keyed (\c
-/// IndexSpace::base_key()) block-count function over \p ordered's whole
-/// \c ScopeBlock tree -- the \c OrderedSchedule counterpart of \c
-/// walk_scope's \c nblocks_by_type (scope_executor.hpp). Walks every nested
-/// \c ScopeBlock reachable from \p ordered.root.steps (root's own axis is
-/// the sentinel default, never a real loop, so it is not itself registered);
-/// for each block's axis TYPE not yet seen, memoizes the count of the SAME
-/// backend \c axis_batches \c run_ordered_contracted_block iterates over that
-/// axis. The returned lambda looks up an \c Index's own TYPE in that memo,
-/// defaulting to 1 (unbatched) for any type the walk never saw as a block
-/// axis.
-///
-/// \note Mirrors the brief's reference shape exactly but for one thing: a
-/// TYPE realized as more than one nested loop (an outer block and an inner
-/// child block sharing the same axis TYPE) would still only memoize the
-/// FIRST (outermost) one's \c mode_batches().size() here, undercounting the
-/// true nested block count (which multiplies). No fixture in this repo
-/// nests the SAME axis type today, so this is not implemented -- a later
-/// task's job if/when a nested-same-type fixture goes live (the Task 5
-/// validate assert is expected to catch an undercount if this is wrong).
-///
-template <typename node_t, typename F>
-[[nodiscard]] std::function<std::size_t(Index const&)> ordered_n_blocks(
-    OrderedSchedule const& ordered, RichSchedule const& rich,
-    std::unordered_map<std::size_t, node_t> const& vmap,
-    F const& leaf_evaluator,
-    std::function<std::size_t(Index const&)> const& target,
-    BackendArrayOps const* aops) {
-  auto by_type =
-      std::make_shared<std::unordered_map<std::wstring, std::size_t>>();
-  auto const add = [&](auto&& self, ScopeBlock const& b) -> void {
-    std::wstring const bk(b.axis.space().base_key());
-    if (!by_type->count(bk)) {
-      // Single source of truth with the actual batch loop: the block COUNT is
-      // the size of the SAME axis_batches the executor iterates (per-space).
-      SEQUANT_ASSERT(aops &&
-                     "ordered_n_blocks: batched schedule requires backend "
-                     "array-ops (CacheManager::set_array_ops)");
-      by_type->emplace(bk, aops->axis_batches(b.axis, target(b.axis)).size());
-    }
-    for (Step const& s : b.steps)
-      if (auto const* child = std::get_if<ScopeBlock>(&s.value))
-        self(self, *child);
-  };
-  // Root's own axis is the sentinel default (never a real loop -- see
-  // ScopeBlock::axis's doc comment), so only its CHILD blocks are walked.
-  for (Step const& s : ordered.root.steps)
-    if (auto const* child = std::get_if<ScopeBlock>(&s.value)) add(add, *child);
-  return [by_type](Index const& m) -> std::size_t {
-    auto const it = by_type->find(std::wstring(m.space().base_key()));
-    return it == by_type->end() ? std::size_t{1} : it->second;
-  };
-}
-
-///
-/// \brief SP4 Task 4: per-LOOP-INSTANCE (not per-TYPE, unlike \c
-/// ordered_n_blocks above) batch count over the whole \c ScopeBlock tree --
-/// the \c CellTableInputs::n_batches_of the cell table's life computation
-/// needs (\c detail::read_multiplicity, cell_table.hpp): a source cell read
-/// by a consumer nested inside a loop it is not resident on is re-read once
-/// per REAL batch of that loop (not once per loop, the placeholder
-/// \c n_batches_of that always returns 1 -- self-consistent for Task 3's
-/// static-only validation, since the builder and the validator used the SAME
-/// stub, but an undercount once Task 4 enforces \c life at runtime: a value
-/// read from OUTSIDE two nested batch loops of \c n \& \c m real batches is
-/// read \c n*m times, not once). Keyed by \c LoopKey::color() (the loop's
-/// stable depth+loop_slot identity, not its canonical axis label, which
-/// \c ordered_n_blocks' TYPE keying already documents as collapsing distinct
-/// same-space instances) so it is exact per realized loop, unlike
-/// \c ordered_n_blocks.
+/// \brief SP4 Task 4: per-LOOP-INSTANCE (not per-TYPE) batch count over the
+/// whole \c ScopeBlock tree -- the \c CellTableInputs::n_batches_of the cell
+/// table's life computation needs (\c detail::read_multiplicity,
+/// cell_table.hpp): a source cell read by a consumer nested inside a loop it
+/// is not resident on is re-read once per REAL batch of that loop (not once
+/// per loop, the placeholder \c n_batches_of that always returns 1 --
+/// self-consistent for Task 3's static-only validation, since the builder
+/// and the validator used the SAME stub, but an undercount once Task 4
+/// enforces \c life at runtime: a value read from OUTSIDE two nested batch
+/// loops of \c n \& \c m real batches is read \c n*m times, not once). Keyed
+/// by \c LoopKey::color() (the loop's stable depth+loop_slot identity, not
+/// its canonical axis label, which a TYPE-keyed count would collapse across
+/// distinct same-space instances) so it is exact per realized loop.
 ///
 [[nodiscard]] inline std::function<std::size_t(LoopKey const&)>
 ordered_n_batches_by_loop(
