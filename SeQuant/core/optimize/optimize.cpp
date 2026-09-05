@@ -159,6 +159,9 @@ inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 /// Optimize a Product that contains some non-Tensor, non-scalar factors by
 /// substituting placeholder tensors with target indices, optimizing the
 /// resulting tensor-only product, then swapping the originals back in.
+ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
+                      bool reorder, bool parallel_outer);
+
 ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   container::svector<ExprPtr> non_tensors(prod.size());
   container::svector<ExprPtr> new_factors;
@@ -169,7 +172,17 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
     if (f->is<Tensor>() || f->is_scalar()) {
       new_factors.emplace_back(f);
     } else {
-      non_tensors[i] = f;
+      // A non-tensor factor (a Sum of products, e.g. the flavor bracket a
+      // CSV transform wraps around a projected leaf, sum_flavors g.C.C; or a
+      // nested product) is opaque to the outer contraction order, but its
+      // OWN contraction order matters just as much: put back as written it
+      // evaluates in its authored left-to-right order. Measured on DCH
+      // cc-pVDZ PNS-CCD (2026-09-05): a projection bracket whose external-
+      // pair C came first materialized an n_occ^4 n_v n_csv intermediate
+      // (3.3 GB each, 32 GB of them cached) where the optimal order, which
+      // the DF cost model had assumed, peaks at n_occ^2 n_v n_csv.
+      non_tensors[i] = optimize_impl(f, opts, /*reorder=*/false,
+                                     /*parallel_outer=*/false);
       auto target_idxs = get_unique_indices(f);
       new_factors.emplace_back(ex<Tensor>(
           std::wstring(placeholder_label_prefix) + std::to_wstring(i),

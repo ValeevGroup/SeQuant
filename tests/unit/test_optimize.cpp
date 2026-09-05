@@ -346,6 +346,49 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res8, {1, 1}) == prod8.at(3));
     }
 
+    SECTION("nested Sum factors are optimized too") {
+      // A product whose factor is a Sum of products (the flavor brackets a
+      // CSV transform wraps around every projected leaf: sum_flavors g.C.C):
+      // opt_mixed_product optimizes the outer product over a placeholder for
+      // the Sum, and must ALSO optimize each nested summand -- put back as
+      // written, the bracket evaluates in its authored left-to-right order,
+      // which for a projection bracket can materialize an n_occ^4 n_v n_csv
+      // intermediate (3.3 GB each on DCH/cc-pVDZ PNS-CCD, 2026-09-05) where
+      // the optimal order peaks at n_occ^2 n_v n_csv.
+      const auto prod1 = parse_expr_antisymm(
+                             L"g_{i3,i4}^{a3,a4}"     // T1
+                             " * t_{a1,a2}^{i3,i4}"   // T2
+                             " * t_{a3,a4}^{i1,i2}")  // T3
+                             ->as<Product>();
+      const auto prod1b = parse_expr_antisymm(
+                              L"h_{i3,i4}^{a3,a4}"     //
+                              " * t_{a1,a2}^{i3,i4}"   //
+                              " * t_{a3,a4}^{i1,i2}")  //
+                              ->as<Product>();
+      // as written, T1 * T2 first: O^2 V^4 intermediate; optimal is
+      // (T1 * T3) * T2 (nvirt > nocc), which single_term_opt finds
+      auto bracket =
+          ex<Sum>(ExprPtrList{ex<Product>(prod1), ex<Product>(prod1b)});
+      auto outer = ex<Product>(
+          ExprPtrList{parse_expr_antisymm(L"λ_{i1,i2}^{a1,a2}"), bracket});
+      auto res = optimize(outer);
+      // find the Sum factor in the result
+      ExprPtr sum_factor;
+      res->visit(
+          [&sum_factor](ExprPtr const& e) {
+            if (e->is<Sum>()) sum_factor = e;
+          },
+          /* atoms_only = */ false);
+      REQUIRE(sum_factor);
+      auto const& s0 = sum_factor->as<Sum>().summand(0);
+      REQUIRE(s0->is<Product>());
+      // binarized into the optimal order: ((T1 * T3) * T2)
+      REQUIRE(s0->as<Product>().size() == 2);
+      REQUIRE(extract(s0, {0, 0}) == prod1.at(0));
+      REQUIRE(extract(s0, {0, 1}) == prod1.at(2));
+      REQUIRE(extract(s0, {1}) == prod1.at(1));
+    }
+
     SECTION("Single term optimization: n_replay volatility weighting") {
       using namespace sequant;
 
