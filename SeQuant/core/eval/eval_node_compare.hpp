@@ -9,7 +9,23 @@
 #include <cstddef>
 #include <unordered_map>
 
+#include <atomic>
+
+#include <cstdlib>
+
+#include <iostream>
+
 namespace sequant {
+
+namespace detail {
+/// @return true if SEQUANT_EVAL_STRICT_LAYOUT is set: make the result mode
+/// layout part of eval-node identity (see the use site in
+/// TreeNodeEqualityComparator)
+inline bool strict_layout_identity() {
+  static const bool on = std::getenv("SEQUANT_EVAL_STRICT_LAYOUT") != nullptr;
+  return on;
+}
+}  // namespace detail
 
 /// Functor to compute the hash of a given (evaluation) tree node
 template <typename TreeNode, bool force_hash_collisions = false>
@@ -76,6 +92,29 @@ struct TreeNodeEqualityComparator {
     // closed-shell paths where every phase is +1; this guards the residual case
     // of a hash collision, mirroring how the graph is both hashed and compared.
     if (lhs->canon_phase() != rhs->canon_phase()) {
+      return false;
+    }
+
+    // SEQUANT_EVAL_STRICT_LAYOUT=1 (diagnostic, OFF by default): additionally
+    // require the two nodes to lay their result modes out the same way.
+    //
+    // The hash and the connectivity comparison identify nodes across index
+    // renamings and across bra<->ket orientation -- that is what makes a
+    // subexpression shareable -- and CanonTransform carries the residual
+    // phase / conjugation / bra-ket swap, but nothing carries a PERMUTATION of
+    // the result modes. Two same-space external indices of an isomorphic
+    // network can be ordered either way, since bliss breaks an automorphic
+    // orbit by input vertex order.
+    //
+    // Measured (h2o tpns=0 PNS-CCD, 2026-09-03): enforcing this separates 52
+    // node pairs on the certified path and 59 on the CSV-then-DF one, changes
+    // NEITHER energy, and costs ~35 % per iteration (HSeOH PNS-CCD 3.4 ->
+    // 4.7 s). So the orderings it separates are value-compatible -- an
+    // automorphic exchange of two externals is a genuine symmetry of the
+    // network -- and the guard stays off. It remains available as a bisection
+    // tool for layout-suspect wrong numbers.
+    if (detail::strict_layout_identity() &&
+        lhs->layout_fingerprint() != rhs->layout_fingerprint()) {
       return false;
     }
 

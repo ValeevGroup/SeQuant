@@ -13,7 +13,10 @@
 #include <range/v3/view/iota.hpp>
 
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
 #include <optional>
+#include <string>
 
 namespace sequant {
 
@@ -21,6 +24,14 @@ namespace sequant {
 // sequant::detail over an unnamed namespace in a header (see CppCoreGuidelines
 // SF.21 / "Use unnamed namespaces in headers ... no" guidance)
 namespace detail {
+
+/// @return true if SEQUANT_EVAL_WARN_TOT_SUM_INNER is set in the environment
+/// (diagnostic for nested additions whose inner index order disagrees)
+inline bool warn_tot_sum_inner() {
+  static const bool on =
+      std::getenv("SEQUANT_EVAL_WARN_TOT_SUM_INNER") != nullptr;
+  return on;
+}
 
 /// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
 /// non-nested array). The outer trange carries no inner information, so the
@@ -826,6 +837,24 @@ class ResultTensorOfTensorTA final : public Result {
     auto const a = annot_wrap{annot};
 
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
+
+    // SEQUANT_EVAL_WARN_TOT_SUM_INNER=1: report a nested addition whose three
+    // annotations do not agree on the INNER (post-';') index order. TA permutes
+    // the outer modes of a nested addition but not the inner ones, so such a
+    // sum adds transposed inner tiles.
+    if (detail::warn_tot_sum_inner()) {
+      auto inner = [](std::string const& s) {
+        auto p = s.find(';');
+        return p == std::string::npos ? std::string{} : s.substr(p + 1);
+      };
+      const auto li = inner(a.lannot), ri = inner(a.rannot),
+                 ti = inner(a.this_annot);
+      if (li != ri || li != ti)
+        std::cerr << "[sequant-eval] WARNING: nested sum with mismatched inner "
+                     "annotations: "
+                  << a.lannot << " + " << a.rannot << " = " << a.this_annot
+                  << "\n";
+    }
 
     ArrayT result;
     result(a.this_annot) =

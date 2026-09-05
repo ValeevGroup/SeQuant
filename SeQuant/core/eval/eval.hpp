@@ -36,6 +36,14 @@
 #include <fstream>
 #endif
 
+#include <cstdlib>
+
+#include <map>
+
+#include <mutex>
+
+#include <string>
+
 namespace sequant {
 
 namespace log {
@@ -374,6 +382,14 @@ inline void release_after_op() {
 // unnamed namespace in a header (see CppCoreGuidelines SF.21)
 namespace detail {
 
+/// @return true if SEQUANT_EVAL_WARN_CACHE_LAYOUT is set (diagnostic: report a
+/// cache slot served under two different index layouts)
+inline bool warn_cache_layout() {
+  static const bool on =
+      std::getenv("SEQUANT_EVAL_WARN_CACHE_LAYOUT") != nullptr;
+  return on;
+}
+
 ///
 /// Invokes @c fun that returns void on the arguments @c args and returns the
 /// time duration as @c std::chrono::duration<double>.
@@ -652,6 +668,27 @@ ResultPtr evaluate(Node const& node,         //
           if (auto m = cache.access_at(f.node); m.ptr) {
             if constexpr (detail::trace(EvalTrace))
               log::cache(f.node, cache, log::label(f.node));
+            // SEQUANT_EVAL_WARN_CACHE_LAYOUT=1: a cache slot is keyed by the
+            // node's hash, and CanonTransform maps the stored canonical value
+            // to the denoted one through phase/conj/braket_swap ONLY -- it
+            // carries no index PERMUTATION. So two nodes that share a hash but
+            // denote different index layouts (e.g. a nested intermediate whose
+            // inner pair-basis modes are transposed) get the same buffer, and
+            // the consumer then applies the permutation its own annotation
+            // implies to data that is in the other layout. Record the first
+            // annotation seen per slot and report a later disagreement.
+            if (detail::warn_cache_layout()) {
+              static std::mutex mtx;
+              static std::map<std::size_t, std::string> seen;
+              const auto key = f.node->hash_value();
+              const auto ann = f.node->indices_annot();
+              std::scoped_lock lock(mtx);
+              auto [it, fresh] = seen.try_emplace(key, ann);
+              if (!fresh && it->second != ann)
+                std::cerr << "[sequant-eval] WARNING: cache slot " << key
+                          << " serves two layouts: \"" << it->second
+                          << "\" vs \"" << ann << "\"\n";
+            }
             // Slice-on-use: a value fetched `m.hops` scopes up does not have
             // this scope's (and any intervening) batch slices baked in, so
             // slice it to the current block for the loops the fetch crossed. A

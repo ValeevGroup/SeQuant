@@ -145,6 +145,33 @@ std::string EvalExpr::indices_annot() const noexcept {
   return outer + (inner.empty() ? "" : (";" + inner));
 }
 
+std::size_t EvalExpr::layout_fingerprint() const noexcept {
+  if (layout_fingerprint_) return *layout_fingerprint_;
+  container::map<Index, std::size_t> ids;
+  auto id_of = [&ids](Index const& ix) {
+    return ids.try_emplace(ix, ids.size()).first->second;
+  };
+  std::size_t fp = 0;
+  // Walk the modes in the order the RESULT carries them, which is the order
+  // indices_annot() builds: the proto-free (outer) indices in canonical order,
+  // then the proto-carrying (inner) ones. Using the raw canon_indices() order
+  // instead would separate nodes whose two groups interleave differently while
+  // laying their modes out identically, and needlessly cost cache sharing.
+  auto walk = [&](bool proto) {
+    for (auto const& ix : canon_indices_) {
+      if (ix.has_proto_indices() != proto) continue;
+      hash::combine(fp, static_cast<std::int64_t>(ix.space().attr()));
+      hash::combine(fp, id_of(ix));
+      hash::combine(fp, ix.proto_indices().size());
+      for (auto const& p : ix.proto_indices()) hash::combine(fp, id_of(p));
+    }
+  };
+  walk(false);
+  walk(true);
+  layout_fingerprint_ = fp;
+  return fp;
+}
+
 EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }

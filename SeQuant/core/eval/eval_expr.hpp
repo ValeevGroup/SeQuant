@@ -258,6 +258,33 @@ class EvalExpr {
   ///
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
+  ///
+  /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
+  ///        canonical slot each result mode holds, and how the proto bundles
+  ///        of the (nested / CSV) modes refer back to those slots.
+  ///
+  /// \details Two nodes may share an evaluation-cache slot only if the value
+  ///          stored for one is, mode for mode, the value the other denotes.
+  ///          The node hash and the graph comparison deliberately identify
+  ///          nodes across index RENAMINGS (that is what makes common
+  ///          subexpressions shareable) and across bra<->ket orientation, and
+  ///          CanonTransform carries the leftover phase / conjugation /
+  ///          bra-ket swap. What none of them carries is a PERMUTATION of the
+  ///          result modes, so a shared slot whose two users order their modes
+  ///          differently hands one of them transposed data -- silently, since
+  ///          annotations are just labels (measured on h2o tpns=0 PNS-CCD,
+  ///          2026-09-03: a nested CSV intermediate whose two pair-basis inner
+  ///          modes were transposed shifted the correlation energy by 2.2e-6).
+  ///
+  ///          The fingerprint numbers the indices by first occurrence in
+  ///          canon_indices() order and hashes (space, id, proto ids) per
+  ///          mode, so it is invariant under a consistent renaming but changes
+  ///          under any reordering of the modes or of a proto bundle.
+  ///
+  /// \return the layout fingerprint (computed once, then memoized)
+  ///
+  [[nodiscard]] std::size_t layout_fingerprint() const noexcept;
+
   /// @return whether this leaf's stored spelling is its Kramers-folded
   ///         (up-row) partner of the as-written one (T19 layer 2): expr()
   ///         is what a provider fetches, canon_indices() carries the
@@ -418,6 +445,7 @@ class EvalExpr {
   ExprPtr expr_;
 
   index_vector canon_indices_;
+  mutable std::optional<std::size_t> layout_fingerprint_;
 
   CanonTransform canon_transform_{};
   bool kramers_folded_ = false;
