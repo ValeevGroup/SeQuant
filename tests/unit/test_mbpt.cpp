@@ -1211,6 +1211,38 @@ SECTION("MRSO") {
                    << std::endl;
       }
     }
+
+    SECTION("density-fit nested factors") {
+      // a tensor to decompose inside a Sum factor of a Product (the shape
+      // csv_transform / a flavor expansion leaves behind) is decomposed too,
+      // and its aux index does not collide with the aux index of a decomposed
+      // tensor of the enclosing product
+      auto const& reg = get_default_context().index_space_registry();
+      const IndexSpace aux_space = reg->retrieve(L"x");
+      ExprPtr nested = deserialize(L"g{a1,i1;a2,i2} C{a1;a3}") +
+                       deserialize(L"g{i1,a1;i2,a2} C{a1;a4}");
+      ExprPtr input = deserialize(L"g{a3,i3;a4,i4}") * nested;
+      ExprPtr actual = mbpt::density_fit(input, aux_space, L"g", L"B");
+      // no 4-center g survives anywhere in the tree
+      bool has_g4 = false;
+      actual->visit(
+          [&](ExprPtr const& e) {
+            if (e->is<Tensor>() && e->as<Tensor>().label() == L"g" &&
+                e->as<Tensor>().aux_rank() == 0)
+              has_g4 = true;
+          },
+          /* atoms_only = */ true);
+      REQUIRE_FALSE(has_g4);
+      // the outer factor took x_1 (its single tensor slot); the nested leaves
+      // continue the numbering of the term
+      expand(actual);
+      simplify(actual);
+      REQUIRE_THAT(actual,
+                   EquivalentTo(L"B{a3;a4;x_1} B{i3;i4;x_1} B{a1;a2;x_2} "
+                                L"B{i1;i2;x_2} C{a1;a3} + B{a3;a4;x_1} "
+                                L"B{i3;i4;x_1} B{i1;i2;x_2} B{a1;a2;x_2} "
+                                L"C{a1;a4}"));
+    }
 #endif
 }  // SECTION("MRSO")
 

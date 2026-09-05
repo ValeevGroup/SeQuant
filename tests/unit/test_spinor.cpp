@@ -6,6 +6,7 @@
 #include <bit>
 #include <catch2/catch_test_macros.hpp>
 #include <complex>
+#include <iostream>
 #include <numeric>
 #include <random>
 
@@ -15,6 +16,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -774,6 +776,102 @@ TEST_CASE("kramers_trace_csv_no_slot_duplication", "[spinor]") {
   REQUIRE_NOTHROW(folded = fold_conjugate_pairs_of_real_sum(
                       E_kr, CanonicalizeOptions::default_options(),
                       [](ExprPtr const& s) { return mbpt::swap_spin(s); }));
+}
+
+TEST_CASE("csv_df_commute", "[spinor][kramers]") {
+  // density_fit and csv_transform must commute: the CSV projection acts on
+  // index slots, the DF split on the (bra[k], ket[k]) electron pairs, so
+  // splitting an integral before or after projecting its slots is the same
+  // expression. Measured order dependence (h2o tpns=0 PNS-CCD, 2026-09-03)
+  // says otherwise on the Kramers path, so pin the identity here.
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto isr = std::make_shared<IndexSpaceRegistry>(
+      get_default_context().index_space_registry()->clone());
+  if (!isr->retrieve_ptr(L"\u03bc\u0303")) add_pao_spaces(isr, Spin::any);
+  if (!isr->retrieve_ptr(L"\u039a")) add_df_spaces(isr);
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  const IndexSpace csv_basis = isr->retrieve(L"\u03bc\u0303");
+  const IndexSpace df_basis = isr->retrieve(L"\u039a");
+  const container::svector<std::wstring> csv_labels = {
+      L"f", L"g", std::wstring(reserved::overlap_label())};
+
+  auto csv = [&](ExprPtr const& e, bool kramers) {
+    return csv_transform(e, csv_basis, L"C", csv_labels, kramers);
+  };
+  auto df = [&](ExprPtr const& e) {
+    return density_fit(e, df_basis, L"g", L"g");
+  };
+  auto norm = [](ExprPtr e) {
+    expand(e);
+    flatten(e);
+    simplify(e);
+    return e;
+  };
+
+  // print compactly and ONLY on failure: the expanded Kramers forms are large
+  // enough that eagerly rendering them overflows the stack
+  auto brief = [](ExprPtr const& e) {
+    auto s = toUtf8(io::serialization::to_string(e));
+    return s.size() > 3000 ? s.substr(0, 3000) + " ..." : s;
+  };
+  auto check_commutes = [&](ExprPtr const& input, bool kramers,
+                            std::string const& what) {
+    auto df_first = norm(csv(df(input->clone()), kramers));
+    auto csv_first = norm(df(csv(input->clone(), kramers)));
+    auto diff = norm(df_first - csv_first);
+    const bool zero = diff->is<Constant>() && diff->as<Constant>().is_zero();
+    if (!zero) {
+      std::cout << "\n=== " << what << " DOES NOT COMMUTE\n"
+                << "  df-then-csv: " << brief(df_first) << "\n"
+                << "  csv-then-df: " << brief(csv_first) << "\n"
+                << "  difference : " << brief(diff) << "\n";
+    }
+    CHECK(zero);
+  };
+
+  SECTION("spin-free CSV expansion") {
+    const Index i1{L"i_1"}, i2{L"i_2"};
+    const Index a1 = Index(L"a_1", {i1, i2});
+    const Index a2 = Index(L"a_2", {i1, i2});
+    auto e = ex<Tensor>(L"g", bra{i1, i2}, ket{a1, a2}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+             ex<Tensor>(L"t", bra{a1, a2}, ket{i1, i2}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    check_commutes(e, /*kramers=*/false, "spin-free (oo|vv) . t");
+  }
+
+  SECTION("Kramers CSV expansion, contracted virtuals") {
+    const Index i1{L"i_1"}, i2{L"i_2"};
+    const Index a1 = Index(L"a_1", {i1, i2});
+    const Index a2 = Index(L"a_2", {i1, i2});
+    const auto E =
+        ex<Constant>(rational{1, 4}) *
+        ex<Tensor>(L"g", bra{i1, i2}, ket{a1, a2}, Symmetry::Antisymm,
+                   BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+        ex<Tensor>(L"t", bra{a1, a2}, ket{i1, i2}, Symmetry::Antisymm,
+                   BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    ExprPtr E_kr;
+    REQUIRE_NOTHROW(E_kr =
+                        closed_shell_kramers_trace(E, {}, /*fold_T=*/false,
+                                                   /*expand_g=*/true, false));
+    expand(E_kr);
+    flatten(E_kr);
+    REQUIRE(E_kr->is<Sum>());
+    std::size_t k = 0;
+    for (auto const& term : *E_kr) {
+      check_commutes(term, /*kramers=*/true,
+                     "Kramers MP2 energy term " + std::to_string(k));
+      ++k;
+    }
+  }
 }
 
 TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
