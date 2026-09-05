@@ -279,6 +279,54 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
       }
     }
 
+    SECTION("twin externals on a nonsymmetric bundle") {
+      if constexpr (TN::version() >= 3) {
+        // Two networks that differ ONLY by which of two same-space externals
+        // sits on which bra slot of a NONSYMMETRIC (column-symmetric) leaf:
+        // R{a_1,a_2} vs R{a_2,a_1}. They denote different tensors (a slot
+        // exchange inside a nonsymmetric bundle is not a symmetry), so their
+        // value identity must differ: either the hash, or the canonical order
+        // of the named indices together with a phase. (The raw network gets
+        // this right; the 2026-09-04 cache defect on this shape -- HSeOH
+        // PNS-CCD, (vv|vv) ladder kept 4-center -- was the eval node's
+        // label-sorted Sum placeholder, see
+        // sum_placeholder_is_spelled_in_its_layout in test_eval_expr.cpp.)
+        const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+        const std::wstring n183 =
+            L"g{a_5,a_6;a_7,a_8}:N-C-S * C{a_5;a_1<i_1,i_2>}:N-N-N * "
+            L"C{a_6;a_2<i_1,i_2>}:N-N-N * C{a_7;a_3<i_1,i_2>}:N-N-N * "
+            L"C{a_8;p_1<i_1,i_2>}:N-N-N * "
+            L"t{a_3<i_1,i_2>,p_1<i_1,i_2>;i_1,i_2}:A-N-S";
+        const std::wstring n190 =
+            L"g{a_5,a_6;a_7,a_8}:N-C-S * C{a_5;a_2<i_1,i_2>}:N-N-N * "
+            L"C{a_6;a_1<i_1,i_2>}:N-N-N * C{a_7;a_3<i_1,i_2>}:N-N-N * "
+            L"C{a_8;p_1<i_1,i_2>}:N-N-N * "
+            L"t{a_3<i_1,i_2>,p_1<i_1,i_2>;i_1,i_2}:A-N-S";
+        const Index i1(L"i_1"), i2(L"i_2");
+        const Index a1(L"a_1", {i1, i2}), a2(L"a_2", {i1, i2});
+        typename TN::NamedIndexSet named{a1, a2, i1, i2};
+        auto canon = [&](std::wstring const& s) {
+          TN tn(deserialize(s));
+          auto md = tn.canonicalize_slots(
+              {.cardinal_tensor_labels = cardinal, .named_indices = &named});
+          std::wstring order;
+          for (auto const& ix : md.template get_indices<Index::index_vector>())
+            order += std::wstring(ix.full_label()) + L" ";
+          return std::make_tuple(md.hash_value(), md.phase, order);
+        };
+        auto const [h183, p183, o183] = canon(n183);
+        auto const [h190, p190, o190] = canon(n190);
+        INFO("183: hash " << h183 << " phase " << int(p183) << " order "
+                          << toUtf8(o183));
+        INFO("190: hash " << h190 << " phase " << int(p190) << " order "
+                          << toUtf8(o190));
+        // identical (hash, order, phase) would let an evaluator serve one
+        // node's buffer for the other
+        const bool same_identity = h183 == h190 && o183 == o190 && p183 == p190;
+        CHECK_FALSE(same_identity);
+      }
+    }
+
     SECTION("conjugate braket fold") {
       if constexpr (TN::version() >= 3) {
         // A Hermitian (BraKetSymmetry::Conjugate) tensor satisfies

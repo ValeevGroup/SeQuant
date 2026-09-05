@@ -1183,6 +1183,72 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   REQUIRE(abc->hash_value() != abd->hash_value());
 }
 
+TEST_CASE("sum_placeholder_is_spelled_in_its_layout", "[eval_expr][sum]") {
+  // A sum hands up its FIRST summand's canonical layout, and the tensor it
+  // spells for its value (expr()) is what an enclosing network sees for the
+  // opaque node -- so that placeholder must be spelled in that layout. Two
+  // relabeled copies of one sum share a slot (their hashes are label-blind)
+  // while their values are transposes of each other: here the column
+  // symmetry of g lets a_1 and a_2 trade bra slots, and the ket slots (a_3 vs
+  // p_1) pin which column is which. Spelled label-sorted instead, the two
+  // placeholders coincide, an enclosing product gets ONE slot with ONE
+  // layout for both, and a cache serves one value for the other untransposed
+  // (HSeOH PNS-CCD, (vv|vv) ladder kept 4-center, 2026-09-04).
+  using namespace sequant;
+  auto const bracket = [](std::wstring const& cs) {
+    return ex<Sum>(ExprPtrList{deserialize(L"g{a_5,a_6;a_7,a_8}:N-C-S" + cs),
+                               deserialize(L"h{a_5,a_6;a_7,a_8}:N-C-S" + cs)});
+  };
+  auto const product = [](ExprPtr const& sum) {
+    return ex<Product>(
+        ExprPtrList{sum, deserialize(L"t{a_3,p_1;i_1,i_2}:A-N-S")});
+  };
+  auto const PA = binarize(product(
+      bracket(L" * C{a_5;a_1} * C{a_6;a_2} * C{a_7;a_3} * C{a_8;p_1}")));
+  auto const PB = binarize(product(
+      bracket(L" * C{a_5;a_2} * C{a_6;a_1} * C{a_7;a_3} * C{a_8;p_1}")));
+  auto const swap12 = [](Index::index_vector v) {
+    for (auto& ix : v) {
+      if (ix.label() == L"a_1")
+        ix = Index(L"a_2");
+      else if (ix.label() == L"a_2")
+        ix = Index(L"a_1");
+    }
+    return v;
+  };
+  auto const slots = [](EvalExpr const& e) {
+    auto const& t = e.expr()->as<Tensor>();
+    Index::index_vector v;
+    for (auto const& ix : t.bra()) v.push_back(ix);
+    for (auto const& ix : t.ket()) v.push_back(ix);
+    for (auto const& ix : t.aux()) v.push_back(ix);
+    return v;
+  };
+  auto const labels = [](Index::index_vector const& v) {
+    std::wstring out;
+    for (auto const& ix : v) out += std::wstring(ix.full_label()) + L" ";
+    return toUtf8(out);
+  };
+  auto const& SA = *PA.left();
+  auto const& SB = *PB.left();
+  REQUIRE(SA.op_type() == EvalOp::Sum);
+  REQUIRE(SB.op_type() == EvalOp::Sum);
+  INFO("SA layout " << labels(SA.canon_indices()) << " placeholder "
+                    << toUtf8(to_latex(SA.expr())));
+  INFO("SB layout " << labels(SB.canon_indices()) << " placeholder "
+                    << toUtf8(to_latex(SB.expr())));
+  // relabeled copies of one sum: one slot, transposed layouts
+  REQUIRE(SA.hash_value() == SB.hash_value());
+  REQUIRE(SB.canon_indices() == swap12(SA.canon_indices()));
+  // the placeholders spell the layouts
+  CHECK(slots(SB) == swap12(slots(SA)));
+  // ... so the enclosing products share a slot with transposed layouts too
+  INFO("PA layout " << labels(PA->canon_indices()));
+  INFO("PB layout " << labels(PB->canon_indices()));
+  REQUIRE(PA->hash_value() == PB->hash_value());
+  CHECK(PB->canon_indices() == swap12(PA->canon_indices()));
+}
+
 TEST_CASE("denoted_expr_is_the_parent_network_spelling",
           "[eval_expr][denoted]") {
   // the denoted spelling re-materializes the transform syntactically: the

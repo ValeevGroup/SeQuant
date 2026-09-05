@@ -641,14 +641,34 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       // partition from the DENOTED orientation (stored canonical slots,
       // re-swapped per the child transform)
       auto const t = left.denoted_expr()->as<Tensor>();
+      // The placeholder is what an enclosing tensor network sees for this
+      // (opaque) node, so spell its slots -- within each bra/ket/aux group --
+      // in the node's canonical index order, i.e. the order the value is laid
+      // out in. Sorted by label instead, two relabeled spellings of one sum
+      // (values: transposes of each other, e.g. the bra slots of a
+      // column-symmetric g projected by C's onto a_1,a_2 vs a_2,a_1) spelled
+      // one identical placeholder, and an enclosing product got one hash AND
+      // one canonical layout for both: the cache served one value for the
+      // other untransposed (HSeOH PNS-CCD, (vv|vv) kept 4-center; test
+      // sum_placeholder_is_spelled_in_its_layout).
+      auto const& frame = left.canon_indices();
+      auto in_canon_order = [&frame](auto const& group) {
+        Index::index_vector ordered;
+        for (auto const& ix : frame)
+          if (std::find(group.begin(), group.end(), ix) != group.end())
+            ordered.emplace_back(ix);
+        SEQUANT_ASSERT(ordered.size() == ranges::size(group));
+        return ordered;
+      };
       return {
           EvalOp::Sum,         //
           ResultType::Tensor,  //
-          detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
-                                            aux(t.aux())),  //
-          left.canon_indices(),                             //
-          sum_transform,                                    //
-          h,                                                //
+          detail::make_tensor_wo_symmetries(
+              opts, bra(in_canon_order(t.bra())), ket(in_canon_order(t.ket())),
+              aux(in_canon_order(t.aux())), /*keep_order=*/true),  //
+          left.canon_indices(),                                    //
+          sum_transform,                                           //
+          h,                                                       //
           nullptr};
     } else {
       return {EvalOp::Sum,              //
