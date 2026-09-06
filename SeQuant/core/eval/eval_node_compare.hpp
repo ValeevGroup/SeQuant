@@ -18,12 +18,12 @@
 namespace sequant {
 
 namespace detail {
-/// @return true if SEQUANT_EVAL_STRICT_LAYOUT is set: make the result mode
-/// layout part of eval-node identity (see the use site in
+/// @return true (the default) unless SEQUANT_EVAL_LAX_LAYOUT is set: the
+/// result mode layout is part of eval-node identity (see the use site in
 /// TreeNodeEqualityComparator)
 inline bool strict_layout_identity() {
-  static const bool on = std::getenv("SEQUANT_EVAL_STRICT_LAYOUT") != nullptr;
-  return on;
+  static const bool lax = std::getenv("SEQUANT_EVAL_LAX_LAYOUT") != nullptr;
+  return !lax;
 }
 }  // namespace detail
 
@@ -95,8 +95,8 @@ struct TreeNodeEqualityComparator {
       return false;
     }
 
-    // SEQUANT_EVAL_STRICT_LAYOUT=1 (diagnostic, OFF by default): additionally
-    // require the two nodes to lay their result modes out the same way.
+    // The two nodes must lay their result modes out the same way (default;
+    // SEQUANT_EVAL_LAX_LAYOUT=1 opts out).
     //
     // The hash and the connectivity comparison identify nodes across index
     // renamings and across bra<->ket orientation -- that is what makes a
@@ -104,15 +104,17 @@ struct TreeNodeEqualityComparator {
     // phase / conjugation / bra-ket swap, but nothing carries a PERMUTATION of
     // the result modes. Two same-space external indices of an isomorphic
     // network can be ordered either way, since bliss breaks an automorphic
-    // orbit by input vertex order.
+    // orbit by input vertex order, and a cached buffer served under the other
+    // ordering is a transposed value.
     //
-    // Measured (h2o tpns=0 PNS-CCD, 2026-09-03): enforcing this separates 52
-    // node pairs on the certified path and 59 on the CSV-then-DF one, changes
-    // NEITHER energy, and costs ~35 % per iteration (HSeOH PNS-CCD 3.4 ->
-    // 4.7 s). So the orderings it separates are value-compatible -- an
-    // automorphic exchange of two externals is a genuine symmetry of the
-    // network -- and the guard stays off. It remains available as a bisection
-    // tool for layout-suspect wrong numbers.
+    // Measured 2026-09-05 (HSeOH PNS-MP1, brackets optimized by
+    // opt_mixed_product): a residual block's product node C†.(g.C) laid out
+    // (i_1,i_2;..) was served to its twin laid out (i_2,i_1;..) from a
+    // different term; the block came out with |R| 0.579 instead of 0.293 and
+    // the energy 7 % off. With this check the energy is exact
+    // (-0.311350162477). On the earlier, as-written trees the check separated
+    // ~50 value-compatible pairs at ~35 % per iteration (h2o tpns=0, HSeOH,
+    // 2026-09-03), which is the price of a cache that cannot permute.
     if (detail::strict_layout_identity() &&
         lhs->layout_fingerprint() != rhs->layout_fingerprint()) {
       return false;

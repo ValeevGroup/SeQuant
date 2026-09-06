@@ -8,6 +8,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_node_compare.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -1247,6 +1248,47 @@ TEST_CASE("sum_placeholder_is_spelled_in_its_layout", "[eval_expr][sum]") {
   INFO("PB layout " << labels(PB->canon_indices()));
   REQUIRE(PA->hash_value() == PB->hash_value());
   CHECK(PB->canon_indices() == swap12(PA->canon_indices()));
+  // The two products ARE one cache slot: the buffer of one, read under the
+  // other's labels, is the other's value (plain externals -- the layout
+  // fingerprint is relabeling-invariant on purpose)
+  using node_t = std::remove_cvref_t<decltype(PA)>;
+  TreeNodeEqualityComparator<node_t> same;
+  REQUIRE(same(PA, PA));
+  REQUIRE(same(PA, PB));
+}
+
+TEST_CASE("twins_whose_composites_carry_the_swapped_externals_are_two_slots",
+          "[eval_expr][cache]") {
+  // CSV/PNS composites carry their pair as proto indices, so the inner tile
+  // at outer position (p,q) is the pair-(p,q) block: two relabeled twins that
+  // lay the pair out as (i_1,i_2) and (i_2,i_1) are NOT value-compatible --
+  // served for each other, one gets the pair-(q,p) blocks. The layout
+  // fingerprint (ids of the externals AND of every composite's protos, in
+  // layout order) tells them apart and the comparator refuses the slot.
+  // Measured 2026-09-05 (HSeOH PNS-MP1, residual block 3 after the brackets
+  // were optimized): C†.(g.C) laid out (i↑_1,i↑_2;..) was served to its twin
+  // laid out (i↑_2,i↑_1;..): |R| 0.579 instead of 0.293, E 7 % off.
+  using namespace sequant;
+  auto const X = binarize(ex<Product>(
+      ExprPtrList{deserialize(L"f{i_1;i_3}:N-N-N"),
+                  deserialize(L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_2}:N-N-N")}));
+  auto const Y = binarize(ex<Product>(
+      ExprPtrList{deserialize(L"f{i_2;i_3}:N-N-N"),
+                  deserialize(L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_1}:N-N-N")}));
+  auto const labels = [](Index::index_vector const& v) {
+    std::wstring out;
+    for (auto const& ix : v) out += std::wstring(ix.full_label()) + L" ";
+    return toUtf8(out);
+  };
+  INFO("X layout " << labels(X->canon_indices()));
+  INFO("Y layout " << labels(Y->canon_indices()));
+  REQUIRE(X->hash_value() == Y->hash_value());  // relabeled twins
+  REQUIRE(X->canon_indices() != Y->canon_indices());
+  REQUIRE(X->layout_fingerprint() != Y->layout_fingerprint());
+  using node_t = std::remove_cvref_t<decltype(X)>;
+  TreeNodeEqualityComparator<node_t> same;
+  REQUIRE(same(X, X));
+  REQUIRE_FALSE(same(X, Y));
 }
 
 TEST_CASE("denoted_expr_is_the_parent_network_spelling",
