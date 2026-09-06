@@ -308,8 +308,27 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     auto const& in_sum = expr->as<Sum>();
     Sum::summands_type new_smands(in_sum.size());
 
+    // Every summand is optimized on a PRIVATE clone, taken here, sequentially,
+    // before the (possibly parallel) loop below. Summands routinely share
+    // subexpression objects -- tensors reused by expand(), or a whole nested
+    // Sum factor (the flavor bracket a CSV transform wraps around a projected
+    // leaf) reused across the terms it appears in -- and Index/Expr memoize
+    // labels and hashes lazily in unsynchronized mutable members. Optimizing
+    // (and, since opt_mixed_product also optimizes nested Sum factors, walking
+    // and canonicalizing) a shared object from several threads races on those
+    // caches and can yield a run-to-run different tree; on a distributed
+    // evaluation that is a deadlock, since every rank must build the same
+    // tree (DCH PNS-MP1 on 8 ranks, 2026-09-05: two ranks built a different
+    // residual tree and the run hung in iteration 1). The clones make
+    // invariant (1) below hold by construction; the input is never touched
+    // concurrently.
+    Sum::summands_type private_smands;
+    private_smands.reserve(in_sum.size());
+    for (auto const& s : in_sum.summands())
+      private_smands.push_back(s->clone());
+
     auto do_term = [&](std::size_t i) {
-      new_smands[i] = optimize_impl(in_sum.summand(i), opts,
+      new_smands[i] = optimize_impl(private_smands[i], opts,
                                     /*reorder=*/false,
                                     /*parallel_outer=*/false);
     };

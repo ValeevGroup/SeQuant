@@ -602,6 +602,50 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(*seq == *par);
     }
 
+    SECTION("parallel optimize of summands sharing a nested Sum factor") {
+      // Summands that hold ONE bracket object (the flavor bracket a CSV
+      // transform wraps around a projected leaf can be reused across the
+      // terms it appears in) are optimized on parallel threads, and the
+      // bracket itself is optimized too (opt_mixed_product). Index and Expr
+      // memoize labels and hashes lazily in mutable members, so the shared
+      // object must not be touched from several threads: optimize() works on
+      // a private clone of every summand. Cache-cold terms are built afresh
+      // for every run and the parallel result must equal the sequential one.
+      auto const nthreads_save = num_threads();
+      struct ThreadGuard {
+        int n;
+        ~ThreadGuard() { set_num_threads(n); }
+      } guard{nthreads_save};
+
+      auto make = []() {
+        auto bracket = deserialize(
+            L"g{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>} "
+            L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_4} "
+            L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}"
+            L" + f{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>} "
+            L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_4} "
+            L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}",
+            {.def_perm_symm = Symmetry::Nonsymm});
+        auto lambda = deserialize(L"λ{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}",
+                                  {.def_perm_symm = Symmetry::Nonsymm});
+        std::vector<ExprPtr> terms;
+        for (int k = 0; k < 32; ++k)
+          terms.push_back(ex<Product>(ExprPtrList{lambda, bracket}));
+        return ex<Sum>(terms.begin(), terms.end());
+      };
+
+      // composite (proto-indexed) indices need an inner extent model
+      auto const opts = OptimizeOptions{
+          .inner_pow = [](Index const&, std::size_t) { return 8.0; }};
+      for (int rep = 0; rep < 8; ++rep) {
+        set_num_threads(1);
+        auto const seq = optimize(make(), opts);
+        set_num_threads(8);
+        auto const par = optimize(make(), opts);
+        REQUIRE(*seq == *par);
+      }
+    }
+
     SECTION("subset_footprints") {
       using namespace sequant;
       // i occ (size 2); a virt (size 4). Tensors: g{a1;i1}, g{a2;i2}.
