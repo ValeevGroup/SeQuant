@@ -140,6 +140,33 @@ std::wstring describe_indices(std::vector<Index> const& ixs) {
 
 }  // namespace
 
+TEST_CASE("range evaluate does not accumulate into a cached result",
+          "[eval][cache]") {
+  // evaluate(nodes, ...) sums the nodes' results in place into the FIRST
+  // node's result. When that node is cached (it recurs among the nodes, or
+  // elsewhere in the block) the first result IS the cache's own buffer, so the
+  // in-place adds corrupt the cache: every later use of the node reads the
+  // running block sum. Measured on HSeOH PNS-MP1 (2026-09-05): a residual
+  // block whose first term became a cache twin of a later term (after the
+  // brackets were optimized) came out with |R| 0.579 instead of 0.293 while
+  // every term evaluated individually was exact.
+  using namespace sequant;
+  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
+  auto const expr = deserialize(L"α * β");
+  node_t node = binarize<sequant::eval::dryrun::EvalExprDryRun>(expr);
+  std::vector<node_t> nodes{node, node, node};
+  auto yield = [](node_t const& n) -> ResultPtr {
+    REQUIRE(n.leaf());
+    return eval_result<ResultScalar<double>>(2.0);
+  };
+  auto cache = cache_manager(nodes);  // the product node recurs -> cached
+  auto sum = evaluate(nodes, yield, cache);
+  REQUIRE(sum->is<ResultScalar<double>>());
+  // 3 * (2 * 2); with the cache buffer used as the accumulator the third use
+  // reads the partial sum (2A) and the total comes out 4A = 16
+  REQUIRE(sum->get<double>() == Catch::Approx(12.0));
+}
+
 TEST_CASE("dryrun size regime basic extents", "[dryrun-probe]") {
   auto r = probe_regime();
   // A bare occ index resolves to its space extent.
@@ -1583,7 +1610,7 @@ TEST_CASE(
   using sequant::make_batched_custom_evaluator;
   using sequant::never_volatile;
   using sequant::no_scope_guard;
-  using node_t = EvalNodeDryRun;
+  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
 
   auto r = backend_test_regime();  // i (occ) extent 10, a (virt) extent 20
   auto cm = std::make_shared<CostModel const>(r);

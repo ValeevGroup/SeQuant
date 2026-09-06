@@ -951,7 +951,13 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
   for (auto&& n : nodes) {
     if (!result) {
-      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
+      // The first term is the accumulator of the in-place adds below, so it
+      // must not be the cache's own buffer (a cached node) or a leaf
+      // provider's: the adds would corrupt it and every later use of that
+      // node would read the running sum (HSeOH PNS-MP1, 2026-09-05: a
+      // residual block whose first term was a cache twin of a later one
+      // came out with |R| 0.579 instead of 0.293). Deep-copy it.
+      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache)->clone();
       continue;
     }
 

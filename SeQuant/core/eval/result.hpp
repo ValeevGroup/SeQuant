@@ -305,6 +305,18 @@ class Result {
   }
 
   ///
+  /// \brief A deep copy of this result: a value sharing no storage with this
+  /// one. Needed wherever a result is mutated in place (add_inplace) while the
+  /// original may be owned by the cache or by a leaf provider -- e.g. the
+  /// accumulator of evaluate(nodes, ...), whose first term can be a cached
+  /// node. Not pure: only data-bearing results implement it; the default
+  /// throws.
+  ///
+  [[nodiscard]] virtual ResultPtr clone() const {
+    throw detail::unimplemented_method("clone");
+  }
+
+  ///
   /// \brief The real part of this result. Re is a projection (not an
   /// involution), so unlike the conjugation channels it is served by a
   /// dedicated IR node (EvalOp::RealPart), not by CanonTransform. Not pure:
@@ -508,6 +520,10 @@ class ResultScalar final : public Result {
   explicit ResultScalar(T v) noexcept : Result{std::move(v)} {}
 
   [[nodiscard]] T value() const noexcept { return get<T>(); }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultScalar<T>>(value());
+  }
 
   [[nodiscard]] ResultPtr sum(Result const& other,
                               std::array<std::any, 3> const&) const override {

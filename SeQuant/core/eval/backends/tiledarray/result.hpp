@@ -757,6 +757,11 @@ class ResultTensorTA final : public Result {
     return eval_result<this_type>(raw<ArrayT>(), std::move(v));
   }
 
+  [[nodiscard]] ResultPtr clone() const override {
+    ensure_materialized();
+    return std::make_shared<this_type>(raw<ArrayT>().clone());  // deep copy
+  }
+
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<this_type>());
     auto const& o = static_cast<this_type const&>(other);
@@ -1036,6 +1041,10 @@ class ResultTensorOfTensorTA final : public Result {
     ArrayT::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<this_type>(get<ArrayT>().clone());  // deep copy
   }
 
   void add_inplace(Result const& other) override {

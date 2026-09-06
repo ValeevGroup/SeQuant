@@ -301,6 +301,10 @@ class ResultDryRun final : public Result {
   [[nodiscard]] container::svector<Index> const& indices() const noexcept {
     return indices_;
   }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultDryRun>(indices_, cm_, overrides_);
+  }
   [[nodiscard]] ExtentOverrides const& overrides() const noexcept {
     return overrides_;
   }
@@ -445,6 +449,11 @@ class ResultDryRunNested final : public Result {
   }
   [[nodiscard]] container::svector<Index> const& indices() const noexcept {
     return indices_;
+  }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultDryRunNested>(outer_, inner_, cm_, overrides_,
+                                                indices_);
   }
   [[nodiscard]] ExtentOverrides const& overrides() const noexcept {
     return overrides_;

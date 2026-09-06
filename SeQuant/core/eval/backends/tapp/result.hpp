@@ -163,6 +163,10 @@ class ResultTensorTAPP final : public Result {
 
   explicit ResultTensorTAPP(T arr) : Result{std::move(arr)} {}
 
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultTensorTAPP<T>>(get<T>());  // T copies deeply
+  }
+
  private:
   using annot_t = container::svector<int64_t>;
   using annot_wrap = Annot<annot_t>;

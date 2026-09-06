@@ -297,6 +297,10 @@ class ResultTensorBTAS final : public Result {
 
   explicit ResultTensorBTAS(T arr) : Result{std::move(arr)} {}
 
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultTensorBTAS<T>>(get<T>());  // T copies deeply
+  }
+
  private:
   // TODO make it same as that used by EvalExprBTAS class from eval.hpp file
   using annot_t = container::svector<long>;
