@@ -19,8 +19,11 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/rules/csv.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -1047,4 +1050,177 @@ TEST_CASE("kramers_symmetry_propagation", "[spinor][kramers]") {
       REQUIRE(*bare(A) == *bare(B));
     }
   }
+}
+
+TEST_CASE("fold_stripped_antisymmetrizer", "[spinor][kramers][fold]") {
+  // Partial-A Kramers blocks keep, for every external group whose Â was
+  // stripped (same-flavour pair, antisymmetrized numerically by the consumer),
+  // both a term and its signed swap image. Under the numerical ½(1-P) both
+  // contribute identically, so the pair folds into one term. The fold must be
+  // exact: (1-P)[folded] == (1-P)[original] symbolically.
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto isr = std::make_shared<IndexSpaceRegistry>(
+      get_default_context().index_space_registry()->clone());
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  // externals stay distinguishable: the fold's canonical keys must be unique
+  ctx.set(
+      CanonicalizeOptions{.method = CanonicalizationMethod::Complete,
+                          .ignore_named_index_labels =
+                              CanonicalizeOptions::IgnoreNamedIndexLabel::No});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto _m =
+      sequant::mbpt::set_scoped_default_mbpt_context(sequant::mbpt::Context(
+          {.csv = sequant::mbpt::CSV::Yes,
+           .op_registry_ptr = sequant::mbpt::make_legacy_registry()}));
+
+  auto nterms = [](const ExprPtr& e) -> std::size_t {
+    if (!e) return 0;
+    if (e->is<Sum>()) return e->as<Sum>().size();
+    if (e->is<Constant>() && e->as<Constant>().is_zero()) return 0;
+    return 1;
+  };
+  auto has_t1 = [](const ExprPtr& term) {
+    bool found = false;
+    term->visit(
+        [&found](const ExprPtr& e) {
+          if (!e->is<Tensor>()) return;
+          const auto& t = e->as<Tensor>();
+          if (t.label() == L"t" && t.bra_rank() == 1) found = true;
+        },
+        /* atoms_only = */ true);
+    return found;
+  };
+  // independent reference implementation of a signed external swap: every
+  // occurrence of the pair is exchanged, proto bundles included
+  auto swap_image = [](const ExprPtr& term, const Index& p,
+                       const Index& q) -> ExprPtr {
+    container::map<Index, Index> ext{{p, q}, {q, p}};
+    container::set<Index> all;
+    term->visit(
+        [&all](const ExprPtr& e) {
+          if (!e->is<Tensor>()) return;
+          for (const auto& idx : e->as<Tensor>().const_indices())
+            all.insert(idx);
+        },
+        /* atoms_only = */ true);
+    container::map<Index, Index> repl;
+    for (const auto& idx : all) {
+      if (auto it = ext.find(idx); it != ext.end()) {
+        repl.emplace(idx, it->second);
+        continue;
+      }
+      if (!idx.has_proto_indices()) continue;
+      auto protos = idx.proto_indices();
+      bool changed = false;
+      for (auto& pr : protos)
+        if (auto it = ext.find(pr); it != ext.end()) {
+          pr = it->second;
+          changed = true;
+        }
+      if (changed)
+        repl.emplace(idx, Index(idx.space(), idx.ordinal(), std::move(protos)));
+    }
+    auto out = std::make_shared<Product>();
+    if (term->is<Product>()) out->scale(term->as<Product>().scalar());
+    container::svector<ExprPtr> factors;
+    if (term->is<Product>())
+      for (const auto& f : term->as<Product>().factors()) factors.push_back(f);
+    else
+      factors.push_back(term);
+    for (const auto& f : factors) {
+      if (f->is<Tensor>()) {
+        Tensor t{f->as<Tensor>()};
+        t.transform_indices(repl);
+        out->append(1, ex<Tensor>(std::move(t)), Product::Flatten::No);
+      } else {
+        out->append(1, f, Product::Flatten::No);
+      }
+    }
+    return out;
+  };
+  // (1-P) over every group, applied term by term
+  auto antisymmetrize =
+      [&](const ExprPtr& e,
+          const container::svector<std::pair<Index, Index>>& groups)
+      -> ExprPtr {
+    container::svector<ExprPtr> terms;
+    if (e->is<Sum>())
+      for (const auto& t : e->as<Sum>().summands()) terms.push_back(t);
+    else
+      terms.push_back(e);
+    for (const auto& [p, q] : groups) {
+      container::svector<ExprPtr> next;
+      for (const auto& t : terms) {
+        next.push_back(t);
+        next.push_back(ex<Constant>(-1) * swap_image(t, p, q));
+      }
+      terms = std::move(next);
+    }
+    auto out = std::make_shared<Sum>();
+    for (auto& t : terms) out->append(t);
+    return out;
+  };
+
+  auto R2 = CC{2}.t().at(2);
+  {
+    auto out = std::make_shared<Sum>();
+    for (const auto& s : R2->as<Sum>().summands())
+      if (!has_t1(s)) out->append(s);
+    R2 = out;
+  }
+  auto blocks = closed_shell_kramers_CC_trace(
+      R2->clone(), /*expand_g=*/true, /*use_T=*/true,
+      /*drop_mixed_kramers_fock=*/true, KramersAExpansion::partial);
+  REQUIRE(blocks.size() == 5);
+
+  std::size_t total_in = 0, total_out = 0;
+  for (std::size_t b = 0; b < blocks.size(); ++b) {
+    // same-flavour external groups = the ones whose Â the tracer stripped
+    container::svector<Index> occ, vir;
+    for (auto const& group : sequant::external_indices(*blocks[b]))
+      for (auto const& sidx : group)
+        if (sidx.slot_type() != SlotType::Proto) {
+          const Index& idx = sidx.index();
+          (isr->is_pure_occupied(idx.space()) ? occ : vir).push_back(idx);
+        }
+    REQUIRE(occ.size() == 2);
+    REQUIRE(vir.size() == 2);
+    auto spin = [](const Index& i) { return to_spin(i.space().qns()); };
+    container::svector<std::pair<Index, Index>> groups;
+    if (spin(vir[0]) == spin(vir[1])) groups.emplace_back(vir[0], vir[1]);
+    if (spin(occ[0]) == spin(occ[1])) groups.emplace_back(occ[0], occ[1]);
+
+    auto blk = blocks[b]->clone();
+    expand(blk);
+    const auto n_in = nterms(blk);
+    auto fold = fold_stripped_antisymmetrizer(blk, groups);
+    const auto n_out = nterms(fold.expr);
+    INFO("block " << b << ": " << n_in << " -> " << n_out << " (merged "
+                  << fold.n_merged << ", dead " << fold.n_dead << ", groups "
+                  << groups.size() << ")");
+    CHECK(fold.n_in == n_in);
+    CHECK(fold.n_out == n_out);
+    if (groups.empty()) {
+      CHECK(n_out == n_in);  // nothing to fold in the self-complementary block
+    } else {
+      // every partial-A block with a stripped group has twins to fold
+      CHECK(n_out < n_in);
+      // exactness under the consumer's numerical antisymmetrization
+      auto diff =
+          antisymmetrize(fold.expr, groups) - antisymmetrize(blk, groups);
+      simplify(diff);
+      CHECK(diff->is<Constant>());
+      if (diff->is<Constant>()) CHECK(diff->as<Constant>().is_zero());
+    }
+    total_in += n_in;
+    total_out += n_out;
+  }
+  // HSeOH PNS-CCD term study (2026-09-07): 493 of the 2201 terms are such
+  // twins; the fold must remove at least the ~470 the canonical keys pair
+  CHECK(total_in - total_out >= 450);
 }

@@ -354,6 +354,50 @@ bool has_antisymmetrizer(const ExprPtr& expr);
 ExprPtr kramers_term_flip(const ExprPtr& term,
                           const container::map<Index, Index>& ext_map);
 
+/// @brief Result of fold_stripped_antisymmetrizer
+struct StrippedAntisymmetrizerFold {
+  /// the folded block (a Sum, or the input if nothing folded)
+  ExprPtr expr;
+  /// number of terms in the input block
+  std::size_t n_in = 0;
+  /// number of terms in the folded block
+  std::size_t n_out = 0;
+  /// number of terms absorbed into a representative (their signed swap image)
+  std::size_t n_merged = 0;
+  /// number of terms annihilated by the antisymmetrizer (a self-image with
+  /// the wrong sign, or a representative whose orbit sums to zero)
+  std::size_t n_dead = 0;
+};
+
+// clang-format off
+/// @brief Folds the terms of a Kramers residual block under the external
+/// antisymmetrizer groups that were STRIPPED from it and are applied by the
+/// consumer numerically (KramersAExpansion::partial: every same-flavour rank-2
+/// external group, antisymmetrized ½(1-P) within the block).
+///
+/// Under that antisymmetrizer a term and its signed swap image contribute
+/// identically, so a pair `T_i`, `T_j = r·P(T_i)` collapses into
+/// `(1 + s·r)·T_i` (s = the parity of the permutation, -1 per group swap);
+/// a term that is its own image with the wrong sign, `P(T_i) = -s·T_i`,
+/// vanishes under the antisymmetrizer and is dropped. The relation is
+/// established symbolically: both terms canonicalize (externals kept
+/// distinguishable, CanonicalizeOptions::ignore_named_index_labels = No) to
+/// the same network up to a scalar. Exact by construction:
+/// (1-P)[folded] == (1-P)[block].
+///
+/// @param block a Kramers residual block (a Sum of flat terms, or one term)
+/// @param groups the stripped external groups, each a pair of external
+///        indices of the block (bra = virtual pair, ket = occupied pair);
+///        proto bundles that contain a group member are remapped with it
+/// @param opts canonicalization options; ignore_named_index_labels is forced
+///        to No (the fold needs unique canonical forms for fixed externals)
+/// @return the folded block and the fold census
+// clang-format on
+StrippedAntisymmetrizerFold fold_stripped_antisymmetrizer(
+    const ExprPtr& block,
+    const container::svector<std::pair<Index, Index>>& groups,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+
 /// @brief deep-copies @p expr and stamps every Tensor leaf with @p ks
 /// (KramersSymmetry::TimeReversal by default): the Kramers trace applies it
 /// to its output so the canonicalizer's Kramers fold (see
