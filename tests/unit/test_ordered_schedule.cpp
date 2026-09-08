@@ -2506,3 +2506,169 @@ TEST_CASE(
   REQUIRE(outermost != nullptr);
   CHECK(sequant::eval::detail::residency_scope(*outermost).path.empty());
 }
+
+// Review fix round 1, Important 1: a depth can legitimately carry BOTH a
+// LoopLocal mode and a Reduction mode of the SAME value (a reduce+carry-style
+// collapse at one depth -- the role loop's own comment at the escape
+// emission above already contemplates this for a reduce+carry PAIR). Same
+// shape as the inner-escape fixture above, except V's Reduction mode (i_2)
+// resolves through reduced_slot to the SAME fusion slot as its own LoopLocal
+// mode (i_1, slot 0) instead of a distinct inner slot, so both land at ONE
+// depth. Rule 4 must upgrade that depth's escape from AccumulateSum (the
+// role loop's own reduction escape) to AccumulateScatter: the loop-local
+// mode's batches are disjoint, so summing them would silently combine
+// values that must stay separate.
+TEST_CASE(
+    "per-nest split: a loop-local mode sharing a depth with a reduced mode "
+    "upgrades the escape to a scatter",
+    "[ordered-schedule][per-nest-split]") {
+  using sequant::eval::LoopRole;
+  sequant::Index const i1{L"i_1"}, i2{L"i_2"};
+  std::vector<sequant::Index> const ab{i1, i2};
+  sequant::eval::RichSchedule rich;
+  rich.cells.push_back(orderedsched_nest_cell(0, 6000, ab, {0, 1}, {{0, 30}}));
+  rich.cells.push_back(
+      orderedsched_nest_cell(1, 6001, {i1}, {0}, {{10, 20}, {11, 30}}));
+  rich.cells.push_back(orderedsched_nest_cell(2, 6002, {}, {}, {{20, 20}}));
+  rich.cells.push_back(orderedsched_nest_cell(3, 6003, ab, {0, 1}, {{30, 30}}));
+  for (auto& occ : rich.cells[1].occurrences)
+    occ.reduced_slot.push_back({i2, 0});  // SAME slot as i_1: one depth
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+  sequant::eval::LegalitySchedule legality;
+  legality.cells.push_back(
+      orderedsched_nest_legality(6000, ab, LoopRole::LoopCarried));
+  {
+    sequant::eval::CellLegality cl;
+    cl.hash = 6001;
+    sequant::eval::AxisClass a1;
+    a1.axis = i1;
+    a1.role = LoopRole::LoopLocal;
+    sequant::eval::AxisClass a2;
+    a2.axis = i2;
+    a2.role = LoopRole::Reduction;
+    cl.per_axis = {a1, a2};
+    legality.cells.push_back(cl);
+  }
+  legality.cells.push_back(
+      orderedsched_nest_legality(6002, {}, LoopRole::LoopLocal));
+  legality.cells.push_back(
+      orderedsched_nest_legality(6003, ab, LoopRole::LoopCarried));
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  auto const sched =
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
+  REQUIRE(well_formed(sched));
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 2);
+  std::vector<std::pair<std::size_t, std::optional<sequant::eval::OutputKind>>>
+      p0;
+  orderedsched_collect_productions(*roots[0], p0);
+  // V (id 1): exactly one escape at the shared depth, and it is a Scatter,
+  // not a Sum -- the dominance upgrade fired.
+  CHECK(std::count_if(p0.begin(), p0.end(), [](auto const& e) {
+          return e.first == 1 &&
+                 e.second == sequant::eval::OutputKind::AccumulateScatter;
+        }) == 1);
+  CHECK(std::count_if(p0.begin(), p0.end(), [](auto const& e) {
+          return e.first == 1 &&
+                 e.second == sequant::eval::OutputKind::AccumulateSum;
+        }) == 0);
+}
+
+// Review fix round 1, Important 2: the outside-nest tripwire fires only when
+// the value has NO role-driven escape (checked BEFORE rule 4 runs); a value
+// that DOES have one is exempt, since that escape already assembles a full
+// form with root residency that any later-pass reader, in any nest, can see.
+// This pins the POSITIVE case (mirrors the existing [levels] "straddling
+// passes" fixture, but checks the exact throw message under this task's own
+// tag): V is LoopLocal only (no role escape) in nest A (i_4, i_5), feeds C
+// (LoopCarried on i_4, same pass -- makes "i" genuine) and is ALSO read
+// directly by X, LoopLocal on the disjoint i_6 (its own nest B), at a later
+// pass -- V's own nest never opens for X, so legality and the schedule
+// disagree.
+TEST_CASE(
+    "per-nest split: a loop-local value with no role escape, read later by "
+    "a value outside its nest, throws",
+    "[ordered-schedule][per-nest-split]") {
+  using sequant::eval::LoopRole;
+  sequant::Index const i4{L"i_4"}, i5{L"i_5"}, i6{L"i_6"};
+
+  sequant::eval::RichSchedule rich;
+  {
+    sequant::eval::ValueCell vc{};
+    vc.value_id = 0;
+    vc.hash = 7100;
+    sequant::eval::OccurrenceRec o1{};
+    o1.point = 11;
+    o1.consumer_point = 20;  // feeds C
+    o1.carried = {i4, i5};
+    o1.loop_slot = {0, 1};
+    vc.occurrences.push_back(o1);
+    sequant::eval::OccurrenceRec o2{};
+    o2.point = 12;
+    o2.consumer_point = 30;  // read directly by X
+    o2.carried = {i4, i5};
+    o2.loop_slot = {0, 1};
+    vc.occurrences.push_back(o2);
+    rich.cells.push_back(std::move(vc));
+  }
+  {
+    sequant::eval::ValueCell vc{};
+    vc.value_id = 1;
+    vc.hash = 7101;
+    sequant::eval::OccurrenceRec o{};
+    o.point = 20;
+    o.consumer_point = 30;  // read by X
+    o.carried = {i4};
+    o.loop_slot = {0};
+    vc.occurrences.push_back(o);
+    rich.cells.push_back(std::move(vc));
+  }
+  {
+    sequant::eval::ValueCell vc{};  // X: LoopLocal on i_6, a disjoint nest
+                                    // from V's own (slots 0, 1)
+    vc.value_id = 2;
+    vc.hash = 7102;
+    sequant::eval::OccurrenceRec o{};
+    o.point = 30;
+    o.consumer_point = 30;  // root
+    o.carried = {i6};
+    o.loop_slot = {2};
+    vc.occurrences.push_back(o);
+    rich.cells.push_back(std::move(vc));
+  }
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;  // V
+    cl.hash = 7100;
+    cl.per_axis.push_back({i4, LoopRole::LoopLocal});
+    cl.per_axis.push_back({i5, LoopRole::LoopLocal});
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // C
+    cl.hash = 7101;
+    cl.per_axis.push_back({i4, LoopRole::LoopCarried});
+    cl.forced_split_axes.push_back(i4);
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // X: LoopLocal on i_6, its own nest
+    cl.hash = 7102;
+    cl.per_axis.push_back({i6, LoopRole::LoopLocal});
+    legality.cells.push_back(cl);
+  }
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  REQUIRE_THROWS_WITH(
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
+      Catch::Matchers::ContainsSubstring("legality and the schedule disagree"));
+}

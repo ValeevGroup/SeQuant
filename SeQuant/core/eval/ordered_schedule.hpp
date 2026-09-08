@@ -299,9 +299,10 @@ inline void collect_productions(ScopeBlock const& block,
 ///     no value_id is built (\c BuildStep) more than once; a built value_id may
 ///     ALSO escape only through its OWN chain -- every block listing it in \c
 ///     outputs either holds its \c BuildStep or is an ancestor of the block
-///     that does (a member materialized across a forced loop split is built in
-///     its home block for its in-nest readers and escapes from that same block
-///     outward; see \c build_ordered_schedule's mixed-pass rule) -- and any
+///     that does (a member materialized across a forced loop split is built
+///     at its production site for its in-nest readers and escapes from that
+///     same site outward; see \c build_ordered_schedule's mixed-pass rule) --
+///     and any
 ///     other combination of build and escape sites is duplicate production;
 ///     and a value_id may escape (\c outputs) at MORE than
 ///     one block ONLY when those blocks lie on a single root-to-node nesting
@@ -340,9 +341,9 @@ inline void collect_productions(ScopeBlock const& block,
   // every block listing it in `outputs` must either BE the block holding its
   // BuildStep (built and escaped in one block -- a mixed-pass member of a
   // forced split: its in-nest readers take the per-batch cell, the other pass
-  // takes the assembled form) or an ANCESTOR of it (the chain levels above the
-  // home block). An escape in a sibling or descendant of the home block is a
-  // second, unrelated producer.
+  // takes the assembled form) or an ANCESTOR of it (the chain levels above
+  // the production site). An escape in a sibling or descendant of the
+  // production site is a second, unrelated producer.
   {
     std::unordered_map<std::size_t, detail::OutputSite const*> build_of;
     for (auto const& b : builds) build_of.emplace(b.value_id, &b);
@@ -1127,9 +1128,11 @@ inline ForkedSubchain fork_subchain(
     if (it2 != value_id_of.end()) cl_by_vid.emplace(it2->second, &c2);
   }
 
-  // 2. Per-value placement: home BuildStep (root-level bucket uses index n
-  // as a sentinel "root" depth) vs. escape output at the deepest escaped
-  // axis's depth.
+  // 2. Per-value placement: BuildStep at its production site (root-level
+  // bucket uses index n as a sentinel "root" depth; see \c build_depth below
+  // for a value materialized across a forced split, whose production site
+  // can sit deeper than its LoopLocal home) vs. escape output at the deepest
+  // escaped axis's depth.
   container::vector<detail::OrderedScheduleDepthBucket> buckets(n);
   container::svector<std::size_t> root_build_ids;
   // Values that keep their BuildStep AND escape it (the mixed-pass members of
@@ -1138,19 +1141,23 @@ inline ForkedSubchain fork_subchain(
   // bool below, not this list.
   container::svector<std::size_t> materialized_across_split_ids;
 
-  // The home depth of a value's plain BuildStep: the INNERMOST loop it is
-  // LoopLocal on, resolved PER-INSTANCE by fusion loop_slot -- NOT by
-  // shallowest same-space count. A value local to slots 2,3 (its own fusion
-  // nest) homes in THAT nest, not the FIRST same-space nest a space-multiset
-  // cover would pick; picking the wrong same-space nest homes the value where
-  // its consumer's nest has not opened (or has already closed), so an
+  // The LoopLocal home depth of a value: the INNERMOST loop it is LoopLocal
+  // on, resolved PER-INSTANCE by fusion loop_slot -- NOT by shallowest
+  // same-space count. A value local to slots 2,3 (its own fusion nest) homes
+  // in THAT nest, not the FIRST same-space nest a space-multiset cover would
+  // pick; picking the wrong same-space nest homes the value where its
+  // consumer's nest has not opened (or has already closed), so an
   // in-consumer-nest read misses and the value vanishes. Resolve each
   // LoopLocal mode's (space, fusion slot) to its realized depth (exactly as
   // the escape placement does), and home at the MAX such depth: within a
   // co-occurrence cluster larger depth nests inside smaller, so the innermost
   // of the value's own home slots is inside all of them. home_floor is the
   // LoopLocal subset, but it drops the pos->slot map, so walk per_axis
-  // directly for the slot. Nullopt = no realized loop-local mode: root.
+  // directly for the slot. Nullopt = no realized loop-local mode: root. This
+  // is a value's plain BuildStep production site UNLESS it is materialized
+  // across a forced split AND a role escape nests deeper than this depth, in
+  // which case \c build_depth (below, in the placement loop) seeds from this
+  // and deepens it to the true production site.
   auto const local_home_depth =
       [&](CellLegality const& cl) -> std::optional<std::size_t> {
     std::optional<std::size_t> target;
@@ -1354,12 +1361,18 @@ inline ForkedSubchain fork_subchain(
     // read a full form that resides at root. The value keeps its Build step
     // at its production site and gains an AccumulateScatter escape at every
     // instance of its nest it is loop-local on and no role already escapes
-    // (a reduced instance sums, a carried one scatters). Every instance the
-    // value is sliced by is then escaped, so the outermost assembled form is
-    // bound to no enclosing instance and the table's residency rule places
-    // it at root; a level the value is invariant to is simply skipped.
+    // it as a Scatter (a reduced instance sums, a carried one scatters; a
+    // loop-local mode sharing a depth with a Reduction dominates it to a
+    // Scatter too -- its own batches are disjoint, so summing them would be
+    // silently wrong). Every instance the value is sliced by is then
+    // escaped, so the outermost assembled form is bound to no enclosing
+    // instance and the table's residency rule places it at root; a level the
+    // value is invariant to is simply skipped.
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
+    // Whether this value already has a role-driven escape (before rule 4
+    // adds anything) -- captures the ORIGINAL tripwire precondition below.
+    bool const had_role_escape = !escapes.empty();
     // Direct readers PRODUCED in the same nest with a later pass. Nest
     // membership is decided by production_depth, not by local_home_depth: a
     // reader with only carried/reduction roles is still produced per batch
@@ -1383,13 +1396,17 @@ inline ForkedSubchain fork_subchain(
       auto const readers = later_same_nest_readers(nest);
       if (!readers.empty()) {
         // RULE 4 (section 7.3): escape every instance of this nest the
-        // value is loop-local on and not already escaped by a role; a role
-        // escape already sums (Reduction) or scatters (LoopCarried) that
-        // instance, so it is left as-is, and an instance the value is
-        // invariant to (its depth does not resolve, or resolves outside
-        // this nest) is simply skipped -- completeness then falls out for
-        // free, since the value is sliced by exactly the instances this
-        // loop escapes.
+        // value is loop-local on and not already escaped by a role as a
+        // Scatter; a role escape already scattering (LoopCarried) that
+        // instance is left as-is, a role escape SUMMING it (Reduction) is
+        // upgraded to a Scatter (a loop-local mode's batches are disjoint,
+        // so summing them across a depth it also shares with a reduced mode
+        // would silently combine values that must stay separate -- the same
+        // dominance the role loop above applies to a reduce+carry pair), and
+        // an instance the value is invariant to (its depth does not
+        // resolve, or resolves outside this nest) is simply skipped --
+        // completeness then falls out for free, since the value is sliced
+        // by exactly the instances this loop escapes.
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
           std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
           int const fs = fusion_slot(cl, pos);
@@ -1401,11 +1418,15 @@ inline ForkedSubchain fork_subchain(
             if (it == escapes.end()) {
               escapes.push_back({*d, OutputKind::AccumulateScatter});
               materialized_across_split = true;
+            } else if (it->second == OutputKind::AccumulateSum) {
+              it->second = OutputKind::AccumulateScatter;
             }
           } else if (it == escapes.end()) {
             // Should be impossible: every non-LoopLocal per_axis mode was
             // already pushed into escapes, for every depth it resolves to,
             // by the role loop above.
+            if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
+              dump_reject(vid, nest, readers);
             throw Exception(
                 "build_ordered_schedule: value " + std::to_string(vid) +
                 " is read by value " + std::to_string(readers.front()) +
@@ -1414,23 +1435,25 @@ inline ForkedSubchain fork_subchain(
                 " is neither loop-local nor escaped by a role");
           }
         }
-      } else {
+      } else if (!had_role_escape) {
         // TRIPWIRE (controller ruling I3; reader test corrected by ruling
-        // I4, applied regardless of role-driven escapes per section 7.3):
-        // this value has at least one nest instance it is loop-local on
-        // (home_depth resolved) and, with no same-nest later-pass reader,
-        // rule 4 above does not fire for it -- that instance is never
-        // escaped, so no coherent full form of this value is ever
-        // assembled, whether or not some OTHER axis of it is role-escaped.
-        // A direct later-pass reader whose production site RESOLVES to a
-        // nest other than this one is the reader's location, not this
-        // value's escapes: it cannot see the per-batch home form, and
-        // legality and the schedule disagree. "Produced outside this nest"
-        // is decided by production_depth, not by local_home_depth: a reader
-        // with only carried/reduction roles -- a forest root delivered in
-        // full, or a carried value of a later pass -- is still produced per
-        // batch inside its own nest, so it must not spuriously trip this
-        // guard.
+        // I4): a value with NO role-driven escape (checked before rule 4
+        // above ran, via had_role_escape) is LoopLocal on every axis, so
+        // its ONLY route to a coherent full form is a same-nest later-pass
+        // reader triggering rule 4 above -- and there is none here (this is
+        // the `readers.empty()` branch). A direct later-pass reader whose
+        // production site RESOLVES to a nest other than this one is the
+        // reader's location, not this value's (nonexistent) escapes: it
+        // cannot see the per-batch home form, and legality and the schedule
+        // disagree. A value that DOES have a role-driven escape is exempt:
+        // that escape already assembles a full form with root residency
+        // (rule 4's own scatter-dominance above ensures no instance is left
+        // half-summed), which any later-pass reader, in any nest, can see.
+        // "Produced outside this nest" is decided by production_depth, not
+        // by local_home_depth: a reader with only carried/reduction roles --
+        // a forest root delivered in full, or a carried value of a later
+        // pass -- is still produced per batch inside its own nest, so it
+        // must not spuriously trip this guard.
         //
         // production_depth never guesses: a reader whose production depth
         // does NOT resolve at all (every one of its modes has an
