@@ -4412,17 +4412,23 @@ TEST_CASE(
 // assembled on the first visit and REUSED afterwards; the steps that feed it
 // are then dead on every later visit. What this pins is the fill-once
 // property this reuse depends on, not the whole-block skip machinery that
-// (on THIS fixture) happens to implement it: under
-// SEQUANT_UT_STRICT_FILL_ONCE=1, a cell's Entry::store() throws if it is
-// filled a second time while its prior fill is still live (see
-// cache_manager.hpp's strict_fill_once), so REQUIRE_NOTHROW over the whole
-// evaluation is a direct proof that the invariant escape's cell is filled
-// EXACTLY ONCE across the loop's batches, not once per batch. (An earlier
-// version of this case instead checked `ordered_last_block_skips() > 0` --
-// the vestigial signal of the OLD builder's separate consumer-pass block,
-// which the per-nest forced-split design no longer emits; the loop-invariant
-// escape this case is actually about is rebuilt on every batch in both old
-// and new code and needs the fill-once property above to be pinned at all.)
+// (on THIS fixture) happens to implement it: with strictness enabled on the
+// cache handle (`set_strict_fill_once`, the per-manager knob -- NOT the
+// `SEQUANT_UT_STRICT_FILL_ONCE` environment variable, which is read only
+// once, on the first `eval::strict_fill_once()` call anywhere in the
+// process, so a later setenv in this translation unit has no effect on it),
+// `CellRegistry::set` throws if a non-persistent cell is filled a second
+// time while its prior fill is still live (see cell_registry.hpp's
+// `CellRegistryHooks::strict_fill_once`, which
+// `run_ordered_schedule_pre_results` now reads off the cache handle), so
+// REQUIRE_NOTHROW over the whole evaluation is a direct proof that the
+// invariant escape's cell is filled EXACTLY ONCE across the loop's batches, not
+// once per batch. (An earlier version of this case instead checked
+// `ordered_last_block_skips() > 0` -- the vestigial signal of the OLD builder's
+// separate consumer-pass block, which the per-nest forced-split design no
+// longer emits; the loop-invariant escape this case is actually about is
+// rebuilt on every batch in both old and new code and needs the fill-once
+// property above to be pinned at all.)
 // ===========================================================================
 TEST_CASE(
     "ordered executor: a loop-invariant escape is not re-formed on later "
@@ -4574,9 +4580,14 @@ TEST_CASE(
 
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_array_ops(&aops);
-  char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
-  std::string const prev_strict_val = prev_strict ? prev_strict : "";
-  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  // Deterministic per-instance override (cache_manager.hpp's
+  // set_strict_fill_once), not the environment: SEQUANT_UT_STRICT_FILL_ONCE
+  // is read once, via a function-local static latched on the first
+  // eval::strict_fill_once() call anywhere in the process (already long
+  // past by this point in the file), so a setenv here would have no effect
+  // on it. This override is robust to that latch and to the assert
+  // configuration alike.
+  ordered_cache.set_strict_fill_once(true);
   // THE pinned property: the whole evaluation runs to completion under
   // strict fill-once, so the invariant escape's cell (and every other cell)
   // is filled EXACTLY ONCE while live -- a re-formed escape on a later batch
@@ -4591,10 +4602,6 @@ TEST_CASE(
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
-  if (prev_strict)
-    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
-  else
-    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
 }
 
 // ===========================================================================

@@ -1954,12 +1954,20 @@ TEST_CASE(
 //
 // Nest: V is LoopLocal on BOTH i_1 (fusion slot 0) and i_2 (fusion slot 1),
 // which anchors the two loop instances into one nest. V feeds C (LoopCarried
-// on i_1) and is ALSO read directly by X (root, no per_axis roles at all).
-// Passes (by hand, mirroring the [levels] lift/straddle test): C = 0 (no
-// carried operand); X = 1 (reads C's completed form, a strict ancestor);
-// V's two consumers are C (pass 0) and X (pass 1) -- the straddle keeps V
-// at its base pass 0 (no lift), so X (pass 1) is a genuine later-pass
-// reader of V, homed at root -- outside V's nest.
+// on i_1) and is ALSO read directly by X, which is LoopLocal on i_3 (fusion
+// slot 2) -- a slot that never co-occurs with slots 0/1 in any cell, so it
+// forms its OWN, disjoint one-member nest: X's production site resolves
+// CONFIDENTLY, and to a nest other than V's. (An earlier version of this
+// fixture gave X no per_axis roles at all, so its production site did not
+// resolve; production_depth now never guesses a nest for an unresolved
+// reader (ruling I1), so an unresolved reader can no longer trip this
+// tripwire -- the fixture must give the offending reader a mode that
+// resolves, confidently, into a different nest, which is what this version
+// does.) Passes (by hand, mirroring the [levels] lift/straddle test): C = 0
+// (no carried operand); X = 1 (reads C's completed form, a strict
+// ancestor); V's two consumers are C (pass 0) and X (pass 1) -- the
+// straddle keeps V at its base pass 0 (no lift), so X (pass 1) is a genuine
+// later-pass reader of V, produced in a sibling nest -- outside V's own.
 // ===========================================================================
 TEST_CASE(
     "build_ordered_schedule: a LoopLocal value straddling passes, read "
@@ -1969,6 +1977,7 @@ TEST_CASE(
   using sequant::eval::LoopRole;
   sequant::Index const i1{L"i_1"};
   sequant::Index const i2{L"i_2"};
+  sequant::Index const i3{L"i_3"};
 
   sequant::eval::RichSchedule rich;
   {
@@ -2002,12 +2011,16 @@ TEST_CASE(
     rich.cells.push_back(std::move(vc));
   }
   {
-    sequant::eval::ValueCell vc{};  // X: root, no per_axis roles
+    sequant::eval::ValueCell vc{};  // X: LoopLocal on i_3 (fusion slot 2) --
+                                    // a second, disjoint nest from V's
+                                    // (slots 0, 1).
     vc.value_id = 2;
     vc.hash = 7002;
     sequant::eval::OccurrenceRec o{};
     o.point = 30;
     o.consumer_point = 30;  // root
+    o.carried = {i3};
+    o.loop_slot = {2};
     vc.occurrences.push_back(o);
     rich.cells.push_back(std::move(vc));
   }
@@ -2028,8 +2041,9 @@ TEST_CASE(
     legality.cells.push_back(cl);
   }
   {
-    sequant::eval::CellLegality cl;  // X: root, no axis roles at all
+    sequant::eval::CellLegality cl;  // X: LoopLocal on i_3, its own nest
     cl.hash = 7002;
+    cl.per_axis.push_back({i3, LoopRole::LoopLocal});
     legality.cells.push_back(cl);
   }
 
