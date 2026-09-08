@@ -2159,9 +2159,9 @@ TEST_CASE(
   legality.cells.push_back(
       orderedsched_nest_legality(2003, cd, LoopRole::LoopLocal));
   legality.cells.push_back(
-      orderedsched_nest_legality(2004, cd, LoopRole::LoopLocal));
+      orderedsched_nest_legality(2004, cd, LoopRole::LoopCarried));  // P
   legality.cells.push_back(
-      orderedsched_nest_legality(2005, cd, LoopRole::LoopLocal));
+      orderedsched_nest_legality(2005, cd, LoopRole::LoopCarried));  // X
 
   sequant::BatchPolicy policy;
   policy.is_batchable_external_index = [](sequant::Index const& ix) {
@@ -2192,8 +2192,12 @@ TEST_CASE(
   CHECK(b_lats == std::vector<int>{0, 1});
 
   // V (id 3) is built in nest B's latitude-0 block (at its inner depth) and
-  // scattered at both of nest B's levels; X (id 5) is built in the
-  // latitude-1 block; C (id 2) is scattered (no BuildStep) in latitude 0.
+  // scattered at both of nest B's levels -- rule 4 fires because X (id 5),
+  // though it has no LoopLocal axis of its own (it is a fully LoopCarried
+  // forest root, like C), is still PRODUCED inside nest B in pass 1
+  // (production_depth, not local_home_depth, decides nest membership for a
+  // rule-4 reader). C (id 2) and P (id 4) are each scattered (no BuildStep)
+  // in latitude 0; X is scattered (no BuildStep) in latitude 1.
   sequant::eval::ScopeBlock const* b0 = nullptr;
   sequant::eval::ScopeBlock const* b1 = nullptr;
   for (std::size_t k = 0; k < roots.size(); ++k) {
@@ -2218,9 +2222,11 @@ TEST_CASE(
         }) == 2);                                    // at both levels
   CHECK(has(p0, 2, OutputKind::AccumulateScatter));  // C scattered
   CHECK_FALSE(has(p0, 2, std::nullopt));
-  CHECK(has(p0, 4, std::nullopt));        // P in pass 0
-  CHECK(has(p1, 5, std::nullopt));        // X in pass 1
-  CHECK_FALSE(has(p1, 3, std::nullopt));  // V not rebuilt
+  CHECK(has(p0, 4, OutputKind::AccumulateScatter));  // P scattered, pass 0
+  CHECK_FALSE(has(p0, 4, std::nullopt));             // P has no BuildStep
+  CHECK(has(p1, 5, OutputKind::AccumulateScatter));  // X scattered, pass 1
+  CHECK_FALSE(has(p1, 5, std::nullopt));             // X has no BuildStep
+  CHECK_FALSE(has(p1, 3, std::nullopt));             // V not rebuilt
 
   // Design section 4: the derived cell table validates clean for this
   // fixture. Pattern follows test_ordered_executor.cpp:1552 / :1905, minus
@@ -2257,38 +2263,16 @@ TEST_CASE(
     UNSCOPED_INFO("[unresolved] cell#" << cid << " position " << pos
                                        << " (value "
                                        << table.cells[cid].value_id << ")");
-  // Every value except P (id 4) and X (id 5) validates clean, with zero
-  // unresolved positions. P and X are, by the table above, true forest
-  // roots (no consumer anywhere in this fixture) that must ALSO retain
-  // their own plain, schedule-level BuildStep inside their own pass's block
-  // -- exactly the has(p0, 4, nullopt) / has(p1, 5, nullopt) checks above.
-  // build_ordered_schedule's placement loop (ordered_schedule.hpp, the
-  // "Plain BuildStep" code just after the escape-emission block) skips that
-  // BuildStep for ANY value with a non-empty escape set unless
-  // materialized_across_split fires, and that flag is set only inside the
-  // branch requiring a genuine LATER-PASS SAME-NEST reader (see
-  // later_same_nest_readers) -- which neither P nor X has. So the only way
-  // to give either of them a route to the table's root scope (an escaping
-  // axis) unconditionally removes the very BuildStep the checks above
-  // require; confirmed empirically (giving either a partial escape flips
-  // has(p0, 4, nullopt) / has(p1, 5, nullopt) to false). This is a genuine
-  // structural conflict between this fixture's required schedule shape and
-  // validate_cell_table's life rule (cell_table.hpp: "Only at the ROOT
-  // scope is a zero-read cell legitimate"), not a gap in the wiring above.
-  // R (id 1) faced the identical issue and had no such assertion pinning
-  // its placement, so it is fixed instead, by being made LoopCarried like
-  // C: a genuine forest root over an external batched index does need to
-  // escape that index to be delivered in full, so this is the fixture's
-  // original role assignment made consistent, not a tweak -- and it clears
-  // R's violation with no effect on any assertion above.
-  CHECK(violations.size() == 2);
-  for (auto const& v : violations) {
-    CHECK(v.rule == "life");
-    CHECK(v.what.find("zero-read cell at a non-root scope") !=
-          std::string::npos);
-    CHECK((v.what.find("value 4") != std::string::npos ||
-           v.what.find("value 5") != std::string::npos));
-  }
+  // Design section 4: the derived cell table validates clean, with zero
+  // unresolved positions. R (id 1), P (id 4) and X (id 5) are each true
+  // forest roots (no consumer anywhere in this fixture) delivered in full
+  // over their own external batched index, so each is LoopCarried like C
+  // rather than LoopLocal: a genuine forest root over a batched index does
+  // need to escape that index to be delivered in full, which is also what
+  // gives each of them a route to the table's root scope, satisfying the
+  // life rule's "only at the ROOT scope is a zero-read cell legitimate"
+  // (cell_table.hpp).
+  CHECK(violations.empty());
   CHECK(table.unresolved.empty());
 
   // The mixed-pass value (V, id 3) has an Assemble cell at root scope (empty

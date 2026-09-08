@@ -1322,6 +1322,31 @@ forced_split_demotions(RichSchedule const& rich,
     return target;
   };
 
+  // The DAG-scope nest a value is PRODUCED inside, for rule-4 reader
+  // classification: the deepest depth ANY of its own per_axis modes (any
+  // role, not just LoopLocal) resolves to. A value with only carried/
+  // reduction roles -- a forest root delivered in full, or a carried value
+  // of a later pass -- is still produced per BATCH inside its own nest (its
+  // production is the accumulation folded into its escape bucket), so
+  // testing only LoopLocal modes (local_home_depth) would report such a
+  // value as homed at root: rule 4 would then neither fire the mixed-pass
+  // materialization for a value it reads, nor guard the tripwire against
+  // it. production_depth instead considers every per_axis mode regardless
+  // of role. Nullopt = no mode resolves (a genuinely unbatched value):
+  // root.
+  auto const production_depth =
+      [&](CellLegality const& cl) -> std::optional<std::size_t> {
+    std::optional<std::size_t> target;
+    for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
+      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      int const fs = fusion_slot(cl, pos);
+      auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+      if (!d) continue;
+      if (!target || *d > *target) target = *d;
+    }
+    return target;
+  };
+
   // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for a rule-4 rejection:
   // print the value's axes with roles/slots/depths, its later-pass readers,
   // and the forced-split axis's carried set, each with home depth and nest.
@@ -1482,7 +1507,10 @@ forced_split_demotions(RichSchedule const& rich,
     // nest; a chain that cannot reach root is rejected loudly (below).
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
-    // Direct readers homed in the same nest with a later pass.
+    // Direct readers PRODUCED in the same nest with a later pass. Nest
+    // membership is decided by production_depth, not by local_home_depth: a
+    // reader with only carried/reduction roles is still produced per batch
+    // inside its own nest even though it reports no LoopLocal home.
     auto const later_same_nest_readers =
         [&](std::size_t nest) -> container::svector<std::size_t> {
       container::svector<std::size_t> out;
@@ -1492,7 +1520,7 @@ forced_split_demotions(RichSchedule const& rich,
         if (pass_of(u) <= pass_of(vid)) continue;
         auto const uit = cl_by_vid.find(u);
         if (uit == cl_by_vid.end()) continue;
-        auto const uh = local_home_depth(*uit->second);
+        auto const uh = production_depth(*uit->second);
         if (uh && type_cluster[*uh] == nest) out.push_back(u);
       }
       return out;
@@ -1541,15 +1569,22 @@ forced_split_demotions(RichSchedule const& rich,
           }
         }
       } else {
-        // TRIPWIRE (controller ruling I3): a value with no role-driven escape
-        // is LoopLocal on every axis, so legality promises no reader outside
-        // its own nest -- every reader either sits in this same nest (handled
-        // above) or is served by an escape this value does not have. A direct
-        // later-pass reader homed OUTSIDE this nest (root, or a sibling nest)
+        // TRIPWIRE (controller ruling I3; reader test corrected by ruling
+        // I4): a value with no role-driven escape is LoopLocal on every
+        // axis, so legality promises no reader outside its own nest --
+        // every reader either sits in this same nest (handled above) or is
+        // served by an escape this value does not have. A direct later-pass
+        // reader PRODUCED outside this nest (root, or a sibling nest)
         // breaks that promise: legality and the schedule disagree, and
-        // silently building would read this value's per-batch home form from
-        // a scope that cannot see it. Thrown loudly rather than producing a
-        // silent mis-schedule.
+        // silently building would read this value's per-batch home form
+        // from a scope that cannot see it. "Produced outside this nest" is
+        // decided by production_depth, not by local_home_depth: a reader
+        // with only carried/reduction roles -- a forest root delivered in
+        // full, or a carried value of a later pass -- is still produced per
+        // batch inside its own nest, so it must not spuriously trip this
+        // guard; a reader whose production depth does not resolve at all,
+        // or resolves into a different nest, still trips it. Thrown loudly
+        // rather than producing a silent mis-schedule.
         auto const cons_it = g.consumers_of.find(vid);
         if (cons_it != g.consumers_of.end())
           for (std::size_t u : cons_it->second) {
@@ -1557,7 +1592,7 @@ forced_split_demotions(RichSchedule const& rich,
             auto const uit = cl_by_vid.find(u);
             std::optional<std::size_t> const uh =
                 uit == cl_by_vid.end() ? std::nullopt
-                                       : local_home_depth(*uit->second);
+                                       : production_depth(*uit->second);
             if (uh && type_cluster[*uh] == nest) continue;  // same nest: n/a
             if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
               dump_reject(vid, nest, container::svector<std::size_t>{u});
