@@ -432,14 +432,15 @@ ordered_range_of(eval::BatchContext const& ctx, LoopKey const& key) {
 /// context and to let the hook lookups -- backend array-ops, the cell read
 /// resolver, the peak monitor -- fall through to \p parent_cache.
 ///
-/// \par Forced-split producer/consumer passes
-/// A forced split realizes its axis as TWO sibling \c ScopeBlock \c Step's at
-/// the SAME nesting level (ordinal 0 the producer, ordinal 1 the consumer)
-/// rather than one nested inside the other. No special-casing is needed:
-/// sibling steps run sequentially, the topological sort puts the consumer
-/// pass after the producer pass, and the consumer's reads name the producer's
-/// assembled cell explicitly (scopes carry their latitude, so the two passes'
-/// cells are distinct).
+/// \par A nest's pass blocks
+/// A nest holding a forced-split axis realizes its loop as that nest's pass
+/// blocks, one per pass (latitude = pass), as sibling \c ScopeBlock \c Step's
+/// at the SAME nesting level rather than one nested inside the other, run in
+/// schedule order. No special-casing is needed: sibling steps run
+/// sequentially, the topological sort orders the pass blocks ascending by
+/// pass, and a later pass's reads name an earlier pass's assembled cell
+/// explicitly (scopes carry their latitude, so each pass's cells are
+/// distinct).
 ///
 /// \param skip The cache-halt skip set over cells (\c
 ///        ordered_cache_halt_skip), computed once per call; this block adds
@@ -1420,10 +1421,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 /// run per batch on a scratch cache, its \c AccumulateSum outputs summed
 /// across batches; Task 3: its \c AccumulateScatter outputs written into a
 /// disjoint slice of a pre-sized destination each batch -- both kinds stored
-/// at the level the block itself sits in on close, including a forced
-/// split's two ordinal-ordered producer/consumer sibling blocks, run in
-/// schedule order like any other pair of steps), then combines the forest
-/// roots' results into the final \c ResultPtr exactly as \c
+/// at the level the block itself sits in on close, including a nest's own
+/// pass-ordered sibling blocks (one per pass, latitude = pass), run in
+/// schedule order like any other set of sibling steps), then combines the
+/// forest roots' results into the final \c ResultPtr exactly as \c
 /// evaluate_whole_scope's shared root-combine loop does (permute-to-\p
 /// layout + cross-root \c add_inplace, with the identical Term/Permute/
 /// SumInplace trace bookkeeping).

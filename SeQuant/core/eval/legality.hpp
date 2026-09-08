@@ -101,31 +101,6 @@ struct LegalitySchedule {
 };
 
 ///
-/// \brief A sequencer-supplied source of monotone demotions for \c
-/// analyze_legality's fixpoint (SP2, Task 4).
-///
-/// \details Given the CURRENT \c LegalitySchedule (one round's classification),
-/// returns the set of \c (ValueCell::hash, axis-SPACE-\c base_key()) pairs that
-/// must be demoted \c LoopLocal -> \c LoopCarried on that axis in the NEXT
-/// round
-/// -- e.g. a value that is \c LoopLocal on a forced-split axis \c L but is used
-/// in BOTH resulting \c L-passes, which cannot keep a single per-\c L copy
-/// alive across the split (see \c ordered_schedule.hpp's \c
-/// forced_split_demotions, the concrete SP2 source). The demotion is a property
-/// of SP2's ORDERED split pass structure, not of the DAG SP1 sees, which is why
-/// SP1 supplies NONE (the default-constructed, empty source): with no source \c
-/// analyze_legality is BYTE-IDENTICAL to its pre-SP2 behavior (the fixpoint
-/// runs exactly one inert round). The source is consulted afresh each round, so
-/// a value already demoted in a prior round is simply not re-reported (it is no
-/// longer \c LoopLocal), which -- together with the caller de-duplicating
-/// against the running demotion set -- keeps the fixpoint monotone and bounded
-/// by \c Sum|per_axis|+1.
-///
-using DemotionSource =
-    std::function<container::svector<std::pair<std::size_t, std::wstring>>(
-        LegalitySchedule const&)>;
-
-///
 /// \brief Group \p cell's \c forced_split_axes by axis SPACE TYPE (\c
 /// base_key()), collapsing multiple same-type \c Index INSTANCES into the
 /// single loop (axis) they jointly force to split.
@@ -383,37 +358,20 @@ using DemotionSource =
 /// unbroken loop around this value. This is directly derivable from the
 /// per-axis roles alone and is the deliverable this task ships as sound.
 ///
-/// \par The monotone fixpoint (Task 4)
-/// The analysis is wrapped in a bounded fixpoint. The design's intended body
-/// is a DEMOTION: once \c L is forced to split, a value used in BOTH resulting
-/// \c L-passes cannot keep a single per-\c L copy alive across the split, so it
-/// is demoted \c LoopLocal -> \c LoopCarried on \c L, which lifts its home
-/// floor; classification/floors are re-derived and the round repeats until no
-/// floor rises. Because a home can only ever LIFT (a role only moves toward
-/// \c LoopCarried, never back), the fixpoint is monotone and terminates; the
-/// hard cap \c Sum_over_cells|per_axis|+1 (each productive round demotes at
-/// least one per-axis entry) guards against a non-terminating bug via \c
-/// SEQUANT_ASSERT.
-///
-/// \par SP2 wiring of the demotion (Task 4)
-/// "Used in both \c L-passes" is a property of the PASS STRUCTURE -- the
-/// ordered, split schedule that SP2 builds -- not of the DAG SP1 sees. It is
-/// therefore supplied FROM OUTSIDE, via the optional \p demotion_source
-/// callback: the SP2 sequencer passes \c forced_split_demotions (\c
-/// ordered_schedule.hpp), which knows the producer/consumer pass partition and
-/// reports every \c LoopLocal value read from BOTH passes of a forced split.
-/// Each fixpoint round consults it and grows the monotone demotion set; a
-/// productive round demotes at least one \c per_axis entry, so the tightened
-/// cap
-/// \c Sum|per_axis|+1 still bounds termination. When \p demotion_source is
-/// EMPTY (the SP1 default), \c derive_demotions is inert (the loop runs exactly
-/// one round) and this function is BYTE-IDENTICAL to its pre-SP2 behavior --
-/// deriving a demotion from a DAG guess is thereby avoided, not approximated.
+/// \par No fixpoint: a value read across a forced split is not demoted here
+/// A value \c LoopLocal on a forced-split axis \c L that is read by a
+/// later-pass reader is handled entirely by the SP2 sequencer (\c
+/// build_ordered_schedule's per-nest pass placement, rule 4), which
+/// materializes such a value across the pass boundary at schedule-build time
+/// -- "used across the split" is a property of the ORDERED pass structure SP2
+/// builds, not of the DAG this function sees, so classification here never
+/// needs to react to it. \c analyze_legality is therefore a single
+/// deterministic round: one classification per cell, with no re-derivation
+/// loop.
 ///
 template <meta::eval_node_range R>
 [[nodiscard]] inline LegalitySchedule analyze_legality(
-    RichSchedule const& rich, R const& forest, BatchPolicy const& policy,
-    DemotionSource demotion_source = {}) {
+    RichSchedule const& rich, R const& forest, BatchPolicy const& policy) {
   using Node = std::ranges::range_value_t<R>;
 
   // point -> occurrence, to reach the PARENT occurrence (same tree) of an
@@ -455,21 +413,7 @@ template <meta::eval_node_range R>
 
   (void)policy;  // build-site now sourced from the DP decision, not the policy
 
-  // Monotone demotion set (the fixpoint state): hash -> the axis SPACE
-  // base_keys forced from LoopLocal to LoopCarried by a prior round. Grows
-  // only; empty in SP1 (see derive_demotions).
-  std::unordered_map<std::size_t, container::svector<std::wstring>> demotions;
-  auto const is_demoted = [&](std::size_t hash, Index const& axis) {
-    auto const it = demotions.find(hash);
-    if (it == demotions.end()) return false;
-    std::wstring const key{axis.space().base_key()};
-    return std::find(it->second.begin(), it->second.end(), key) !=
-           it->second.end();
-  };
-
-  // One classification round over every cell, honoring the current demotion
-  // set. Pure in `demotions` (and the fixed inputs), so re-running it is what
-  // makes the fixpoint well-defined.
+  // The single classification round over every cell.
   auto const build_cells = [&]() -> LegalitySchedule {
     LegalitySchedule out;
     out.cells.reserve(rich.cells.size());
@@ -536,11 +480,6 @@ template <meta::eval_node_range R>
         ac.axis = axis;
         ac.role = classify_axis(vc.carried, contracted_below, axis,
                                 vc.occurrences, dp_sliced, enclosing_slot);
-        // Monotone demotion (SP2 hook): a prior fixpoint round can force an
-        // axis LoopLocal -> LoopCarried; roles only ever move toward
-        // LoopCarried, never back, which is what makes the fixpoint monotone.
-        if (ac.role == LoopRole::LoopLocal && is_demoted(vc.hash, axis))
-          ac.role = LoopRole::LoopCarried;
         cl.per_axis.push_back(std::move(ac));
       }
 
@@ -600,55 +539,7 @@ template <meta::eval_node_range R>
     return out;
   };
 
-  // The monotone demotion step. Given the current schedule (its per_axis roles
-  // and forced_split_axes), enlarge `demotions` with every (value, axis) the
-  // sequencer-supplied `demotion_source` reports as used in BOTH L-passes of a
-  // forced L-split (and which must therefore lift its floor). Returns true iff
-  // it added anything not already recorded.
-  //
-  // With NO source (the SP1 default) this is DELIBERATELY INERT (returns false
-  // without touching `demotions`): "used in both L-passes" is a property of
-  // SP2's ordered, split pass structure, which is supplied from outside, not
-  // guessed from the DAG here. The de-duplication against the running set below
-  // is what keeps the fixpoint monotone (a pair already demoted is never
-  // counted as growth) and guarantees convergence within the cap even if the
-  // source re-reports a stale pair.
-  auto const derive_demotions = [&](LegalitySchedule const& current) -> bool {
-    if (!demotion_source) return false;  // SP1: inert, byte-identical
-    bool grew = false;
-    for (auto const& [hash, key] : demotion_source(current)) {
-      auto& keys = demotions[hash];
-      if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
-        keys.push_back(key);
-        grew = true;
-      }
-    }
-    return grew;
-  };
-
-  LegalitySchedule out = build_cells();
-
-  // Monotone fixpoint. `derive_demotions` demotes a single (cell, axis) pair
-  // per round -- SP1's is inert (returns false immediately, so the loop below
-  // runs exactly one round), but once SP2 wires it live, a cell can be lifted
-  // on several axes over several rounds, so the tight non-termination bound
-  // is Sum_over_cells |per_axis| + 1 (every productive round demotes at
-  // least one per_axis entry, and roles only ever move toward LoopCarried,
-  // never back), NOT cells.size()+1 (which only holds for CELL-granular
-  // progress, i.e. >= one whole cell demoted per round). Asserted below as a
-  // hard non-termination tripwire.
-  [[maybe_unused]] std::size_t const cap = [&] {
-    std::size_t sum = 0;
-    for (CellLegality const& cl : out.cells) sum += cl.per_axis.size();
-    return sum + 1;
-  }();
-  for (std::size_t iter = 0;; ++iter) {
-    SEQUANT_ASSERT(iter <= cap,
-                   "analyze_legality: forced-split fixpoint did not converge");
-    if (!derive_demotions(out)) break;
-    out = build_cells();
-  }
-  return out;
+  return build_cells();
 }
 
 }  // namespace sequant::eval

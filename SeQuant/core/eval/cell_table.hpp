@@ -353,10 +353,10 @@ template <typename Candidates>
   //
   // That "another instance of the same group" branch keys the group on \c
   // depth ALONE (not the full LoopKey): two members of one loop group share a
-  // depth and differ by \c loop_slot. Note that the passes of a forced split
-  // differ by LATITUDE, which LoopKey drops entirely, so they are the SAME
-  // instance here; and on a schedule with a single instance per depth the
-  // branch cannot fire at all. It guards hand-built tables and the
+  // depth and differ by \c loop_slot. Note that the pass blocks of a nest
+  // differ by LATITUDE (one per pass), which LoopKey drops entirely, so they
+  // are the SAME instance here; and on a schedule with a single instance per
+  // depth the branch cannot fire at all. It guards hand-built tables and the
   // multi-instance loop groups a later stage will emit.
   for (CellId id = 0; id < n; ++id) {
     TableCell const& c = table.cells[id];

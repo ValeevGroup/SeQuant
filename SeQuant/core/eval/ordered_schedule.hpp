@@ -536,8 +536,8 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
 /// the value \c p directly READS, and \c consumers_of[c] lists every value_id
 /// that directly reads \c c (the reverse). Same recovery \c
 /// build_ordered_schedule uses inline (occurrence \c consumer_point ->
-/// producing value_id via \c point_owner); factored here so the split-pass
-/// partition and \c build_ordered_schedule agree edge-for-edge.
+/// producing value_id via \c point_owner); factored here so \c
+/// forced_split_levels and \c build_ordered_schedule agree edge-for-edge.
 ///
 struct OrderedScheduleDepGraph {
   std::unordered_map<std::size_t, std::size_t> value_id_of;  //!< hash -> id
@@ -570,93 +570,6 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
       }
     }
   return g;
-}
-
-///
-/// \brief The producer/consumer pass partition of one forced-split axis TYPE
-/// \p axis_key (SP2, Task 4): which values are LOOP-CARRIED on the axis (the
-/// values that force the split), and which values belong to the CONSUMER pass
-/// (a strict dependency-ancestor of some carried value -- it reads a carried
-/// value's completed result, so it cannot run until the producer pass has
-/// closed the axis loop and scattered that value to full). Every other value is
-/// in the PRODUCER pass (it builds the carried values, or is unrelated).
-///
-struct ForcedSplitPasses {
-  std::unordered_set<std::size_t> carried;        //!< LoopCarried-on-axis ids
-  std::unordered_set<std::size_t> consumer_pass;  //!< strict ancestors thereof
-};
-
-inline ForcedSplitPasses forced_split_passes(std::wstring const& axis_key,
-                                             LegalitySchedule const& legality,
-                                             OrderedScheduleDepGraph const& g) {
-  ForcedSplitPasses r;
-  for (CellLegality const& cl : legality.cells) {
-    bool const carried_here = std::any_of(
-        cl.per_axis.begin(), cl.per_axis.end(), [&](AxisClass const& ac) {
-          return ac.role == LoopRole::LoopCarried &&
-                 ac.axis.space().base_key() == axis_key;
-        });
-    if (!carried_here) continue;
-    auto const it = g.value_id_of.find(cl.hash);
-    if (it != g.value_id_of.end()) r.carried.insert(it->second);
-  }
-
-  // consumer_pass = strict dependency-ancestors of the carried set: walk UP the
-  // consumer edges from each carried value (a carried value that is itself an
-  // ancestor of ANOTHER carried value is thereby included -- it consumes a
-  // completed carried value -- while a carried value that is only a source of
-  // others is not, and stays in the producer pass).
-  container::svector<std::size_t> stack;
-  auto const push = [&](std::size_t v) {
-    if (r.consumer_pass.insert(v).second) stack.push_back(v);
-  };
-  for (std::size_t c : r.carried) {
-    auto const it = g.consumers_of.find(c);
-    if (it != g.consumers_of.end())
-      for (std::size_t p : it->second) push(p);
-  }
-  while (!stack.empty()) {
-    std::size_t const v = stack.back();
-    stack.pop_back();
-    auto const it = g.consumers_of.find(v);
-    if (it != g.consumers_of.end())
-      for (std::size_t p : it->second) push(p);
-  }
-  // DOWNWARD closure (2026-09-02): a LoopLocal member of this nest whose
-  // consumers ALL sit in the consumer pass must move with them -- its
-  // per-batch cell is pass-local, so left in the producer pass it is gone by
-  // the time the consumer pass runs (w20 pVDZ-F12 strict walk: 59557, a
-  // 4-occ member read only by two consumer-pass members at i#d1s0 lat 1 ->
-  // "read-from-home value vanished"). A member with consumers in BOTH passes
-  // is left where it is (it cannot be built twice); such a case must escape
-  // instead and shows up in the strict walk.
-  for (bool grew = true; grew;) {
-    grew = false;
-    container::svector<std::size_t> members(r.consumer_pass.begin(),
-                                            r.consumer_pass.end());
-    for (std::size_t v : members) {
-      auto const dit = g.depends_on.find(v);
-      if (dit == g.depends_on.end()) continue;
-      for (std::size_t op : dit->second) {
-        if (r.consumer_pass.count(op) || r.carried.count(op)) continue;
-        auto const cit = g.consumers_of.find(op);
-        if (cit == g.consumers_of.end() || cit->second.empty()) continue;
-        bool all_in = true;
-        for (std::size_t c : cit->second)
-          if (!r.consumer_pass.count(c)) {
-            all_in = false;
-            break;
-          }
-        // All consumers on the consumer side: move it. Consumers on BOTH
-        // sides: left where it is -- a per-batch cell is pass-local, so this
-        // is a genuine scheduling conflict (recompute it in the consumer pass
-        // vs materialize it across the pass boundary) that the schedule must
-        // decide with a cost; it surfaces in the strict walk, by design.
-        if (all_in && r.consumer_pass.insert(op).second) grew = true;
-      }
-    }
-  }
-  return r;
 }
 
 ///
@@ -757,19 +670,22 @@ inline ForcedSplitLevels forced_split_levels(std::wstring const& axis_key,
 }
 
 ///
-/// \brief The producer-side and consumer-side copies of a forked inner
+/// \brief The predicate-false and predicate-true copies of a forked inner
 /// sub-chain (see \c fork_subchain).
 ///
 struct ForkedSubchain {
-  container::vector<Step> producer;  //!< steps whose values are producer-side
-  container::vector<Step> consumer;  //!< steps whose values are consumer-side
+  container::vector<Step> producer;  //!< steps whose values are predicate-false
+  container::vector<Step> consumer;  //!< steps whose values are predicate-true
 };
 
 ///
 /// \brief Fork an already-built inner sub-chain (an ORDERED list of \c Step)
-/// into a producer-side copy and a consumer-side copy, for a forced loop split
-/// at a NON-innermost axis (\c build_ordered_schedule). \p
-/// in_consumer(value_id) decides each value's side (true => the consumer pass).
+/// into a predicate-false copy and a predicate-true copy, used once per pass
+/// at a nest holding a forced-split axis (\c build_ordered_schedule): for pass
+/// \p k, \p in_consumer(value_id) is `pass_of(value_id) == k`, so the
+/// predicate-true side is exactly that pass's own steps out of the nest's
+/// full pending sub-chain (its predicate-false side, everything else, is
+/// picked up by a later call for a different \p k).
 ///
 /// \details A \c BuildStep goes wholly to one side by \p in_consumer of its
 /// value. A nested \c ScopeBlock (an inner loop) is recursively forked; each
@@ -811,7 +727,7 @@ inline ForkedSubchain fork_subchain(
       // values are contracted at the output step itself -- is legitimate and
       // must NOT be dropped: doing so strands a whole nested loop (e.g. an
       // inner occ member loop or an aux loop) together with its escape outputs,
-      // leaving the split axis as the only realized loop (the
+      // leaving the forced-split axis as the only realized loop (the
       // is_range_set_congruent crash).
       if (side_steps.empty() && side_outputs.empty()) return;
       ScopeBlock fb;
@@ -833,111 +749,16 @@ inline ForkedSubchain fork_subchain(
 }  // namespace detail
 
 ///
-/// \brief The SP2 \c DemotionSource (\c legality.hpp) for forced loop splits
-/// (Task 4): every \c (hash, axis-base-key) that must be demoted \c LoopLocal
-/// -> \c LoopCarried because a producer-side value is read across the split.
-///
-/// \details For each forced-split axis TYPE \c L (\c forced_split_types over
-/// every cell) the split makes two ordered \c L-passes -- a PRODUCER pass that
-/// builds the loop-carried values to full and a CONSUMER pass that reads them
-/// (see \c build_ordered_schedule). A value \c V that is \c LoopLocal on \c L
-/// (a single per-iteration copy, homed INSIDE the \c L loop) and HOMED on the
-/// producer side (\c V itself is NOT in \c consumer_pass) is demoted the moment
-/// ANY of its DIRECT consumers lands in the consumer pass: that consumer runs
-/// in a later, disjoint \c L-loop and cannot see \c V's per-iteration
-/// producer-side copy, so \c V must be materialized in full (\c LoopCarried ->
-/// an \c AccumulateScatter escape output of the producer pass), lifting its
-/// home floor out of \c L.
-///
-/// \note NOT LIVE on any schedule: \c analyze_legality takes its \c
-/// DemotionSource as an optional argument and is inert without one (\c
-/// derive_demotions returns immediately), and no caller passes one -- so this
-/// function only runs in its own unit tests. The schedule builder applies the
-/// same classification DIRECTLY, in \c build_ordered_schedule's per-value
-/// placement loop (its "MIXED-PASS MEMBER" rule, section 2), where the pass
-/// partition and the realized loop depths are both in hand; see there for the
-/// live behavior.
-///
-/// \par Why the trigger is SINGLE-SIDED (not "read from both passes")
-/// The pass closure (\c forced_split_passes) is one-directional: if \c V were
-/// in
-/// \c consumer_pass, EVERY direct consumer of \c V would be forced into \c
-/// consumer_pass too, so a consumer-homed value is never read from the producer
-/// side and needs no demotion (hence the \c consumer_pass guard on \c V). The
-/// only unsound case is therefore the asymmetric one -- \c V homed producer
-/// whose SOLE consumer reads the carried leaf (that consumer is unconditionally
-/// in \c consumer_pass). Requiring a producer-side consumer TOO would skip it,
-/// leaving \c V an invisible producer-pass transient the consumer block
-/// requires but no producer emits -- a silent mis-schedule. Demoting on ANY
-/// consumer-pass reader closes that gap and is complete.
-///
-/// Wire this into \c analyze_legality as its \c demotion_source to grow the
-/// monotone fixpoint (Task 4). Recomputed afresh each round on the CURRENT
-/// schedule; a value already demoted is no longer \c LoopLocal, so it is not
-/// re-reported, and the fixpoint converges.
-///
-[[nodiscard]] inline container::svector<std::pair<std::size_t, std::wstring>>
-forced_split_demotions(RichSchedule const& rich,
-                       LegalitySchedule const& legality) {
-  auto const g = detail::ordered_schedule_dep_graph(rich);
-
-  // forced-split axis TYPES, in first-discovery order across cells.
-  container::svector<std::wstring> axes;
-  for (CellLegality const& cl : legality.cells)
-    for (Index const& ix : forced_split_types(cl)) {
-      std::wstring key{ix.space().base_key()};
-      if (std::find(axes.begin(), axes.end(), key) == axes.end())
-        axes.push_back(std::move(key));
-    }
-
-  container::svector<std::pair<std::size_t, std::wstring>> out;
-  for (std::wstring const& key : axes) {
-    auto const passes = detail::forced_split_passes(key, legality, g);
-    for (CellLegality const& cl : legality.cells) {
-      bool const loop_local_here = std::any_of(
-          cl.per_axis.begin(), cl.per_axis.end(), [&](AxisClass const& ac) {
-            return ac.role == LoopRole::LoopLocal &&
-                   ac.axis.space().base_key() == key;
-          });
-      if (!loop_local_here) continue;
-      auto const vid_it = g.value_id_of.find(cl.hash);
-      if (vid_it == g.value_id_of.end()) continue;
-      std::size_t const vid = vid_it->second;
-      // V must be HOMED on the producer side (not itself in consumer_pass): a
-      // consumer-pass value's own consumers are, by the one-directional closure
-      // in forced_split_passes, all in consumer_pass too, so it is never read
-      // from the producer side and needs no demotion.
-      if (passes.consumer_pass.count(vid)) continue;
-      auto const cons_it = g.consumers_of.find(vid);
-      if (cons_it == g.consumers_of.end()) continue;
-      // SINGLE-SIDED trigger: demote as soon as ANY direct consumer of V lands
-      // in the consumer pass. V is a producer-side LoopLocal transient, so
-      // WITHOUT this demotion it would be an invisible per-iteration value the
-      // consumer pass (a later, disjoint L-loop) cannot see -- a silent
-      // mis-schedule. Requiring a producer-side consumer TOO (the old `&&`)
-      // wrongly skipped the case where V's SOLE consumer reads the carried
-      // value (and is thereby forced into consumer_pass): demoting V ->
-      // LoopCarried materializes it as an AccumulateScatter escape output of
-      // the producer pass, visible across the split.
-      bool const read_by_consumer_pass = std::any_of(
-          cons_it->second.begin(), cons_it->second.end(),
-          [&](std::size_t c) { return passes.consumer_pass.count(c); });
-      if (read_by_consumer_pass) out.push_back({cl.hash, key});
-    }
-  }
-  return out;
-}
-
-///
 /// \brief Task 3 of the ordered-scope batched-eval design (SP2): the
 /// deterministic sequencer -- lowers SP1's \c LegalitySchedule (per-value
 /// \c home_floor / \c per_axis roles) plus the \c RichSchedule (per-value
 /// \c first_use / \c last_use over the forest's single post-order static-
 /// point timeline) into an \c OrderedSchedule. Every batch axis TYPE realizes
 /// ONE loop block, chained (not branched) exactly as \c build_scope_schedule's
-/// single canonical chain -- EXCEPT the innermost forced-split axis, which
-/// Task 4 realizes as two ordered producer/consumer passes (see step 2b and
-/// \c forced_split_demotions).
+/// single canonical chain -- EXCEPT a nest holding a forced-split axis, whose
+/// loop is instead realized as that nest's pass blocks, one per pass
+/// (latitude = pass), run in schedule order (see step 2b and \c
+/// forced_split_levels).
 ///
 /// \details Four-part algorithm, pure scheduling (no cost choice):
 ///
@@ -1737,13 +1558,14 @@ forced_split_demotions(RichSchedule const& rich,
 
   // 3. Assemble the chain bottom-up (innermost first). Thread up a LIST of
   // child block Steps to embed one level out -- normally ONE (the single block
-  // for the deeper axis, exactly as Task 3), but TWO at the split depth (the
-  // producer/consumer passes) -- each paired with the meta the outer topo-sort
-  // needs (its OWN escape outputs as `produced`, its whole subtree's external
-  // need as `requires_`, and a deterministic `tie_key`). child_produced_all /
+  // for the deeper axis, exactly as Task 3), but ONE PER PASS at a nest's
+  // outermost depth when that nest holds a forced-split axis (its pass
+  // blocks) -- each paired with the meta the outer topo-sort needs (its OWN
+  // escape outputs as `produced`, its whole subtree's external need as
+  // `requires_`, and a deterministic `tie_key`). child_produced_all /
   // child_requires_all carry the FULL recursive produced/external-need sets of
-  // everything built at this depth (identical whether one block or two -- the
-  // outer level sees the same production/need set either way) to grow the next
+  // everything built at this depth (identical whichever way -- the outer
+  // level sees the same production/need set either way) to grow the next
   // level's own sets, per the function doc comment's part 3.
   container::vector<Step> pending_steps;
   container::vector<detail::OrderedScheduleStepMeta> pending_metas;
@@ -2088,10 +1910,10 @@ inline void assert_global_level_axis_uniqueness(
 /// every non-root \c ScopeBlock's \c DagScopeLevel. Two blocks that are
 /// STRUCTURALLY the same loop (identical \c (depth, space, ordinal)) always
 /// share one \c LoopId; two blocks that differ in ANY of those three --
-/// including two forced-split SIBLING passes, which differ only in \c
-/// ordinal -- get DISTINCT ids by construction (see the design's "Loop
-/// identity is a slot color" section: producer/consumer passes must be
-/// distinguishable colors, not folded).
+/// including two of a nest's own pass blocks (one per pass, latitude =
+/// pass), which differ only in \c latitude_ordinal -- get DISTINCT ids by
+/// construction (see the design's "Loop identity is a slot color" section: a
+/// nest's pass blocks must be distinguishable colors, not folded).
 ///
 /// \note Defined in \c dag_scope.hpp so the low-level DAG-scope types can be
 /// named without depending on this schedule header; re-exported here for the

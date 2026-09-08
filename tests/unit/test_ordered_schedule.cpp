@@ -44,6 +44,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -800,11 +801,6 @@ TEST_CASE(
 
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
 
-  // No LoopLocal value is read from both passes here (the shared operand is a
-  // leaf, materialized regardless), so the demotion source reports nothing:
-  // the split is driven purely by the loop-carried structure.
-  CHECK(sequant::eval::forced_split_demotions(rich, legality).empty());
-
   auto const sched =
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"});
   REQUIRE(well_formed(sched));
@@ -1117,101 +1113,6 @@ TEST_CASE(
   scan(sched.root.steps);
   CHECK(saw_depth_1);
   CHECK(saw_depth_2);
-}
-
-// ===========================================================================
-// Task 4 (Fix round 1): the demotion trigger in forced_split_demotions is
-// SINGLE-SIDED -- a producer-homed LoopLocal value V (V itself NOT in
-// consumer_pass) is demoted the moment ANY direct consumer of V lands in the
-// consumer pass, NOT only when V ALSO has a producer-side consumer. A hand-
-// built dep graph + legality isolates the four cases (the split-pass BFS is
-// one-directional, so a consumer-homed value never leaks back to the producer
-// side and needs no demotion -- hence the asymmetric "sole consumer" case is
-// the only unsound one, and it is exactly the one the old `&&` trigger missed):
-//
-//   Lc (id0)  -- LoopCarried leaf on occ  (forces the split)
-//   Wc (id5)  -- LoopCarried, reads Lc    => a strict ancestor of Lc, so it is
-//                                            in consumer_pass
-//   Pu (id4)  -- producer-side root, reads Vboth+Vprod (reads NO carried value,
-//                                            so NOT in consumer_pass)
-//   Vboth(id1)-- LoopLocal, read by Pu (producer) AND Wc (consumer) => flagged
-//   Vsole(id2)-- LoopLocal, read ONLY by Wc (consumer) => flagged (the case the
-//                                            old `&&` trigger silently dropped)
-//   Vprod(id3)-- LoopLocal, read ONLY by Pu (producer) => NOT flagged
-// ===========================================================================
-TEST_CASE(
-    "forced_split_demotions: single-sided trigger flags a producer-homed "
-    "LoopLocal read by any consumer-pass value, including its SOLE consumer",
-    "[ordered-schedule]") {
-  sequant::Index const i{L"i_1"};
-
-  auto const make_cell =
-      [](std::size_t id, std::size_t hash,
-         std::vector<std::pair<std::size_t, std::size_t>> const& occs) {
-        sequant::eval::ValueCell vc{};
-        vc.value_id = id;
-        vc.hash = hash;
-        vc.first_use = 0;
-        vc.last_use = 0;
-        for (auto const& [p, cp] : occs) {
-          sequant::eval::OccurrenceRec o{};
-          o.point = p;
-          o.consumer_point = cp;
-          vc.occurrences.push_back(std::move(o));
-        }
-        return vc;
-      };
-
-  // consumer_point == point means "forest root" (no structural parent).
-  sequant::eval::RichSchedule rich;
-  rich.cells.push_back(make_cell(0, 1000, {{0, 50}}));  // Lc  -> Wc
-  rich.cells.push_back(
-      make_cell(1, 1001, {{10, 40}, {11, 50}}));         // Vboth->Pu,Wc
-  rich.cells.push_back(make_cell(2, 1002, {{20, 50}}));  // Vsole-> Wc
-  rich.cells.push_back(make_cell(3, 1003, {{30, 40}}));  // Vprod-> Pu
-  rich.cells.push_back(make_cell(4, 1004, {{40, 40}}));  // Pu  (root)
-  rich.cells.push_back(make_cell(5, 1005, {{50, 50}}));  // Wc  (root)
-
-  auto const make_legality = [&](std::size_t hash,
-                                 sequant::eval::LoopRole role) {
-    sequant::eval::CellLegality cl;
-    cl.hash = hash;
-    sequant::eval::AxisClass ac;
-    ac.axis = i;
-    ac.role = role;
-    cl.per_axis.push_back(ac);
-    if (role == sequant::eval::LoopRole::LoopCarried)
-      cl.forced_split_axes.push_back(i);
-    return cl;
-  };
-  sequant::eval::LegalitySchedule legality;
-  legality.cells.push_back(
-      make_legality(1000, sequant::eval::LoopRole::LoopCarried));
-  legality.cells.push_back(
-      make_legality(1001, sequant::eval::LoopRole::LoopLocal));
-  legality.cells.push_back(
-      make_legality(1002, sequant::eval::LoopRole::LoopLocal));
-  legality.cells.push_back(
-      make_legality(1003, sequant::eval::LoopRole::LoopLocal));
-  legality.cells.push_back(
-      make_legality(1004, sequant::eval::LoopRole::LoopLocal));
-  legality.cells.push_back(
-      make_legality(1005, sequant::eval::LoopRole::LoopCarried));
-
-  auto const dem = sequant::eval::forced_split_demotions(rich, legality);
-  auto const flagged = [&](std::size_t hash) {
-    return std::any_of(dem.begin(), dem.end(), [&](auto const& p) {
-      return p.first == hash && p.second == L"i";
-    });
-  };
-
-  CHECK(flagged(1001));        // Vboth: producer + consumer reader
-  CHECK(flagged(1002));        // Vsole: SOLE consumer is consumer-pass
-  CHECK_FALSE(flagged(1003));  // Vprod: only a producer-side consumer
-  CHECK_FALSE(flagged(1004));  // Pu: no consumers at all
-  CHECK_FALSE(flagged(1000));  // Lc: carried, not a LoopLocal candidate
-  CHECK_FALSE(flagged(1005));  // Wc: carried / in consumer_pass
-  CHECK(dem.size() == 2);
 }
 
 namespace {
@@ -1879,6 +1780,82 @@ TEST_CASE(
   CHECK(fx.sched.num_values == fx.rich.cells.size());
 }
 
+namespace {
+
+// A test-local copy of the two-set producer/consumer partition function
+// ordered_schedule.hpp used to build before Task 4's per-nest pass-level
+// design superseded it (now deleted from production code): the
+// LoopCarried-on-axis set and its strict dependency-ancestor closure
+// (upward, then the downward LoopLocal-member closure), verbatim. Kept ONLY
+// to pin the equivalence this test checks -- that two pass levels (0 and 1)
+// reproduce exactly this old two-set partition -- against the CURRENT
+// `forced_split_levels`; it has no other caller and is not a claim about
+// production behavior.
+std::pair<std::unordered_set<std::size_t>, std::unordered_set<std::size_t>>
+orderedsched_old_partition(
+    std::wstring const& axis_key,
+    sequant::eval::LegalitySchedule const& legality,
+    sequant::eval::detail::OrderedScheduleDepGraph const& g) {
+  std::unordered_set<std::size_t> carried;
+  std::unordered_set<std::size_t> consumer_pass;
+  for (sequant::eval::CellLegality const& cl : legality.cells) {
+    bool const carried_here =
+        std::any_of(cl.per_axis.begin(), cl.per_axis.end(),
+                    [&](sequant::eval::AxisClass const& ac) {
+                      return ac.role == sequant::eval::LoopRole::LoopCarried &&
+                             ac.axis.space().base_key() == axis_key;
+                    });
+    if (!carried_here) continue;
+    auto const it = g.value_id_of.find(cl.hash);
+    if (it != g.value_id_of.end()) carried.insert(it->second);
+  }
+
+  // consumer_pass = strict dependency-ancestors of the carried set: walk UP
+  // the consumer edges from each carried value.
+  std::vector<std::size_t> stack;
+  auto const push = [&](std::size_t v) {
+    if (consumer_pass.insert(v).second) stack.push_back(v);
+  };
+  for (std::size_t c : carried) {
+    auto const it = g.consumers_of.find(c);
+    if (it != g.consumers_of.end())
+      for (std::size_t p : it->second) push(p);
+  }
+  while (!stack.empty()) {
+    std::size_t const v = stack.back();
+    stack.pop_back();
+    auto const it = g.consumers_of.find(v);
+    if (it != g.consumers_of.end())
+      for (std::size_t p : it->second) push(p);
+  }
+  // DOWNWARD closure: a LoopLocal member of this nest whose consumers ALL sit
+  // in the consumer pass must move with them.
+  for (bool grew = true; grew;) {
+    grew = false;
+    std::vector<std::size_t> members(consumer_pass.begin(),
+                                     consumer_pass.end());
+    for (std::size_t v : members) {
+      auto const dit = g.depends_on.find(v);
+      if (dit == g.depends_on.end()) continue;
+      for (std::size_t op : dit->second) {
+        if (consumer_pass.count(op) || carried.count(op)) continue;
+        auto const cit = g.consumers_of.find(op);
+        if (cit == g.consumers_of.end() || cit->second.empty()) continue;
+        bool all_in = true;
+        for (std::size_t c : cit->second)
+          if (!consumer_pass.count(c)) {
+            all_in = false;
+            break;
+          }
+        if (all_in && consumer_pass.insert(op).second) grew = true;
+      }
+    }
+  }
+  return {std::move(carried), std::move(consumer_pass)};
+}
+
+}  // namespace
+
 // Two-level equivalence, on REAL data: orderedsched_water20_auxocc_fixture()
 // (the SAME shared fixture the "[w20-auxocc]" TEST_CASE above consumes --
 // Kappa batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
@@ -1894,15 +1871,15 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
           "[ordered-schedule][levels]") {
   auto const fx = orderedsched_water20_auxocc_fixture();
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
-  auto const old =
-      sequant::eval::detail::forced_split_passes(L"i", fx.legality, g);
+  auto const [old_carried, old_consumer_pass] =
+      orderedsched_old_partition(L"i", fx.legality, g);
   auto const lv =
       sequant::eval::detail::forced_split_levels(L"i", fx.rich, fx.legality, g);
-  REQUIRE(!old.carried.empty());
-  CHECK(lv.carried == old.carried);
+  REQUIRE(!old_carried.empty());
+  CHECK(lv.carried == old_carried);
   CHECK(lv.max_pass >= 1);
   for (std::size_t v = 0; v < fx.rich.cells.size(); ++v)
-    CHECK((lv.pass(v) >= 1) == (old.consumer_pass.count(v) != 0));
+    CHECK((lv.pass(v) >= 1) == (old_consumer_pass.count(v) != 0));
 }
 
 // ===========================================================================
