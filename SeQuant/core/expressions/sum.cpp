@@ -4,6 +4,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <algorithm>
 
 namespace sequant {
 
@@ -362,13 +363,21 @@ SumPtr HashingAccumulator::make_sum_impl(bool canonicalize) {
   }
 
   if (canonicalize) {
-    ranges::sort(summands, [](const auto &e1, const auto &e2) {
-      if (e1->hash_value() == e2->hash_value()) {
-        return e1 < e2;
-      } else {
-        return e1->hash_value() < e2->hash_value();
-      }
-    });
+    // Sort by hash, then by content (Expr::operator<); a complete tie keeps
+    // the accumulation order (stable sort). Never order by the ExprPtr
+    // handles: ExprPtr is a std::shared_ptr, so `e1 < e2` is heap-address
+    // order, which differs between MPI ranks (and between runs) and made the
+    // summand order -- hence every downstream evaluation tree --
+    // rank-dependent whenever two non-proportional summands share a hash
+    // value (observed 2026-09-07 on an 8-rank Kramers-restricted MP1 energy
+    // sum: one rank had two such summands swapped).
+    std::stable_sort(summands.begin(), summands.end(),
+                     [](const auto &e1, const auto &e2) {
+                       const auto h1 = e1->hash_value();
+                       const auto h2 = e2->hash_value();
+                       if (h1 != h2) return h1 < h2;
+                       return *e1 < *e2;
+                     });
   }
 
   return std::make_shared<Sum>(std::move(summands), Sum::move_only_tag{});

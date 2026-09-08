@@ -42,6 +42,27 @@ struct Dummy : public sequant::Expr {
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
+/// Distinct expressions that all share ONE hash value: Sum canonicalization
+/// must order them by content, never by the ExprPtr handles (heap addresses)
+struct HashTie : public sequant::Expr {
+  std::wstring label;
+  explicit HashTie(std::wstring l) : label(std::move(l)) {}
+  virtual ~HashTie() = default;
+  std::wstring to_latex() const override { return L"{\\text{" + label + L"}}"; }
+  type_id_type type_id() const override { return get_type_id<HashTie>(); };
+  sequant::ExprPtr clone() const override {
+    return sequant::ex<HashTie>(label);
+  }
+  void adjoint() override {}
+  hash_type memoizing_hash() const override { return 42; }
+  bool static_equal(const sequant::Expr &that) const override {
+    return label == static_cast<const HashTie &>(that).label;
+  }
+  bool static_less_than(const sequant::Expr &that) const override {
+    return label < static_cast<const HashTie &>(that).label;
+  }
+};
+
 template <typename T>
 struct VecExpr : public std::vector<T>, public sequant::Expr {
   using base_type = std::vector<T>;
@@ -1301,4 +1322,41 @@ TEST_CASE("expr", "[elements]") {
                    EquivalentTo("R1{a1,a2;i1,i2} = 2 t{a1,a2;i1,i2}:N-N-S"));
     }
   }
+}
+
+TEST_CASE("sum canonical order of equal-hash summands",
+          "[expr][sum][canonicalize]") {
+  using namespace sequant;
+  // HashingAccumulator::make_sum_impl used to break hash ties by comparing
+  // the ExprPtr handles, i.e. heap addresses: the canonical order of two
+  // non-proportional summands with equal hashes then depended on their
+  // allocation order (and differed between MPI ranks). The tie must be broken
+  // by content.
+  auto labels_of = [](const ExprPtr &e) {
+    std::vector<std::wstring> out;
+    for (const auto &s : e->as<Sum>().summands())
+      out.push_back(s->as<HashTie>().label);
+    return out;
+  };
+  const std::vector<std::wstring> expected{L"a", L"b", L"c"};
+
+  // same sum, summands allocated AND appended in opposite orders
+  auto a1 = ex<HashTie>(L"a");
+  auto b1 = ex<HashTie>(L"b");
+  auto c1 = ex<HashTie>(L"c");
+  auto s1 = ex<Sum>(ExprPtrList{a1, b1, c1});
+  auto c2 = ex<HashTie>(L"c");
+  auto b2 = ex<HashTie>(L"b");
+  auto a2 = ex<HashTie>(L"a");
+  auto s2 = ex<Sum>(ExprPtrList{c2, b2, a2});
+
+  REQUIRE(a1->hash_value() == b1->hash_value());
+  REQUIRE(a1->hash_value() == c2->hash_value());
+  canonicalize(s1);
+  canonicalize(s2);
+  REQUIRE(s1->is<Sum>());
+  REQUIRE(s2->is<Sum>());
+  REQUIRE(s1->as<Sum>().size() == 3);
+  REQUIRE(labels_of(s1) == expected);
+  REQUIRE(labels_of(s2) == expected);
 }
