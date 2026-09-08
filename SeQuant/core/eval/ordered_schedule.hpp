@@ -1370,9 +1370,33 @@ inline ForkedSubchain fork_subchain(
     // value is invariant to is simply skipped.
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
-    // Whether this value already has a role-driven escape (before rule 4
-    // adds anything) -- captures the ORIGINAL tripwire precondition below.
-    bool const had_role_escape = !escapes.empty();
+    // Whether this value has a LoopLocal instance of ITS OWN nest that is
+    // NOT covered by a role-driven escape (before rule 4 adds anything) --
+    // the invariant the outside-nest tripwire below actually needs. A
+    // per-batch-only instance like that is never delivered to root, so a
+    // later-pass reader outside the nest contradicts legality regardless of
+    // whether some OTHER instance of this same value happens to be
+    // role-escaped elsewhere, at a different depth (a coarser gate on
+    // "any role escape at all" would miss exactly this two-different-depth
+    // case).
+    bool unescaped_local_instance = false;
+    if (home_depth) {
+      std::size_t const home_nest = type_cluster[*home_depth];
+      for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
+        if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
+        std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+        int const fs = fusion_slot(cl, pos);
+        auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+        if (!d || type_cluster[*d] != home_nest) continue;
+        bool const escaped =
+            std::any_of(escapes.begin(), escapes.end(),
+                        [&](auto const& e) { return e.first == *d; });
+        if (!escaped) {
+          unescaped_local_instance = true;
+          break;
+        }
+      }
+    }
     // Direct readers PRODUCED in the same nest with a later pass. Nest
     // membership is decided by production_depth, not by local_home_depth: a
     // reader with only carried/reduction roles is still produced per batch
@@ -1435,20 +1459,23 @@ inline ForkedSubchain fork_subchain(
                 " is neither loop-local nor escaped by a role");
           }
         }
-      } else if (!had_role_escape) {
+      } else if (unescaped_local_instance) {
         // TRIPWIRE (controller ruling I3; reader test corrected by ruling
-        // I4): a value with NO role-driven escape (checked before rule 4
-        // above ran, via had_role_escape) is LoopLocal on every axis, so
-        // its ONLY route to a coherent full form is a same-nest later-pass
-        // reader triggering rule 4 above -- and there is none here (this is
-        // the `readers.empty()` branch). A direct later-pass reader whose
-        // production site RESOLVES to a nest other than this one is the
-        // reader's location, not this value's (nonexistent) escapes: it
-        // cannot see the per-batch home form, and legality and the schedule
-        // disagree. A value that DOES have a role-driven escape is exempt:
-        // that escape already assembles a full form with root residency
-        // (rule 4's own scatter-dominance above ensures no instance is left
-        // half-summed), which any later-pass reader, in any nest, can see.
+        // I4): a value with an unescaped LoopLocal instance of its OWN nest
+        // (checked before rule 4 above ran, via unescaped_local_instance)
+        // has a per-batch-only form of THAT instance that is never
+        // delivered to root -- and there is no same-nest later-pass reader
+        // to trigger rule 4 above and fix it (this is the `readers.empty()`
+        // branch). A direct later-pass reader whose production site
+        // RESOLVES to a nest other than this one is the reader's location,
+        // not this value's escapes: it cannot see the per-batch home form,
+        // and legality and the schedule disagree, regardless of whether
+        // some OTHER instance of this value happens to be role-escaped
+        // elsewhere. A value whose EVERY LoopLocal instance of its own nest
+        // is already role-escaped is exempt: each such escape already
+        // assembles a full form with root residency (rule 4's own
+        // scatter-dominance above ensures no instance is left half-summed),
+        // which any later-pass reader, in any nest, can see.
         // "Produced outside this nest" is decided by production_depth, not
         // by local_home_depth: a reader with only carried/reduction roles --
         // a forest root delivered in full, or a carried value of a later
