@@ -58,10 +58,10 @@ class CC {
     /// maximum order of nested commutators in H̄; must be specified if unitary
     /// ansatz is used
     std::optional<size_t> hbar_comm_rank = std::nullopt;
-    /// for BCH, maximum order of the additional singles-only similarity
-    /// transform applied after H̄; unitary ansätze use
-    /// \f$ \sigma_1 = T_1 - T_1^\dagger \f$, while non-unitary ansätze use
-    /// \f$ T_1 \f$. Zero disables the transform
+    /// maximum order of the additional singles-only similarity transform
+    /// applied after H̄ using \f$ \sigma_1 = T_1 - T_1^\dagger \f$.
+    /// Zero disables the transform; a positive rank requires a unitary BCH
+    /// ansatz with singles amplitudes enabled
     size_t hbar_singles_comm_rank = 0;
     /// maximum order of nested commutators in the similarity transformed
     /// perturbation operator; must be specified if unitary ansatz is used in
@@ -81,9 +81,10 @@ class CC {
   /// @param n coupled cluster excitation rank
   /// @param opts configuration options @see CC::Options
   /// @throw Exception if a unitary ansatz has no `hbar_comm_rank`, if an
-  /// orbital-optimized ansatz includes singles, or if the Bernoulli expansion
-  /// is requested with an ansatz other than `Ansatz::U` or with a positive
-  /// `hbar_singles_comm_rank`
+  /// orbital-optimized ansatz includes singles, if the Bernoulli expansion
+  /// is requested with an ansatz other than `Ansatz::U`, or if a positive
+  /// `hbar_singles_comm_rank` is used with a non-unitary ansatz, Bernoulli,
+  /// or excluded singles
   explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz
@@ -139,10 +140,10 @@ class CC {
   /// @warning A non-unitary H̄ is not self-contained. Evaluating it with empty
   ///   connectivity, e.g. `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
   ///   retains disconnected terms. Pass `default_op_connections()` (the default
-  ///   when the options argument is omitted), or reproduce every configured BCH
-  ///   transform with explicit-commutator `mbpt::lst(..., {})` calls. A unitary
-  ///   H̄ is self-contained, so its connectivity must be empty. See the "Using
-  ///   H̄ outside the CC class" section of the user guide.
+  ///   when the options argument is omitted), or build H̄ with an explicit
+  ///   commutator `mbpt::lst(..., {})` call. A unitary H̄ is self-contained,
+  ///   so its connectivity must be empty. See the "Using H̄ outside the CC
+  ///   class" section of the user guide.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 

@@ -41,10 +41,15 @@ CC::CC(size_t n, const Options& opts) : N(n), opts_(opts) {
   if (opts_.hbar_expansion == HbarExpansion::Bernoulli &&
       opts_.ansatz != Ansatz::U)
     throw Exception("CC: Bernoulli expansion requires the U ansatz");
-  if (opts_.hbar_expansion == HbarExpansion::Bernoulli &&
-      opts_.hbar_singles_comm_rank > 0)
-    throw Exception(
-        "CC: hbar_singles_comm_rank is not supported with Bernoulli");
+  if (opts_.hbar_singles_comm_rank > 0) {
+    if (!unitary())
+      throw Exception("CC: hbar_singles_comm_rank requires a unitary ansatz");
+    if (opts_.hbar_expansion == HbarExpansion::Bernoulli)
+      throw Exception(
+          "CC: hbar_singles_comm_rank is not supported with Bernoulli");
+    if (skip_singles())
+      throw Exception("CC: hbar_singles_comm_rank requires singles amplitudes");
+  }
   if (unitary() && !opts_.hbar_comm_rank)
     throw Exception("CC: hbar_comm_rank is required for unitary ansatz");
   if ((opts_.ansatz == Ansatz::oT || opts_.ansatz == Ansatz::oU) &&
