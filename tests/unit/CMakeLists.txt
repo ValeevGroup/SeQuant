@@ -162,6 +162,7 @@ endif()
 set(eval_dryrun_test_sources
     "test_cell_registry.cpp"
     "test_cell_table.cpp"
+    "test_dag_dot_dump.cpp"
     "test_dag_scope.cpp"
     "test_eval_dryrun.cpp"
     "test_eval_ordered.cpp"
