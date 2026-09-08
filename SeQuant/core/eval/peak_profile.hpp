@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -241,23 +242,28 @@ struct OccurrenceRec {
   //!< compute_dag_boulevard (spec 2026-08-28 sec.4-5). Parallel to \c carried.
   container::svector<int> loop_slot;
   //!< Loop identity for the modes this occurrence's value CONTRACTS (reduces)
-  //!< that a producing operand HOME-SLICES: the reduction loop and the
-  //!< operand's slice loop are one physical loop and must share \c loop_slot,
-  //!< but a reduced mode has no \c carried position, so its slot is recorded
-  //!< here as (mode, loop_slot). Assigned by the same union-find, which unites
-  //!< the operand's carried-mode node with a synthetic reduction node at this
-  //!< value (carried->reduced propagation). Read by \c ordered_schedule's \c
-  //!< fusion_slot when it places a Reduction escape (else the reduction would
-  //!< default to slot 0 and diverge from the operand's slice nest).
+  //!< in batches at its own node: assigned either by uniting a producing
+  //!< operand's HOME-SLICED carried-mode node with a synthetic reduction node
+  //!< (the reduction loop and the operand's slice loop are one physical loop
+  //!< and must share \c loop_slot), or -- when no operand is home-sliced on
+  //!< the mode -- by seeding that synthetic node directly (see \c
+  //!< contracted_batched below). A reduced mode has no \c carried position,
+  //!< so its slot is recorded here as (mode, loop_slot). Read by \c
+  //!< ordered_schedule's \c fusion_slot when it places a Reduction escape; a
+  //!< Reduction mode that still resolves to no slot here is a hard error
+  //!< there (\c build_ordered_schedule throws in its escape-placement loop),
+  //!< not a slot-0 default.
   container::svector<std::pair<Index, int>> reduced_slot;
   //!< Modes THIS occurrence's value contracts IN BATCHES at its own node
   //!< (the legality \c build_site_of CONTRACTED test, mirrored -- see \c
-  //!< NodeRec::contracted_batched). A Reduction-role mode owns a loop
-  //!< identity via this list even when no operand of the contraction is
-  //!< itself home-sliced on the mode (an all-input reduction): the
-  //!< union-find below seeds a component for every entry here
-  //!< unconditionally, instead of relying solely on a home-sliced child to
-  //!< create one.
+  //!< NodeRec::contracted_batched). A mode here owns a loop identity even
+  //!< when no operand of the contraction is itself home-sliced on it (an
+  //!< all-input reduction): the union-find below seeds a component for every
+  //!< entry here that \c classify_axis would actually call \c Reduction (no
+  //!< carried index of the SAME SPACE as the mode), instead of relying
+  //!< solely on a home-sliced child to create one; an entry beside a
+  //!< same-space carried index is \c classify_axis LoopLocal/LoopCarried, not
+  //!< Reduction, and is left to the ordinary carried-position path.
   container::svector<Index> contracted_batched;
 };
 
@@ -468,7 +474,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
             std::any_of(stamps.begin(), stamps.end(), [&](auto const& p) {
               return p.second == BatchModeType::Contracted && p.first == ix;
             });
-        if (batched) r.contracted_batched.push_back(ix);
+        if (batched && !contains(r.contracted_batched, ix))
+          r.contracted_batched.push_back(ix);
       }
     }
     r.ectx = std::move(ectx);
@@ -652,8 +659,10 @@ RichSchedule compute_dag_boulevard(R const& forest,
                                     Index const& m) -> std::size_t {
       auto const key = std::make_pair(par_vid, std::wstring{m.full_label()});
       auto const it = red_pos.find(key);
-      std::size_t const pos =
-          (it != red_pos.end()) ? it->second : (red_pos[key] = red_next++);
+      if (it != red_pos.end()) return encode(par_vid, it->second);
+      std::size_t const pos = red_next++;
+      SEQUANT_ASSERT(red_next < (std::size_t{1} << POS_BITS));
+      red_pos[key] = pos;
       return encode(par_vid, pos);
     };
     // (parent value_id, reduced mode) pairs to stamp onto the parent's
@@ -749,10 +758,12 @@ RichSchedule compute_dag_boulevard(R const& forest,
             // loop -- they must share loop_slot. A reduced mode has no carried
             // position at the parent, so unite the child's carried-mode node
             // with a synthetic reduction node for (parent, m); the parent's
-            // reduction escape then inherits this slot instead of defaulting to
-            // 0 and landing in a different same-space nest than the operand it
-            // reads (the eviction this fixes). try_unite stays conflict-aware,
-            // so a genuine transposition is still kept distinct.
+            // reduction escape then inherits this slot instead of landing in
+            // a different same-space nest than the operand it reads (the
+            // eviction this fixes) or, absent any slot at all, hitting
+            // build_ordered_schedule's hard-error throw. try_unite stays
+            // conflict-aware, so a genuine transposition is still kept
+            // distinct.
             std::size_t const rn = reduction_node(par_vid, m);
             if (try_unite(encode(c.value_id, pV), rn))
               reduction_stamps.push_back({par_vid, m});
@@ -787,20 +798,32 @@ RichSchedule compute_dag_boulevard(R const& forest,
 
     // A value's OWN contracted-in-batches modes (the legality build_site_of
     // CONTRACTED test, mirrored as NodeRec::contracted_batched /
-    // OccurrenceRec::contracted_batched above) always own a loop identity,
-    // even when every operand of the contraction is an INPUT -- a leaf, or a
+    // OccurrenceRec::contracted_batched above) own a loop identity even when
+    // every operand of the contraction is an INPUT -- a leaf, or a
     // root-resident value that is not itself home-sliced on the mode. With no
     // home-sliced child there is no edge for the loop above to unite through,
     // so it never creates a component for (value, mode) and the value's
     // reduction escape is later placed with no loop identity at all. Seed the
-    // reduction node here unconditionally, for every occurrence's own
-    // contracted_batched mode; the child-driven union above still fires
-    // whenever a home-sliced operand exists and unites its slice loop into
-    // this same component (reduction_node is idempotent -- same (value,
-    // mode) always encodes to the same synthetic node).
+    // reduction node here for every occurrence's own contracted_batched mode
+    // -- SCOPED to modes legality::classify_axis would actually call
+    // Reduction for: classify_axis reaches Reduction only via its Q1 test
+    // (the value carries NO index of the SAME SPACE as the mode); a value
+    // that also carries another index of that space takes the Q2b branch
+    // instead (LoopLocal/LoopCarried) and must not gain a new realized loop
+    // depth here, so mirror that same-space test before seeding and leave
+    // such a mode to the ordinary carried-position path below. The
+    // child-driven union above still fires whenever a home-sliced operand
+    // exists and unites its slice loop into this same component
+    // (reduction_node is idempotent -- same (value, mode) always encodes to
+    // the same synthetic node).
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences)
         for (Index const& m : occ.contracted_batched) {
+          bool const carries_same_space = std::any_of(
+              occ.carried.begin(), occ.carried.end(), [&](Index const& ix) {
+                return ix.space().base_key() == m.space().base_key();
+              });
+          if (carries_same_space) continue;
           (void)find(reduction_node(c.value_id, m));
           reduction_stamps.push_back({c.value_id, m});
         }

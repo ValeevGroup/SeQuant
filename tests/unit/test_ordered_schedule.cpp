@@ -896,6 +896,150 @@ TEST_CASE(
   CHECK(b_sliced);
 }
 
+// task-loopid fix round 1 (M1): the seeding loop above must be SCOPED to
+// modes legality::classify_axis would actually call Reduction for --
+// classify_axis reaches Reduction only via its Q1 test (the value carries
+// NO index of the SAME SPACE as the contracted mode). A value that
+// contracts a batched mode while ALSO carrying another index of that same
+// space (e.g. an occ-space contraction inside an occ-carrying result) takes
+// the Q2b branch instead (LoopLocal/LoopCarried here, since nothing opens
+// an enclosing loop of that space at the root) and must not gain a new
+// realized loop depth: it should carry NO reduced_slot and the schedule
+// should keep exactly the pre-fix slot-0-fallback shape (an
+// AccumulateScatter escape, not a throw -- the throw is Reduction-only).
+TEST_CASE(
+    "compute_dag_boulevard does NOT seed a reduction loop identity for a "
+    "contracted mode the value also carries another index of the SAME "
+    "SPACE for; the schedule keeps its previous (slot-0-fallback) shape",
+    "[ordered-schedule]") {
+  Index const i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+
+  // R{i_1;i_2} = A{i_1;i_3} * B{i_3;i_2}, contracting i_3 -- but R carries
+  // i_1 AND i_2, both the SAME SPACE ("i") as the contracted i_3. A and B
+  // are leaves, so neither is ever home-sliced (same as the companion test
+  // above).
+  auto A = orderedsched_leaf("A{i_1;i_3}");
+  auto B = orderedsched_leaf("B{i_3;i_2}");
+  auto R = orderedsched_inode("R{i_1;i_2}", A, B);  // contracts i_3
+  R->set_node_slice_mask({{i3, sequant::BatchModeType::Contracted}});
+  R->set_batch_loops_opened_here({{i3, sequant::BatchModeType::Contracted}});
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{R};
+  auto const block_of = [](Index const&) -> std::size_t { return 3; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(rich.cells.size() == 3);  // A, B, R
+
+  auto const value_id_of = [&](std::string_view tensor) -> std::size_t {
+    auto const hash = orderedsched_eval_tensor(tensor).hash_value();
+    auto const it =
+        std::find_if(rich.cells.begin(), rich.cells.end(),
+                     [&](auto const& vc) { return vc.hash == hash; });
+    REQUIRE(it != rich.cells.end());
+    return it->value_id;
+  };
+  std::size_t const r_id = value_id_of("R{i_1;i_2}");
+
+  // M1: R's occurrence must carry NO reduced_slot entry at all -- the new
+  // seeding must not manufacture a loop identity for a same-space carried
+  // contraction.
+  REQUIRE(!rich.cells[r_id].occurrences.empty());
+  CHECK(rich.cells[r_id].occurrences.front().reduced_slot.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  // R's only build-site axis is i_3 itself (the CONTRACTED-at-node test);
+  // i_1/i_2 are plain untouched carried "spectator" indices (never in
+  // R.sliced_modes(), since nothing opens an "i" loop enclosing the root).
+  // Pin the classification directly: LoopCarried, not Reduction.
+  auto const r_legality_it = std::find_if(
+      legality.cells.begin(), legality.cells.end(),
+      [&](auto const& cl) { return cl.hash == rich.cells[r_id].hash; });
+  REQUIRE(r_legality_it != legality.cells.end());
+  REQUIRE(r_legality_it->per_axis.size() == 1);
+  CHECK(r_legality_it->per_axis.front().axis == i3);
+  CHECK(r_legality_it->per_axis.front().role ==
+        sequant::eval::LoopRole::LoopCarried);
+
+  // build_ordered_schedule must NOT throw (LoopCarried keeps the slot-0
+  // fallback -- the shape is unaffected by this fix) and places R as a
+  // single AccumulateScatter output.
+  sequant::eval::OrderedSchedule sched;
+  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(
+                      rich, legality, policy, {L"i"}));
+  REQUIRE(well_formed(sched));
+
+  bool found_scatter = false;
+  std::function<void(ScopeBlock const&)> find_r = [&](ScopeBlock const& b) {
+    for (auto const& [ovid, okind] : b.outputs)
+      if (ovid == r_id && okind == OutputKind::AccumulateScatter)
+        found_scatter = true;
+    for (auto const& st : b.steps)
+      if (auto const* child = std::get_if<ScopeBlock>(&st.value))
+        find_r(*child);
+  };
+  find_r(sched.root);
+  CHECK(found_scatter);
+}
+
+// task-loopid fix round 1 (m2): the escape-placement throw added alongside
+// the seeding fix above. Through the real pipeline a Reduction axis always
+// gets a reduced_slot now (that is the whole point of the fix), so this
+// shape has to be built by hand: a value V reducing i_1 at its own node
+// (Reduction role, no carried position for i_1) whose occurrence's
+// reduced_slot is left EMPTY -- no loop identity at all, the exact
+// precondition the throw guards, in the style of the existing hand-built
+// rejection cases above ("outside its nest", "throws instead of silently
+// mis-scheduling").
+TEST_CASE(
+    "build_ordered_schedule: a Reduction axis with no reduced_slot at all "
+    "throws instead of guessing loop_slot 0",
+    "[ordered-schedule]") {
+  using sequant::eval::LoopRole;
+  Index const i1{L"i_1"};
+
+  sequant::eval::RichSchedule rich;
+  {
+    sequant::eval::ValueCell vc{};
+    vc.value_id = 0;
+    vc.hash = 8100;
+    sequant::eval::OccurrenceRec o{};
+    o.point = 0;
+    o.consumer_point = 0;  // root
+    // carried, loop_slot, and reduced_slot are all left default-empty: V
+    // reduces i_1 (per the legality entry below) but has no slot recorded
+    // for it anywhere.
+    vc.occurrences.push_back(o);
+    rich.cells.push_back(std::move(vc));
+  }
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;
+    cl.hash = 8100;
+    cl.per_axis.push_back({i1, LoopRole::Reduction});
+    legality.cells.push_back(cl);
+  }
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  REQUIRE_THROWS_WITH(
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
+      Catch::Matchers::ContainsSubstring("no loop identity"));
+}
+
 // ===========================================================================
 // Task 4: forced loop split. On the synthetic cross-iteration fixture
 // B{i_3,i_4} = A{;i_3} * A{;i_4} (occ made batchable in the EXTERNAL role, no

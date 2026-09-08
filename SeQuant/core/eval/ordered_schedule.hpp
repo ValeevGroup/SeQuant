@@ -960,8 +960,12 @@ inline ForkedSubchain fork_subchain(
   // consumer connectivity, NOT a within-cell position. Read off a
   // representative occurrence in the value's own frame (per_axis modes match
   // the occurrence's `carried` by label). Returns -1 if unavailable (a leaf, a
-  // not-batched mode, or a divergent occurrence) -- callers fall back to slot
-  // 0.
+  // not-batched mode, or a divergent occurrence): the LoopCarried caller
+  // falls back to slot 0, but the Reduction caller (the escape-placement
+  // loop below) treats -1 as a hard error and throws -- a Reduction mode
+  // with no slot has no loop identity at all (compute_dag_boulevard's
+  // union-find never numbered a component for it), so guessing would silently
+  // place the escape in the wrong nest.
   std::unordered_map<std::size_t, ValueCell const*> hash_to_rich;
   hash_to_rich.reserve(rich.cells.size());
   for (ValueCell const& vc : rich.cells) hash_to_rich.emplace(vc.hash, &vc);
@@ -974,12 +978,14 @@ inline ForkedSubchain fork_subchain(
     auto const cit = std::find(occ.carried.begin(), occ.carried.end(), m);
     if (cit == occ.carried.end()) {
       // Not a carried mode: a Reduction mode is contracted at this value and
-      // has no carried position. Its reduction loop shares loop identity with
-      // the operand that home-slices it (carried->reduced propagation, stamped
-      // by compute_dag_boulevard); read that slot so the reduction escape lands
-      // in the SAME same-space nest as the operand it reduces, not the slot-0
-      // default (a different nest -> the operand vanishes before the reduction
-      // reaches it).
+      // has no carried position. Its slot is stamped by compute_dag_boulevard
+      // either via carried->reduced propagation (uniting the home-sliced
+      // operand's carried-mode node with a synthetic reduction node) or,
+      // absent any home-sliced operand, by seeding that synthetic node
+      // directly; read that slot so the reduction escape lands in the SAME
+      // same-space nest as the operand it reduces, instead of a different
+      // nest (the operand vanishes before the reduction reaches it) or,
+      // absent a slot altogether, the hard-error throw above.
       for (auto const& [rm, rs] : occ.reduced_slot)
         if (rm == m) return rs;
       return -1;
