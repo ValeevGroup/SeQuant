@@ -1101,6 +1101,37 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // deterministic regardless of when in the process this call happens.
   registry_hooks.strict_fill_once = cache.strict_fill_once();
   CellRegistry registry(cell_table, std::move(registry_hooks));
+  // Invariant: at most one persistent cell per value. The persistent store is
+  // keyed by the value's canonical hash, so two persistent cells of one value
+  // (a persistent Build inside a nest and a persistent Assemble at root, say)
+  // would silently share one store slot: seeded from the same object, skipped
+  // together by the cache-halt gate, and the last publisher would win.
+  {
+    std::unordered_map<std::size_t, container::svector<CellId>> per_value;
+    for (CellId c = 0; c < cell_table.cells.size(); ++c)
+      if (cell_table.cells[c].persistent)
+        per_value[cell_table.cells[c].value_id].push_back(c);
+    std::string offenders;
+    for (auto const& [vid, cs] : per_value)
+      if (cs.size() > 1) {
+        offenders += " value " + std::to_string(vid) + ": cells";
+        for (CellId c : cs)
+          offenders +=
+              " #" + std::to_string(c) + "(" +
+              (cell_table.cells[c].production.kind == ProductionKind::Build
+                   ? "Build"
+               : cell_table.cells[c].production.kind == ProductionKind::Assemble
+                   ? "Assemble"
+                   : "Leaf") +
+              ",depth=" +
+              std::to_string(cell_table.cells[c].scope.path.size()) + ")";
+      }
+    if (!offenders.empty())
+      throw std::runtime_error(
+          "run_ordered_schedule_pre_results: several persistent cells share "
+          "one value (one persistent-store slot):" +
+          offenders);
+  }
   registry.seed_persistent();
   std::unordered_map<std::size_t, std::size_t> const cell_vid_of_hash = [&] {
     std::unordered_map<std::size_t, std::size_t> m;
