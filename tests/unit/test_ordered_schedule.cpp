@@ -1504,6 +1504,129 @@ OrderedSchedFixture orderedsched_cross_iteration_fixture() {
                              std::move(legality), std::move(sched)};
 }
 
+// Same recipe as the "[w20-auxocc]" TEST_CASE below (the real water-20
+// CSV-CCSD doubles residual with AUX+OCC batching -- Kappa
+// batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
+// make_csv_batch_policy with occ_target>0), stopping once the schedule is
+// built. Unlike orderedsched_water20_fixture()'s aux-ONLY policy (where
+// Kappa is always fully contracted and nothing is ever LoopCarried), this
+// configuration genuinely carries values on occ -- shared by the
+// [w20-auxocc] case and the forced_split_levels equivalence case below so
+// the two do not silently drift apart.
+OrderedSchedFixture orderedsched_water20_auxocc_fixture() {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                 "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  // Use the FULL residual (all summands) to match the MPQC w20 run -- a
+  // truncated forest can miss the term interaction that produces the malformed
+  // schedule. Overridable for bisecting which term first breaks well_formed.
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedsched_witness_df_regime(kOrderedSchedWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // AUX+OCC: Kappa batchable-contracted (aux), i batchable-EXTERNAL (occ).
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"\x39a";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  // MATCH MPQC make_csv_batch_policy with occ_target>0: occ batching turns on
+  // spectator batching AND node-level placement (which changes the schedule
+  // structure -- occ-outer hoisting). Both are gated on occ_target>0 there.
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"\x39a" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedsched_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"\x39a" ? 256 : 16;
+  };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  // MPQC passes an EMPTY mode_order (cck.ipp: the whole_scope/ordered driver
+  // calls evaluate(..., std::initializer_list<std::wstring>{}, ...)), letting
+  // build_ordered_schedule DERIVE the forced-split axes from the legality --
+  // NOT an explicit {L"Κ", L"i"}. Match that.
+  auto sched = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+
+  return OrderedSchedFixture{std::move(forest), std::move(rich),
+                             std::move(legality), std::move(sched)};
+}
+
 ///
 /// \brief Collects every value_id PRODUCED anywhere in \p block's subtree,
 /// tagged by its production ROLE: \c std::nullopt for a plain \c BuildStep
@@ -1749,121 +1872,14 @@ TEST_CASE(
     "build_ordered_schedule: water-20 aux+occ residual builds a well-formed "
     "schedule",
     "[ordered-schedule][w20-auxocc]") {
-  using sequant::eval::dryrun::EvalExprDryRun;
-  using sequant::eval::dryrun::EvalNodeDryRun;
-  using Node = EvalNodeDryRun;
-
-  auto ctx = sequant::get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
-
-  auto const body =
-      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                                 "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
-  REQUIRE(static_cast<bool>(expr));
-  REQUIRE(expr->is<sequant::Sum>());
-  auto const& summands = expr->as<sequant::Sum>().summands();
-  REQUIRE(!summands.empty());
-
-  // Use the FULL residual (all summands) to match the MPQC w20 run -- a
-  // truncated forest can miss the term interaction that produces the malformed
-  // schedule. Overridable for bisecting which term first breaks well_formed.
-  std::size_t nterms = summands.size();
-  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
-    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
-
-  auto regime = orderedsched_witness_df_regime(kOrderedSchedWater20_pVDZF12);
-  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
-
-  // AUX+OCC: Κ batchable-contracted (aux), i batchable-EXTERNAL (occ).
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"Κ";
-  };
-  policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
-    return reg && ix.space() && reg->is_pure_occupied(ix.space());
-  };
-  // MATCH MPQC make_csv_batch_policy with occ_target>0: occ batching turns on
-  // spectator batching AND node-level placement (which changes the schedule
-  // structure -- occ-outer hoisting). Both are gated on occ_target>0 there.
-  policy.batch_spectator_indices = true;
-  policy.node_level_placement = true;
-  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
-  };
-  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
-  };
-  policy.accumulation_factor = 1.0;
-  policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      sequant::Expr const*,
-      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
-  sequant::OptimizeOptions opts;
-  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-
-  std::vector<Node> forest;
-  for (std::size_t s = 0; s < nterms; ++s) {
-    sequant::ExprPtr const term =
-        orderedsched_witness_flatten_product(summands[s]);
-    if (!term) continue;
-    sequant::ExprPtr optimized;
-    try {
-      optimized = sequant::optimize(term, opts);
-    } catch (std::exception const&) {
-      continue;
-    }
-    if (!optimized) continue;
-    sequant::BinarizationOptions bopts;
-    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
-      bopts.node_batch_axes = it->second;
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  }
-  REQUIRE(!forest.empty());
-
-  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"Κ" ? 256 : 16;
-  };
-  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
-  REQUIRE(!rich.cells.empty());
-
-  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
-  REQUIRE(legality.cells.size() == rich.cells.size());
-
-  // MPQC passes an EMPTY mode_order (cck.ipp: the whole_scope/ordered driver
-  // calls evaluate(..., std::initializer_list<std::wstring>{}, ...)), letting
-  // build_ordered_schedule DERIVE the forced-split axes from the legality --
-  // NOT an explicit {L"Κ", L"i"}. Match that.
-  auto const sched = sequant::eval::build_ordered_schedule(
-      rich, legality, policy, std::initializer_list<std::wstring>{});
-  CHECK(well_formed(sched));
-  CHECK(sched.num_values == rich.cells.size());
+  auto const fx = orderedsched_water20_auxocc_fixture();
+  CHECK(well_formed(fx.sched));
+  CHECK(fx.sched.num_values == fx.rich.cells.size());
 }
 
-// Two-level equivalence, on REAL data: the water-20 aux+occ residual (the
-// SAME construction as the "[w20-auxocc]" TEST_CASE above -- Kappa
-// batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
+// Two-level equivalence, on REAL data: orderedsched_water20_auxocc_fixture()
+// (the SAME shared fixture the "[w20-auxocc]" TEST_CASE above consumes --
+// Kappa batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
 // make_csv_batch_policy with occ_target>0), which genuinely carries values
 // on occ (unlike orderedsched_water20_fixture()'s aux-ONLY policy, where
 // Kappa is always fully contracted and nothing is ever LoopCarried).
@@ -1874,111 +1890,15 @@ TEST_CASE(
 // would be > 1, are exercised by the two synthetic cases above).
 TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
           "[ordered-schedule][levels]") {
-  using sequant::eval::dryrun::EvalExprDryRun;
-  using sequant::eval::dryrun::EvalNodeDryRun;
-  using Node = EvalNodeDryRun;
-
-  auto ctx = sequant::get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
-
-  auto const body =
-      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
-                                 "/data/csv_ccsd_doubles_residual_df.txt");
-  REQUIRE(!body.empty());
-  std::string line = body;
-  if (auto nl = line.find('\n'); nl != std::string::npos)
-    line = line.substr(0, nl);
-  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
-  REQUIRE(static_cast<bool>(expr));
-  REQUIRE(expr->is<sequant::Sum>());
-  auto const& summands = expr->as<sequant::Sum>().summands();
-  REQUIRE(!summands.empty());
-
-  std::size_t nterms = summands.size();
-  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
-    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
-
-  auto regime = orderedsched_witness_df_regime(kOrderedSchedWater20_pVDZF12);
-  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
-
-  // AUX+OCC: Kappa batchable-contracted (aux), i batchable-EXTERNAL (occ) --
-  // same policy as the "[w20-auxocc]" TEST_CASE above.
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
-    return ix.space().base_key() == L"\x39a";
-  };
-  policy.is_batchable_external_index = [](sequant::Index const& ix) {
-    auto const reg = sequant::get_default_context().index_space_registry();
-    return reg && ix.space() && reg->is_pure_occupied(ix.space());
-  };
-  policy.batch_spectator_indices = true;
-  policy.node_level_placement = true;
-  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"\x39a" ? 256 : 16;
-  };
-  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
-    return t.label() == L"t";
-  };
-  policy.accumulation_factor = 1.0;
-  policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
-
-  auto axes_map = std::make_shared<std::unordered_map<
-      sequant::Expr const*,
-      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
-  sequant::OptimizeOptions opts;
-  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
-  opts.idx_to_extent = regime.idx_to_extent();
-  opts.inner_pow = regime.inner_pow_fn();
-  opts.batch_policy = policy;
-  opts.volatile_weight = 20.0;
-  opts.roofline.machine_balance = 200.0;
-  opts.roofline.fast_mem_elems = 1000000.0;
-  opts.term_batch_axes = axes_map;
-
-  std::vector<Node> forest;
-  for (std::size_t s = 0; s < nterms; ++s) {
-    sequant::ExprPtr const term =
-        orderedsched_witness_flatten_product(summands[s]);
-    if (!term) continue;
-    sequant::ExprPtr optimized;
-    try {
-      optimized = sequant::optimize(term, opts);
-    } catch (std::exception const&) {
-      continue;
-    }
-    if (!optimized) continue;
-    sequant::BinarizationOptions bopts;
-    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
-      bopts.node_batch_axes = it->second;
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  }
-  REQUIRE(!forest.empty());
-
-  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
-    return ix.space().base_key() == L"\x39a" ? 256 : 16;
-  };
-  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
-  REQUIRE(!rich.cells.empty());
-
-  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
-  REQUIRE(legality.cells.size() == rich.cells.size());
-
-  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  auto const fx = orderedsched_water20_auxocc_fixture();
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
   auto const old =
-      sequant::eval::detail::forced_split_passes(L"i", legality, g);
+      sequant::eval::detail::forced_split_passes(L"i", fx.legality, g);
   auto const lv =
-      sequant::eval::detail::forced_split_levels(L"i", rich, legality, g);
+      sequant::eval::detail::forced_split_levels(L"i", fx.rich, fx.legality, g);
   REQUIRE(!old.carried.empty());
   CHECK(lv.carried == old.carried);
   CHECK(lv.max_pass >= 1);
-  for (std::size_t v = 0; v < rich.cells.size(); ++v)
+  for (std::size_t v = 0; v < fx.rich.cells.size(); ++v)
     CHECK((lv.pass(v) >= 1) == (old.consumer_pass.count(v) != 0));
 }
