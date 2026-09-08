@@ -1148,6 +1148,13 @@ sequant::eval::CellLegality orderedsched_levels_legality(
   return cl;
 }
 
+// forced_split_levels's `inside` predicate for a fixture with no Reduction
+// role at all: no Reduction source exists, so it is never consulted; always
+// false is the only well-defined answer.
+bool orderedsched_no_reduction_inside(std::size_t, std::size_t) {
+  return false;
+}
+
 }  // namespace
 
 // Chain: L0 (carried, no carried operand) -> C1 (carried, reads L0's full
@@ -1172,8 +1179,8 @@ TEST_CASE("forced_split_levels: a carried chain gives consecutive passes",
   legality.cells.push_back(
       orderedsched_levels_legality(1003, LoopRole::LoopLocal));
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
-  auto const lv =
-      sequant::eval::detail::forced_split_levels(L"i", rich, legality, g);
+  auto const lv = sequant::eval::detail::forced_split_levels(
+      rich, legality, g, orderedsched_no_reduction_inside);
   CHECK(lv.carried == std::unordered_set<std::size_t>{0, 1, 2});
   CHECK(lv.pass(0) == 0);
   CHECK(lv.pass(1) == 1);
@@ -1216,8 +1223,8 @@ TEST_CASE(
     legality.cells.push_back(
         orderedsched_levels_legality(h, LoopRole::LoopLocal));
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
-  auto const lv =
-      sequant::eval::detail::forced_split_levels(L"i", rich, legality, g);
+  auto const lv = sequant::eval::detail::forced_split_levels(
+      rich, legality, g, orderedsched_no_reduction_inside);
   CHECK(lv.pass(0) == 0);  // L0
   CHECK(lv.pass(1) == 1);  // C1
   CHECK(lv.pass(4) == 2);  // A reads C1
@@ -1873,8 +1880,8 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
   auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
   auto const [old_carried, old_consumer_pass] =
       orderedsched_old_partition(L"i", fx.legality, g);
-  auto const lv =
-      sequant::eval::detail::forced_split_levels(L"i", fx.rich, fx.legality, g);
+  auto const lv = sequant::eval::detail::forced_split_levels(
+      fx.rich, fx.legality, g, orderedsched_no_reduction_inside);
   REQUIRE(!old_carried.empty());
   CHECK(lv.carried == old_carried);
   CHECK(lv.max_pass >= 1);
@@ -2153,7 +2160,122 @@ sequant::eval::CellTable orderedsched_validated_table(
   return table;
 }
 
+struct OrderedSchedReductionInLoopFixture {
+  sequant::eval::RichSchedule rich;
+  sequant::eval::LegalitySchedule legality;
+};
+
+// Amendment 8 (design section 9.2): V (id 0) is Reduction on i_1 (reduced
+// instance slot 0), read by u (id 1, also Reduction on the same instance --
+// produced inside it) and by w (id 2, a root reader with no per_axis at
+// all, outside the instance). V and u have empty carried/home (a Reduction
+// axis is contracted at the value, no carried position -- fusion_slot falls
+// back to reduced_slot, exactly as the escape placement does); reduced_slot
+// is patched onto orderedsched_nest_cell's occurrences after the fact since
+// that helper only sets carried/home/loop_slot from `modes`.
+OrderedSchedReductionInLoopFixture orderedsched_reduction_in_loop_fixture() {
+  using sequant::eval::LoopRole;
+  sequant::Index const i1{L"i_1"};
+
+  OrderedSchedReductionInLoopFixture fx;
+  auto v = orderedsched_nest_cell(0, 9300, {}, {}, {{110, 200}, {111, 300}});
+  for (auto& occ : v.occurrences) occ.reduced_slot = {{i1, 0}};
+  fx.rich.cells.push_back(std::move(v));
+
+  auto u = orderedsched_nest_cell(1, 9301, {}, {}, {{200, 200}});
+  for (auto& occ : u.occurrences) occ.reduced_slot = {{i1, 0}};
+  fx.rich.cells.push_back(std::move(u));
+
+  fx.rich.cells.push_back(
+      orderedsched_nest_cell(2, 9302, {}, {}, {{300, 300}}));
+
+  fx.legality.cells.push_back(
+      orderedsched_nest_legality(9300, {i1}, LoopRole::Reduction));
+  fx.legality.cells.push_back(
+      orderedsched_nest_legality(9301, {i1}, LoopRole::Reduction));
+  fx.legality.cells.push_back(
+      orderedsched_nest_legality(9302, {}, LoopRole::LoopLocal));
+  return fx;
+}
+
 }  // namespace
+
+// V reduced over the instance at depth 0 (Reduction on i_1, reduced_slot 0),
+// read by u (also Reduction on i_1: produced inside the loop) and by w (no
+// batched mode: root). pass(V)=0, pass(u)=1, pass(w)=0. This raw-levels test
+// hand-rolls `inside` (the fixture has exactly one candidate bumping edge,
+// V -> u); the per-nest-split test below exercises build_ordered_schedule's
+// REAL `inside`, resolved from the loop chain (fusion_slot/depth_of_instance/
+// production_depth/type_cluster) against the SAME fixture.
+TEST_CASE(
+    "forced_split_levels: an in-loop reader of a reduction is bumped, "
+    "a root reader is not",
+    "[ordered-schedule][levels]") {
+  auto const fx = orderedsched_reduction_in_loop_fixture();
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
+  auto const inside = [](std::size_t reader_vid, std::size_t source_vid) {
+    return reader_vid == 1 && source_vid == 0;  // u inside V's instance
+  };
+  auto const lv = sequant::eval::detail::forced_split_levels(
+      fx.rich, fx.legality, g, inside);
+  CHECK(lv.pass(0) == 0);  // V
+  CHECK(lv.pass(1) == 1);  // u: bumped, produced inside V's reduced instance
+  CHECK(lv.pass(2) == 0);  // w: root reader, not bumped
+  CHECK(lv.pinned.count(0) == 1);  // V pinned: source of a bumping edge
+}
+
+TEST_CASE(
+    "per-nest split: a reduction source read inside its own loop by a "
+    "later pass gets two pass blocks",
+    "[ordered-schedule][per-nest-split]") {
+  using sequant::eval::OutputKind;
+  auto const fx = orderedsched_reduction_in_loop_fixture();
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+  auto const sched = sequant::eval::build_ordered_schedule(fx.rich, fx.legality,
+                                                           policy, {L"i"});
+  REQUIRE(well_formed(sched));
+
+  // Two root blocks of the same loop (slot 0), latitudes 0 and 1.
+  auto const roots = orderedsched_root_blocks(sched);
+  REQUIRE(roots.size() == 2);
+  sequant::eval::ScopeBlock const* b0 = nullptr;
+  sequant::eval::ScopeBlock const* b1 = nullptr;
+  for (auto const* b : roots) {
+    CHECK(b->level.loop_slot == 0);
+    if (b->latitude_ordinal == 0) b0 = b;
+    if (b->latitude_ordinal == 1) b1 = b;
+  }
+  REQUIRE(b0 != nullptr);
+  REQUIRE(b1 != nullptr);
+
+  // Pass 0 lists V's AccumulateSum output; pass 1 holds u's production (also
+  // an AccumulateSum output -- u has no BuildStep either, both values escape
+  // by their own Reduction role, section 3.2's per-nest realization is
+  // latitude-blind to which of build_ids/outputs supplies the pass).
+  std::vector<std::pair<std::size_t, std::optional<OutputKind>>> p0, p1;
+  orderedsched_collect_productions(*b0, p0);
+  orderedsched_collect_productions(*b1, p1);
+  auto const has = [](auto const& v, std::size_t id,
+                      std::optional<OutputKind> kind) {
+    return std::any_of(v.begin(), v.end(), [&](auto const& e) {
+      return e.first == id && e.second == kind;
+    });
+  };
+  CHECK(has(p0, 0, OutputKind::AccumulateSum));  // V's sum, pass 0
+  CHECK(has(p1, 1, OutputKind::AccumulateSum));  // u's production, pass 1
+  CHECK_FALSE(has(p1, 0, OutputKind::AccumulateSum));
+  CHECK_FALSE(has(p0, 1, OutputKind::AccumulateSum));
+
+  // Design section 4 / amendment 8's own gate: the derived cell table
+  // validates clean -- the 9.1 partial-sum check does not fire (it would
+  // have thrown loudly inside build_ordered_schedule above, before this
+  // point, had the levels failed to bump u).
+  orderedsched_validated_table(fx.rich, sched);
+}
 
 TEST_CASE(
     "per-nest split: only the nest holding a later-pass member is "

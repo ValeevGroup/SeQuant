@@ -585,26 +585,51 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 }
 
 ///
-/// \brief Pass levels for the one forced-split axis space \p axis_key: every
-/// value gets an integer pass such that a value reading a carried value's
-/// completed (full) form sits in a later pass than the carried value.
+/// \brief Pass levels, GLOBAL over every batched space (amendment 8, design
+/// section 9.2): every value gets an integer pass such that a value that
+/// needs another value's COMPLETED form sits in a later pass than that
+/// other value.
+///
+/// Two kinds of dependency edge bump the reader's pass, both keyed on the
+/// OPERAND (the "source") rather than the axis space:
+///   - the source is \c LoopCarried on some axis (any space): its full array
+///     exists only after its own loop closes, so EVERY direct reader is
+///     bumped (as amendment 7's single-space carried set did);
+///   - the source is a \c Reduction on some instance (an \c AccumulateSum
+///     escape) and the reader is produced INSIDE that same instance (its
+///     production site is at or below the reduction's depth, in the same
+///     nest): such a reader would otherwise see the current batch's partial
+///     sum rather than the completed reduction (the finding pinned by the
+///     9.1 partial-sum check). A reader produced outside the reduced
+///     instance reads the completed sum from the escape's residency scope
+///     as always and needs no bump. \p inside(reader_vid, source_vid)
+///     decides this per (reader, source) pair -- the caller's lambda
+///     captures the loop chain (fusion_slot, depth_of_instance,
+///     production_depth, type_cluster) needed to resolve the source's
+///     reduced instance(s) and the reader's production site exactly as the
+///     escape placement does.
 ///
 /// Forward sweep (operands before consumers):
-///   level(v) = max over direct operands o of (o carried ? pass(o) + 1
+///   level(v) = max over direct operands o of (bump(o, v) ? pass(o) + 1
 ///              : level(o)), 0 with no operands;
-///   a carried value's pass is its level; a non-carried value's BASE is its
-///   level.
-/// Reverse sweep (consumers before operands): a non-carried value with at
+///   a bumping-edge source's pass is its level (it is PINNED, see below); a
+///   value that is the source of no bumping edge has its level as its BASE.
+/// Reverse sweep (consumers before operands): a non-pinned value with at
 /// least one consumer is LIFTED to max(base, min over its direct consumers'
 /// passes), so a value whose readers all sit later is built with them; a
 /// value with readers in several passes keeps its base (and is materialized
 /// by the builder's rule 4 when a later same-nest reader needs it).
 ///
-/// Every dependency edge points to an equal or earlier pass. With only passes
-/// 0 and 1 present this is exactly the former two-set partition.
+/// Every dependency edge points to an equal or earlier pass. With only
+/// LoopCarried bumps present (no Reduction-source bump fires) this is
+/// exactly the former single-space two-set partition.
 ///
 struct ForcedSplitLevels {
-  std::unordered_set<std::size_t> carried;  //!< LoopCarried-on-axis ids
+  std::unordered_set<std::size_t> carried;  //!< LoopCarried (any space) ids
+  std::unordered_set<std::size_t>
+      pinned;  //!< sources of a bumping edge (carried values, and Reduction
+               //!< sources with at least one in-loop reader): skipped by the
+               //!< reverse lift, exactly as \c carried alone was before.
   std::unordered_map<std::size_t, int>
       pass_of;  //!< value id -> pass, for every value \c
                 //!< ordered_schedule_dep_graph reached (has a legality cell
@@ -618,21 +643,26 @@ struct ForcedSplitLevels {
   }
 };
 
-inline ForcedSplitLevels forced_split_levels(std::wstring const& axis_key,
-                                             RichSchedule const& rich,
-                                             LegalitySchedule const& legality,
-                                             OrderedScheduleDepGraph const& g) {
+inline ForcedSplitLevels forced_split_levels(
+    RichSchedule const& rich, LegalitySchedule const& legality,
+    OrderedScheduleDepGraph const& g,
+    std::function<bool(std::size_t /*reader_vid*/,
+                       std::size_t /*source_vid*/)> const& inside) {
   ForcedSplitLevels r;
+  std::unordered_set<std::size_t> reduction_sources;
   for (CellLegality const& cl : legality.cells) {
-    bool const carried_here = std::any_of(
-        cl.per_axis.begin(), cl.per_axis.end(), [&](AxisClass const& ac) {
-          return ac.role == LoopRole::LoopCarried &&
-                 ac.axis.space().base_key() == axis_key;
-        });
-    if (!carried_here) continue;
     auto const it = g.value_id_of.find(cl.hash);
-    if (it != g.value_id_of.end()) r.carried.insert(it->second);
+    if (it == g.value_id_of.end()) continue;
+    bool const carried_here = std::any_of(
+        cl.per_axis.begin(), cl.per_axis.end(),
+        [&](AxisClass const& ac) { return ac.role == LoopRole::LoopCarried; });
+    if (carried_here) r.carried.insert(it->second);
+    bool const reduces_here = std::any_of(
+        cl.per_axis.begin(), cl.per_axis.end(),
+        [&](AxisClass const& ac) { return ac.role == LoopRole::Reduction; });
+    if (reduces_here) reduction_sources.insert(it->second);
   }
+  r.pinned = r.carried;
 
   std::size_t const n = rich.cells.size();
   // Topological order, operands before consumers (Kahn over depends_on).
@@ -667,15 +697,19 @@ inline ForcedSplitLevels forced_split_levels(std::wstring const& axis_key,
     int lv = 0;
     auto const it = g.depends_on.find(v);
     if (it != g.depends_on.end())
-      for (std::size_t o : it->second)
-        lv = std::max(lv, r.carried.count(o) ? base.at(o) + 1 : base.at(o));
+      for (std::size_t o : it->second) {
+        bool const bump = r.carried.count(o) != 0 ||
+                          (reduction_sources.count(o) != 0 && inside(v, o));
+        if (bump) r.pinned.insert(o);
+        lv = std::max(lv, bump ? base.at(o) + 1 : base.at(o));
+      }
     base[v] = lv;
   }
 
   r.pass_of = base;
   for (auto it = topo.rbegin(); it != topo.rend(); ++it) {
     std::size_t const v = *it;
-    if (r.carried.count(v)) continue;
+    if (r.pinned.count(v)) continue;
     auto const cit = g.consumers_of.find(v);
     if (cit == g.consumers_of.end() || cit->second.empty()) continue;
     int mn = std::numeric_limits<int>::max();
@@ -1084,43 +1118,8 @@ inline ForkedSubchain fork_subchain(
       }
   }
 
-  // 2a. PASS LEVELS (per-nest forced split design, section 3.1). A
-  // candidate forced space is any space some cell is LoopCarried on; but a
-  // space is only GENUINELY forced when its levels actually reach pass >= 1
-  // (some value is a real reader of a carried value's completed form, i.e.
-  // `max_pass >= 1`) -- a LoopCarried space with no such reader needs no
-  // pass split at all (every value stays at pass 0) and is ignored, exactly
-  // as the old code's has_prod/has_cons genuineness test did. Only GENUINE
-  // spaces are counted against the "at most one forced space" limit; two
-  // LoopCarried spaces of which at most one is genuine still builds. Levels
-  // are global; each nest decides for itself (step 4 below) whether it
-  // holds members of more than one pass.
-  std::optional<detail::ForcedSplitLevels> levels;
-  {
-    container::svector<std::wstring> forced_spaces;
-    for (CellLegality const& cl : legality.cells)
-      for (Index const& ix : forced_split_types(cl)) {
-        std::wstring const key{ix.space().base_key()};
-        if (std::find(forced_spaces.begin(), forced_spaces.end(), key) ==
-            forced_spaces.end())
-          forced_spaces.push_back(key);
-      }
-    std::size_t genuine_count = 0;
-    for (std::wstring const& key : forced_spaces) {
-      auto candidate = detail::forced_split_levels(key, rich, legality, g);
-      if (candidate.max_pass == 0) continue;  // LoopCarried but no split needed
-      ++genuine_count;
-      if (!levels) levels = std::move(candidate);
-    }
-    if (genuine_count > 1)
-      throw Exception(
-          "build_ordered_schedule: more than one forced-split space with "
-          "passes above zero is not supported");
-  }
-  auto const pass_of = [&](std::size_t vid) -> int {
-    return levels ? levels->pass(vid) : 0;
-  };
-  // Legality record by value id, for reader lookups in rule 4.
+  // Legality record by value id, for reader lookups in rule 4 and (below)
+  // for the pass levels' \c inside predicate.
   std::unordered_map<std::size_t, CellLegality const*> cl_by_vid;
   cl_by_vid.reserve(legality.cells.size());
   for (CellLegality const& c2 : legality.cells) {
@@ -1205,10 +1204,49 @@ inline ForkedSubchain fork_subchain(
     return target;
   };
 
+  // 2a. PASS LEVELS (per-nest forced split design, section 3.1, amendment 8
+  // section 9.2). Global over every batched space: a bumping edge is either
+  // a LoopCarried source (any space, every direct reader bumped) or a
+  // Reduction source with a direct reader produced inside that same
+  // reduced instance. \c inside resolves the second kind exactly as the
+  // escape placement does: for each of the source's Reduction axes,
+  // fusion_slot (which already reads \c reduced_slot for a Reduction mode)
+  // gives the instance's slot, depth_of_instance gives its depth, and the
+  // reader is "inside" when its own production_depth is at or below that
+  // depth in the SAME nest (type_cluster equal). Moved here (after
+  // production_depth and cl_by_vid, which it needs) rather than at its
+  // former position ahead of the loop chain. Computed unconditionally, no
+  // per-space loop, no "more than one forced space" throw: an empty
+  // carried and reduction-source set yields all-zero passes, so a schedule
+  // with no forced-split axis at all is unaffected.
+  auto const inside = [&](std::size_t reader_vid,
+                          std::size_t source_vid) -> bool {
+    auto const sit = cl_by_vid.find(source_vid);
+    if (sit == cl_by_vid.end()) return false;
+    CellLegality const& scl = *sit->second;
+    auto const rit = cl_by_vid.find(reader_vid);
+    if (rit == cl_by_vid.end()) return false;
+    auto const rd = production_depth(*rit->second);
+    if (!rd) return false;
+    for (std::size_t pos = 0; pos < scl.per_axis.size(); ++pos) {
+      if (scl.per_axis[pos].role != LoopRole::Reduction) continue;
+      std::wstring const bk{scl.per_axis[pos].axis.space().base_key()};
+      int const fs = fusion_slot(scl, pos);
+      if (fs < 0) continue;
+      auto const d = depth_of_instance(bk, fs);
+      if (!d) continue;
+      if (*rd >= *d && type_cluster[*rd] == type_cluster[*d]) return true;
+    }
+    return false;
+  };
+  detail::ForcedSplitLevels const levels =
+      detail::forced_split_levels(rich, legality, g, inside);
+  auto const pass_of = [&](std::size_t vid) -> int { return levels.pass(vid); };
+
   // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for the outside-nest
   // tripwire rejection (rule 4 itself no longer rejects loudly): print the
   // value's axes with roles/slots/depths, its later-pass readers, and the
-  // forced-split axis's carried set, each with home depth and nest.
+  // carried set, each with home depth and nest.
   auto const dump_reject = [&](std::size_t v0, std::size_t nest,
                                container::svector<std::size_t> const& readers) {
     auto const role_str = [](LoopRole r) -> wchar_t const* {
@@ -1251,7 +1289,7 @@ inline ForkedSubchain fork_subchain(
           std::wcerr << L"?";
         std::wcerr << L" ";
       }
-      std::wcerr << L"}" << (levels->carried.count(v) ? L" CARRIED" : L"")
+      std::wcerr << L"}" << (levels.carried.count(v) ? L" CARRIED" : L"")
                  << L")";
     };
     std::wcerr << L"[sched-reject] nest outermost depth "
@@ -1263,7 +1301,7 @@ inline ForkedSubchain fork_subchain(
       describe(u);
       std::wcerr << L"\n";
     }
-    for (std::size_t c : levels->carried) {
+    for (std::size_t c : levels.carried) {
       std::wcerr << L"[sched-reject]   carried ";
       describe(c);
       std::wcerr << L"\n";
@@ -1415,7 +1453,7 @@ inline ForkedSubchain fork_subchain(
       }
       return out;
     };
-    if (levels && home_depth) {
+    if (home_depth) {
       std::size_t const nest = type_cluster[*home_depth];
       auto const readers = later_same_nest_readers(nest);
       if (!readers.empty()) {
@@ -1525,13 +1563,16 @@ inline ForkedSubchain fork_subchain(
     // in which case the deepest site on that chain is the true production
     // site and home's rule-4 escape is pure forwarding, like any other link
     // in the chain.
-    // Invariant: a value reduced over a loop instance (an AccumulateSum
-    // escape at depth d) is complete only after that loop closes; a reader
-    // produced INSIDE that instance (production depth at or below d in the
-    // same nest) in the SAME pass would be served the current batch's partial
-    // sum. Such a reader needs a later pass of the loop (a forced split on
-    // the reduced instance), which the pass levels do not yet provide; reject
-    // loudly rather than emit the silent partial read.
+    // COMPLETENESS INVARIANT of amendment 8 (design section 9.2): a value
+    // reduced over a loop instance (an AccumulateSum escape at depth d) is
+    // complete only after that loop closes; a reader produced INSIDE that
+    // instance (production depth at or below d in the same nest) in the
+    // SAME pass would be served the current batch's partial sum. The pass
+    // levels above (2a) now bump exactly such a reader to a later pass via
+    // the Reduction-source bumping edge, so this shape should never survive
+    // to here; this check stays as a loud tripwire on the levels
+    // themselves -- its firing means the levels failed to bump a read they
+    // should have, a builder defect, not an expected outcome.
     for (auto const& [d, kind] : escapes) {
       if (kind != OutputKind::AccumulateSum) continue;
       auto const cons_it = g.consumers_of.find(vid);
