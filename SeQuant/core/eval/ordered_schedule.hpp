@@ -1223,9 +1223,9 @@ forced_split_demotions(RichSchedule const& rich,
   // outermost = min depth, for determinism), and within a cluster innermost
   // (larger d) FIRST, so the loop wraps a cluster's members into one nest and
   // finalizes that nest at the cluster boundary.
+  std::map<std::size_t, std::size_t> cluster_min;  // cluster -> outermost depth
   container::svector<std::size_t> order;
   {
-    std::map<std::size_t, std::size_t> cluster_min;
     for (std::size_t d = 0; d < n; ++d) {
       auto const it = cluster_min.find(type_cluster[d]);
       if (it == cluster_min.end() || d < it->second)
@@ -1241,68 +1241,36 @@ forced_split_demotions(RichSchedule const& rich,
       }
   }
 
-  // 2a. FORCED LOOP SPLIT DETECTION (Task 4). Decided BEFORE per-value
-  // placement (step 2 below), because placement itself depends on it: a value
-  // homed on the producer side but READ from the consumer pass has to be
-  // materialized across the split (see the mixed-pass rule in step 2), which
-  // needs the pass partition in hand.
-  //
-  // A realized axis is forced to split when some cell is LoopCarried on it and
-  // its values divide into a non-empty PRODUCER pass and a non-empty CONSUMER
-  // pass (a value is in the consumer pass iff it is a strict dependency-
-  // ancestor of a loop-carried value, i.e. it reads that value's completed
-  // result: see detail::forced_split_passes); that loop is then realized as
-  // TWO ordered sibling blocks with distinct ordinals -- a producer pass
-  // (ordinal 0, builds the loop-carried values to full via their
-  // AccumulateScatter outputs) then a consumer pass (ordinal 1, the
-  // cross-iteration reads).
-  //
-  // Detected at ANY depth, not only at the innermost axis. Find the OUTERMOST
-  // realized axis forced to split (some cell LoopCarried on it) whose split is
-  // GENUINE -- both a pure producer (a carried value read only in a later
-  // pass) and a consumer (a strict ancestor of a carried value). The split is
-  // realized at that depth d*; when d* is not the innermost axis the enclosed
-  // inner sub-chain is FORKED across the two passes (fork_subchain).
-  // At most one forced axis is expected in practice (only an external axis is
-  // LoopCarried; contracted axes are Reduction) -- a second, nested forced
-  // split is a distinct feature and is rejected loudly rather than mis-emitted.
-  std::optional<std::size_t> split_depth;
-  std::optional<detail::ForcedSplitPasses> split_passes;
+  // 2a. PASS LEVELS (per-nest forced split design, section 3.1). The one
+  // forced space is the space some cell is LoopCarried on; a second forced
+  // space is rejected as before. Levels are global; each nest decides for
+  // itself (step 4 below) whether it holds members of more than one pass.
+  std::optional<detail::ForcedSplitLevels> levels;
   {
-    std::size_t forced_count = 0;
-    container::svector<std::wstring> seen_split_spaces;
-    for (std::size_t d = 0; d < n; ++d) {
-      std::wstring const key{types[d].space().base_key()};
-      // A space now spans several per-instance slot depths; the PROCON split is
-      // per SPACE (base_key), so consider each space once, at its first (slot
-      // 0) depth. (Per-slot PROCON of a multi-member group is deferred.)
-      if (std::find(seen_split_spaces.begin(), seen_split_spaces.end(), key) !=
-          seen_split_spaces.end())
-        continue;
-      seen_split_spaces.push_back(key);
-      bool const forced =
-          std::any_of(legality.cells.begin(), legality.cells.end(),
-                      [&](CellLegality const& cl) {
-                        for (Index const& ix : forced_split_types(cl))
-                          if (ix.space().base_key() == key) return true;
-                        return false;
-                      });
-      if (!forced) continue;
-      auto passes = detail::forced_split_passes(key, legality, g);
-      bool const has_cons = !passes.consumer_pass.empty();
-      bool const has_prod = std::any_of(
-          passes.carried.begin(), passes.carried.end(),
-          [&](std::size_t v) { return !passes.consumer_pass.count(v); });
-      if (!has_prod || !has_cons) continue;  // LoopCarried but no split needed
-      ++forced_count;
-      if (!split_depth) {  // outermost genuine split
-        split_depth = d;
-        split_passes = std::move(passes);
+    container::svector<std::wstring> forced_spaces;
+    for (CellLegality const& cl : legality.cells)
+      for (Index const& ix : forced_split_types(cl)) {
+        std::wstring const key{ix.space().base_key()};
+        if (std::find(forced_spaces.begin(), forced_spaces.end(), key) ==
+            forced_spaces.end())
+          forced_spaces.push_back(key);
       }
-    }
-    SEQUANT_ASSERT(forced_count <= 1,
-                   "build_ordered_schedule: multiple forced-split axes at "
-                   "different depths (nested splits) not supported");
+    SEQUANT_ASSERT(forced_spaces.size() <= 1,
+                   "build_ordered_schedule: more than one forced-split space "
+                   "is not supported");
+    if (!forced_spaces.empty())
+      levels =
+          detail::forced_split_levels(forced_spaces.front(), rich, legality, g);
+  }
+  auto const pass_of = [&](std::size_t vid) -> int {
+    return levels ? levels->pass(vid) : 0;
+  };
+  // Legality record by value id, for reader lookups in rule 4.
+  std::unordered_map<std::size_t, CellLegality const*> cl_by_vid;
+  cl_by_vid.reserve(legality.cells.size());
+  for (CellLegality const& c2 : legality.cells) {
+    auto const it2 = value_id_of.find(c2.hash);
+    if (it2 != value_id_of.end()) cl_by_vid.emplace(it2->second, &c2);
   }
 
   // 2. Per-value placement: home BuildStep (root-level bucket uses index n
@@ -1341,6 +1309,70 @@ forced_split_demotions(RichSchedule const& rich,
       if (!target || *d > *target) target = *d;
     }
     return target;
+  };
+
+  // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for a rule-4 rejection:
+  // print the value's axes with roles/slots/depths, its later-pass readers,
+  // and the forced-split axis's carried set, each with home depth and nest.
+  auto const dump_reject = [&](std::size_t v0, std::size_t nest,
+                               container::svector<std::size_t> const& readers) {
+    auto const role_str = [](LoopRole r) -> wchar_t const* {
+      switch (r) {
+        case LoopRole::LoopLocal:
+          return L"L";
+        case LoopRole::Reduction:
+          return L"R";
+        case LoopRole::LoopCarried:
+          return L"C";
+        default:
+          return L"I";
+      }
+    };
+    auto const describe = [&](std::size_t v) {
+      auto const it2 = cl_by_vid.find(v);
+      std::wcerr << L"v" << v << L"(pass=" << pass_of(v);
+      if (it2 == cl_by_vid.end()) {
+        std::wcerr << L" no legality)";
+        return;
+      }
+      CellLegality const& c2 = *it2->second;
+      auto const hd = local_home_depth(c2);
+      std::wcerr << L" home=";
+      if (hd)
+        std::wcerr << *hd << L"/nest" << type_cluster[*hd];
+      else
+        std::wcerr << L"root";
+      std::wcerr << L" axes={";
+      for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
+        std::wstring const bk2{c2.per_axis[p2].axis.space().base_key()};
+        int const fs2 = fusion_slot(c2, p2);
+        auto const d2 = depth_of_instance(bk2, fs2 >= 0 ? fs2 : 0);
+        std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
+                   << role_str(c2.per_axis[p2].role) << L"@slot" << fs2
+                   << L"->d";
+        if (d2)
+          std::wcerr << *d2;
+        else
+          std::wcerr << L"?";
+        std::wcerr << L" ";
+      }
+      std::wcerr << L"}" << (levels->carried.count(v) ? L" CARRIED" : L"")
+                 << L")";
+    };
+    std::wcerr << L"[sched-reject] nest outermost depth "
+               << cluster_min.at(nest) << L" value: ";
+    describe(v0);
+    std::wcerr << L"\n";
+    for (std::size_t u : readers) {
+      std::wcerr << L"[sched-reject]   later-pass reader ";
+      describe(u);
+      std::wcerr << L"\n";
+    }
+    for (std::size_t c : levels->carried) {
+      std::wcerr << L"[sched-reject]   carried ";
+      describe(c);
+      std::wcerr << L"\n";
+    }
   };
 
   for (CellLegality const& cl : legality.cells) {
@@ -1428,188 +1460,102 @@ forced_split_demotions(RichSchedule const& rich,
       }
     }
 
-    // MIXED-PASS MEMBER (spec rule 4): the pass partition is a partition of
-    // the SCHEDULE, not of the DAG -- the consumer pass is a later, DISJOINT
-    // traversal of the split loop (and of the whole sub-chain forked inside
-    // it), so a per-batch cell homed anywhere on the producer side is gone by
-    // the time the consumer pass runs. A value HOMED producer-side (not itself
-    // in consumer_pass) with at least one direct consumer in consumer_pass is
-    // therefore classified LOOP-CARRIED here: it materializes to full through
-    // the ordinary multi-level escape chain and the consumer pass reads the
-    // assembled form at the split's parent. No depth is special-cased -- the
-    // member may sit any number of levels below the split.
-    //
-    // ONLY for a value with NO role-driven escape of its own (\c escapes still
-    // empty, i.e. every \c per_axis role is \c LoopLocal). A value that
-    // already escapes by its own roles has no \c BuildStep at all -- its
-    // production IS the accumulation -- so there is nothing to materialize and
-    // nothing to keep; a role-escaping value that ALSO has a reader inside its
-    // own nest (which would miss it, since the assembled form only exists at
-    // the parent scope) is a SEPARATE, PARKED case, noted by the stage-1
-    // review and not addressed here.
-    //
-    // The escaped levels are the value's own \c LoopLocal instances from its
-    // HOME level (\c local_home_depth, the innermost one) outward to the split
-    // depth -- the complete chain, no cluster filter: skipping a level the
-    // value is bound to would leave the assembled form stranded inside the
-    // split. A level the value is INVARIANT to contributes no instance and IS
-    // legitimately skipped (the runtime home walk and the cell table both
-    // carry a value through a level it does not vary with).
+    // MIXED-PASS MEMBER (per-nest forced split design, section 3.3). A
+    // same-nest, later-pass reader is the only reader that can see a
+    // per-batch slice from another traversal of the nest: a reader outside
+    // the nest or at root is never LoopLocal on the value and is served by
+    // the value's role-driven escapes. Such a member keeps its BuildStep and
+    // is scattered to full at every level of its nest it is LoopLocal on,
+    // from its home out to the nest's outermost depth, so the later pass
+    // reads the full form at root. The chain is measured in the value's OWN
+    // nest; a chain that cannot reach root is rejected loudly (below).
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
-    if (escapes.empty() && split_passes && home_depth &&
-        *home_depth >= *split_depth &&
-        !split_passes->consumer_pass.count(vid)) {
+    // Direct readers homed in the same nest with a later pass.
+    auto const later_same_nest_readers =
+        [&](std::size_t nest) -> container::svector<std::size_t> {
+      container::svector<std::size_t> out;
       auto const cons_it = g.consumers_of.find(vid);
-      bool const read_by_consumer_pass =
-          cons_it != g.consumers_of.end() &&
-          std::any_of(cons_it->second.begin(), cons_it->second.end(),
-                      [&](std::size_t c) {
-                        return split_passes->consumer_pass.count(c) != 0;
-                      });
-      if (read_by_consumer_pass) {
+      if (cons_it == g.consumers_of.end()) return out;
+      for (std::size_t u : cons_it->second) {
+        if (pass_of(u) <= pass_of(vid)) continue;
+        auto const uit = cl_by_vid.find(u);
+        if (uit == cl_by_vid.end()) continue;
+        auto const uh = local_home_depth(*uit->second);
+        if (uh && type_cluster[*uh] == nest) out.push_back(u);
+      }
+      return out;
+    };
+    if (escapes.empty() && levels && home_depth) {
+      std::size_t const nest = type_cluster[*home_depth];
+      auto const readers = later_same_nest_readers(nest);
+      if (!readers.empty()) {
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
           if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
           std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
           int const fs = fusion_slot(cl, pos);
           auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
-          if (!d || *d < *split_depth || *d > *home_depth) continue;
+          if (!d || type_cluster[*d] != nest || *d > *home_depth) continue;
           auto it = std::find_if(escapes.begin(), escapes.end(),
                                  [&](auto const& e) { return e.first == *d; });
-          // Every level here is being reclassified from LoopLocal to
-          // loop-CARRIED (a Reduction or LoopCarried role would have filled
-          // `escapes` already and excluded the value from this rule), so the
-          // kind is always a scatter to full -- never a sum.
           if (it == escapes.end())
             escapes.push_back({*d, OutputKind::AccumulateScatter});
           else
             it->second = OutputKind::AccumulateScatter;
           materialized_across_split = true;
         }
-        // The chain must actually run from the value's home OUT PAST the
-        // split, along ONE root-to-node nesting path: within a co-occurrence
-        // cluster a larger depth nests inside a smaller one, but two clusters
-        // are SIBLING nests at root and do not enclose each other at all. So
-        // the home level must be among the escaped levels, and every escaped
-        // level -- the split's own included -- must share the home's cluster.
-        // Anything else would leave the assembled form stranded inside the
-        // split (or in a sibling nest) while the consumer pass reads for it,
-        // which is a mis-schedule this builder must not emit silently.
-        if (materialized_across_split) {
-          bool complete =
-              type_cluster[*home_depth] == type_cluster[*split_depth];
-          bool home_escaped = false;
-          for (auto const& [d, kind] : escapes) {
-            (void)kind;
-            if (d == *home_depth) home_escaped = true;
-            if (type_cluster[d] != type_cluster[*home_depth]) complete = false;
-          }
-          // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE): on an incomplete
-          // chain, print the value's axes, its consumers and the split's
-          // carried set with their home depths and clusters, so a failure on
-          // a real input can be diagnosed without a debugger.
-          if ((!complete || !home_escaped) &&
-              std::getenv("SEQUANT_DUMP_SCHEDULE")) {
-            std::unordered_map<std::size_t, CellLegality const*> cl_by_vid;
-            for (CellLegality const& c2 : legality.cells) {
-              auto const it2 = value_id_of.find(c2.hash);
-              if (it2 != value_id_of.end()) cl_by_vid.emplace(it2->second, &c2);
-            }
-            auto const role_str = [](LoopRole r) -> wchar_t const* {
-              switch (r) {
-                case LoopRole::LoopLocal:
-                  return L"L";
-                case LoopRole::Reduction:
-                  return L"R";
-                case LoopRole::LoopCarried:
-                  return L"C";
-                default:
-                  return L"I";
-              }
-            };
-            auto const describe = [&](std::size_t v) {
-              auto const it2 = cl_by_vid.find(v);
-              std::wcerr << L"v" << v;
-              if (it2 == cl_by_vid.end()) {
-                std::wcerr << L"(no legality)";
-                return;
-              }
-              CellLegality const& c2 = *it2->second;
-              auto const hd = local_home_depth(c2);
-              std::wcerr << L"(home=";
-              if (hd)
-                std::wcerr << *hd << L"/cl" << type_cluster[*hd];
-              else
-                std::wcerr << L"root";
-              std::wcerr << L" axes={";
-              for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
-                std::wstring const bk2{c2.per_axis[p2].axis.space().base_key()};
-                int const fs2 = fusion_slot(c2, p2);
-                auto const d2 = depth_of_instance(bk2, fs2 >= 0 ? fs2 : 0);
-                std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
-                           << role_str(c2.per_axis[p2].role) << L"@slot" << fs2
-                           << L"->d";
-                if (d2)
-                  std::wcerr << *d2;
-                else
-                  std::wcerr << L"?";
-                std::wcerr << L" ";
-              }
-              std::wcerr << L"}"
-                         << (split_passes->consumer_pass.count(v) ? L" CONS"
-                                                                  : L" prod")
-                         << (split_passes->carried.count(v) ? L" CARRIED" : L"")
-                         << L")";
-            };
-            std::wcerr << L"[sched-split-diag] split_depth=" << *split_depth
-                       << L"/cl" << type_cluster[*split_depth] << L" value: ";
-            describe(vid);
-            std::wcerr << L"\n[sched-split-diag]   escapes={";
-            for (auto const& [d, kind] : escapes) {
-              (void)kind;
-              std::wcerr << d << L"/cl" << type_cluster[d] << L" ";
-            }
-            std::wcerr << L"} complete=" << complete << L" home_escaped="
-                       << home_escaped << L"\n";
-            if (cons_it != g.consumers_of.end())
-              for (std::size_t c3 : cons_it->second) {
-                std::wcerr << L"[sched-split-diag]   consumer ";
-                describe(c3);
-                std::wcerr << L"\n";
-              }
-            for (std::size_t cv : split_passes->carried) {
-              std::wcerr << L"[sched-split-diag]   carried ";
-              describe(cv);
-              std::wcerr << L"\n";
-            }
-            std::map<std::wstring, std::size_t> hist;
-            for (std::size_t pv : split_passes->consumer_pass) {
-              auto const it2 = cl_by_vid.find(pv);
-              std::wstring key = L"none";
-              if (it2 != cl_by_vid.end()) {
-                auto const hd = local_home_depth(*it2->second);
-                key = hd ? (L"d" + std::to_wstring(*hd) + L"/cl" +
-                            std::to_wstring(type_cluster[*hd]))
-                         : L"root";
-              }
-              ++hist[key];
-            }
-            std::wcerr << L"[sched-split-diag]   consumer_pass homes:";
-            for (auto const& [k, cnt] : hist)
-              std::wcerr << L" " << k << L"=" << cnt;
-            std::wcerr << L" (total " << split_passes->consumer_pass.size()
-                       << L", carried " << split_passes->carried.size()
-                       << L")\n";
-          }
-          if (!complete || !home_escaped)
+        // Every level of the nest from the home out to the outermost depth
+        // must be escaped; a level the value is invariant to would end the
+        // chain inside the nest, invisible to the later pass.
+        std::size_t const outermost = cluster_min.at(nest);
+        for (std::size_t d = outermost; d <= *home_depth; ++d) {
+          if (type_cluster[d] != nest) continue;
+          bool const escaped =
+              std::any_of(escapes.begin(), escapes.end(),
+                          [&](auto const& e) { return e.first == d; });
+          if (!escaped) {
+            if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
+              dump_reject(vid, nest, readers);
             throw Exception(
-                "build_ordered_schedule: cannot materialize value " +
-                std::to_string(vid) +
-                " across the forced loop split at depth " +
-                std::to_string(*split_depth) + ": its home at depth " +
-                std::to_string(*home_depth) +
-                " is not on one nesting path out of the split (escape chain "
-                "incomplete)");
+                "build_ordered_schedule: value " + std::to_string(vid) +
+                " (pass " + std::to_string(pass_of(vid)) +
+                ") is read by value " + std::to_string(readers.front()) +
+                " (pass " + std::to_string(pass_of(readers.front())) +
+                ") in a later pass of its nest (outermost depth " +
+                std::to_string(outermost) +
+                ") but is invariant to that nest's loop at depth " +
+                std::to_string(d) +
+                ": its escape chain cannot reach root (unsupported: hoisting "
+                "an invariant assembled form)");
+          }
+        }
+      }
+    } else if (!escapes.empty() && levels && home_depth) {
+      // A role-escaping value whose chain ends INSIDE its nest (its
+      // outermost escaped level is not the nest's outermost depth) with a
+      // same-nest later-pass reader: the assembled form is invisible to that
+      // pass. Rejected loudly (parent design section 8.2's parked case).
+      std::size_t const nest = type_cluster[*home_depth];
+      std::size_t d_min = escapes.front().first;
+      for (auto const& [d, kind] : escapes) {
+        (void)kind;
+        d_min = std::min(d_min, d);
+      }
+      if (type_cluster[d_min] == nest && d_min != cluster_min.at(nest)) {
+        auto const readers = later_same_nest_readers(nest);
+        if (!readers.empty()) {
+          if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
+            dump_reject(vid, nest, readers);
+          throw Exception(
+              "build_ordered_schedule: value " + std::to_string(vid) +
+              " (pass " + std::to_string(pass_of(vid)) +
+              ") escapes only to depth " + std::to_string(d_min) +
+              " inside its nest (outermost depth " +
+              std::to_string(cluster_min.at(nest)) + ") but is read by value " +
+              std::to_string(readers.front()) + " (pass " +
+              std::to_string(pass_of(readers.front())) +
+              ") in a later pass of that nest (unsupported: an inner "
+              "escape read across passes)");
         }
       }
     }
@@ -1732,6 +1678,32 @@ forced_split_demotions(RichSchedule const& rich,
   container::vector<detail::OrderedScheduleStepMeta> finished_metas;
   std::optional<std::size_t> prev_cluster;
 
+  // Per-nest pass sets (design section 3.2): the passes of every build
+  // homed at any of the nest's depths and of every escape output listed
+  // there. A nest with one pass is one block (latitude = that pass); a nest
+  // with several is one block per pass at its outermost depth.
+  std::map<std::size_t, std::set<int>> nest_passes;
+  for (std::size_t d = 0; d < n; ++d) {
+    auto& ps = nest_passes[type_cluster[d]];
+    for (std::size_t v : buckets[d].build_ids) ps.insert(pass_of(v));
+    for (auto const& o : buckets[d].outputs) ps.insert(pass_of(o.first));
+  }
+  if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
+    for (auto const& [c, ps] : nest_passes) {
+      std::wcerr << L"[sched-nest] outermost depth " << cluster_min.at(c)
+                 << L" passes={";
+      for (int k : ps) {
+        std::size_t cnt = 0;
+        for (std::size_t d = 0; d < n; ++d) {
+          if (type_cluster[d] != c) continue;
+          for (std::size_t v : buckets[d].build_ids)
+            if (pass_of(v) == k) ++cnt;
+        }
+        std::wcerr << k << L":" << cnt << L" ";
+      }
+      std::wcerr << L"}\n";
+    }
+
   for (std::size_t oi = 0; oi < order.size(); ++oi) {
     std::size_t const d = order[oi];  // cluster-grouped, innermost-first
     // Cluster boundary: the previous cluster's nest is complete in `pending`;
@@ -1772,21 +1744,20 @@ forced_split_demotions(RichSchedule const& rich,
     container::vector<Step> next_steps;
     container::vector<detail::OrderedScheduleStepMeta> next_metas;
 
-    if (split_passes && d == *split_depth) {
-      // Split at depth d*: partition this bucket's homed BuildSteps and escape
-      // outputs into the producer (ordinal 0) and consumer (ordinal 1) passes
-      // by consumer_pass membership, and FORK the enclosed inner sub-chain
-      // (pending_steps) across the two passes. At the innermost axis pending is
-      // empty and fork_subchain returns two empty inner lists, reducing to the
-      // original childless two-block emission (byte-identical). The consumer
-      // block reads the producer block's escaped (now-full) outputs, so its
-      // `requires_` names them and the outer topo-sort orders producer first.
-      auto const in_consumer = [&](std::size_t vid) {
-        return split_passes->consumer_pass.count(vid) != 0;
-      };
-
-      detail::ForkedSubchain forked =
-          detail::fork_subchain(pending_steps, in_consumer);
+    std::size_t const nest = type_cluster[d];
+    bool const outermost = d == cluster_min.at(nest);
+    std::set<int> const& passes = nest_passes[nest];
+    if (outermost && passes.size() > 1) {
+      // Several passes at this nest's outermost depth (per-nest forced split
+      // design, section 3.2): one block per pass, ascending, each holding the
+      // builds and outputs of that pass at this depth plus the inner
+      // sub-chain forked for that pass (fork_subchain applied once per pass;
+      // the fork's predicate-true "consumer" side is the pass's own steps).
+      // At the innermost axis pending is empty and fork_subchain returns an
+      // empty inner list, reducing to a childless per-pass block emission.
+      // The later pass's block reads the earlier pass's escaped (now-full)
+      // outputs, so its `requires_` names them and the outer topo-sort orders
+      // passes in ascending order.
 
       // Recursive value_ids a forked child Step produces (builds + escape
       // outputs, through nested blocks), for its `requires_`/`tie_key` meta.
@@ -1850,23 +1821,25 @@ forced_split_demotions(RichSchedule const& rich,
             next_metas.push_back(std::move(m));
           };
 
-      container::svector<std::size_t> prod_builds, cons_builds;
-      for (std::size_t v : bucket.build_ids)
-        (in_consumer(v) ? cons_builds : prod_builds).push_back(v);
-      container::svector<std::pair<std::size_t, OutputKind>> prod_outs,
-          cons_outs;
-      for (auto const& o : bucket.outputs)
-        (in_consumer(o.first) ? cons_outs : prod_outs).push_back(o);
-
-      auto prod_metas = meta_for(forked.producer);
-      auto cons_metas = meta_for(forked.consumer);
-      emit_pass(0, prod_builds, prod_outs, std::move(forked.producer),
-                std::move(prod_metas));
-      emit_pass(1, cons_builds, cons_outs, std::move(forked.consumer),
-                std::move(cons_metas));
+      for (int k : passes) {
+        auto const in_pass = [&](std::size_t v) { return pass_of(v) == k; };
+        detail::ForkedSubchain forked =
+            detail::fork_subchain(pending_steps, in_pass);
+        // The "consumer" side of the two-way fork is the predicate-true side.
+        container::svector<std::size_t> builds;
+        for (std::size_t v : bucket.build_ids)
+          if (in_pass(v)) builds.push_back(v);
+        container::svector<std::pair<std::size_t, OutputKind>> outs;
+        for (auto const& o : bucket.outputs)
+          if (in_pass(o.first)) outs.push_back(o);
+        auto metas = meta_for(forked.consumer);
+        emit_pass(k, builds, outs, std::move(forked.consumer),
+                  std::move(metas));
+      }
     } else {
       ScopeBlock block = make_block(
-          types[d], 0, d + 1, type_slot[d], bucket.build_ids, bucket.outputs,
+          types[d], outermost && !passes.empty() ? *passes.begin() : 0, d + 1,
+          type_slot[d], bucket.build_ids, bucket.outputs,
           std::move(pending_steps), std::move(pending_metas));
       next_steps.push_back(Step{std::move(block)});
       detail::OrderedScheduleStepMeta m;
