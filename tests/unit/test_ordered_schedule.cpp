@@ -31,6 +31,7 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
 #include <array>
@@ -1901,4 +1902,165 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
   CHECK(lv.max_pass >= 1);
   for (std::size_t v = 0; v < fx.rich.cells.size(); ++v)
     CHECK((lv.pass(v) >= 1) == (old.consumer_pass.count(v) != 0));
+}
+
+// ===========================================================================
+// Fix round 1 (review-task-2.md, Important 2): the one-forced-space
+// assertion must count only GENUINE splits (a space whose levels reach
+// pass >= 1 somewhere), not every space some cell happens to be
+// LoopCarried on. Two spaces, "i" and "a", each carry exactly one value;
+// only the "i" value has a reader (so only "i" is genuine -- "a"'s
+// max_pass stays 0). build_ordered_schedule must not throw the
+// more-than-one-forced-space assertion and must produce a well-formed
+// schedule.
+// ===========================================================================
+TEST_CASE(
+    "build_ordered_schedule: two LoopCarried spaces of which only one is "
+    "genuine build without the more-than-one-forced-space assertion",
+    "[ordered-schedule][levels]") {
+  using sequant::eval::LoopRole;
+  sequant::Index const i1{L"i_1"};
+  sequant::Index const a1{L"a_1"};
+
+  sequant::eval::RichSchedule rich;
+  // L_i (carried on "i"): produced at point 0, read by Reader_i at point 1.
+  rich.cells.push_back(orderedsched_levels_cell(0, 9000, {{0, 1}}));
+  // Reader_i: root (produced at point 1, no further consumer) -- makes
+  // space "i" genuine (a real strict-ancestor reader of the carried value).
+  rich.cells.push_back(orderedsched_levels_cell(1, 9001, {{1, 1}}));
+  // L_a (carried on "a"): itself a root (point == consumer_point) -- no
+  // reader at all, so "a" is LoopCarried but NOT genuine (max_pass == 0).
+  rich.cells.push_back(orderedsched_levels_cell(2, 9002, {{2, 2}}));
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;
+    cl.hash = 9000;
+    cl.per_axis.push_back({i1, LoopRole::LoopCarried});
+    cl.forced_split_axes.push_back(i1);
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // Reader_i: root, no axis roles at all
+    cl.hash = 9001;
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;
+    cl.hash = 9002;
+    cl.per_axis.push_back({a1, LoopRole::LoopCarried});
+    cl.forced_split_axes.push_back(a1);
+    legality.cells.push_back(cl);
+  }
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i" || ix.space().base_key() == L"a";
+  };
+
+  sequant::eval::OrderedSchedule sched;
+  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(
+                      rich, legality, policy, {L"i", L"a"}));
+  CHECK(sequant::eval::well_formed(sched));
+}
+
+// ===========================================================================
+// Fix round 1 (review-task-2.md, Important 3): a LoopLocal-only value (no
+// role-driven escape) that STRADDLES passes -- read by a same-pass reader
+// (here, the carried value C it itself feeds) and by a LATER-pass reader
+// homed OUTSIDE its nest (root-homed X) -- is neither materialized (its
+// only same-nest reader, C, is not a LATER pass, so `later_same_nest_
+// readers` is empty) nor silently accepted: legality promises an
+// all-LoopLocal value has no reader outside its own nest, and the schedule
+// must throw rather than build an inconsistent schedule.
+//
+// Nest: V is LoopLocal on BOTH i_1 (fusion slot 0) and i_2 (fusion slot 1),
+// which anchors the two loop instances into one nest. V feeds C (LoopCarried
+// on i_1) and is ALSO read directly by X (root, no per_axis roles at all).
+// Passes (by hand, mirroring the [levels] lift/straddle test): C = 0 (no
+// carried operand); X = 1 (reads C's completed form, a strict ancestor);
+// V's two consumers are C (pass 0) and X (pass 1) -- the straddle keeps V
+// at its base pass 0 (no lift), so X (pass 1) is a genuine later-pass
+// reader of V, homed at root -- outside V's nest.
+// ===========================================================================
+TEST_CASE(
+    "build_ordered_schedule: a LoopLocal value straddling passes, read "
+    "later by a value outside its nest, throws instead of silently "
+    "mis-scheduling",
+    "[ordered-schedule][levels]") {
+  using sequant::eval::LoopRole;
+  sequant::Index const i1{L"i_1"};
+  sequant::Index const i2{L"i_2"};
+
+  sequant::eval::RichSchedule rich;
+  {
+    sequant::eval::ValueCell vc{};
+    vc.value_id = 0;
+    vc.hash = 7000;
+    sequant::eval::OccurrenceRec o1{};
+    o1.point = 11;
+    o1.consumer_point = 20;  // feeds C
+    o1.carried = {i1, i2};
+    o1.loop_slot = {0, 1};
+    vc.occurrences.push_back(o1);
+    sequant::eval::OccurrenceRec o2{};
+    o2.point = 12;
+    o2.consumer_point = 30;  // read directly by X
+    o2.carried = {i1, i2};
+    o2.loop_slot = {0, 1};
+    vc.occurrences.push_back(o2);
+    rich.cells.push_back(std::move(vc));
+  }
+  {
+    sequant::eval::ValueCell vc{};
+    vc.value_id = 1;
+    vc.hash = 7001;
+    sequant::eval::OccurrenceRec o{};
+    o.point = 20;
+    o.consumer_point = 30;  // read by X
+    o.carried = {i1};
+    o.loop_slot = {0};
+    vc.occurrences.push_back(o);
+    rich.cells.push_back(std::move(vc));
+  }
+  {
+    sequant::eval::ValueCell vc{};  // X: root, no per_axis roles
+    vc.value_id = 2;
+    vc.hash = 7002;
+    sequant::eval::OccurrenceRec o{};
+    o.point = 30;
+    o.consumer_point = 30;  // root
+    vc.occurrences.push_back(o);
+    rich.cells.push_back(std::move(vc));
+  }
+
+  sequant::eval::LegalitySchedule legality;
+  {
+    sequant::eval::CellLegality cl;  // V
+    cl.hash = 7000;
+    cl.per_axis.push_back({i1, LoopRole::LoopLocal});
+    cl.per_axis.push_back({i2, LoopRole::LoopLocal});
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // C
+    cl.hash = 7001;
+    cl.per_axis.push_back({i1, LoopRole::LoopCarried});
+    cl.forced_split_axes.push_back(i1);
+    legality.cells.push_back(cl);
+  }
+  {
+    sequant::eval::CellLegality cl;  // X: root, no axis roles at all
+    cl.hash = 7002;
+    legality.cells.push_back(cl);
+  }
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  REQUIRE_THROWS_WITH(
+      sequant::eval::build_ordered_schedule(rich, legality, policy, {L"i"}),
+      Catch::Matchers::ContainsSubstring("outside its nest"));
 }

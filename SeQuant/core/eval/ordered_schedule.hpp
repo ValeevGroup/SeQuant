@@ -1241,10 +1241,17 @@ forced_split_demotions(RichSchedule const& rich,
       }
   }
 
-  // 2a. PASS LEVELS (per-nest forced split design, section 3.1). The one
-  // forced space is the space some cell is LoopCarried on; a second forced
-  // space is rejected as before. Levels are global; each nest decides for
-  // itself (step 4 below) whether it holds members of more than one pass.
+  // 2a. PASS LEVELS (per-nest forced split design, section 3.1). A
+  // candidate forced space is any space some cell is LoopCarried on; but a
+  // space is only GENUINELY forced when its levels actually reach pass >= 1
+  // (some value is a real reader of a carried value's completed form, i.e.
+  // `max_pass >= 1`) -- a LoopCarried space with no such reader needs no
+  // pass split at all (every value stays at pass 0) and is ignored, exactly
+  // as the old code's has_prod/has_cons genuineness test did. Only GENUINE
+  // spaces are counted against the "at most one forced space" limit; two
+  // LoopCarried spaces of which at most one is genuine still builds. Levels
+  // are global; each nest decides for itself (step 4 below) whether it
+  // holds members of more than one pass.
   std::optional<detail::ForcedSplitLevels> levels;
   {
     container::svector<std::wstring> forced_spaces;
@@ -1255,12 +1262,16 @@ forced_split_demotions(RichSchedule const& rich,
             forced_spaces.end())
           forced_spaces.push_back(key);
       }
-    SEQUANT_ASSERT(forced_spaces.size() <= 1,
+    std::size_t genuine_count = 0;
+    for (std::wstring const& key : forced_spaces) {
+      auto candidate = detail::forced_split_levels(key, rich, legality, g);
+      if (candidate.max_pass == 0) continue;  // LoopCarried but no split needed
+      ++genuine_count;
+      if (!levels) levels = std::move(candidate);
+    }
+    SEQUANT_ASSERT(genuine_count <= 1,
                    "build_ordered_schedule: more than one forced-split space "
                    "is not supported");
-    if (!forced_spaces.empty())
-      levels =
-          detail::forced_split_levels(forced_spaces.front(), rich, legality, g);
   }
   auto const pass_of = [&](std::size_t vid) -> int {
     return levels ? levels->pass(vid) : 0;
@@ -1529,6 +1540,36 @@ forced_split_demotions(RichSchedule const& rich,
                 "an invariant assembled form)");
           }
         }
+      } else {
+        // TRIPWIRE (controller ruling I3): a value with no role-driven escape
+        // is LoopLocal on every axis, so legality promises no reader outside
+        // its own nest -- every reader either sits in this same nest (handled
+        // above) or is served by an escape this value does not have. A direct
+        // later-pass reader homed OUTSIDE this nest (root, or a sibling nest)
+        // breaks that promise: legality and the schedule disagree, and
+        // silently building would read this value's per-batch home form from
+        // a scope that cannot see it. Thrown loudly rather than producing a
+        // silent mis-schedule.
+        auto const cons_it = g.consumers_of.find(vid);
+        if (cons_it != g.consumers_of.end())
+          for (std::size_t u : cons_it->second) {
+            if (pass_of(u) <= pass_of(vid)) continue;
+            auto const uit = cl_by_vid.find(u);
+            std::optional<std::size_t> const uh =
+                uit == cl_by_vid.end() ? std::nullopt
+                                       : local_home_depth(*uit->second);
+            if (uh && type_cluster[*uh] == nest) continue;  // same nest: n/a
+            if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
+              dump_reject(vid, nest, container::svector<std::size_t>{u});
+            throw Exception(
+                "build_ordered_schedule: value " + std::to_string(vid) +
+                " (pass " + std::to_string(pass_of(vid)) +
+                ") has only loop-local roles but is read by value " +
+                std::to_string(u) + " (pass " + std::to_string(pass_of(u)) +
+                ") outside its nest (outermost depth " +
+                std::to_string(cluster_min.at(nest)) +
+                "): legality and the schedule disagree");
+          }
       }
     } else if (!escapes.empty() && levels && home_depth) {
       // A role-escaping value whose chain ends INSIDE its nest (its
@@ -1815,7 +1856,14 @@ forced_split_demotions(RichSchedule const& rich,
                 types[d], latitude_ordinal, d + 1, type_slot[d], builds, outs,
                 std::move(child_steps), std::move(child_metas))});
             detail::OrderedScheduleStepMeta m;
-            for (auto const& o : outs) m.produced.push_back(o.first);
+            // RECURSIVE produced (not just this pass's own outputs): a pass
+            // block is now always a root-level sibling of every other nest
+            // (the split always lands at the nest's outermost depth), so an
+            // under-reported `produced` orders a sibling nest that requires a
+            // value this pass BUILDS (no escape of its own) before this pass
+            // runs -- the same read-before-build hazard the single-block
+            // path's `produced_all` comment already explains.
+            m.produced.assign(pass_produced.begin(), pass_produced.end());
             m.requires_ = external_needs(pass_produced);
             m.tie_key = min_first_use(pass_produced);
             next_metas.push_back(std::move(m));
