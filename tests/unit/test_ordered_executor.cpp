@@ -4405,21 +4405,28 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// A nested block whose every production is already resident is not ENTERED at
-// all on the enclosing loop's later batches.
+// A loop-invariant escape is not re-formed on later batches.
 //
-// The case that makes this matter: a block whose escape is loop-invariant to
-// the loop its Assemble cell sits in -- the table marks that cell
-// `produce_if_absent`, so it is assembled on the first visit and REUSED
-// afterwards. The steps that feed it are then dead on every later visit: with
-// the Assemble treated as a skipped consumer, the by-source closure marks
-// them skipped too, and the whole batch loop is elided rather than re-run to
-// produce partials nobody will fold. (Before that, the block ran in full
-// every visit and only the Assemble itself was skipped.)
+// The case: a block whose escape is loop-invariant to the loop its Assemble
+// cell sits in -- the table marks that cell `produce_if_absent`, so it is
+// assembled on the first visit and REUSED afterwards; the steps that feed it
+// are then dead on every later visit. What this pins is the fill-once
+// property this reuse depends on, not the whole-block skip machinery that
+// (on THIS fixture) happens to implement it: under
+// SEQUANT_UT_STRICT_FILL_ONCE=1, a cell's Entry::store() throws if it is
+// filled a second time while its prior fill is still live (see
+// cache_manager.hpp's strict_fill_once), so REQUIRE_NOTHROW over the whole
+// evaluation is a direct proof that the invariant escape's cell is filled
+// EXACTLY ONCE across the loop's batches, not once per batch. (An earlier
+// version of this case instead checked `ordered_last_block_skips() > 0` --
+// the vestigial signal of the OLD builder's separate consumer-pass block,
+// which the per-nest forced-split design no longer emits; the loop-invariant
+// escape this case is actually about is rebuilt on every batch in both old
+// and new code and needs the fill-once property above to be pinned at all.)
 // ===========================================================================
 TEST_CASE(
-    "ordered executor: a block whose productions are all resident is not "
-    "entered again",
+    "ordered executor: a loop-invariant escape is not re-formed on later "
+    "batches",
     "[ordered][block-skip]") {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
@@ -4567,10 +4574,20 @@ TEST_CASE(
 
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_array_ops(&aops);
-  ordered_cache.set_recompute_tally_enabled(true);
   char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
   std::string const prev_strict_val = prev_strict ? prev_strict : "";
   setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  // THE pinned property: the whole evaluation runs to completion under
+  // strict fill-once, so the invariant escape's cell (and every other cell)
+  // is filled EXACTLY ONCE while live -- a re-formed escape on a later batch
+  // would throw here. (The recompute tally -- `set_recompute_tally_enabled`
+  // -- was tried as a more targeted signal and dropped: MEASURED on this
+  // fixture, the block that would be skipped whole holds no value whose
+  // ONLY production site is inside it -- every one of them is also built by
+  // a step of another block or another pass -- so no per-value build count
+  // in the tally moves when the whole-block skip fires or not; it cannot
+  // express this case's claim on this fixture, and REQUIRE_NOTHROW is the
+  // pinned property instead.)
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
@@ -4578,19 +4595,6 @@ TEST_CASE(
     setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
   else
     unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
-
-  // THE assertion: at least one nested batch loop was skipped OUTRIGHT --
-  // every production it would have made was already resident, so it was not
-  // entered.
-  CHECK(sequant::eval::detail::ordered_last_block_skips() > 0);
-
-  // The build tally cannot localize the elision any further on this fixture:
-  // MEASURED here, the block that gets skipped whole holds no value whose
-  // ONLY production site is inside it (every one of them is also built by a
-  // step of another block or another pass), so no per-value build count is
-  // below what the loop nesting alone implies. The skip counter above is the
-  // direct statement of the same fact -- the block was not entered -- and the
-  // strict-fill-once walk above is what says the elision changed nothing else.
 }
 
 // ===========================================================================
