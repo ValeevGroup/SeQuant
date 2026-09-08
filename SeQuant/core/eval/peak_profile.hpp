@@ -250,6 +250,15 @@ struct OccurrenceRec {
   //!< fusion_slot when it places a Reduction escape (else the reduction would
   //!< default to slot 0 and diverge from the operand's slice nest).
   container::svector<std::pair<Index, int>> reduced_slot;
+  //!< Modes THIS occurrence's value contracts IN BATCHES at its own node
+  //!< (the legality \c build_site_of CONTRACTED test, mirrored -- see \c
+  //!< NodeRec::contracted_batched). A Reduction-role mode owns a loop
+  //!< identity via this list even when no operand of the contraction is
+  //!< itself home-sliced on the mode (an all-input reduction): the
+  //!< union-find below seeds a component for every entry here
+  //!< unconditionally, instead of relying solely on a home-sliced child to
+  //!< create one.
+  container::svector<Index> contracted_batched;
 };
 
 ///
@@ -368,6 +377,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
     container::svector<Index> own_modes;  // THIS occurrence's OWN realized
                                           // loop modes -- see the
                                           // own_modes_union note below.
+    container::svector<Index>
+        contracted_batched;  // modes THIS node contracts in batches at its
+                             // OWN node (mirrors legality::build_site_of's
+                             // CONTRACTED test -- contracted_indices(n)
+                             // intersected with a Contracted-kind
+                             // node_slice_mask() stamp -- inlined here rather
+                             // than called, since legality.hpp already
+                             // depends on this header). A value that reduces
+                             // one of these modes owns a loop identity for
+                             // it even when no operand is itself home-sliced
+                             // on the mode (see the union-find pass below).
   };
 
   container::svector<NodeRec> recs;
@@ -427,6 +447,30 @@ RichSchedule compute_dag_boulevard(R const& forest,
     r.consumer_point = point;  // root default; overwritten by parent below
     r.home = home_scope(n);    // sliced_modes (empty on leaves)
     r.carried.assign(n->canon_indices().begin(), n->canon_indices().end());
+    // Modes THIS node contracts in batches at its own node -- mirrors
+    // legality::build_site_of's CONTRACTED test (eval.hpp's
+    // contracted_indices(n), intersected with a Contracted-kind
+    // node_slice_mask() stamp) verbatim, inlined rather than shared: this
+    // header cannot include legality.hpp / eval.hpp (legality.hpp already
+    // depends on peak_profile.hpp).
+    if (!n.leaf() && n->is_product()) {
+      auto const& l = n.left()->canon_indices();
+      auto const& rr = n.right()->canon_indices();
+      auto const& c = n->canon_indices();
+      auto const contains = [](auto const& vec, Index const& ix) {
+        return std::find(vec.begin(), vec.end(), ix) != vec.end();
+      };
+      auto const& stamps = n->node_slice_mask();
+      for (Index const& ix : l) {
+        if (!contains(rr, ix) || contains(c, ix))
+          continue;  // not contracted at this node
+        bool const batched =
+            std::any_of(stamps.begin(), stamps.end(), [&](auto const& p) {
+              return p.second == BatchModeType::Contracted && p.first == ix;
+            });
+        if (batched) r.contracted_batched.push_back(ix);
+      }
+    }
     r.ectx = std::move(ectx);
     r.own_modes = std::move(own_modes);
     std::size_t const idx = recs.size();
@@ -506,6 +550,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       o.carried = r.carried;
       o.home = r.home;
       o.ectx = r.ectx;
+      o.contracted_batched = r.contracted_batched;
       return o;
     };
 
@@ -740,6 +785,26 @@ RichSchedule compute_dag_boulevard(R const& forest,
         }
       }
 
+    // A value's OWN contracted-in-batches modes (the legality build_site_of
+    // CONTRACTED test, mirrored as NodeRec::contracted_batched /
+    // OccurrenceRec::contracted_batched above) always own a loop identity,
+    // even when every operand of the contraction is an INPUT -- a leaf, or a
+    // root-resident value that is not itself home-sliced on the mode. With no
+    // home-sliced child there is no edge for the loop above to unite through,
+    // so it never creates a component for (value, mode) and the value's
+    // reduction escape is later placed with no loop identity at all. Seed the
+    // reduction node here unconditionally, for every occurrence's own
+    // contracted_batched mode; the child-driven union above still fires
+    // whenever a home-sliced operand exists and unites its slice loop into
+    // this same component (reduction_node is idempotent -- same (value,
+    // mode) always encodes to the same synthetic node).
+    for (ValueCell const& c : out.cells)
+      for (OccurrenceRec const& occ : c.occurrences)
+        for (Index const& m : occ.contracted_batched) {
+          (void)find(reduction_node(c.value_id, m));
+          reduction_stamps.push_back({c.value_id, m});
+        }
+
     // Number the components: one loop_slot per component, ranked per SPACE in
     // first-seen order over each value's canonical frame. A component is
     // single-space (edges join only identical physical modes).
@@ -754,6 +819,19 @@ RichSchedule compute_dag_boulevard(R const& forest,
           std::wstring const sp{occ.carried[pV].space().base_key()};
           root_slot.emplace(root, next_slot[sp]++);
         }
+    // A reduction-only component -- one seeded above by contracted_batched
+    // that no home-sliced operand ever united into -- never surfaces in the
+    // carried-position walk just above (it walks occ.carried positions, and
+    // a reduced mode has none), so it would otherwise stay unnumbered and
+    // the final stamping loop below would silently skip it. Number it here;
+    // find() already resolves to the SAME root as above wherever a union did
+    // happen, so root_slot.find de-duplicates that case for free.
+    for (auto const& [par_vid, m] : reduction_stamps) {
+      std::size_t const root = find(reduction_node(par_vid, m));
+      if (root_slot.find(root) != root_slot.end()) continue;
+      std::wstring const sp{m.space().base_key()};
+      root_slot.emplace(root, next_slot[sp]++);
+    }
 
     // Component-membership dump: per (space, slot), the distinct member values
     // (hash:pos:mode). Two same-slot fragments of one physical loop appear as

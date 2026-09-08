@@ -1336,6 +1336,20 @@ inline ForkedSubchain fork_subchain(
       if (ac.role == LoopRole::LoopLocal) continue;
       std::wstring const bk{ac.axis.space().base_key()};
       int const fs = fusion_slot(cl, pos);
+      // A Reduction mode with no fusion slot has no loop identity at all
+      // (peak_profile's union-find never numbered a component for it) --
+      // guessing slot 0 places the AccumulateSum escape in whatever nest
+      // happens to own slot 0, not the loop the operands were actually
+      // sliced on, and every batch then silently contracts the FULL
+      // operands (the sum over n batches overcounts by n). A LoopCarried
+      // mode keeps the existing slot-0 fallback: it always carries a real
+      // position, so home_scope + compute_dag_boulevard still resolve it in
+      // the ordinary case, and the fallback is legacy/defensive there.
+      if (ac.role == LoopRole::Reduction && fs < 0)
+        throw Exception(
+            "build_ordered_schedule: value " + std::to_string(vid) +
+            " reduces a batched mode with no loop identity (no reduced_slot "
+            "stamped); the escape cannot be placed");
       auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
       SEQUANT_ASSERT(d.has_value());  // types was built from this same union
       OutputKind const kind =

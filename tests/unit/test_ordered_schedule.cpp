@@ -750,6 +750,153 @@ TEST_CASE(
 }
 
 // ===========================================================================
+// task-loopid (2026-09-08 amendment 8): a batched reduction always owns a
+// loop identity, even when EVERY operand of the contraction is an INPUT --
+// a leaf, or (as here) a value that is never itself home-sliced on the
+// reduced mode -- so there is no home-sliced child for compute_dag_boulevard
+// to union a loop component through. P{;a_9} = A{i_1;} * B{;i_1} contracts i_1
+// at its own node (node_slice_mask stamped Contracted); A and B are LEAVES,
+// so neither is ever home-sliced (stamp_lifetime_masks never stamps a leaf's
+// sliced_modes -- see lifetime_mask.hpp's "leaves are not stamped"). Before
+// the fix, compute_dag_boulevard's union-find seeded a reduction_node ONLY
+// from a home-sliced child's edge, so this shape never got a component: P's
+// occurrences carried no reduced_slot for i_1, fusion_slot(P, i_1) returned
+// -1, and build_ordered_schedule's escape placement guessed loop_slot 0 --
+// landing the AccumulateSum escape in whatever nest happened to own slot 0
+// rather than the loop A/B are actually read under, so the per-batch read of
+// A and B was never sliced on i_1 (every batch contracted the FULL leaf, and
+// the sum over n batches overcounted P by n).
+// ===========================================================================
+TEST_CASE(
+    "compute_dag_boulevard seeds a loop identity for a batched reduction "
+    "whose operands are ALL inputs (no home-sliced operand to union "
+    "through); build_ordered_schedule places its single AccumulateSum "
+    "escape by that slot, and the resulting cell-table reads slice both "
+    "operands on it",
+    "[ordered-schedule][cell_table]") {
+  Index const i1{L"i_1"};
+
+  auto A = orderedsched_leaf("A{i_1;}");
+  auto B = orderedsched_leaf("B{;i_1}");
+  // a_9 is an inert filler free index (EvalExpr's Tensor ctor requires a
+  // non-empty index list); it is never batchable, so it plays no role below.
+  auto P = orderedsched_inode("P{;a_9}", A, B);  // contracts i_1
+  P->set_node_slice_mask({{i1, sequant::BatchModeType::Contracted}});
+  P->set_batch_loops_opened_here({{i1, sequant::BatchModeType::Contracted}});
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const& ix) {
+    return ix.space().base_key() == L"i";
+  };
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {{L"i", 6u}};
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  std::vector<sequant::EvalNode<sequant::EvalExpr>> forest{P};
+  auto const block_of = [](Index const&) -> std::size_t { return 3; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(rich.cells.size() == 3);  // A, B, P
+
+  auto const value_id_of = [&](std::string_view tensor) -> std::size_t {
+    auto const hash = orderedsched_eval_tensor(tensor).hash_value();
+    auto const it =
+        std::find_if(rich.cells.begin(), rich.cells.end(),
+                     [&](auto const& vc) { return vc.hash == hash; });
+    REQUIRE(it != rich.cells.end());
+    return it->value_id;
+  };
+  std::size_t const a_id = value_id_of("A{i_1;}");
+  std::size_t const b_id = value_id_of("B{;i_1}");
+  std::size_t const p_id = value_id_of("P{;a_9}");
+
+  // Fix item 1: P's occurrence must carry a reduced_slot entry for i_1 -- a
+  // real component, numbered, even though neither A nor B was ever
+  // home-sliced to union it through.
+  REQUIRE(!rich.cells[p_id].occurrences.empty());
+  auto const& p_occ = rich.cells[p_id].occurrences.front();
+  auto const rs_it =
+      std::find_if(p_occ.reduced_slot.begin(), p_occ.reduced_slot.end(),
+                   [&](auto const& e) { return e.first == i1; });
+  REQUIRE(rs_it != p_occ.reduced_slot.end());
+  CHECK(rs_it->second >= 0);
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  // Fix item 2: build_ordered_schedule must NOT throw (fusion_slot resolves
+  // now that reduced_slot is stamped) and places P as a single AccumulateSum
+  // output of the {i} block, with no BuildStep anywhere (single production
+  // site: the escape itself).
+  sequant::eval::OrderedSchedule sched;
+  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(
+                      rich, legality, policy, {L"i"}));
+  REQUIRE(well_formed(sched));
+
+  auto const i_child_idx = orderedsched_index_of_child_block(sched.root, L"i");
+  REQUIRE(i_child_idx.has_value());
+  ScopeBlock const& i_block =
+      std::get<ScopeBlock>(sched.root.steps[*i_child_idx].value);
+  CHECK(i_block.axis.space().base_key() == L"i");
+
+  auto const p_out_it =
+      std::find_if(i_block.outputs.begin(), i_block.outputs.end(),
+                   [&](auto const& out) { return out.first == p_id; });
+  REQUIRE(p_out_it != i_block.outputs.end());
+  CHECK(p_out_it->second == OutputKind::AccumulateSum);
+
+  // Exactly one AccumulateSum escape for P anywhere in the schedule (its only
+  // production site).
+  std::size_t p_sum_outputs = 0;
+  std::function<void(ScopeBlock const&)> count_p = [&](ScopeBlock const& b) {
+    for (auto const& [ovid, okind] : b.outputs)
+      if (ovid == p_id && okind == OutputKind::AccumulateSum) ++p_sum_outputs;
+    for (auto const& st : b.steps)
+      if (auto const* child = std::get_if<ScopeBlock>(&st.value))
+        count_p(*child);
+  };
+  count_p(sched.root);
+  CHECK(p_sum_outputs == 1);
+
+  // Fix item 3 (the actual overcounting bug): the cell table's Read of A and
+  // of B, as operands of P's (synthesized) Build cell inside the {i} block,
+  // must each carry a NON-EMPTY slice on i_1 -- each batch of the i-loop
+  // reads only that batch's block of the leaf. An empty slice there is
+  // exactly the pre-fix overcounting shape: the same FULL leaf read every
+  // batch, summed n times instead of once.
+  auto const sma = sequant::eval::compute_sliced_mode_assignment(sched, rich);
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  sequant::eval::CellTableInputs in;
+  in.ordered = &sched;
+  in.rich = &rich;
+  in.sliced = &sma;
+  in.sliced_modes_of = [](std::size_t) {
+    return sequant::container::svector<Index>{};
+  };
+  in.volatile_of = [](std::size_t) { return false; };
+  in.n_batches_of = [](sequant::eval::LoopKey const&) -> std::size_t {
+    return 2;
+  };
+  in.operands_of = [&](std::size_t vid) {
+    auto const it = g.depends_on.find(vid);
+    return it == g.depends_on.end() ? sequant::container::svector<std::size_t>{}
+                                    : it->second;
+  };
+  auto const table = sequant::eval::build_cell_table(in);
+  auto const violations =
+      sequant::eval::validate_cell_table(table, sched.root, in.n_batches_of);
+  CHECK(violations.empty());
+
+  bool a_sliced = false, b_sliced = false;
+  for (sequant::eval::Read const& r : table.reads) {
+    if (r.operand_value_id == a_id && !r.slice.empty()) a_sliced = true;
+    if (r.operand_value_id == b_id && !r.slice.empty()) b_sliced = true;
+  }
+  CHECK(a_sliced);
+  CHECK(b_sliced);
+}
+
+// ===========================================================================
 // Task 4: forced loop split. On the synthetic cross-iteration fixture
 // B{i_3,i_4} = A{;i_3} * A{;i_4} (occ made batchable in the EXTERNAL role, no
 // enclosing occ loop realized), every occ-carrying value is LoopCarried on occ
