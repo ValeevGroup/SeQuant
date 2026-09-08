@@ -40,14 +40,6 @@ class CC {
     Bernoulli
   };
 
-  /// Assembly used for the right-hand UCC EOM equations.
-  enum class UCCEOMAssembly {
-    /// Project \f$ [\bar{H}, R] \f$.
-    Commutator,
-    /// Assemble the projected \f$ \bar{H} \f$ matrix.
-    ProjectedHbar
-  };
-
   /// Configuration options for CC class
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
@@ -231,27 +223,21 @@ class CC {
   ///     UCCSD[2|2,1,0] of 10.1063/5.0062090, Eqs. (29), (41), (44), (48). Its
   ///     BCH scheme needs F one rank above V, which one rank per block cannot
   ///     express.
-  /// @param assembly optional explicit UCC assembly:
-  ///   - If omitted, `Bernoulli` and non-empty `block_ranks` select
-  ///     `ProjectedHbar`; otherwise `BCH` selects `Commutator`.
-  ///   - The two BCH assemblies differ by ground-state amplitude-equation
-  ///     residuals and agree when those vanish.
-  ///   - Traditional CC accepts only `Commutator`, uses its connected H̄R
-  ///     product, and does not support block ranks.
-  /// @throw Exception if `Commutator` is used with the Bernoulli expansion, if
-  ///   `ProjectedHbar` or non-empty `block_ranks` is used with a traditional
+  ///   - Empty uses the configured H̄ rank for every block.
+  /// @note UCC always uses Hamiltonian-matrix assembly. Traditional CC uses
+  ///   its connected H̄R product and does not support block ranks.
+  /// @throw Exception if non-empty `block_ranks` is used with a traditional
   ///   ansatz, or if `block_ranks` is not `K`×`K`
   /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
   ///   indexed by the smaller particle/hole count of each projection manifold:
   ///   - Element 0 is null iff `np == nh`.
-  ///   - With projected-H̄ UCC assembly, each diagonal subtracts the scalar
-  ///     carried by the same temporary \f$ \bar{H}^{(k)} \f$ used for that block,
-  ///     leaving the per-block normal-ordered components of Eq. (10), not
-  ///     distinct physical energy zeros.
+  ///   - With UCC Hamiltonian-matrix assembly, each diagonal subtracts the
+  ///     scalar carried by the same temporary \f$ \bar{H}^{(k)} \f$ used for
+  ///     that block, leaving the per-block normal-ordered components of
+  ///     Eq. (10), not distinct physical energy zeros.
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> eom_r(
-      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {},
-      std::optional<UCCEOMAssembly> assembly = std::nullopt) const;
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {}) const;
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
@@ -293,15 +279,13 @@ class CC {
 
   /// @brief assembles the right-hand UCC EOM equations
   /// @param block_ranks see `eom_r`; empty uses the configured H̄ rank, or 4
-  /// @param assembly assembly to use
   /// @pre a unitary ansatz
   /// @note under the Bernoulli expansion each block's H̄ has its N part removed.
   ///   Where a block's rank equals `hbar_comm_rank` the removed terms vanish at
   ///   converged amplitudes, so its equations change but its values do not;
   ///   below that rank the values change too. `BCH` keeps them.
-  [[nodiscard]] std::vector<ExprPtr> assemble_ucc_eom(
-      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks,
-      UCCEOMAssembly assembly) const;
+  [[nodiscard]] std::vector<ExprPtr> eom_r_ucc(
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks) const;
 
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note The choice of commutator representation is really a question of

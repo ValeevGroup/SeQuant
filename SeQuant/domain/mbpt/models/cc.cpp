@@ -427,25 +427,12 @@ container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
 // 10.1021/acs.jctc.5c01991 Fig. 1.
 //
 // Eq. (10) splits the single physical E_gr from the normal-ordered components
-// that build the blocks of Eq. (7). In projected-H̄ UCC assembly, each
+// that build the blocks of Eq. (7). In UCC Hamiltonian-matrix assembly, each
 // cumulative H̄^(k) still carries its rank-dependent scalar part, so remove
 // that same scalar on the diagonal.
-std::vector<ExprPtr> CC::assemble_ucc_eom(
-    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks,
-    UCCEOMAssembly assembly) const {
-  if (assembly == UCCEOMAssembly::Commutator &&
-      opts_.hbar_expansion == HbarExpansion::Bernoulli)
-    throw Exception("CC::eom_r: Bernoulli requires projected Hbar assembly");
-
+std::vector<ExprPtr> CC::eom_r_ucc(
+    nₚ np, nₕ nh, const std::vector<size_t>& block_ranks) const {
   using std::min;
-  if (assembly == UCCEOMAssembly::Commutator && block_ranks.empty()) {
-    const auto hbar_R = commutator(hbar(), R(np, nh, eom_norm));
-    std::vector<ExprPtr> result(min(np, nh) + 1);
-    for (const auto& [rp, rh] : eom_manifolds(np, nh))
-      result.at(min(rp, rh)) = ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, {});
-    return result;
-  }
-
   const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();
   // `block_ranks` is read at i * K + j, so the ascending order above is what
@@ -502,17 +489,13 @@ std::vector<ExprPtr> CC::assemble_ucc_eom(
       const auto [kp, kh] = manifolds[j];
       const auto& hbar_ij = hbars.at(ranks.at(i * K + j));
       const auto ket = ket_of(kp, kh);
-      if (assembly == UCCEOMAssembly::Commutator) {
-        acc->append(vev(bra * commutator(hbar_ij, ket)));
-      } else {
-        acc->append(vev(bra * hbar_ij * ket));
-        // Remove the scalar part of this block's temporary H̄^(k_ii). This is
-        // not a block-dependent physical E_gr: it leaves the normal-ordered
-        // coefficients selected for this block in Eq. (10). Written as
-        // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the
-        // block's external ones.
-        if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
-      }
+      acc->append(vev(bra * hbar_ij * ket));
+      // Remove the scalar part of this block's temporary H̄^(k_ii). This is
+      // not a block-dependent physical E_gr: it leaves the normal-ordered
+      // coefficients selected for this block in Eq. (10). Written as
+      // <i|r_i H̄|0> so Wick keeps its summed indices disjoint from the
+      // block's external ones.
+      if (i == j) acc->append(ex<Constant>(-1) * vev(bra * ket * hbar_ij));
     }
     result.at(static_cast<size_t>(min(bp, bh))) = simplify(ExprPtr{acc});
   }
@@ -520,26 +503,17 @@ std::vector<ExprPtr> CC::assemble_ucc_eom(
 }
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
-                               const std::vector<size_t>& block_ranks,
-                               std::optional<UCCEOMAssembly> assembly) const {
+                               const std::vector<size_t>& block_ranks) const {
   SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
   if (np != nh)
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
 
-  const auto selected_assembly = assembly.value_or(
-      (!block_ranks.empty() || opts_.hbar_expansion == HbarExpansion::Bernoulli)
-          ? UCCEOMAssembly::ProjectedHbar
-          : UCCEOMAssembly::Commutator);
-  if (unitary())
-    return assemble_ucc_eom(np, nh, block_ranks, selected_assembly);
+  if (unitary()) return eom_r_ucc(np, nh, block_ranks);
 
   if (!block_ranks.empty())
     throw Exception("CC::eom_r: block_ranks require a unitary ansatz");
-  if (selected_assembly == UCCEOMAssembly::ProjectedHbar)
-    throw Exception(
-        "CC::eom_r: projected Hbar assembly requires a unitary ansatz");
 
   const auto hbar = this->hbar();
   const auto hbar_R = hbar * R(np, nh, eom_norm);
