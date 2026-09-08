@@ -5,6 +5,10 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <typeinfo>
 
 namespace sequant {
 
@@ -378,6 +382,32 @@ SumPtr HashingAccumulator::make_sum_impl(bool canonicalize) {
                        if (h1 != h2) return h1 < h2;
                        return *e1 < *e2;
                      });
+  }
+
+  // SEQUANT_SUM_TIE_TRACE (diagnostic): report adjacent canonicalized summands
+  // that share a hash value, with their dynamic types and expressions, so the
+  // terms whose relative order rests on the content tie-break can be seen.
+  static const bool trace_ties =
+      std::getenv("SEQUANT_SUM_TIE_TRACE") != nullptr;
+  if (canonicalize && trace_ties) {
+    auto narrow = [](const std::wstring &w) {
+      std::string r;
+      for (wchar_t c : w) r.push_back(c < 128 ? static_cast<char>(c) : '?');
+      return r;
+    };
+    for (std::size_t i = 1; i < summands.size(); ++i) {
+      if (summands[i - 1]->hash_value() != summands[i]->hash_value()) continue;
+      std::cerr << "[sequant-sum-tie] hash=0x" << std::hex
+                << summands[i]->hash_value() << std::dec
+                << " lt=" << (*summands[i - 1] < *summands[i]) << "/"
+                << (*summands[i] < *summands[i - 1])
+                << " types=" << typeid(*summands[i - 1]).name() << "/"
+                << typeid(*summands[i]).name()
+                << " ids=" << summands[i - 1]->type_id() << "/"
+                << summands[i]->type_id() << "\n    "
+                << narrow(summands[i - 1]->to_latex()) << "\n    "
+                << narrow(summands[i]->to_latex()) << "\n";
+    }
   }
 
   return std::make_shared<Sum>(std::move(summands), Sum::move_only_tag{});
