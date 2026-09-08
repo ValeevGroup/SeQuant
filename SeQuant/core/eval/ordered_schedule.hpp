@@ -19,6 +19,7 @@
 #include <iostream>
 
 #include <algorithm>
+#include <climits>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -655,6 +656,103 @@ inline ForcedSplitPasses forced_split_passes(std::wstring const& axis_key,
       }
     }
   }
+  return r;
+}
+
+///
+/// \brief Pass levels for the one forced-split axis space \p axis_key: every
+/// value gets an integer pass such that a value reading a carried value's
+/// completed (full) form sits in a later pass than the carried value.
+///
+/// Forward sweep (operands before consumers):
+///   level(v) = max over direct operands o of (o carried ? pass(o) + 1
+///              : level(o)), 0 with no operands;
+///   a carried value's pass is its level; a non-carried value's BASE is its
+///   level.
+/// Reverse sweep (consumers before operands): a non-carried value with at
+/// least one consumer is LIFTED to max(base, min over its direct consumers'
+/// passes), so a value whose readers all sit later is built with them; a
+/// value with readers in several passes keeps its base (and is materialized
+/// by the builder's rule 4 when a later same-nest reader needs it).
+///
+/// Every dependency edge points to an equal or earlier pass. With only passes
+/// 0 and 1 present this is exactly the former two-set partition.
+///
+struct ForcedSplitLevels {
+  std::unordered_set<std::size_t> carried;       //!< LoopCarried-on-axis ids
+  std::unordered_map<std::size_t, int> pass_of;  //!< value id -> pass
+  int max_pass = 0;
+  int pass(std::size_t vid) const {
+    auto const it = pass_of.find(vid);
+    return it == pass_of.end() ? 0 : it->second;
+  }
+};
+
+inline ForcedSplitLevels forced_split_levels(std::wstring const& axis_key,
+                                             RichSchedule const& rich,
+                                             LegalitySchedule const& legality,
+                                             OrderedScheduleDepGraph const& g) {
+  ForcedSplitLevels r;
+  for (CellLegality const& cl : legality.cells) {
+    bool const carried_here = std::any_of(
+        cl.per_axis.begin(), cl.per_axis.end(), [&](AxisClass const& ac) {
+          return ac.role == LoopRole::LoopCarried &&
+                 ac.axis.space().base_key() == axis_key;
+        });
+    if (!carried_here) continue;
+    auto const it = g.value_id_of.find(cl.hash);
+    if (it != g.value_id_of.end()) r.carried.insert(it->second);
+  }
+
+  std::size_t const n = rich.cells.size();
+  // Topological order, operands before consumers (Kahn over depends_on).
+  container::svector<std::size_t> topo;
+  topo.reserve(n);
+  {
+    container::svector<std::size_t> indeg(n, 0);
+    for (std::size_t v = 0; v < n; ++v) {
+      auto const it = g.depends_on.find(v);
+      if (it != g.depends_on.end()) indeg[v] = it->second.size();
+    }
+    container::svector<std::size_t> ready;
+    for (std::size_t v = 0; v < n; ++v)
+      if (indeg[v] == 0) ready.push_back(v);
+    while (!ready.empty()) {
+      std::size_t const v = ready.back();
+      ready.pop_back();
+      topo.push_back(v);
+      auto const it = g.consumers_of.find(v);
+      if (it == g.consumers_of.end()) continue;
+      for (std::size_t u : it->second)
+        if (--indeg[u] == 0) ready.push_back(u);
+    }
+    SEQUANT_ASSERT(topo.size() == n,
+                   "forced_split_levels: the value dependency graph has a "
+                   "cycle");
+  }
+
+  std::unordered_map<std::size_t, int> base;
+  base.reserve(n);
+  for (std::size_t v : topo) {
+    int lv = 0;
+    auto const it = g.depends_on.find(v);
+    if (it != g.depends_on.end())
+      for (std::size_t o : it->second)
+        lv = std::max(lv, r.carried.count(o) ? base[o] + 1 : base[o]);
+    base[v] = lv;
+  }
+
+  r.pass_of = base;
+  for (auto it = topo.rbegin(); it != topo.rend(); ++it) {
+    std::size_t const v = *it;
+    if (r.carried.count(v)) continue;
+    auto const cit = g.consumers_of.find(v);
+    if (cit == g.consumers_of.end() || cit->second.empty()) continue;
+    int mn = INT_MAX;
+    for (std::size_t u : cit->second) mn = std::min(mn, r.pass_of[u]);
+    r.pass_of[v] = std::max(base[v], mn);
+  }
+  for (auto const& [v, p] : r.pass_of) r.max_pass = std::max(r.max_pass, p);
   return r;
 }
 

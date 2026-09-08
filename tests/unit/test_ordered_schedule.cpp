@@ -1212,6 +1212,121 @@ TEST_CASE(
   CHECK(dem.size() == 2);
 }
 
+namespace {
+
+sequant::eval::ValueCell orderedsched_levels_cell(
+    std::size_t id, std::size_t hash,
+    std::vector<std::pair<std::size_t, std::size_t>> const& occs) {
+  sequant::eval::ValueCell vc{};
+  vc.value_id = id;
+  vc.hash = hash;
+  vc.first_use = 0;
+  vc.last_use = 0;
+  for (auto const& [p, cp] : occs) {
+    sequant::eval::OccurrenceRec o{};
+    o.point = p;
+    o.consumer_point = cp;
+    vc.occurrences.push_back(std::move(o));
+  }
+  return vc;
+}
+
+sequant::eval::CellLegality orderedsched_levels_legality(
+    std::size_t hash, sequant::eval::LoopRole role) {
+  sequant::Index const i{L"i_1"};
+  sequant::eval::CellLegality cl;
+  cl.hash = hash;
+  sequant::eval::AxisClass ac;
+  ac.axis = i;
+  ac.role = role;
+  cl.per_axis.push_back(ac);
+  if (role == sequant::eval::LoopRole::LoopCarried)
+    cl.forced_split_axes.push_back(i);
+  return cl;
+}
+
+}  // namespace
+
+// Chain: L0 (carried, no carried operand) -> C1 (carried, reads L0's full
+// form) -> C2 (carried, reads C1) -> R (non-carried, reads C2). Passes must
+// be 0, 1, 2, 3.
+TEST_CASE("forced_split_levels: a carried chain gives consecutive passes",
+          "[ordered-schedule][levels]") {
+  using sequant::eval::LoopRole;
+  sequant::eval::RichSchedule rich;
+  // occurrence (point, consumer_point); consumer_point == point is a root
+  rich.cells.push_back(orderedsched_levels_cell(0, 1000, {{0, 10}}));   // L0
+  rich.cells.push_back(orderedsched_levels_cell(1, 1001, {{10, 20}}));  // C1
+  rich.cells.push_back(orderedsched_levels_cell(2, 1002, {{20, 30}}));  // C2
+  rich.cells.push_back(orderedsched_levels_cell(3, 1003, {{30, 30}}));  // R
+  sequant::eval::LegalitySchedule legality;
+  legality.cells.push_back(
+      orderedsched_levels_legality(1000, LoopRole::LoopCarried));
+  legality.cells.push_back(
+      orderedsched_levels_legality(1001, LoopRole::LoopCarried));
+  legality.cells.push_back(
+      orderedsched_levels_legality(1002, LoopRole::LoopCarried));
+  legality.cells.push_back(
+      orderedsched_levels_legality(1003, LoopRole::LoopLocal));
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  auto const lv =
+      sequant::eval::detail::forced_split_levels(L"i", rich, legality, g);
+  CHECK(lv.carried == std::unordered_set<std::size_t>{0, 1, 2});
+  CHECK(lv.pass(0) == 0);
+  CHECK(lv.pass(1) == 1);
+  CHECK(lv.pass(2) == 2);
+  CHECK(lv.pass(3) == 3);
+  CHECK(lv.max_pass == 3);
+}
+
+// Lift: V (non-carried, base 0) is read only by A and B, both in pass 2
+// (they read C1's full form, C1 carried at pass 1). V moves to pass 2.
+// Straddle: W (non-carried, base 0) is read by A (pass 2) and by P (pass 0);
+// W stays at 0. Edge property: every dependency edge points to an equal or
+// earlier pass.
+TEST_CASE(
+    "forced_split_levels: the lift follows readers that all sit later; "
+    "straddling readers keep the base; edges never point later",
+    "[ordered-schedule][levels]") {
+  using sequant::eval::LoopRole;
+  sequant::eval::RichSchedule rich;
+  rich.cells.push_back(
+      orderedsched_levels_cell(0, 1000, {{0, 10}}));  // L0 carried
+  rich.cells.push_back(orderedsched_levels_cell(
+      1, 1001, {{10, 40}, {11, 50}}));  // C1 carried, -> A, B
+  rich.cells.push_back(
+      orderedsched_levels_cell(2, 1002, {{20, 40}, {21, 50}}));  // V -> A, B
+  rich.cells.push_back(
+      orderedsched_levels_cell(3, 1003, {{30, 40}, {31, 60}}));  // W -> A, P
+  rich.cells.push_back(
+      orderedsched_levels_cell(4, 1004, {{40, 40}}));  // A root
+  rich.cells.push_back(
+      orderedsched_levels_cell(5, 1005, {{50, 50}}));  // B root
+  rich.cells.push_back(
+      orderedsched_levels_cell(6, 1006, {{60, 60}}));  // P root
+  sequant::eval::LegalitySchedule legality;
+  legality.cells.push_back(
+      orderedsched_levels_legality(1000, LoopRole::LoopCarried));
+  legality.cells.push_back(
+      orderedsched_levels_legality(1001, LoopRole::LoopCarried));
+  for (std::size_t h : {1002u, 1003u, 1004u, 1005u, 1006u})
+    legality.cells.push_back(
+        orderedsched_levels_legality(h, LoopRole::LoopLocal));
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  auto const lv =
+      sequant::eval::detail::forced_split_levels(L"i", rich, legality, g);
+  CHECK(lv.pass(0) == 0);  // L0
+  CHECK(lv.pass(1) == 1);  // C1
+  CHECK(lv.pass(4) == 2);  // A reads C1
+  CHECK(lv.pass(5) == 2);  // B reads C1
+  CHECK(lv.pass(6) == 0);  // P reads only W
+  CHECK(lv.pass(2) == 2);  // V lifted to its readers' pass
+  CHECK(lv.pass(3) == 0);  // W straddles passes 0 and 2: stays
+  CHECK(lv.max_pass == 2);
+  for (auto const& [v, ops] : g.depends_on)
+    for (std::size_t o : ops) CHECK(lv.pass(o) <= lv.pass(v));
+}
+
 // ===========================================================================
 // Task 5: acceptance + executor-shape validation.
 //
@@ -1744,4 +1859,30 @@ TEST_CASE(
       rich, legality, policy, std::initializer_list<std::wstring>{});
   CHECK(well_formed(sched));
   CHECK(sched.num_values == rich.cells.size());
+}
+
+// Two-level equivalence: on the real cross-iteration fixture, pass >= 1 is
+// exactly today's consumer pass (upward plus downward closure) and max_pass
+// is 1.
+//
+// Hidden ([.]), like every other consumer of orderedsched_cross_iteration_
+// fixture() in this file (see the "blocked-layers-1-2" acceptance and
+// executor-shape TEST_CASEs above): analyze_legality's build_site/per_axis/
+// forced_split_axes classification is not yet populated on this branch (0
+// of 7 [blocked-layers-1-2] cases pass today), so old.carried is empty here
+// and the equivalence this case checks cannot be exercised yet. Re-enable
+// (drop [.]) once that classification lands.
+TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
+          "[.][ordered-schedule][levels][blocked-layers-1-2]") {
+  auto fx = orderedsched_cross_iteration_fixture();
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
+  auto const old =
+      sequant::eval::detail::forced_split_passes(L"i", fx.legality, g);
+  auto const lv =
+      sequant::eval::detail::forced_split_levels(L"i", fx.rich, fx.legality, g);
+  REQUIRE(!old.carried.empty());
+  CHECK(lv.carried == old.carried);
+  CHECK(lv.max_pass == 1);
+  for (std::size_t v = 0; v < fx.rich.cells.size(); ++v)
+    CHECK((lv.pass(v) >= 1) == (old.consumer_pass.count(v) != 0));
 }
