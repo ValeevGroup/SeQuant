@@ -62,24 +62,25 @@ struct LoopKey {
 /// coordinates say where a schedule placed it. \c altitude_ordinal is the
 /// nesting rank the schedule assigned the slot within its group
 /// (free/interchangeable);
-/// \c latitude_ordinal is the legality producer/consumer (PROCON) pass index
-/// (formerly \c ordinal). \c space is a color for fusion group-matching, never
-/// identity. See doc/dev/specs/2026-08-28-batched-dag-loop-identity-design.md.
+/// \c latitude_ordinal is the PASS index within a forced-split nest (formerly
+/// \c ordinal): a nest holding members of more than one pass emits one
+/// sibling block per pass, and \c latitude_ordinal disambiguates them (see
+/// \c forced_split_levels, ordered_schedule.hpp). \c space is a color for
+/// fusion group-matching, never identity. See
+/// doc/dev/specs/2026-08-28-batched-dag-loop-identity-design.md.
 struct DagScopeLevel {
   std::size_t depth;   //!< which loop-group (identity)
   std::wstring space;  //!< color only, NOT identity
   int loop_slot = 0;   //!< which member-slot within the group (identity)
   int altitude_ordinal =
       0;  //!< layout: nesting rank of the slot within its group
-  int latitude_ordinal = 0;  //!< layout: PROCON pass index (was: ordinal)
+  int latitude_ordinal = 0;  //!< layout: pass index (was: ordinal)
 
   [[nodiscard]] LoopKey key() const { return LoopKey{depth, loop_slot}; }
 
   friend bool operator==(DagScopeLevel const& lhs, DagScopeLevel const& rhs) {
-    // Task 1 (vocabulary landing): full-tuple comparison keeps behavior
-    // byte-identical (loop_slot == altitude_ordinal == 0 until Task 3; passes
-    // stay distinct via latitude_ordinal until Task 6). Identity migrates to
-    // key() in later tasks.
+    // Full-tuple comparison; identity migrates to key() alone in a later
+    // task.
     return lhs.depth == rhs.depth && lhs.space == rhs.space &&
            lhs.loop_slot == rhs.loop_slot &&
            lhs.altitude_ordinal == rhs.altitude_ordinal &&

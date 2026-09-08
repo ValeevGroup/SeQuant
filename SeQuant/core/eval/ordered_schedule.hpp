@@ -19,7 +19,6 @@
 #include <iostream>
 
 #include <algorithm>
-#include <climits>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -87,15 +86,16 @@ struct Step;        // fwd; see immediately below.
 ///
 struct ScopeBlock {
   Index axis{};  //!< the loop axis; default (sentinel) on the root block.
-  int latitude_ordinal =
-      0;                  //!< layout: PROCON pass index (was: ordinal) --
-                          //!< disambiguates recurring sibling blocks
-                          //!< realizing the same axis (e.g. producer/consumer
-                          //!< passes over the same axis TYPE at one level).
-  DagScopeLevel level{};  //!< this block's DAG-scope nest position (mirrors
-                          //!< \c axis/\c ordinal; see \c DagScopeLevel's doc
-                          //!< comment). Default-valued (depth 0, empty
-                          //!< space, ordinal 0) on the root block.
+  int latitude_ordinal = 0;  //!< layout: the PASS index (was: ordinal) --
+                             //!< disambiguates recurring sibling blocks
+                             //!< realizing the same axis (a forced-split nest
+                             //!< emits one sibling block per pass it holds; see
+                             //!< \c forced_split_levels).
+  DagScopeLevel level{};     //!< this block's DAG-scope nest position (mirrors
+                             //!< \c axis and \c latitude_ordinal; see \c
+                             //!< DagScopeLevel's doc comment). Default-valued
+                             //!< (depth 0, empty space, altitude/latitude
+                             //!< ordinals 0) on the root block.
   BatchModeType kind =
       BatchModeType::Contracted;    //!< Contracted (accumulate on block exit)
                                     //!< or External (scatter on block exit);
@@ -195,8 +195,8 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
       auto const* cj = std::get_if<ScopeBlock>(&block.steps[j].value);
       if (!cj) continue;
       // Two sibling blocks are the SAME realized loop only when their FULL
-      // loop IDENTITY collides: (depth, loop_slot) AND the latitude (PROCON
-      // pass). Keying on the axis SPACE (a fusion color, not identity) wrongly
+      // loop IDENTITY collides: (depth, loop_slot) AND the latitude (pass
+      // index). Keying on the axis SPACE (a fusion color, not identity) wrongly
       // rejected two DISTINCT same-space sibling loops the un-fuse legitimately
       // emits at different (depth, loop_slot) -- the w20 aux+occ case: two occ
       // (space "i") nests at (1,0) and (2,1), same latitude 0, are different
@@ -512,8 +512,19 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
       if (--indegree[dep] == 0) ready.push_back(dep);
     }
   }
-  // No cycle: see the function doc comment.
-  SEQUANT_ASSERT(order.size() == m);
+  // No cycle: see the function doc comment. Thrown rather than asserted so
+  // this stays loud in a build with asserts disabled -- with a short \c
+  // order, the code below would otherwise build \c out_steps from a
+  // truncated \c order and silently drop the unplaced steps.
+  if (order.size() != m) {
+    std::size_t unsatisfied_edges = 0;
+    for (std::size_t i = 0; i < m; ++i) unsatisfied_edges += indegree[i];
+    throw Exception(
+        "ordered_schedule_topo_sort_steps: cyclic step dependencies among " +
+        std::to_string(m) + " sibling steps (" +
+        std::to_string(unsatisfied_edges) +
+        " prerequisite edges never satisfied)");
+  }
 
   // Post-sort validation (loud tripwire, see the function doc comment):
   // every local prerequisite must actually precede its dependent.
@@ -592,8 +603,13 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// 0 and 1 present this is exactly the former two-set partition.
 ///
 struct ForcedSplitLevels {
-  std::unordered_set<std::size_t> carried;       //!< LoopCarried-on-axis ids
-  std::unordered_map<std::size_t, int> pass_of;  //!< value id -> pass
+  std::unordered_set<std::size_t> carried;  //!< LoopCarried-on-axis ids
+  std::unordered_map<std::size_t, int>
+      pass_of;  //!< value id -> pass, for every value \c
+                //!< ordered_schedule_dep_graph reached (has a legality cell
+                //!< and takes part in the dependency graph); ABSENT for a
+                //!< value with no legality cell, which \c pass() below
+                //!< reports as pass 0 rather than throwing.
   int max_pass = 0;
   int pass(std::size_t vid) const {
     auto const it = pass_of.find(vid);
@@ -651,7 +667,7 @@ inline ForcedSplitLevels forced_split_levels(std::wstring const& axis_key,
     auto const it = g.depends_on.find(v);
     if (it != g.depends_on.end())
       for (std::size_t o : it->second)
-        lv = std::max(lv, r.carried.count(o) ? base[o] + 1 : base[o]);
+        lv = std::max(lv, r.carried.count(o) ? base.at(o) + 1 : base.at(o));
     base[v] = lv;
   }
 
@@ -661,9 +677,9 @@ inline ForcedSplitLevels forced_split_levels(std::wstring const& axis_key,
     if (r.carried.count(v)) continue;
     auto const cit = g.consumers_of.find(v);
     if (cit == g.consumers_of.end() || cit->second.empty()) continue;
-    int mn = INT_MAX;
-    for (std::size_t u : cit->second) mn = std::min(mn, r.pass_of[u]);
-    r.pass_of[v] = std::max(base[v], mn);
+    int mn = std::numeric_limits<int>::max();
+    for (std::size_t u : cit->second) mn = std::min(mn, r.pass_of.at(u));
+    r.pass_of[v] = std::max(base.at(v), mn);
   }
   for (auto const& [v, p] : r.pass_of) r.max_pass = std::max(r.max_pass, p);
   return r;
@@ -672,6 +688,11 @@ inline ForcedSplitLevels forced_split_levels(std::wstring const& axis_key,
 ///
 /// \brief The predicate-false and predicate-true copies of a forked inner
 /// sub-chain (see \c fork_subchain).
+///
+/// \details The per-nest pass-split builder takes only \c consumer once per
+/// pass (the predicate-true side) and never reads \c producer; the field is
+/// kept for other callers (e.g. \c fork_subchain's own unit tests) that fork
+/// on a two-way predicate rather than a per-pass one.
 ///
 struct ForkedSubchain {
   container::vector<Step> producer;  //!< steps whose values are predicate-false
@@ -1090,9 +1111,10 @@ inline ForkedSubchain fork_subchain(
       ++genuine_count;
       if (!levels) levels = std::move(candidate);
     }
-    SEQUANT_ASSERT(genuine_count <= 1,
-                   "build_ordered_schedule: more than one forced-split space "
-                   "is not supported");
+    if (genuine_count > 1)
+      throw Exception(
+          "build_ordered_schedule: more than one forced-split space with "
+          "passes above zero is not supported");
   }
   auto const pass_of = [&](std::size_t vid) -> int {
     return levels ? levels->pass(vid) : 0;
@@ -1153,15 +1175,23 @@ inline ForkedSubchain fork_subchain(
   // value as homed at root: rule 4 would then neither fire the mixed-pass
   // materialization for a value it reads, nor guard the tripwire against
   // it. production_depth instead considers every per_axis mode regardless
-  // of role. Nullopt = no mode resolves (a genuinely unbatched value):
-  // root.
+  // of role. A mode whose fusion slot does not resolve (\c fusion_slot
+  // returns -1) is SKIPPED rather than guessed at slot 0 -- a guessed slot
+  // can land in the WRONG nest (fusion_slot's own doc comment), and this
+  // result feeds the outside-its-nest tripwire below, where a wrong nest
+  // decides whether to throw. Nullopt = no mode resolves at all, whether
+  // because the value is genuinely unbatched (root) or because every one of
+  // its modes has an unresolvable fusion slot -- the two are
+  // indistinguishable here; the table validator's visibility rule is the
+  // net for whichever of those a later-pass reader turns out to be.
   auto const production_depth =
       [&](CellLegality const& cl) -> std::optional<std::size_t> {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
       int const fs = fusion_slot(cl, pos);
-      auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
+      if (fs < 0) continue;  // unresolved: never guess slot 0
+      auto const d = depth_of_instance(bk, fs);
       if (!d) continue;
       if (!target || *d > *target) target = *d;
     }
@@ -1395,17 +1425,26 @@ inline ForkedSubchain fork_subchain(
         // axis, so legality promises no reader outside its own nest --
         // every reader either sits in this same nest (handled above) or is
         // served by an escape this value does not have. A direct later-pass
-        // reader PRODUCED outside this nest (root, or a sibling nest)
-        // breaks that promise: legality and the schedule disagree, and
-        // silently building would read this value's per-batch home form
-        // from a scope that cannot see it. "Produced outside this nest" is
-        // decided by production_depth, not by local_home_depth: a reader
-        // with only carried/reduction roles -- a forest root delivered in
-        // full, or a carried value of a later pass -- is still produced per
-        // batch inside its own nest, so it must not spuriously trip this
-        // guard; a reader whose production depth does not resolve at all,
-        // or resolves into a different nest, still trips it. Thrown loudly
-        // rather than producing a silent mis-schedule.
+        // reader whose production site RESOLVES to outside this nest (root,
+        // or a sibling nest) breaks that promise: legality and the schedule
+        // disagree, and silently building would read this value's per-batch
+        // home form from a scope that cannot see it. "Produced outside this
+        // nest" is decided by production_depth, not by local_home_depth: a
+        // reader with only carried/reduction roles -- a forest root
+        // delivered in full, or a carried value of a later pass -- is still
+        // produced per batch inside its own nest, so it must not
+        // spuriously trip this guard.
+        //
+        // production_depth never guesses: a reader whose production depth
+        // does NOT resolve at all (every one of its modes has an
+        // unresolvable fusion slot, or it has no per_axis modes) is neither
+        // confidently inside this nest NOR confidently outside it, so it
+        // neither trips this guard nor counts as an in-nest reader -- the
+        // guard fires only for a CONFIDENTLY resolved different nest. An
+        // unresolved reader is not silently accepted, either: the table
+        // validator's visibility rule is the net that catches a reader the
+        // builder could not locate. Thrown loudly, for the case this guard
+        // does catch, rather than producing a silent mis-schedule.
         auto const cons_it = g.consumers_of.find(vid);
         if (cons_it != g.consumers_of.end())
           for (std::size_t u : cons_it->second) {
@@ -1414,7 +1453,10 @@ inline ForkedSubchain fork_subchain(
             std::optional<std::size_t> const uh =
                 uit == cl_by_vid.end() ? std::nullopt
                                        : production_depth(*uit->second);
-            if (uh && type_cluster[*uh] == nest) continue;  // same nest: n/a
+            if (!uh)
+              continue;  // unresolved: neither trips nor counts as
+                         // inside the nest
+            if (type_cluster[*uh] == nest) continue;  // same nest: n/a
             if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
               dump_reject(vid, nest, container::svector<std::size_t>{u});
             throw Exception(
@@ -1463,13 +1505,13 @@ inline ForkedSubchain fork_subchain(
       // A value that escapes by its OWN per-axis roles has no BuildStep: its
       // production is the accumulation itself. One materialized across the
       // split by the rule above is different -- it is an ordinary LoopLocal
-      // value that ALSO has producer-side consumers, which read it inside its
-      // own nest, per batch. It keeps its BuildStep at its home block, so that
-      // block both BUILDS it (for its producer-side readers, and as the
+      // value that ALSO has same-pass consumers, which read it inside its own
+      // nest, per batch. It keeps its BuildStep at its home block, so that
+      // block both BUILDS it (for its same-pass in-nest readers, and as the
       // per-batch input of its own escape) and lists it as an output (for the
-      // consumer pass). `well_formed` admits exactly this shape: every block
-      // that lists it either holds its BuildStep or is an ancestor of the one
-      // that does.
+      // later-pass reader). `well_formed` admits exactly this shape: every
+      // block that lists it either holds its BuildStep or is an ancestor of
+      // the one that does.
       if (!materialized_across_split) continue;
       materialized_across_split_ids.push_back(vid);
     }

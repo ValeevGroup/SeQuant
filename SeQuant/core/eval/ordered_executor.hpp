@@ -437,8 +437,14 @@ ordered_range_of(eval::BatchContext const& ctx, LoopKey const& key) {
 /// blocks, one per pass (latitude = pass), as sibling \c ScopeBlock \c Step's
 /// at the SAME nesting level rather than one nested inside the other, run in
 /// schedule order. No special-casing is needed: sibling steps run
-/// sequentially, the topological sort orders the pass blocks ascending by
-/// pass, and a later pass's reads name an earlier pass's assembled cell
+/// sequentially, and the root topological sort is DEPENDENCY-driven (ties
+/// broken by first use), not simply ascending by pass -- a later pass's
+/// block is only guaranteed to follow an earlier pass's block of the SAME
+/// nest where it actually reads that earlier block's production (every case
+/// that matters: a rule-4 materialization, or a carried value's assembled
+/// form); two pass blocks with no such dependency between them may come out
+/// in either order, which is harmless since their scopes and cells are
+/// distinct. A later pass's reads name an earlier pass's assembled cell
 /// explicitly (scopes carry their latitude, so each pass's cells are
 /// distinct).
 ///
@@ -1087,6 +1093,13 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   registry_hooks.hash_of = [&rich](std::size_t vid) -> std::size_t {
     return rich.cells[vid].hash;
   };
+  // Both default to the same process-wide env gate (\c eval::strict_fill_once,
+  // latched on its first call anywhere in the process) but are otherwise
+  // independent knobs; read \c cache's per-instance override here so a
+  // caller's \c set_strict_fill_once actually governs the registry's own
+  // fill-once check (\c CellRegistry::set), not just \c CacheManager's --
+  // deterministic regardless of when in the process this call happens.
+  registry_hooks.strict_fill_once = cache.strict_fill_once();
   CellRegistry registry(cell_table, std::move(registry_hooks));
   registry.seed_persistent();
   std::unordered_map<std::size_t, std::size_t> const cell_vid_of_hash = [&] {
