@@ -6,6 +6,8 @@
 #include <SeQuant/core/eval/cell_table.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <cstdlib>
+#include <iostream>
 
 #include <functional>
 #include <optional>
@@ -537,6 +539,19 @@ class CellReadResolver {
     // cached bool, so it can never drift from what the registry actually
     // holds.
     last_served_source_[*vid] = r.source;
+    // Diagnostic (SEQUANT_UT_READ_DIAG): every table-driven read, with its
+    // consumer cell, the value, the source cell and the declared slices.
+    if (static bool const read_diag = std::getenv("SEQUANT_UT_READ_DIAG");
+        read_diag) {
+      std::cerr << "[READ] consumer=" << consumer_ << " value=" << *vid
+                << " source=" << r.source << " src_kind="
+                << (src_cell.production.kind == ProductionKind::Build ? "Build"
+                    : src_cell.production.kind == ProductionKind::Assemble
+                        ? "Assemble"
+                        : "Leaf")
+                << " src_depth=" << src_cell.scope.path.size()
+                << " slices=" << r.slice.size() << std::endl;
+    }
     ResultPtr v = table_read(*reg_, r.source).value;
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
