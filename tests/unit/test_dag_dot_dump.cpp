@@ -9,7 +9,12 @@
 // edge are black.
 //
 //   SEQUANT_DOT_FOREST=<path> SEQUANT_DOT_DAG=<path> [SEQUANT_DOT_LABELS=1]
+//   [SEQUANT_DOT_COLLAPSE_SUMS=1] [SEQUANT_DOT_LATEX=<path>]
 //   unit_tests-sequant "[dot-dump]"
+//
+// SEQUANT_DOT_LATEX writes the forest as LaTeX: one display equation per
+// root, the head tensor equal to the optimized (factorized) expression, in
+// breqn's dmath* environments so long right-hand sides break automatically.
 //
 // With SEQUANT_DOT_LABELS set, nodes carry their value id as a label;
 // otherwise they are unlabeled dots.
@@ -73,6 +78,7 @@ TEST_CASE(
   REQUIRE(forest_path != nullptr);
   REQUIRE(dag_path != nullptr);
   bool const labels = std::getenv("SEQUANT_DOT_LABELS") != nullptr;
+  char const* const latex_path = std::getenv("SEQUANT_DOT_LATEX");
   // SEQUANT_DOT_COLLAPSE_SUMS: a chain of Sum nodes (an equation's binarized
   // summation spine, every link a one-time node) is drawn as its top node
   // only, with the term trees attached to it directly.
@@ -141,6 +147,42 @@ TEST_CASE(
     auto res = optimize_result(sum, opts);
     REQUIRE(res.expr);
     ResultExpr rexpr{make_head(eq.rank), res.expr};
+    if (latex_path) {
+      static std::ofstream tex;
+      if (!tex.is_open()) {
+        tex.open(latex_path);
+        REQUIRE(tex.good());
+        tex << "% forest of the optimized (factorized) equations; needs "
+               "\\usepackage{breqn}\n";
+      }
+      auto const w2s = [](std::wstring const& w) {
+        std::string out;
+        for (wchar_t c : w) {
+          if (c < 0x80) {
+            out += static_cast<char>(c);
+          } else {  // UTF-8 encode
+            unsigned int const u = static_cast<unsigned int>(c);
+            if (u < 0x800) {
+              out += static_cast<char>(0xC0 | (u >> 6));
+              out += static_cast<char>(0x80 | (u & 0x3F));
+            } else if (u < 0x10000) {
+              out += static_cast<char>(0xE0 | (u >> 12));
+              out += static_cast<char>(0x80 | ((u >> 6) & 0x3F));
+              out += static_cast<char>(0x80 | (u & 0x3F));
+            } else {
+              out += static_cast<char>(0xF0 | (u >> 18));
+              out += static_cast<char>(0x80 | ((u >> 12) & 0x3F));
+              out += static_cast<char>(0x80 | ((u >> 6) & 0x3F));
+              out += static_cast<char>(0x80 | (u & 0x3F));
+            }
+          }
+        }
+        return out;
+      };
+      tex << "\\begin{dmath*}\n"
+          << w2s(make_head(eq.rank).to_latex()) << " = "
+          << w2s(res.expr->to_latex()) << "\n\\end{dmath*}\n\n";
+    }
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     forest.push_back(binarize<EvalExprDryRun>(rexpr, BinarizationOptions{}));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -178,8 +220,24 @@ TEST_CASE(
   std::unordered_map<std::size_t, std::size_t> vid_of_hash;
   for (auto const& c : rich.cells) vid_of_hash.emplace(c.hash, c.value_id);
 
+  // Roots (the forest's trees, in order): drawn as labelled double circles on
+  // one rank in both pictures.
+  std::vector<std::pair<std::size_t, std::string>> root_labels;  // hash, label
+  for (std::size_t t = 0; t < forest.size(); ++t)
+    root_labels.push_back(
+        {forest[t]->hash_value(),
+         t == 0 ? std::string("E") : "R" + std::to_string(t)});
+  auto root_label_of = [&](std::size_t hash) -> std::string {
+    for (auto const& [h, l] : root_labels)
+      if (h == hash) return l;
+    return {};
+  };
   auto node_attrs = [&](std::size_t hash, bool leaf) -> std::string {
     std::string attrs;
+    if (auto const rl = root_label_of(hash); !rl.empty())
+      return "shape=doublecircle, width=0.34, height=0.34, fixedsize=true, "
+             "style=filled, fillcolor=white, color=black, label=\"" +
+             rl + "\", fontsize=11, fontname=\"Helvetica-Bold\"";
     auto const it = colour_of_hash.find(hash);
     if (!leaf && it != colour_of_hash.end())
       attrs = "style=filled, fillcolor=\"" + it->second + "\", color=\"" +
@@ -212,30 +270,36 @@ TEST_CASE(
     // emit(n, attach): draws n's subtree; when n is a Sum inside a Sum chain
     // and collapsing is on, n itself is skipped and its children attach to
     // `attach` (the chain's top node) instead.
-    std::function<void(EvalNodeDryRun const&, std::size_t)> emit_under;
+    // emit_under(child, parent, parent_is_sum): draws child's subtree under
+    // parent; a Sum child of a Sum parent is a link of a summation spine and,
+    // with collapsing on, is skipped -- its own children attach to parent.
+    std::function<void(EvalNodeDryRun const&, std::size_t, bool)> emit_under;
     std::function<std::size_t(EvalNodeDryRun const&)> emit =
         [&](EvalNodeDryRun const& n) -> std::size_t {
       std::size_t const id = counter++;
       out << "  n" << id << " [" << node_attrs(n->hash_value(), n.leaf())
           << "];\n";
       if (!n.leaf()) {
-        emit_under(n.left(), id);
-        emit_under(n.right(), id);
+        emit_under(n.left(), id, is_sum(n));
+        emit_under(n.right(), id, is_sum(n));
       }
       return id;
     };
-    emit_under = [&](EvalNodeDryRun const& child, std::size_t parent) {
-      if (collapse_sums && is_sum(child) && is_sum(forest.front()) && true) {
-        // a Sum whose parent is a Sum: collapse into the parent
-        emit_under(child.left(), parent);
-        emit_under(child.right(), parent);
+    emit_under = [&](EvalNodeDryRun const& child, std::size_t parent,
+                     bool parent_is_sum) {
+      if (collapse_sums && is_sum(child) && parent_is_sum) {
+        emit_under(child.left(), parent, true);
+        emit_under(child.right(), parent, true);
         return;
       }
       auto const cid = emit(child);
       out << "  n" << parent << " -> n" << cid << ";\n";
     };
-    for (auto const& tree : forest) emit(tree);
-    out << "}\n";
+    std::vector<std::size_t> root_ids;
+    for (auto const& tree : forest) root_ids.push_back(emit(tree));
+    out << "  {rank=same;";
+    for (std::size_t r : root_ids) out << " n" << r;
+    out << "}\n}\n";
     std::cerr << "[dot-dump] forest nodes=" << counter << " -> " << forest_path
               << "\n";
   }
@@ -281,7 +345,11 @@ TEST_CASE(
         out << "  v" << attach_point(parent) << " -> v" << o << ";\n";
         ++edges;
       }
-    out << "}\n";
+    out << "  {rank=same;";
+    for (auto const& [h, l] : root_labels)
+      if (auto const it = vid_of_hash.find(h); it != vid_of_hash.end())
+        out << " v" << it->second;
+    out << "}\n}\n";
     std::cerr << "[dot-dump] dag nodes=" << rich.cells.size()
               << " edges=" << edges << " -> " << dag_path << "\n";
   }
