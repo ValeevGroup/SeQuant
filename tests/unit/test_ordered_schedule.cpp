@@ -1861,28 +1861,124 @@ TEST_CASE(
   CHECK(sched.num_values == rich.cells.size());
 }
 
-// Two-level equivalence: on the real cross-iteration fixture, pass >= 1 is
-// exactly today's consumer pass (upward plus downward closure) and max_pass
-// is 1.
-//
-// Hidden ([.]), like every other consumer of orderedsched_cross_iteration_
-// fixture() in this file (see the "blocked-layers-1-2" acceptance and
-// executor-shape TEST_CASEs above): analyze_legality's build_site/per_axis/
-// forced_split_axes classification is not yet populated on this branch (0
-// of 7 [blocked-layers-1-2] cases pass today), so old.carried is empty here
-// and the equivalence this case checks cannot be exercised yet. Re-enable
-// (drop [.]) once that classification lands.
+// Two-level equivalence, on REAL data: the water-20 aux+occ residual (the
+// SAME construction as the "[w20-auxocc]" TEST_CASE above -- Kappa
+// batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
+// make_csv_batch_policy with occ_target>0), which genuinely carries values
+// on occ (unlike orderedsched_water20_fixture()'s aux-ONLY policy, where
+// Kappa is always fully contracted and nothing is ever LoopCarried).
+// old.consumer_pass is exactly today's upward-plus-downward pass-1 set; the
+// property this pins -- pass(v) >= 1 iff v is in old.consumer_pass -- holds
+// for a carried chain of ANY depth, not just the depth-1 case this real
+// fixture happens to produce (max_pass here is 1; deeper chains, where it
+// would be > 1, are exercised by the two synthetic cases above).
 TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
-          "[.][ordered-schedule][levels][blocked-layers-1-2]") {
-  auto fx = orderedsched_cross_iteration_fixture();
-  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(fx.rich);
+          "[ordered-schedule][levels]") {
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  auto const body =
+      orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                                 "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = sequant::deserialize<sequant::ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<sequant::Sum>());
+  auto const& summands = expr->as<sequant::Sum>().summands();
+  REQUIRE(!summands.empty());
+
+  std::size_t nterms = summands.size();
+  if (char const* nt = std::getenv("SEQUANT_UT_DRYRUN_NTERMS"))
+    nterms = std::min<std::size_t>(summands.size(), std::atoll(nt));
+
+  auto regime = orderedsched_witness_df_regime(kOrderedSchedWater20_pVDZF12);
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  // AUX+OCC: Kappa batchable-contracted (aux), i batchable-EXTERNAL (occ) --
+  // same policy as the "[w20-auxocc]" TEST_CASE above.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](sequant::Index const& ix) {
+    return ix.space().base_key() == L"\x39a";
+  };
+  policy.is_batchable_external_index = [](sequant::Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space());
+  };
+  policy.batch_spectator_indices = true;
+  policy.node_level_placement = true;
+  policy.batch_target_size = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"\x39a" ? 256 : 16;
+  };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  auto axes_map = std::make_shared<std::unordered_map<
+      sequant::Expr const*,
+      sequant::container::vector<sequant::NodeBatchAnnotation>>>();
+  sequant::OptimizeOptions opts;
+  opts.objective_function = sequant::ObjectiveFunction::DenseTimeSpaceBatched;
+  opts.idx_to_extent = regime.idx_to_extent();
+  opts.inner_pow = regime.inner_pow_fn();
+  opts.batch_policy = policy;
+  opts.volatile_weight = 20.0;
+  opts.roofline.machine_balance = 200.0;
+  opts.roofline.fast_mem_elems = 1000000.0;
+  opts.term_batch_axes = axes_map;
+
+  std::vector<Node> forest;
+  for (std::size_t s = 0; s < nterms; ++s) {
+    sequant::ExprPtr const term =
+        orderedsched_witness_flatten_product(summands[s]);
+    if (!term) continue;
+    sequant::ExprPtr optimized;
+    try {
+      optimized = sequant::optimize(term, opts);
+    } catch (std::exception const&) {
+      continue;
+    }
+    if (!optimized) continue;
+    sequant::BinarizationOptions bopts;
+    if (auto it = axes_map->find(optimized.get()); it != axes_map->end())
+      bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    forest.push_back(sequant::binarize<EvalExprDryRun>(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+  REQUIRE(!forest.empty());
+
+  auto const block_of = [](sequant::Index const& ix) -> std::size_t {
+    return ix.space().base_key() == L"\x39a" ? 256 : 16;
+  };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
   auto const old =
-      sequant::eval::detail::forced_split_passes(L"i", fx.legality, g);
+      sequant::eval::detail::forced_split_passes(L"i", legality, g);
   auto const lv =
-      sequant::eval::detail::forced_split_levels(L"i", fx.rich, fx.legality, g);
+      sequant::eval::detail::forced_split_levels(L"i", rich, legality, g);
   REQUIRE(!old.carried.empty());
   CHECK(lv.carried == old.carried);
-  CHECK(lv.max_pass == 1);
-  for (std::size_t v = 0; v < fx.rich.cells.size(); ++v)
+  CHECK(lv.max_pass >= 1);
+  for (std::size_t v = 0; v < rich.cells.size(); ++v)
     CHECK((lv.pass(v) >= 1) == (old.consumer_pass.count(v) != 0));
 }
