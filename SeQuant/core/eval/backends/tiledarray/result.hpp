@@ -753,31 +753,17 @@ class ResultTensorOfTensorTA final : public Result {
     ::sequant::detail::note_fence();
   }
 
-  /// KNOWN DEFECT: this allocating addition does NOT treat an operand whose
-  /// inner tiles are all empty (\c tot_inner_rank() == 0) as the additive
-  /// identity -- the expression add below propagates those empty inner tiles
-  /// into the result and so ANNIHILATES the other addend, even when that one
-  /// holds data. \c add_inplace() below does not have this hole: it takes an
-  /// explicit \c tot_inner_rank() == 0 branch and returns the accumulator
-  /// untouched. An all-empty nested operand is a normal, correct intermediate
-  /// (e.g. a scatter destination whose per-batch partials were all zero this
-  /// iteration), so the two implementations of one addition disagree on real
-  /// data, and which of them a caller reaches is a LIFETIME decision (\c
-  /// evaluate_impl's in-place accumulation gate), never a numerical one. This
-  /// was the mechanism behind a not-a-number result norm in an
-  /// application-driven nested-array evaluation (an iterative solver's
-  /// residual over batched nested arrays) once in-place accumulation stopped
-  /// being eligible: the whole result came back with no data at all, and its
-  /// norm is then 0/0 (see SeQuant 965e420b8, which fixed the eligibility,
-  /// not this).
-  ///
-  /// The intended fix is a guard here mirroring \c add_inplace()'s -- return
-  /// the surviving addend permuted into this node's layout -- but it is NOT
-  /// applied yet: it awaits a nested-array reproduction. A fixture over
-  /// \c TA::DistArray<TA::Tensor<TA::Tensor<double>>> does NOT reproduce the
-  /// annihilation (it already behaves as the identity there); the nested
-  /// arrays an application actually builds do. Do not ship the guard on the
-  /// strength of a fixture that passes without it.
+  /// Allocating addition. For nested arrays an addend whose inner tiles are
+  /// all empty must act as the additive identity; that was once NOT the case
+  /// (the empty inner tiles propagated into the result and annihilated the
+  /// other addend, which surfaced as a not-a-number norm in an iterative
+  /// nested-array evaluation once in-place accumulation stopped being
+  /// eligible). The cause was in TiledArray's arena nested-tensor addition,
+  /// which dropped populated cells against a null-cell operand; it is fixed
+  /// upstream (TiledArray pull request 575, merge 55795e180), which is the
+  /// pinned TiledArray from SeQuant 7509b0d90 on. No guard is needed here;
+  /// \c add_inplace() keeps its explicit empty-accumulator branch for the
+  /// in-place path.
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
