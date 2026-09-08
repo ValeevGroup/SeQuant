@@ -424,6 +424,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     }
   }  // SECTION("rdm")
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("extra singles commutators") {
     // hbar_singles_comm_rank wraps H̄_R with a factored t1 similarity transform
     // to order K:  H̄ = Σ_a (1/a!) [H̄_R, t1−t1†]_a.
@@ -460,7 +461,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
           ex<Constant>(rational{1, 2}) * comm(comm(hbar_R, sigma1), sigma1);
       REQUIRE_THAT(CC(N, k2).hbar(), EquivalentTo(expected));
     }
-  }  // SECTION("extra singles commutators")
+  }     // SECTION("extra singles commutators")
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};
@@ -495,11 +497,14 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   }
 
   SECTION("EOM assembly") {
-    const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
     const auto ee_np = nₚ(2);
     const auto ee_nh = nₕ(2);
     const std::vector<std::size_t> uniform_ranks = {2, 2, 2, 2};
 
+    REQUIRE_THROWS_AS(CC(2).eom_r(ee_np, ee_nh, uniform_ranks), Exception);
+
+#ifndef SEQUANT_SKIP_LONG_TESTS
+    const auto ucc = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
     const auto uniform = ucc.eom_r(ee_np, ee_nh);
     const auto blocked = ucc.eom_r(ee_np, ee_nh, uniform_ranks);
     REQUIRE(!uniform.at(0));
@@ -511,7 +516,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto mixed = ucc.eom_r(ee_np, ee_nh, {2, 1, 2, 2});
     REQUIRE_THAT(mixed.at(1), !EquivalentTo(uniform.at(1)));
     REQUIRE_THAT(mixed.at(2), EquivalentTo(uniform.at(2)));
-    REQUIRE_THROWS_AS(CC(2).eom_r(ee_np, ee_nh, uniform_ranks), Exception);
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
   SECTION("EE-EOM-CCSD L") {
