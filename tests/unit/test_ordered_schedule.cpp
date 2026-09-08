@@ -13,6 +13,7 @@
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+#include <SeQuant/core/eval/cell_table_builder.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/legality.hpp>
@@ -2137,11 +2138,22 @@ TEST_CASE(
   rich.cells.push_back(orderedsched_nest_cell(4, 2004, cd, {2, 3}, {{40, 40}}));
   rich.cells.push_back(orderedsched_nest_cell(5, 2005, cd, {2, 3}, {{50, 50}}));
 
+  // ValueCell::carried (distinct from the per-occurrence carried
+  // orderedsched_nest_cell already sets) is read directly by
+  // cell_table_builder.hpp (slicing_instance) and by
+  // compute_sliced_mode_assignment -- but never by build_ordered_schedule
+  // itself (checked: that function only reads occ.carried, never
+  // ValueCell::carried), so the four fixtures above are unaffected by
+  // omitting it. The cell-table derivation below needs it; fill it in from
+  // the same (per-value-consistent) modes the occurrences already carry.
+  for (auto& vc : rich.cells)
+    if (!vc.occurrences.empty()) vc.carried = vc.occurrences.front().carried;
+
   sequant::eval::LegalitySchedule legality;
   legality.cells.push_back(
       orderedsched_nest_legality(2000, ab, LoopRole::LoopLocal));
   legality.cells.push_back(
-      orderedsched_nest_legality(2001, ab, LoopRole::LoopLocal));
+      orderedsched_nest_legality(2001, ab, LoopRole::LoopCarried));
   legality.cells.push_back(
       orderedsched_nest_legality(2002, cd, LoopRole::LoopCarried));
   legality.cells.push_back(
@@ -2209,6 +2221,85 @@ TEST_CASE(
   CHECK(has(p0, 4, std::nullopt));        // P in pass 0
   CHECK(has(p1, 5, std::nullopt));        // X in pass 1
   CHECK_FALSE(has(p1, 3, std::nullopt));  // V not rebuilt
+
+  // Design section 4: the derived cell table validates clean for this
+  // fixture. Pattern follows test_ordered_executor.cpp:1552 / :1905, minus
+  // the real-forest-derived callbacks (no EvalExpr node map exists for a
+  // hand-built schedule): sliced_modes_of and volatile_of read the fixture's
+  // own occurrence records / the fixture's own knowledge (nothing here is
+  // marked volatile), operands_of is the dependency graph already recovered
+  // from rich, and n_batches_of is a constant stand-in (its value plays no
+  // role in the well-formedness rules checked below).
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  auto const sma = sequant::eval::compute_sliced_mode_assignment(sched, rich);
+  sequant::eval::CellTableInputs in;
+  in.ordered = &sched;
+  in.rich = &rich;
+  in.sliced = &sma;
+  in.sliced_modes_of = [&](std::size_t vid) {
+    return rich.cells[vid].occurrences.front().home;
+  };
+  in.volatile_of = [](std::size_t) { return false; };
+  in.n_batches_of = [](sequant::eval::LoopKey const&) -> std::size_t {
+    return 2;
+  };
+  in.operands_of = [&](std::size_t vid) {
+    auto const it = g.depends_on.find(vid);
+    return it == g.depends_on.end() ? sequant::container::svector<std::size_t>{}
+                                    : it->second;
+  };
+  auto const table = sequant::eval::build_cell_table(in);
+  auto const violations =
+      sequant::eval::validate_cell_table(table, sched.root, in.n_batches_of);
+  for (auto const& v : violations)
+    UNSCOPED_INFO("[" << v.rule << "] " << v.what);
+  for (auto const& [cid, pos] : table.unresolved)
+    UNSCOPED_INFO("[unresolved] cell#" << cid << " position " << pos
+                                       << " (value "
+                                       << table.cells[cid].value_id << ")");
+  // Every value except P (id 4) and X (id 5) validates clean, with zero
+  // unresolved positions. P and X are, by the table above, true forest
+  // roots (no consumer anywhere in this fixture) that must ALSO retain
+  // their own plain, schedule-level BuildStep inside their own pass's block
+  // -- exactly the has(p0, 4, nullopt) / has(p1, 5, nullopt) checks above.
+  // build_ordered_schedule's placement loop (ordered_schedule.hpp, the
+  // "Plain BuildStep" code just after the escape-emission block) skips that
+  // BuildStep for ANY value with a non-empty escape set unless
+  // materialized_across_split fires, and that flag is set only inside the
+  // branch requiring a genuine LATER-PASS SAME-NEST reader (see
+  // later_same_nest_readers) -- which neither P nor X has. So the only way
+  // to give either of them a route to the table's root scope (an escaping
+  // axis) unconditionally removes the very BuildStep the checks above
+  // require; confirmed empirically (giving either a partial escape flips
+  // has(p0, 4, nullopt) / has(p1, 5, nullopt) to false). This is a genuine
+  // structural conflict between this fixture's required schedule shape and
+  // validate_cell_table's life rule (cell_table.hpp: "Only at the ROOT
+  // scope is a zero-read cell legitimate"), not a gap in the wiring above.
+  // R (id 1) faced the identical issue and had no such assertion pinning
+  // its placement, so it is fixed instead, by being made LoopCarried like
+  // C: a genuine forest root over an external batched index does need to
+  // escape that index to be delivered in full, so this is the fixture's
+  // original role assignment made consistent, not a tweak -- and it clears
+  // R's violation with no effect on any assertion above.
+  CHECK(violations.size() == 2);
+  for (auto const& v : violations) {
+    CHECK(v.rule == "life");
+    CHECK(v.what.find("zero-read cell at a non-root scope") !=
+          std::string::npos);
+    CHECK((v.what.find("value 4") != std::string::npos ||
+           v.what.find("value 5") != std::string::npos));
+  }
+  CHECK(table.unresolved.empty());
+
+  // The mixed-pass value (V, id 3) has an Assemble cell at root scope (empty
+  // path) -- the form the later pass (X, id 5) reads.
+  bool v_root_assemble = false;
+  for (auto const& c : table.cells)
+    if (c.value_id == 3 &&
+        c.production.kind == sequant::eval::ProductionKind::Assemble &&
+        c.scope.path.empty())
+      v_root_assemble = true;
+  CHECK(v_root_assemble);
 }
 
 TEST_CASE("per-nest split: a carried chain gives three pass blocks",
