@@ -1525,6 +1525,34 @@ inline ForkedSubchain fork_subchain(
     // in which case the deepest site on that chain is the true production
     // site and home's rule-4 escape is pure forwarding, like any other link
     // in the chain.
+    // Invariant: a value reduced over a loop instance (an AccumulateSum
+    // escape at depth d) is complete only after that loop closes; a reader
+    // produced INSIDE that instance (production depth at or below d in the
+    // same nest) in the SAME pass would be served the current batch's partial
+    // sum. Such a reader needs a later pass of the loop (a forced split on
+    // the reduced instance), which the pass levels do not yet provide; reject
+    // loudly rather than emit the silent partial read.
+    for (auto const& [d, kind] : escapes) {
+      if (kind != OutputKind::AccumulateSum) continue;
+      auto const cons_it = g.consumers_of.find(vid);
+      if (cons_it == g.consumers_of.end()) continue;
+      for (std::size_t u : cons_it->second) {
+        auto const uit = cl_by_vid.find(u);
+        if (uit == cl_by_vid.end()) continue;
+        auto const pd = production_depth(*uit->second);
+        if (!pd || *pd < d || type_cluster[*pd] != type_cluster[d]) continue;
+        if (pass_of(u) != pass_of(vid)) continue;
+        throw Exception(
+            "build_ordered_schedule: value " + std::to_string(vid) +
+            " is reduced over the loop at depth " + std::to_string(d) +
+            " but value " + std::to_string(u) +
+            " reads it inside that loop in the same pass (pass " +
+            std::to_string(pass_of(u)) +
+            "): the read would see a partial sum; a reader of a reduction "
+            "inside its own loop needs a later pass of that loop "
+            "(unsupported)");
+      }
+    }
     std::optional<std::size_t> build_depth = home_depth;
     if (!escapes.empty()) {
       for (auto const& [d, kind] : escapes)
