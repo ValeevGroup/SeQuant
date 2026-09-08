@@ -1198,9 +1198,10 @@ inline ForkedSubchain fork_subchain(
     return target;
   };
 
-  // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for a rule-4 rejection:
-  // print the value's axes with roles/slots/depths, its later-pass readers,
-  // and the forced-split axis's carried set, each with home depth and nest.
+  // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for the outside-nest
+  // tripwire rejection (rule 4 itself no longer rejects loudly): print the
+  // value's axes with roles/slots/depths, its later-pass readers, and the
+  // forced-split axis's carried set, each with home depth and nest.
   auto const dump_reject = [&](std::size_t v0, std::size_t nest,
                                container::svector<std::size_t> const& readers) {
     auto const role_str = [](LoopRole r) -> wchar_t const* {
@@ -1347,15 +1348,16 @@ inline ForkedSubchain fork_subchain(
       }
     }
 
-    // MIXED-PASS MEMBER (per-nest forced split design, section 3.3). A
-    // same-nest, later-pass reader is the only reader that can see a
-    // per-batch slice from another traversal of the nest: a reader outside
-    // the nest or at root is never LoopLocal on the value and is served by
-    // the value's role-driven escapes. Such a member keeps its BuildStep and
-    // is scattered to full at every level of its nest it is LoopLocal on,
-    // from its home out to the nest's outermost depth, so the later pass
-    // reads the full form at root. The chain is measured in the value's OWN
-    // nest; a chain that cannot reach root is rejected loudly (below).
+    // MIXED-PASS MEMBER (per-nest forced split design, sections 3.3 and 7).
+    // A reader of a later pass produced inside this value's nest is the only
+    // reader that can see a per-batch slice from another traversal; it must
+    // read a full form that resides at root. The value keeps its Build step
+    // at its production site and gains an AccumulateScatter escape at every
+    // instance of its nest it is loop-local on and no role already escapes
+    // (a reduced instance sums, a carried one scatters). Every instance the
+    // value is sliced by is then escaped, so the outermost assembled form is
+    // bound to no enclosing instance and the table's residency rule places
+    // it at root; a level the value is invariant to is simply skipped.
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
     // Direct readers PRODUCED in the same nest with a later pass. Nest
@@ -1376,64 +1378,59 @@ inline ForkedSubchain fork_subchain(
       }
       return out;
     };
-    if (escapes.empty() && levels && home_depth) {
+    if (levels && home_depth) {
       std::size_t const nest = type_cluster[*home_depth];
       auto const readers = later_same_nest_readers(nest);
       if (!readers.empty()) {
+        // RULE 4 (section 7.3): escape every instance of this nest the
+        // value is loop-local on and not already escaped by a role; a role
+        // escape already sums (Reduction) or scatters (LoopCarried) that
+        // instance, so it is left as-is, and an instance the value is
+        // invariant to (its depth does not resolve, or resolves outside
+        // this nest) is simply skipped -- completeness then falls out for
+        // free, since the value is sliced by exactly the instances this
+        // loop escapes.
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-          if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
           std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
           int const fs = fusion_slot(cl, pos);
           auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
-          if (!d || type_cluster[*d] != nest || *d > *home_depth) continue;
+          if (!d || type_cluster[*d] != nest) continue;
           auto it = std::find_if(escapes.begin(), escapes.end(),
                                  [&](auto const& e) { return e.first == *d; });
-          if (it == escapes.end())
-            escapes.push_back({*d, OutputKind::AccumulateScatter});
-          else
-            it->second = OutputKind::AccumulateScatter;
-          materialized_across_split = true;
-        }
-        // Every level of the nest from the home out to the outermost depth
-        // must be escaped; a level the value is invariant to would end the
-        // chain inside the nest, invisible to the later pass.
-        std::size_t const outermost = cluster_min.at(nest);
-        for (std::size_t d = outermost; d <= *home_depth; ++d) {
-          if (type_cluster[d] != nest) continue;
-          bool const escaped =
-              std::any_of(escapes.begin(), escapes.end(),
-                          [&](auto const& e) { return e.first == d; });
-          if (!escaped) {
-            if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
-              dump_reject(vid, nest, readers);
+          if (cl.per_axis[pos].role == LoopRole::LoopLocal) {
+            if (it == escapes.end()) {
+              escapes.push_back({*d, OutputKind::AccumulateScatter});
+              materialized_across_split = true;
+            }
+          } else if (it == escapes.end()) {
+            // Should be impossible: every non-LoopLocal per_axis mode was
+            // already pushed into escapes, for every depth it resolves to,
+            // by the role loop above.
             throw Exception(
                 "build_ordered_schedule: value " + std::to_string(vid) +
-                " (pass " + std::to_string(pass_of(vid)) +
-                ") is read by value " + std::to_string(readers.front()) +
-                " (pass " + std::to_string(pass_of(readers.front())) +
-                ") in a later pass of its nest (outermost depth " +
-                std::to_string(outermost) +
-                ") but is invariant to that nest's loop at depth " +
-                std::to_string(d) +
-                ": its escape chain cannot reach root (unsupported: hoisting "
-                "an invariant assembled form)");
+                " is read by value " + std::to_string(readers.front()) +
+                " in a later pass of its nest, but its instance at depth " +
+                std::to_string(*d) +
+                " is neither loop-local nor escaped by a role");
           }
         }
       } else {
         // TRIPWIRE (controller ruling I3; reader test corrected by ruling
-        // I4): a value with no role-driven escape is LoopLocal on every
-        // axis, so legality promises no reader outside its own nest --
-        // every reader either sits in this same nest (handled above) or is
-        // served by an escape this value does not have. A direct later-pass
-        // reader whose production site RESOLVES to outside this nest (root,
-        // or a sibling nest) breaks that promise: legality and the schedule
-        // disagree, and silently building would read this value's per-batch
-        // home form from a scope that cannot see it. "Produced outside this
-        // nest" is decided by production_depth, not by local_home_depth: a
-        // reader with only carried/reduction roles -- a forest root
-        // delivered in full, or a carried value of a later pass -- is still
-        // produced per batch inside its own nest, so it must not
-        // spuriously trip this guard.
+        // I4, applied regardless of role-driven escapes per section 7.3):
+        // this value has at least one nest instance it is loop-local on
+        // (home_depth resolved) and, with no same-nest later-pass reader,
+        // rule 4 above does not fire for it -- that instance is never
+        // escaped, so no coherent full form of this value is ever
+        // assembled, whether or not some OTHER axis of it is role-escaped.
+        // A direct later-pass reader whose production site RESOLVES to a
+        // nest other than this one is the reader's location, not this
+        // value's escapes: it cannot see the per-batch home form, and
+        // legality and the schedule disagree. "Produced outside this nest"
+        // is decided by production_depth, not by local_home_depth: a reader
+        // with only carried/reduction roles -- a forest root delivered in
+        // full, or a carried value of a later pass -- is still produced per
+        // batch inside its own nest, so it must not spuriously trip this
+        // guard.
         //
         // production_depth never guesses: a reader whose production depth
         // does NOT resolve at all (every one of its modes has an
@@ -1459,67 +1456,54 @@ inline ForkedSubchain fork_subchain(
             if (type_cluster[*uh] == nest) continue;  // same nest: n/a
             if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
               dump_reject(vid, nest, container::svector<std::size_t>{u});
-            throw Exception(
-                "build_ordered_schedule: value " + std::to_string(vid) +
-                " (pass " + std::to_string(pass_of(vid)) +
-                ") has only loop-local roles but is read by value " +
-                std::to_string(u) + " (pass " + std::to_string(pass_of(u)) +
-                ") outside its nest (outermost depth " +
-                std::to_string(cluster_min.at(nest)) +
-                "): legality and the schedule disagree");
+            throw Exception("build_ordered_schedule: value " +
+                            std::to_string(vid) + " (pass " +
+                            std::to_string(pass_of(vid)) +
+                            ") is read by value " + std::to_string(u) +
+                            " (pass " + std::to_string(pass_of(u)) +
+                            ") outside its nest (outermost depth " +
+                            std::to_string(cluster_min.at(nest)) +
+                            "): legality and the schedule disagree");
           }
-      }
-    } else if (!escapes.empty() && levels && home_depth) {
-      // A role-escaping value whose chain ends INSIDE its nest (its
-      // outermost escaped level is not the nest's outermost depth) with a
-      // same-nest later-pass reader: the assembled form is invisible to that
-      // pass. Rejected loudly (parent design section 8.2's parked case).
-      std::size_t const nest = type_cluster[*home_depth];
-      std::size_t d_min = escapes.front().first;
-      for (auto const& [d, kind] : escapes) {
-        (void)kind;
-        d_min = std::min(d_min, d);
-      }
-      if (type_cluster[d_min] == nest && d_min != cluster_min.at(nest)) {
-        auto const readers = later_same_nest_readers(nest);
-        if (!readers.empty()) {
-          if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
-            dump_reject(vid, nest, readers);
-          throw Exception(
-              "build_ordered_schedule: value " + std::to_string(vid) +
-              " (pass " + std::to_string(pass_of(vid)) +
-              ") escapes only to depth " + std::to_string(d_min) +
-              " inside its nest (outermost depth " +
-              std::to_string(cluster_min.at(nest)) + ") but is read by value " +
-              std::to_string(readers.front()) + " (pass " +
-              std::to_string(pass_of(readers.front())) +
-              ") in a later pass of that nest (unsupported: an inner "
-              "escape read across passes)");
-        }
       }
     }
 
+    // Where the value's plain BuildStep sits: \c home_depth (the INNERMOST
+    // loop it is LoopLocal on), UNLESS it is materialized across the split
+    // (below) and its escape chain reaches deeper than that -- a role
+    // escape nested inside the LoopLocal home (a Reduction axis, say) --
+    // in which case the deepest site on that chain is the true production
+    // site and home's rule-4 escape is pure forwarding, like any other link
+    // in the chain.
+    std::optional<std::size_t> build_depth = home_depth;
     if (!escapes.empty()) {
       for (auto const& [d, kind] : escapes)
         buckets[d].outputs.push_back({vid, kind});
       // A value that escapes by its OWN per-axis roles has no BuildStep: its
-      // production is the accumulation itself. One materialized across the
-      // split by the rule above is different -- it is an ordinary LoopLocal
-      // value that ALSO has same-pass consumers, which read it inside its own
-      // nest, per batch. It keeps its BuildStep at its home block, so that
+      // production is the accumulation itself, at the DEEPEST escape site
+      // (the multi-level chain's bottom-up assembly: raw production at the
+      // deepest site, pure forwarding at every shallower one). One
+      // materialized across the split by rule 4 above is different: it IS
+      // produced, at the deepest site of its full chain (role escapes and
+      // the rule-4 scatter together), which same-pass consumers read inside
+      // its own nest, per batch. It keeps its BuildStep there, so that
       // block both BUILDS it (for its same-pass in-nest readers, and as the
-      // per-batch input of its own escape) and lists it as an output (for the
-      // later-pass reader). `well_formed` admits exactly this shape: every
-      // block that lists it either holds its BuildStep or is an ancestor of
-      // the one that does.
+      // per-batch input of the rest of its chain) and lists it as an output
+      // (for the later-pass reader). `well_formed` admits exactly this
+      // shape: every block that lists a value in `outputs` either holds its
+      // BuildStep or is an ancestor of the one that does -- always true
+      // here since the BuildStep sits at the chain's deepest site and every
+      // other site is, by construction, an ancestor of it.
       if (!materialized_across_split) continue;
+      for (auto const& [d, kind] : escapes) {
+        (void)kind;
+        if (!build_depth || d > *build_depth) build_depth = d;
+      }
       materialized_across_split_ids.push_back(vid);
     }
 
-    // Plain BuildStep: home at the INNERMOST loop the value is LoopLocal on
-    // (\c local_home_depth, computed above as \c home_depth).
-    if (home_depth)
-      buckets[*home_depth].build_ids.push_back(vid);
+    if (build_depth)
+      buckets[*build_depth].build_ids.push_back(vid);
     else
       root_build_ids.push_back(vid);
   }
