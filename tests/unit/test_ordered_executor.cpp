@@ -2536,11 +2536,18 @@ TEST_CASE(
                     kPaoBlock = env_size("SEQUANT_UT_DRYRUN_PAO_TS", 256);
 
   sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [batch_aux,
-                                          batch_pao](sequant::Index const& ix) {
-    return (batch_aux && ix.space().base_key() == L"Κ") ||
-           (batch_pao && ix.space().base_key() == L"μ̃");
-  };
+  // SEQUANT_UT_DRYRUN_OCC_CONTRACTED=1: the occupied space is ALSO a batchable
+  // CONTRACTED index (MPQC wires occupied batching for external indices only),
+  // so a consumer that contracts an occupied pair can loop over it in batches
+  // instead of reading the producer's whole assembled value.
+  bool const occ_contracted =
+      batch_occ && std::getenv("SEQUANT_UT_DRYRUN_OCC_CONTRACTED") != nullptr;
+  policy.is_batchable_contracted_index =
+      [batch_aux, batch_pao, occ_contracted](sequant::Index const& ix) {
+        return (batch_aux && ix.space().base_key() == L"Κ") ||
+               (batch_pao && ix.space().base_key() == L"μ̃") ||
+               (occ_contracted && ix.space().base_key() == L"i");
+      };
   policy.is_batchable_external_index = [batch_occ](sequant::Index const& ix) {
     return batch_occ && ix.space().base_key() == L"i";
   };
@@ -2907,7 +2914,9 @@ TEST_CASE(
              << L", warm-iter needed_build-skipped {Κ}-block BuildSteps="
              << warm_skipped << L", peak_threshold=" << std::scientific
              << policy.peak_threshold << L" B, blocks aux/occ/pao=" << kAuxBlock
-             << L"/" << kOccBlock << L"/" << kPaoBlock << L" ===\n";
+             << L"/" << kOccBlock << L"/" << kPaoBlock
+             << (occ_contracted ? L", occ also CONTRACTED-batchable" : L"")
+             << L" ===\n";
   pr(L"forest  iter1 (cold)", f1);
   pr(L"forest  iter2 (warm)", f2);
   if (ordered_ok) {
