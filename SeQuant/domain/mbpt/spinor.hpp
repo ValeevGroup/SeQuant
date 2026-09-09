@@ -103,11 +103,17 @@ inline bool has_conj_suffix(std::wstring_view label) {
 /// @param drop_mixed_kramers_fock if true, discard every emitted term carrying
 ///        a Fock element between opposite Kramers partners (see
 ///        drop_mixed_kramers_fock_terms); default false.
+/// @param internal_union if true, do NOT enumerate the Kramers flavours at
+///        all: every index stays spin-free, i.e. the UNION of its ↑ and ↓
+///        flavours, so the single union expression IS the complete
+///        configuration sum (real by construction; no T-pair fold, no
+///        `RealPart`). The consumer serves union-legged leaves. Ignores
+///        @p fold_T and @p drop_mixed_kramers_fock.
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {},
     bool fold_T = true, bool expand_g = true,
-    bool drop_mixed_kramers_fock = false);
+    bool drop_mixed_kramers_fock = false, bool internal_union = false);
 
 // clang-format off
 /// @brief Orbits of the n-bit Kramers configurations under a group of bit
@@ -274,10 +280,18 @@ enum class KramersAExpansion {
 ///        KramersAExpansion. Default: full (every emitted block is the
 ///        antisymmetrized residual; external configs fold under the swap
 ///        generators + T).
+/// @param internal_union if true, skip the internal fold (stage 2b): the
+///        externals are labelled per orbit representative as before, the
+///        INTERNAL (contracted) indices stay spin-free -- each is the UNION
+///        of its ↑ and ↓ flavours, so one union term equals the sum over the
+///        2^k internal flavour configurations. The consumer serves
+///        union-legged leaves (amplitudes as block concatenations of their
+///        flavour blocks, integrals over the union space).
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(
     const ExprPtr& expr, bool expand_g = false, bool use_T = true,
     bool drop_mixed_kramers_fock = false,
-    KramersAExpansion a_expansion = KramersAExpansion::full);
+    KramersAExpansion a_expansion = KramersAExpansion::full,
+    bool internal_union = false);
 
 // clang-format off
 /// @brief Drop every term containing a Fock (`f`) element between opposite

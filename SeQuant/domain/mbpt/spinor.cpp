@@ -414,7 +414,8 @@ ExprPtr restrict_antisymmetrizer(const ExprPtr& expr, bool keep_bra,
 
 container::svector<ExprPtr> closed_shell_kramers_CC_trace(
     const ExprPtr& expr, bool expand_g, bool use_T,
-    bool drop_mixed_kramers_fock, KramersAExpansion a_expansion) {
+    bool drop_mixed_kramers_fock, KramersAExpansion a_expansion,
+    bool internal_union) {
   // Stage 1: factor out the antisymmetrizer Â (kept, not expanded). Its bra/ket
   // are the external virtual/occupied index groups.
   auto A = find_antisymmetrizer(expr);
@@ -583,12 +584,17 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
       return sum;
     };
 
-    if (block->is<Sum>()) {
-      auto folded = std::make_shared<Sum>();
-      for (const auto& summand : *block) folded->append(fold_term(summand));
-      block = folded;
-    } else {
-      block = fold_term(block);
+    // internal_union: the internals stay spin-free (each the union of its
+    // two flavours); one union term equals the 2^k-configuration sum, so
+    // there is nothing to enumerate
+    if (!internal_union) {
+      if (block->is<Sum>()) {
+        auto folded = std::make_shared<Sum>();
+        for (const auto& summand : *block) folded->append(fold_term(summand));
+        block = folded;
+      } else {
+        block = fold_term(block);
+      }
     }
 
     canonicalize(block);  // sigma merge + dummy canonicalization
@@ -611,7 +617,8 @@ container::svector<ExprPtr> closed_shell_kramers_CC_trace(
 ExprPtr closed_shell_kramers_trace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    bool fold_T, bool expand_g, bool drop_mixed_kramers_fock) {
+    bool fold_T, bool expand_g, bool drop_mixed_kramers_fock,
+    bool internal_union) {
   if (expr->is<Constant>() || expr->is<Variable>()) return expr;
 
   // Step 0/6: optionally expand the integral `g`'s antisymmetry (Kramers-free,
@@ -637,12 +644,19 @@ ExprPtr closed_shell_kramers_trace(
   if (traced_input->is<Sum>()) {
     auto out = std::make_shared<Sum>();
     for (const auto& summand : traced_input->as<Sum>().summands())
-      out->append(closed_shell_kramers_trace(summand, ext_index_groups, fold_T,
-                                             /*expand_g=*/false));
+      out->append(closed_shell_kramers_trace(
+          summand, ext_index_groups, fold_T,
+          /*expand_g=*/false, drop_mixed_kramers_fock, internal_union));
     ExprPtr result{out};
     flatten(result);
     return mark_kramers_symmetric(result);
   }
+
+  // internal_union: every index stays spin-free (the union of its two
+  // flavours), so the single union expression IS the complete configuration
+  // sum -- no enumeration, no T-pair fold (the union sum is real by
+  // construction), nothing to drop
+  if (internal_union) return mark_kramers_symmetric(traced_input);
 
   // Steps 1-2: classify indices and build groups (each internal index its own
   // group; external groups appended verbatim). No Ms / rank assumptions.

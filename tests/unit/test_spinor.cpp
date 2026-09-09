@@ -638,6 +638,105 @@ TEST_CASE("kramers_transform_bit_engine", "[orbit-transform]") {
   }
 }
 
+TEST_CASE("kramers_trace_internal_union", "[spinor][kramers][union]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using sequant::reserved::antisymm_label;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  // the number of Kramers-FLAVOURED indices a term uses (a union index --
+  // the spin-free union of ↑ and ↓ -- carries no flavour)
+  auto n_flavoured = [](const ExprPtr& term) {
+    std::size_t n = 0;
+    for (const auto& idx :
+         get_used_indices<container::set<Index, Index::LabelCompare>>(term))
+      if (to_spin(idx.space().qns()) != Spin::any) ++n;
+    return n;
+  };
+  auto n_terms = [](const ExprPtr& e) {
+    return e->is<Sum>() ? e->size() : std::size_t{1};
+  };
+  auto for_each_term = [](const ExprPtr& e, auto&& f) {
+    if (e->is<Sum>())
+      for (const auto& t : *e) f(t);
+    else
+      f(e);
+  };
+  auto count_realparts = [](const ExprPtr& expr) {
+    std::size_t n = 0;
+    expr->visit(
+        [&n](const ExprPtr& current) {
+          if (current->is<RealPart>()) ++n;
+        },
+        /* atoms_only = */ false);
+    return n;
+  };
+
+  SECTION("CC residual: the internal indices stay the union (spin-free)") {
+    // pp-ladder: 1/2 Â^{a1a2}_{i1i2} g^{a1a2}_{a3a4} t^{a3a4}_{i1i2};
+    // a3, a4 internal
+    auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
+                        ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+    auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"},
+                        Symmetry::Antisymm);
+    auto t = ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                        Symmetry::Antisymm);
+    auto ppladder = ex<Constant>(rational{1, 2}) * A * g * t;
+
+    auto split = closed_shell_kramers_CC_trace(ppladder, /*expand_g=*/true);
+    auto joined = closed_shell_kramers_CC_trace(
+        ppladder, /*expand_g=*/true, /*use_T=*/true,
+        /*drop_mixed_kramers_fock=*/false, KramersAExpansion::full,
+        /*internal_union=*/true);
+    // the external fold is untouched: 5 blocks either way
+    REQUIRE(split.size() == 5);
+    REQUIRE(joined.size() == 5);
+    // the split path enumerates the internal pair: some term carries 6
+    // flavoured indices (4 externals + a3, a4)
+    bool any_six = false;
+    for (const auto& b : split)
+      for_each_term(b, [&](const ExprPtr& term) {
+        if (n_flavoured(term) == 6) any_six = true;
+      });
+    REQUIRE(any_six);
+    for (std::size_t b = 0; b < 5; ++b) {
+      INFO("block " << b << ":\n" << toUtf8(to_latex(joined[b])));
+      // union: every term carries exactly the 4 flavoured externals, the
+      // internals are spin-free
+      for_each_term(joined[b], [&](const ExprPtr& term) {
+        REQUIRE(n_flavoured(term) == 4);
+      });
+      // and no more terms than the flavour-enumerated block
+      REQUIRE(n_terms(joined[b]) <= n_terms(split[b]));
+    }
+  }
+
+  SECTION("energy: nothing to enumerate, no Re fold") {
+    // E = 1/4 g-bar^{a1 a2}_{i1 i2} t-bar^{i1 i2}_{a1 a2}
+    const auto E = ex<Constant>(rational{1, 4}) *
+                   ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                              Symmetry::Antisymm) *
+                   ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                              Symmetry::Antisymm);
+    auto r = closed_shell_kramers_trace(E, {}, /*fold_T=*/false,
+                                        /*expand_g=*/true,
+                                        /*drop_mixed_kramers_fock=*/false,
+                                        /*internal_union=*/true);
+    INFO(toUtf8(to_latex(r)));
+    REQUIRE(count_realparts(r) == 0);
+    for_each_term(
+        r, [&](const ExprPtr& term) { REQUIRE(n_flavoured(term) == 0); });
+    // the raw-g expansion of ONE union term (the flavour-enumerated form has
+    // 7 representatives, see kramers_trace)
+    REQUIRE(n_terms(r) <= 2);
+  }
+}
+
 TEST_CASE("drop_mixed_kramers_fock_terms", "[spinor]") {
   using namespace sequant;
   using namespace sequant::mbpt;
