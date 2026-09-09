@@ -115,13 +115,13 @@ class TensorCanonicalizer {
   static void index_pair_comparer(index_pair_comparer_t comparer);
 
  protected:
-  inline auto mutable_bra_range(AbstractTensor& t) const {
+  static inline auto mutable_bra_range(AbstractTensor& t) {
     return t._bra_mutable();
   }
-  inline auto mutable_ket_range(AbstractTensor& t) const {
+  static inline auto mutable_ket_range(AbstractTensor& t) {
     return t._ket_mutable();
   }
-  inline auto mutable_aux_range(AbstractTensor& t) const {
+  static inline auto mutable_aux_range(AbstractTensor& t) {
     return t._aux_mutable();
   }
 
@@ -165,6 +165,9 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     });
   }
   virtual ~DefaultTensorCanonicalizer() = default;
+
+  /// Canonicalizes the assignment of indices to bra and ket
+  static void canonicalize_braket(AbstractTensor& t);
 
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c

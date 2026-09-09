@@ -32,6 +32,13 @@ class CC {
     oU
   };
 
+  enum class HbarExpansion {
+    /// standard Baker-Campbell-Hausdorff commutator expansion
+    BCH,
+    /// Bernoulli expansion, 10.1063/1.5030344 (U ansatz only)
+    Bernoulli
+  };
+
   /// Configuration options for CC class
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
@@ -54,6 +61,9 @@ class CC {
     /// perturbation operator; must be specified if unitary ansatz is used in
     /// perturbed amplitude derivation
     std::optional<size_t> pertbar_comm_rank = std::nullopt;
+    /// choice of H̄ expansion; Bernoulli requires the U ansatz, not merely a
+    /// unitary one, and ignores `screen` and `use_topology`, see `hbar()`
+    HbarExpansion hbar_expansion = HbarExpansion::BCH;
   };
 
   /// @brief constructs CC engine with default options (traditional ansatz,
@@ -64,6 +74,8 @@ class CC {
   /// @brief constructs CC engine with custom options
   /// @param n coupled cluster excitation rank
   /// @param opts configuration options @see CC::Options
+  /// @throw Exception if a unitary ansatz has no `hbar_comm_rank`, or if the
+  /// Bernoulli expansion is requested with an ansatz other than `Ansatz::U`
   explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz
@@ -75,6 +87,9 @@ class CC {
   /// @return the maximum of nested commutators in H̄; returns std::nullopt if
   /// not set
   [[nodiscard]] std::optional<size_t> hbar_comm_rank() const;
+
+  /// @return the choice of H̄ expansion
+  [[nodiscard]] HbarExpansion hbar_expansion() const;
 
   /// @return true if singles amplitudes are excluded from \f$ \hat{T} \f$ and
   /// \f$ \hat{\Lambda} \f$
@@ -109,6 +124,10 @@ class CC {
   /// the explicit form. For a unitary ansatz the reverse holds: H̄ is already
   /// self-contained, so connectivity must be left empty. See the "Using H̄
   /// outside the CC class" section of the user guide.
+  /// @note Under `HbarExpansion::Bernoulli` the result is tensor-level, so it
+  /// takes `op::tensor` projectors and `op::tensor::ref_av`, not their `op`
+  /// counterparts. That path never reaches `CC::ref_av`, so `screen` and
+  /// `use_topology` have no effect on it.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -171,11 +190,42 @@ class CC {
       size_t rank = 1, size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt) const;
 
+  // clang-format off
   /// @brief derives right-side sigma equations for EOM-CC
   /// @param np number of particle creators in R operator
   /// @param nh number of hole creators in R operator
-  /// @return vector of right side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh) const;
+  /// @param block_ranks optional per-block H̄ commutator truncation ranks: a
+  ///   different H̄ in each block of the secular matrix instead of one uniform
+  ///   H̄ everywhere. For singles+doubles the matrix is
+  ///     | H_SS  H_SD |    e.g.  | 2  1 |
+  ///     | H_DS  H_DD |          | 1  0 |
+  ///   read row by row, i.e. `{2,1,1,0}`: H_SS through the double commutator
+  ///   [[H,σ],σ], H_SD and H_DS through the single [H,σ], H_DD the bare
+  ///   Hamiltonian integrals (no commutators). Under `Bernoulli` a rank is the
+  ///   Bernoulli order H̄^k instead, whose commutators are in V alone. These are
+  ///   that paper's Bernoulli qUCCSD ranks, UCCSD[2|2,1,0] of 10.1063/5.0062090
+  ///   Eqs. (29), (41), (44), (48); its BCH scheme instead needs F one rank
+  ///   above V, which one number per block cannot express.
+  ///   `K` manifolds give a row-major `K`×`K` matrix ordered by ASCENDING
+  ///   manifold rank, so one set of numbers serves EE, IP and EA (read S as
+  ///   1h/1p and D as 2h1p/1h2p; 10.1021/acs.jctc.5c01991 Fig. 1 carries the
+  ///   IP/EA ranks). Empty (the default) fills every block with
+  ///   `hbar_comm_rank`. Which form gets built depends on the expansion:
+  ///   `Bernoulli` always uses the blocked form, `BCH` uses it only when a
+  ///   matrix is given and builds a commutator otherwise. The BCH forms differ
+  ///   by off-diagonal amplitude-residual terms unless those residuals vanish.
+  /// @pre if non-empty, requires a unitary ansatz; a non-unitary H̄ terminates
+  ///   and has nothing to truncate.
+  /// @pre `block_ranks` is either empty or `K`×`K`
+  /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
+  ///   indexed by the smaller particle/hole count of each projection manifold.
+  ///   With per-block truncation, each diagonal subtracts the scalar carried by
+  ///   the same temporary \f$ \bar{H}^{(k)} \f$ used for that block. This leaves
+  ///   the blockwise normal-ordered components of Eq. (10), not distinct
+  ///   physical energy zeros. Element 0 is null iff `np == nh`
+  // clang-format on
+  [[nodiscard]] std::vector<ExprPtr> eom_r(
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks = {}) const;
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
@@ -219,6 +269,18 @@ class CC {
   bool use_topology_ = true;
   std::optional<size_t> hbar_comm_rank_ = std::nullopt;
   std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
+  HbarExpansion hbar_expansion_ = HbarExpansion::BCH;
+
+  /// @brief `eom_r`'s per-block-truncated path, taken whenever `block_ranks` is
+  /// non-empty or the expansion is Bernoulli
+  /// @param block_ranks see `eom_r`; empty means uniform `hbar_comm_rank`
+  /// @pre a unitary ansatz
+  /// @note under the Bernoulli expansion each block's H̄ has its N part removed.
+  ///   Where a block's rank equals `hbar_comm_rank` the removed terms vanish at
+  ///   converged amplitudes, so its equations change but its values do not;
+  ///   below that rank the values change too. `BCH` keeps them.
+  [[nodiscard]] std::vector<ExprPtr> eom_r_blocked(
+      nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks) const;
 
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note The choice of commutator representation is really a question of

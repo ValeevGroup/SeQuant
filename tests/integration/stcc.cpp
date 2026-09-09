@@ -41,8 +41,6 @@ int main(int argc, char* argv[]) {
                CanonicalizationMethod::Complete),
        // mbpt works with particle-symmetric tensors
        .column_symmetry = ColumnSymmetry::Symm});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
 

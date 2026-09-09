@@ -49,8 +49,6 @@ ExprPtr VacuumAverage(const ExprPtr& e, const PyEVOptions& opts) {
 
 inline void __init__(py::module m) {
   sequant::mbpt::load(sequant::mbpt::Convention::Minimal);
-  sequant::TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // mbpt context setup
   sequant::mbpt::Context::Options opts;

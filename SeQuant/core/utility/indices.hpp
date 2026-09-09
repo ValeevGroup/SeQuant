@@ -364,19 +364,54 @@ Map get_used_indices_with_counts(const ExprPtr& expr) {
 
 /// @returns A set of all unique indices used in the provided expression
 /// @note includes pure protoindices
-template <typename Set = container::set<Index>>
+/// @tparam types The set of SlotTypes of indices to consider. Any index that
+/// never occurs in these kind of slots at least once is filtered out
+template <typename Set = container::set<Index>, SlotTypes types = AnySlotType>
 Set get_used_indices(const Expr& expr) {
-  return get_used_indices_with_counts(expr) |
-         std::views::transform(
-             [](const auto& idx_count) { return idx_count.first; }) |
-         ranges::to<Set>;
+  if constexpr (types == AnySlotType) {
+    return get_used_indices_with_counts(expr) |
+           std::views::transform(
+               [](const auto& idx_count) { return idx_count.first; }) |
+           ranges::to<Set>;
+  } else {
+    return get_used_indices_with_counts(expr) |
+           std::views::filter([](const auto& pair) -> bool {
+             if constexpr (types & SlotType::Bra) {
+               if (pair.second.bra > 0) {
+                 return true;
+               }
+             }
+             if constexpr (types & SlotType::Ket) {
+               if (pair.second.ket > 0) {
+                 return true;
+               }
+             }
+             if constexpr (types & SlotType::Aux) {
+               if (pair.second.aux > 0) {
+                 return true;
+               }
+             }
+             if constexpr (types & SlotType::Proto) {
+               if (pair.second.proto > 0) {
+                 return true;
+               }
+             }
+
+             return false;
+           }) |
+           std::views::transform(
+               [](const auto& idx_count) { return idx_count.first; }) |
+           ranges::to<Set>;
+  }
 }
 
 /// @returns A set of all unique indices used in the provided expression
 /// @note includes pure protoindices
-template <typename Set = container::set<Index>>
+/// @tparam types The set of SlotTypes of indices to consider. Any index that
+/// never occurs in these kind of slots at least once is filtered out
+template <typename Set = container::set<Index>, SlotTypes types = AnySlotType>
 Set get_used_indices(const ExprPtr& expr) {
-  return get_used_indices<Set>(*expr);
+  return get_used_indices<Set, types>(*expr);
 }
 
 template <typename Container = std::vector<Index>, typename Rng>
@@ -719,8 +754,11 @@ decltype(auto) get_ket_idx(Group&& group) {
 /// (based on slot type) or assert that they already are in canonical order,
 /// if group is const.
 decltype(auto) as_index_group_view(SlottedIndexGroup auto&& group) {
-  static_assert(static_cast<int>(SlotType::Bra) == 0);
-  static_assert(static_cast<int>(SlotType::Ket) == 1);
+  static_assert(SlotType::Bra < SlotType::Ket);
+  static_assert(SlotType::Bra < SlotType::Aux);
+  static_assert(SlotType::Bra < SlotType::Proto);
+  static_assert(SlotType::Ket < SlotType::Aux);
+  static_assert(SlotType::Ket < SlotType::Proto);
 
   // We have to ensure a unique order of indices if we're getting rid of the
   // SlotType tag

@@ -41,8 +41,7 @@ void Tensor::adjoint() {
 }
 
 ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
-  auto canonicalizer_ptr = TensorCanonicalizer::instance_ptr(label_);
-  return canonicalizer_ptr ? canonicalizer_ptr->apply(*this) : ExprPtr{};
+  return TensorCanonicalizer::instance()->apply(*this);
 }
 
 }  // namespace sequant

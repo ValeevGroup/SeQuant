@@ -187,7 +187,7 @@ void add_to_context(TextGeneratorContext &ctx, std::string_view key,
       indices.push_back(idx);
     }
 
-    ctx.set_batch_indices(std::move(indices));
+    ctx.set_batch_indices(indices);
   } else {
     throw Exception(
         "Unsupported key in TextGenerator context specification: '" +
@@ -203,7 +203,7 @@ void add_to_context(ItfContext &ctx, std::string_view key,
       indices.push_back(idx);
     }
 
-    ctx.set_batch_indices(std::move(indices));
+    ctx.set_batch_indices(indices);
   } else {
     throw Exception("Unsupported key in ITF context specification: '" +
                     std::string(key) + "'");
@@ -560,7 +560,7 @@ TEST_CASE("export", "[export]") {
                 ));
       }
       SECTION("index batching") {
-        ctx.set_batch_indices({"i_1", "i_2"});
+        ctx.set_batch_indices(std::vector<Index>{"i_1", "i_2"});
 
         export_expression(
             to_export_tree(deserialize<ResultExpr>(

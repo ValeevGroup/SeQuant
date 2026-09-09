@@ -88,8 +88,6 @@ int main() {
       {.index_space_registry_shared_ptr = sequant::mbpt::make_min_sr_spaces(),
        .spbasis = SPBasis::Spinfree});
 
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   // WARNING some code is not thread safe ...
   // set_num_threads(1);
 

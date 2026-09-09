@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -25,6 +26,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -266,6 +268,82 @@ TEST_CASE("expr", "[elements]") {
         REQUIRE(front_ptr_cast);
         REQUIRE(front_ptr_cast->value() == 4);
       }
+    }
+  }
+
+  SECTION("mixed const/non-const iteration") {
+    // N.B. Sum folds Constant summands together, so use Variables to get a
+    // Sum that actually holds two subexpressions
+    auto e = ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+
+    // a mutable iterator converts to a const iterator ...
+    ConstExprIterator cit = e->begin();
+    REQUIRE(cit == e->cbegin());
+    // ... but not the other way around
+    static_assert(!std::is_convertible_v<ConstExprIterator, ExprIterator>);
+
+    // ... and the two compare/subtract heterogeneously, in either order
+    REQUIRE(e->begin() == e->cbegin());
+    REQUIRE(e->cbegin() == e->begin());
+    REQUIRE(e->begin() != e->cend());
+    REQUIRE(e->cend() != e->begin());
+    REQUIRE(e->begin() < e->cend());
+    REQUIRE(e->cend() > e->begin());
+    REQUIRE(e->cend() - e->begin() == 2);
+    REQUIRE(e->begin() - e->cend() == -2);
+
+    // same via the free functions, which return different iterator types
+    REQUIRE(sequant::cbegin(e) != sequant::end(e));
+    REQUIRE(sequant::end(e) - sequant::cbegin(e) == 2);
+  }
+
+  SECTION("checked element access") {
+    // N.B. unlike operator[], at()/front()/back() must throw regardless of
+    // whether SEQUANT_ASSERT is enabled, so this also pins down the behavior
+    // of builds configured with SEQUANT_ASSERT_BEHAVIOR=IGNORE
+    auto sum = ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+    const Expr &const_sum = *sum;
+
+    REQUIRE(sum->at(0) == ex<Variable>(L"x"));
+    REQUIRE(sum->at(1) == ex<Variable>(L"y"));
+    REQUIRE(sum->front() == ex<Variable>(L"x"));
+    REQUIRE(sum->back() == ex<Variable>(L"y"));
+    REQUIRE_THROWS_AS(sum->at(2), Exception);
+    REQUIRE_THROWS_AS(const_sum.at(2), Exception);
+    // ... including an index that used to be a negative one
+    REQUIRE_THROWS_AS(sum->at(static_cast<std::size_t>(-1)), Exception);
+
+    // atoms are empty, so every element access throws (in particular,
+    // back() must not compute `at(size() - 1)` == `at(SIZE_MAX)` unchecked)
+    auto atom = ex<Constant>(3);
+    const Expr &const_atom = *atom;
+    REQUIRE(atom->empty());
+    REQUIRE(atom->size() == 0);
+    REQUIRE_THROWS_AS(atom->at(0), Exception);
+    REQUIRE_THROWS_AS(atom->front(), Exception);
+    REQUIRE_THROWS_AS(atom->back(), Exception);
+    REQUIRE_THROWS_AS(const_atom.front(), Exception);
+    REQUIRE_THROWS_AS(const_atom.back(), Exception);
+  }
+
+  SECTION("hash invalidation on mutable iteration") {
+    // handing out a mutable iterator must invalidate the memoized hash no
+    // matter which end of the range it points at: `*(--end())` mutates just
+    // as `*begin()` does
+    auto check = [](ExprPtr expr, bool via_end) {
+      const auto hash_before = expr->hash_value();
+      // this is the only accessor called before the mutation, so it alone is
+      // responsible for invalidating the memoized hash
+      auto it = via_end ? expr->end() : expr->begin();
+      *(via_end ? std::prev(it) : it) = ex<Variable>(L"mutated");
+      REQUIRE(expr->hash_value() != hash_before);
+    };
+
+    for (bool via_end : {false, true}) {
+      check(ex<Sum>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")}),
+            via_end);
+      check(ex<Product>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")}),
+            via_end);
     }
   }
 
@@ -959,6 +1037,31 @@ TEST_CASE("expr", "[elements]") {
     }
   }
 
+  SECTION("hash invalidation on mutable factors() access") {
+    // Product::factors() non-const hands out a mutable reference into
+    // factors_, so it must invalidate the memoized hash, exactly as the
+    // non-const begin_subexpr()/end_subexpr() do
+    auto prod =
+        ex<Product>(ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+    const auto hash_before = prod->hash_value();
+
+    prod->as<Product>().factors()[0] = ex<Variable>(L"mutated");
+
+    REQUIRE(prod->hash_value() != hash_before);
+  }
+
+  SECTION("hash invalidation on growing an empty Product via factors()") {
+    // an empty Product can still be *grown* through the mutable factors()
+    // reference, so the invalidation must not be guarded by
+    // `!factors_.empty()` the way begin_subexpr()/end_subexpr() are
+    auto prod = ex<Product>(ExprPtrList{});
+    const auto hash_before = prod->hash_value();
+
+    prod->as<Product>().factors().push_back(ex<Variable>(L"x"));
+
+    REQUIRE(prod->hash_value() != hash_before);
+  }
+
   SECTION("commutativity") {
     const auto ex1 = std::make_shared<VecExpr<std::shared_ptr<Constant>>>(
         std::initializer_list<std::shared_ptr<Constant>>{
@@ -1170,6 +1273,74 @@ TEST_CASE("expr", "[elements]") {
           deserialize<ResultExpr>(L"R{a1,a2;i1,i2;p1} = t{a1,a2;i1,i2;p1}")
               .index_particle_grouping<std::pair<Index, Index>>();
       REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
+    }
+  }
+
+  SECTION("single-tensor-simplify") {
+    SECTION("perm-symmetry") {
+      auto expr =
+          deserialize<ResultExpr>("R1{a1;i1} = t{a1,i1}:A - t{i1,a1}:A");
+
+      simplify(expr);
+
+      REQUIRE_THAT(expr, EquivalentTo("R1{a1;i1} = 2 t{a1,i1}:A"));
+    }
+    SECTION("braket-symmetry") {
+      auto expr = deserialize<ResultExpr>(
+          "R1{a1;i1} = f{a1;i1}:A-S-S + f{i1;a1}:A-S-S");
+
+      simplify(expr);
+
+      REQUIRE_THAT(expr, EquivalentTo("R1{a1;i1} = 2 f{a1;i1}:A-S-S"));
+    }
+    SECTION("column-symmetry") {
+      auto expr = deserialize<ResultExpr>(
+          "R1{a1,a2;i1,i2} = t{a1,a2;i1,i2}:N-N-S + t{a2,a1;i2,i1}:N-N-S");
+
+      simplify(expr);
+
+      REQUIRE_THAT(expr,
+                   EquivalentTo("R1{a1,a2;i1,i2} = 2 t{a1,a2;i1,i2}:N-N-S"));
+    }
+  }
+
+  SECTION("TreeIndex") {
+    std::vector<std::tuple<std::string, TreeIndex, std::string>> tests = {
+        {"Var", {}, "Var"},           {"A * B", {}, "A * B"},
+        {"A + B", {0}, "A"},          {"A + B", {1}, "B"},
+        {"A + B", {}, "A + B"},       {"A + B", {0}, "A"},
+        {"A + B", {1}, "B"},          {"A + B * C", {0}, "A"},
+        {"A + B * C", {1}, "B * C"},  {"A + B * C", {1, 0}, "B"},
+        {"A + B * C", {1, 1}, "C"},   {"(A + B) * C", {0}, "A + B"},
+        {"(A + B) * C", {0, 1}, "B"}, {"(A + B) * C", {1}, "C"},
+    };
+
+    for (const auto &[expr_string, idx, expected_str] : tests) {
+      CAPTURE(expr_string);
+      CAPTURE(idx);
+      CAPTURE(expected_str);
+
+      ExprPtr expr = deserialize(expr_string);
+      ExprPtr expected = deserialize(expected_str);
+
+      REQUIRE_THAT(idx.select_from(expr), EquivalentTo(expected));
+      REQUIRE_THAT(idx.select_from(std::as_const(expr)),
+                   EquivalentTo(expected));
+      REQUIRE_THAT(idx.select_from(*expr), EquivalentTo(*expected));
+      REQUIRE_THAT(idx.select_from(std::as_const(*expr)),
+                   EquivalentTo(*expected));
+
+      REQUIRE_THAT(expr[idx], EquivalentTo(*expected));
+      REQUIRE_THAT(std::as_const(expr)[idx], EquivalentTo(*expected));
+      REQUIRE_THAT((*expr)[idx], EquivalentTo(*expected));
+      REQUIRE_THAT(std::as_const(*expr)[idx], EquivalentTo(*expected));
+    }
+
+    SECTION("Out-of-bounds exception") {
+      const ExprPtr expr = deserialize("A * B");
+
+      REQUIRE_THROWS_AS(TreeIndex({2}).select_from(expr), Exception);
+      REQUIRE_THROWS_AS(TreeIndex({0, 1}).select_from(expr), Exception);
     }
   }
 }

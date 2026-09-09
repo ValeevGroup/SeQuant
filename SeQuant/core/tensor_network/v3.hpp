@@ -416,6 +416,7 @@ class TensorNetworkV3 {
   // clang-format on
   Graph create_graph(
       const CreateGraphOptions &options = make_default_graph_options()) const;
+  static const unsigned int *canonicalize_graph(const Graph &graph);
 
  private:
   /// list of tensors

@@ -2,6 +2,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
@@ -41,11 +42,13 @@ void print_help() {
   std::wcout
       << "  <exe> [options] <network 1> [<network 2> [... [<network N>] ] ]\n";
   std::wcout << "Options:\n";
-  std::wcout << "  --help     Shows this help message\n";
-  std::wcout << "  --v1       Use TensorNetworkV1\n";
-  std::wcout << "  --v2       Use TensorNetworkV2\n";
-  std::wcout << "  --v3       Use TensorNetworkV3 [default]\n";
-  std::wcout << "  --no-named Treat all indices as unnamed (even if they are "
+  std::wcout << "  --help      Shows this help message\n";
+  std::wcout << "  --canonical Print out canonical form of the graph\n";
+  std::wcout << "  --perm      Also print the canonicalize permutation\n";
+  std::wcout << "  --v1        Use TensorNetworkV1\n";
+  std::wcout << "  --v2        Use TensorNetworkV2\n";
+  std::wcout << "  --v3        Use TensorNetworkV3 [default]\n";
+  std::wcout << "  --no-named  Treat all indices as unnamed (even if they are "
                 "external)\n";
 }
 
@@ -58,6 +61,8 @@ int main(int argc, char **argv) {
   bool use_named_indices = true;
   int version = 3;
   const TensorNetworkV1::named_indices_t empty_named_indices;
+  bool canonical = false;
+  bool print_perm = false;
 
   if (argc <= 1) {
     print_help();
@@ -81,6 +86,12 @@ int main(int argc, char **argv) {
     } else if (current == L"--v3") {
       version = 3;
       continue;
+    } else if (current == L"--canonical") {
+      canonical = true;
+      continue;
+    } else if (current == L"--perm") {
+      print_perm = true;
+      continue;
     }
 
     ExprPtr expr;
@@ -94,6 +105,11 @@ int main(int argc, char **argv) {
     SEQUANT_ASSERT(expr);
 
     if (version == 1) {
+      if (canonical) {
+        std::wcout << "Canonical form not available for v1 graphs" << std::endl;
+        return 2;
+      }
+
       std::optional<TensorNetworkV1> network = make_tn<TensorNetworkV1>(expr);
       if (!network.has_value()) {
         std::wcout << "Failed to construct tensor network for input '"
@@ -120,6 +136,24 @@ int main(int argc, char **argv) {
         auto graph = network->create_graph(
             {.named_indices =
                  use_named_indices ? nullptr : &empty_named_indices});
+
+        if (canonical) {
+          const unsigned int *perm = TN::canonicalize_graph(graph);
+          auto *cgraph = graph.bliss_graph->permute(perm);
+          graph.vertex_labels = permute(graph.vertex_labels, perm);
+
+          if (print_perm) {
+            std::wcout << "Canonicalization permutation:\n";
+            for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
+              std::wcout << i << " -> " << perm[i] << "\n";
+            }
+            std::wcout << std::endl;
+          }
+
+          // Note: deleting the original bliss_graph also invalidates perm
+          graph.bliss_graph.reset(cgraph);
+        }
+
         std::wcout << "Graph for '" << to_latex(expr) << "'\n";
         graph.bliss_graph->write_dot(std::wcout,
                                      {.labels = graph.vertex_labels});

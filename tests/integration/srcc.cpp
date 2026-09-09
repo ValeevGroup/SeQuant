@@ -290,8 +290,6 @@ int main(int argc, char* argv[]) {
                         // mbpt works with particle-symmetric tensors
                         .column_symmetry = ColumnSymmetry::Symm})
           .set(strict));
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print stats
   Logger::instance().wick_stats = false;

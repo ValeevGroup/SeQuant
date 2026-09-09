@@ -10,6 +10,7 @@
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -58,12 +59,13 @@ class GenerationVisitor {
       : m_generator(generator), m_ctx(ctx), m_scalarFactors(scalarFactors) {
     if (m_generator.supports_index_batching()) {
       // Make tensor comparator aware of the list of batched indices
-      std::vector<Index> batchIndices =
+      std::span<const Index> batchIndices =
           m_ctx.batch_indices(m_ctx.current_expression_id());
       if (!batchIndices.empty()) {
         IndexSpecificTensorBlockLessThanComparator cmp =
             m_tensorUses.key_comp();
-        cmp.set_indices(std::move(batchIndices));
+        cmp.set_indices(
+            std::vector<Index>(batchIndices.begin(), batchIndices.end()));
         m_tensorUses = decltype(m_tensorUses)(std::move(cmp));
       }
     }
@@ -798,7 +800,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
-                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                       return "$" + toUtf8(io::latex::to_string(node->expr())) +
+                              "$";
                      },
                      [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
@@ -811,7 +814,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
     std::cout << "Tree after pre-processing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
-                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                       return "$" + toUtf8(io::latex::to_string(node->expr())) +
+                              "$";
                      },
                      [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
