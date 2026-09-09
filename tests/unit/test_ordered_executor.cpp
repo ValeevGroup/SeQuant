@@ -2524,7 +2524,16 @@ TEST_CASE(
   bool const batch_pao =
       (batch == "pao" || batch == "aux_pao" || batch == "aux_pao_occ");
   bool const batch_occ = (batch == "aux_occ" || batch == "aux_pao_occ");
-  constexpr std::size_t kAuxBlock = 256, kOccBlock = 8, kPaoBlock = 256;
+  // Block targets (SEQUANT_UT_DRYRUN_AUX_TS / OCC_TS / PAO_TS override the
+  // defaults, e.g. to mirror a production input's batch:*_target_size).
+  auto env_size = [](char const* k, std::size_t dflt) -> std::size_t {
+    if (char const* v = std::getenv(k))
+      return static_cast<std::size_t>(std::atoll(v));
+    return dflt;
+  };
+  std::size_t const kAuxBlock = env_size("SEQUANT_UT_DRYRUN_AUX_TS", 256),
+                    kOccBlock = env_size("SEQUANT_UT_DRYRUN_OCC_TS", 8),
+                    kPaoBlock = env_size("SEQUANT_UT_DRYRUN_PAO_TS", 256);
 
   sequant::BatchPolicy policy;
   policy.is_batchable_contracted_index = [batch_aux,
@@ -2537,8 +2546,9 @@ TEST_CASE(
   };
   policy.batch_spectator_indices = batch_occ;
   policy.node_level_placement = batch_occ;  // occ external placement needs it
-  policy.batch_target_size = [batch_aux, batch_pao, batch_occ](
-                                 sequant::Index const& ix) -> std::size_t {
+  policy.batch_target_size =
+      [batch_aux, batch_pao, batch_occ, kAuxBlock, kOccBlock,
+       kPaoBlock](sequant::Index const& ix) -> std::size_t {
     if (batch_aux && ix.space().base_key() == L"Κ") return kAuxBlock;
     if (batch_pao && ix.space().base_key() == L"μ̃") return kPaoBlock;
     if (batch_occ && ix.space().base_key() == L"i") return kOccBlock;
@@ -2549,7 +2559,12 @@ TEST_CASE(
   };
   policy.accumulation_factor = 1.0;
   policy.persistent_only = false;
-  policy.peak_threshold = 1e11;
+  // Peak budget (SEQUANT_UT_DRYRUN_PEAK_THR_GB overrides; default 100 GB).
+  policy.peak_threshold =
+      (std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB")
+           ? std::atof(std::getenv("SEQUANT_UT_DRYRUN_PEAK_THR_GB"))
+           : 100.0) *
+      1e9;
 
   auto axes_map = std::make_shared<std::unordered_map<
       sequant::Expr const*,
@@ -2595,8 +2610,13 @@ TEST_CASE(
   using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
   annot_t const layout{};
   sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  // The executor slices each block's axis at THIS target; it must be the
+  // policy's own per-axis target (the one the optimizer planned with) -- a
+  // flat 256 left the 80-orbital occupied axis as ONE batch, so the occupied
+  // loops were degenerate: loop structure (and lost persistence) without any
+  // slicing.
   std::function<std::size_t(sequant::Index const&)> const target =
-      [](sequant::Index const&) -> std::size_t { return 256; };
+      policy.batch_target_size;
 
   auto& logger = sequant::Logger::instance();
   auto const prev_level = logger.eval.level;
@@ -2735,6 +2755,7 @@ TEST_CASE(
         std::size_t bytes;
         bool carriesK;
         std::wstring label;
+        std::size_t hash;
       };
       std::vector<LE> rows;
       std::size_t all_sum = 0, auxfree_sum = 0;
@@ -2748,7 +2769,7 @@ TEST_CASE(
         }
         all_sum += e.bytes;
         if (!carriesK) auxfree_sum += e.bytes;
-        rows.push_back({e.bytes, carriesK, kind + L"{" + sig + L"}"});
+        rows.push_back({e.bytes, carriesK, kind + L"{" + sig + L"}", e.hash});
       }
       std::sort(rows.begin(), rows.end(),
                 [](LE const& a, LE const& b) { return a.bytes > b.bytes; });
@@ -2759,8 +2780,8 @@ TEST_CASE(
       for (auto const& r : rows)
         if (GB(r.bytes) > 0.1)
           std::wcerr << L"  " << GB(r.bytes) << L" GB  carriesΚ="
-                     << (r.carriesK ? L"yes" : L"no ") << L"  " << r.label
-                     << L"\n";
+                     << (r.carriesK ? L"yes" : L"no ") << L"  h="
+                     << (r.hash % 100000) << L"  " << r.label << L"\n";
       std::wcerr << L"  TOTAL co-resident = " << GB(all_sum)
                  << L" GB;  aux-FREE (no-Κ, aux-batching-immune) floor = "
                  << GB(auxfree_sum) << L" GB\n";
@@ -2848,6 +2869,11 @@ TEST_CASE(
           mon.hwmark_bytes,
           std::max<std::size_t>(cache.working_set_hwmark(),
                                 static_cast<std::size_t>(peak.load())));
+      // DIAG: which of the three peak sources dominates
+      std::wcerr << L"  [peak-components] monitor_hwmark=" << mon.hwmark_bytes
+                 << L" cache_working_set_hwmark=" << cache.working_set_hwmark()
+                 << L" sink_peak=" << static_cast<std::size_t>(peak.load())
+                 << L"\n";
     };
     run(f1);
     cache.reset();
@@ -2868,7 +2894,9 @@ TEST_CASE(
              << std::wstring(batch.begin(), batch.end()) << L", "
              << forest.size() << L" terms, n_Kblocks=" << n_Kblocks
              << L", warm-iter needed_build-skipped {Κ}-block BuildSteps="
-             << warm_skipped << L" ===\n";
+             << warm_skipped << L", peak_threshold=" << std::scientific
+             << policy.peak_threshold << L" B, blocks aux/occ/pao=" << kAuxBlock
+             << L"/" << kOccBlock << L"/" << kPaoBlock << L" ===\n";
   pr(L"forest  iter1 (cold)", f1);
   pr(L"forest  iter2 (warm)", f2);
   if (ordered_ok) {
