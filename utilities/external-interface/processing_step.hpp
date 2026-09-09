@@ -57,7 +57,7 @@ class OBOProcessFunctionMember<void> {
 ///   'input.bla', we want the associated outputs to be aliased to
 ///   'output.bla' to allow easy referencing in the driver. This applies to
 ///   individual as well as group aliases.
-template <typename DataType>
+template <typename DataType, bool inherit_aliases = true>
 class OneByOneProcessingStep
     : public ProcessingStep,
       public detail::OBOProcessFunctionMember<DataType> {
@@ -95,14 +95,14 @@ class OneByOneProcessingStep
                             e.what());
           }
 
-          if (new_outputs == 0 && alias_unchanged_inputs()) {
+          if (inherit_aliases && new_outputs == 0 && alias_unchanged_inputs()) {
             new_outputs = 1;
             ctx.add_data_alias(
                 current.associated_ids.front(),
                 std::string(step_id) + "." + std::to_string(total_outputs));
           }
 
-          if (new_outputs > 0) {
+          if (inherit_aliases && new_outputs > 0) {
             std::string created_outputs =
                 std::string(step_id) + "[" + std::to_string(total_outputs) +
                 "-" + std::to_string(total_outputs + new_outputs - 1) + "]";
@@ -145,34 +145,36 @@ class OneByOneProcessingStep
         }
       }
 
-      for (auto &[group_id, assoc_outputs] : group_assocs) {
-        const std::size_t expected_size = ctx.dataset_size(group_id);
-        SEQUANT_ASSERT(expected_size >= assoc_outputs.size());
+      if (inherit_aliases) {
+        for (auto &[group_id, assoc_outputs] : group_assocs) {
+          const std::size_t expected_size = ctx.dataset_size(group_id);
+          SEQUANT_ASSERT(expected_size >= assoc_outputs.size());
 
-        if (expected_size != assoc_outputs.size()) {
-          continue;
-        }
-
-        std::string out_group_id;
-        if (auto pos = group_id.find('.'); pos != std::string_view::npos) {
-          // Remove previous step ID
-          out_group_id =
-              std::string(step_id) + std::string(group_id.substr(pos));
-        } else {
-          out_group_id = std::string(step_id) + "." + std::string(group_id);
-        }
-
-        if (ctx.has_data(out_group_id)) {
-          if (!ctx.ids_are_equivalent(assoc_outputs, out_group_id)) {
-            throw Exception(
-                "Duplicate group ID name '" + std::string(group_id) +
-                "' leading to ambiguity for '" + out_group_id + "'");
+          if (expected_size != assoc_outputs.size()) {
+            continue;
           }
 
-          continue;
-        }
+          std::string out_group_id;
+          if (auto pos = group_id.find('.'); pos != std::string_view::npos) {
+            // Remove previous step ID
+            out_group_id =
+                std::string(step_id) + std::string(group_id.substr(pos));
+          } else {
+            out_group_id = std::string(step_id) + "." + std::string(group_id);
+          }
 
-        ctx.add_data_alias(assoc_outputs, std::move(out_group_id));
+          if (ctx.has_data(out_group_id)) {
+            if (!ctx.ids_are_equivalent(assoc_outputs, out_group_id)) {
+              throw Exception(
+                  "Duplicate group ID name '" + std::string(group_id) +
+                  "' leading to ambiguity for '" + out_group_id + "'");
+            }
+
+            continue;
+          }
+
+          ctx.add_data_alias(assoc_outputs, std::move(out_group_id));
+        }
       }
     }
 
