@@ -1,7 +1,7 @@
 {
 	"code_generation": {
 		"output_format": "itf",
-		"output_path": "nevpt2.itfaa",
+		"output_path": "nevpt2_v1_cse_merged.itfaa",
 		"default_options": {
 			"projection": "biorthogonal",
 			"spintracing": "closed_shell",
