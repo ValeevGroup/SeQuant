@@ -86,6 +86,7 @@ struct designated_init_only_probe {
 };
 static_assert(std::is_aggregate_v<designated_init_only_probe>);
 static_assert(std::is_trivially_copyable_v<designated_init_only_probe>);
+static_assert(std::is_default_constructible_v<designated_init_only_probe>);
 // [[no_unique_address]] elision is permitted, not required, and MSVC ignores
 // the standard spelling outright (it has [[msvc::no_unique_address]], since
 // honoring this one would change its ABI). A toolchain that does not elide
