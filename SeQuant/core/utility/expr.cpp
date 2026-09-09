@@ -449,16 +449,21 @@ bool is_valid(const ResultExpr &expr, std::string *msg) {
 ExprPtr transform_expr(const ExprPtr &expr,
                        const container::map<Index, Index> &index_replacements,
                        Constant::scalar_type scaling_factor) {
-  if (expr->is<Constant>() || expr->is<Variable>()) {
+  return transform_expr(*expr, index_replacements, scaling_factor);
+}
+
+ExprPtr transform_expr(const Expr &expr,
+                       const container::map<Index, Index> &index_replacements,
+                       Constant::scalar_type scaling_factor) {
+  if (expr.is<Constant>() || expr.is<Variable>()) {
     if (scaling_factor != 1) {
-      return ex<Constant>(scaling_factor) * expr;
+      return ex<Constant>(scaling_factor) * expr.clone();
     }
 
-    return expr;
+    return expr.clone();
   }
 
-  auto transform_tensor =
-      [&index_replacements](const ExprPtr &tensor) -> ExprPtr {
+  auto transform_tensor = [&index_replacements](const Expr &tensor) -> ExprPtr {
     ExprPtr result = tensor.clone();
     auto &result_tensor = result->as<AbstractTensor>();
     transform_indices(result_tensor, index_replacements);
@@ -472,7 +477,7 @@ ExprPtr transform_expr(const ExprPtr &expr,
     result->scale(product.scalar());
     for (auto &&term : product) {
       if (term->is<AbstractTensor>()) {
-        result->append(1, transform_tensor(term));
+        result->append(1, transform_tensor(*term));
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term->clone());
       } else {
@@ -483,18 +488,18 @@ ExprPtr transform_expr(const ExprPtr &expr,
     return result;
   };
 
-  if (expr->is<AbstractTensor>()) {
+  if (expr.is<AbstractTensor>()) {
     auto result = transform_tensor(expr);
     if (scaling_factor != 1) {
       result = result * ex<Constant>(scaling_factor);
     }
     return result;
-  } else if (expr->is<Product>()) {
-    auto result = transform_product(expr->as<Product>());
+  } else if (expr.is<Product>()) {
+    auto result = transform_product(expr.as<Product>());
     return result;
-  } else if (expr->is<Sum>()) {
+  } else if (expr.is<Sum>()) {
     auto result = std::make_shared<Sum>();
-    for (auto &term : *expr) {
+    for (auto &term : expr) {
       result->append(transform_expr(term, index_replacements, scaling_factor));
     }
     return result;
