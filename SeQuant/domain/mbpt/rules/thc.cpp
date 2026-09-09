@@ -15,10 +15,14 @@
 
 namespace sequant::mbpt {
 
-ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
+ExprPtr tensor_hypercontract_impl(Tensor const& tnsr_in, Index const& aux_idx_1,
                                   Index const& aux_idx_2,
                                   std::wstring_view factor_label,
                                   std::wstring_view aux_label) {
+  // Normalize to the VALUE orientation first: a marker-conjugated (folded)
+  // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
+  // layout would silently drop the conjugation (see sequant::value_oriented).
+  const Tensor tnsr = value_oriented(tnsr_in);
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);

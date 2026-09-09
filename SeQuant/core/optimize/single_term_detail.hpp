@@ -530,7 +530,9 @@ inline SubnetMetadata build_subnet_metadata(
 
     auto tn = TensorNetwork{ts_expr};
     auto meta = tn.canonicalize_slots(
-        TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices);
+        {.cardinal_tensor_labels =
+             TensorCanonicalizer::cardinal_tensor_labels(),
+         .named_indices = &results[n].indices});
 
     auto [it, inserted] = meta_to_id.try_emplace(std::move(meta), 0);
     if (inserted) it->second = meta_to_id.size() - 1;

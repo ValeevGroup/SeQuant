@@ -687,8 +687,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       auto theta1 = θ(1)->as<op_t>();
       // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
+      // the Hermitian θ canonicalizes to its swapped+starred spelling
+      // (θ^*{p1;p2} == θ{p2;p1} by the Conjugate value identity); the
+      // operator ã cannot swap
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
-              L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
+              L"{{{\\theta^*}^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_2}}_{{p_1}}}}");
 
       {
         // replacement operator: label "ã", lowering yields a bare
@@ -733,10 +736,12 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto L_3 = l(3)->as<op_t>();
       //    std::wcout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
       //    std::endl;
+      // under this test's scoped_hermitian_amplitudes() pinning, the
+      // (legacy-Hermitian) L canonicalizes to its swapped+starred spelling
       REQUIRE(
           to_latex(simplify(L_3.tensor_form())) ==
-          L"{{{\\frac{1}{36}}}{\\bar{L}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
-          L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
+          L"{{{\\frac{1}{36}}}{{\\bar{L}^*}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_"
+          L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
 
       auto R_2_3 = r(nₚ(3), nₕ(2))->as<op_t>();
       //    std::wcout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form()))
@@ -751,8 +756,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // std::endl;
       REQUIRE(
           to_latex(simplify(L_1_2.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_"
-          L"1}{i_2}}"
+          L"{{{\\frac{1}{2}}}{{\\bar{L}^*}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+          L"{i_1}{i_2}}"
           L"_{\\textvisiblespace\\,{a_1}}}}");
 
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
@@ -812,10 +817,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       //    std::wcout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
               L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
+              L"\\bigl({{{R^*}^{}_{{i_1}}}{\\tilde{a}_{{i_1}}}} + "
+              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
               L"\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
       lower_to_tensor_form(L23);
@@ -824,11 +829,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(L23) ==
               L"{ "
               L"\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
-              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
-              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
-              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
-              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
-              L"a_2}}}}\\bigr) }");
+              L"{{{\\frac{1}{12}}}{{\\bar{L}^*}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}}"
+              L"}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_"
+              L"2}}}} + "
+              L"{{{\\frac{1}{2}}}{{\\bar{L}^*}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{"
+              L"a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
 
       // perturbation ops
       REQUIRE_NOTHROW(Hʼ(1, {.order = 1}));
@@ -1189,8 +1194,11 @@ SECTION("MRSO") {
               fcrex(p) * fannx(q);
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
-    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
-                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
+    // the Hermitian γ canonicalizes to its swapped+starred spelling
+    // (γ^*{u_1;u_2} == γ{u_2;u_1} by the Conjugate value identity)
+    REQUIRE_THAT(result,
+                 SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
+                              L"h{u_1;u_2}:N-C-S * γ^*{u_1;u_2}:N-C-S"));
   }
 
 #if 0

@@ -59,8 +59,13 @@ class VertexPainterImpl {
   /// their Index::color() \param distinct_named_indices if false, will use same
   /// color for all named indices that have same Index::color(), else will use
   /// distinct color for each named_index
+  /// @param color_conjugation if true, a tensor's elementwise-conjugation
+  /// marker (AbstractTensor::_conjugated()) enters its core-vertex color, so
+  /// `T` and `T*` are distinguishable in the graph; see
+  /// TensorNetworkV3::CreateGraphOptions::color_conjugation
   VertexPainterImpl(const NamedIndexSet &named_indices,
-                    bool distinct_named_indices = true);
+                    bool distinct_named_indices = true,
+                    bool color_conjugation = false);
 
   const ColorMap &used_colors() const;
 
@@ -88,6 +93,7 @@ class VertexPainterImpl {
   ColorMap used_colors_;
   const NamedIndexSet &named_indices_;
   bool distinct_named_indices_ = true;
+  bool color_conjugation_ = false;
   std::optional<std::size_t> salt_;
 
   /// @return the salt value used for hashing; if not set by apply_shade use

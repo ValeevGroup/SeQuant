@@ -282,6 +282,18 @@ class TensorNetworkV3 {
     /// reports the phase change due to permutation of slots relative to their
     /// input order
     std::int8_t phase = +1;  // +1 or -1
+
+    /// antilinear byproduct of canonicalization: the input ordinals of the
+    /// network's BraKetSymmetry::Conjugate tensors whose canonical labeling
+    /// spells them in the bra<->ket-swapped orientation. A Hermitian
+    /// (Conjugate) tensor satisfies T{bra;ket} = conj(T{ket;bra}), so each
+    /// such swap carries an elementwise conjugation of that tensor (cf.
+    /// `phase`, which carries the ±1 linear byproduct of antisymmetric slot
+    /// reorderings). NOTE: flat input ordinals suffice for the flat networks
+    /// canonicalize_slots consumes today; this field is to be replaced
+    /// by/dissolved into the maintainer's TreeIndex-based reporting when
+    /// that lands, so it survives nested expressions.
+    container::svector<std::size_t> conjugated_tensors;
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -298,11 +310,44 @@ class TensorNetworkV3 {
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
   /// @return the computed canonicalization metadata
+  /// @note equivalent to (and forwards to) the CanonicalizeSlotsOptions
+  /// overload; prefer that overload in new code
   SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{});
+
+  /// @brief options controlling canonicalize_slots()
+  struct CanonicalizeSlotsOptions {
+    SEQUANT_DESIGNATED_INIT_ONLY;
+    /// move all tensors with these labels to the front before canonicalizing
+    /// indices
+    container::vector<std::wstring> cardinal_tensor_labels = {};
+    /// the indices that cannot be renamed, i.e. their labels are meaningful;
+    /// nullptr = use the external indices
+    const NamedIndexSet *named_indices = nullptr;
+    /// less-than comparison for coarse-grained sorting of named indices
+    /// before sorting to canonical order. N.B. defaulted to the DECLARED
+    /// default (default_idxptr_slottype_lesscompare), so a value-initialized
+    /// options object exercises the same code path as explicit callers -- a
+    /// default-constructed (empty) std::function is replaced by an internal
+    /// space-only fallback, a different path
+    SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+        default_idxptr_slottype_lesscompare{};
+    /// if false, BraKetSymmetry::Conjugate tensors are treated
+    /// orientation-SENSITIVELY: their bra/ket bundles get distinct graph
+    /// colors (like Nonsymm) and no conjugated_tensors byproduct is
+    /// reported. Used at the eval boundary, where leaves must keep their
+    /// as-written orientation until evaluators understand conjugation (the
+    /// lazy-conj follow-up); symbolic canonicalization keeps the default.
+    bool fold_conjugate_braket = true;
+  };
+
+  /// @sa canonicalize_slots(const container::vector<std::wstring>&, const
+  ///     NamedIndexSet*, SlotCanonicalizationMetadata::named_index_compare_t)
+  SlotCanonicalizationMetadata canonicalize_slots(
+      CanonicalizeSlotsOptions options);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -348,6 +393,17 @@ class TensorNetworkV3 {
     /// to be treated as topologically distinct (e.g. in WickTheorem) need to
     /// set this to true
     bool distinct_named_indices = false;
+
+    /// if true, a tensor's elementwise-conjugation marker
+    /// (Tensor::conjugated()) enters its core-vertex color, so that `T` and
+    /// `T*` are distinguishable (default: false, since canonicalize() toggles
+    /// the marker while re-orienting Conjugate tensors)
+    bool color_conjugation = false;
+
+    /// if false, BraKetSymmetry::Conjugate tensors get distinct bra/ket
+    /// bundle colors (orientation-sensitive), disabling the braket-conjugate
+    /// fold for graphs built with these options
+    bool fold_conjugate_braket = true;
 
     /// if false, will not generate the labels
     bool make_labels = true;

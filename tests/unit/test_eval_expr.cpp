@@ -282,18 +282,84 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(bare_tree.leaf());
     REQUIRE(bare_tree->hash_value() != tree->hash_value());
 
-    // Hermitian (BraKetSymmetry::Conjugate/Symm) tensors don't carry the
-    // marker — Tensor::adjoint() guards the relabel on Nonsymm only — so
-    // binarize gives a plain leaf (no Adjoint op).
+    // Hermitian (BraKetSymmetry::Conjugate/Symm) tensors don't get the '⁺'
+    // label decoration — Tensor::adjoint() guards the relabel on Nonsymm
+    // only. At the eval boundary a flat Conjugate leaf is NOT folded onto
+    // one orientation (that is the lazy-conj eval follow-up): both
+    // orientations binarize to plain unmarked leaves in their as-written
+    // spelling. An already-starred spelling, however, is served through an
+    // EvalOp::Adjoint node over its unmarked VALUE-orientation operand.
     Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
              BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     Tensor g_adj = g;
     g_adj.adjoint();
-    REQUIRE(g_adj.label() == L"g");  // no marker added for Conjugate
+    REQUIRE(g_adj.label() == L"g");  // no label marker added for Conjugate
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto g_tree = binarize(ex<Tensor>(g_adj));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(g_tree.leaf());  // no Adjoint wrapper
+    REQUIRE(g_tree.leaf());
+    REQUIRE_FALSE(g_tree->as_tensor().conjugated());
+    REQUIRE(g_tree->as_tensor().bra().at(0).label() == L"p_3");  // as written
+    auto g_tree2 = binarize(ex<Tensor>(g));
+    REQUIRE(g_tree2.leaf());
+    REQUIRE_FALSE(g_tree2->as_tensor().conjugated());
+    // a starred spelling is served via Adjoint over the value orientation
+    Tensor g_star = g;
+    g_star.conjugate();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto g_tree3 = binarize(ex<Tensor>(g_star));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(g_tree3.leaf());
+    REQUIRE(g_tree3->op_type() == EvalOp::Adjoint);
+    REQUIRE(g_tree3.left().leaf());
+    REQUIRE_FALSE(g_tree3.left()->as_tensor().conjugated());
+    // bare operand = value orientation of g^*: bra/ket swapped back
+    REQUIRE(g_tree3.left()->as_tensor().bra().at(0).label() == L"p_3");
+    REQUIRE(g_tree3.right()->is_constant());  // sentinel
+    REQUIRE(g_tree3->hash_value() != g_tree3.left()->hash_value());
+  }
+
+  SECTION("starred non-Conjugate leaves") {
+    // The conjugation marker is first-class and can land on leaves whose
+    // braket symmetry is not Conjugate. Symm: conj is the identity in value,
+    // so the marker just drops and the leaf is served unmarked. Nonsymm:
+    // conj(t) has no slot spelling and no Adjoint-served equivalent, so
+    // binarize must refuse loudly instead of serving the wrong value
+    // (lazy-conj eval is the follow-up).
+    Tensor s(L"s", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm);
+    Tensor s_star = s;
+    s_star.conjugate();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto s_tree = binarize(ex<Tensor>(s_star));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(s_tree.leaf());
+    REQUIRE_FALSE(s_tree->as_tensor().conjugated());
+
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    Tensor t_star = t;
+    t_star.conjugate();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_star)), std::logic_error);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+    // a directly-constructed EvalExpr must not alias t and t* onto one cache
+    // slot: for Nonsymm they are value-distinct
+    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_star}.hash_value());
+
+    // '⁺'-labeled AND marked (the symbolic transpose conj(adjoint(t))): the
+    // marker refusal must fire before the '⁺' label channel, else the label
+    // channel builds Adjoint over a still-marked bare leaf and the marker is
+    // silently ignored
+    Tensor t_adj_star = t;
+    t_adj_star.adjoint();    // '⁺' label + slot swap
+    t_adj_star.conjugate();  // marker on top: t^T, not evaluable
+    REQUIRE(t_adj_star.label() == L"t⁺");
+    REQUIRE(t_adj_star.conjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_adj_star)), std::logic_error);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
   SECTION("Adjoint op in a binarized term") {
@@ -554,4 +620,137 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }
+}
+
+// At the eval boundary a BraKetSymmetry::Conjugate leaf is
+// orientation-sensitive: neither the flat (block-canonicalization) branch
+// nor the ToT (canonicalize_slots) branch folds bra<->ket orientations --
+// leaves keep their as-written spelling, and only an already-starred
+// spelling carries a marker (served by binarize through an EvalOp::Adjoint
+// node). The conjugation marker still colors the ToT graph, so T and T*
+// stay distinct. Folding fresh leaves onto one orientation-shared slot is
+// the lazy-conj eval follow-up.
+TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+
+  // A proto-indexed (Tensor-of-Tensor) Conjugate leaf and its bra<->ket swap.
+  // These evaluate to complex conjugates of each other. Proto indices route
+  // the leaf ctor through canonicalize_slots; a flat tensor takes the
+  // block-canonicalization branch instead. Neither path folds at the eval
+  // boundary.
+  auto C = deserialize(L"C{a_1<i_1>;i_2}:N-C-S")->as<Tensor>();
+  REQUIRE(ranges::any_of(C.const_indices(), &Index::has_proto_indices));
+  auto C_swap = C;
+  C_swap.adjoint();  // swaps bra<->ket; no '⁺' marker for Conjugate
+  REQUIRE(C_swap.label() == L"C");
+
+  auto is_conj_leaf = [](EvalExpr const& e) {
+    return e.expr()->is<Tensor>() && e.expr()->as<Tensor>().conjugated();
+  };
+
+  SECTION("leaf identity: orientations are distinct at eval") {
+    EvalExpr a{C};
+    EvalExpr b{C_swap};
+    // no fold: distinct spellings, distinct slots, no markers
+    REQUIRE(a.hash_value() != b.hash_value());
+    REQUIRE_FALSE(is_conj_leaf(a));
+    REQUIRE_FALSE(is_conj_leaf(b));
+    // a starred ToT spelling keeps its marker, and the marker colors the
+    // graph: C and C* stay distinct
+    auto C_star = C;
+    C_star.conjugate();
+    EvalExpr s{C_star};
+    REQUIRE(is_conj_leaf(s));
+    REQUIRE(s.hash_value() != a.hash_value());
+  }
+
+  SECTION("flat (block-canon) Conjugate leaf does NOT fold at eval") {
+    // A flat (protoindex-free) Conjugate leaf takes the block-canonicalization
+    // branch, not canonicalize_slots. There the conjugate-braket fold is
+    // DISABLED: leaves keep their as-written orientation so leaf yielders and
+    // evaluators need no conjugation awareness -- folding flat leaves onto
+    // one orientation-shared slot is the lazy-conj eval follow-up. A marked
+    // spelling keeps its marker, shares the slot of its unstarred spelling
+    // (leaf-hash invariant), and binarize serves it through EvalOp::Adjoint.
+    auto F = deserialize(L"C{a_1;i_1}:N-C-S")->as<Tensor>();
+    REQUIRE_FALSE(ranges::any_of(F.const_indices(), &Index::has_proto_indices));
+    auto F_swap = F;
+    F_swap.adjoint();
+    REQUIRE(F_swap.label() == L"C");
+
+    EvalExpr fa{F};
+    EvalExpr fb{F_swap};
+    // no fold: both orientations stay unmarked, in their own spelling
+    REQUIRE_FALSE(is_conj_leaf(fa));
+    REQUIRE_FALSE(is_conj_leaf(fb));
+    // a starred spelling hashes onto its unstarred spelling's slot
+    auto F_star = F;
+    F_star.conjugate();
+    EvalExpr fs{F_star};
+    REQUIRE(is_conj_leaf(fs));
+    REQUIRE(fs.hash_value() == fa.hash_value());
+  }
+}
+
+TEST_CASE("eval_expr_conjugation_marker_identity",
+          "[EvalExpr][conjugate-fold]") {
+  // C(a_1;p) C*(a_2;p) and C*(a_1;p) C(a_2;p) are one tensor S up to the
+  // named relabeling a_1 <-> a_2 (its slots are "index of the unconjugated
+  // factor" and "index of the conjugated factor"), so they may share one
+  // eval-node hash and cache slot -- but only if their canonical layouts put
+  // the unconjugated factor's index in the same slot. With the conjugation
+  // marker invisible to the graph coloring, the two spellings were the same
+  // colored graph with an automorphism exchanging the factors, and bliss
+  // pinned the slot order by the index labels alone: the same buffer was then
+  // read as S by one occurrence and as S^T* by the other (identical only for
+  // real C). Regression for the Kramers-restricted CSV inter-pair overlap.
+  using namespace sequant;
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+
+  auto C = [](std::wstring_view ext) {
+    return ex<Tensor>(L"C", bra{Index{ext}}, ket{Index{L"p_1"}},
+                      Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                      ColumnSymmetry::Symm);
+  };
+  auto Cstar = [&C](std::wstring_view ext) {
+    auto t = C(ext);
+    t->as<Tensor>().conjugate();
+    return t;
+  };
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto A = binarize(C(L"a_1") * Cstar(L"a_2"));  // S(a_1, a_2)
+  auto B = binarize(Cstar(L"a_1") * C(L"a_2"));  // S(a_2, a_1)
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(!A.leaf());
+  REQUIRE(!B.leaf());
+  REQUIRE(A->canon_indices().size() == 2);
+  REQUIRE(B->canon_indices().size() == 2);
+
+  // slot of the unconjugated factor's index in the canonical layout
+  auto unconj_slot = [](auto const& node, Index const& unconj_idx) {
+    auto const& ci = node->canon_indices();
+    return std::distance(ci.begin(),
+                         std::find(ci.begin(), ci.end(), unconj_idx));
+  };
+  auto const slot_A = unconj_slot(A, Index{L"a_1"});
+  auto const slot_B = unconj_slot(B, Index{L"a_2"});
+  REQUIRE(slot_A < 2);
+  REQUIRE(slot_B < 2);
+
+  // same value up to relabeling: one identity ...
+  REQUIRE(A->hash_value() == B->hash_value());
+  // ... and a layout that agrees on which slot is the unconjugated one
+  REQUIRE(slot_A == slot_B);
+
+  // the genuinely different tensor C(a_1) C(a_2) (no conjugation) is kept apart
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto D = binarize(C(L"a_1") * C(L"a_2"));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(D->hash_value() != A->hash_value());
 }

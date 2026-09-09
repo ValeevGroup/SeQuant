@@ -588,9 +588,10 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     auto scalar = product->scalar();
 
     sequant::TensorNetwork tn(*product);
-    auto hash =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
-            .hash_value();
+    auto hash = tn.canonicalize_slots(
+                      {.cardinal_tensor_labels =
+                           TensorCanonicalizer::cardinal_tensor_labels()})
+                    .hash_value();
 
     auto it = largest_coeff_terms.find(hash);
     if (it == largest_coeff_terms.end()) {
