@@ -15,7 +15,7 @@ namespace sequant::util::extint {
 
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(OutputStep);
 
-std::string OutputStep::kind() const { return "Output"; }
+std::string OutputStep::kind() const { return "output"; }
 
 bool OutputStep::accepts_options() const { return true; }
 
