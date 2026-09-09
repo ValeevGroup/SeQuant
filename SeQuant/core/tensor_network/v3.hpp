@@ -282,6 +282,24 @@ class TensorNetworkV3 {
     /// reports the phase change due to permutation of slots relative to their
     /// input order
     std::int8_t phase = +1;  // +1 or -1
+
+    /// antilinear byproduct of canonicalization: the input ordinals of the
+    /// network's BraKetSymmetry::Conjugate tensors whose canonical labeling
+    /// spells them in the bra<->ket-swapped orientation. A Hermitian
+    /// (Conjugate) tensor satisfies T{bra;ket} = conj(T{ket;bra}), so each
+    /// such swap carries an elementwise conjugation of that tensor (cf.
+    /// `phase`, which carries the ±1 linear byproduct of antisymmetric slot
+    /// reorderings). NOTE: flat input ordinals suffice for the flat networks
+    /// canonicalize_slots consumes today; this field is to be replaced
+    /// by/dissolved into the maintainer's TreeIndex-based reporting when
+    /// that lands, so it survives nested expressions.
+    container::svector<std::size_t> conjugated_tensors;
+    /// Kramers (time-reversal) fold byproduct (CanonicalizeSlotsOptions::
+    /// fold_kramers): the input ordinals of the tensors whose flavored slots
+    /// were flipped to their Kramers partners (and marked conjugated) to give
+    /// their connected component its canonical orientation; the accumulated
+    /// phase is folded into `phase`
+    container::svector<std::size_t> kramers_flipped_tensors;
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -298,11 +316,60 @@ class TensorNetworkV3 {
   /// before sorting to canonical order; the default is to sort
   /// by Index::space()
   /// @return the computed canonicalization metadata
+  /// @note equivalent to (and forwards to) the CanonicalizeSlotsOptions
+  /// overload; prefer that overload in new code
   SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{});
+
+  /// @brief options controlling canonicalize_slots()
+  struct CanonicalizeSlotsOptions {
+    SEQUANT_DESIGNATED_INIT_ONLY;
+    /// move all tensors with these labels to the front before canonicalizing
+    /// indices
+    container::vector<std::wstring> cardinal_tensor_labels = {};
+    /// the indices that cannot be renamed, i.e. their labels are meaningful;
+    /// nullptr = use the external indices
+    const NamedIndexSet *named_indices = nullptr;
+    /// less-than comparison for coarse-grained sorting of named indices
+    /// before sorting to canonical order. N.B. defaulted to the DECLARED
+    /// default (default_idxptr_slottype_lesscompare), so a value-initialized
+    /// options object exercises the same code path as explicit callers -- a
+    /// default-constructed (empty) std::function is replaced by an internal
+    /// space-only fallback, a different path
+    SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+        default_idxptr_slottype_lesscompare{};
+    /// if false, BraKetSymmetry::Conjugate tensors are treated
+    /// orientation-SENSITIVELY: their bra/ket bundles get distinct graph
+    /// colors (like Nonsymm) and no conjugated_tensors byproduct is
+    /// reported. Used at the eval boundary, where leaves must keep their
+    /// as-written orientation until evaluators understand conjugation (the
+    /// lazy-conj follow-up); symbolic canonicalization keeps the default.
+    bool fold_conjugate_braket = true;
+    /// if true, apply the Kramers (time-reversal) network fold before
+    /// canonicalization (see CanonicalizeOptions::fold_kramers); reported
+    /// via kramers_flipped_tensors
+    bool fold_kramers = false;
+    /// if true, the bra and ket slots of every tensor with (anti)symmetric
+    /// bra/ket bundles are permuted IN PLACE into their canonical order, and
+    /// SlotCanonicalizationMetadata::phase reports the parity of exactly
+    /// that reorder. The canonical order is then the NAMED-index canonical
+    /// order (the order of get_indices(): coarse groups by
+    /// named_index_compare, canonical vertex ordinal within a group;
+    /// anonymous slots after the named ones by vertex ordinal), so a
+    /// respelled leaf keeps the space order of its bundles. (Without this
+    /// option the phase is relative to the raw canonical vertex order and
+    /// nothing is permuted.) Column-symmetric Nonsymm tensors and the
+    /// bra<->ket orientation are NOT touched (see conjugated_tensors)
+    bool apply_slot_order = false;
+  };
+
+  /// @sa canonicalize_slots(const container::vector<std::wstring>&, const
+  ///     NamedIndexSet*, SlotCanonicalizationMetadata::named_index_compare_t)
+  SlotCanonicalizationMetadata canonicalize_slots(
+      CanonicalizeSlotsOptions options);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -348,6 +415,17 @@ class TensorNetworkV3 {
     /// to be treated as topologically distinct (e.g. in WickTheorem) need to
     /// set this to true
     bool distinct_named_indices = false;
+
+    /// if true, a tensor's elementwise-conjugation marker
+    /// (Tensor::conjugated()) enters its core-vertex color, so that `T` and
+    /// `T*` are distinguishable (default: false, since canonicalize() toggles
+    /// the marker while re-orienting Conjugate tensors)
+    bool color_conjugation = false;
+
+    /// if false, BraKetSymmetry::Conjugate tensors get distinct bra/ket
+    /// bundle colors (orientation-sensitive), disabling the braket-conjugate
+    /// fold for graphs built with these options
+    bool fold_conjugate_braket = true;
 
     /// if false, will not generate the labels
     bool make_labels = true;
@@ -441,6 +519,23 @@ class TensorNetworkV3 {
 
   /// initializes edges_, ext_indices_, and pure_proto_indices_
   void init_edges();
+
+  /// @brief Kramers (time-reversal) network fold: gives every connected
+  /// component of tensors joined by shared flavored indices (slots and proto
+  /// indices) ONE orientation. Components containing a named index, a
+  /// non-foldable tensor (see kramers_foldable()) are pinned; a free
+  /// component is flipped (every flavored slot of every member replaced by
+  /// its Kramers partner, conjugation marker toggled) iff the flipped
+  /// spelling has fewer down-first tensors, ties broken by the sorted
+  /// (label, slot flavors) fingerprint (marker-free, so an unmarked flavor
+  /// twin of a traced sum orients like the marked flip). Both spellings of a
+  /// component thus land on the same orientation.
+  /// @param named_indices indices whose flavor is fixed
+  /// @return the accumulated phase, (-1)^(#down slots) per flipped tensor,
+  ///         and the (sorted) ordinals of the flipped tensors
+  /// @note invalidates edges_ if any tensor was flipped
+  std::pair<int, container::svector<std::size_t>> kramers_orient(
+      const NamedIndexSet &named_indices);
 
   /// Canonicalizes the network graph representation using colored graph
   /// canonicalization

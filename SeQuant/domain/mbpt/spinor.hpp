@@ -1,0 +1,412 @@
+//
+// Kramers tracing for closed-shell relativistic (2-/4-component) theories.
+//
+// Rewrites an all-spinor (Kramers-free) expression — e.g. the MP2 energy
+// `1/4 g-bar t-bar` over full spinor indices — into a sum over the
+// time-reversal-symmetry (TRS) canonical Kramers-block representatives.
+//
+// Design (round 2): a single function `closed_shell_kramers_trace` that
+// mirrors the naive spin tracer `spintrace_impl` but, instead of the
+// Ms-conservation filter (`can_expand`, which is invalid relativistically),
+// folds whole Kramers configurations related by global time reversal
+// (T = flip every Kramers label + complex-conjugate) into a single
+// `2 Re[...]` representative. Particle-interchange (sigma) folding is left
+// to `sequant::canonicalize`; external-index antisymmetry folding (CC,
+// rank-general) and the per-column internal-T-reach are deferred.
+//
+// Kramers labels reuse the `Spin` quantum number (space_qns.hpp):
+//   Spin::alpha (== Spin::up)   = Kramers-up   (label suffix U+2191)
+//   Spin::beta  (== Spin::down) = Kramers-down (label suffix U+2193)
+//
+// `RealPart`/`ImagPart` (now the core wrappers, see
+// SeQuant/core/expressions/complex.hpp) mark a closed (scalar-valued)
+// contraction so the evaluator takes its real/imaginary part; the core eval
+// layer evaluates them natively (EvalOp::RealPart/ImagPart), and their
+// canonicalization normalizes the inner in place.
+//
+
+#ifndef SEQUANT_DOMAIN_MBPT_SPINOR_HPP
+#define SEQUANT_DOMAIN_MBPT_SPINOR_HPP
+
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+
+#include <SeQuant/core/expressions/complex.hpp>
+
+#include <SeQuant/domain/mbpt/fwd.hpp>
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <utility>
+
+namespace sequant::mbpt {
+
+// =====================================================================
+// Re/Im evaluation markers + complex-conjugation label convention.
+//
+// Convention: complex conjugation of a tensor is encoded as a `*` suffix
+// on the tensor label (e.g. `g` -> `g*`). Evaluator-side dispatch
+// translates the suffix into a `.conj()` call on the numeric tensor.
+// =====================================================================
+
+/// @brief Tests whether a tensor label encodes complex conjugation.
+inline bool has_conj_suffix(std::wstring_view label) {
+  return !label.empty() && label.back() == L'*';
+}
+
+// RealPart/ImagPart wrappers: provided by the core
+// (SeQuant/core/expressions/complex.hpp) together with the real_part /
+// imaginary_part factories; the eval layer evaluates them natively
+// (EvalOp::RealPart/ImagPart). The duplicate domain-local definitions that
+// used to live here were retired when the core gained them.
+
+// =====================================================================
+// Kramers tracer.
+// =====================================================================
+
+// clang-format off
+/// @brief Traces an all-spinor (Kramers-free) closed-shell expression into a
+///        sum over time-reversal-canonical Kramers-block representatives.
+/// @details Mirrors the naive spin tracer `spintrace` in structure: it
+/// enumerates the 2^n Kramers configurations of the term's indices and assigns
+/// Kramers-up/down labels (reusing `Spin::alpha`/`Spin::beta`). Unlike
+/// `spintrace`, it applies NO Ms-conservation filter (Kramers is not conserved
+/// relativistically). Configurations related by global time reversal
+/// (T: flip every Kramers label, complex-conjugate) are folded pairwise into a
+/// single `RealPart`-wrapped representative (`A + A* = 2 Re A`). For the
+/// integral `g` the bra antisymmetry is expanded (to the NonSymm form);
+/// the amplitude `t` is kept antisymmetric (the "level-1" form). The caller is
+/// expected to run `canonicalize` + `rapid_simplify` on the result to perform
+/// the particle-interchange (sigma) merge.
+/// @param expr an all-spinor expression (indices have no Kramers/Spin label)
+/// @param ext_index_groups groups of external indices (empty for a fully
+///        contracted energy; external-antisymmetry folding is not yet
+///        implemented and these are treated like internal groups for now)
+/// @param fold_T if true (default), fold each global-T (conjugate) pair into a
+///        single `2 Re[...]` representative; if false, emit every configuration
+///        (sigma-merged) verbatim with no `RealPart` wrapper — the sum is
+///        complex and the caller takes its real part. The false form is for
+///        evaluators that cannot evaluate `Re()` of a tensor network (e.g. the
+///        CCk energy observable, which sums the blocks then takes the real part).
+/// @param expand_g if true (default), expand the integral `g`'s antisymmetry
+///        (the level-1 raw-g form); if false, keep `g` antisymmetric (ḡ) so the
+///        evaluator fetches the factory [as] block and the cross-Kramers
+///        antisymmetry is handled inside the integral. (g-expansion is a later
+///        optimization stage.)
+/// @return the Kramers-traced expression (unsimplified)
+// clang-format on
+/// @param drop_mixed_kramers_fock if true, discard every emitted term carrying
+///        a Fock element between opposite Kramers partners (see
+///        drop_mixed_kramers_fock_terms); default false.
+ExprPtr closed_shell_kramers_trace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups = {},
+    bool fold_T = true, bool expand_g = true,
+    bool drop_mixed_kramers_fock = false);
+
+// clang-format off
+/// @brief Orbits of the n-bit Kramers configurations under a group of bit
+/// permutations and (optionally) global time reversal.
+/// @details A configuration is an n-bit integer (bit p = Kramers label of index
+/// slot p: 0 = up, 1 = down). The orbit group is generated by @p bit_perms
+/// (each a permutation `q` of [0,n) acting as: bit p -> bit q[p]) together with,
+/// if @p use_T, the global time-reversal T = full one's-complement. This is the
+/// building block of the Kramers folds: the external-antisymmetry fold uses the
+/// external transpositions P_ab / P_ij with T (doubles: 16 -> 5 blocks); the
+/// internal/MP2 fold uses the particle interchange sigma with T. Mirrors
+/// `~/code/KR-MP2/kramers_orbit_compress.py`.
+/// @param n number of index slots (bits); must be <= 62
+/// @param bit_perms generator permutations (each of length n)
+/// @param use_T include global time reversal (complement) as a generator
+/// @return one ascending-sorted vector of member configs per orbit; the
+///         canonical representative is the front element (orbit-min)
+// clang-format on
+container::svector<container::svector<std::uint64_t>> kramers_config_orbits(
+    std::size_t n,
+    const container::svector<container::svector<std::size_t>>& bit_perms,
+    bool use_T);
+
+/// @brief The external-antisymmetry generator set for a rank-@p rank CC
+/// residual block: the S_rank adjacent transpositions of the virtual external
+/// group
+/// `[0,rank)` and of the occupied external group `[rank,2*rank)`, as bit
+/// permutations over the `n = 2*rank` external slots. This is the single source
+/// of the generator set shared by the tracer (closed_shell_kramers_CC_trace),
+/// the amplitude allocator, and the leaf reconstruction (kr_recon) — pass the
+/// result to kramers_config_orbits / kramers_external_blocks together with `T`.
+container::svector<container::svector<std::size_t>> kramers_external_generators(
+    std::size_t rank);
+
+/// One member of a Kramers external block: its configuration plus the transform
+/// that reconstructs its (residual) tensor from the orbit's canonical
+/// representative,  block(config) = sign * [conj] * permute(block(canonical)).
+struct KramersBlockMember {
+  std::uint64_t config;  //!< this member's configuration
+  int sign;              //!< +1 or -1
+  bool conj;             //!< complex-conjugate the canonical block
+  container::svector<std::size_t>
+      perm;  //!< index permutation (slot p -> perm[p])
+};
+
+/// A symmetry-unique external block: the canonical (orbit-min) configuration
+/// and every member with its reconstruction transform.
+struct KramersBlock {
+  std::uint64_t canonical;
+  container::svector<KramersBlockMember> members;  //!< includes the canonical
+};
+
+/// @brief On-the-fly variant of kramers_external_blocks: compute the
+/// reconstruction transform block(cfg) = sign*[conj]*perm(block(canon))
+/// directly from the bit representations, with no orbit table generation.
+/// @details Rank-general. The permutation is built by order-preserving bit
+/// matching within each slot group (parity-tracked for the sign), so no
+/// generator-word composition is involved — the rank>=3 composition-order
+/// subtleties cannot arise by construction. The conj branch matches against
+/// the complement, with the global time-reversal sign (-1)^(#down of the
+/// pre-image). When both branches exist (self-conjugate orbits) the direct
+/// (conj-free) transform is returned; reconstruction through either is exact
+/// only when the stored representative respects its 𝒯 self-symmetry (enforce
+/// the stabilizer projection on such blocks).
+/// @param n number of slots (bits), <= 62
+/// @param groups the slot partition (e.g. {{0..r-1},{r..2r-1}} for a rank-r
+///        residual); permutations act within groups only, each transposition
+///        contributing sign -1 (antisymmetric groups)
+/// @param use_T include the global time-reversal (complement/conj) branch
+/// @param canon the representative configuration
+/// @param cfg the configuration to reconstruct
+/// @return the transform, or nullopt if cfg is not in canon's orbit
+std::optional<KramersBlockMember> kramers_transform(
+    std::size_t n,
+    const container::svector<container::svector<std::size_t>>& groups,
+    bool use_T, std::uint64_t canon, std::uint64_t cfg);
+
+/// @brief The slot partition for a rank-@p rank CC residual: virtual externals
+/// [0,rank) and occupied externals [rank,2*rank) — the group input of
+/// kramers_transform, consistent with kramers_external_generators.
+container::svector<container::svector<std::size_t>> kramers_external_groups(
+    std::size_t rank);
+
+// clang-format off
+/// @brief External Kramers blocks with per-member reconstruction transforms.
+/// @details Like kramers_config_orbits, but each generator carries a transform
+/// so that every non-canonical member records how its tensor is obtained from
+/// the canonical's: the transposition generators @p antisym_perms each act with
+/// sign -1 (residual antisymmetry), the @p symm_perms each act with sign +1
+/// (e.g. particle interchange sigma on a raw, non-antisymmetrized integral),
+/// and (if @p use_T) global time reversal T acts as complex conjugation with
+/// sign (-1)^(#down) and the identity slot permutation. This is the eval-time
+/// external reconstruction (compute the canonical block, fill the rest by
+/// sign/conj/perm): use {antisym_perms = external transpositions, T} for the
+/// antisymmetric residual (doubles -> 5 blocks), or {symm_perms = sigma, T} for
+/// a raw g leaf (doubles -> 6 blocks).
+/// @param n number of external slots (bits), <= 62
+/// @param antisym_perms transposition generators acting with sign -1
+/// @param use_T include global time reversal
+/// @param symm_perms permutation generators acting with sign +1 (default none)
+/// @return one KramersBlock per symmetry-unique external representative
+// clang-format on
+container::svector<KramersBlock> kramers_external_blocks(
+    std::size_t n,
+    const container::svector<container::svector<std::size_t>>& antisym_perms,
+    bool use_T,
+    const container::svector<container::svector<std::size_t>>& symm_perms = {});
+
+/// How closed_shell_kramers_CC_trace handles the residual's antisymmetrizer Â.
+enum class KramersAExpansion {
+  /// expand Â into all its signed external permutations (normalized
+  /// 1/(bra!ket!)): every emitted block is the fully antisymmetrized residual
+  /// and the external configs fold under the swap generators + T (doubles:
+  /// 5 blocks)
+  full,
+  /// strip Â: the emitted blocks are the bare residual configs, the caller
+  /// antisymmetrizes numerically ACROSS configs, and the configs fold under T
+  /// only (doubles: 8 blocks with use_T, 16 without)
+  none,
+  /// per representative block expand Â only over the external groups whose
+  /// members carry DIFFERENT Kramers flavours (the swaps that change the
+  /// config); a group whose members share one flavour is left to the caller,
+  /// which antisymmetrizes it numerically WITHIN the block (ket group =
+  /// occupied pair, bra group = virtual pair). Exact, same 5-orbit structure
+  /// as full, ~half the terms in the blocks with a same-flavour group. Rank 2
+  /// groups only (rank > 2 groups are expanded fully).
+  partial
+};
+
+// clang-format off
+/// @brief CC residual Kramers trace — external fold (stages 1-2).
+/// @details Given a CC residual expression carrying a leading antisymmetrizer Â
+/// (its bra = external virtuals, ket = external occupieds), folds the external
+/// Kramers configurations under the residual's external antisymmetry (the S_k
+/// adjacent transpositions of each external group, rank-general) together with
+/// global time reversal T (kramers_config_orbits), and returns one block per
+/// symmetry-unique external representative with the external indices
+/// Kramers-labeled. Â is A-expanded (expand_A_op) into explicit signed external
+/// permutations so the full external antisymmetry — cross-Kramers pairs included
+/// — is explicit per term (required for the t-dependent terms). Doubles -> 5
+/// blocks.
+/// @note Internal tracing/folding, A-expand and the g TRS folds are handled.
+/// @param expr a CC residual term/expression with a leading Â
+/// @param expand_g if true, expand each integral `g`'s antisymmetry to raw
+///        NonSymm form (Kramers-free, no Ms filter) before labeling/folding, so
+///        the evaluator fetches raw ⟨..|..⟩ blocks rather than the factory [as]
+///        block. The factory [as] block silently omits the cross-Kramers swap
+///        for mixed-Kramers index pairs, so the [as] form is wrong for any term
+///        with a cross-Kramers (occ or virt) pair — INTERNAL pairs included.
+///        Defaults false (keep ḡ antisymmetric).
+/// @return one Kramers-labeled block per external representative
+// clang-format on
+/// @param use_T if true (default) fold the external Kramers configs under
+/// global
+///        time reversal T as well (doubles -> 5 blocks); if false fold only
+///        under the external particle-interchange swaps B/K (doubles -> 9
+///        blocks), avoiding the T (conjugation) reduction — a diagnostic to
+///        isolate whether the residual's T-transformation is the issue.
+/// @param drop_mixed_kramers_fock if true, discard every emitted term that
+///        carries a Fock element between opposite Kramers partners (see
+///        drop_mixed_kramers_fock_terms). Default false: the reduction is a
+///        property of the REFERENCE, not of the algebra, so callers opt in.
+/// @param a_expansion how the residual's antisymmetrizer Â is handled, see
+///        KramersAExpansion. Default: full (every emitted block is the
+///        antisymmetrized residual; external configs fold under the swap
+///        generators + T).
+container::svector<ExprPtr> closed_shell_kramers_CC_trace(
+    const ExprPtr& expr, bool expand_g = false, bool use_T = true,
+    bool drop_mixed_kramers_fock = false,
+    KramersAExpansion a_expansion = KramersAExpansion::full);
+
+// clang-format off
+/// @brief Drop every term containing a Fock (`f`) element between opposite
+///        Kramers partners.
+/// @details For a Kramers-restricted reference the one-body Fock operator
+/// commutes with time reversal, so in a Kramers-paired basis every Fock matrix
+/// element between opposite Kramers partners vanishes *in exact arithmetic*:
+/// `f^{p↑}_{q↓} = 0`, for occupied, virtual and mixed blocks alike. Terms
+/// carrying such a factor can therefore be removed at derivation time.
+///
+/// @warning This is a property of the REFERENCE, not of the algebra: it holds
+/// only while the orbital bases stay Kramers-paired (a canonical
+/// Kramers-restricted reference, or a localizer applying the same
+/// transformation to both Kramers partners). A localizer that MIXES Kramers
+/// partners makes these blocks nonzero and this reduction wrong, which is why
+/// the tracers keep it behind an opt-in flag.
+///
+/// @note Verified numerically on HSeOH/X2C (Se, strong spin-orbit): the
+/// crossed blocks vanish with SCF convergence in lockstep with the Brillouin
+/// block ⟨i|F|a⟩, which is guaranteed zero for a converged SCF, and stay ~8x
+/// BELOW it throughout. At SCF target 1e-15, ‖f^{i↑}_{j↓}‖ ~ 2.5e-12 and
+/// ‖f^{a↑}_{b↓}‖ ~ 2.0e-12 against a diagonal of 4.7e+2, i.e. ~4e-15
+/// relative. (Measuring this requires the DF-consistent Fock: MPQC's leaf
+/// builder requests `[df]` so it receives the SCF's own converged Fock; a
+/// hand-built formula without `[df]` gets an exact-J/K Fock instead and shows
+/// a spurious ~1e-5 residual.)
+///
+/// @note Dropping these terms saves little arithmetic: at MPQC's production
+/// CSV screening threshold the crossed Fock blocks already fall below the
+/// sparse-shape cutoff and are discarded, so the terms cost almost nothing to
+/// evaluate. The benefit is a smaller derivation -- fewer terms to
+/// canonicalize, binarize, cache and step through.
+/// @param expr expression to filter
+/// @return @p expr with the offending terms removed; `Constant{0}` if that
+///         removes everything
+// clang-format on
+ExprPtr drop_mixed_kramers_fock_terms(const ExprPtr& expr);
+
+/// @brief True if @p expr contains an antisymmetrizer (Â) tensor anywhere.
+/// @details Lets a caller (e.g. the CC spintrace dispatch) tell a residual
+/// equation (carries a leading Â -> closed_shell_kramers_CC_trace) from a fully
+/// contracted scalar like the energy (no Â -> closed_shell_kramers_trace).
+bool has_antisymmetrizer(const ExprPtr& expr);
+
+// clang-format off
+/// @brief Canonicalize the internal Kramers-flavor orientation of each term
+/// (task #59, korbit rebase).
+/// @details Within a term, tensor leaves connected by shared Kramers-flavored
+/// slot indices form flip components (a whole-leaf flavor flip drags every
+/// index the leaf carries, so closure is by leaves, not lines). A component
+/// touching an external index (or a dangling index) is frozen. A fully
+/// internal component may be reoriented by global time reversal: flip the
+/// flavor of every index in it and conjugate-mark every leaf
+/// (Tensor::conjugate()); the TRS phases cancel pairwise on the component's
+/// contracted lines, so no scalar arises (same reason the tracer's closed
+/// contraction T-fold is sign-free). The pass flips a component iff its
+/// flipped fingerprint (sorted multiset of per-leaf (label, flavor bits))
+/// is lexicographically smaller, so the result is canonical and idempotent.
+/// Proto bundles are rewritten coherently wherever they reference flipped
+/// indices (decoration follows its referent); a proto never creates
+/// connectivity by itself.
+/// @param expr a Sum of flat terms (or a single term); nested Sum factors are
+///        left untouched
+/// @param externals the term-set's external (fixed-flavor) indices
+/// @return the rebased expression
+// clang-format on
+/// @brief Whole-term time-reversal image of a flat term: every flavored
+/// slot index is flavor-flipped (externals through @p ext_map, internal
+/// dummies to fresh flipped-space tmps, proto bundles following their
+/// referents) and every leaf is conjugate-marked. The scalar is untouched:
+/// the external-flip phase is the caller's (the block stabilizer's sign).
+/// @return the flipped term, or nullptr if @p term is not a flat product of
+///         tensors and scalars
+ExprPtr kramers_term_flip(const ExprPtr& term,
+                          const container::map<Index, Index>& ext_map);
+
+/// @brief Result of fold_stripped_antisymmetrizer
+struct StrippedAntisymmetrizerFold {
+  /// the folded block (a Sum, or the input if nothing folded)
+  ExprPtr expr;
+  /// number of terms in the input block
+  std::size_t n_in = 0;
+  /// number of terms in the folded block
+  std::size_t n_out = 0;
+  /// number of terms absorbed into a representative (their signed swap image)
+  std::size_t n_merged = 0;
+  /// number of terms annihilated by the antisymmetrizer (a self-image with
+  /// the wrong sign, or a representative whose orbit sums to zero)
+  std::size_t n_dead = 0;
+};
+
+// clang-format off
+/// @brief Folds the terms of a Kramers residual block under the external
+/// antisymmetrizer groups that were STRIPPED from it and are applied by the
+/// consumer numerically (KramersAExpansion::partial: every same-flavour rank-2
+/// external group, antisymmetrized ½(1-P) within the block).
+///
+/// Under that antisymmetrizer a term and its signed swap image contribute
+/// identically, so a pair `T_i`, `T_j = r·P(T_i)` collapses into
+/// `(1 + s·r)·T_i` (s = the parity of the permutation, -1 per group swap);
+/// a term that is its own image with the wrong sign, `P(T_i) = -s·T_i`,
+/// vanishes under the antisymmetrizer and is dropped. The relation is
+/// established symbolically: both terms canonicalize (externals kept
+/// distinguishable, CanonicalizeOptions::ignore_named_index_labels = No) to
+/// the same network up to a scalar. Exact by construction:
+/// (1-P)[folded] == (1-P)[block].
+///
+/// @param block a Kramers residual block (a Sum of flat terms, or one term)
+/// @param groups the stripped external groups, each a pair of external
+///        indices of the block (bra = virtual pair, ket = occupied pair);
+///        proto bundles that contain a group member are remapped with it
+/// @param opts canonicalization options; ignore_named_index_labels is forced
+///        to No (the fold needs unique canonical forms for fixed externals)
+/// @return the folded block and the fold census
+// clang-format on
+StrippedAntisymmetrizerFold fold_stripped_antisymmetrizer(
+    const ExprPtr& block,
+    const container::svector<std::pair<Index, Index>>& groups,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+
+/// @brief deep-copies @p expr and stamps every Tensor leaf with @p ks
+/// (KramersSymmetry::TimeReversal by default): the Kramers trace applies it
+/// to its output so the canonicalizer's Kramers fold (see
+/// CanonicalizeOptions::fold_kramers) knows the leaves obey the
+/// time-reversal identity; csv_transform / density_fit propagate the
+/// attribute from the tensor they factorize
+ExprPtr mark_kramers_symmetric(
+    const ExprPtr& expr, KramersSymmetry ks = KramersSymmetry::TimeReversal);
+
+}  // namespace sequant::mbpt
+
+#endif  // SEQUANT_DOMAIN_MBPT_SPINOR_HPP

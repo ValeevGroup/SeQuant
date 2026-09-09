@@ -1,4 +1,4 @@
 ECC =
-  + 1/4 g{i1,i2;a1,a2}:A-H-S T2{a1,a2;i1,i2}
-  + f{i1;a1}:A-H-S T1{a1;i1}
-  + 1/2 g{i1,i2;a1,a2}:A-H-S T1{a1;i1} T1{a2;i2}
+  + 1/4 g{i1,i2;a1,a2}:A-H-S T2{a1,a2;i1,i2}:A-N-S
+  + f{i1;a1}:A-H-S T1{a1;i1}:A-N-S
+  + 1/2 g{i1,i2;a1,a2}:A-H-S T1{a1;i1}:A-N-S T1{a2;i2}:A-N-S

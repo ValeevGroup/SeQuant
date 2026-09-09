@@ -3,12 +3,14 @@
 //
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
+#include <compare>
 #include <memory>
 #include <mutex>
 #include <type_traits>
@@ -172,8 +174,17 @@ TensorCanonicalizer::~TensorCanonicalizer() = default;
 std::pair<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>*,
           std::unique_lock<std::recursive_mutex>>
 TensorCanonicalizer::instance_map_accessor() {
+  // The map is seeded with DefaultTensorCanonicalizer as the default default
+  // (label L""), so a bare Tensor canonicalizes (including the
+  // braket-orientation fold, now part of DefaultTensorCanonicalizer::apply)
+  // even when no canonicalizer was registered explicitly. Explicit
+  // register_instance calls override the seed as before.
   static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
-      map_;
+      map_ = [] {
+        container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> m;
+        m.emplace(L"", std::make_shared<DefaultTensorCanonicalizer>());
+        return m;
+      }();
   static std::recursive_mutex mtx_;
   static bool initialized_ = false;
 
@@ -327,18 +338,152 @@ void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
   });
 }
 
-void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
-  if (t._braket_symmetry() != BraKetSymmetry::Symm) {
+bool braket_orientation_pinned(const AbstractTensor& t) {
+  const auto lbl = t._label();
+  return lbl == reserved::antisymm_label() || lbl == reserved::symm_label() ||
+         lbl == reserved::transposition_label();
+}
+
+bool braket_conjugate_foldable(const AbstractTensor& t) {
+  return t._braket_symmetry() == BraKetSymmetry::Conjugate && t._is_cnumber() &&
+         !braket_orientation_pinned(t);
+}
+
+bool braket_foldable(const AbstractTensor& t) {
+  return t._braket_symmetry() == BraKetSymmetry::Symm ||
+         braket_conjugate_foldable(t);
+}
+
+bool kramers_foldable(const AbstractTensor& t) {
+  return t._is_cnumber() &&
+         t._kramers_symmetry() == KramersSymmetry::TimeReversal &&
+         !braket_orientation_pinned(t);
+}
+
+bool kramers_flip_slots(AbstractTensor& t) {
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return false;
+  bool flipped = false;
+  // in place (not via _transform_indices: the block canonicalizer tags every
+  // slot and Index::transform skips tagged indices); a tag present on the
+  // slot is carried over
+  auto flip = [&](auto&& slots) {
+    for (auto& idx : slots) {
+      auto f = kramers_flipped(idx, *isr);
+      if (!f) continue;
+      const bool tagged = idx.tag().has_value();
+      idx = std::move(*f);
+      if (tagged) idx.tag().assign(0);
+      flipped = true;
+    }
+  };
+  flip(t._bra_mutable());
+  flip(t._ket_mutable());
+  flip(t._aux_mutable());
+  return flipped;
+}
+
+std::wstring kramers_flavor_key(const AbstractTensor& t, bool flipped) {
+  const auto isr = get_default_context().index_space_registry();
+  auto bundle = [&](auto slots) {
+    std::wstring b;
+    for (const Index& idx : slots) {
+      if (!isr || !isr->kramers_partner(idx.space())) {
+        b += L'-';
+        continue;
+      }
+      const bool down = !isr->kramers_canonical(idx.space());
+      b += (down != flipped) ? L'b' : L'a';  // up 'a' orders before down 'b'
+    }
+    std::sort(b.begin(), b.end());
+    return b;
+  };
+  std::wstring bra = bundle(t._bra()), ket = bundle(t._ket()),
+               aux = bundle(t._aux());
+  if (braket_foldable(t) && ket < bra) std::swap(bra, ket);
+  std::wstring key(t._label());
+  key += L'|';
+  key += bra;
+  key += L'|';
+  key += ket;
+  key += L'|';
+  key += aux;
+  return key;
+}
+
+bool kramers_noncanonical(const AbstractTensor& t) {
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return false;
+  std::size_t n_up = 0, n_down = 0;
+  auto count = [&](auto slots) {
+    for (const Index& idx : slots) {
+      if (!isr->kramers_partner(idx.space())) continue;
+      if (isr->kramers_canonical(idx.space()))
+        ++n_up;
+      else
+        ++n_down;
+    }
+  };
+  count(t._bra());
+  count(t._ket());
+  count(t._aux());
+  if (n_up + n_down == 0) return false;
+  if (n_down != n_up) return n_down > n_up;
+  return kramers_flavor_key(t, true) < kramers_flavor_key(t, false);
+}
+
+int canonicalize_kramers(AbstractTensor& t) {
+  if (!kramers_foldable(t)) return 1;
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return 1;
+  // orientation/permutation-invariant decision (see kramers_noncanonical);
+  // count the down slots for the phase
+  if (!kramers_noncanonical(t)) return 1;  // nothing to fold
+  int n_down = 0;
+  auto visit = [&](const Index& idx) {
+    if (isr->kramers_partner(idx.space()) &&
+        !isr->kramers_canonical(idx.space()))
+      ++n_down;
+  };
+  for (const auto& idx : t._bra()) visit(idx);
+  for (const auto& idx : t._ket()) visit(idx);
+  for (const auto& idx : t._aux()) visit(idx);
+  kramers_flip_slots(t);
+  t._conjugate();
+  return (n_down % 2) ? -1 : 1;
+}
+
+void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
+                                                     bool fold_conjugate) {
+  if (!braket_foldable(t)) {
+    return;
+  }
+  const auto bks = t._braket_symmetry();
+  if (bks == BraKetSymmetry::Conjugate && !fold_conjugate) {
     return;
   }
 
-  // bra<->ket exchange is a symmetry for braket-symmetric tensors, so pick a
-  // canonical orientation. The choice is governed solely by the canonical
-  // "colors" of the bra and ket bundles -- i.e. their index spaces, not the
-  // index labels -- so the result is label-independent. Bundles with identical
-  // spaces (e.g. g{p,q;r,s}) compare equal and are left untouched; only
-  // differing-color bundles are reoriented (so e.g. a half-tensor X{;a;x} folds
-  // into X{a;;x}).
+  // Normalize to the VALUE orientation first: a marked Conjugate tensor's
+  // starred spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has
+  // TWO spellings. Deciding on the current spelling is not marker-convergent
+  // (both spellings can satisfy "no swap"), which would let different
+  // canonicalization routes (graph vs content) end on different members of
+  // the pair. Unfold, then decide -- one canonical spelling per VALUE.
+  if (bks == BraKetSymmetry::Conjugate && t._conjugated()) {
+    t._conjugate();
+    t._swap_bra_ket();
+  }
+
+  // bra<->ket exchange is a symmetry for braket-foldable tensors, so pick a
+  // canonical orientation: freely for Symm braket symmetry, and combined with
+  // the elementwise-conjugation marker for Conjugate braket symmetry (the
+  // value identity T{q;p} = conj(T{p;q})). The choice is governed by the
+  // canonical "colors" of the bra and ket bundles -- i.e. their index spaces,
+  // not the index labels -- so the result is label-independent. Bundles with
+  // identical spaces (e.g. g{p,q;r,s}) compare equal and are left untouched
+  // for Symm; for Conjugate a full space tie is broken on the index labels
+  // (below), because the two orientations denote DIFFERENT (conjugate) values
+  // that must nevertheless land on one canonical spelling.
   const TensorBlockIndexComparer cmp;
   auto space_less = [&cmp](const Index& a, const Index& b) {
     return cmp.compare_spaces(a, b) < 0;
@@ -360,9 +505,58 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t) {
   ranges::sort(ket_spaces, space_less);
 
   // canonical orientation: the bundle whose spaces are lexicographically
-  // larger goes to bra.
-  if (ranges::lexicographical_compare(bra_spaces, ket_spaces, space_less)) {
+  // larger goes to bra (three-way compare, so a full tie is detected without
+  // re-comparing in reverse)
+  const auto space_order = std::lexicographical_compare_three_way(
+      bra_spaces.begin(), bra_spaces.end(), ket_spaces.begin(),
+      ket_spaces.end(), [&cmp](const Index& a, const Index& b) {
+        return cmp.compare_spaces(a, b) <=> 0;
+      });
+  bool swap = space_order < 0;
+
+  // Kramers (time-reversal) tensors: prefer the orientation whose bra
+  // carries fewer down-flavored indices, so the up-row spelling is reached
+  // by the braket move (value-exact via the marker) and "first flavored
+  // slot up" is a braket-invariant notion for the Kramers fold. Ties fall
+  // through to the space/label criteria below.
+  bool kramers_decided = false;
+  if (t._kramers_symmetry() == KramersSymmetry::TimeReversal) {
+    if (const auto isr = get_default_context().index_space_registry()) {
+      auto n_down = [&isr](const std::vector<Index>& v) {
+        std::size_t n = 0;
+        for (const auto& idx : v)
+          if (isr->kramers_partner(idx.space()) &&
+              !isr->kramers_canonical(idx.space()))
+            ++n;
+        return n;
+      };
+      const auto nb = n_down(bra_spaces), nk = n_down(ket_spaces);
+      if (nb != nk) {
+        swap = nb > nk;
+        kramers_decided = true;
+      }
+    }
+  }
+
+  // Full space tie, Conjugate braket symmetry: break on the index labels,
+  // keeping the label-lexicographically SMALLER bundle in the bra, so
+  // label-ascending spellings (e.g. g{p_1,p_2;p_3,p_4}) remain canonical as
+  // written. Identical bundles (diagonal T{p,q;p,q}) compare equal and never
+  // swap. (Symm ties stay untouched: both orientations denote the SAME value
+  // there, so no fold is required.)
+  if (!kramers_decided && space_order == 0 &&
+      bks == BraKetSymmetry::Conjugate) {
+    std::vector<Index> bra_full(bra_spaces), ket_full(ket_spaces);
+    ranges::sort(bra_full, std::less<Index>{});
+    ranges::sort(ket_full, std::less<Index>{});
+    swap =
+        ranges::lexicographical_compare(ket_full, bra_full, std::less<Index>{});
+  }
+
+  if (swap) {
     t._swap_bra_ket();
+    // preserve the represented value: T{q;p} = conj(T{p;q})
+    if (bks == BraKetSymmetry::Conjugate) t._conjugate();
   }
 }
 
@@ -386,14 +580,20 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  canonicalize_braket(t);
+  canonicalize_braket(t, fold_conjugate_braket_);
+  const int kramers_phase = fold_kramers_ ? canonicalize_kramers(t) : 1;
+  // the flipped spelling may prefer the other braket orientation
+  if (fold_kramers_) canonicalize_braket(t, fold_conjugate_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});
 
   reset_tags(t);
 
-  return result;
+  // combine the slot-permutation phase with the Kramers fold phase
+  const int perm_phase = result ? -1 : 1;
+  if (perm_phase * kramers_phase < 0) return result ? result : ex<Constant>(-1);
+  return nullptr;
 }
 
 }  // namespace sequant

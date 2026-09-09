@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_RESULT_HPP
 #define SEQUANT_EVAL_RESULT_HPP
 
+#include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
@@ -290,9 +291,47 @@ class Result {
   /// well. Not a pure virtual: only tensor-backed results need it; the
   /// default throws. Mirrors the slice_mode precedent.
   ///
-  [[nodiscard]] virtual ResultPtr adjoint(
-      std::array<std::any, 2> const& /*ann*/) const {
-    throw detail::unimplemented_method("adjoint");
+  /// \brief Applies a canonicalization transform to this result on
+  /// retrieval: the returned result equals `phase * (conj? elementwise-conj)`
+  /// of this, with slots relabeled per \p ann ({source annot, target annot};
+  /// equal annots = no transposition). The caller handles the trivial
+  /// transform (returns the ResultPtr unchanged, exactly as apply_phase
+  /// short-circuits phase==1). Not pure: only data-bearing results
+  /// implement it; the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& /*ann*/) const {
+    throw detail::unimplemented_method("apply_transform");
+  }
+
+  ///
+  /// \brief A deep copy of this result: a value sharing no storage with this
+  /// one. Needed wherever a result is mutated in place (add_inplace) while the
+  /// original may be owned by the cache or by a leaf provider -- e.g. the
+  /// accumulator of evaluate(nodes, ...), whose first term can be a cached
+  /// node. Not pure: only data-bearing results implement it; the default
+  /// throws.
+  ///
+  [[nodiscard]] virtual ResultPtr clone() const {
+    throw detail::unimplemented_method("clone");
+  }
+
+  ///
+  /// \brief The real part of this result. Re is a projection (not an
+  /// involution), so unlike the conjugation channels it is served by a
+  /// dedicated IR node (EvalOp::RealPart), not by CanonTransform. Not pure:
+  /// only scalar-backed results need it today (the conjugate-pair fold emits
+  /// Re/Im of fully contracted c-number networks); the default throws.
+  ///
+  [[nodiscard]] virtual ResultPtr real_part() const {
+    throw detail::unimplemented_method("real_part");
+  }
+
+  ///
+  /// \brief The imaginary part of this result; see real_part().
+  ///
+  [[nodiscard]] virtual ResultPtr imag_part() const {
+    throw detail::unimplemented_method("imag_part");
   }
 
   ///
@@ -333,6 +372,54 @@ class Result {
   }
 
   ///
+  /// \brief Scatter \p block into the `[block_lo, block_hi)` element slice of
+  ///        this result's mode \p mode.
+  ///
+  /// The inverse of slice_mode(): where slice_mode() GATHERS one contiguous
+  /// element block OUT of a mode, write_into_slice() SCATTERS a per-block
+  /// result INTO a pre-sized destination's `[block_lo, block_hi)` slice along
+  /// outer \p mode, leaving every other mode untouched. Used to assemble a
+  /// result that is evaluated one block at a time over a partitioned
+  /// (Hadamard/spectator) mode: partitioning the mode into disjoint blocks,
+  /// evaluating each, and write_into_slice()-ing each block into its slice
+  /// reconstructs the whole result. Unlike add_inplace() (which accumulates,
+  /// correct only for a contracted mode), the blocks are disjoint slices of
+  /// one pre-sized result. Element semantics keep this backend-neutral (no
+  /// notion of tiles); a tiled backend may require `[block_lo, block_hi)` to
+  /// fall on tile boundaries and preserves each mode's element lobound. Not a
+  /// pure virtual: only tensor-backed results need it; the default throws.
+  /// Mirrors the slice_mode() precedent.
+  ///
+  virtual void write_into_slice(Result const& /*block*/, std::size_t /*mode*/,
+                                std::size_t /*block_lo*/,
+                                std::size_t /*block_hi*/) {
+    throw detail::unimplemented_method("write_into_slice");
+  }
+
+  ///
+  /// \brief Build a zero-filled result shaped like \c *this but with mode
+  ///        \p mode carrying the FULL extent of an external (spectator) axis.
+  ///
+  /// Used to PRE-SIZE the destination of an external-axis scatter (see
+  /// make_batched_custom_evaluator's External branch): \c *this is one block
+  /// partial (the node's result with the external axis sliced to a single
+  /// block, but full on every other mode), and \p axis_src is the unsliced
+  /// axis-carrying leaf whose mode \p axis_src_mode holds the external axis at
+  /// its FULL extent/tiling. The returned result has \c *this's TiledRange with
+  /// dim \p mode replaced by \c axis_src's dim \p axis_src_mode, zero-filled,
+  /// so the per-block partials can be write_into_slice()d into their disjoint
+  /// slices. \p axis_src's tiling on \p axis_src_mode must be the tiling the
+  /// block partials slice from (guaranteed when both derive from the same
+  /// leaf). Not a pure virtual: only tensor-backed results need it; the default
+  /// throws. Mirrors the slice_mode()/write_into_slice() precedent.
+  ///
+  [[nodiscard]] virtual ResultPtr pre_sized_zeros_over_mode(
+      std::size_t /*mode*/, Result const& /*axis_src*/,
+      std::size_t /*axis_src_mode*/) const {
+    throw detail::unimplemented_method("pre_sized_zeros_over_mode");
+  }
+
+  ///
   /// \brief Add other Result object into this object.
   ///
   virtual void add_inplace(Result const&) = 0;
@@ -357,6 +444,7 @@ class Result {
   template <typename T>
   [[nodiscard]] T& get() {
     SEQUANT_ASSERT(has_value());
+    ensure_materialized();
     return *std::any_cast<T>(&value_);
   }
 
@@ -367,6 +455,7 @@ class Result {
   template <typename T>
   [[nodiscard]] T const& get() const {
     SEQUANT_ASSERT(has_value());
+    ensure_materialized();
     return *std::any_cast<const T>(&value_);
   }
 
@@ -381,6 +470,27 @@ class Result {
 
   [[nodiscard]] virtual id_t type_id() const noexcept = 0;
 
+  /// @brief hook for lazily-transformed results: called by get<>() before
+  /// handing out the stored value, so a result that carries a pending
+  /// transform (see e.g. ResultTensorTA::is_view) materializes it here.
+  /// Default: no-op.
+  virtual void ensure_materialized() const {}
+
+  /// @return the stored value WITHOUT the materialization hook (for a
+  ///         backend's own lazy paths)
+  template <typename T>
+  [[nodiscard]] T const& raw() const {
+    SEQUANT_ASSERT(has_value());
+    return *std::any_cast<const T>(&value_);
+  }
+
+  /// replaces the stored value in place (an ensure_materialized override
+  /// swaps its materialized copy in for the shared source)
+  template <typename T>
+  void reset_value(T&& arg) const {
+    value_ = std::make_any<std::decay_t<T>>(std::forward<T>(arg));
+  }
+
   template <typename T>
   [[nodiscard]] static id_t id_for_type() noexcept {
     static id_t id = next_id();
@@ -388,7 +498,11 @@ class Result {
   }
 
  private:
-  std::any value_;
+  /// mutable so that a lazily transformed result can materialize itself on
+  /// first read through a const handle. NOT thread-safe: a Result is owned
+  /// by one evaluation (the serial evaluate() stack / cache); concurrent
+  /// get<>() on a pending view is not supported
+  mutable std::any value_;
 
   [[nodiscard]] static id_t next_id() noexcept;
 };
@@ -406,6 +520,10 @@ class ResultScalar final : public Result {
   explicit ResultScalar(T v) noexcept : Result{std::move(v)} {}
 
   [[nodiscard]] T value() const noexcept { return get<T>(); }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultScalar<T>>(value());
+  }
 
   [[nodiscard]] ResultPtr sum(Result const& other,
                               std::array<std::any, 3> const&) const override {
@@ -460,6 +578,34 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     return eval_result<ResultScalar<T>>(value() * T(factor));
+  }
+
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform t, std::array<std::any, 2> const&) const override {
+    auto v = value();
+    if constexpr (!std::is_arithmetic_v<T>) {
+      using std::conj;
+      if (t.conj) v = conj(v);
+    }
+    return eval_result<ResultScalar<T>>(v * T(t.phase));
+  }
+
+  [[nodiscard]] ResultPtr real_part() const override {
+    if constexpr (std::is_arithmetic_v<T>) {
+      return eval_result<ResultScalar<T>>(value());
+    } else {
+      using std::real;
+      return eval_result<ResultScalar<T>>(T(real(value())));
+    }
+  }
+
+  [[nodiscard]] ResultPtr imag_part() const override {
+    if constexpr (std::is_arithmetic_v<T>) {
+      return eval_result<ResultScalar<T>>(T{0});
+    } else {
+      using std::imag;
+      return eval_result<ResultScalar<T>>(T(imag(value())));
+    }
   }
 
  private:

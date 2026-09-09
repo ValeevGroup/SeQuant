@@ -1,14 +1,19 @@
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/optimize/cost_model.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -18,10 +23,12 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -87,39 +94,58 @@ void log_chosen_factorization(ExprPtr const& result,
 /// Optimize a Product that contains only Tensor and scalar factors.
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
-  CostParams const cost{
-      .is_volatile_leaf = opts.batch_policy.is_volatile_leaf,
-      .volatile_weight = opts.volatile_weight,
-      .footprint_weight = opts.footprint_weight,
-      .peak_flops_tolerance = opts.peak_flops_tolerance,
-      .roofline = opts.roofline,
-      .accumulation_factor = opts.batch_policy.accumulation_factor,
-      .prune_outer_products = opts.prune_outer_products};
+  // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
+  // Batching config (both role predicates, batch_target_size, inner_pow,
+  // batch_persistent_only) now travels on CostParams rather than as loose args.
+  CostParams cost;
+  cost.is_volatile_leaf = opts.batch_policy.is_volatile_leaf;
+  cost.volatile_weight = opts.volatile_weight;
+  cost.footprint_weight = opts.footprint_weight;
+  cost.peak_flops_tolerance = opts.peak_flops_tolerance;
+  cost.roofline = opts.roofline;
+  cost.accumulation_factor = opts.batch_policy.accumulation_factor;
+  cost.peak_threshold = opts.batch_policy.peak_threshold;
+  cost.prune_outer_products = opts.prune_outer_products;
+  cost.batch_spectator_indices = opts.batch_policy.batch_spectator_indices;
+  cost.order_aware_recompute = opts.batch_policy.order_aware_recompute;
+  cost.is_batchable_contracted_index =
+      opts.batch_policy.is_batchable_contracted_index;
+  cost.is_batchable_external_index =
+      opts.batch_policy.is_batchable_external_index;
+  cost.batch_target_size = opts.batch_policy.batch_target_size;
+  cost.inner_pow = opts.inner_pow;
+  cost.batch_persistent_only = opts.batch_policy.persistent_only;
+  // Filled only by the DensePeakSizeBatched arm below (via out_axes); every
+  // other objective leaves it empty, so the term_batch_axes insertion at the
+  // end is then a no-op-shaped empty-vector entry (harmless: Task 3.3 only
+  // consumes entries for summands the batched objective actually annotated).
+  container::vector<NodeBatchAnnotation> node_axes;
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
       return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-          prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
+          prod, opts.idx_to_extent, subnet_cse, cost);
     if (opts.objective_function == ObjectiveFunction::DenseSize)
       return opt::single_term_opt<ObjectiveFunction::DenseSize>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTime)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseTimeSpace)
+      return opt::single_term_opt<ObjectiveFunction::DenseTimeSpace>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTimeBatched)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTimeBatched>(
           prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
-    if (opts.objective_function == ObjectiveFunction::DensePeakSize)
-      return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-          prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
+          opts.term_batch_axes ? &node_axes : nullptr);
     SEQUANT_ASSERT(opts.objective_function ==
-                   ObjectiveFunction::DensePeakSizeBatched);
-    return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                   ObjectiveFunction::DenseTimeSpaceBatched);
+    return opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
         prod, opts.idx_to_extent, subnet_cse, cost,
-        opts.batch_policy.is_batchable_index,
-        opts.batch_policy.batch_target_size, opts.inner_pow,
-        opts.batch_policy.persistent_only);
+        opts.term_batch_axes ? &node_axes : nullptr);
   };
   ExprPtr result = run();
+  if (opts.term_batch_axes)
+    (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
   if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
     log_chosen_factorization(result, opts);
   return result;
@@ -133,6 +159,9 @@ inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 /// Optimize a Product that contains some non-Tensor, non-scalar factors by
 /// substituting placeholder tensors with target indices, optimizing the
 /// resulting tensor-only product, then swapping the originals back in.
+ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
+                      bool reorder, bool parallel_outer);
+
 ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   container::svector<ExprPtr> non_tensors(prod.size());
   container::svector<ExprPtr> new_factors;
@@ -143,7 +172,17 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
     if (f->is<Tensor>() || f->is_scalar()) {
       new_factors.emplace_back(f);
     } else {
-      non_tensors[i] = f;
+      // A non-tensor factor (a Sum of products, e.g. the flavor bracket a
+      // CSV transform wraps around a projected leaf, sum_flavors g.C.C; or a
+      // nested product) is opaque to the outer contraction order, but its
+      // OWN contraction order matters just as much: put back as written it
+      // evaluates in its authored left-to-right order. Measured on DCH
+      // cc-pVDZ PNS-CCD (2026-09-05): a projection bracket whose external-
+      // pair C came first materialized an n_occ^4 n_v n_csv intermediate
+      // (3.3 GB each, 32 GB of them cached) where the optimal order, which
+      // the DF cost model had assumed, peaks at n_occ^2 n_v n_csv.
+      non_tensors[i] = optimize_impl(f, opts, /*reorder=*/false,
+                                     /*parallel_outer=*/false);
       auto target_idxs = get_unique_indices(f);
       new_factors.emplace_back(ex<Tensor>(
           std::wstring(placeholder_label_prefix) + std::to_wstring(i),
@@ -182,20 +221,114 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                       bool reorder, bool parallel_outer) {
+  // Re/Im wrappers are transparent to optimization: optimize the wrapped
+  // expression and re-wrap. Without this the wrapper is returned untouched
+  // and its inner product evaluates in naive left-to-right order (measured:
+  // 14.4 GB vs 1.7 GB peak RSS on a Kramers-CSV MP2 energy whose TRS fold
+  // wrapped three terms).
+  // A wrapper at the summand root: its inner contraction nodes ARE the
+  // summand's DP nodes (binarize shares the node counter with it), so its
+  // batch axes are re-keyed under the wrapper the caller keys on.
+  auto rekey_axes = [&opts](ExprPtr const& inner, ExprPtr const& wrapper) {
+    if (!opts.term_batch_axes) return;
+    auto it = opts.term_batch_axes->find(inner.get());
+    if (it != opts.term_batch_axes->end())
+      (*opts.term_batch_axes)[wrapper.get()] = it->second;
+  };
+  if (expr->is<RealPart>()) {
+    auto inner = optimize_impl(expr->as<RealPart>().inner(), opts,
+                               /*reorder=*/false, /*parallel_outer=*/false);
+    auto wrapped = ex<RealPart>(inner);
+    rekey_axes(inner, wrapped);
+    return wrapped;
+  }
+  if (expr->is<ImagPart>()) {
+    auto inner = optimize_impl(expr->as<ImagPart>().inner(), opts,
+                               /*reorder=*/false, /*parallel_outer=*/false);
+    auto wrapped = ex<ImagPart>(inner);
+    rekey_axes(inner, wrapped);
+    return wrapped;
+  }
   if (expr->is<Product>()) {
-    auto const& prod = expr->as<Product>();
+    auto const& prod_in = expr->as<Product>();
+    // Re/Im wrapper FACTORS are transparent too (the conjugate-pair fold
+    // emits `2 Re[A]`): RealPart::is_scalar() would otherwise let the
+    // wrapper pass through opt_pure_product as an opaque scalar with A left
+    // in its naive left-to-right order. Optimize each wrapper's inner first.
+    auto const has_wrapper = ranges::any_of(prod_in, [](auto&& x) {
+      return x->template is<RealPart>() || x->template is<ImagPart>();
+    });
+    Product::factors_type factors;
+    container::svector<ExprPtr> inners;  // optimized wrapper inners, in order
+    if (has_wrapper) {
+      for (auto const& f : prod_in) {
+        if (f->is<RealPart>()) {
+          inners.push_back(
+              optimize_impl(f->as<RealPart>().inner(), opts, false, false));
+          factors.push_back(ex<RealPart>(inners.back()));
+        } else if (f->is<ImagPart>()) {
+          inners.push_back(
+              optimize_impl(f->as<ImagPart>().inner(), opts, false, false));
+          factors.push_back(ex<ImagPart>(inners.back()));
+        } else
+          factors.push_back(f);
+      }
+    }
+    Product const prod_rewrapped =
+        has_wrapper ? Product{prod_in.scalar(), factors, Product::Flatten::No}
+                    : Product{};
+    auto const& prod = has_wrapper ? prod_rewrapped : prod_in;
     bool pure = ranges::all_of(prod, [](auto&& x) {
       return x->template is<Tensor>() || x->is_scalar();
     });
-    return pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    auto result =
+        pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    // Wrappers whose siblings are all scalars (the fold's `2 Re[A]`): the
+    // product has no contraction nodes of its own, so the summand's DP nodes
+    // are exactly the wrappers' inner nodes, in factor order (binarize
+    // shares its node counter with such wrappers). Re-key their batch axes
+    // under the summand pointer the caller keys on.
+    if (has_wrapper && opts.term_batch_axes) {
+      const bool scalar_siblings =
+          ranges::all_of(prod_in, [](auto&& x) { return x->is_scalar(); });
+      if (scalar_siblings) {
+        container::vector<NodeBatchAnnotation> axes;
+        for (auto const& inner : inners) {
+          auto it = opts.term_batch_axes->find(inner.get());
+          if (it != opts.term_batch_axes->end())
+            axes.insert(axes.end(), it->second.begin(), it->second.end());
+        }
+        (*opts.term_batch_axes)[result.get()] = std::move(axes);
+      }
+    }
+    return result;
   }
 
   if (expr->is<Sum>()) {
     auto const& in_sum = expr->as<Sum>();
     Sum::summands_type new_smands(in_sum.size());
 
+    // Every summand is optimized on a PRIVATE clone, taken here, sequentially,
+    // before the (possibly parallel) loop below. Summands routinely share
+    // subexpression objects -- tensors reused by expand(), or a whole nested
+    // Sum factor (the flavor bracket a CSV transform wraps around a projected
+    // leaf) reused across the terms it appears in -- and Index/Expr memoize
+    // labels and hashes lazily in unsynchronized mutable members. Optimizing
+    // (and, since opt_mixed_product also optimizes nested Sum factors, walking
+    // and canonicalizing) a shared object from several threads races on those
+    // caches and can yield a run-to-run different tree; on a distributed
+    // evaluation that is a deadlock, since every rank must build the same
+    // tree (DCH PNS-MP1 on 8 ranks, 2026-09-05: two ranks built a different
+    // residual tree and the run hung in iteration 1). The clones make
+    // invariant (1) below hold by construction; the input is never touched
+    // concurrently.
+    Sum::summands_type private_smands;
+    private_smands.reserve(in_sum.size());
+    for (auto const& s : in_sum.summands())
+      private_smands.push_back(s->clone());
+
     auto do_term = [&](std::size_t i) {
-      new_smands[i] = optimize_impl(in_sum.summand(i), opts,
+      new_smands[i] = optimize_impl(private_smands[i], opts,
                                     /*reorder=*/false,
                                     /*parallel_outer=*/false);
     };
@@ -247,6 +380,14 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   return optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
                        /*parallel_outer=*/true);
+}
+
+OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
+  if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
+  OptimizeResult res;
+  res.expr = optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
+                           /*parallel_outer=*/true);
+  return res;
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {

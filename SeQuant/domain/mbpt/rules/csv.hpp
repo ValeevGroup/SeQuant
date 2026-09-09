@@ -20,13 +20,22 @@ namespace sequant::mbpt {
 ///                           will be introduced.
 /// \param tensor_labels The labels of the tensors that will be
 ///                    transformed
+/// \param kramers if true, every spin(Kramers)-labeled CSV index is expanded
+///                over BOTH spin flavors of the introduced expansion dummy
+///                (a sum of terms): in a time-reversal-coupled (relativistic)
+///                basis the CSV vectors have support on both Kramers
+///                row-blocks, so the ms-conserving single-flavor expansion
+///                (the default, correct non-relativistically) silently drops
+///                the Kramers-off-diagonal coefficient blocks. Spin-free
+///                indices are unaffected.
 /// \return The CSV-transformed expression if CSV-tensors with labels present
 ///         in @c csv_tensors appear in @c expr. Otherwise returns the input
 ///         expression itself.
 ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
                       std::wstring const& coeff_tensor_label = L"C",
-                      container::svector<std::wstring> const& tensor_labels = {
-                          L"f", L"g", sequant::reserved::overlap_label()});
+                      container::svector<std::wstring> const& tensor_labels =
+                          {L"f", L"g", sequant::reserved::overlap_label()},
+                      bool kramers = false);
 
 }  // namespace sequant::mbpt
 

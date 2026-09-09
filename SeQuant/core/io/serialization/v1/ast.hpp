@@ -77,12 +77,16 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
 // represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
   std::wstring name;
+  // elementwise-conjugation marker: label^*{...} (matches the serializer's
+  // spelling of Tensor::conjugated())
+  bool conjugated = false;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;
 
-  Tensor(std::wstring name = {}, IndexGroups indices = {},
-         boost::optional<SymmetrySpec> symmetry = {})
+  Tensor(std::wstring name = {}, bool conjugated = false,
+         IndexGroups indices = {}, boost::optional<SymmetrySpec> symmetry = {})
       : name(std::move(name)),
+        conjugated(conjugated),
         indices(std::move(indices)),
         symmetry(std::move(symmetry)) {}
 };
@@ -160,7 +164,7 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
                           perm_symm, braket_symm, column_symm);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
-                          indices, symmetry);
+                          conjugated, indices, symmetry);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,
                           exponent, conjugated);
 

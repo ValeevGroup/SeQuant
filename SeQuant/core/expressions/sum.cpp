@@ -4,6 +4,11 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <algorithm>
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <typeinfo>
 
 namespace sequant {
 
@@ -362,13 +367,47 @@ SumPtr HashingAccumulator::make_sum_impl(bool canonicalize) {
   }
 
   if (canonicalize) {
-    ranges::sort(summands, [](const auto &e1, const auto &e2) {
-      if (e1->hash_value() == e2->hash_value()) {
-        return e1 < e2;
-      } else {
-        return e1->hash_value() < e2->hash_value();
-      }
-    });
+    // Sort by hash, then by content (Expr::operator<); a complete tie keeps
+    // the accumulation order (stable sort). Never order by the ExprPtr
+    // handles: ExprPtr is a std::shared_ptr, so `e1 < e2` is heap-address
+    // order, which differs between MPI ranks (and between runs) and made the
+    // summand order -- hence every downstream evaluation tree --
+    // rank-dependent whenever two non-proportional summands share a hash
+    // value (observed 2026-09-07 on an 8-rank Kramers-restricted MP1 energy
+    // sum: one rank had two such summands swapped).
+    std::stable_sort(summands.begin(), summands.end(),
+                     [](const auto &e1, const auto &e2) {
+                       const auto h1 = e1->hash_value();
+                       const auto h2 = e2->hash_value();
+                       if (h1 != h2) return h1 < h2;
+                       return *e1 < *e2;
+                     });
+  }
+
+  // SEQUANT_SUM_TIE_TRACE (diagnostic): report adjacent canonicalized summands
+  // that share a hash value, with their dynamic types and expressions, so the
+  // terms whose relative order rests on the content tie-break can be seen.
+  static const bool trace_ties =
+      std::getenv("SEQUANT_SUM_TIE_TRACE") != nullptr;
+  if (canonicalize && trace_ties) {
+    auto narrow = [](const std::wstring &w) {
+      std::string r;
+      for (wchar_t c : w) r.push_back(c < 128 ? static_cast<char>(c) : '?');
+      return r;
+    };
+    for (std::size_t i = 1; i < summands.size(); ++i) {
+      if (summands[i - 1]->hash_value() != summands[i]->hash_value()) continue;
+      const Expr &prev = *summands[i - 1];
+      const Expr &cur = *summands[i];
+      std::cerr << "[sequant-sum-tie] hash=0x" << std::hex
+                << summands[i]->hash_value() << std::dec
+                << " lt=" << (prev < cur) << "/" << (cur < prev)
+                << " types=" << typeid(prev).name() << "/" << typeid(cur).name()
+                << " ids=" << summands[i - 1]->type_id() << "/"
+                << summands[i]->type_id() << "\n    "
+                << narrow(summands[i - 1]->to_latex()) << "\n    "
+                << narrow(summands[i]->to_latex()) << "\n";
+    }
   }
 
   return std::make_shared<Sum>(std::move(summands), Sum::move_only_tag{});
