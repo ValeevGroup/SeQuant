@@ -597,12 +597,22 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(expected_str));
 
         ExprPtr input = deserialize(input_str);
+        ExprPtr input2 = deserialize(input_str);
         const ExprPtr target = deserialize(target_str);
         const ExprPtr replacement = deserialize(replacement_str);
 
-        replace<TensorBlockEqualComparator>(input, target, replacement);
+        ExprMatcher matcher(
+            *target, ExprMatcherOptions{.tensor_cmp = TensorComparison::Block});
+
+        replace(input, matcher, *replacement);
 
         REQUIRE_THAT(input, EquivalentTo(expected_str));
+
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+        replace<TensorBlockEqualComparator>(input2, target, replacement);
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+        REQUIRE_THAT(input2, EquivalentTo(expected_str));
       }
     }
     SECTION("ResultExpr") {
@@ -631,12 +641,22 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(expected_str));
 
         ResultExpr input = deserialize<ResultExpr>(input_str);
+        ResultExpr input2 = deserialize<ResultExpr>(input_str);
         const ExprPtr target = deserialize(target_str);
         const ExprPtr replacement = deserialize(replacement_str);
 
-        replace<TensorBlockEqualComparator>(input, target, replacement);
+        ExprMatcher matcher(
+            *target, ExprMatcherOptions{.tensor_cmp = TensorComparison::Block});
+
+        replace(input, matcher, *replacement);
 
         REQUIRE_THAT(input, EquivalentTo(expected_str));
+
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+        replace<TensorBlockEqualComparator>(input2, target, replacement);
+        SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+        REQUIRE_THAT(input2, EquivalentTo(expected_str));
       }
     }
   }
