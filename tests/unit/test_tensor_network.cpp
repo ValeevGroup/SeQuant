@@ -49,6 +49,7 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 
 #include <SeQuant/core/utility/timer.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/split.hpp>
@@ -245,6 +246,35 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
 
       REQUIRE(canon1.hash_value() == canon2.hash_value());
       REQUIRE(canon1.phase != canon2.phase);
+    }
+
+    SECTION("apply slot order") {
+      if constexpr (TN::version() >= 3) {
+        // an antisymmetric bundle spelled in its two slot orders: with the
+        // canonical slot order APPLIED both networks leave in ONE spelling
+        // and the reported phase is the parity of that reorder (the order
+        // the phase is defined against); by default the spelling is kept
+        const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+        TN tn12(deserialize(L"t{a_1,a_2;i_1,i_2}:A-N-S"));
+        TN tn21(deserialize(L"t{a_2,a_1;i_1,i_2}:A-N-S"));
+        const auto md12 = tn12.canonicalize_slots(
+            {.cardinal_tensor_labels = cardinal, .apply_slot_order = true});
+        const auto md21 = tn21.canonicalize_slots(
+            {.cardinal_tensor_labels = cardinal, .apply_slot_order = true});
+        REQUIRE(md12.hash_value() == md21.hash_value());
+        REQUIRE(md12.phase * md21.phase == -1);
+        const auto& t12 = *tn12.tensors()[0];
+        const auto& t21 = *tn21.tensors()[0];
+        REQUIRE(ranges::equal(t12._bra(), t21._bra()));
+        REQUIRE(ranges::equal(t12._ket(), t21._ket()));
+
+        TN tn21_asis(deserialize(L"t{a_2,a_1;i_1,i_2}:A-N-S"));
+        const auto md21_asis =
+            tn21_asis.canonicalize_slots({.cardinal_tensor_labels = cardinal});
+        REQUIRE(md21_asis.phase == md21.phase);
+        REQUIRE(md21_asis.hash_value() == md21.hash_value());
+        REQUIRE(tn21_asis.tensors()[0]->_bra()[0].label() == L"a_2");
+      }
     }
 
     SECTION("conjugate braket fold") {

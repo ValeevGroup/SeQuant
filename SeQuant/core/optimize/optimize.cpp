@@ -3,6 +3,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
@@ -182,8 +183,45 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                       bool reorder, bool parallel_outer) {
+  // Re/Im wrappers are transparent to optimization: optimize the wrapped
+  // expression and re-wrap. Without this the wrapper is returned untouched
+  // and its inner product evaluates in naive left-to-right order (measured:
+  // 14.4 GB vs 1.7 GB peak RSS on a Kramers-CSV MP2 energy whose TRS fold
+  // wrapped three terms).
+  if (expr->is<RealPart>())
+    return ex<RealPart>(optimize_impl(expr->as<RealPart>().inner(), opts,
+                                      /*reorder=*/false,
+                                      /*parallel_outer=*/false));
+  if (expr->is<ImagPart>())
+    return ex<ImagPart>(optimize_impl(expr->as<ImagPart>().inner(), opts,
+                                      /*reorder=*/false,
+                                      /*parallel_outer=*/false));
   if (expr->is<Product>()) {
-    auto const& prod = expr->as<Product>();
+    auto const& prod_in = expr->as<Product>();
+    // Re/Im wrapper FACTORS are transparent too (the conjugate-pair fold
+    // emits `2 Re[A]`): RealPart::is_scalar() would otherwise let the
+    // wrapper pass through opt_pure_product as an opaque scalar with A left
+    // in its naive left-to-right order. Optimize each wrapper's inner first.
+    auto const has_wrapper = ranges::any_of(prod_in, [](auto&& x) {
+      return x->template is<RealPart>() || x->template is<ImagPart>();
+    });
+    Product::factors_type factors;
+    if (has_wrapper) {
+      for (auto const& f : prod_in) {
+        if (f->is<RealPart>())
+          factors.push_back(ex<RealPart>(
+              optimize_impl(f->as<RealPart>().inner(), opts, false, false)));
+        else if (f->is<ImagPart>())
+          factors.push_back(ex<ImagPart>(
+              optimize_impl(f->as<ImagPart>().inner(), opts, false, false)));
+        else
+          factors.push_back(f);
+      }
+    }
+    Product const prod_rewrapped =
+        has_wrapper ? Product{prod_in.scalar(), factors, Product::Flatten::No}
+                    : Product{};
+    auto const& prod = has_wrapper ? prod_rewrapped : prod_in;
     bool pure = ranges::all_of(prod, [](auto&& x) {
       return x->template is<Tensor>() || x->is_scalar();
     });

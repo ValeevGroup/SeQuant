@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
@@ -2444,4 +2445,98 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   auto without = to_latex(optimize(prod, opt));
   unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
   CHECK(with == without);
+}
+
+TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
+  using namespace sequant;
+  // A Re/Im wrapper must be transparent to optimization: the inner product
+  // gets contraction-order optimized (binarized) and re-wrapped. An opaque
+  // wrapper would come back untouched, leaving the inner to evaluate in
+  // naive left-to-right order.
+  auto const flat =
+      deserialize(L"g{i3,i4;a3,a4} * t{a1,a2;i3,i4} * t{a3,a4;i1,i2}");
+  REQUIRE(flat->as<Product>().size() == 3);
+
+  SECTION("RealPart") {
+    auto opt = optimize(ex<RealPart>(flat->clone()), /*reorder_sum=*/false);
+    REQUIRE(opt->is<RealPart>());
+    auto const& inner = opt->as<RealPart>().inner();
+    REQUIRE(inner->is<Product>());
+    CHECK(inner->as<Product>().size() == 2);  // binarized, not flat
+  }
+
+  SECTION("ImagPart") {
+    auto opt = optimize(ex<ImagPart>(flat->clone()), /*reorder_sum=*/false);
+    REQUIRE(opt->is<ImagPart>());
+    auto const& inner = opt->as<ImagPart>().inner();
+    REQUIRE(inner->is<Product>());
+    CHECK(inner->as<Product>().size() == 2);
+  }
+
+  SECTION("wrapped summand inside a Sum") {
+    auto sum = ex<Sum>(ExprPtrList{ex<RealPart>(flat->clone()), flat->clone()});
+    auto opt = optimize(sum, /*reorder_sum=*/false);
+    REQUIRE(opt->is<Sum>());
+    auto const& s0 = opt->as<Sum>().summand(0);
+    REQUIRE(s0->is<RealPart>());
+    CHECK(s0->as<RealPart>().inner()->as<Product>().size() == 2);
+  }
+}
+
+// T20 (PR 2): a Re/Im-wrapped product factor must not be an opaque scalar to
+// the optimizer. The conjugate-pair fold emits `2 Re[A]`; RealPart::is_scalar()
+// made the wrapper pass through opt_pure_product untouched, so A evaluated in
+// its naive left-to-right order (measured 14 GB vs 1.7 GB peak on a Kramers
+// CSV-MP2 energy). The wrapper's inner must come out exactly as optimize(A).
+TEST_CASE("Re-wrapped product factor is optimized like the bare product",
+          "[optimize][re_im]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 300}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseFLOPs;
+  opts.idx_to_extent = idxsz;
+
+  // naive left-to-right order is far from optimal here (g.g first)
+  auto bare = deserialize(
+      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} t{i_1,i_2;a_1,a_2} f{i_3;i_3}");
+  auto ref = optimize(bare, opts);
+  REQUIRE(ref->is<Product>());
+  auto inner_of = [](ExprPtr const& e) -> ExprPtr {
+    if (e->is<RealPart>()) return e->as<RealPart>().inner();
+    REQUIRE(e->is<Product>());
+    ExprPtr found;
+    for (auto const& f : e->as<Product>())
+      if (f->is<RealPart>()) found = f->as<RealPart>().inner();
+    REQUIRE(found);
+    return found;
+  };
+  {
+    auto opt = optimize(real_part(bare->clone()), opts);
+    INFO("bare Re[A]: " << toUtf8(to_latex(opt)));
+    REQUIRE(*inner_of(opt) == *ref);
+  }
+  {
+    auto opt = optimize(ex<Constant>(2) * real_part(bare->clone()), opts);
+    INFO("2 Re[A]: " << toUtf8(to_latex(opt)));
+    REQUIRE(*inner_of(opt) == *ref);
+  }
+  {
+    auto opt = optimize(ex<Constant>(2) * imaginary_part(bare->clone()), opts);
+    REQUIRE(opt->is<Product>());
+    ExprPtr found;
+    for (auto const& f : opt->as<Product>())
+      if (f->is<ImagPart>()) found = f->as<ImagPart>().inner();
+    REQUIRE(found);
+    REQUIRE(*found == *ref);
+  }
 }

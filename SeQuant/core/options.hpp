@@ -72,10 +72,11 @@ struct CanonicalizeOptions {
   CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
 
-  friend constexpr bool operator==(const CanonicalizeOptions& a,
-                                   const CanonicalizeOptions& b) {
-    return a.method == b.method;
-  }
+  /// every field participates (defaulted, so a new field cannot be left
+  /// out): Context equality, and hence the scoped context setter, which
+  /// skips contexts that compare equal, relies on it
+  friend bool operator==(const CanonicalizeOptions& a,
+                         const CanonicalizeOptions& b) = default;
 };
 
 /// @brief options that control behavior of `simplify()`
@@ -89,10 +90,10 @@ struct SimplifyOptions : public CanonicalizeOptions {
   /// complex-field base space (in a real field conjugation is trivial and
   /// plain canonicalization already merges such pairs).
   /// @note default is No for now: consumers that predate RealPart/ImagPart
-  ///       (tensor-network construction, evaluation) cannot ingest the
-  ///       folded nodes yet; the default flips to Yes once the evaluation
-  ///       layer understands them (the eval follow-up work)
-  FoldConjugatePairs fold_conjugate_pairs = FoldConjugatePairs::No;
+  ///       (tensor-network construction, evaluation) ingests the folded
+  ///       nodes via EvalOp::RealPart/ImagPart, so the fold is on by
+  ///       default.
+  FoldConjugatePairs fold_conjugate_pairs = FoldConjugatePairs::Yes;
 
   // the base overloads are hidden by the FoldConjugatePairs overload below
   using CanonicalizeOptions::copy_and_set;
@@ -101,11 +102,8 @@ struct SimplifyOptions : public CanonicalizeOptions {
   static SimplifyOptions default_options();
   SimplifyOptions(CanonicalizeOptions opts);
 
-  friend constexpr bool operator==(const SimplifyOptions& a,
-                                   const SimplifyOptions& b) {
-    return static_cast<const CanonicalizeOptions&>(a) ==
-           static_cast<const CanonicalizeOptions&>(b);
-  }
+  friend bool operator==(const SimplifyOptions& a,
+                         const SimplifyOptions& b) = default;
 };
 
 }  // namespace sequant

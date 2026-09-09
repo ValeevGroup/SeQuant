@@ -185,11 +185,14 @@ TEST_CASE("eval_node", "[EvalNode]") {
                  EquivalentTo("t{a3,a4;i1,i2}:A-N-S"));
   }
 
-  SECTION("Conjugate factor keeps as-written orientation and partition") {
-    // At the eval boundary a Conjugate-braket (Hermitian) factor keeps its
-    // as-written orientation (no fold -- that is the lazy-conj eval
-    // follow-up); intermediate bra/ket partitions derive from that value
-    // orientation.
+  SECTION(
+      "Conjugate factor folds to canonical orientation; partitions keep the "
+      "denoted spelling") {
+    // With the fold ON at the eval boundary a Conjugate-braket (Hermitian)
+    // factor is stored in its canonical orientation, the delta to the
+    // as-written spelling recorded in the leaf's CanonTransform and applied
+    // on retrieval; intermediate bra/ket partitions still derive from the
+    // DENOTED (as-written) orientation.
     auto const p1 = deserialize(
         L"1/16 "
         L"* g{i3,i4;a3,a4}:A-C-S"
@@ -197,11 +200,16 @@ TEST_CASE("eval_node", "[EvalNode]") {
         L"* t{a3,a4;i1,i2}:A-N-S");
     auto node1 = eval_node(p1);
 
-    // the g leaf stays as written, unmarked
+    // the g leaf is stored unmarked in one of the two orientations; the
+    // transform records the written->canonical delta, which for a Conjugate
+    // leaf is either trivial (written canonically) or the fold map
+    // {conj, braket_swap} (an ARRAY map: conj + relabel on retrieval -- on
+    // Hermitian data exactly the written block)
     auto const gnode = node(node1, {L, L, L});
     auto const& gleaf = gnode.as_tensor();
     REQUIRE_FALSE(gleaf.conjugated());
-    REQUIRE_THAT(gleaf, EquivalentTo("g{i3,i4;a3,a4}:A-C-S"));
+    auto const gt = gnode.canon_transform();
+    REQUIRE(gt.conj == gt.braket_swap);  // fold map or trivial
 
     // ...and the intermediates keep their value-oriented bra/ket splits
     REQUIRE_THAT(node(node1, {L, L}).as_tensor(),

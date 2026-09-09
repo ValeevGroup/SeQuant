@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -38,15 +39,16 @@ enum class EvalOp {
   Product,
 
   ///
-  /// \brief Represents the adjoint (conjugate transpose) of one EvalExpr
-  ///        object. The result equals the bra/ket-swapped, complex-conjugated
-  ///        operand. The IR representation is "structurally binary, lexically
-  ///        unary": an Adjoint node holds the bare-label operand as its left
-  ///        child and a Constant(1) sentinel as its right child (so the
-  ///        FullBinaryNode invariant — every non-leaf has both children —
-  ///        is preserved). Evaluate dispatches on this op_type and only uses
-  ///        the left operand; the right is ignored.
-  Adjoint
+  /// \brief The real part of a scalar-valued EvalExpr (a unary node over the
+  ///        shared inner subtree; the right child is a Constant{1} sentinel).
+  ///        Re is a projection (not invertible), so unlike the conjugation
+  ///        channels it cannot ride in CanonTransform and remains an IR node.
+  RealPart,
+
+  ///
+  /// \brief The imaginary part of a scalar-valued EvalExpr; see RealPart.
+  ImagPart,
+
 };
 
 ///
@@ -105,7 +107,7 @@ class EvalExpr {
   ///                     to indicate that no graph is present/necessary.
   ///
   EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
-           std::int8_t phase, size_t hash,
+           CanonTransform transform, size_t hash,
            std::shared_ptr<bliss::Graph> connectivity);
 
   ///
@@ -199,7 +201,6 @@ class EvalExpr {
   ///
   /// \return True if this expression is an adjoint (unary) node.
   ///
-  [[nodiscard]] bool is_adjoint() const noexcept;
 
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
@@ -252,6 +253,23 @@ class EvalExpr {
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
   ///
+  /// \return The full canonicalization transform (phase/conj/braket_swap)
+  /// mapping this node's cached canonical result to its denoted value.
+  ///
+  [[nodiscard]] CanonTransform canon_transform() const noexcept;
+
+  /// \return For a tensor-valued node: its DENOTED spelling -- the stored
+  /// canonical spelling with the transform re-materialized syntactically:
+  /// bra<->ket swapped back when braket_swap is set and the conj bit spelled
+  /// as the conjugation marker. This is the spelling the PARENT network is
+  /// built from (the marker colors its graph); for a Hermitian leaf written
+  /// in the non-canonical orientation it is C^*{swapped}, which equals the
+  /// as-written value only through the Hermiticity the network does not use
+  /// -- an identity convention, not a value statement. The phase, a scalar,
+  /// is not spelled. \pre is_tensor()
+  [[nodiscard]] ExprPtr denoted_expr() const;
+
+  ///
   /// \return Whether this expression has a connectivity graph
   /// \see connectivity_graph
   ///
@@ -280,7 +298,7 @@ class EvalExpr {
 
   index_vector canon_indices_;
 
-  std::int8_t canon_phase_{1};
+  CanonTransform canon_transform_{};
 
   size_t hash_value_;
 
@@ -498,11 +516,6 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
   auto const& evxpr = *node;
 
   if (node.leaf()) return evxpr.expr();
-
-  // Adjoint is unary and stores the marker-bearing tensor directly in its
-  // own ExprPtr; the bare-leaf left child and Constant(1) right child are
-  // structural plumbing for the IR, not part of the symbolic form.
-  if (op == EvalOp::Adjoint) return evxpr.expr();
 
   if (op == EvalOp::Product) {
     auto prod = Product{};

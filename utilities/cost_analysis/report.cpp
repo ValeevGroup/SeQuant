@@ -98,7 +98,10 @@ void report_shape_histogram(const EquationResult& cell, double bytes_per_elem,
 
 std::string full_expr(const TreeNode& n) {
   if (n.leaf()) return n->label();
-  if (n->op_type() == EvalOp::Adjoint) return full_expr(n.left()) + "+";
+  if (n->op_type() == EvalOp::RealPart)
+    return "Re(" + full_expr(n.left()) + ")";
+  if (n->op_type() == EvalOp::ImagPart)
+    return "Im(" + full_expr(n.left()) + ")";
   const char* op = n->op_type() == EvalOp::Product ? " * " : " + ";
   return "(" + full_expr(n.left()) + op + full_expr(n.right()) + ")";
 }

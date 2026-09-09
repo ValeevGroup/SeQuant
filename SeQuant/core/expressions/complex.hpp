@@ -54,6 +54,10 @@ class RealPart : public Expr {
   bool is_scalar() const override { return true; }
   type_id_type type_id() const override { return get_type_id<RealPart>(); }
   ExprPtr clone() const override;
+  /// canonicalizes the inner expression in place (the wrapper itself has no
+  /// slots); equivalent-modulo-dummies wrappers thereby become identical and
+  /// merge as like terms
+  ExprPtr canonicalize(CanonicalizeOptions opts) override;
   void adjoint() override {}  // Re(E) is real, self-adjoint
   std::wstring to_latex() const override;
 
@@ -83,6 +87,8 @@ class ImagPart : public Expr {
   bool is_scalar() const override { return true; }
   type_id_type type_id() const override { return get_type_id<ImagPart>(); }
   ExprPtr clone() const override;
+  /// canonicalizes the inner expression in place; see RealPart
+  ExprPtr canonicalize(CanonicalizeOptions opts) override;
   void adjoint() override {}  // Im(E) is real, self-adjoint
   std::wstring to_latex() const override;
 

@@ -9,6 +9,7 @@
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -21,11 +22,6 @@ template <meta::eval_node Node>
 ExprPtr linearize_eval_node(Node const& node) {
   if (node.leaf()) return to_expr(node);
 
-  // Adjoint is unary: round-trip back to the marker-bearing tensor stored in
-  // the node's own ExprPtr — that's the symbolic form a Sum/Product parent
-  // would see — and ignore the Constant(1) sentinel right child.
-  if (node->op_type() == EvalOp::Adjoint) return to_expr(node);
-
   ExprPtr lres = linearize_eval_node(node.left());
   ExprPtr rres = linearize_eval_node(node.right());
 
@@ -33,6 +29,8 @@ ExprPtr linearize_eval_node(Node const& node) {
   SEQUANT_ASSERT(rres);
 
   if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
+  if (node->op_type() == EvalOp::RealPart) return ex<RealPart>(lres);
+  if (node->op_type() == EvalOp::ImagPart) return ex<ImagPart>(lres);
   SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
   return ex<Product>(
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
@@ -158,16 +156,6 @@ struct Memory {
                     : AsyCost::zero();
     };
 
-    // Adjoint is unary — the right child is the Constant(1) sentinel (zero
-    // cost). But the backend materializes the permuted/conjugated result into
-    // a fresh array, so the bare-leaf operand (left) and the adjoint result
-    // (node) are both live at peak — two tensors' worth, not one.
-    if (n->op_type() == EvalOp::Adjoint) {
-      add_cost(n.left()->expr());
-      add_cost(n->expr());
-      return result;
-    }
-
     add_cost(n.left()->expr());
     add_cost(n.right()->expr());
     add_cost(n->expr());
@@ -185,12 +173,9 @@ struct Memory {
 struct FlopsWithSymm {
   [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     auto cost = Flops{}(n);
-    // Adjoint is unary (right is Constant(1) sentinel) and does no
-    // symmetry-driven reduction — return Flops's permute-style cost as-is.
-    if (n.leaf() || n->op_type() == EvalOp::Adjoint ||
-        !(n->is_tensor()            //
-          && n.left()->is_tensor()  //
-          && n.right()->is_tensor()))
+    if (n.leaf() || !(n->is_tensor()            //
+                      && n.left()->is_tensor()  //
+                      && n.right()->is_tensor()))
       return cost;
 
     // confirmed:

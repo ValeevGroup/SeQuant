@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
@@ -16,6 +17,10 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
 
   auto check_product = [&label](const Product& p) {
     return ranges::any_of(p.factors(), [&label](const auto& t) {
+      if (t->template is<RealPart>())
+        return has_tensor(t->template as<RealPart>().inner(), label);
+      if (t->template is<ImagPart>())
+        return has_tensor(t->template as<ImagPart>().inner(), label);
       return t->template is<AbstractTensor>() &&
              (t->template as<AbstractTensor>())._label() == label;
     });
@@ -28,6 +33,10 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
   } else if (expr->is<Sum>()) {
     return ranges::any_of(
         *expr, [&label](const auto& term) { return has_tensor(term, label); });
+  } else if (expr->is<RealPart>()) {
+    return has_tensor(expr->as<RealPart>().inner(), label);
+  } else if (expr->is<ImagPart>()) {
+    return has_tensor(expr->as<ImagPart>().inner(), label);
   } else
     return false;
 }
