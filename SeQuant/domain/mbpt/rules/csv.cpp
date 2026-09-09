@@ -25,7 +25,8 @@ namespace sequant::mbpt {
 /// @param kramers if true, spin(Kramers)-labeled CSV indices expand over BOTH
 ///        spin flavors of the expansion dummy (see csv_transform)
 ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
-                           std::wstring_view coeff_tensor_label, bool kramers) {
+                           std::wstring_view coeff_tensor_label, bool kramers,
+                           bool kramers_union) {
   // Normalize to the VALUE orientation first: a marker-conjugated (folded)
   // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
   // layout would silently drop the conjugation (see sequant::value_oriented).
@@ -74,6 +75,16 @@ ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
                                     : ket_idx.drop_proto_indices());
       const bool spin_labeled =
           (bitset_t(dummy_base.space().qns()) & mask_v<Spin>) != 0;
+      if (kramers && spin_labeled && kramers_union) {
+        // Kramers union mode: one spin-free dummy spanning both flavors of
+        // the expansion basis (the consumer serves the union leaf)
+        auto dummy_idx = Index::make_tmp_index(csv_basis);
+        return ex<Product>(
+            1, ExprPtrList{ex<Tensor>(coeff_tensor_label, bra({bra_idx}),
+                                      ket({dummy_idx})),
+                           ex<Tensor>(coeff_tensor_label, bra({dummy_idx}),
+                                      ket({ket_idx}))});
+      }
       if (kramers && spin_labeled) {
         // Kramers mode: the C†C contraction runs over BOTH spin flavors of the
         // expansion basis (the CSV vectors span both Kramers row-blocks).
@@ -177,7 +188,10 @@ ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
       slots.push_back(Slot{in_bra, p});
       const bool spin_labeled =
           (bitset_t(idx.space().qns()) & mask_v<Spin>) != 0;
-      if (kramers && spin_labeled)
+      if (kramers && spin_labeled && kramers_union)
+        // union of both flavors: one spin-free dummy in the plain csv_basis
+        cands.push_back({Index::make_tmp_index(csv_basis)});
+      else if (kramers && spin_labeled)
         cands.push_back({make_flavored_csv_index(Spin::alpha),
                          make_flavored_csv_index(Spin::beta)});
       else
@@ -221,20 +235,22 @@ ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
 ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
                       std::wstring const& coeff_tensor_label,
                       container::svector<std::wstring> const& tensor_labels,
-                      bool kramers) {
+                      bool kramers, bool kramers_union) {
   using ranges::views::transform;
   if (expr->is<Sum>())
-    return ex<Sum>(*expr                                          //
-                   | transform([&csv_basis, &coeff_tensor_label,  //
-                                &tensor_labels, kramers](auto&& x) {
-                       return csv_transform(x, csv_basis, coeff_tensor_label,
-                                            tensor_labels, kramers);
-                     }));
+    return ex<Sum>(
+        *expr                                          //
+        | transform([&csv_basis, &coeff_tensor_label,  //
+                     &tensor_labels, kramers, kramers_union](auto&& x) {
+            return csv_transform(x, csv_basis, coeff_tensor_label,
+                                 tensor_labels, kramers, kramers_union);
+          }));
   else if (expr->is<Tensor>()) {
     auto const& tnsr = expr->as<Tensor>();
     if (!ranges::contains(tensor_labels, tnsr.label())) return expr;
     if (ranges::none_of(tnsr.indices(), &Index::has_proto_indices)) return expr;
-    auto out = csv_transform_impl(tnsr, csv_basis, coeff_tensor_label, kramers);
+    auto out = csv_transform_impl(tnsr, csv_basis, coeff_tensor_label, kramers,
+                                  kramers_union);
     // the CSV coefficients (and the rebuilt tensor) inherit the source
     // tensor's Kramers symmetry: C_μ^{a↓<..>} and C_μ^{a↑<..>} are
     // time-reversal partners exactly when the tensor they expand is
@@ -249,7 +265,7 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
 
     for (auto&& f : prod.factors()) {
       auto trans = csv_transform(f, csv_basis, coeff_tensor_label,
-                                 tensor_labels, kramers);
+                                 tensor_labels, kramers, kramers_union);
       // N.B. do not flatten the product to ensure that CSV transform of
       // each factor is performed before assembling the final product
       // this way for DF-factorized integrals each DF factor is transformed

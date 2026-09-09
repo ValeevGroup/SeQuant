@@ -1335,4 +1335,33 @@ TEST_CASE("denoted_expr_is_the_parent_network_spelling",
     REQUIRE(e.kramers_folded());
     REQUIRE(e.denoted_expr()->as<Tensor>() == w);
   }
+  {
+    // a leaf with a Kramers-UNION slot (spin-free index of a space whose
+    // flavours are Kramers partners: the CSV expansion dummy of the
+    // kramers_union csv_transform) is NOT folded even with the fold ON: its
+    // time-reversal image permutes the union axis (swaps the two flavour
+    // halves) and is not an elementwise {conj, phase} of the served block.
+    // A fully flavoured leaf of the same shape still folds.
+    auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+    mbpt::add_fermi_spin(*isr);
+    Context ctx = get_default_context();
+    ctx.set(isr);
+    ctx.set(CanonicalizeOptions{
+        .fold_kramers_eval_leaves =
+            CanonicalizeOptions::FoldKramersEvalLeaves::Yes});
+    auto resetter = set_scoped_default_context(ctx);
+    auto mk = [](std::wstring_view k) {
+      return Tensor(L"C", bra{Index(L"a↓_1")}, ket{Index(k)}, Symmetry::Nonsymm,
+                    BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm,
+                    KramersSymmetry::TimeReversal);
+    };
+    EvalExpr flavoured{mk(L"a↑_2")};
+    REQUIRE(flavoured.kramers_folded());
+    Tensor const w = mk(L"a_2");  // a_2: the union of a↑ and a↓
+    EvalExpr e{w};
+    REQUIRE(!e.kramers_folded());
+    REQUIRE(e.canon_transform().trivial());
+    REQUIRE(e.as_tensor() == w);
+    REQUIRE(e.denoted_expr()->as<Tensor>() == w);
+  }
 }

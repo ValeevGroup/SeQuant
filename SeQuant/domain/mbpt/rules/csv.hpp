@@ -28,6 +28,14 @@ namespace sequant::mbpt {
 ///                (the default, correct non-relativistically) silently drops
 ///                the Kramers-off-diagonal coefficient blocks. Spin-free
 ///                indices are unaffected.
+/// \param kramers_union (Kramers mode only) if true, expand every
+///                spin-labeled CSV index over ONE spin-free expansion dummy
+///                spanning the UNION of both Kramers flavors of the expansion
+///                basis (one coefficient leaf per slot, no flavor sum) instead
+///                of the two-flavor sum. Exact: the union index runs over the
+///                same set of expansion functions; the consumer must serve the
+///                union-flavor leaves (full-spinor integrals, both row halves
+///                of the coefficient). Ignored unless @p kramers.
 /// \return The CSV-transformed expression if CSV-tensors with labels present
 ///         in @c csv_tensors appear in @c expr. Otherwise returns the input
 ///         expression itself.
@@ -35,7 +43,7 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
                       std::wstring const& coeff_tensor_label = L"C",
                       container::svector<std::wstring> const& tensor_labels =
                           {L"f", L"g", sequant::reserved::overlap_label()},
-                      bool kramers = false);
+                      bool kramers = false, bool kramers_union = false);
 
 }  // namespace sequant::mbpt
 

@@ -383,6 +383,31 @@ bool kramers_flip_slots(AbstractTensor& t) {
   return flipped;
 }
 
+bool kramers_union_index(const Index& idx, const IndexSpaceRegistry& isr) {
+  const auto& sp = idx.space();
+  if (isr.kramers_partner(sp)) return false;  // a flavoured index
+  // a flavoured (Kramers-partnered) subspace of the same type whose quantum
+  // numbers are a proper subset of this space's: sp is their union
+  for (const auto& s : isr) {
+    if (s.type() != sp.type()) continue;
+    if (!isr.kramers_partner(s)) continue;
+    if (s.qns() == sp.qns()) continue;
+    if (sp.qns().intersection(s.qns()) == s.qns()) return true;
+  }
+  return false;
+}
+
+bool has_kramers_union_slot(const AbstractTensor& t) {
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return false;
+  auto any_union = [&](auto slots) {
+    for (const Index& idx : slots)
+      if (kramers_union_index(idx, *isr)) return true;
+    return false;
+  };
+  return any_union(t._bra()) || any_union(t._ket()) || any_union(t._aux());
+}
+
 std::wstring kramers_flavor_key(const AbstractTensor& t, bool flipped) {
   const auto isr = get_default_context().index_space_registry();
   auto bundle = [&](auto slots) {

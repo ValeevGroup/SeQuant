@@ -204,6 +204,23 @@ int canonicalize_kramers(AbstractTensor& t);
 /// @return whether any slot was flipped
 bool kramers_flip_slots(AbstractTensor& t);
 
+/// @brief whether @p idx is a Kramers-UNION index: a spin-free index (its
+/// space has no Kramers partner) of a space whose flavoured subspaces ARE
+/// registered Kramers partners in @p isr, i.e. the union of the ↑ and ↓
+/// halves of one space (the expansion dummy of a Kramers-union CSV
+/// transform, a union-contracted integral leg). The time-reversal image of a
+/// tensor over such an axis permutes the axis (swaps the two halves, with a
+/// sign), so it is NOT an elementwise {conj, phase} of the tensor: a leaf
+/// with a union slot must not be Kramers-folded at the eval-leaf level (the
+/// network-level fold, which relabels the summed union dummy consistently
+/// across the term, is unaffected). Indices of spaces without flavoured
+/// partners (e.g. a density-fitting auxiliary index) are not union indices.
+bool kramers_union_index(const Index& idx, const IndexSpaceRegistry& isr);
+
+/// @return true if any slot (bra, ket, aux) of @p t is a Kramers-union index
+/// (see kramers_union_index) under the default context's registry
+bool has_kramers_union_slot(const AbstractTensor& t);
+
 /// @brief flavor key of @p t: label + per-bundle flavor characters
 /// ('a'/'b'/'-' for up/down/unflavored, so up orders first) SORTED within
 /// each bundle, the bra

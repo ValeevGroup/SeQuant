@@ -234,7 +234,11 @@ LeafNormalization normalize_leaf(Tensor& t) {
   LeafNormalization result;
   auto& tr = result.transform;
   tr = compose(tr, normalize_leaf_spelling(t));
-  const int kramers_phase = fold_kramers_leaf() ? canonicalize_kramers(t) : 1;
+  // a leaf with a Kramers-union slot has no elementwise time-reversal image
+  // (see kramers_union_index): served as written, never folded
+  const int kramers_phase = (fold_kramers_leaf() && !has_kramers_union_slot(t))
+                                ? canonicalize_kramers(t)
+                                : 1;
   result.kramers_fired = t.conjugated();
   if (result.kramers_fired) {
     tr = compose(tr, {.conj = true});
