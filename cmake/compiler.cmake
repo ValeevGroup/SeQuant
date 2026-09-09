@@ -63,10 +63,61 @@ endfunction()
 
 
 include(CheckIPOSupported)
+include(CheckCXXCompilerFlag)
 
 check_ipo_supported(RESULT SEQUANT_CAN_RELY_ON_CMAKE_LTO LANGUAGES CXX)
 
+# Note: these are probed at directory scope (rather than inside target_set_optimization_flags)
+# because the archiver selection below has to happen at directory scope in order to be inherited
+# by the subdirectories that define our targets. The results are cached, so this costs a single
+# round of try-compiles for the entire project.
+set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
+check_cxx_compiler_flag("-flto" SEQUANT_LTO_FLAG_SUPPORTED)
+check_cxx_compiler_flag("-flto=auto" SEQUANT_LTO_AUTO_SUPPORTED)
+check_cxx_compiler_flag("-flto;-ffat-lto-objects" SEQUANT_FAT_LTO_FLAG_SUPPORTED)
+unset(CMAKE_TRY_COMPILE_TARGET_TYPE)
+
+# Tri-state on purpose: ON/OFF force LTO on/off for all SeQuant targets, whereas the default
+# (empty) lets target_set_optimization_flags decide per target type. Declared as a cache
+# variable so that it shows up in cmake -LH, ccmake, etc. just like our other knobs.
+set(SEQUANT_LTO "" CACHE STRING
+	"Whether to build SeQuant's targets with link-time optimization (LTO); leave empty to decide automatically per target type")
+set_property(CACHE SEQUANT_LTO PROPERTY STRINGS "" ON OFF)
+
+# Without "fat" objects, a static library built with LTO holds IR rather than machine code, and
+# an archiver that doesn't understand that IR produces an archive without a usable symbol index
+# ("archive has no index" at link time). CMake substitutes the compiler's LTO-aware archiver
+# when it drives LTO itself (via INTERPROCEDURAL_OPTIMIZATION), but we set the LTO flags by hand
+# (see below), so we have to make sure the archiver matches. In practice CMake's own CMAKE_AR
+# detection already picks e.g. llvm-ar next to clang++, so the substitution below only kicks in
+# on toolchains where it doesn't - it is a safety net rather than the common path.
+set(SEQUANT_LTO_AWARE_ARCHIVER FALSE)
+if (NOT PROJECT_IS_TOP_LEVEL)
+	# We don't apply LTO flags as a subproject (see target_set_optimization_flags below), so
+	# there is no reason to touch the encompassing project's archiver either
+elseif (CMAKE_CXX_COMPILER_AR)
+	set(SEQUANT_LTO_AWARE_ARCHIVER TRUE)
+	if (NOT CMAKE_AR STREQUAL CMAKE_CXX_COMPILER_AR)
+		# Announced rather than done silently: CMAKE_AR may well have been set deliberately
+		message(STATUS "Using the compiler's LTO-aware archiver (${CMAKE_CXX_COMPILER_AR}) for SeQuant's static libraries")
+		set(CMAKE_AR "${CMAKE_CXX_COMPILER_AR}")
+		if (CMAKE_CXX_COMPILER_RANLIB)
+			set(CMAKE_RANLIB "${CMAKE_CXX_COMPILER_RANLIB}")
+		endif()
+	endif()
+elseif (APPLE)
+	# On Apple platforms LTO objects are bitcode wrapped in a Mach-O container, which cctools'
+	# ar and ranlib index just fine - no special archiver needed
+	set(SEQUANT_LTO_AWARE_ARCHIVER TRUE)
+endif()
+
 function(target_set_optimization_flags TARGET)
+	if (NOT PROJECT_IS_TOP_LEVEL)
+		# When SeQuant is consumed as a subproject, how its targets are optimized is the
+		# encompassing project's call, not ours (cf. target_set_warning_flags)
+		return()
+	endif()
+
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 		return()
 	endif()
@@ -78,17 +129,16 @@ function(target_set_optimization_flags TARGET)
 		return()
 	endif()
 
-	include(CheckCXXCompilerFlag)
+	if (TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR TARGET_TYPE STREQUAL "OBJECT_LIBRARY")
+		set(IS_ARCHIVE_LIKE_TARGET TRUE)
+	else()
+		set(IS_ARCHIVE_LIKE_TARGET FALSE)
+	endif()
 
-	set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
-	check_cxx_compiler_flag("-flto" SEQUANT_LTO_FLAG_SUPPORTED)
-	check_cxx_compiler_flag("-flto=auto" SEQUANT_LTO_AUTO_SUPPORTED)
-	check_cxx_compiler_flag("-flto;-ffat-lto-objects" SEQUANT_FAT_LTO_FLAG_SUPPORTED)
-
-	if (DEFINED SEQUANT_LTO)
+	if (NOT SEQUANT_LTO STREQUAL "")
 		# Always honor explicit user choice
 		set(ENABLE_LTO ${SEQUANT_LTO})
-	elseif(TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR TARGET_TYPE STREQUAL "OBJECT_LIBRARY")
+	elseif(IS_ARCHIVE_LIKE_TARGET)
 		# For static/object libraries we only want to enable LTO by default, if we can create
 		# "fat" object files. Those can still be linked without LTO and hence shouldn't
 		# break any downstream use.
@@ -100,6 +150,14 @@ function(target_set_optimization_flags TARGET)
 	endif()
 
 	if (ENABLE_LTO)
+		if (NOT SEQUANT_FAT_LTO_FLAG_SUPPORTED AND NOT SEQUANT_LTO_AWARE_ARCHIVER
+				AND TARGET_TYPE STREQUAL "STATIC_LIBRARY")
+			message(FATAL_ERROR "Requested LTO for static library '${TARGET}' but your compiler supports neither "
+				"\"fat\" LTO objects nor an LTO-aware archiver (CMAKE_CXX_COMPILER_AR). The resulting archive "
+				"would not be linkable - point CMAKE_AR and CMAKE_RANLIB at an LTO-aware ar/ranlib (e.g. llvm-ar "
+				"and llvm-ranlib) or use SEQUANT_LTO=OFF")
+		endif()
+
 		if (SEQUANT_LTO_FLAG_SUPPORTED)
 			# We prefer to manually set the LTO flag(s) rather than CMake doing it for us
 			# due to https://gitlab.kitware.com/cmake/cmake/-/work_items/23136
@@ -115,7 +173,10 @@ function(target_set_optimization_flags TARGET)
 				target_link_options("${TARGET}" PRIVATE -flto)
 			endif()
 
-			if (SEQUANT_FAT_LTO_FLAG_SUPPORTED)
+			# Only static/object libraries benefit from "fat" objects (see above): everything else
+			# is linked by us, so the extra machine-code copy is never used - while producing it
+			# costs an entire second compilation of every translation unit on GCC.
+			if (SEQUANT_FAT_LTO_FLAG_SUPPORTED AND IS_ARCHIVE_LIKE_TARGET)
 				target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
 			endif()
 		else()

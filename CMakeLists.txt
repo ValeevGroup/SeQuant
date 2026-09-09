@@ -125,6 +125,9 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 # Additional build variables
 ############################
 option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
+# N.B. declared here rather than in benchmarks/ so that setting it is not reported as an
+# unused variable in builds that have SEQUANT_BENCHMARKS=OFF
+option(SEQUANT_QUICK_BENCHMARKS "Whether to exclude computationally expensive benchmarks" OFF)
 option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
 option(SEQUANT_EVAL_TESTS "OBSOLETE: use SEQUANT_TILEDARRAY and SEQUANT_BTAS" OFF)
 option(SEQUANT_BTAS "Enable BTAS eval backend" ${SEQUANT_EVAL_TESTS})
