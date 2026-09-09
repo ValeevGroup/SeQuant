@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
        // tensors to particle (column) symmetry; bra-ket and permutational
        // symmetries stay at the safe Nonsymm/NonHermitian library defaults and
        // are specified explicitly where needed (e.g. Hermitian integrals)
-       .column_symmetry = ColumnSymmetry::Symm});
+       .deserialization_column_symmetry = ColumnSymmetry::Symm});
   TensorCanonicalizer::set_cardinal_tensor_labels(
       sequant::mbpt::cardinal_tensor_labels());
   // uncomment to enable verbose output ...

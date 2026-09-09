@@ -14,6 +14,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
+#include <SeQuant/domain/mbpt/rdm.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
@@ -1499,5 +1500,34 @@ SECTION("avoided-connections") {
       L"Â{i_1;a_2} Â{a_1;i_2} g{i_3,i_2;a_3,a_1}:A-C-S "
       L"t{a_3,a_2;i_3,i_1}:A-C-S";
   REQUIRE_THAT(simplify(res4), EquivalentTo(expected4));
+}
+
+SECTION("rdm-decomposition symmetries") {
+  using namespace sequant;
+
+  // an RDM is Hermitian and particle (column) symmetric by definition, and the
+  // decompositions in mbpt/rdm.cpp must spell out both: the γ they build has
+  // to equal the γ that expectation_value_impl() (mbpt/op.cpp) builds, or
+  // otherwise-equal terms stop merging. The symmetries take part in the tensor
+  // hash, so a mismatch in either attribute is enough to break it.
+  auto ctx_resetter = set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+               .vacuum = Vacuum::SingleProduct}));
+
+  const auto kappa =
+      ex<Tensor>(L"κ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
+                 TensorSymmetries{.column = ColumnSymmetry::Symm});
+  const auto gamma = mbpt::decompositions::cumu_to_density(kappa);
+  REQUIRE(gamma->is<Tensor>());
+  REQUIRE(gamma->as<Tensor>().label() == L"γ");
+  REQUIRE(gamma->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(gamma->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+
+  // ... and the two spellings do compare equal
+  const auto gamma_op =
+      ex<Tensor>(L"γ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
+                 Symmetry::Nonsymm, Hermiticity::Hermitian,
+                 std::optional<ColumnSymmetry>(ColumnSymmetry::Symm));
+  REQUIRE(*gamma == *gamma_op);
 }
 }

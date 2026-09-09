@@ -102,10 +102,11 @@ class compute_cceqvec {
                            ? AssertStrictBraKetSymmetry::No
                            : AssertStrictBraKetSymmetry::Yes;
       auto context_resetter = sequant::set_scoped_default_context(
-          sequant::Context({.index_space_registry_shared_ptr = so_reg,
-                            .vacuum = Vacuum::SingleProduct,
-                            // mbpt works with particle-symmetric tensors
-                            .column_symmetry = ColumnSymmetry::Symm})
+          sequant::Context(
+              {.index_space_registry_shared_ptr = so_reg,
+               .vacuum = Vacuum::SingleProduct,
+               // mbpt works with particle-symmetric tensors
+               .deserialization_column_symmetry = ColumnSymmetry::Symm})
               .set(so_strict));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
@@ -284,11 +285,12 @@ int main(int argc, char* argv[]) {
   auto strict = field_override == Field::Real ? AssertStrictBraKetSymmetry::No
                                               : AssertStrictBraKetSymmetry::Yes;
   sequant::set_default_context(
-      sequant::Context({.index_space_registry_shared_ptr = sr_reg,
-                        .vacuum = Vacuum::SingleProduct,
-                        .spbasis = spbasis,
-                        // mbpt works with particle-symmetric tensors
-                        .column_symmetry = ColumnSymmetry::Symm})
+      sequant::Context(
+          {.index_space_registry_shared_ptr = sr_reg,
+           .vacuum = Vacuum::SingleProduct,
+           .spbasis = spbasis,
+           // mbpt works with particle-symmetric tensors
+           .deserialization_column_symmetry = ColumnSymmetry::Symm})
           .set(strict));
 
   // change to true to print stats

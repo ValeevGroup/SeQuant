@@ -35,6 +35,7 @@
 
 // the particle-symmetric default symmetry pack `particle_symmetric` (column =
 // Symm) is defined in catch2_sequant.hpp and shared across the MBPT test TUs
+using namespace sequant::tests;
 
 TEST_CASE("spin", "[spin]") {
   using namespace sequant;

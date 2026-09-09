@@ -576,18 +576,43 @@ TEST_CASE("serialization", "[serialization]") {
 
       SECTION("(anti)symmetrization operators are always column symmetric") {
         // ... including under a Context whose column default is the library
-        // default Nonsymm: the deserializer must force Symm rather than pass
+        // default Nonsymm: the deserializer must supply Symm rather than pass
         // the (contradicting) Context default to the Tensor ctor
         auto ctx = get_default_context();
         ctx.set(ColumnSymmetry::Nonsymm);
         auto resetter = set_scoped_default_context(ctx);
         for (const auto& input :
-             {L"Ŝ{i1,i2;a1,a2}", L"Â{i1,i2;a1,a2}", L"Ŝ{i1,i2;a1,a2}:N-N-N",
-              L"Â{i1,i2;a1,a2}:A-N-N"}) {
+             {L"Ŝ{i1,i2;a1,a2}", L"Â{i1,i2;a1,a2}", L"Ŝ{i1,i2;a1,a2}:N-N-S",
+              L"Â{i1,i2;a1,a2}:A-N-S"}) {
           ExprPtr expr;
           REQUIRE_NOTHROW(expr = deserialize<ExprPtr>(input));
           REQUIRE(expr->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
         }
+        // a *spelled-out* column symmetry that contradicts the defining one is
+        // rejected, exactly as the equivalent programmatic ctor call is --
+        // only a defaulted one is silently replaced above
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Ŝ{i1,i2;a1,a2}:N-N-N"));
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"Â{i1,i2;a1,a2}:A-N-N"));
+      }
+
+      SECTION("(anti)symmetric bra/ket implies column symmetry") {
+        // an unspecified column symmetry follows the implication rather than
+        // the Context default, ...
+        auto ctx = get_default_context();
+        ctx.set(ColumnSymmetry::Nonsymm);
+        auto resetter = set_scoped_default_context(ctx);
+        for (const auto& input : {L"t{i1,i2;a1,a2}:A", L"t{i1,i2;a1,a2}:S"}) {
+          ExprPtr expr;
+          REQUIRE_NOTHROW(expr = deserialize<ExprPtr>(input));
+          REQUIRE(expr->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+        }
+        // ... while a spelled-out one that contradicts it is rejected
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:A-N-N"));
+        REQUIRE_THROWS(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:S-N-N"));
+        // a Nonsymm bra/ket implies nothing, so the Context default stands
+        REQUIRE(deserialize<ExprPtr>(L"t{i1,i2;a1,a2}:N")
+                    ->as<Tensor>()
+                    .column_symmetry() == ColumnSymmetry::Nonsymm);
       }
     }
   }

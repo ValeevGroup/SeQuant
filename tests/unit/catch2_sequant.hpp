@@ -24,14 +24,16 @@
 #include <type_traits>
 #include <variant>
 
-namespace sequant {
+namespace sequant::tests {
 /// Shared particle-symmetric symmetry pack for the MBPT test TUs, which must
 /// spell out MBPT particle symmetry explicitly since programmatic Tensor
 /// construction is Context-independent (see Tensor::Defaults). Defined `inline`
-/// here rather than once per TU so that unity test builds see one definition.
+/// here rather than once per TU so that unity test builds see one definition,
+/// and in a test-only namespace rather than in `sequant` itself so that it
+/// cannot collide with a library symbol.
 inline constexpr TensorSymmetries particle_symmetric{.column =
                                                          ColumnSymmetry::Symm};
-}  // namespace sequant
+}  // namespace sequant::tests
 
 namespace Catch {
 

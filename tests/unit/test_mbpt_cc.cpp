@@ -219,22 +219,22 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                            .t()
                            .at(2);
     REQUIRE_THAT(
-        R2_h1, EquivalentTo(
-                   L"1/2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;a_3,a_4}:A-C-S "
-                   L"* t{a_3,a_4;i_1,i_2}:A-N-S "
-                   L"+ Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,i_2}:A-C-S "
-                   L"+ 1/2 Â{i_1,i_2;a_1,a_2} * g{i_3,i_4;i_1,i_2}:A-C-S "
-                   L"* t{a_1,a_2;i_3,i_4}:A-N-S "
-                   L"+ 2 Â{i_1,i_2;a_1,a_2} * f{i_3;i_1}:A-C-S "
-                   L"* t{a_1,a_2;i_2,i_3}:A-N-S "
-                   L"- 2 Â{i_1,i_2;a_1,a_2} * f{a_1;a_3}:A-C-S "
-                   L"* t{a_2,a_3;i_1,i_2}:A-N-S "
-                   L"+ 2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,a_3}:A-C-S "
-                   L"* t{a_3;i_2}:A-N-S "
-                   L"+ 2 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,i_2}:A-C-S "
-                   L"* t{a_2;i_3}:A-N-S "
-                   L"- 4 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,a_3}:A-C-S "
-                   L"* t{a_2,a_3;i_2,i_3}:A-N-S"));
+        R2_h1,
+        EquivalentTo(L"1/2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;a_3,a_4}:A-C-S "
+                     L"* t{a_3,a_4;i_1,i_2}:A-N-S "
+                     L"+ Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,i_2}:A-C-S "
+                     L"+ 1/2 Â{i_1,i_2;a_1,a_2} * g{i_3,i_4;i_1,i_2}:A-C-S "
+                     L"* t{a_1,a_2;i_3,i_4}:A-N-S "
+                     L"+ 2 Â{i_1,i_2;a_1,a_2} * f{i_3;i_1}:A-C-S "
+                     L"* t{a_1,a_2;i_2,i_3}:A-N-S "
+                     L"- 2 Â{i_1,i_2;a_1,a_2} * f{a_1;a_3}:A-C-S "
+                     L"* t{a_2,a_3;i_1,i_2}:A-N-S "
+                     L"+ 2 Â{i_1,i_2;a_1,a_2} * g{a_1,a_2;i_1,a_3}:A-C-S "
+                     L"* t{a_3;i_2}:A-N-S "
+                     L"+ 2 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,i_2}:A-C-S "
+                     L"* t{a_2;i_3}:A-N-S "
+                     L"- 4 Â{i_1,i_2;a_1,a_2} * g{i_3,a_1;i_1,a_3}:A-C-S "
+                     L"* t{a_2,a_3;i_2,i_3}:A-N-S"));
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
     const auto E = cc.energy(3);

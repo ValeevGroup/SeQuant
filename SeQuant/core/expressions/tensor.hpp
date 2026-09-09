@@ -964,8 +964,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                         bool symmetry_specified) {
     if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm) {
       // (Anti)symmetry in bra and ket indices automatically implies column
-      // symmetry. N.B. must run before the reserved-label check below, which
-      // would otherwise report the (Antisymm) antisymmetrizer as contradicting.
+      // symmetry. As for the reserved labels below, reject a contradicting
+      // *specified* value and supply the correct one otherwise.
+      // N.B. must run before the reserved-label check below, which would
+      // otherwise report the (Antisymm) antisymmetrizer as contradicting.
+      if (column_symmetry_specified && column_symmetry_ != ColumnSymmetry::Symm)
+        throw Exception(
+            "Tensor: (anti)symmetry in bra and ket implies column (particle) "
+            "symmetry, which the given ColumnSymmetry contradicts");
       column_symmetry_ = ColumnSymmetry::Symm;
     }
 

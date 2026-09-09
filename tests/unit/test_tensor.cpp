@@ -27,6 +27,7 @@
 
 // the `particle_symmetric` symmetry pack (column = Symm) is defined in
 // catch2_sequant.hpp and shared across the MBPT test TUs
+using namespace sequant::tests;
 
 TEST_CASE("tensor", "[elements]") {
   using namespace sequant;
@@ -618,6 +619,28 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
     REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
     REQUIRE(t.column_symmetry() == ColumnSymmetry::Symm);
   }
+
+  SECTION("(anti)symmetric bra/ket implies column symmetry") {
+    // the implication holds for ordinary tensors too, not just the reserved
+    // (anti)symmetrizers: an unspecified column symmetry is supplied, ...
+    for (auto s : {Symmetry::Symm, Symmetry::Antisymm}) {
+      REQUIRE(Tensor(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                     TensorSymmetries{.perm = s})
+                  .column_symmetry() == ColumnSymmetry::Symm);
+      // ... while a spelled-out one that contradicts it is rejected rather
+      // than silently promoted
+      REQUIRE_THROWS_AS(
+          Tensor(
+              L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+              TensorSymmetries{.perm = s, .column = ColumnSymmetry::Nonsymm}),
+          Exception);
+    }
+    // a Nonsymm bra/ket implies nothing, so an explicit Nonsymm column stands
+    REQUIRE(Tensor(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                   TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                    .column = ColumnSymmetry::Nonsymm})
+                .column_symmetry() == ColumnSymmetry::Nonsymm);
+  }
 }
 
 TEST_CASE("(anti)symmetrizer factories", "[elements]") {
@@ -658,14 +681,15 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
         Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                TensorSymmetries{.column = ColumnSymmetry::Nonsymm}),
         Exception);
-    // ... but for Â a Nonsymm column request is *promoted* rather than
-    // rejected: Antisymm bra/ket permutational symmetry implies column
-    // symmetry for any tensor, reserved or not, and that promotion runs first
-    REQUIRE(Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
-                   ket{L"a_1", L"a_2"},
-                   TensorSymmetries{.perm = Symmetry::Antisymm,
-                                    .column = ColumnSymmetry::Nonsymm})
-                .column_symmetry() == ColumnSymmetry::Symm);
+    // ... and Â is rejected too: Antisymm bra/ket permutational symmetry
+    // implies column symmetry for any tensor, reserved or not, so a spelled-out
+    // Nonsymm column contradicts the request either way
+    REQUIRE_THROWS_AS(
+        Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+               ket{L"a_1", L"a_2"},
+               TensorSymmetries{.perm = Symmetry::Antisymm,
+                                .column = ColumnSymmetry::Nonsymm}),
+        Exception);
     REQUIRE_THROWS_AS(
         Tensor(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
                ket{L"a_1", L"a_2"},

@@ -323,6 +323,30 @@ struct Transformer {
                             ann(std::move(braIndices)), vac);
     }
 
+    // whether the input spelled a symmetry out, as opposed to inheriting it
+    // from the Context/DeserializationOptions defaults. Only a *spelled-out*
+    // value may contradict a symmetry that is fixed by definition -- a
+    // defaulted one is silently replaced by the correct value below, since the
+    // ambient default says nothing about this particular tensor.
+    const auto specified = [&tensor](char ast::SymmetrySpec::*field) {
+      return tensor.symmetry.has_value() &&
+             tensor.symmetry.value().*field != ast::SymmetrySpec::unspecified;
+    };
+    const bool perm_symm_specified = specified(&ast::SymmetrySpec::perm_symm);
+    const bool braket_symm_specified =
+        specified(&ast::SymmetrySpec::braket_symm);
+    const bool column_symm_specified =
+        specified(&ast::SymmetrySpec::column_symm);
+
+    // (Anti)symmetry in bra and ket implies column symmetry, and the Tensor
+    // ctor rejects an *explicit* ColumnSymmetry that contradicts it. Apply the
+    // implication here for a column symmetry that merely came from the
+    // defaults, so that only a genuinely contradicting explicit spec reaches
+    // (and is rejected by) the ctor.
+    if (!column_symm_specified &&
+        (perm_symm == Symmetry::Symm || perm_symm == Symmetry::Antisymm))
+      column_symm = ColumnSymmetry::Symm;
+
     // Force the defining symmetries of the reserved (anti)symmetrization
     // operators; see sequant::{anti,}symmetrizer_symmetries.
     const bool is_reserved_symmetrizer =
@@ -333,24 +357,20 @@ struct Transformer {
     // defining value only when none was spelled out, so that a contradicting
     // explicit spec reaches the Tensor ctor and is rejected there rather than
     // silently overwritten here.
-    if (is_reserved_symmetrizer &&
-        (!tensor.symmetry.has_value() ||
-         tensor.symmetry.value().perm_symm == ast::SymmetrySpec::unspecified))
+    if (is_reserved_symmetrizer && !perm_symm_specified)
       perm_symm = tensor.name == reserved::antisymm_label() ? Symmetry::Antisymm
                                                             : Symmetry::Nonsymm;
-    if (is_reserved_symmetrizer) {
-      // force it rather than passing the Context's column default through,
-      // which the Tensor ctor would reject as a contradicting *explicit*
-      // request
+    // (anti)symmetrization operators act on indistinguishable particles, hence
+    // are always column symmetric; supply that rather than passing the
+    // Context's column default through, which the Tensor ctor would reject as
+    // a contradicting *explicit* request
+    if (is_reserved_symmetrizer && !column_symm_specified)
       column_symm = ColumnSymmetry::Symm;
-    }
     // likewise, force braket-Nonsymm rather than inheriting the Context's
     // default Hermiticity, which could derive a non-Nonsymm braket and make a
     // plain "Ŝ{...}"/"Â{...}" fail to construct; an explicit braket spec is
     // left untouched so that the Tensor ctor still rejects it
-    if (is_reserved_symmetrizer &&
-        (!tensor.symmetry.has_value() ||
-         tensor.symmetry.value().braket_symm == ast::SymmetrySpec::unspecified))
+    if (is_reserved_symmetrizer && !braket_symm_specified)
       braket_symm = BraKetSymmetry::Nonsymm;
 
     // the reserved metric and Kronecker tensors are Hermitian by definition;
@@ -360,8 +380,7 @@ struct Transformer {
     // otherwise-equal terms from merging)
     if ((tensor.name == reserved::overlap_label() ||
          tensor.name == reserved::kronecker_label()) &&
-        (!tensor.symmetry.has_value() ||
-         tensor.symmetry.value().braket_symm == ast::SymmetrySpec::unspecified))
+        !braket_symm_specified)
       braket_symm = Hermiticity::Hermitian;
 
     // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or

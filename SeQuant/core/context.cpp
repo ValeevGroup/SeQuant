@@ -31,9 +31,11 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.canonicalization_options() == ctx2.canonicalization_options() &&
            ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
            ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
-           ctx1.symmetry() == ctx2.symmetry() &&
-           ctx1.hermiticity() == ctx2.hermiticity() &&
-           ctx1.column_symmetry() == ctx2.column_symmetry() &&
+           ctx1.deserialization_symmetry() == ctx2.deserialization_symmetry() &&
+           ctx1.deserialization_hermiticity() ==
+               ctx2.deserialization_hermiticity() &&
+           ctx1.deserialization_column_symmetry() ==
+               ctx2.deserialization_column_symmetry() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
@@ -136,9 +138,10 @@ Context::Context(Options options)
       canonicalization_options_(options.canonicalization_options),
       braket_typesetting_(options.braket_typesetting),
       braket_slot_typesetting_(options.braket_slot_typesetting),
-      symmetry_(options.symmetry),
-      hermiticity_(options.hermiticity),
-      column_symmetry_(options.column_symmetry) {}
+      deserialization_symmetry_(options.deserialization_symmetry),
+      deserialization_hermiticity_(options.deserialization_hermiticity),
+      deserialization_column_symmetry_(
+          options.deserialization_column_symmetry) {}
 
 Context Context::clone() const {
   Context ctx(*this);
@@ -182,11 +185,17 @@ BraKetSlotTypesetting Context::braket_slot_typesetting() const {
   return braket_slot_typesetting_;
 }
 
-Symmetry Context::symmetry() const { return symmetry_; }
+Symmetry Context::deserialization_symmetry() const {
+  return deserialization_symmetry_;
+}
 
-Hermiticity Context::hermiticity() const { return hermiticity_; }
+Hermiticity Context::deserialization_hermiticity() const {
+  return deserialization_hermiticity_;
+}
 
-ColumnSymmetry Context::column_symmetry() const { return column_symmetry_; }
+ColumnSymmetry Context::deserialization_column_symmetry() const {
+  return deserialization_column_symmetry_;
+}
 
 Context& Context::set(Vacuum vacuum) {
   vacuum_ = vacuum;
@@ -242,17 +251,17 @@ Context& Context::set(BraKetSlotTypesetting bkst) {
 }
 
 Context& Context::set(Symmetry symmetry) {
-  symmetry_ = symmetry;
+  deserialization_symmetry_ = symmetry;
   return *this;
 }
 
 Context& Context::set(Hermiticity hermiticity) {
-  hermiticity_ = hermiticity;
+  deserialization_hermiticity_ = hermiticity;
   return *this;
 }
 
 Context& Context::set(ColumnSymmetry column_symmetry) {
-  column_symmetry_ = column_symmetry;
+  deserialization_column_symmetry_ = column_symmetry;
   return *this;
 }
 

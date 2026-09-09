@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
            CanonicalizeOptions::default_options().copy_and_set(
                CanonicalizationMethod::Complete),
        // mbpt works with particle-symmetric tensors
-       .column_symmetry = ColumnSymmetry::Symm});
+       .deserialization_column_symmetry = ColumnSymmetry::Symm});
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
 

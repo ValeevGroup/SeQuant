@@ -250,8 +250,9 @@ transform::DefaultSymmetries to_default_symms(
   // unspecified symmetries default to the active Context's; the Hermiticity is
   // resolved against each tensor's base_field downstream, as in the Tensor ctor
   const Context &ctx = get_default_context();
-  transform::DefaultSymmetries symms{ctx.symmetry(), ctx.hermiticity(),
-                                     ctx.column_symmetry()};
+  transform::DefaultSymmetries symms{ctx.deserialization_symmetry(),
+                                     ctx.deserialization_hermiticity(),
+                                     ctx.deserialization_column_symmetry()};
 
   if (options.def_perm_symm.has_value()) {
     std::get<0>(symms) = options.def_perm_symm.value();
