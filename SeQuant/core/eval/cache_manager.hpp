@@ -1151,9 +1151,14 @@ class CacheManager {
     shaped_product_hook_ = std::move(fn);
   }
 
-  /// \return the shaped-product hook (empty if none is set).
+  /// \return the shaped-product hook: this cache's own, or, when none is set
+  ///         here, the nearest ancestor's (a batch-scope cache is created
+  ///         empty under its parent, and the products evaluated inside a batch
+  ///         block must see the same hook as those evaluated at root); empty
+  ///         if no cache on the chain has one.
   [[nodiscard]] shaped_product_hook_type const& shaped_product_hook()
       const noexcept {
+    if (!shaped_product_hook_ && parent_) return parent_->shaped_product_hook();
     return shaped_product_hook_;
   }
 

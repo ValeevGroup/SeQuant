@@ -272,6 +272,33 @@ inline void log_ta(Args const&... args) noexcept {
   log_result("[TA] ", args...);
 }
 
+/// Batch-step data-movement record, emitted at eval log level > 0 (the same
+/// gate as the executor's `Eval | ...` records):
+///
+///   Batch | <Slice|Scatter|Accumulate> | <time>ns | bytes=<B> | <annot>
+///
+/// Slice: an operand block gathered out of a mode for one batch step;
+/// Scatter: a per-batch block written into its pre-sized destination;
+/// Accumulate: a per-batch block added into its accumulator. `bytes` is the
+/// host size of the MOVED block, summed over ranks (collective, so every rank
+/// must reach this call whenever the level is nonzero -- the level is
+/// identical across ranks). These movements are not eval-tree ops, so the
+/// `Eval` records never see them; this is the only accounting of their cost.
+template <typename... Args>
+inline void log_batch_op([[maybe_unused]] char const* kind,
+                         [[maybe_unused]] std::chrono::nanoseconds elapsed,
+                         [[maybe_unused]] TA::DistArray<Args...> const& moved,
+                         [[maybe_unused]] std::string const& annot) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::instance();
+  if (l.eval.level == 0) return;
+  auto bytes = TA::size_of<TA::MemorySpace::Host>(moved);
+  moved.world().gop.sum(bytes);
+  write_log(l, "Batch | ", kind, " | ", elapsed.count(), "ns | bytes=", bytes,
+            "B | ", annot, '\n');
+#endif
+}
+
 /// Convert sequant::DeNest to TA::DeNest
 inline constexpr TA::DeNest to_ta_denest(DeNest d) noexcept {
   return d == DeNest::True ? TA::DeNest::True : TA::DeNest::False;
@@ -681,9 +708,12 @@ class ResultTensorTA final : public Result {
 
     detail::log_ta(ann, " += ", ann, "\n");
 
+    auto const t0 = std::chrono::steady_clock::now();
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
     ::sequant::detail::note_wait();
+    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, o,
+                         ann);
     log_ta_tensor_host_memory_use();
   }
 
@@ -984,9 +1014,12 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(ann, " += ", ann, "\n");
 
+    auto const t0 = std::chrono::steady_clock::now();
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
     ::sequant::detail::note_wait();
+    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, o,
+                         ann);
     log_ta_tensor_host_memory_use();
   }
 
@@ -1086,9 +1119,14 @@ template <typename... Args>
   // combined by einsum's general product (Einsum::index::operator| asserts that
   // a shared index has the same TiledRange1 in both operands). The batch mode
   // keeps its real element offset too, consistently across all sliced operands.
+  auto const t0 = std::chrono::steady_clock::now();
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
   ::sequant::detail::note_wait();
+  detail::log_batch_op("Slice", std::chrono::steady_clock::now() - t0, out,
+                       annot + " mode=" + std::to_string(mode) + " tiles=[" +
+                           std::to_string(tile_lo) + "," +
+                           std::to_string(tile_hi) + ")");
   return out;
 }
 
@@ -1149,9 +1187,14 @@ void write_array_into_mode(TA::DistArray<Args...>& dest,
   // coordinates (keeping every mode's lobound) so it matches the source block,
   // which slice_array_over_mode() also gathered with preserve_lobound. Plain
   // block() would rebase the sub-block to 0 and mismatch the source trange.
+  auto const t0 = std::chrono::steady_clock::now();
   dest(annot).block(lo, hi, TA::preserve_lobound) = block(annot);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(dest.world());
   ::sequant::detail::note_wait();
+  detail::log_batch_op("Scatter", std::chrono::steady_clock::now() - t0, block,
+                       annot + " mode=" + std::to_string(mode) + " tiles=[" +
+                           std::to_string(tile_lo) + "," +
+                           std::to_string(tile_hi) + ")");
 }
 
 /// \brief Compute the result's OUTER TiledRange for a binary product from the
@@ -1237,9 +1280,11 @@ template <typename NumericT, typename PolicyT,
   bool const l_flat = left.is<FlatResult>();
   bool const r_flat = right.is<FlatResult>();
 
-  // Every branch fences the world after the assignment so the imposed shape
-  // (held by pointer by the expression) is no longer referenced before this
-  // function returns and the caller's shape object goes out of scope.
+  // No world fence after the assignments: the expression engine folds the
+  // imposed shape into its own shape (a mask) when the expression is
+  // initialized, inside the assignment, so the caller's shape object need not
+  // outlive it; a per-product fence would only serialize the asynchronous
+  // tile work against the executor's bookkeeping.
 
   // T * T -> T
   if (l_flat && r_flat) {
@@ -1247,8 +1292,6 @@ template <typename NumericT, typename PolicyT,
     out(a.this_annot) =
         (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
             .set_shape(shape);
-    out.world().gop.fence();
-    ::sequant::detail::note_fence();
     FlatArray::wait_for_lazy_cleanup(out.world());
     ::sequant::detail::note_wait();
     return eval_result<FlatResult>(std::move(out));
@@ -1271,8 +1314,6 @@ template <typename NumericT, typename PolicyT,
           (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
               .set_shape(shape);
     }
-    out.world().gop.fence();
-    ::sequant::detail::note_fence();
     ToTArray::wait_for_lazy_cleanup(out.world());
     ::sequant::detail::note_wait();
     return eval_result<ToTResult>(std::move(out));
@@ -1286,8 +1327,6 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) = left.get<ToTArray>()(a.lannot)
                               .dot_inner(right.get<ToTArray>()(a.rannot))
                               .set_shape(shape);
-      out.world().gop.fence();
-      ::sequant::detail::note_fence();
       FlatArray::wait_for_lazy_cleanup(out.world());
       ::sequant::detail::note_wait();
       return eval_result<FlatResult>(std::move(out));
@@ -1305,8 +1344,6 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) =
           (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
               .set_shape(shape);
-      out.world().gop.fence();
-      ::sequant::detail::note_fence();
       ToTArray::wait_for_lazy_cleanup(out.world());
       ::sequant::detail::note_wait();
       return eval_result<ToTResult>(std::move(out));
