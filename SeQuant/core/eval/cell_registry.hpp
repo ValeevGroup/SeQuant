@@ -543,8 +543,15 @@ class CellReadResolver {
     // consumer cell, the value, the source cell and the declared slices.
     if (static bool const read_diag = std::getenv("SEQUANT_UT_READ_DIAG");
         read_diag) {
-      std::cerr << "[READ] consumer=" << consumer_ << " value=" << *vid
-                << " source=" << r.source << " src_kind="
+      TableCell const& ccell = reg_->table().cells[consumer_];
+      std::cerr << "[READ] consumer=" << consumer_
+                << " consumer_vid=" << ccell.value_id << " consumer_kind="
+                << (ccell.production.kind == ProductionKind::Build ? "Build"
+                    : ccell.production.kind == ProductionKind::Assemble
+                        ? "Assemble"
+                        : "Other")
+                << " consumer_depth=" << ccell.scope.path.size()
+                << " value=" << *vid << " source=" << r.source << " src_kind="
                 << (src_cell.production.kind == ProductionKind::Build ? "Build"
                     : src_cell.production.kind == ProductionKind::Assemble
                         ? "Assemble"

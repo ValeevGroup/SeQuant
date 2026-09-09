@@ -2713,6 +2713,17 @@ TEST_CASE(
     if (it->second.leaf()) return L"leaf";
     return L"I";
   };
+  // SEQUANT_UT_VALUE_LABELS: name every value of the ordered schedule
+  // (value id, truncated hash, kind{carried-space signature}), so the
+  // executor's [READ]/[BLOCK] diagnostics (which speak value ids) can be
+  // read by label.
+  if (std::getenv("SEQUANT_UT_VALUE_LABELS")) {
+    std::wcerr << L"--- [value-labels] vid  h  label\n";
+    for (std::size_t v = 0; v < rich.cells.size(); ++v)
+      std::wcerr << L"  vid=" << v << L" h=" << (rich.cells[v].hash % 100000)
+                 << L"  " << node_kind(rich.cells[v].hash) << L"{"
+                 << space_sig(rich.cells[v].carried) << L"}\n";
+  }
 
   // ---------- ORDERED / DAG executor, 2 iterations ----------
   if (ordered_ok) {
