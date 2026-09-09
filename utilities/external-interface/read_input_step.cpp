@@ -14,7 +14,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(ReadInputStep, "read_input");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(ReadInputStep);
 
 std::string ReadInputStep::kind() const { return "read_input"; }
 

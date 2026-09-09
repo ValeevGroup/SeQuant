@@ -11,7 +11,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(CanonicalizeStep, "canonicalize");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(CanonicalizeStep);
 
 std::string CanonicalizeStep::kind() const { return "canonicalize"; }
 

@@ -64,7 +64,7 @@ class MetaAwareIftContext : public ItfContext {
   const ExportStep::ItfMeta *meta_ = nullptr;
 };
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(ExportStep, "export");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(ExportStep);
 
 std::string ExportStep::kind() const { return "export"; }
 

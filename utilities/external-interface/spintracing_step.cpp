@@ -13,7 +13,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(SpintracingStep, "spintracing");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(SpintracingStep);
 
 std::string SpintracingStep::kind() const { return "spintracing"; }
 

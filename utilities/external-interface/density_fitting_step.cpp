@@ -12,7 +12,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(DensityFittingStep, "density_fitting");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(DensityFittingStep);
 
 std::string DensityFittingStep::kind() const { return "density_fitting"; }
 
