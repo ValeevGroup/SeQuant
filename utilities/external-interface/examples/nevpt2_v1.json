@@ -1,0 +1,121 @@
+{
+	"code_generation": {
+		"output_format": "itf",
+		"output_path": "nevpt2_v1.itfaa",
+		"default_options": {
+			"projection": "biorthogonal",
+			"spintracing": "closed_shell",
+			"density_fitting": true,
+			"term_by_term": false,
+			"subexpression_elimination": false,
+			"index_batching": "None"
+		},
+		"code_blocks": [
+			{
+				"name": "Energy0",
+				"results": [
+					{
+						"name": "ECC0",
+						"equation_file": "nevpt2/nevpt2_en0.inp",
+						"projection": "primitive"
+					}
+				]
+			},
+			{
+				"name": "Energy",
+				"results": [
+					{
+						"name": "ECC",
+						"equation_file": "nevpt2/nevpt2_en.inp",
+						"projection": "primitive"
+					}
+				]
+			},
+			{
+				"name": "Residual",
+				"results": [
+					{
+						"name": "R1",
+						"equation_file": "nevpt2/nevpt2_res1_i1.inp"
+					},
+					{
+						"name": "R1",
+						"equation_file": "nevpt2/nevpt2_res1_s0.inp"
+					},
+					{
+						"name": "R2",
+						"equation_file": "nevpt2/nevpt2_res2_s1_singles.inp"
+					},
+					{
+						"name": "R1",
+						"equation_file": "nevpt2/nevpt2_res1_s1.inp"
+					},
+					{
+						"name": "R2",
+						"equation_file": "nevpt2/nevpt2_res2_p0.inp"
+					},
+					{
+						"name": "R2",
+						"equation_file": "nevpt2/nevpt2_res2_p2.inp"
+					},
+					{
+						"name": "R2",
+						"equation_file": "nevpt2/nevpt2_res2_i2.inp"
+					},
+					{
+						"name": "R2",
+						"equation_file": "nevpt2/nevpt2_res2_p1.inp",
+						"expand_symmetrizer": true
+					},
+					{
+						"name": "R2",
+						"equation_file": "nevpt2/nevpt2_res2_s1.inp",
+						"expand_symmetrizer": true
+					},
+					{
+						"name": "R2",
+						"equation_file": "nevpt2/nevpt2_res2_s2.inp",
+						"expand_symmetrizer": true
+					}
+				]
+			}
+		]
+	},
+	"index_spaces": [
+		{
+			"name": "External",
+			"tag": "e",
+			"label": "a",
+			"size": 1000,
+			"real_valued": true
+		},
+		{
+			"name": "Active",
+			"tag": "a",
+			"label": "u",
+			"size": 5,
+			"real_valued": true
+		},
+		{
+			"name": "Closed",
+			"tag": "c",
+			"label": "i",
+			"size": 80,
+			"real_valued": true
+		},
+		{
+			"name": "BasisMp2Fit",
+			"tag": "F",
+			"label": "F",
+			"size": 1500,
+			"real_valued": true
+		},
+		{
+			"name": "ConfigI0",
+			"tag": "",
+			"label": "I",
+			"size": 50,
+			"real_valued": true
+		}
+	]
+}

@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -25,6 +26,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -1299,6 +1301,46 @@ TEST_CASE("expr", "[elements]") {
 
       REQUIRE_THAT(expr,
                    EquivalentTo("R1{a1,a2;i1,i2} = 2 t{a1,a2;i1,i2}:N-N-S"));
+    }
+  }
+
+  SECTION("TreeIndex") {
+    std::vector<std::tuple<std::string, TreeIndex, std::string>> tests = {
+        {"Var", {}, "Var"},           {"A * B", {}, "A * B"},
+        {"A + B", {0}, "A"},          {"A + B", {1}, "B"},
+        {"A + B", {}, "A + B"},       {"A + B", {0}, "A"},
+        {"A + B", {1}, "B"},          {"A + B * C", {0}, "A"},
+        {"A + B * C", {1}, "B * C"},  {"A + B * C", {1, 0}, "B"},
+        {"A + B * C", {1, 1}, "C"},   {"(A + B) * C", {0}, "A + B"},
+        {"(A + B) * C", {0, 1}, "B"}, {"(A + B) * C", {1}, "C"},
+    };
+
+    for (const auto &[expr_string, idx, expected_str] : tests) {
+      CAPTURE(expr_string);
+      CAPTURE(idx);
+      CAPTURE(expected_str);
+
+      ExprPtr expr = deserialize(expr_string);
+      ExprPtr expected = deserialize(expected_str);
+
+      REQUIRE_THAT(idx.select_from(expr), EquivalentTo(expected));
+      REQUIRE_THAT(idx.select_from(std::as_const(expr)),
+                   EquivalentTo(expected));
+      REQUIRE_THAT(idx.select_from(*expr), EquivalentTo(*expected));
+      REQUIRE_THAT(idx.select_from(std::as_const(*expr)),
+                   EquivalentTo(*expected));
+
+      REQUIRE_THAT(expr[idx], EquivalentTo(*expected));
+      REQUIRE_THAT(std::as_const(expr)[idx], EquivalentTo(*expected));
+      REQUIRE_THAT((*expr)[idx], EquivalentTo(*expected));
+      REQUIRE_THAT(std::as_const(*expr)[idx], EquivalentTo(*expected));
+    }
+
+    SECTION("Out-of-bounds exception") {
+      const ExprPtr expr = deserialize("A * B");
+
+      REQUIRE_THROWS_AS(TreeIndex({2}).select_from(expr), Exception);
+      REQUIRE_THROWS_AS(TreeIndex({0, 1}).select_from(expr), Exception);
     }
   }
 }

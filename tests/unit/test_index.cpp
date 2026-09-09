@@ -64,8 +64,7 @@ TEST_CASE("index", "[elements][index]") {
     Index i2_alt(isr->retrieve("i1"), 2);
     REQUIRE(i2 == i2_alt);
 
-    // examples with proto indices
-    {
+    SECTION("with proto-indices") {
       REQUIRE_NOTHROW(Index(isr->retrieve(L"i"), 3, {i1, i2}));
       Index i3(isr->retrieve(L"i"), 3, {i1, i2});
       REQUIRE(i3.label() == L"i_3");
@@ -142,8 +141,7 @@ TEST_CASE("index", "[elements][index]") {
       }
     }
 
-    // can use bytestrings also
-    {
+    SECTION("from bytestring") {
       Index i1("i_1");
       REQUIRE(i1.label() == L"i_1");
       REQUIRE(i1.space() == isr->retrieve("i"));
@@ -165,8 +163,7 @@ TEST_CASE("index", "[elements][index]") {
               get_default_context().index_space_registry()->retrieve("α_1"));
     }
 
-    // with default Context label defines Index
-    {
+    SECTION("default Context label defines Index") {
       const auto ctx_resetter = set_scoped_default_context(Context{});
       REQUIRE_NOTHROW(Index(L"i"));
       Index i(L"i");

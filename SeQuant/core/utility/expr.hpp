@@ -4,8 +4,10 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find.hpp>
@@ -14,9 +16,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <concepts>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace sequant {
@@ -64,6 +68,9 @@ bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 [[nodiscard]] ExprPtr transform_expr(
     const ExprPtr &expr, const container::map<Index, Index> &index_replacements,
     Constant::scalar_type scaling_factor = 1);
+[[nodiscard]] ExprPtr transform_expr(
+    const Expr &expr, const container::map<Index, Index> &index_replacements,
+    Constant::scalar_type scaling_factor = 1);
 
 /// @brief Searches for tensors with the given label and removes them from the
 /// given expression Note: The function assumes that there don't exist multiple
@@ -71,7 +78,7 @@ bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 ///
 /// @param expression The expression to modify
 /// @param label The label of the tensor that shall be removed
-/// @returns The removed tensor, if any occurrance has been found
+/// @returns The removed tensor, if any occurrence has been found
 std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
 
 /// Replaces a given target expression by a given replacement
@@ -87,82 +94,32 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
 /// @param expr The expression to perform the replacements in
 /// @param target The target expression to be replaced
 /// @param replacement The expression to replace the target with
-/// @param cmp The comparator used to determine equality between expressions
 /// @returns A reference to expr, which has been modified in-place (useful for
 /// chaining)
 ///
 /// @note At this time, target must not be a composite expression
+ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
+                 const Expr &replacement);
+
 template <typename EqualityComparator = std::equal_to<>>
-ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
-                 const ExprPtr &replacement, EqualityComparator cmp = {}) {
-  if (!target->is_atom()) {
-    throw Exception(
-        "Replacement of composite expressions is not yet implemented");
-  }
-
-  container::svector<std::size_t> index_mapping;
-  if (target.is<AbstractTensor>()) {
-    // Figure out which indices are being reused between target and replacement
-    // (those are the ones we might need to perform replacements on)
-    auto target_slots = slots(target.as<AbstractTensor>());
-    auto replacement_indices = get_used_indices(replacement);
-
-    for (const auto &[i, idx] : ranges::views::enumerate(target_slots)) {
-      if (!idx.nonnull()) {
-        continue;
-      }
-
-      if (std::ranges::find(replacement_indices, idx) !=
-          replacement_indices.end()) {
-        index_mapping.emplace_back(i);
-      }
-    }
-  }
-
-  if (cmp(*expr, *target)) {
-    expr = replacement->clone();
+[[deprecated(
+    "This is only a backwards-compat shim. Use overload using "
+    "ExprMatcher instead")]] ExprPtr &
+replace(ExprPtr &expr, const ExprPtr &target, const ExprPtr &replacement,
+        EqualityComparator = {}) {
+  ExprMatcherOptions options{.cross_comparisons = true};
+  if constexpr (std::same_as<std::remove_cvref_t<EqualityComparator>,
+                             std::equal_to<>>) {
+    options.tensor_cmp = TensorComparison::Identity;
+  } else if constexpr (std::same_as<std::remove_cvref_t<EqualityComparator>,
+                                    TensorBlockEqualComparator>) {
+    options.tensor_cmp = TensorComparison::Block;
   } else {
-    expr->visit(
-        [&](ExprPtr &current) {
-          if (cmp(*current, *target)) {
-            ExprPtr repl;
-
-            if (index_mapping.empty()) {
-              repl = replacement->clone();
-            } else {
-              // Ensure that all indices shared between target and replacement
-              // will also be shared with current and the actual replacement we
-              // want to use for it (this becomes relevant if cmp compares only
-              // equivalence instead of equality)
-              SEQUANT_ASSERT(current->is<AbstractTensor>());
-              SEQUANT_ASSERT(target->is<AbstractTensor>());
-
-              const auto &current_tensor = current->as<AbstractTensor>();
-              const auto &target_tensor = target->as<AbstractTensor>();
-
-              SEQUANT_ASSERT(num_slots(current_tensor) ==
-                             num_slots(target_tensor));
-
-              auto current_slots = slots(current_tensor);
-              auto target_slots = slots(target_tensor);
-
-              container::map<Index, Index> replacements;
-              for (std::size_t i : index_mapping) {
-                if (target_slots[i] != current_slots[i]) {
-                  replacements[target_slots[i]] = current_slots[i];
-                }
-              }
-
-              repl = transform_expr(replacement, replacements);
-            }
-
-            current = std::move(repl);
-          }
-        },
-        /*only_atoms*/ true);
+    static_assert(false,
+                  "Compatibility shim can't deal with the provided comparator");
   }
 
-  return expr;
+  return replace(expr, ExprMatcher(*target, std::move(options)), *replacement);
 }
 
 /// Replaces a given target expression by a given replacement. Result indices
@@ -179,37 +136,32 @@ ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
 /// @param expr The expression to perform the replacements in
 /// @param target The target expression to be replaced
 /// @param replacement The expression to replace the target with
-/// @param cmp The comparator used to determine equality between expressions
 /// @returns A reference to expr, which has been modified in-place (useful for
 /// chaining)
 ///
 /// @note At this time, target must not be a composite expression
+ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
+                    const Expr &replacement);
+
 template <typename EqualityComparator = std::equal_to<>>
-ResultExpr &replace(ResultExpr &expr, const ExprPtr &target,
-                    const ExprPtr &replacement, EqualityComparator cmp = {}) {
-  replace(expr.expression(), target, replacement, cmp);
-
-  // We have to check whether the external indices have been modified by the
-  // replacement and if they did, adapt the indices in the result
-  IndexGroups<> externals = get_unique_indices(expr.expression());
-
-  if (!std::ranges::equal(externals.bra, expr.bra()) ||
-      !std::ranges::equal(externals.ket, expr.ket()) ||
-      !std::ranges::equal(externals.aux, expr.aux())) {
-    // Externals have changed -> update result
-    // TODO: Is retaining result symmetry a reasonable thing to do? Generally
-    // speaking, replacements could also change the result symmetry so in
-    // principle we'd need a way to deduce result symmetry.
-    expr =
-        ResultExpr(bra(std::move(externals.bra)), ket(std::move(externals.ket)),
-                   aux(std::move(externals.aux)), expr.symmetry(),
-                   expr.braket_symmetry(), expr.column_symmetry(),
-                   expr.has_label() ? std::optional<std::wstring>(expr.label())
-                                    : std::nullopt,
-                   std::move(expr.expression()));
+[[deprecated(
+    "This is only a backwards-compat shim. Use overload using "
+    "ExprMatcher instead")]] ResultExpr &
+replace(ResultExpr &expr, const ExprPtr &target, const ExprPtr &replacement,
+        EqualityComparator = {}) {
+  ExprMatcherOptions options{.cross_comparisons = true};
+  if constexpr (std::same_as<std::remove_cvref_t<EqualityComparator>,
+                             std::equal_to<>>) {
+    options.tensor_cmp = TensorComparison::Identity;
+  } else if constexpr (std::same_as<std::remove_cvref_t<EqualityComparator>,
+                                    TensorBlockEqualComparator>) {
+    options.tensor_cmp = TensorComparison::Block;
+  } else {
+    static_assert(false,
+                  "Compatibility shim can't deal with the provided comparator");
   }
 
-  return expr;
+  return replace(expr, ExprMatcher(*target, std::move(options)), *replacement);
 }
 
 }  // namespace sequant
