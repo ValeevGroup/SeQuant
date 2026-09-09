@@ -10,7 +10,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(ValidateStep, "validate");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(ValidateStep);
 
 std::string ValidateStep::kind() const { return "validate"; }
 

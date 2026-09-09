@@ -24,6 +24,7 @@ add_executable(external_interface
     read_input_step.cpp
     simplify_step.cpp
     spintracing_step.cpp
+    substitute_step.cpp
     to_export_tree_step.cpp
     validate_step.cpp
 )

@@ -43,6 +43,8 @@ class ExprMatcher {
   std::partial_ordering compare(const ExprPtr &other) const;
   std::partial_ordering compare(const Expr &other) const;
 
+  const Expr &expr() const;
+
   bool operator==(const ExprMatcher &other) const;
   std::partial_ordering operator<=>(const ExprMatcher &other) const;
 

@@ -15,7 +15,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(ToExportTreeStep, "to_export_tree");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(ToExportTreeStep);
 
 std::string ToExportTreeStep::kind() const { return "to_export_tree"; }
 

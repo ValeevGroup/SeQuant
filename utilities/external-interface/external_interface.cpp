@@ -17,6 +17,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -348,14 +349,19 @@ void generateITF(const json &blocks, std::string_view out_file,
           spdlog::debug("Replacing {} -> {} (tensor equality: '{}')", target,
                         replacement, equality_method);
 
+          ExprMatcherOptions options;
           if (equality_method == "identity") {
-            replace(result, target, replacement);
+            options.tensor_cmp = TensorComparison::Identity;
           } else if (equality_method == "block") {
-            replace<TensorBlockEqualComparator>(result, target, replacement);
+            options.tensor_cmp = TensorComparison::Block;
           } else {
             throw Exception("Unknown tensor_equality choice '" +
                             equality_method + "'");
           }
+
+          ExprMatcher matcher(*target, std::move(options));
+
+          replace(result, matcher, *replacement);
         }
       }
 

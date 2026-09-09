@@ -14,7 +14,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(ProjectionStep, "project");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(ProjectionStep);
 
 std::string ProjectionStep::kind() const { return "project"; }
 

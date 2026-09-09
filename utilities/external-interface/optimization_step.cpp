@@ -13,7 +13,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(OptimizationStep, "optimize");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(OptimizationStep);
 
 std::string OptimizationStep::kind() const { return "optimize"; }
 

@@ -16,7 +16,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(IndexBatchingStep, "batch_indices");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(IndexBatchingStep);
 
 std::string IndexBatchingStep::kind() const { return "batch_indices"; }
 

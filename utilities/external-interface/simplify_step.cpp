@@ -11,7 +11,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(SimplifyStep, "simplify");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(SimplifyStep);
 
 std::string SimplifyStep::kind() const { return "simplify"; }
 

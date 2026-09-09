@@ -18,7 +18,7 @@
 
 namespace sequant::util::extint {
 
-SEQUANT_EXTINT_REGISTER_STEP_TYPE(CSEStep, "cse");
+SEQUANT_EXTINT_REGISTER_STEP_TYPE(CSEStep);
 
 std::string CSEStep::kind() const { return "cse"; }
 
