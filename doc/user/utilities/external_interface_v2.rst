@@ -143,164 +143,165 @@ Examples
 --------
 
 .. code-block:: json
-  {
-    "driver_format_version": 2,
-    "index_spaces": [
-      {
-        "label": "a",
-        "size": 1000,
-        "real_valued": true
-      },
-      {
-        "label": "u",
-        "size": 5,
-        "real_valued": true
-      },
-      {
-        "label": "i",
-        "size": 80,
-        "real_valued": true
-      },
-      {
-        "label": "F",
-        "size": 1500,
-        "real_valued": true
-      }
-    ],
-    "steps": [
-      {
-        "id": "input",
-        "kind": "read_input",
-        "options": {
-          "file_path": [
-            "nevpt2/nevpt2_en0.inp",
-            "nevpt2/nevpt2_en.inp",
-  
-            "nevpt2/nevpt2_res1_i1.inp",
-            "nevpt2/nevpt2_res1_s0.inp",
-            "nevpt2/nevpt2_res2_s1_singles.inp",
-            "nevpt2/nevpt2_res1_s1.inp",
-  
-            "nevpt2/nevpt2_res2_p0.inp",
-            "nevpt2/nevpt2_res2_p2.inp",
-            "nevpt2/nevpt2_res2_i2.inp",
-            "nevpt2/nevpt2_res2_p1.inp",
-            "nevpt2/nevpt2_res2_s1.inp",
-            "nevpt2/nevpt2_res2_s2.inp"
-          ],
-          "default_symmetry": "antisymmetric"
-        },
-        "outputs": {
-          "ecc0": "0",
-          "ecc": "1",
-          "en": "0-1",
-          "res1": "2-5",
-          "res1_i1": "2",
-          "res1_s0": "3",
-          "res2_s1_singles": "4",
-          "res1_s1": "5",
-          "res2": "6-11",
-          "res2_p0": "6",
-          "res2_p2": "7",
-          "res2_i2": "8",
-          "res2_p1": "9",
-          "res2_s1": "10",
-          "res2_s2": "11",
-          "res": "2-11"
-        }
-      },
-      {
-        "kind": "validate",
-        "inputs": "input"
-      },
-      {
-        "id": "DF",
-        "kind": "density_fitting",
-        "inputs": "input",
-        "options": {
-          "auxiliary_space": "F"
-        }
-      },
-      {
-        "id": "traced",
-        "kind": "spintracing",
-        "inputs": "DF",
-        "options": {
-          "algorithm": "closed_shell"
-        }
-      },
-      {
-        "id": "biorth",
-        "kind": "project",
-        "inputs": "traced.res",
-        "options": {
-          "method": "biorthogonal"
-        }
-      },
-      {
-        "id": "opt",
-        "kind": "optimize",
-        "inputs": [
-          "traced.en",
-          "biorth"
-        ]
-      },
-      {
-        "id": "treeify",
-        "kind": "to_export_tree",
-        "inputs": "opt"
-      },
-      {
-        "kind": "export",
-        "inputs": "treeify",
-        "options": {
-          "language": "itf",
-          "optimize": true,
-          "output": "nevpt2_v2.itfaa",
-          "grouping": {
-            "Energy0": "ecc0",
-            "Energy": "ecc",
-            "Residual": "res"
-          },
-          "relative_order": [
-            "ecc0",
-            "ecc",
-            "res1_i1",
-            "res1_s0",
-            "res2_s1_singles",
-            "res1_s1",
-            "res2_p0",
-            "res2_p2",
-            "res2_i2",
-            "res2_p1",
-            "res2_s1",
-            "res2_s2"
-          ],
-          "imports": {
-            "R2{a1;i1}": "R2:ec"
-          },
-          "meta": {
-            "index_spaces": {
-              "a": {
-                "name": "External",
-                "tag": "e"
-              },
-              "u": {
-                "name": "Active",
-                "tag": "a"
-              },
-              "i": {
-                "name": "Closed",
-                "tag": "c"
-              },
-              "F": {
-                "name": "BasisMp2Fit",
-                "tag": "F"
-              }
-            },
-            "min_index_id": 1
-          }
-        }
-      }
-  }
+
+   {
+     "driver_format_version": 2,
+     "index_spaces": [
+       {
+         "label": "a",
+         "size": 1000,
+         "real_valued": true
+       },
+       {
+         "label": "u",
+         "size": 5,
+         "real_valued": true
+       },
+       {
+         "label": "i",
+         "size": 80,
+         "real_valued": true
+       },
+       {
+         "label": "F",
+         "size": 1500,
+         "real_valued": true
+       }
+     ],
+     "steps": [
+       {
+         "id": "input",
+         "kind": "read_input",
+         "options": {
+           "file_path": [
+             "nevpt2/nevpt2_en0.inp",
+             "nevpt2/nevpt2_en.inp",
+   
+             "nevpt2/nevpt2_res1_i1.inp",
+             "nevpt2/nevpt2_res1_s0.inp",
+             "nevpt2/nevpt2_res2_s1_singles.inp",
+             "nevpt2/nevpt2_res1_s1.inp",
+   
+             "nevpt2/nevpt2_res2_p0.inp",
+             "nevpt2/nevpt2_res2_p2.inp",
+             "nevpt2/nevpt2_res2_i2.inp",
+             "nevpt2/nevpt2_res2_p1.inp",
+             "nevpt2/nevpt2_res2_s1.inp",
+             "nevpt2/nevpt2_res2_s2.inp"
+           ],
+           "default_symmetry": "antisymmetric"
+         },
+         "outputs": {
+           "ecc0": "0",
+           "ecc": "1",
+           "en": "0-1",
+           "res1": "2-5",
+           "res1_i1": "2",
+           "res1_s0": "3",
+           "res2_s1_singles": "4",
+           "res1_s1": "5",
+           "res2": "6-11",
+           "res2_p0": "6",
+           "res2_p2": "7",
+           "res2_i2": "8",
+           "res2_p1": "9",
+           "res2_s1": "10",
+           "res2_s2": "11",
+           "res": "2-11"
+         }
+       },
+       {
+         "kind": "validate",
+         "inputs": "input"
+       },
+       {
+         "id": "DF",
+         "kind": "density_fitting",
+         "inputs": "input",
+         "options": {
+           "auxiliary_space": "F"
+         }
+       },
+       {
+         "id": "traced",
+         "kind": "spintracing",
+         "inputs": "DF",
+         "options": {
+           "algorithm": "closed_shell"
+         }
+       },
+       {
+         "id": "biorth",
+         "kind": "project",
+         "inputs": "traced.res",
+         "options": {
+           "method": "biorthogonal"
+         }
+       },
+       {
+         "id": "opt",
+         "kind": "optimize",
+         "inputs": [
+           "traced.en",
+           "biorth"
+         ]
+       },
+       {
+         "id": "treeify",
+         "kind": "to_export_tree",
+         "inputs": "opt"
+       },
+       {
+         "kind": "export",
+         "inputs": "treeify",
+         "options": {
+           "language": "itf",
+           "optimize": true,
+           "output": "nevpt2_v2.itfaa",
+           "grouping": {
+             "Energy0": "ecc0",
+             "Energy": "ecc",
+             "Residual": "res"
+           },
+           "relative_order": [
+             "ecc0",
+             "ecc",
+             "res1_i1",
+             "res1_s0",
+             "res2_s1_singles",
+             "res1_s1",
+             "res2_p0",
+             "res2_p2",
+             "res2_i2",
+             "res2_p1",
+             "res2_s1",
+             "res2_s2"
+           ],
+           "imports": {
+             "R2{a1;i1}": "R2:ec"
+           },
+           "meta": {
+             "index_spaces": {
+               "a": {
+                 "name": "External",
+                 "tag": "e"
+               },
+               "u": {
+                 "name": "Active",
+                 "tag": "a"
+               },
+               "i": {
+                 "name": "Closed",
+                 "tag": "c"
+               },
+               "F": {
+                 "name": "BasisMp2Fit",
+                 "tag": "F"
+               }
+             },
+             "min_index_id": 1
+           }
+         }
+       }
+   }
 
