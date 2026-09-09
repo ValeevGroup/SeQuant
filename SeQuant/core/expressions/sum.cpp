@@ -397,12 +397,12 @@ SumPtr HashingAccumulator::make_sum_impl(bool canonicalize) {
     };
     for (std::size_t i = 1; i < summands.size(); ++i) {
       if (summands[i - 1]->hash_value() != summands[i]->hash_value()) continue;
+      const Expr &prev = *summands[i - 1];
+      const Expr &cur = *summands[i];
       std::cerr << "[sequant-sum-tie] hash=0x" << std::hex
                 << summands[i]->hash_value() << std::dec
-                << " lt=" << (*summands[i - 1] < *summands[i]) << "/"
-                << (*summands[i] < *summands[i - 1])
-                << " types=" << typeid(*summands[i - 1]).name() << "/"
-                << typeid(*summands[i]).name()
+                << " lt=" << (prev < cur) << "/" << (cur < prev)
+                << " types=" << typeid(prev).name() << "/" << typeid(cur).name()
                 << " ids=" << summands[i - 1]->type_id() << "/"
                 << summands[i]->type_id() << "\n    "
                 << narrow(summands[i - 1]->to_latex()) << "\n    "
