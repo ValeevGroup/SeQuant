@@ -657,6 +657,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // productions (the recompute the forest performs and the per-term
   // optimizer costs).
   std::unordered_map<std::size_t, std::set<std::size_t>> forbid;
+  // The KIND of a component's loop (Contracted: a batched reduction at its
+  // opener; External: a carried mode's physical loop), keyed by root: two
+  // components of different kinds never unite -- a term's external occupied
+  // loop and another term's contracted occupied loop may slice one mode of a
+  // shared value, but they are two loops (one scatters into the result, the
+  // other sums), and the builder realizes a block as one kind.
+  std::unordered_map<std::size_t, BatchModeType> comp_kind;
   auto find = [&](std::size_t x) -> std::size_t {
     auto it = uf.find(x);
     if (it == uf.end()) {
@@ -685,9 +692,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
     if (auto const fa = forbid.find(ra);
         fa != forbid.end() && fa->second.count(rb))
       return false;  // a reader's loop and the reduction it reads complete
+    if (auto const ka = comp_kind.find(ra), kb = comp_kind.find(rb);
+        ka != comp_kind.end() && kb != comp_kind.end() &&
+        ka->second != kb->second)
+      return false;  // an external loop and a contracted loop stay distinct
     for (auto const& [o, pos] : ma) mb[o] = pos;
     members.erase(ra);
     uf[ra] = rb;
+    if (auto const ka = comp_kind.find(ra); ka != comp_kind.end()) {
+      comp_kind[rb] = ka->second;
+      comp_kind.erase(ka);
+    }
     if (auto const fa = forbid.find(ra); fa != forbid.end()) {
       auto moved = std::move(fa->second);
       forbid.erase(fa);
@@ -753,6 +768,28 @@ RichSchedule compute_dag_boulevard(R const& forest,
     for (Index const& m : recs[i].contracted_batched) {
       (void)find(reduction_node(i, m));
       reduction_stamps.push_back({i, m});
+    }
+
+  // Component kinds (see `comp_kind`), from every open, before any fold.
+  for (std::size_t i = 0; i < nrec; ++i)
+    for (auto const& [ix, kind] : recs[i].opens) {
+      std::optional<std::size_t> node;
+      if (kind == BatchModeType::Contracted) {
+        node = reduction_node(i, ix);
+      } else {
+        for (std::size_t pV = 0; pV < recs[i].carried.size(); ++pV)
+          if (recs[i].carried[pV] == ix) {
+            node = encode(i, pV);
+            break;
+          }
+      }
+      if (!node) continue;
+      std::size_t const r = find(*node);
+      auto const it = comp_kind.find(r);
+      SEQUANT_ASSERT((it == comp_kind.end() || it->second == kind) &&
+                     "compute_dag_boulevard: one loop instance opened with "
+                     "two kinds within a tree");
+      comp_kind[r] = kind;
     }
 
   // Reader-versus-reduction constraints (see `forbid`): for every occurrence
