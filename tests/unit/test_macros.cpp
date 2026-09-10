@@ -17,6 +17,7 @@ TEST_CASE("macros", "[elements]") {
       sequant::assert_failed("test");
         // clang-format on
       } catch (sequant::Exception& ex) {
+        CAPTURE(ex.what());
         // see #line up there
         // N.B. clang <16 has std::source_location produce wrong line numbers
         // when initialized as default argument see
@@ -33,6 +34,7 @@ TEST_CASE("macros", "[elements]") {
       SEQUANT_ASSERT(1 == 0 && "1 != 0", "testing SEQUANT_ASSERT");
         // clang-format on
       } catch (sequant::Exception& ex) {
+        CAPTURE(ex.what());
         // see #line up there
         // N.B. clang <16 has std::source_location produce wrong line numbers
         // when initialized as default argument see
