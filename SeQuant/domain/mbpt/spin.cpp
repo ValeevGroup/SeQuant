@@ -1399,7 +1399,7 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
 template <detail::index_group_range IdxGroups>
 std::vector<ExprPtr> open_shell_spintrace_impl(
     const ExprPtr& expr, IdxGroups&& ext_index_groups,
-    const std::optional<int>& target_spin_case) {
+    const std::optional<std::size_t>& target_spin_case) {
   if (expr->is<Constant>() || expr->is<Variable>()) {
     return std::vector<ExprPtr>{expr};
   }
@@ -1587,14 +1587,14 @@ std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<SlottedIndex>>&
         ext_index_groups,
-    const std::optional<int>& target_spin_case) {
+    const std::optional<std::size_t>& target_spin_case) {
   return open_shell_spintrace_impl(
       expr, as_view_of_index_groups(ext_index_groups), target_spin_case);
 }
 
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr, EmptyInitializerList,
-    const std::optional<int>& target_spin_case) {
+    const std::optional<std::size_t>& target_spin_case) {
   return open_shell_spintrace_impl(
       expr, container::svector<container::svector<Index>>{}, target_spin_case);
 }
@@ -1602,7 +1602,7 @@ std::vector<ExprPtr> open_shell_spintrace(
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    const std::optional<int>& target_spin_case) {
+    const std::optional<std::size_t>& target_spin_case) {
   return open_shell_spintrace_impl(expr, ext_index_groups, target_spin_case);
 }
 
