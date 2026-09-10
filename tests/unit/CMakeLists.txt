@@ -41,6 +41,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_slot_symmetry.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
