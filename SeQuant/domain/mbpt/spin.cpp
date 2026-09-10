@@ -1255,14 +1255,12 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   auto k = ranges::views::concat(O1.ket(), O2.ket());
   auto a = ranges::views::concat(O1.aux(), O2.aux());
   // preserve O1's braket and column symmetry, not just its perm symmetry: all
-  // three take part in the tensor hash, so dropping one would keep the merged
-  // tensor from comparing equal to the same tensor spelled another way.
-  // N.B. forwarding braket_symmetry() rather than hermiticity() means an
-  // AntiHermitian O1 re-derives as NonHermitian (see the note on
-  // Tensor::hermiticity_). That is not observable here -- both derive to
-  // braket-Nonsymm, and hermiticity_ is deliberately outside the hash and
-  // static_equal -- but it would have to be revisited if AntiHermitian ever
-  // gains distinct behavior.
+  // three take part in the tensor hash. Forward the braket symmetry itself
+  // rather than the Hermiticity back-filled from it -- re-deriving would flip
+  // an explicitly pinned Conjugate to Symm over a real field, the same
+  // corruption v1/ast_conversions.hpp declines to risk. The cost is only the
+  // AntiHermitian preimage, which is outside the hash and derives to the same
+  // braket-Nonsymm anyway.
   return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), aux(a), O1.symmetry(),
                            O1.braket_symmetry(), O1.column_symmetry()));
 }
