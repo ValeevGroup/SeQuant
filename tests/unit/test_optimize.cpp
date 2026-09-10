@@ -4703,3 +4703,105 @@ TEST_CASE("Re-wrapped summand batch-annotates its inner product",
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 }
+
+TEST_CASE("Nested product brackets: batch annotations align with binarize",
+          "[optimize][annotate][nested-product]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{20};
+  };
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto make_opts = [&](std::shared_ptr<AxesMap> const& axes_map) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = is_batch;
+    opts.batch_policy.batch_target_size = bts;
+    opts.batch_policy.peak_threshold = 1.0;  // force batching
+    opts.term_batch_axes = axes_map;
+    return opts;
+  };
+
+  // Two projection brackets, each a NESTED Product (Flatten::No, opaque to the
+  // outer contraction order) that keeps the aux index OPEN on its result,
+  // contracted over that aux index at the root:
+  //   [ (g{a1;a2;K1} C{a1;i1}) C{a2;i2} ] * [ (g{a3;a4;K1} C{a3;i3}) C{a4;i4} ]
+  // opt_mixed_product optimizes each bracket on its own (K1 is external
+  // there, so it is never a batch mode inside) and the outer DP contracts K1
+  // between the two placeholders. binarize builds the brackets' inner
+  // contraction nodes BEFORE the root (left-first post-order), so the
+  // annotation list keyed on the optimized term must carry one entry per
+  // inner node too, or the root's contracted-K1 mark lands on an inner node
+  // whose result still carries K1 (runtime: per-batch partials of unequal
+  // extent are then accumulated, TA trange mismatch).
+  auto bracket = [](wchar_t const* g, wchar_t const* c1, wchar_t const* c2) {
+    auto inner = ex<Product>(Product{
+        1, ExprPtrList{deserialize(g), deserialize(c1)}, Product::Flatten::No});
+    return ex<Product>(
+        Product{1, ExprPtrList{inner, deserialize(c2)}, Product::Flatten::No});
+  };
+  auto b1 = bracket(L"g{a_1;a_2;Κ_1}", L"C{a_1;i_1}", L"C{a_2;i_2}");
+  auto b2 = bracket(L"g{a_3;a_4;Κ_1}", L"C{a_3;i_3}", L"C{a_4;i_4}");
+  auto term =
+      ex<Product>(Product{1, ExprPtrList{b1, b2}, Product::Flatten::No});
+
+  auto axes_map = std::make_shared<AxesMap>();
+  auto optimized = optimize(term, make_opts(axes_map));
+  REQUIRE(optimized);
+  auto it = axes_map->find(optimized.get());
+  REQUIRE(it != axes_map->end());
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = it->second;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  auto carries_aux = [&aux](EvalExpr const& e) {
+    if (!e.is_tensor()) return false;
+    auto const& t = e.as_tensor();
+    for (auto const& ix : t.aux())
+      if (ix.space() == aux) return true;
+    for (auto const& ix : t.bra())
+      if (ix.space() == aux) return true;
+    for (auto const& ix : t.ket())
+      if (ix.space() == aux) return true;
+    return false;
+  };
+  auto has_aux_con = [&aux](EvalExpr const& e) {
+    for (auto const& [ix, kind] : e.batched_here())
+      if (ix.space() == aux && kind == BatchModeType::Contracted) return true;
+    return false;
+  };
+  // the two brackets contribute 2 contraction nodes each, the root one more
+  std::size_t n_dp = 0;
+  std::size_t n_aux_con = 0;
+  bool aux_con_on_aux_carrier = false;
+  node.visit([&](auto const& n) {
+    if (n.leaf() || n->op_type() != EvalOp::Product) return;
+    ++n_dp;
+    if (has_aux_con(*n)) {
+      ++n_aux_con;
+      if (carries_aux(*n)) aux_con_on_aux_carrier = true;
+    }
+  });
+  REQUIRE(n_dp == 5);
+  REQUIRE(it->second.size() == n_dp);
+  // the root contracts K1: it is the ONLY node that may slice it
+  REQUIRE(has_aux_con(*node));
+  REQUIRE(n_aux_con == 1);
+  REQUIRE_FALSE(aux_con_on_aux_carrier);
+}

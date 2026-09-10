@@ -156,6 +156,53 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
 /// user-defined tensor label can collide with it.
 inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 
+/// The non_tensors slot a placeholder tensor label (see
+/// placeholder_label_prefix) stands in for. The prefix is internal; anything
+/// carrying it must have been emitted by opt_mixed_product with a
+/// pure-decimal suffix, so any deviation is a programming error.
+std::size_t placeholder_index(std::wstring_view label) {
+  SEQUANT_ASSERT(label.starts_with(placeholder_label_prefix));
+  auto suffix_view = label.substr(placeholder_label_prefix.size());
+  SEQUANT_ASSERT(!suffix_view.empty());
+  std::size_t suffix = 0;
+  for (wchar_t c : suffix_view) {
+    SEQUANT_ASSERT(c >= L'0' && c <= L'9');
+    suffix = suffix * 10 + static_cast<std::size_t>(c - L'0');
+  }
+  return suffix;
+}
+
+/// Number of contraction (DP) nodes binarize builds for \p e, i.e. how many
+/// BinarizationOptions::node_batch_axes entries it consumes, mirroring
+/// impl::binarize: a Product consumes its factors' counts (in factor order)
+/// plus one per tensor x tensor left-fold step (#non-scalar factors - 1); a
+/// Sum factor is binarized on a private counter (consumes none); a Re/Im
+/// wrapper factor shares the counter only when every factor is a scalar (its
+/// inner nodes are then the product's DP nodes).
+std::size_t binarize_dp_node_count(ExprPtr const& e) {
+  if (e->is<RealPart>())
+    return binarize_dp_node_count(e->as<RealPart>().inner());
+  if (e->is<ImagPart>())
+    return binarize_dp_node_count(e->as<ImagPart>().inner());
+  if (!e->is<Product>()) return 0;
+  auto const& prod = e->as<Product>();
+  bool const wrapper_shares_counter = ranges::all_of(
+      prod.factors(), [](ExprPtr const& f) { return f->is_scalar(); });
+  std::size_t n = 0;
+  std::size_t n_tensor = 0;
+  for (auto const& f : prod.factors()) {
+    if (f->is<Sum>()) {
+      // private counter, no entries
+    } else if (f->is<RealPart>() || f->is<ImagPart>()) {
+      if (wrapper_shares_counter) n += binarize_dp_node_count(f);
+    } else {
+      n += binarize_dp_node_count(f);
+    }
+    if (!f->is_scalar()) ++n_tensor;
+  }
+  return n + (n_tensor > 1 ? n_tensor - 1 : 0);
+}
+
 /// Optimize a Product that contains some non-Tensor, non-scalar factors by
 /// substituting placeholder tensors with target indices, optimizing the
 /// resulting tensor-only product, then swapping the originals back in.
@@ -193,21 +240,64 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   auto result = opt_pure_product(
       Product{prod.scalar(), new_factors, Product::Flatten::No}, opts);
 
+  // Per-node batch annotations (opts.term_batch_axes): opt_pure_product keyed
+  // the OUTER network's entries -- one per DP node over the placeholders, in
+  // binarize's left-first post-order -- on `result`, and each nested Product
+  // factor's own optimization above keyed ITS entries on non_tensors[i].
+  // binarize consumes ONE shared counter in post-order over the WHOLE tree,
+  // a nested Product factor's contraction nodes included (only a Sum factor
+  // gets a private counter and no entries), so splice each nested product's
+  // entries in at its placeholder's position and re-key the merged list on
+  // `result`. Without this the outer entries land on the brackets' inner
+  // nodes: e.g. the DF driver (g C C)(K) . (g C C)(K), contracted over the
+  // aux index K at the root with each bracket keeping K open, had the root's
+  // contracted-K mark stamped on the first bracket's inner node, whose result
+  // still carries K -- the batched runtime then accumulated per-batch
+  // partials of unequal K extent (Kramers-union PNS-CCD, 2026-09-09).
+  if (opts.term_batch_axes) {
+    container::vector<NodeBatchAnnotation> outer;
+    if (auto it = opts.term_batch_axes->find(result.get());
+        it != opts.term_batch_axes->end())
+      outer = std::move(it->second);
+    container::vector<NodeBatchAnnotation> merged;
+    std::size_t next_outer = 0;
+    std::function<void(ExprPtr const&)> walk = [&](ExprPtr const& e) {
+      if (e->is<Product>()) {
+        std::size_t n_tensor = 0;
+        for (auto const& f : e->as<Product>().factors()) {
+          walk(f);
+          if (!f->is_scalar()) ++n_tensor;
+        }
+        for (std::size_t k = 1; k < n_tensor; ++k, ++next_outer)
+          merged.push_back(next_outer < outer.size() ? outer[next_outer]
+                                                     : NodeBatchAnnotation{});
+        return;
+      }
+      if (!e->is<Tensor>()) return;
+      auto const label = e->as<Tensor>().label();
+      if (!label.starts_with(placeholder_label_prefix)) return;
+      auto const& inner = non_tensors[placeholder_index(label)];
+      SEQUANT_ASSERT(inner);
+      // the nested product's own entries, in ITS post-order; a Sum bracket
+      // contributes none (private counter in binarize). A count mismatch
+      // (an inner optimization path that did not record) degrades to
+      // unannotated inner nodes rather than misaligning the outer ones.
+      std::size_t const need = binarize_dp_node_count(inner);
+      auto it = opts.term_batch_axes->find(inner.get());
+      if (it != opts.term_batch_axes->end() && it->second.size() == need)
+        merged.insert(merged.end(), it->second.begin(), it->second.end());
+      else
+        merged.insert(merged.end(), need, NodeBatchAnnotation{});
+    };
+    walk(result);
+    (*opts.term_batch_axes)[result.get()] = std::move(merged);
+  }
+
   auto replacer = [&non_tensors](ExprPtr& out) {
     if (!out->is<Tensor>()) return;
     auto label = out->as<Tensor>().label();
     if (!label.starts_with(placeholder_label_prefix)) return;
-
-    // The placeholder prefix is internal; anything carrying it must have been
-    // emitted by this function, with a pure-decimal suffix indexing
-    // non_tensors. Any deviation is a programming error.
-    auto suffix_view = label.substr(placeholder_label_prefix.size());
-    SEQUANT_ASSERT(!suffix_view.empty());
-    std::size_t suffix = 0;
-    for (wchar_t c : suffix_view) {
-      SEQUANT_ASSERT(c >= L'0' && c <= L'9');
-      suffix = suffix * 10 + static_cast<std::size_t>(c - L'0');
-    }
+    auto const suffix = placeholder_index(label);
     SEQUANT_ASSERT(suffix < non_tensors.size() && non_tensors[suffix]);
     out = non_tensors[suffix].clone();
   };
