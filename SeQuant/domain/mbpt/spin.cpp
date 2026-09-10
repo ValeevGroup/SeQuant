@@ -1694,7 +1694,8 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
       auto count_indices = [](const auto& range) {
         auto sizes = range | ranges::views::transform(
                                  [](const auto& list) { return list.size(); });
-        return std::accumulate(sizes.begin(), sizes.end(), 0);
+        return std::accumulate(sizes.begin(), sizes.end(),
+                               static_cast<std::size_t>(0));
       };
       auto determined_externals = external_indices(expression);
 
