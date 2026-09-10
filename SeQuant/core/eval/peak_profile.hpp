@@ -298,12 +298,15 @@ struct ValueCell {
   bool is_leaf = false;  //!< the value is a forest LEAF (an input fetched on
                          //!< demand), not a computed intermediate -- so it is
                          //!< never scheduled as a BuildStep.
-  std::size_t hash;      //!< the value's \c EvalExpr::hash_value() -- the CSE
+  std::size_t hash;      //!< the value's NODE id (\c EvalExpr::hash_value(),
+                         //!< the canonical colored graph): links a cell back
+                         //!< to its forest nodes; batched-slot-BLIND.
+  std::size_t key = 0;   //!< the VALUE id (\c value_key: node id combined
+                         //!< with the home-sliced canonical positions,
+                         //!< explicit-cells design section 11) -- the
                          //!< identity that folds occurrences into this cell.
-                         //!< Batched-slot-BLIND; DISTINCT from the
-                         //!< batched-slot-aware occurrence key the router uses
-                         //!< (see remat_to_router). Links a cell back to its
-                         //!< forest nodes.
+                         //!< 0 (a hand-built cell) means "== hash"; read it
+                         //!< through \c value_key_of(ValueCell const&).
   int home_depth;        //!< \c home_depth_of(home_scope, ectx) at the
                          //!< FIRST occurrence -- informational, as \c
                          //!< Cell::home_depth
@@ -341,6 +344,13 @@ struct ValueCell {
 /// single monotone static-point timeline. The \c Schedule consumed by \c
 /// peak_profile_sweep is a pure PROJECTION of this (see \c compute_dag_path).
 ///
+/// The value id of \p c: its \c key, or its node id for a cell built without
+/// one (every hand-built fixture; a value with nothing home-sliced has the
+/// two equal anyway).
+[[nodiscard]] inline std::size_t value_key_of(ValueCell const& c) noexcept {
+  return c.key ? c.key : c.hash;
+}
+
 struct RichSchedule {
   container::svector<ValueCell> cells;
   std::size_t num_points = 0;  //!< one past the last static point
@@ -411,7 +421,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // is the parent's point (its structural consumer); a root keeps its own
   // point (set at construction, overwritten by the parent if any).
   struct NodeRec {
-    std::size_t hash;
+    std::size_t hash;  // node id
+    std::size_t key;   // value id (value_key_of(n))
     bool is_leaf;
     std::size_t point;
     std::size_t consumer_point;
@@ -504,6 +515,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     std::size_t const point = counter++;
     NodeRec r;
     r.hash = n->hash_value();
+    r.key = value_key_of(n);
     r.is_leaf = n.leaf();
     r.point = point;
     r.consumer_point = point;  // root default; overwritten by parent below
@@ -564,7 +576,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // from ALL occurrences, not just the one that seeds the cell).
   std::unordered_map<std::size_t, container::svector<Index>> own_modes_union;
   for (auto const& r : recs) {
-    auto& acc = own_modes_union[r.hash];
+    auto& acc = own_modes_union[r.key];
     for (auto const& m : r.own_modes)
       if (std::find(acc.begin(), acc.end(), m) == acc.end()) acc.push_back(m);
   }
@@ -579,12 +591,12 @@ RichSchedule compute_dag_boulevard(R const& forest,
       carried_isect;
   std::unordered_map<std::size_t, bool> carried_seeded;
   for (auto const& r : recs) {
-    auto& u = carried_union[r.hash];
+    auto& u = carried_union[r.key];
     for (auto const& m : r.carried)
       if (std::find(u.begin(), u.end(), m) == u.end()) u.push_back(m);
-    auto& is = carried_isect[r.hash];
-    if (!carried_seeded[r.hash]) {
-      carried_seeded[r.hash] = true;
+    auto& is = carried_isect[r.key];
+    if (!carried_seeded[r.key]) {
+      carried_seeded[r.key] = true;
       is.assign(r.carried.begin(), r.carried.end());
     } else {
       container::svector<Index> keep;
@@ -627,16 +639,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
       return o;
     };
 
-    auto const it = hash_to_cell.find(r.hash);
+    auto const it = hash_to_cell.find(r.key);
     if (it == hash_to_cell.end()) {
       ValueCell c;
       c.value_id = out.cells.size();
       c.is_leaf = r.is_leaf;
-      c.hash = r.hash;  // the value's hash_value() (== the hash_to_cell key)
+      c.hash = r.hash;  // the node id
+      c.key = r.key;    // the value id (== the hash_to_cell key)
       c.first_use = r.point;
       c.last_use = r.consumer_point;
       c.home_depth = detail::home_depth_of(r.home, r.ectx);
-      auto const& self_modes = own_modes_union[r.hash];
+      auto const& self_modes = own_modes_union[r.key];
       container::svector<Index> home_modes;
       for (auto const& m : r.home)
         if (std::find(self_modes.begin(), self_modes.end(), m) ==
@@ -645,15 +658,15 @@ RichSchedule compute_dag_boulevard(R const& forest,
       c.carried = r.carried;
       c.home_modes = std::move(home_modes);
       {
-        auto const& u = carried_union[r.hash];
-        auto const& is = carried_isect[r.hash];
+        auto const& u = carried_union[r.key];
+        auto const& is = carried_isect[r.key];
         for (auto const& m : u)
           if (std::find(is.begin(), is.end(), m) == is.end())
             c.divergent_modes.push_back(m);
       }
       fold_enclosing(c.enclosing_modes);
       c.occurrences.push_back(make_occ());
-      hash_to_cell.emplace(r.hash, c.value_id);
+      hash_to_cell.emplace(r.key, c.value_id);
       out.cells.push_back(std::move(c));
     } else {
       ValueCell& c = out.cells[it->second];
@@ -831,14 +844,24 @@ RichSchedule compute_dag_boulevard(R const& forest,
             // conflict-aware, so a genuine transposition is still kept
             // distinct.
             std::size_t const rn = reduction_node(par_vid, m);
-            if (try_unite(encode(c.value_id, pV), rn))
+            if (try_unite(encode(c.value_id, pV), rn)) {
               reduction_stamps.push_back({par_vid, m});
+              if (conflict_dump)
+                std::wcerr << L"[loop_slot] edge v" << c.value_id << L"@" << pV
+                           << L"(" << m.full_label() << L") ~ red(v" << par_vid
+                           << L"," << m.full_label() << L")\n";
+            }
             continue;
           }
           std::size_t const pC =
               static_cast<std::size_t>(pj - par->carried.begin());
-          if (!try_unite(encode(c.value_id, pV), encode(par_vid, pC)) &&
-              conflict_dump) {
+          bool const united =
+              try_unite(encode(c.value_id, pV), encode(par_vid, pC));
+          if (united && conflict_dump)
+            std::wcerr << L"[loop_slot] edge v" << c.value_id << L"@" << pV
+                       << L"(" << m.full_label() << L") ~ v" << par_vid << L"@"
+                       << pC << L"\n";
+          if (!united && conflict_dump) {
             std::wcerr << L"[loop_slot] REJECTED edge (value " << c.value_id
                        << L" pos " << pV << L") ~ (value " << par_vid
                        << L" pos " << pC << L") mode " << m.full_label()
@@ -930,8 +953,10 @@ RichSchedule compute_dag_boulevard(R const& forest,
             std::size_t const root = find(encode(c.value_id, pV));
             std::wstring const sp{occ.carried[pV].space().base_key()};
             std::wstring const mem =
+                L"v" + std::to_wstring(c.value_id) + L":" +
                 std::to_wstring(c.hash % 100000u) + L"(" +
-                std::wstring(occ.carried[pV].full_label()) + L")";
+                std::wstring(occ.carried[pV].full_label()) + L"@" +
+                std::to_wstring(pV) + L")";
             comp[{sp, root_slot.at(root)}][mem] = 1;
           }
       for (auto const& [key, members] : comp) {
@@ -1039,6 +1064,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
         // Enclosing chain, outermost first, each entry resolved through its
         // opener occurrence (same tree, so the opened Index matches verbatim).
         container::svector<std::pair<std::wstring, int>> chain;
+        container::svector<std::size_t> chain_opener;  // parallel: point
         for (std::size_t k = 0;
              k < occ.ectx.size() && k < occ.ectx_opener_point.size(); ++k) {
           auto const pit = point_occ.find(occ.ectx_opener_point[k]);
@@ -1048,21 +1074,32 @@ RichSchedule compute_dag_boulevard(R const& forest,
           for (auto const& [oix, okind] : opener.opens)
             if (oix == occ.ectx[k].first) {
               if (auto const key =
-                      instance_slot(vit->second, opener, oix, okind))
+                      instance_slot(vit->second, opener, oix, okind)) {
                 chain.push_back(*key);
+                chain_opener.push_back(occ.ectx_opener_point[k]);
+              }
               break;
             }
         }
+        // A node's own opens sit inside every enclosing loop (opened by an
+        // ancestor, never by this node): a real constraint.
         for (auto const& [ix, kind] : occ.opens)
           if (auto const key = instance_slot(c.value_id, occ, ix, kind))
             if (!chain.empty() && chain.back() != *key &&
                 constrains(chain.back(), *key))
               out.loop_order.emplace(std::make_pair(chain.back(), *key),
                                      c.value_id);
-        for (std::size_t k = 1; k < chain.size(); ++k)
-          if (chain[k - 1] != chain[k] && constrains(chain[k - 1], chain[k]))
-            out.loop_order.emplace(std::make_pair(chain[k - 1], chain[k]),
-                                   c.value_id);
+        // Consecutive enclosing loops opened by DIFFERENT nodes nest in the
+        // order listed. Two loops opened at ONE node (a value contracting
+        // two modes in batches at its own node) are listed in that node's
+        // order but nest either way: no constraint between them.
+        for (std::size_t k = 1; k < chain.size(); ++k) {
+          if (chain[k - 1] == chain[k]) continue;
+          if (chain_opener[k - 1] == chain_opener[k]) continue;
+          if (!constrains(chain[k - 1], chain[k])) continue;
+          out.loop_order.emplace(std::make_pair(chain[k - 1], chain[k]),
+                                 c.value_id);
+        }
       }
   }
 

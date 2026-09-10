@@ -8,6 +8,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/cell_registry.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
 #include <SeQuant/core/eval/member_axis.hpp>
 #include <SeQuant/core/eval/occurrence_key.hpp>
 #include <SeQuant/core/eval/placement_router.hpp>
@@ -874,7 +875,7 @@ ResultPtr evaluate_impl(Node const& node,         //
           if (rr && !f.node.leaf() &&
               f.node->hash_value() != node->hash_value()) {
             if (auto v =
-                    rr->fetch(f.node->hash_value(), cache.batch_context())) {
+                    rr->fetch(value_key_of(f.node), cache.batch_context())) {
               // Stage 3: ownership of a table value's exhaustion is now the
               // registry's own affair (CellRegistry::read drops its
               // reference on the draining read) -- the in-place gate below
@@ -1030,7 +1031,7 @@ ResultPtr evaluate_impl(Node const& node,         //
           // every later fetch of this cell.
           if (auto* rr = cache.cell_read_resolver()) {
             if (auto v =
-                    rr->fetch(f.node->hash_value(), cache.batch_context())) {
+                    rr->fetch(value_key_of(f.node), cache.batch_context())) {
               // See the Stage-3 ownership note on the operand probe above:
               // this branch is kept because the two probes must not drift
               // apart, and because it is already the correct wiring for the
@@ -1067,7 +1068,7 @@ ResultPtr evaluate_impl(Node const& node,         //
           // node's phase, exactly as the scope cache's store/read pair did.
           // The value this frame returns stays the ORIENTED `result`.
           if (auto* rr = cache.cell_read_resolver())
-            rr->record_leaf(f.node->hash_value(), apply_phase(f.node, result));
+            rr->record_leaf(value_key_of(f.node), apply_phase(f.node, result));
           // Store the FULL leaf under its canonical key (a block slice would
           // corrupt the cache), then return it SLICED to the current block: a
           // freshly built leaf's lifetime is top, so every enclosing carried
@@ -1086,7 +1087,7 @@ ResultPtr evaluate_impl(Node const& node,         //
           // that still falls through to the un-declared slicing below.
           if (auto* rr = cache.cell_read_resolver()) {
             if (auto v =
-                    rr->fetch(f.node->hash_value(), cache.batch_context())) {
+                    rr->fetch(value_key_of(f.node), cache.batch_context())) {
               // See the Stage-3 ownership note on the operand probe above:
               // nothing to release here any more.
               finalize(apply_phase(f.node, *v));
@@ -1203,11 +1204,11 @@ ResultPtr evaluate_impl(Node const& node,         //
         bool const inplace_eligible =
             f.node->op_type() == EvalOp::Sum && f.node->accumulate_in_place() &&
             !f.node.left().leaf() &&
-            (rr_gate ? rr_gate->operand_drained(f.node.left()->hash_value())
+            (rr_gate ? rr_gate->operand_drained(value_key_of(f.node.left()))
                      : !cache.chain_holds_shared(f.left));
         if (inplace_eligible) {
           SEQUANT_ASSERT(
-              rr_gate ? rr_gate->operand_drained(f.node.left()->hash_value())
+              rr_gate ? rr_gate->operand_drained(value_key_of(f.node.left()))
                       : !cache.chain_holds_shared(f.left));
 
           // The accumulator (f.left) is used AS IS, in its own layout --

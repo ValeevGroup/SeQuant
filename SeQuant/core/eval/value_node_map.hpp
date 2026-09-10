@@ -2,6 +2,7 @@
 #define SEQUANT_EVAL_VALUE_NODE_MAP_HPP
 
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/lifetime_mask.hpp>
 
 #include <cstddef>
 #include <unordered_map>
@@ -37,7 +38,33 @@ build_value_node_map(R const& forest) {
   using node_t = std::ranges::range_value_t<R>;
   std::unordered_map<std::size_t, node_t> out;
   auto visit = [&out](auto&& self, node_t const& n) -> void {
+    // Both the node id and the value id (value_key_of, explicit-cells design
+    // section 11) resolve: a lookup by value id lands on one of THAT value's
+    // own nodes, a lookup by node id (a monitor's op hash, a leaf) on the
+    // first node of that hash.
     out.emplace(n->hash_value(), n);
+    out.emplace(value_key_of(n), n);
+    if (!n.leaf()) {
+      self(self, n.left());
+      self(self, n.right());
+    }
+  };
+  for (auto const& t : forest) visit(visit, t);
+  return out;
+}
+
+/// \brief Like \c build_value_node_map but keyed by VALUE id (\c
+/// value_key_of: node id + home-sliced positions), one representative node
+/// per value -- the map the ordered executor resolves a \c value_id through,
+/// so a value is always built from one of its own occurrences' nodes (a node
+/// of the same hash home-sliced on other positions is another value).
+template <meta::eval_node_range R>
+[[nodiscard]] std::unordered_map<std::size_t, std::ranges::range_value_t<R>>
+build_value_key_node_map(R const& forest) {
+  using node_t = std::ranges::range_value_t<R>;
+  std::unordered_map<std::size_t, node_t> out;
+  auto visit = [&out](auto&& self, node_t const& n) -> void {
+    out.emplace(value_key_of(n), n);
     if (!n.leaf()) {
       self(self, n.left());
       self(self, n.right());

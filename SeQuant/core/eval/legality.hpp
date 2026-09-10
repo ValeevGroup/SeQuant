@@ -54,7 +54,9 @@ struct AxisClass {
 /// (Task 3/4).
 ///
 struct CellLegality {
-  std::size_t hash = 0;  //!< == ValueCell::hash
+  std::size_t hash = 0;  //!< == value_key_of(ValueCell): the VALUE id (node
+                         //!< id + home-sliced positions), the join key with
+                         //!< the rich schedule
 
   //!< The batch-loop axes this value depends on AT ITS OWN NODE -- carried in
   //!< its own result OR contracted at its own node (NOT recursively over its
@@ -417,9 +419,13 @@ template <meta::eval_node_range R>
     return -1;
   };
 
+  // One representative forest node per VALUE (keyed by value id, not node
+  // id): a value's roles are read off one of its OWN occurrences' nodes -- a
+  // node of the same hash home-sliced elsewhere carries that frame's slice
+  // annotations, not this value's.
   std::unordered_map<std::size_t, Node> node_of;
   auto visit = [&](auto&& self, Node const& n) -> void {
-    node_of.emplace(n->hash_value(), n);
+    node_of.emplace(value_key_of(n), n);
     if (!n.leaf()) {
       self(self, n.left());
       self(self, n.right());
@@ -435,13 +441,13 @@ template <meta::eval_node_range R>
     out.cells.reserve(rich.cells.size());
     for (ValueCell const& vc : rich.cells) {
       CellLegality cl;
-      cl.hash = vc.hash;
+      cl.hash = value_key_of(vc);
 
       // Every RichSchedule cell was produced by walking THIS SAME forest (see
       // compute_dag_boulevard), so its hash must resolve here; a miss would
       // silently leave contracted_below empty and misclassify the cell rather
       // than surface the underlying bug.
-      auto const it = node_of.find(vc.hash);
+      auto const it = node_of.find(value_key_of(vc));
       SEQUANT_ASSERT(it != node_of.end());
       container::svector<Index> contracted_below;
       for (Index const& ix : contracted_indices(it->second))

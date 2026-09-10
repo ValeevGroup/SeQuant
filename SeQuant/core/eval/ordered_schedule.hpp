@@ -562,7 +562,7 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
   OrderedScheduleDepGraph g;
   g.value_id_of.reserve(rich.cells.size());
   for (ValueCell const& vc : rich.cells)
-    g.value_id_of.emplace(vc.hash, vc.value_id);
+    g.value_id_of.emplace(value_key_of(vc), vc.value_id);
 
   std::unordered_map<std::size_t, std::size_t> point_owner;
   for (ValueCell const& vc : rich.cells)
@@ -968,7 +968,8 @@ inline ForkedSubchain fork_subchain(
   // place the escape in the wrong nest.
   std::unordered_map<std::size_t, ValueCell const*> hash_to_rich;
   hash_to_rich.reserve(rich.cells.size());
-  for (ValueCell const& vc : rich.cells) hash_to_rich.emplace(vc.hash, &vc);
+  for (ValueCell const& vc : rich.cells)
+    hash_to_rich.emplace(value_key_of(vc), &vc);
   auto const fusion_slot = [&](CellLegality const& cl, std::size_t pos) -> int {
     auto const hit = hash_to_rich.find(cl.hash);
     if (hit == hash_to_rich.end() || hit->second->occurrences.empty())
@@ -1118,6 +1119,10 @@ inline ForkedSubchain fork_subchain(
   // TEMP instrumentation (P1 Task 2 "before"): the realized loop chain is one
   // representative per SPACE (the collapse). Guarded by SEQUANT_DUMP_SCHEDULE.
   if (std::getenv("SEQUANT_DUMP_SCHEDULE")) {
+    for (auto const& [pair, witness] : rich.loop_order)
+      std::wcerr << L"[sched] loop_order " << pair.first.first << L"#"
+                 << pair.first.second << L" > " << pair.second.first << L"#"
+                 << pair.second.second << L" by v" << witness << L"\n";
     std::wcerr << L"[sched] per-instance loop chain: ";
     for (std::size_t d = 0; d < types.size(); ++d)
       std::wcerr << L"d" << d << L"=" << types[d].space().base_key() << L"#slot"

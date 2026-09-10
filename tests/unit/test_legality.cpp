@@ -311,7 +311,7 @@ TEST_CASE(
     for (bool const require_mu_mu : {true, false}) {
       if (mu_mu_hash) break;
       for (auto const& vc : rich.cells) {
-        auto const it = vmap.find(vc.hash);
+        auto const it = vmap.find(sequant::eval::value_key_of(vc));
         if (it == vmap.end() || it->second.leaf()) continue;
         if (carries_type(vc.carried, is_K)) continue;  // Q1 would be true
         auto const contracted = sequant::contracted_indices(it->second);
@@ -443,7 +443,7 @@ TEST_CASE(
     bool found_loop_carried = false;
     for (auto const& vc : rich.cells) {
       if (!carries_type(vc.carried, is_K)) continue;
-      auto const it = vmap.find(vc.hash);
+      auto const it = vmap.find(sequant::eval::value_key_of(vc));
       if (it == vmap.end()) continue;
       auto const contracted = sequant::contracted_indices(it->second);
       sequant::container::svector<sequant::Index> contracted_below(
@@ -902,7 +902,7 @@ TEST_CASE(
     auto const vmap = sequant::eval::build_value_node_map(forest);
     for (auto const& vc : rich.cells) {
       if (carries_K(vc.carried)) continue;
-      auto const it = vmap.find(vc.hash);
+      auto const it = vmap.find(sequant::eval::value_key_of(vc));
       if (it == vmap.end() || it->second.leaf()) continue;
       auto const contracted = sequant::contracted_indices(it->second);
       if (std::any_of(contracted.begin(), contracted.end(), is_K)) continue;

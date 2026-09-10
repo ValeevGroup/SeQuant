@@ -500,8 +500,7 @@ void run_ordered_contracted_block(
                  "kind -- only Contracted/External are realizable");
 
   auto const resolve = [&](std::size_t vid) -> node_t const& {
-    auto const hash = rich.cells[vid].hash;
-    auto const it = vmap.find(hash);
+    auto const it = vmap.find(value_key_of(rich.cells[vid]));
     SEQUANT_ASSERT(it != vmap.end() &&
                    "evaluate_ordered_schedule: a loop-block value_id was not "
                    "found in the forest's value-node map");
@@ -950,15 +949,16 @@ CellTableInputs make_cell_table_inputs(OrderedSchedule const& ordered,
   // returns, and both the caller's use of CellTableInputs (build_cell_table)
   // and CellTableInputs itself never outlive this call chain, so a value copy
   // is cheap and correct.
-  std::unordered_map<std::size_t, std::size_t> vid_of_hash;
-  for (auto const& vc : rich.cells) vid_of_hash.emplace(vc.hash, vc.value_id);
-  in.operands_of = [&resolve, vid_of_hash](std::size_t vid) {
+  std::unordered_map<std::size_t, std::size_t> vid_of_key;
+  for (auto const& vc : rich.cells)
+    vid_of_key.emplace(value_key_of(vc), vc.value_id);
+  in.operands_of = [&resolve, vid_of_key](std::size_t vid) {
     container::svector<std::size_t> out;
     auto const& nd = resolve(vid);
     if (nd.leaf()) return out;
     for (auto const* child : {&nd.left(), &nd.right()})
-      if (auto it = vid_of_hash.find((*child)->hash_value());
-          it != vid_of_hash.end())
+      if (auto it = vid_of_key.find(value_key_of(*child));
+          it != vid_of_key.end())
         out.push_back(it->second);
     return out;
   };
@@ -1021,17 +1021,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   SlicedModeAssignment const sliced_mode_assignment =
       compute_sliced_mode_assignment(ordered, rich);
 
-  // hash -> node, resolving a BuildStep's value_id (via rich.cells[vid].hash)
-  // to the forest node evaluate_impl builds.
-  auto const vmap = build_value_node_map(forest);
+  // value id -> node, resolving a BuildStep's value_id (via
+  // value_key_of(rich.cells[vid])) to a forest node of that value for
+  // evaluate_impl to build.
+  auto const vmap = build_value_key_node_map(forest);
 
   // value_id -> forest node: the same lookup run_ordered_contracted_block's
   // own `resolve` performs (see its definition above this function), built
   // again here since that one closes over the block function's own
   // parameters, not this function's locals.
   auto const resolve = [&](std::size_t vid) -> node_t const& {
-    auto const hash = rich.cells[vid].hash;
-    auto const it = vmap.find(hash);
+    auto const it = vmap.find(value_key_of(rich.cells[vid]));
     SEQUANT_ASSERT(it != vmap.end() &&
                    "evaluate_ordered_schedule: a value_id was not found in "
                    "the forest's value-node map");
@@ -1133,17 +1133,20 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           offenders);
   }
   registry.seed_persistent();
-  std::unordered_map<std::size_t, std::size_t> const cell_vid_of_hash = [&] {
+  // value id -> value_id: the resolver's operand lookup (the evaluator hands
+  // it value_key_of(operand node), see eval.hpp's fetch/record_leaf/
+  // operand_drained sites).
+  std::unordered_map<std::size_t, std::size_t> const cell_vid_of_key = [&] {
     std::unordered_map<std::size_t, std::size_t> m;
     m.reserve(rich.cells.size());
-    for (auto const& vc : rich.cells) m.emplace(vc.hash, vc.value_id);
+    for (auto const& vc : rich.cells) m.emplace(value_key_of(vc), vc.value_id);
     return m;
   }();
   CellReadResolver resolver(
       registry,
-      [&cell_vid_of_hash](std::size_t h) -> std::optional<std::size_t> {
-        auto const it = cell_vid_of_hash.find(h);
-        if (it == cell_vid_of_hash.end()) return std::nullopt;
+      [&cell_vid_of_key](std::size_t k) -> std::optional<std::size_t> {
+        auto const it = cell_vid_of_key.find(k);
+        if (it == cell_vid_of_key.end()) return std::nullopt;
         return it->second;
       });
   struct CellReadResolverGuard {
@@ -1250,7 +1253,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     if (auto const* build = std::get_if<BuildStep>(&step.value)) {
       std::size_t const vid = build->value_id;
       SEQUANT_ASSERT(vid < rich.cells.size());
-      auto const it = vmap.find(rich.cells[vid].hash);
+      auto const it = vmap.find(value_key_of(rich.cells[vid]));
       SEQUANT_ASSERT(it != vmap.end() &&
                      "evaluate_ordered_schedule: BuildStep value not found "
                      "in the forest's value-node map");
@@ -1321,9 +1324,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 
   // hash -> value_id, to resolve each forest root's own build above into the
   // per-root pre_results below.
-  std::unordered_map<std::size_t, std::size_t> hash_to_vid;
+  std::unordered_map<std::size_t, std::size_t> hash_to_vid;  // value id -> vid
   hash_to_vid.reserve(rich.cells.size());
-  for (auto const& c : rich.cells) hash_to_vid.emplace(c.hash, c.value_id);
+  for (auto const& c : rich.cells)
+    hash_to_vid.emplace(value_key_of(c), c.value_id);
 
   container::svector<node_t> roots;
   for (auto&& n : forest) roots.push_back(n);
@@ -1335,7 +1339,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // and its retention must not be excused as "that is just the root".
   container::set<CellId> root_cells;
   for (std::size_t i = 0; i != roots.size(); ++i) {
-    auto const vid_it = hash_to_vid.find(roots[i]->hash_value());
+    auto const vid_it = hash_to_vid.find(value_key_of(roots[i]));
     SEQUANT_ASSERT(vid_it != hash_to_vid.end() &&
                    "evaluate_ordered_schedule: forest root not found in the "
                    "schedule's value map");

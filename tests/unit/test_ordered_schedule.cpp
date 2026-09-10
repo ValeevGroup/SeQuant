@@ -523,7 +523,7 @@ TEST_CASE(
     for (bool const require_mu_mu : {true, false}) {
       if (mu_mu_hash) break;
       for (auto const& vc : rich.cells) {
-        auto const it = vmap.find(vc.hash);
+        auto const it = vmap.find(sequant::eval::value_key_of(vc));
         if (it == vmap.end() || it->second.leaf()) continue;
         if (carries_type(vc.carried, is_K)) continue;
         auto const contracted = sequant::contracted_indices(it->second);
@@ -2002,7 +2002,8 @@ TEST_CASE(
       (void)kind;
       REQUIRE(vid < fx->rich.cells.size());
       CHECK(fx->rich.cells[vid].value_id == vid);
-      CHECK(vmap.find(fx->rich.cells[vid].hash) != vmap.end());
+      CHECK(vmap.find(sequant::eval::value_key_of(fx->rich.cells[vid])) !=
+            vmap.end());
     }
   }
 }

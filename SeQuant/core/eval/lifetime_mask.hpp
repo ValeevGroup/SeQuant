@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 
 #include <algorithm>
@@ -186,6 +187,66 @@ void stamp_lifetime_masks(R const& forest) noexcept {
 template <meta::eval_node Node>
 container::svector<Index> const& home_scope(Node const& n) noexcept {
   return n->sliced_modes();
+}
+
+/// \brief The VALUE key of a node: its node id (\c hash_value, the canonical
+/// colored graph of its tensor network, label-free) combined with the sorted
+/// canonical POSITIONS it is home-sliced on (explicit-cells design section
+/// 11). Equal to the node id when nothing is home-sliced, so every unbatched
+/// value keeps the identity it has today. Two occurrences are one value iff
+/// they are one node and are home-sliced on the same positions: one node
+/// sliced along two different modes of its array in two terms is two values,
+/// each loop-local in its own nest, never resident whole.
+inline std::size_t value_key(std::size_t node_hash,
+                             container::svector<std::size_t> positions) {
+  if (positions.empty()) return node_hash;
+  std::sort(positions.begin(), positions.end());
+  std::size_t h = node_hash;
+  hash::combine(h, positions.size());
+  for (std::size_t p : positions) hash::combine(h, p);
+  return h;
+}
+
+namespace detail {
+/// (key, any node of the subtree is home-sliced). The key is over the
+/// PRODUCTION subtree: a node's own id and home-sliced positions combined
+/// with its operands' keys -- a value that reduces a differently-sliced
+/// operand in another nest is a different production, hence a different
+/// value (the recursive form of \c occurrence_key's whole-subtree
+/// canonicalization). A subtree with nothing home-sliced keys to the node id.
+template <meta::eval_node Node>
+std::pair<std::size_t, bool> value_key_impl(Node const& n) {
+  container::svector<std::size_t> pos;
+  auto const& carried = n->canon_indices();
+  for (Index const& m : home_scope(n))
+    for (std::size_t p = 0; p < carried.size(); ++p)
+      if (carried[p] == m) {
+        pos.push_back(p);
+        break;
+      }
+  bool sliced = !pos.empty();
+  std::size_t h = value_key(n->hash_value(), std::move(pos));
+  if (!n.leaf()) {
+    auto const [lk, ls] = value_key_impl(n.left());
+    auto const [rk, rs] = value_key_impl(n.right());
+    if (ls || rs) {
+      sliced = true;
+      hash::combine(h, lk);
+      hash::combine(h, rk);
+    }
+  }
+  return {sliced ? h : n->hash_value(), sliced};
+}
+}  // namespace detail
+
+/// \brief \c value_key of a forest node over its production subtree: its
+/// node id combined with the canonical positions (indices in \c
+/// canon_indices) of its \c home_scope modes and with its operands' keys;
+/// equal to the node id when nothing in the subtree is home-sliced (see \c
+/// detail::value_key_impl).
+template <meta::eval_node Node>
+std::size_t value_key_of(Node const& n) {
+  return detail::value_key_impl(n).first;
 }
 
 }  // namespace sequant
