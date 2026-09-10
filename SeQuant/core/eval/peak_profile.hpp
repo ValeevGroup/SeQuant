@@ -645,6 +645,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // the other external loop folds into that loop; the terms' roots keep the
   // two loops apart). members[root]: occurrence index -> its single position.
   std::unordered_map<std::size_t, std::map<std::size_t, std::size_t>> members;
+  // Components that must NEVER be united, keyed by root (symmetric): the
+  // reduction loop of a value and every loop enclosing (or opened by) an
+  // occurrence that reads that value COMPLETE. Were they one physical loop,
+  // the reader would sit inside the loop the value sums over and read a
+  // partial sum -- the illegal fusion the pass split and rule 4 used to
+  // paper over by re-running the nest and materializing every loop-local
+  // value whole. Seeded after the within-tree edges, enforced by every
+  // fold: the reader's loop stays its own instance, in its own nest,
+  // sequenced after the reduction's, and its sliced operands are its own
+  // productions (the recompute the forest performs and the per-term
+  // optimizer costs).
+  std::unordered_map<std::size_t, std::set<std::size_t>> forbid;
   auto find = [&](std::size_t x) -> std::size_t {
     auto it = uf.find(x);
     if (it == uf.end()) {
@@ -670,9 +682,21 @@ RichSchedule compute_dag_boulevard(R const& forest,
       auto const jt = mb.find(o);
       if (jt != mb.end() && jt->second != pos) return false;  // conflict
     }
+    if (auto const fa = forbid.find(ra);
+        fa != forbid.end() && fa->second.count(rb))
+      return false;  // a reader's loop and the reduction it reads complete
     for (auto const& [o, pos] : ma) mb[o] = pos;
     members.erase(ra);
     uf[ra] = rb;
+    if (auto const fa = forbid.find(ra); fa != forbid.end()) {
+      auto moved = std::move(fa->second);
+      forbid.erase(fa);
+      for (std::size_t x : moved) {
+        forbid[x].erase(ra);
+        forbid[x].insert(rb);
+        forbid[rb].insert(x);
+      }
+    }
     return true;
   };
   auto const is_batched = [](NodeRec const& r, Index const& m) -> bool {
@@ -730,6 +754,54 @@ RichSchedule compute_dag_boulevard(R const& forest,
       (void)find(reduction_node(i, m));
       reduction_stamps.push_back({i, m});
     }
+
+  // Reader-versus-reduction constraints (see `forbid`): for every occurrence
+  // O and every operand occurrence c that reduces modes in batches, c's
+  // reduction components must stay apart from every loop instance enclosing
+  // O (through its openers) and every loop O opens itself.
+  {
+    auto const instance_node_of =
+        [&](std::size_t opener_idx,
+            Index const& ix) -> std::optional<std::size_t> {
+      NodeRec const& op = recs[opener_idx];
+      for (auto const& [oix, okind] : op.opens)
+        if (oix == ix) {
+          if (okind == BatchModeType::Contracted)
+            return reduction_node(opener_idx, ix);
+          for (std::size_t pV = 0; pV < op.carried.size(); ++pV)
+            if (op.carried[pV] == ix) return encode(opener_idx, pV);
+          return std::nullopt;
+        }
+      return std::nullopt;
+    };
+    for (std::size_t i = 0; i < nrec; ++i) {
+      NodeRec const& o = recs[i];
+      container::svector<std::size_t> reader_loops;
+      for (std::size_t k = 0; k < o.ectx.size() && k < o.ectx_opener.size();
+           ++k) {
+        auto const pit = pre_to_point.find(o.ectx_opener[k]);
+        if (pit == pre_to_point.end()) continue;
+        auto const rit = rec_of_point.find(pit->second);
+        if (rit == rec_of_point.end()) continue;
+        if (auto const nd = instance_node_of(rit->second, o.ectx[k].first))
+          reader_loops.push_back(*nd);
+      }
+      for (auto const& [ix, kind] : o.opens)
+        if (auto const nd = instance_node_of(i, ix))
+          reader_loops.push_back(*nd);
+      if (reader_loops.empty()) continue;
+      for (std::size_t ci : o.child_recs)
+        for (Index const& m : recs[ci].contracted_batched) {
+          std::size_t const r = find(reduction_node(ci, m));
+          for (std::size_t ln : reader_loops) {
+            std::size_t const x = find(ln);
+            if (x == r) continue;
+            forbid[r].insert(x);
+            forbid[x].insert(r);
+          }
+        }
+    }
+  }
 
   // FOLD across trees: occurrences of one group are one value where one
   // physical loop slices them. Attempt the union position by position (and

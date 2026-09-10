@@ -701,6 +701,11 @@ inline ForcedSplitLevels forced_split_levels(
         bool const bump = r.carried.count(o) != 0 ||
                           (reduction_sources.count(o) != 0 && inside(v, o));
         if (bump) r.pinned.insert(o);
+        if (bump && std::getenv("SEQUANT_DUMP_SCHEDULE"))
+          std::wcerr << L"[levels] v" << v << L" bumped by operand v" << o
+                     << (r.carried.count(o) ? L" (carried)"
+                                            : L" (reduction read inside)")
+                     << L" -> level " << (base.at(o) + 1) << L"\n";
         lv = std::max(lv, bump ? base.at(o) + 1 : base.at(o));
       }
     base[v] = lv;

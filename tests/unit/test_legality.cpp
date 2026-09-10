@@ -92,6 +92,7 @@ TEST_CASE(
   sequant::container::svector<Index> const sliced{i1, i2};
   OccurrenceRec occ;
   occ.carried = carried;
+  occ.home = {i1};  // this occurrence's own home (positional, same frame)
   occ.ectx = {{i1, std::pair<std::size_t, std::size_t>{0, 16}}};
   occ.loop_slot = {0, -1};
   sequant::container::svector<OccurrenceRec> const occurrences{occ};
@@ -621,7 +622,7 @@ TEST_CASE(
   occ.point = 0;
   occ.consumer_point = 1;
   occ.carried = carried;
-  occ.home = {};
+  occ.home = {i_1, i_2};  // sliced on both; only i_1 has an enclosing loop
   occ.ectx.push_back({i_1, {0u, 4u}});  // enclosing loop realized over i_1
 
   svector<OccurrenceRec> const occurrences{occ};
@@ -680,7 +681,7 @@ TEST_CASE(
   occ.point = 0;
   occ.consumer_point = 1;
   occ.carried = carried;
-  occ.home = {};
+  occ.home = {i_1};
   occ.ectx.push_back({i_1, {0u, 4u}});  // only i_1 has a realized loop
 
   svector<OccurrenceRec> const occurrences{occ};

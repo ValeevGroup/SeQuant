@@ -338,7 +338,16 @@ struct LegalitySchedule {
     }
     if (axis_slot < occ.carried.size()) {
       Index const& c = occ.carried[axis_slot];
-      if (same_type(c) && is_batched(c)) {
+      // Batched-ness of THIS occurrence's position is read off its OWN home
+      // (same frame as `c`), never off `sliced`, which is labeled in the
+      // representative occurrence's frame: one node's occurrences carry
+      // different labels at one position across terms (i_3 here, i_4
+      // there), and a label miss here wrongly made a value every consumer
+      // reads inside its loop LoopCarried -- which then bumped its
+      // consumers into later passes and materialized it whole.
+      bool const batched_here =
+          std::find(occ.home.begin(), occ.home.end(), c) != occ.home.end();
+      if (same_type(c) && batched_here) {
         matched_any_same_type = true;
         bool const lockstep = std::any_of(
             encl.begin(), encl.end(), [&](Index const& L) { return c == L; });
