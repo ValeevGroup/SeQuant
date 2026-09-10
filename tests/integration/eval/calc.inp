@@ -5,9 +5,11 @@ spintrace      no
 optimization
 single_term    yes
 reuse_imeds    yes
+multi_term     yes
 
 scf
 tightness      normal
 
 log
 level          1
+print_exprs    yes

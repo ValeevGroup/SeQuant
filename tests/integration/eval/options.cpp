@@ -63,7 +63,8 @@ void ParseOptionsEquations::update(std::string_view arg_name,
 
 std::string ParseOptionsOptimization::help() const {
   return bool_parser.help(single_term) + "\n" + bool_parser.help(reuse_imeds) +
-         "\n" + bool_parser.help(cache_leaves);
+         "\n" + bool_parser.help(cache_leaves) + "\n" +
+         bool_parser.help(multi_term);
 }
 
 OptionsOptimization ParseOptionsOptimization::opts() const { return opts_; }
@@ -76,6 +77,8 @@ void ParseOptionsOptimization::update(std::string_view arg_name,
     opts_.reuse_imeds = bool_parser.parse(value);
   else if (arg_name == cache_leaves)
     opts_.cache_leaves = bool_parser.parse(value);
+  else if (arg_name == multi_term)
+    opts_.multi_term = bool_parser.parse(value);
   else
     throw detail::ErrorArgNameInvalid{arg_name.data()};
 }
@@ -106,14 +109,20 @@ void ParseOptionsSCF::update(std::string_view arg_name,
   }  // unreachable
 }
 
-std::string ParseOptionsLog::help() const { return level_parser.help(level); }
+std::string ParseOptionsLog::help() const {
+  return level_parser.help(level) + "\n" + bool_parser.help(print_exprs);
+}
 
 OptionsLog ParseOptionsLog::opts() const { return opts_; }
 
 void ParseOptionsLog::update(std::string_view arg_name,
                              std::string_view value) {
-  if (arg_name != level) throw detail::ErrorArgNameInvalid{arg_name.data()};
-  opts_.level = level_parser.parse(value);
+  if (arg_name == level)
+    opts_.level = level_parser.parse(value);
+  else if (arg_name == print_exprs)
+    opts_.print_exprs = bool_parser.parse(value);
+  else
+    throw detail::ErrorArgNameInvalid{arg_name.data()};
 }
 
 }  // namespace detail
