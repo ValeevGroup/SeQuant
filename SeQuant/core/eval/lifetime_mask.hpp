@@ -186,7 +186,36 @@ void stamp_lifetime_masks(R const& forest) noexcept {
 /// existing rl-walk, reused by the peak profile / remat.
 template <meta::eval_node Node>
 container::svector<Index> const& home_scope(Node const& n) noexcept {
-  return n->sliced_modes();
+  return n->occurrence_home();
+}
+
+/// \brief Stamps every occurrence's OWN home (\c EvalExpr::occurrence_home):
+/// the loops opened at or above the node, filtered to its own result slots,
+/// with NO cross-occurrence meet. One node sliced along different modes in
+/// different terms, or read whole in one term and sliced in another, keeps
+/// each occurrence's slicing; value identity (\c value_key_of) then tells the
+/// occurrences apart instead of the meet folding them to a whole home
+/// (explicit-cells design section 11). The table-driven engine's home; the
+/// forest-descent path keeps \c stamp_lifetime_masks' meet.
+template <meta::eval_node_range R>
+void stamp_occurrence_homes(R const& forest) noexcept {
+  using Node = std::ranges::range_value_t<R>;
+  using Data = typename Node::value_type;
+  auto walk = [&](auto&& self, Node const& n,
+                  container::svector<Index> acc) -> void {
+    if (n.leaf()) return;
+    for (auto const& [ix, kind] : n->batch_loops_opened_here())
+      acc.push_back(ix);
+    auto const slots = detail::slot_modes_of(n);
+    container::svector<Index> home;
+    for (auto const& m : acc)
+      if (std::find(slots.begin(), slots.end(), m) != slots.end())
+        home.push_back(m);
+    const_cast<Data&>(*n).set_occurrence_home(std::move(home));
+    self(self, n.left(), acc);
+    self(self, n.right(), acc);
+  };
+  for (auto const& tree : forest) walk(walk, tree, {});
 }
 
 /// \brief The VALUE key of a node: its node id (\c hash_value, the canonical
@@ -246,6 +275,7 @@ std::pair<std::size_t, bool> value_key_impl(Node const& n) {
 /// detail::value_key_impl).
 template <meta::eval_node Node>
 std::size_t value_key_of(Node const& n) {
+  if (std::size_t const k = n->value_key(); k != 0) return k;  // stamped
   return detail::value_key_impl(n).first;
 }
 

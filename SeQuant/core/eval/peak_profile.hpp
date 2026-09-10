@@ -413,9 +413,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
                                    [[maybe_unused]] dryrun::CostModel const& cm,
                                    BlockOfFn const& block_of) {
   using Node = std::ranges::range_value_t<R>;
+  using Data = typename Node::value_type;
 
-  // Populate home_scope (EvalExpr::sliced_modes) on every internal node.
+  // Populate the forest path's residency meet (EvalExpr::sliced_modes) and,
+  // for THIS engine, every occurrence's own home (EvalExpr::occurrence_home,
+  // what home_scope / value_key_of read).
   stamp_lifetime_masks(forest);
+  stamp_occurrence_homes(forest);
 
   // Per-occurrence record captured during the post-order walk. consumer_point
   // is the parent's point (its structural consumer); a root keeps its own
@@ -436,6 +440,10 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // leaf): names each operand OCCURRENCE by its leg, so a value that is
     // both operands of one node under different labels keeps two identities.
     container::svector<std::size_t> operand_points;
+    container::svector<std::size_t> child_recs;  // rec indices, left, right
+    container::svector<int> loop_slot;           // per carried position
+    container::svector<std::pair<Index, int>> reduced_slot;
+    Node const* node = nullptr;  // the forest node, to stamp its value key
     // The batch loops this node OPENS (batch_loops_opened_here), with the
     // kind of each: the source of every loop instance's kind (see
     // RichSchedule::loop_kind).
@@ -515,7 +523,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     std::size_t const point = counter++;
     NodeRec r;
     r.hash = n->hash_value();
-    r.key = value_key_of(n);
+    r.key = n->hash_value();  // the FINAL value key is assigned below
     r.is_leaf = n.leaf();
     r.point = point;
     r.consumer_point = point;  // root default; overwritten by parent below
@@ -553,6 +561,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
     for (auto const& [ix, kind] : n->batch_loops_opened_here())
       r.opens.push_back({ix, kind});
     for (auto ci : child_recs) r.operand_points.push_back(recs[ci].point);
+    r.child_recs = child_recs;
+    r.node = &n;
     std::size_t const idx = recs.size();
     recs.push_back(std::move(r));
     for (auto ci : child_recs) recs[ci].consumer_point = point;
@@ -562,18 +572,270 @@ RichSchedule compute_dag_boulevard(R const& forest,
   for (auto const& tree : forest)
     visit(visit, tree, detail::BatchContext{}, {});
 
-  // Cross-occurrence union, per canonical value (hash), of the modes that
-  // value EVER realizes as its OWN loop (\c node_slice_mask() at the value's
-  // own node, not an ancestor's). \c home_scope already folds a node's own
-  // batched-here contribution into its meet (stamp_lifetime_masks: "the node
-  // AND all its ancestors"), which is right for OTHER consumers of that
-  // meet, but wrong for THIS cell's own footprint: a mode a value realizes as
-  // its OWN loop slices that value's OPERANDS on the way down, never the
-  // value's own result -- the node is the loop's full accumulated output
-  // (see the post-order walk's doc comment above: "the node itself does
-  // NOT" see its own loop). Subtracting this union keeps the exclusion
-  // occurrence-independent by the same reasoning as the meet itself (built
-  // from ALL occurrences, not just the one that seeds the cell).
+  // ---------------------------------------------------------------------
+  // Loop identity FIRST, over OCCURRENCES (explicit-cells design section
+  // 11, as amended): a loop instance is a connected component of
+  // (occurrence, position) nodes joined by producer->consumer edges within a
+  // tree and by conflict-aware FOLDS across trees; value identity is defined
+  // AFTER the components are numbered -- node id + (position, loop slot) of
+  // every home-sliced position + the operands' keys -- so one node sliced at
+  // one position by two different loops in two terms (the residual's two
+  // external loops, say) is two values, while occurrences one physical loop
+  // does slice fold into one. The old order (value ids by hash, then loops
+  // keyed by (value, position)) forced the two loops through the shared
+  // node and either collapsed them or mis-stamped one family's slots.
+  // ---------------------------------------------------------------------
+  std::size_t const nrec = recs.size();
+  std::unordered_map<std::size_t, std::size_t> rec_of_point;
+  for (std::size_t i = 0; i < nrec; ++i) rec_of_point[recs[i].point] = i;
+
+  // The GROUP key an occurrence folds under: node id + home-sliced canonical
+  // positions. Occurrences of one group are candidates for one loop
+  // instance per position; the fold below decides.
+  auto const home_positions = [](NodeRec const& r) {
+    container::svector<std::size_t> pos;
+    for (Index const& m : r.home)
+      for (std::size_t p = 0; p < r.carried.size(); ++p)
+        if (r.carried[p] == m) {
+          pos.push_back(p);
+          break;
+        }
+    std::sort(pos.begin(), pos.end());
+    return pos;
+  };
+  container::svector<std::size_t> group_key(nrec);
+  for (std::size_t i = 0; i < nrec; ++i)
+    group_key[i] = value_key(recs[i].hash, home_positions(recs[i]));
+
+  std::size_t constexpr POS_BITS = 20;
+  auto const encode = [](std::size_t idx, std::size_t pos) -> std::size_t {
+    return (idx << POS_BITS) | pos;
+  };
+  auto const dec_idx = [](std::size_t n) { return n >> POS_BITS; };
+  auto const dec_pos = [](std::size_t n) {
+    return n & ((std::size_t{1} << POS_BITS) - 1);
+  };
+  // Reduction-mode nodes live in the UPPER half of an occurrence's position
+  // space, one per (occurrence, reduced mode label in its own frame).
+  std::size_t constexpr CONTRACTED_BASE = std::size_t{1} << (POS_BITS - 1);
+  std::map<std::pair<std::size_t, std::wstring>, std::size_t> red_pos;
+  std::size_t red_next = CONTRACTED_BASE;
+  auto const reduction_node = [&](std::size_t idx,
+                                  Index const& m) -> std::size_t {
+    auto const key = std::make_pair(idx, std::wstring{m.full_label()});
+    auto const it = red_pos.find(key);
+    if (it != red_pos.end()) return encode(idx, it->second);
+    std::size_t const pos = red_next++;
+    SEQUANT_ASSERT(red_next < (std::size_t{1} << POS_BITS));
+    red_pos[key] = pos;
+    return encode(idx, pos);
+  };
+  // (occurrence, reduced mode) pairs to stamp once components are numbered.
+  container::svector<std::pair<std::size_t, Index>> reduction_stamps;
+
+  std::unordered_map<std::size_t, std::size_t> uf;  // node -> parent
+  // CONFLICT-AWARE union-find: a component is one physical loop, and one
+  // batch loop slices ONE mode of any array OCCURRENCE -- so a component must
+  // never hold two distinct positions of one occurrence. That is the only
+  // physical constraint: one loop may slice different positions of one NODE
+  // in different occurrences (a term contracting an index that sits on
+  // position 2 of one operand's subtree and position 0 of the other's, both
+  // the same intermediate), and a term's two external loops may pair with
+  // another term's in either assignment (a value the mirror term slices by
+  // the other external loop folds into that loop; the terms' roots keep the
+  // two loops apart). members[root]: occurrence index -> its single position.
+  std::unordered_map<std::size_t, std::map<std::size_t, std::size_t>> members;
+  auto find = [&](std::size_t x) -> std::size_t {
+    auto it = uf.find(x);
+    if (it == uf.end()) {
+      uf.emplace(x, x);
+      members[x][dec_idx(x)] = dec_pos(x);
+      return x;
+    }
+    std::size_t root = x;
+    while (uf[root] != root) root = uf[root];
+    while (uf[x] != root) {
+      std::size_t const nxt = uf[x];
+      uf[x] = root;
+      x = nxt;
+    }
+    return root;
+  };
+  auto try_unite = [&](std::size_t a, std::size_t b) -> bool {
+    std::size_t const ra = find(a), rb = find(b);
+    if (ra == rb) return true;
+    auto& ma = members[ra];
+    auto& mb = members[rb];
+    for (auto const& [o, pos] : ma) {
+      auto const jt = mb.find(o);
+      if (jt != mb.end() && jt->second != pos) return false;  // conflict
+    }
+    for (auto const& [o, pos] : ma) mb[o] = pos;
+    members.erase(ra);
+    uf[ra] = rb;
+    return true;
+  };
+  auto const is_batched = [](NodeRec const& r, Index const& m) -> bool {
+    for (auto const& h : r.home)
+      if (h == m) return true;
+    return false;
+  };
+  bool const conflict_dump = std::getenv("SEQUANT_DUMP_LOOP_SLOT") != nullptr;
+
+  // Edges within a tree: a home-sliced carried position of an occurrence to
+  // the SAME physical mode at its parent occurrence (label match in the
+  // parent's frame -- same tree, labels agree), or, where the parent reduces
+  // the mode, to the parent's reduction node for it.
+  for (std::size_t i = 0; i < nrec; ++i) {
+    NodeRec const& r = recs[i];
+    NodeRec const* par = nullptr;
+    std::size_t par_idx = 0;
+    if (r.consumer_point != r.point) {
+      auto const pit = rec_of_point.find(r.consumer_point);
+      if (pit != rec_of_point.end()) {
+        par_idx = pit->second;
+        par = &recs[par_idx];
+      }
+    }
+    for (std::size_t pV = 0; pV < r.carried.size(); ++pV) {
+      Index const& m = r.carried[pV];
+      if (!is_batched(r, m)) continue;
+      (void)find(encode(i, pV));
+      if (!par) continue;
+      auto const pj = std::find(par->carried.begin(), par->carried.end(), m);
+      if (pj == par->carried.end()) {
+        std::size_t const rn = reduction_node(par_idx, m);
+        if (try_unite(encode(i, pV), rn)) {
+          reduction_stamps.push_back({par_idx, m});
+          if (conflict_dump)
+            std::wcerr << L"[loop_slot] edge occ" << i << L"@" << pV << L"("
+                       << m.full_label() << L") ~ red(occ" << par_idx << L","
+                       << m.full_label() << L")\n";
+        }
+        continue;
+      }
+      std::size_t const pC =
+          static_cast<std::size_t>(pj - par->carried.begin());
+      bool const united = try_unite(encode(i, pV), encode(par_idx, pC));
+      if (conflict_dump)
+        std::wcerr << L"[loop_slot] " << (united ? L"edge" : L"REJECTED edge")
+                   << L" occ" << i << L"@" << pV << L"(" << m.full_label()
+                   << L") ~ occ" << par_idx << L"@" << pC << L"\n";
+    }
+  }
+  // Every mode an occurrence contracts in batches at its own node owns a
+  // loop identity even when every operand is an input.
+  for (std::size_t i = 0; i < nrec; ++i)
+    for (Index const& m : recs[i].contracted_batched) {
+      (void)find(reduction_node(i, m));
+      reduction_stamps.push_back({i, m});
+    }
+
+  // FOLD across trees: occurrences of one group are one value where one
+  // physical loop slices them. Attempt the union position by position (and
+  // reduction by reduction, by index in the node's contracted order, which
+  // is canonical); a rejected fold (the two trees' loops would collapse two
+  // distinct positions of some group) leaves the occurrences in different
+  // instances, and the final key below tells them apart.
+  {
+    std::unordered_map<std::size_t, std::size_t> first_of_group;
+    for (std::size_t i = 0; i < nrec; ++i) {
+      auto const [fit, inserted] = first_of_group.emplace(group_key[i], i);
+      if (inserted) continue;
+      std::size_t const f = fit->second;
+      NodeRec const& rf = recs[f];
+      NodeRec const& ro = recs[i];
+      for (std::size_t p = 0; p < ro.carried.size() && p < rf.carried.size();
+           ++p) {
+        if (!is_batched(ro, ro.carried[p]) || !is_batched(rf, rf.carried[p]))
+          continue;
+        bool const united = try_unite(encode(f, p), encode(i, p));
+        if (conflict_dump && !united)
+          std::wcerr << L"[loop_slot] REJECTED fold occ" << f << L"@" << p
+                     << L" ~ occ" << i << L"@" << p << L" (hash "
+                     << (ro.hash % 100000u) << L")\n";
+      }
+      for (std::size_t j = 0;
+           j < ro.contracted_batched.size() && j < rf.contracted_batched.size();
+           ++j)
+        (void)try_unite(reduction_node(f, rf.contracted_batched[j]),
+                        reduction_node(i, ro.contracted_batched[j]));
+    }
+  }
+
+  // Number the components: one loop_slot per component, per SPACE in
+  // first-seen order.
+  std::unordered_map<std::size_t, int> root_slot;
+  std::map<std::wstring, int> next_slot;
+  for (std::size_t i = 0; i < nrec; ++i)
+    for (std::size_t pV = 0; pV < recs[i].carried.size(); ++pV) {
+      if (!is_batched(recs[i], recs[i].carried[pV])) continue;
+      std::size_t const root = find(encode(i, pV));
+      if (root_slot.find(root) != root_slot.end()) continue;
+      std::wstring const sp{recs[i].carried[pV].space().base_key()};
+      root_slot.emplace(root, next_slot[sp]++);
+    }
+  for (auto const& [idx, m] : reduction_stamps) {
+    std::size_t const root = find(reduction_node(idx, m));
+    if (root_slot.find(root) != root_slot.end()) continue;
+    std::wstring const sp{m.space().base_key()};
+    root_slot.emplace(root, next_slot[sp]++);
+  }
+
+  // Stamp each occurrence's per-position loop_slot and reduced_slot.
+  for (std::size_t i = 0; i < nrec; ++i) {
+    NodeRec& r = recs[i];
+    r.loop_slot.assign(r.carried.size(), -1);
+    for (std::size_t pV = 0; pV < r.carried.size(); ++pV)
+      if (is_batched(r, r.carried[pV]))
+        r.loop_slot[pV] = root_slot.at(find(encode(i, pV)));
+  }
+  {
+    std::set<std::pair<std::size_t, std::wstring>> stamped;
+    for (auto const& [idx, m] : reduction_stamps) {
+      if (!stamped.insert({idx, std::wstring{m.full_label()}}).second) continue;
+      auto const rit = root_slot.find(find(reduction_node(idx, m)));
+      if (rit == root_slot.end()) continue;
+      recs[idx].reduced_slot.push_back({m, rit->second});
+    }
+  }
+
+  // FINAL value key, bottom-up (recs are in post-order: operands precede
+  // their consumer): node id combined with (position, slot) of every
+  // home-sliced position, (index, slot) of every mode reduced in batches,
+  // and the operands' keys -- the node id alone when nothing below is
+  // sliced. Stamped on the node so value_key_of(node) agrees everywhere.
+  container::svector<std::size_t> final_key(nrec);
+  for (std::size_t i = 0; i < nrec; ++i) {
+    NodeRec const& r = recs[i];
+    bool sliced = false;
+    std::size_t h = r.hash;
+    hash::combine(h, std::size_t{0x5eed});
+    for (std::size_t pV = 0; pV < r.carried.size(); ++pV)
+      if (r.loop_slot[pV] >= 0) {
+        sliced = true;
+        hash::combine(h, pV);
+        hash::combine(h, static_cast<std::size_t>(r.loop_slot[pV]));
+      }
+    for (std::size_t j = 0; j < r.reduced_slot.size(); ++j) {
+      sliced = true;
+      hash::combine(h, CONTRACTED_BASE + j);
+      hash::combine(h, static_cast<std::size_t>(r.reduced_slot[j].second));
+    }
+    for (std::size_t ci : r.child_recs) {
+      if (final_key[ci] != recs[ci].hash) sliced = true;
+      hash::combine(h, final_key[ci]);
+    }
+    final_key[i] = sliced ? h : r.hash;
+    recs[i].key = final_key[i];
+    if (r.node) const_cast<Data&>(**r.node).set_value_key(final_key[i]);
+  }
+
+  // Cross-occurrence union, per VALUE, of the modes that value EVER realizes
+  // as its OWN loop (\c node_slice_mask() at the value's own node, not an
+  // ancestor's): a mode a value realizes as its OWN loop slices that value's
+  // OPERANDS on the way down, never the value's own result, so it is
+  // excluded from the cell's footprint home.
   std::unordered_map<std::size_t, container::svector<Index>> own_modes_union;
   for (auto const& r : recs) {
     auto& acc = own_modes_union[r.key];
@@ -582,11 +844,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
   }
 
   // Per-value RELABELED modes: carried by SOME occurrences but not all -- the
-  // UNION minus the INTERSECTION of the occurrences' canon_indices (r.carried).
-  // A mode in the intersection appears (at the same canonical slot) in every
-  // occurrence, so slicing it is shareable; one present only in the union binds
-  // a different physical label in some occurrence, so slicing it forces a SPLIT
-  // (see ValueCell::divergent_modes / cell_footprint's 2x pricing).
+  // UNION minus the INTERSECTION of the occurrences' canon_indices.
   std::unordered_map<std::size_t, container::svector<Index>> carried_union,
       carried_isect;
   std::unordered_map<std::size_t, bool> carried_seeded;
@@ -607,23 +865,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
     }
   }
 
-  // Group occurrences by value identity (hash_value): one ValueCell per
+  // Group occurrences by value identity (the final key): one ValueCell per
   // group.
   RichSchedule out;
   out.num_points = counter;
   std::unordered_map<std::size_t, std::size_t> hash_to_cell;
   for (auto const& r : recs) {
-    // Fold this occurrence's ectx into the running enclosing_modes union
-    // (every occurrence contributes, unlike home_modes/carried which are
-    // read off the FIRST occurrence only).
     auto fold_enclosing = [&](container::svector<Index>& enclosing_modes) {
       for (auto const& e : r.ectx)
         if (std::find(enclosing_modes.begin(), enclosing_modes.end(),
                       e.first) == enclosing_modes.end())
           enclosing_modes.push_back(e.first);
     };
-
-    // The per-occurrence record retained on the cell for a CSE-aware split.
     auto make_occ = [&]() -> OccurrenceRec {
       OccurrenceRec o;
       o.point = r.point;
@@ -636,9 +889,10 @@ RichSchedule compute_dag_boulevard(R const& forest,
       o.contracted_batched = r.contracted_batched;
       o.opens = r.opens;
       o.operand_points = r.operand_points;
+      o.loop_slot = r.loop_slot;
+      o.reduced_slot = r.reduced_slot;
       return o;
     };
-
     auto const it = hash_to_cell.find(r.key);
     if (it == hash_to_cell.end()) {
       ValueCell c;
@@ -677,378 +931,70 @@ RichSchedule compute_dag_boulevard(R const& forest,
     }
   }
 
-  // Task 2 (loop identity, spec 2026-08-28 sec.4-5): assign a per-occurrence
-  // `loop_slot` -- which MEMBER of a same-space loop group slices each batched
-  // carried mode.
-  //
-  // A loop's identity comes from PHYSICAL producer->consumer connectivity,
-  // never from the loop-colored value-id (that would be circular -- the
-  // value-id needs `loop_slot`). Loops are grouped by connected components; a
-  // component is one physical loop and its `loop_slot` numbers the components
-  // of each space.
-  //
-  // A component is a set of (value_id, STRUCTURAL slot) nodes, where the slot
-  // is a mode's position in `canon_indices`. That order is invariant across a
-  // value's occurrences (same structure => same canonical order; only the
-  // LABELS differ between terms), so keying by position folds the occurrences
-  // across trees. Edges connect a child value's slot to its parent's slot for
-  // the SAME physical mode, matched by `Index ==` in the PARENT OCCURRENCE's
-  // own frame -- the child and its parent are in one tree, so labels agree
-  // there (eval.hpp `contracted_indices` relies on exactly this). A same-space
-  // transposition between two occurrences (spec sec.4(b)) surfaces as a
-  // rejected union (below), not as a relabeling of the position key; recording
-  // it is deferred.
-  //
-  // Symmetry stays OUT of this pass: a symmetric tensor's two modes are still
-  // two distinct physical loops; folding `A(_,i)` with `A(i,_)` is a downstream
-  // VALUE-ID decision (Task 4) via the existing loop-colored occurrence_key.
-  // Where connectivity is contradictory (spec sec.4 C/D) or symmetry leaves the
-  // mapping free, the safe direction is to KEEP loops distinct (reject the
-  // merge): an over-split loop is a missed fusion (still correct), a collapse
-  // is the crash.
+  // Component-membership dump: per (space, slot), the member values
+  // (value:hash(label@position)). Guarded by SEQUANT_DUMP_LOOP_SLOT.
+  if (conflict_dump) {
+    std::map<std::pair<std::wstring, int>, std::map<std::wstring, int>> comp;
+    for (ValueCell const& c : out.cells)
+      for (OccurrenceRec const& occ : c.occurrences)
+        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
+          if (pV >= occ.loop_slot.size() || occ.loop_slot[pV] < 0) continue;
+          std::wstring const sp{occ.carried[pV].space().base_key()};
+          std::wstring const mem = L"v" + std::to_wstring(c.value_id) + L":" +
+                                   std::to_wstring(c.hash % 100000u) + L"(" +
+                                   std::wstring(occ.carried[pV].full_label()) +
+                                   L"@" + std::to_wstring(pV) + L")";
+          comp[{sp, occ.loop_slot[pV]}][mem] = 1;
+        }
+    for (auto const& [key, mems] : comp) {
+      std::wcerr << L"[comp] " << key.first << L"#slot" << key.second
+                 << L" members={ ";
+      for (auto const& [mem, _] : mems) std::wcerr << mem << L" ";
+      std::wcerr << L"}\n";
+    }
+  }
+
+  // Per-instance loop KIND and NESTING (unchanged in substance): every open
+  // names one physical loop -- a Contracted open is the reduction node of
+  // (occurrence, mode), an External open the carried position of the mode at
+  // the opening occurrence -- and that component's slot takes the open's
+  // kind. The same resolution names the loop instance of every ectx entry
+  // (through its opener occurrence), which yields the DP's nesting order.
   {
-    std::unordered_map<std::size_t, std::size_t>
-        point_value;  // point->value_id
     std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
     for (ValueCell const& c : out.cells)
-      for (OccurrenceRec const& o : c.occurrences) {
-        point_value[o.point] = c.value_id;
-        point_occ[o.point] = &o;
-      }
-
-    std::size_t constexpr POS_BITS = 20;  // a value's index count is tiny
-    auto const encode = [](std::size_t vid, std::size_t pos) -> std::size_t {
-      return (vid << POS_BITS) | pos;
-    };
-    auto const dec_vid = [](std::size_t n) { return n >> POS_BITS; };
-    auto const dec_pos = [](std::size_t n) {
-      return n & ((std::size_t{1} << POS_BITS) - 1);
-    };
-    // Reduction-mode nodes live in the UPPER half of a value's position space
-    // (>= CONTRACTED_BASE) so they never collide with a carried position (the
-    // lower half). A value's index count is tiny, so both halves are ample. A
-    // (value, reduced-mode) pair maps to one stable synthetic position, keyed
-    // by the mode's canonical label in the PARENT's own frame (the same frame
-    // the carried-mode edge match uses), so two operands reducing the SAME
-    // physical mode at one parent resolve to ONE reduction node.
-    std::size_t constexpr CONTRACTED_BASE = std::size_t{1} << (POS_BITS - 1);
-    std::map<std::pair<std::size_t, std::wstring>, std::size_t> red_pos;
-    std::size_t red_next = CONTRACTED_BASE;
-    auto const reduction_node = [&](std::size_t par_vid,
-                                    Index const& m) -> std::size_t {
-      auto const key = std::make_pair(par_vid, std::wstring{m.full_label()});
-      auto const it = red_pos.find(key);
-      if (it != red_pos.end()) return encode(par_vid, it->second);
-      std::size_t const pos = red_next++;
-      SEQUANT_ASSERT(red_next < (std::size_t{1} << POS_BITS));
-      red_pos[key] = pos;
-      return encode(par_vid, pos);
-    };
-    // (parent value_id, reduced mode) pairs to stamp onto the parent's
-    // occurrences once components are numbered.
-    container::svector<std::pair<std::size_t, Index>> reduction_stamps;
-
-    std::unordered_map<std::size_t, std::size_t>
-        uf;  // node -> parent (self=root)
-    // CONFLICT-AWARE union-find: a component is one physical loop, so it must
-    // never hold two DISTINCT slots of one value. members[root] maps value_id
-    // -> the single slot that value contributes; a union that would violate
-    // this is REJECTED (keep loops distinct -- the safe direction) rather than
-    // merged, which otherwise cascades a single transposition into a per-space
-    // collapse.
-    std::unordered_map<std::size_t, std::map<std::size_t, std::size_t>> members;
-    auto find = [&](std::size_t x) -> std::size_t {
-      auto it = uf.find(x);
-      if (it == uf.end()) {
-        uf.emplace(x, x);
-        members[x][dec_vid(x)] = dec_pos(x);
-        return x;
-      }
-      std::size_t root = x;
-      while (uf[root] != root) root = uf[root];
-      while (uf[x] != root) {  // path-compress
-        std::size_t const nxt = uf[x];
-        uf[x] = root;
-        x = nxt;
-      }
-      return root;
-    };
-    auto try_unite = [&](std::size_t a, std::size_t b) -> bool {
-      std::size_t const ra = find(a), rb = find(b);
-      if (ra == rb) return true;
-      auto& ma = members[ra];
-      auto& mb = members[rb];
-      for (auto const& [vid, pos] : ma) {
-        auto const jt = mb.find(vid);
-        if (jt != mb.end() && jt->second != pos) return false;  // conflict
-      }
-      for (auto const& [vid, pos] : ma) mb[vid] = pos;  // merge ma -> mb
-      members.erase(ra);
-      uf[ra] = rb;
-      return true;
-    };
-
-    // A value's mode gets a loop component ONLY where the value is HOME-SLICED
-    // on it (materialized slice-by-slice), NOT merely USED inside a loop
-    // (occ.ectx). A full-homed value materializes nothing slice-by-slice, so it
-    // must contribute NO loop -- otherwise its varying use-sites (bound to i_1
-    // at one consumer, i_2 at another) force the union-find to invent a
-    // spurious extra member. Its per-consumer USE-site slices are a separate,
-    // derived fact.
-    auto const is_batched = [](OccurrenceRec const& occ,
-                               Index const& m) -> bool {
-      for (auto const& h : occ.home)
-        if (h == m) return true;
-      return false;
-    };
-
-    bool const conflict_dump = std::getenv("SEQUANT_DUMP_LOOP_SLOT") != nullptr;
-    // Edges + node creation, keyed by CANONICAL slot (occurrence-invariant).
-    for (ValueCell const& c : out.cells)
-      for (OccurrenceRec const& occ : c.occurrences) {
-        OccurrenceRec const* par = nullptr;
-        std::size_t par_vid = 0;
-        if (occ.consumer_point != occ.point) {
-          auto const pit = point_occ.find(occ.consumer_point);
-          auto const vit = point_value.find(occ.consumer_point);
-          if (pit != point_occ.end() && vit != point_value.end()) {
-            par = pit->second;
-            par_vid = vit->second;
-          }
-        }
-        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
-          Index const& m = occ.carried[pV];
-          if (!is_batched(occ, m)) continue;
-          (void)find(encode(c.value_id, pV));  // seed the node
-          if (!par) continue;
-          // Match the SAME physical mode in the parent OCCURRENCE's own frame
-          // (same tree as the child, so labels agree -- contracted_indices
-          // relies on this). NOT cell.carried, whose labels come from a
-          // possibly- different tree. Node keys use STRUCTURAL position
-          // (canon_indices order is invariant across a value's occurrences;
-          // only the labels differ), which folds the value's occurrences across
-          // trees.
-          auto const pj =
-              std::find(par->carried.begin(), par->carried.end(), m);
-          if (pj == par->carried.end()) {
-            // CONTRACTED at parent (m is home-sliced by this child but absent
-            // from the parent's result): the parent REDUCES m, and its
-            // reduction loop is the SAME physical loop as this child's slice
-            // loop -- they must share loop_slot. A reduced mode has no carried
-            // position at the parent, so unite the child's carried-mode node
-            // with a synthetic reduction node for (parent, m); the parent's
-            // reduction escape then inherits this slot instead of landing in
-            // a different same-space nest than the operand it reads (the
-            // eviction this fixes) or, absent any slot at all, hitting
-            // build_ordered_schedule's hard-error throw. try_unite stays
-            // conflict-aware, so a genuine transposition is still kept
-            // distinct.
-            std::size_t const rn = reduction_node(par_vid, m);
-            if (try_unite(encode(c.value_id, pV), rn)) {
-              reduction_stamps.push_back({par_vid, m});
-              if (conflict_dump)
-                std::wcerr << L"[loop_slot] edge v" << c.value_id << L"@" << pV
-                           << L"(" << m.full_label() << L") ~ red(v" << par_vid
-                           << L"," << m.full_label() << L")\n";
-            }
-            continue;
-          }
-          std::size_t const pC =
-              static_cast<std::size_t>(pj - par->carried.begin());
-          bool const united =
-              try_unite(encode(c.value_id, pV), encode(par_vid, pC));
-          if (united && conflict_dump)
-            std::wcerr << L"[loop_slot] edge v" << c.value_id << L"@" << pV
-                       << L"(" << m.full_label() << L") ~ v" << par_vid << L"@"
-                       << pC << L"\n";
-          if (!united && conflict_dump) {
-            std::wcerr << L"[loop_slot] REJECTED edge (value " << c.value_id
-                       << L" pos " << pV << L") ~ (value " << par_vid
-                       << L" pos " << pC << L") mode " << m.full_label()
-                       << L" -- would collapse two members; kept distinct\n";
-            auto lbls = [](container::svector<Index> const& v) {
-              std::wstring s;
-              for (auto const& ix : v) {
-                s += std::wstring(ix.full_label());
-                s += L" ";
-              }
-              return s;
-            };
-            std::wcerr << L"[loop_slot]   child hash=" << (c.hash % 100000u)
-                       << L" cell.carried=[" << lbls(c.carried)
-                       << L"] occ.carried=[" << lbls(occ.carried) << L"]\n";
-            std::wcerr << L"[loop_slot]   parent hash="
-                       << (out.cells[par_vid].hash % 100000u)
-                       << L" cell.carried=[" << lbls(out.cells[par_vid].carried)
-                       << L"] occ.carried=[" << lbls(par->carried) << L"]\n";
-          }
-        }
-      }
-
-    // A value's OWN contracted-in-batches modes (the legality build_site_of
-    // CONTRACTED test, mirrored as NodeRec::contracted_batched /
-    // OccurrenceRec::contracted_batched above) own a loop identity even when
-    // every operand of the contraction is an INPUT -- a leaf, or a
-    // root-resident value that is not itself home-sliced on the mode. With no
-    // home-sliced child there is no edge for the loop above to unite through,
-    // so it never creates a component for (value, mode) and the value's
-    // reduction escape is later placed with no loop identity at all. Seed the
-    // reduction node here for every occurrence's own contracted_batched mode.
-    // The child-driven union above still fires whenever a home-sliced operand
-    // exists and unites its slice loop into this same component
-    // (reduction_node is idempotent -- same (value, mode) always encodes to
-    // the same synthetic node).
-    // Seeded for EVERY mode contracted in batches at the node, whether or not
-    // the value also carries an index of that space: legality classifies the
-    // contracted axis per axis (classify_axis decides by the axis's identity,
-    // not its space), so such a mode is a Reduction on its own loop instance
-    // and needs a loop identity the escape placement can resolve. (An earlier
-    // guard skipped the same-space-carried case to mirror the per-space
-    // classification that is now gone.)
-    for (ValueCell const& c : out.cells)
-      for (OccurrenceRec const& occ : c.occurrences)
-        for (Index const& m : occ.contracted_batched) {
-          (void)find(reduction_node(c.value_id, m));
-          reduction_stamps.push_back({c.value_id, m});
-        }
-
-    // Number the components: one loop_slot per component, ranked per SPACE in
-    // first-seen order over each value's canonical frame. A component is
-    // single-space (edges join only identical physical modes).
-    std::unordered_map<std::size_t, int> root_slot;  // root -> loop_slot
-    std::map<std::wstring, int> next_slot;           // space -> next slot #
-    for (ValueCell const& c : out.cells)
-      for (OccurrenceRec const& occ : c.occurrences)
-        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
-          if (!is_batched(occ, occ.carried[pV])) continue;
-          std::size_t const root = find(encode(c.value_id, pV));
-          if (root_slot.find(root) != root_slot.end()) continue;
-          std::wstring const sp{occ.carried[pV].space().base_key()};
-          root_slot.emplace(root, next_slot[sp]++);
-        }
-    // A reduction-only component -- one seeded above by contracted_batched
-    // that no home-sliced operand ever united into -- never surfaces in the
-    // carried-position walk just above (it walks occ.carried positions, and
-    // a reduced mode has none), so it would otherwise stay unnumbered and
-    // the final stamping loop below would silently skip it. Number it here;
-    // find() already resolves to the SAME root as above wherever a union did
-    // happen, so root_slot.find de-duplicates that case for free.
-    for (auto const& [par_vid, m] : reduction_stamps) {
-      std::size_t const root = find(reduction_node(par_vid, m));
-      if (root_slot.find(root) != root_slot.end()) continue;
-      std::wstring const sp{m.space().base_key()};
-      root_slot.emplace(root, next_slot[sp]++);
-    }
-
-    // Component-membership dump: per (space, slot), the distinct member values
-    // (hash:pos:mode). Two same-slot fragments of one physical loop appear as
-    // DIFFERENT slots here; this shows which values fragmented apart. Guarded
-    // by SEQUANT_DUMP_LOOP_SLOT.
-    if (conflict_dump) {
-      std::map<std::pair<std::wstring, int>, std::map<std::wstring, int>> comp;
-      for (ValueCell const& c : out.cells)
-        for (OccurrenceRec const& occ : c.occurrences)
-          for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
-            if (!is_batched(occ, occ.carried[pV])) continue;
-            std::size_t const root = find(encode(c.value_id, pV));
-            std::wstring const sp{occ.carried[pV].space().base_key()};
-            std::wstring const mem =
-                L"v" + std::to_wstring(c.value_id) + L":" +
-                std::to_wstring(c.hash % 100000u) + L"(" +
-                std::wstring(occ.carried[pV].full_label()) + L"@" +
-                std::to_wstring(pV) + L")";
-            comp[{sp, root_slot.at(root)}][mem] = 1;
-          }
-      for (auto const& [key, members] : comp) {
-        std::wcerr << L"[comp] " << key.first << L"#slot" << key.second
-                   << L" members={ ";
-        for (auto const& [mem, _] : members) std::wcerr << mem << L" ";
-        std::wcerr << L"}\n";
-      }
-    }
-
-    // Stamp each occurrence's per-position loop_slot (structural position keys
-    // fold occurrences of one value across trees).
-    bool const dump = conflict_dump;
-    for (ValueCell& c : out.cells)
-      for (OccurrenceRec& occ : c.occurrences) {
-        occ.loop_slot.assign(occ.carried.size(), -1);
-        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV) {
-          if (!is_batched(occ, occ.carried[pV])) continue;
-          occ.loop_slot[pV] = root_slot.at(find(encode(c.value_id, pV)));
-        }
-        if (dump) {
-          std::wcerr << L"[loop_slot] value_id=" << c.value_id << L" hash="
-                     << (c.hash % 100000u) << L" point=" << occ.point
-                     << L" carried={";
-          for (std::size_t k = 0; k < occ.carried.size(); ++k)
-            std::wcerr << occ.carried[k].full_label() << L":"
-                       << occ.loop_slot[k] << L" ";
-          std::wcerr << L"} home={";
-          for (auto const& h : occ.home) std::wcerr << h.full_label() << L" ";
-          std::wcerr << L"} ectx={";
-          for (auto const& e : occ.ectx)
-            std::wcerr << e.first.full_label() << L" ";
-          std::wcerr << L"}\n";
-        }
-      }
-
-    // Stamp reduced-mode slots on the reducing parents: for each
-    // (parent, reduced-mode) whose reduction node was united with an operand's
-    // slice loop, record (mode, slot) on EVERY occurrence of that parent (the
-    // value reduces the mode consistently across its occurrences). Deduplicated
-    // so two operands reducing the same mode stamp it once.
-    std::set<std::pair<std::size_t, std::wstring>> stamped;
-    for (auto const& [par_vid, m] : reduction_stamps) {
-      auto const key = std::make_pair(par_vid, std::wstring{m.full_label()});
-      if (!stamped.insert(key).second) continue;
-      auto const rit = root_slot.find(find(reduction_node(par_vid, m)));
-      if (rit == root_slot.end()) continue;  // component never numbered
-      for (OccurrenceRec& occ : out.cells[par_vid].occurrences)
-        occ.reduced_slot.push_back({m, rit->second});
-    }
-    // Per-instance loop KIND and NESTING: every open names one physical loop
-    // -- a Contracted open is the reduction node of (value, mode), an
-    // External open is the carried position of the mode at the opening node
-    // -- and that component's slot takes the open's kind. Two opens of one
-    // instance must agree (an instance is either reduced or carried),
-    // asserted. The same resolution names the loop instance of every ectx
-    // entry (through its opener occurrence), which yields the DP's nesting
-    // order as (outer, inner) constraints.
+      for (OccurrenceRec const& o : c.occurrences) point_occ[o.point] = &o;
     auto const instance_slot =
-        [&](std::size_t vid, OccurrenceRec const& occ, Index const& ix,
+        [&](OccurrenceRec const& occ, Index const& ix,
             BatchModeType kind) -> std::optional<std::pair<std::wstring, int>> {
+      auto const rit_idx = rec_of_point.find(occ.point);
+      if (rit_idx == rec_of_point.end()) return std::nullopt;
+      std::size_t const idx = rit_idx->second;
       std::optional<std::size_t> root;
       if (kind == BatchModeType::Contracted) {
-        root = find(reduction_node(vid, ix));
+        root = find(reduction_node(idx, ix));
       } else {
         for (std::size_t pV = 0; pV < occ.carried.size(); ++pV)
           if (occ.carried[pV] == ix) {
-            root = find(encode(vid, pV));
+            root = find(encode(idx, pV));
             break;
           }
       }
       if (!root) return std::nullopt;
       auto const rit = root_slot.find(*root);
-      if (rit == root_slot.end()) return std::nullopt;  // never numbered
+      if (rit == root_slot.end()) return std::nullopt;
       return std::make_pair(std::wstring{ix.space().base_key()}, rit->second);
     };
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences)
         for (auto const& [ix, kind] : occ.opens) {
-          auto const key = instance_slot(c.value_id, occ, ix, kind);
+          auto const key = instance_slot(occ, ix, kind);
           if (!key) continue;
           auto const [kit, inserted] = out.loop_kind.emplace(*key, kind);
           SEQUANT_ASSERT(kit->second == kind &&
                          "compute_dag_boulevard: one loop instance opened "
                          "with two kinds (contracted and external)");
         }
-    // Two EXTERNAL loops carry no data dependence between them (a value
-    // sliced on both is produced per pair of batches either way, and the
-    // escape placement is order-free), so trees may open them in either
-    // order and the fused nest picks one: no constraint. A pair with a
-    // contracted loop is a real constraint: a reduction completes inside the
-    // loops that enclose it, so its consumers' loops must nest outside.
     auto const constrains = [&](std::pair<std::wstring, int> const& a,
                                 std::pair<std::wstring, int> const& b) {
       auto const ka = out.loop_kind.find(a);
@@ -1061,38 +1007,28 @@ RichSchedule compute_dag_boulevard(R const& forest,
     };
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences) {
-        // Enclosing chain, outermost first, each entry resolved through its
-        // opener occurrence (same tree, so the opened Index matches verbatim).
         container::svector<std::pair<std::wstring, int>> chain;
-        container::svector<std::size_t> chain_opener;  // parallel: point
+        container::svector<std::size_t> chain_opener;
         for (std::size_t k = 0;
              k < occ.ectx.size() && k < occ.ectx_opener_point.size(); ++k) {
           auto const pit = point_occ.find(occ.ectx_opener_point[k]);
-          auto const vit = point_value.find(occ.ectx_opener_point[k]);
-          if (pit == point_occ.end() || vit == point_value.end()) continue;
+          if (pit == point_occ.end()) continue;
           OccurrenceRec const& opener = *pit->second;
           for (auto const& [oix, okind] : opener.opens)
             if (oix == occ.ectx[k].first) {
-              if (auto const key =
-                      instance_slot(vit->second, opener, oix, okind)) {
+              if (auto const key = instance_slot(opener, oix, okind)) {
                 chain.push_back(*key);
                 chain_opener.push_back(occ.ectx_opener_point[k]);
               }
               break;
             }
         }
-        // A node's own opens sit inside every enclosing loop (opened by an
-        // ancestor, never by this node): a real constraint.
         for (auto const& [ix, kind] : occ.opens)
-          if (auto const key = instance_slot(c.value_id, occ, ix, kind))
+          if (auto const key = instance_slot(occ, ix, kind))
             if (!chain.empty() && chain.back() != *key &&
                 constrains(chain.back(), *key))
               out.loop_order.emplace(std::make_pair(chain.back(), *key),
                                      c.value_id);
-        // Consecutive enclosing loops opened by DIFFERENT nodes nest in the
-        // order listed. Two loops opened at ONE node (a value contracting
-        // two modes in batches at its own node) are listed in that node's
-        // order but nest either way: no constraint between them.
         for (std::size_t k = 1; k < chain.size(); ++k) {
           if (chain[k - 1] == chain[k]) continue;
           if (chain_opener[k - 1] == chain_opener[k]) continue;

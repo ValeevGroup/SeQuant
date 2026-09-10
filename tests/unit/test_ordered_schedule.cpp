@@ -964,8 +964,9 @@ TEST_CASE(
   // Pin the classification directly: i_3 is a Reduction -- decided per axis,
   // the same-space carried i_1/i_2 do not change that.
   auto const r_legality_it = std::find_if(
-      legality.cells.begin(), legality.cells.end(),
-      [&](auto const& cl) { return cl.hash == rich.cells[r_id].hash; });
+      legality.cells.begin(), legality.cells.end(), [&](auto const& cl) {
+        return cl.hash == sequant::eval::value_key_of(rich.cells[r_id]);
+      });
   REQUIRE(r_legality_it != legality.cells.end());
   REQUIRE(r_legality_it->per_axis.size() == 1);
   CHECK(r_legality_it->per_axis.front().axis == i3);

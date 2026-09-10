@@ -6,8 +6,12 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
 #include <functional>
+#include <iostream>
 #include <optional>
+#include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -48,6 +52,25 @@ struct CellBuildState {
   // walk (Build inside a block, or the Assemble at that block's parent)
   std::unordered_map<std::size_t, container::svector<CellId>> forms_of;
 };
+
+/// The home of value \p vid (the per-occurrence home of one of its forest
+/// nodes, \p nd, explicit-cells design section 11) translated POSITIONALLY
+/// into the rich cell's own frame -- the first occurrence's labels, which the
+/// table builder matches \c CellTableInputs::sliced_modes_of against. The
+/// node's home is labeled in its own tree; positions are canonical across
+/// occurrences, labels are not.
+template <typename Node>
+[[nodiscard]] container::svector<Index> home_modes_in_cell_frame(
+    RichSchedule const& rich, std::size_t vid, Node const& nd) {
+  auto const& hm = sequant::home_scope(nd);
+  auto const& nc = nd->canon_indices();
+  auto const& cc = rich.cells[vid].carried;
+  container::svector<Index> out;
+  for (std::size_t p = 0; p < nc.size() && p < cc.size(); ++p)
+    if (std::find(hm.begin(), hm.end(), nc[p]) != hm.end())
+      out.push_back(cc[p]);
+  return out;
+}
 
 /// The loop instance among \p path (with its axis spaces) that slices carried
 /// position \p p of value \p vid: an enclosing entry whose index space is the
@@ -248,6 +271,22 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
           if (!detail::same_key(k, inst)) a.partial_over.push_back(k);
       } else {
         a.partial_over = s.partial_over;
+        // Diagnostic (SEQUANT_DUMP_CELLS): a Scatter with nothing to scatter
+        // -- the source's sliced positions against the escaping instance.
+        if (a.production.scatter_map.empty() &&
+            std::getenv("SEQUANT_DUMP_CELLS")) {
+          std::cerr << "[cells] empty scatter map: value " << ovid
+                    << " source cell#" << src << " (scope depth "
+                    << s.scope.path.size() << ") inst d" << inst.depth << "#"
+                    << inst.loop_slot << " source.sliced={";
+          for (auto const& [p, k] : s.sliced)
+            std::cerr << "pos" << p << "@d" << k.depth << "#" << k.loop_slot
+                      << " ";
+          std::cerr << "} source.path={";
+          for (auto const& [k, lat] : s.scope.path)
+            std::cerr << "d" << k.depth << "#" << k.loop_slot << " ";
+          std::cerr << "}\n";
+        }
       }
       a.scope.path = path;
       set_residency_flags(a, in.volatile_of(ovid), path);
@@ -480,6 +519,41 @@ inline void apply_persistence_frontier(
   // only knowable once the reads exist: demote every candidate whose every
   // consumer is itself non-volatile (see apply_persistence_frontier).
   detail::apply_persistence_frontier(st.table, in.volatile_of);
+  // Diagnostic (SEQUANT_DUMP_CELLS_OF=<vid>[,<vid>...]): every cell of the
+  // listed values (kind, scope path, sliced positions, partial_over).
+  if (char const* dv = std::getenv("SEQUANT_DUMP_CELLS_OF")) {
+    std::set<std::size_t> want;
+    std::istringstream toks{dv};
+    for (std::string tok; std::getline(toks, tok, ',');)
+      if (!tok.empty()) want.insert(std::stoul(tok));
+    for (CellId cid = 0; cid < st.table.cells.size(); ++cid) {
+      TableCell const& c = st.table.cells[cid];
+      if (!want.count(c.value_id)) continue;
+      std::cerr << "[cells] value " << c.value_id << " cell#" << cid << " "
+                << (c.production.kind == ProductionKind::Build      ? "Build"
+                    : c.production.kind == ProductionKind::Assemble ? "Assemble"
+                                                                    : "Leaf")
+                << " path={";
+      for (auto const& [k, lat] : c.scope.path)
+        std::cerr << "d" << k.depth << "#" << k.loop_slot << " ";
+      std::cerr << "} sliced={";
+      for (auto const& [p, k] : c.sliced)
+        std::cerr << "pos" << p << "@d" << k.depth << "#" << k.loop_slot << " ";
+      std::cerr << "} partial_over={";
+      for (auto const& k : c.partial_over)
+        std::cerr << "d" << k.depth << "#" << k.loop_slot << " ";
+      std::cerr << "} pia=" << c.produce_if_absent
+                << " persistent=" << c.persistent << "\n";
+    }
+  }
+  // Diagnostic (SEQUANT_DUMP_CELLS): every sliced position no enclosing
+  // instance resolved (recorded WHOLE).
+  if (std::getenv("SEQUANT_DUMP_CELLS"))
+    for (auto const& [cid, pos] : st.table.unresolved)
+      std::cerr << "[cells] unresolved: cell#" << cid << " value "
+                << st.table.cells[cid].value_id << " position " << pos
+                << " scope depth " << st.table.cells[cid].scope.path.size()
+                << "\n";
   // Lives: reads weighted by the consumer's extra enclosing batches
   // (detail::read_multiplicity), plus one per Assemble that consumes the
   // cell.

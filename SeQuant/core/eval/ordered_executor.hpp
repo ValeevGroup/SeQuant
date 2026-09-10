@@ -961,8 +961,7 @@ CellTableInputs make_cell_table_inputs(OrderedSchedule const& ordered,
   in.sliced = &sma;
   in.sliced_modes_of = [&](std::size_t vid) {
     auto const& nd = resolve(vid);
-    return container::svector<Index>(nd->sliced_modes().begin(),
-                                     nd->sliced_modes().end());
+    return home_modes_in_cell_frame(rich, vid, nd);
   };
   in.volatile_of = [&](std::size_t vid) {
     return is_volatile && subtree_any(resolve(vid), is_volatile);

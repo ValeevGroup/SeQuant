@@ -346,6 +346,37 @@ class EvalExpr {
   }
 
   ///
+  /// \brief The batch modes that slice THIS occurrence of the node: the loops
+  /// opened at or above it that live on its own result slots. The value's
+  /// HOME in the table-driven engine (explicit-cells design section 11,
+  /// \c home_scope / \c value_key_of), stamped per occurrence by \c
+  /// stamp_occurrence_homes -- NOT the cross-occurrence meet (\c
+  /// sliced_modes), which folds occurrences by node identity and by label and
+  /// serves the forest-descent path's residency. Empty = whole.
+  ///
+  [[nodiscard]] container::svector<Index> const& occurrence_home()
+      const noexcept {
+    return occurrence_home_;
+  }
+
+  /// \brief Sets this occurrence's home; see \c occurrence_home.
+  void set_occurrence_home(container::svector<Index> m) noexcept {
+    occurrence_home_ = std::move(m);
+  }
+
+  ///
+  /// \brief This occurrence's VALUE key (explicit-cells design section 11):
+  /// node id + (position, loop slot) of every home-sliced position + the
+  /// operands' keys, stamped by \c compute_dag_boulevard once loop instances
+  /// are numbered; 0 = not stamped (\c value_key_of then falls back to the
+  /// structural key).
+  ///
+  [[nodiscard]] std::size_t value_key() const noexcept { return value_key_; }
+
+  /// \brief Sets this occurrence's value key; see \c value_key.
+  void set_value_key(std::size_t k) noexcept { value_key_ = k; }
+
+  ///
   /// \brief Whether this \c Sum node's result should be accumulated in place
   /// into its left operand rather than materialized as a fresh value. Set by
   /// \c binarize on the accumulation-chain \c Sum nodes produced when an
@@ -421,6 +452,8 @@ class EvalExpr {
 
   /// See \c sliced_modes.
   container::svector<Index> sliced_modes_{};
+  container::svector<Index> occurrence_home_{};
+  std::size_t value_key_ = 0;
 
   /// See \c batch_order_aware.
   bool batch_order_aware_ = false;

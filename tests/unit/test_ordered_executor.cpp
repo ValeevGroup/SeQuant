@@ -1041,7 +1041,12 @@ void ut_dump_role_diag(sequant::eval::RichSchedule const& rich,
     if (v >= rich.cells.size()) continue;
     auto const& cell = rich.cells[v];
     std::wcerr << L"[role-diag] vid=" << v << L" h=" << (cell.hash % 100000)
-               << L" per_axis={";
+               << L" key=" << (sequant::eval::value_key_of(cell) % 100000)
+               << L" same_hash_vids=";
+    for (auto const& o : rich.cells)
+      if (o.hash == cell.hash && o.value_id != v)
+        std::wcerr << o.value_id << L",";
+    std::wcerr << L" per_axis={";
     for (auto const& lc : legality.cells)
       if (lc.hash == sequant::eval::value_key_of(cell))
         for (auto const& ax : lc.per_axis)
@@ -1535,8 +1540,8 @@ TEST_CASE(
     in.sliced_modes_of = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       REQUIRE(it != vmap.end());
-      return sequant::container::svector<sequant::Index>(
-          it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+      return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                             it->second);
     };
     in.volatile_of = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
@@ -1574,6 +1579,20 @@ TEST_CASE(
                                          << table.cells[cid].value_id << ")");
       std::cerr << "[unresolved] cell#" << cid << " position " << pos
                 << " (value " << table.cells[cid].value_id << ")\n";
+    }
+    // SEQUANT_UT_READS_OF=<vid>: every table read whose consumer is a cell
+    // of that value (source cell, source value, its scope depth and slices).
+    if (char const* rv = std::getenv("SEQUANT_UT_READS_OF")) {
+      std::size_t const want = std::strtoul(rv, nullptr, 10);
+      for (auto const& r : table.reads) {
+        if (table.cells[r.consumer].value_id != want) continue;
+        auto const& sc = table.cells[r.source];
+        std::cerr << "[reads-of] consumer cell#" << r.consumer << " (value "
+                  << want << ") reads cell#" << r.source << " (value "
+                  << sc.value_id << ", scope depth " << sc.scope.path.size()
+                  << ", sliced=" << sc.sliced.size()
+                  << ") slices=" << r.slice.size() << "\n";
+      }
     }
     // The static gate, unconditional: EVERY configuration this fixture is run
     // under (the default one, or one mirrored from an input through the
@@ -1698,8 +1717,8 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   in.sliced_modes_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
-    return sequant::container::svector<sequant::Index>(
-        it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+    return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                           it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
@@ -2051,8 +2070,8 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   in.sliced_modes_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
-    return sequant::container::svector<sequant::Index>(
-        it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+    return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                           it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
@@ -2948,10 +2967,14 @@ TEST_CASE(
                  << L"entries > 0.1 GB (peak_total=" << GB(peak_total)
                  << L" GB) ---\n";
       for (auto const& r : rows)
-        if (GB(r.bytes) > 0.1)
+        if (GB(r.bytes) > 0.1) {
           std::wcerr << L"  " << GB(r.bytes) << L" GB  carriesΚ="
                      << (r.carriesK ? L"yes" : L"no ") << L"  h="
-                     << (r.hash % 100000) << L"  " << r.label << L"\n";
+                     << (r.hash % 100000) << L"  " << r.label << L"  vids=";
+          for (auto const& vc : rich.cells)
+            if (vc.hash == r.hash) std::wcerr << vc.value_id << L",";
+          std::wcerr << L"\n";
+        }
       std::wcerr << L"  TOTAL co-resident = " << GB(all_sum)
                  << L" GB;  aux-FREE (no-Κ, aux-batching-immune) floor = "
                  << GB(auxfree_sum) << L" GB\n";
@@ -3076,6 +3099,33 @@ TEST_CASE(
     run(f1);
     cache.reset();
     run(f2);
+    // SEQUANT_UT_TOP_BUILDS=<N>, forest side: the same tally over the
+    // forest-descent evaluation, for the per-value forest-vs-ordered
+    // comparison.
+    if (char const* tb = std::getenv("SEQUANT_UT_TOP_BUILDS")) {
+      std::size_t const n_top = std::strtoul(tb, nullptr, 10);
+      std::vector<std::tuple<std::size_t, std::size_t>> rows;
+      for (auto const& vc : rich.cells) {
+        if (vc.is_leaf) continue;
+        auto const it = vmap.find(sequant::eval::value_key_of(vc));
+        if (it == vmap.end()) continue;
+        rows.emplace_back(
+            orderedexec_builds_of(cache.recompute_tally(), it->second),
+            vc.value_id);
+      }
+      std::sort(rows.begin(), rows.end(), [](auto const& a, auto const& b) {
+        return std::get<0>(a) > std::get<0>(b);
+      });
+      std::wcerr << L"--- [top-builds-forest] builds vid h label occurrences\n";
+      for (std::size_t k = 0; k < rows.size() && k < n_top; ++k) {
+        auto const [b, v] = rows[k];
+        std::wcerr << L"  " << b << L"  vid=" << v << L" h="
+                   << (rich.cells[v].hash % 100000) << L"  "
+                   << node_kind(rich.cells[v].hash) << L"{"
+                   << space_sig(rich.cells[v].carried) << L"}  occ="
+                   << rich.cells[v].occurrences.size() << L"\n";
+      }
+    }
   }
 
   cm->set_cost_sink(nullptr);
@@ -4462,8 +4512,8 @@ TEST_CASE(
   in.sliced_modes_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
-    return sequant::container::svector<sequant::Index>(
-        it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+    return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                           it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
@@ -4787,8 +4837,8 @@ TEST_CASE(
     in.sliced_modes_of = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       REQUIRE(it != vmap.end());
-      return sequant::container::svector<sequant::Index>(
-          it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+      return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                             it->second);
     };
     in.volatile_of = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
@@ -4964,8 +5014,8 @@ TEST_CASE(
   in.sliced_modes_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
-    return sequant::container::svector<sequant::Index>(
-        it->second->sliced_modes().begin(), it->second->sliced_modes().end());
+    return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                           it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));

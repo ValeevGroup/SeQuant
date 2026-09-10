@@ -169,7 +169,7 @@ struct LegalitySchedule {
   //     \c node_slice_mask stamp == the node's chosen aprime).
   // With an infinite budget (or no batchable axis) the DP emits no stamps, so
   // both are empty and the schedule is flat -- matching forest descent.
-  auto const& sliced = node->sliced_modes();
+  auto const& sliced = sequant::home_scope(node);
   auto const& stamps = node->node_slice_mask();
   for (Index const& ix : node->canon_indices())
     if (std::find(sliced.begin(), sliced.end(), ix) != sliced.end())
@@ -471,12 +471,20 @@ template <meta::eval_node_range R>
         if (std::find(site.begin(), site.end(), ix) == site.end())
           site.push_back(ix);
       };
-      auto const& dp_sliced = it->second->sliced_modes();
+      auto const& dp_sliced = sequant::home_scope(it->second);
       auto const& dp_stamps = it->second->node_slice_mask();
-      for (Index const& ix : vc.carried)
-        if (std::find(dp_sliced.begin(), dp_sliced.end(), ix) !=
-            dp_sliced.end())
-          add_if_new(ix);
+      // POSITIONAL: the representative node's home is labeled in ITS tree's
+      // frame, vc.carried in the first occurrence's; positions are canonical
+      // across occurrences (explicit-cells design section 11), labels are
+      // not.
+      {
+        auto const& rep_carried = it->second->canon_indices();
+        for (std::size_t p = 0; p < vc.carried.size() && p < rep_carried.size();
+             ++p)
+          if (std::find(dp_sliced.begin(), dp_sliced.end(), rep_carried[p]) !=
+              dp_sliced.end())
+            add_if_new(vc.carried[p]);
+      }
       for (Index const& ix : contracted_below)
         if (std::any_of(dp_stamps.begin(), dp_stamps.end(), [&](auto const& p) {
               return p.second == BatchModeType::Contracted && p.first == ix;

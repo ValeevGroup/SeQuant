@@ -37,19 +37,23 @@ template <meta::eval_node_range R>
 build_value_node_map(R const& forest) {
   using node_t = std::ranges::range_value_t<R>;
   std::unordered_map<std::size_t, node_t> out;
-  auto visit = [&out](auto&& self, node_t const& n) -> void {
-    // Both the node id and the value id (value_key_of, explicit-cells design
-    // section 11) resolve: a lookup by value id lands on one of THAT value's
-    // own nodes, a lookup by node id (a monitor's op hash, a leaf) on the
-    // first node of that hash.
-    out.emplace(n->hash_value(), n);
-    out.emplace(value_key_of(n), n);
+  // Two passes. Value keys first, over the WHOLE forest: a whole value's key
+  // IS its node hash, and that entry must be the whole occurrence -- an
+  // earlier sliced occurrence of the same node (key != hash) must not claim
+  // the hash slot first. Then node hashes, only where no value claimed them
+  // (a monitor's op hash, a leaf: any node of that hash).
+  auto visit = [&out](auto&& self, node_t const& n, bool keys) -> void {
+    if (keys)
+      out.emplace(value_key_of(n), n);
+    else
+      out.emplace(n->hash_value(), n);
     if (!n.leaf()) {
-      self(self, n.left());
-      self(self, n.right());
+      self(self, n.left(), keys);
+      self(self, n.right(), keys);
     }
   };
-  for (auto const& t : forest) visit(visit, t);
+  for (auto const& t : forest) visit(visit, t, true);
+  for (auto const& t : forest) visit(visit, t, false);
   return out;
 }
 
