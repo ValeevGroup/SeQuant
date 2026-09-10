@@ -1046,6 +1046,75 @@ inline ForkedSubchain fork_subchain(
       type_slot.push_back(s);
     }
 
+  // Nest the chain as the DP realized it: RichSchedule::loop_order holds the
+  // (outer, inner) instance pairs read off the occurrences' enclosing
+  // contexts. The space-major, slot-ascending order above is only the
+  // tie-break (a stable topological order: among the ready instances the
+  // earliest in that order goes first). A cycle means the loop identity fused
+  // two physical loops that nest in opposite orders -- a builder error, not a
+  // silent choice.
+  if (!rich.loop_order.empty()) {
+    std::size_t const nn = types.size();
+    std::map<std::pair<std::wstring, int>, std::size_t> item_of;
+    for (std::size_t d = 0; d < nn; ++d)
+      item_of[{std::wstring{types[d].space().base_key()}, type_slot[d]}] = d;
+    container::svector<container::svector<std::size_t>> succ(nn);
+    container::svector<std::size_t> indeg(nn, 0);
+    for (auto const& [pair, witness] : rich.loop_order) {
+      auto const& [outer, inner] = pair;
+      (void)witness;
+      auto const a = item_of.find(outer);
+      auto const b = item_of.find(inner);
+      if (a == item_of.end() || b == item_of.end() || a->second == b->second)
+        continue;
+      succ[a->second].push_back(b->second);
+      ++indeg[b->second];
+    }
+    std::set<std::size_t> ready;
+    for (std::size_t d = 0; d < nn; ++d)
+      if (indeg[d] == 0) ready.insert(d);
+    container::svector<std::size_t> perm;
+    while (!ready.empty()) {
+      std::size_t const d = *ready.begin();
+      ready.erase(ready.begin());
+      perm.push_back(d);
+      for (std::size_t s : succ[d])
+        if (--indeg[s] == 0) ready.insert(s);
+    }
+    if (perm.size() != nn) {
+      // The instances left unplaced are on (or downstream of) the cycle;
+      // list the constraints among them with their witnesses.
+      std::string msg =
+          "build_ordered_schedule: the loop nesting constraints read off the "
+          "batched realization are contradictory (a cycle among loop "
+          "instances): the loop identity fused two physical loops that nest "
+          "in opposite orders; unplaced constraints:";
+      auto const narrow = [](std::wstring const& w) {
+        return std::string(w.begin(), w.end());
+      };
+      for (auto const& [pair, witness] : rich.loop_order) {
+        auto const a = item_of.find(pair.first);
+        auto const b = item_of.find(pair.second);
+        if (a == item_of.end() || b == item_of.end()) continue;
+        if (indeg[a->second] == 0 && indeg[b->second] == 0) continue;
+        msg += " [" + narrow(pair.first.first) + "#" +
+               std::to_string(pair.first.second) + " > " +
+               narrow(pair.second.first) + "#" +
+               std::to_string(pair.second.second) + " by v" +
+               std::to_string(witness) + "]";
+      }
+      throw Exception(msg);
+    }
+    container::svector<Index> types2;
+    container::svector<int> type_slot2;
+    for (std::size_t d : perm) {
+      types2.push_back(types[d]);
+      type_slot2.push_back(type_slot[d]);
+    }
+    types = std::move(types2);
+    type_slot = std::move(type_slot2);
+  }
+
   // TEMP instrumentation (P1 Task 2 "before"): the realized loop chain is one
   // representative per SPACE (the collapse). Guarded by SEQUANT_DUMP_SCHEDULE.
   if (std::getenv("SEQUANT_DUMP_SCHEDULE")) {
@@ -1712,9 +1781,19 @@ inline ForkedSubchain fork_subchain(
                                 .space = std::wstring{axis.space().base_key()},
                                 .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
-    block.kind = detail::mode_is_external(rich, axis)
-                     ? BatchModeType::External
-                     : BatchModeType::Contracted;
+    // The block's kind is the kind of ITS loop instance (the open that
+    // created the (space, slot) component -- RichSchedule::loop_kind); a
+    // space can hold both a contracted-in-batches instance and an external
+    // one, so the per-space test (does the space appear on a root result?)
+    // is only the fallback for an instance no open recorded.
+    if (auto const kit = rich.loop_kind.find(
+            {std::wstring{axis.space().base_key()}, loop_slot});
+        kit != rich.loop_kind.end())
+      block.kind = kit->second;
+    else
+      block.kind = detail::mode_is_external(rich, axis)
+                       ? BatchModeType::External
+                       : BatchModeType::Contracted;
     block.steps =
         detail::ordered_schedule_topo_sort_steps(std::move(items), meta);
     block.outputs.assign(outputs.begin(), outputs.end());
@@ -2120,7 +2199,12 @@ struct SlicedModeAssignment {
   /// LoopId, CONSUMER value_id). The position (not an Index label) is what the
   /// table builder consumes, so the runtime never re-matches a label across
   /// index-frames.
-  container::svector<std::tuple<std::size_t, std::size_t, LoopId, std::size_t>>
+  /// The fifth element is the operand's LEG at the consumer (its index in
+  /// the consumer occurrence's \c operand_points; \c npos when unknown): a
+  /// value read on both legs of one consumer under different labels has
+  /// facts per leg, and the table builder pairs each leg's read with its own.
+  container::svector<
+      std::tuple<std::size_t, std::size_t, LoopId, std::size_t, std::size_t>>
       occ_facts;
 
   /// EXPLICIT per-occurrence INVARIANT facts: (value_id, LoopId, CONSUMER
@@ -2131,7 +2215,8 @@ struct SlicedModeAssignment {
   /// not another). Recording the negative decision lets the runtime tell
   /// "correctly invariant" apart from "no decision recorded" (a real gap), so
   /// the completeness guard fires only on the latter.
-  container::svector<std::tuple<std::size_t, LoopId, std::size_t>>
+  /// Fourth element: the operand's leg at the consumer, as in \c occ_facts.
+  container::svector<std::tuple<std::size_t, LoopId, std::size_t, std::size_t>>
       occ_invariant;
 
   /// \return the realized \c DagScopeLevel a \p loop_id names (the inverse of
@@ -2306,6 +2391,14 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       // the old raw ectx<->scope POSITIONAL zip (which mis-sliced divergent
       // occurrences: the multi-occ collapse / ToTxToT deadlock).
       auto const& vs = value_slot[w_vid];
+      // This occurrence's leg at its consumer (left 0 / right 1).
+      std::size_t leg = static_cast<std::size_t>(-1);
+      {
+        auto const& cpts =
+            rich.cells[oit->second].occurrences.front().operand_points;
+        for (std::size_t li = 0; li < cpts.size(); ++li)
+          if (cpts[li] == occ.point) leg = li;
+      }
       for (std::size_t k = 0; k < scope.size(); ++k) {
         DagScopeLevel const& lvl = scope[k].level;
         bool self_sliced = false;
@@ -2329,7 +2422,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           if (std::wstring(occ.carried[pos].space().base_key()) != lvl.space)
             continue;
           result.occ_facts.push_back(
-              std::make_tuple(w_vid, pos, id_of(lvl), oit->second));
+              std::make_tuple(w_vid, pos, id_of(lvl), oit->second, leg));
           self_sliced = true;
           break;  // one W-position per enclosing loop
         }
@@ -2429,12 +2522,12 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
             // fetch by C is correctly unsliced on this loop. Record that
             // explicitly so the guard does not mistake it for a gap.
             result.occ_invariant.push_back(
-                std::make_tuple(w_vid, id_of(lvl), oit->second));
+                std::make_tuple(w_vid, id_of(lvl), oit->second, leg));
             recorded = true;
             continue;
           }
           result.occ_facts.push_back(
-              std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second));
+              std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second, leg));
           recorded = true;
           if (std::getenv("SEQUANT_DUMP_USEINDUCED"))
             std::cerr << "[useinduced] value_h="
@@ -2471,10 +2564,10 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                           << "\n";
               if (pos_a == occ.carried.size())
                 result.occ_invariant.push_back(
-                    std::make_tuple(w_vid, id_of(lvl), oit->second));
+                    std::make_tuple(w_vid, id_of(lvl), oit->second, leg));
               else
-                result.occ_facts.push_back(
-                    std::make_tuple(w_vid, pos_a, id_of(lvl), oit->second));
+                result.occ_facts.push_back(std::make_tuple(
+                    w_vid, pos_a, id_of(lvl), oit->second, leg));
               recorded = true;
               break;
             }
@@ -2488,7 +2581,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         // enforced by the dry-run/wet backends themselves.
         if (!recorded)
           result.occ_invariant.push_back(
-              std::make_tuple(w_vid, id_of(lvl), oit->second));
+              std::make_tuple(w_vid, id_of(lvl), oit->second, leg));
       }
     }
   }

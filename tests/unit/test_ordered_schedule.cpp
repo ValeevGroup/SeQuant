@@ -948,11 +948,12 @@ TEST_CASE(
   };
   std::size_t const r_id = value_id_of("R{i_1;i_2}");
 
-  // M1: R's occurrence must carry NO reduced_slot entry at all -- the new
-  // seeding must not manufacture a loop identity for a same-space carried
-  // contraction.
+  // R's occurrence carries a reduced_slot for i_3: the contracted mode owns a
+  // loop identity even though R also carries other indices of the same space
+  // (roles are per axis; the seeding no longer skips the same-space-carried
+  // case).
   REQUIRE(!rich.cells[r_id].occurrences.empty());
-  CHECK(rich.cells[r_id].occurrences.front().reduced_slot.empty());
+  CHECK_FALSE(rich.cells[r_id].occurrences.front().reduced_slot.empty());
 
   auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
   REQUIRE(legality.cells.size() == rich.cells.size());
@@ -960,7 +961,8 @@ TEST_CASE(
   // R's only build-site axis is i_3 itself (the CONTRACTED-at-node test);
   // i_1/i_2 are plain untouched carried "spectator" indices (never in
   // R.sliced_modes(), since nothing opens an "i" loop enclosing the root).
-  // Pin the classification directly: LoopCarried, not Reduction.
+  // Pin the classification directly: i_3 is a Reduction -- decided per axis,
+  // the same-space carried i_1/i_2 do not change that.
   auto const r_legality_it = std::find_if(
       legality.cells.begin(), legality.cells.end(),
       [&](auto const& cl) { return cl.hash == rich.cells[r_id].hash; });
@@ -968,27 +970,25 @@ TEST_CASE(
   REQUIRE(r_legality_it->per_axis.size() == 1);
   CHECK(r_legality_it->per_axis.front().axis == i3);
   CHECK(r_legality_it->per_axis.front().role ==
-        sequant::eval::LoopRole::LoopCarried);
+        sequant::eval::LoopRole::Reduction);
 
-  // build_ordered_schedule must NOT throw (LoopCarried keeps the slot-0
-  // fallback -- the shape is unaffected by this fix) and places R as a
-  // single AccumulateScatter output.
+  // build_ordered_schedule must NOT throw (the Reduction resolves to the
+  // stamped reduced_slot) and places R as an AccumulateSum output.
   sequant::eval::OrderedSchedule sched;
   REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(
                       rich, legality, policy, {L"i"}));
   REQUIRE(well_formed(sched));
 
-  bool found_scatter = false;
+  bool found_sum = false;
   std::function<void(ScopeBlock const&)> find_r = [&](ScopeBlock const& b) {
     for (auto const& [ovid, okind] : b.outputs)
-      if (ovid == r_id && okind == OutputKind::AccumulateScatter)
-        found_scatter = true;
+      if (ovid == r_id && okind == OutputKind::AccumulateSum) found_sum = true;
     for (auto const& st : b.steps)
       if (auto const* child = std::get_if<ScopeBlock>(&st.value))
         find_r(*child);
   };
   find_r(sched.root);
-  CHECK(found_scatter);
+  CHECK(found_sum);
 }
 
 // task-loopid fix round 1 (m2): the escape-placement throw added alongside

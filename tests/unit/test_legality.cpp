@@ -75,6 +75,36 @@ TEST_CASE(
   CHECK_FALSE(contains(L"i"));
 }
 
+TEST_CASE(
+    "classify_axis decides per axis: a value carrying one occupied index and "
+    "contracting another in batches is loop-local on the first and a "
+    "reduction on the second",
+    "[legality]") {
+  using sequant::Index;
+  using sequant::eval::LoopRole;
+  using sequant::eval::OccurrenceRec;
+  // value V{i_1;a_1} = sum_{i_2} X{i_1,i_2;a_1} * Y{i_2}: carries i_1 (sliced,
+  // lockstep with an enclosing i_1 loop) and contracts i_2 at its own node
+  // (sliced there by the DP). Both indices are of the occupied space.
+  Index const i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"};
+  sequant::container::svector<Index> const carried{i1, a1};
+  sequant::container::svector<Index> const contracted_below{i2};
+  sequant::container::svector<Index> const sliced{i1, i2};
+  OccurrenceRec occ;
+  occ.carried = carried;
+  occ.ectx = {{i1, std::pair<std::size_t, std::size_t>{0, 16}}};
+  occ.loop_slot = {0, -1};
+  sequant::container::svector<OccurrenceRec> const occurrences{occ};
+  CHECK(sequant::eval::classify_axis(carried, contracted_below, i1, occurrences,
+                                     sliced) == LoopRole::LoopLocal);
+  CHECK(sequant::eval::classify_axis(carried, contracted_below, i2, occurrences,
+                                     sliced) == LoopRole::Reduction);
+  // and an axis the value neither carries nor contracts is invariant
+  CHECK(sequant::eval::classify_axis(carried, contracted_below, Index{L"i_3"},
+                                     occurrences,
+                                     sliced) == LoopRole::LoopInvariant);
+}
+
 // ===========================================================================
 // classify_axis / analyze_legality: four-way per-axis classification,
 // validated on the real water-20 CSV-CCSD doubles residual (DF/aux-only
@@ -601,13 +631,17 @@ TEST_CASE(
   // loop, so i_2 is a cross-iteration read.
   svector<Index> const sliced{i_1, i_2};
 
-  // i_1 IS lockstep-bound to the enclosing loop, but i_2 -- the SECOND
-  // same-space carried slot -- is free at this occurrence: it is not the
-  // enclosing loop's own Index, so it is a cross-iteration read. The
-  // uncorrected classify_axis (checking only the FIRST same-type carried
-  // slot, i_1, which does match) would wrongly report LoopLocal here; the
-  // corrected version must report LoopCarried.
+  // Roles are per AXIS (classify_axis decides by the axis's own carried slot,
+  // not by its space): i_1 IS lockstep-bound to the enclosing loop, so the
+  // i_1 axis is LoopLocal; i_2 -- the SECOND same-space carried slot -- is
+  // free at this occurrence (not the enclosing loop's own Index, a
+  // cross-iteration read), so the i_2 axis is LoopCarried. (The earlier
+  // per-space rule let the free i_2 slot make the whole space, i_1 included,
+  // LoopCarried; a value carrying one occupied index and contracting another
+  // in batches then never got its reduction recorded.)
   CHECK(classify_axis(carried, contracted_below, i_1, occurrences, sliced) ==
+        LoopRole::LoopLocal);
+  CHECK(classify_axis(carried, contracted_below, i_2, occurrences, sliced) ==
         LoopRole::LoopCarried);
 
   // Sanity: probing with the OTHER same-space axis Index (i_2) must agree --

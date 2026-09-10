@@ -557,7 +557,20 @@ class CellReadResolver {
                         ? "Assemble"
                         : "Leaf")
                 << " src_depth=" << src_cell.scope.path.size()
-                << " slices=" << r.slice.size() << std::endl;
+                << " slices=" << r.slice.size();
+      for (auto const& [pos, key] : r.slice) {
+        std::cerr << " [pos" << pos << "@d" << key.depth << "#"
+                  << key.loop_slot;
+        for (auto const& e : ctx)
+          if (detail::same_key(e.level.key(), key))
+            std::cerr << "=" << e.range.first << ".." << e.range.second;
+        std::cerr << "]";
+      }
+      std::cerr << " src_sliced={";
+      for (auto const& [pos, key] : src_cell.sliced)
+        std::cerr << "pos" << pos << "@d" << key.depth << "#" << key.loop_slot
+                  << " ";
+      std::cerr << "}" << std::endl;
     }
     ResultPtr v = table_read(*reg_, r.source).value;
     for (auto const& [pos, key] : r.slice) {

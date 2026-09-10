@@ -2656,6 +2656,122 @@ TEST_CASE(
   }
   bool const ordered_ok = ordered_opt.has_value();
   if (ordered_ok) REQUIRE(sequant::eval::well_formed(*ordered_opt));
+  // SEQUANT_UT_SCHED_TREE: the block tree of the ordered schedule (depth,
+  // axis, kind, step count, escaped outputs), independent of whether the cell
+  // table later validates.
+  if (ordered_ok && std::getenv("SEQUANT_UT_SCHED_TREE")) {
+    std::function<void(sequant::eval::ScopeBlock const&, int)> dump =
+        [&](sequant::eval::ScopeBlock const& b, int depth) {
+          std::size_t builds = 0, children = 0;
+          for (auto const& st : b.steps) {
+            if (std::get_if<sequant::eval::BuildStep>(&st.value)) ++builds;
+            if (std::get_if<sequant::eval::ScopeBlock>(&st.value)) ++children;
+          }
+          std::wcerr << L"[sched-tree] " << std::wstring(2 * depth, L' ')
+                     << L"depth=" << depth << L" axis="
+                     << (b.axis ? b.axis.full_label() : L"<root>") << L" kind="
+                     << (b.kind == sequant::BatchModeType::External
+                             ? L"external"
+                             : L"contracted")
+                     << L" builds=" << builds << L" children=" << children
+                     << L" outs=";
+          for (auto const& [ovid, okind] : b.outputs)
+            std::wcerr << ovid << L":"
+                       << (okind == sequant::eval::OutputKind::AccumulateSum
+                               ? L"sum"
+                           : okind ==
+                                   sequant::eval::OutputKind::AccumulateScatter
+                               ? L"scatter"
+                               : L"other")
+                       << L" ";
+          std::wcerr << L"\n";
+          for (auto const& st : b.steps)
+            if (auto const* child =
+                    std::get_if<sequant::eval::ScopeBlock>(&st.value))
+              dump(*child, depth + 1);
+        };
+    dump(ordered_opt->root, 0);
+  }
+  // SEQUANT_UT_ROLE_DIAG=<vid>[,<vid>...]: per-axis legality roles and the
+  // loop identities (carried positions' loop_slot, reduced_slot, modes
+  // contracted in batches, loops opened) of every occurrence of those values.
+  if (char const* rd = std::getenv("SEQUANT_UT_ROLE_DIAG")) {
+    std::set<std::size_t> want;
+    std::istringstream toks{rd};
+    for (std::string tok; std::getline(toks, tok, ',');)
+      if (!tok.empty()) want.insert(std::stoul(tok));
+    auto role_name = [](sequant::eval::LoopRole r) -> wchar_t const* {
+      switch (r) {
+        case sequant::eval::LoopRole::LoopLocal:
+          return L"LoopLocal";
+        case sequant::eval::LoopRole::Reduction:
+          return L"Reduction";
+        case sequant::eval::LoopRole::LoopCarried:
+          return L"LoopCarried";
+        case sequant::eval::LoopRole::LoopInvariant:
+          return L"LoopInvariant";
+      }
+      return L"?";
+    };
+    for (std::size_t v : want) {
+      if (v >= rich.cells.size()) continue;
+      auto const& cell = rich.cells[v];
+      std::wcerr << L"[role-diag] vid=" << v << L" h=" << (cell.hash % 100000)
+                 << L" per_axis={";
+      for (auto const& lc : legality.cells)
+        if (lc.hash == cell.hash)
+          for (auto const& ax : lc.per_axis)
+            std::wcerr << ax.axis.full_label() << L":" << role_name(ax.role)
+                       << L" ";
+      std::wcerr << L"}\n";
+      for (auto const& occ : cell.occurrences) {
+        std::wcerr << L"[role-diag]   occ carried={";
+        for (std::size_t p = 0; p < occ.carried.size(); ++p)
+          std::wcerr << occ.carried[p].full_label() << L"#"
+                     << (p < occ.loop_slot.size() ? occ.loop_slot[p] : -9)
+                     << L" ";
+        std::wcerr << L"} reduced_slot={";
+        for (auto const& [ix, sl] : occ.reduced_slot)
+          std::wcerr << ix.full_label() << L"#" << sl << L" ";
+        std::wcerr << L"} contracted_batched={";
+        for (auto const& ix : occ.contracted_batched)
+          std::wcerr << ix.full_label() << L" ";
+        std::wcerr << L"} opens={";
+        for (auto const& [ix, k] : occ.opens)
+          std::wcerr << ix.full_label()
+                     << (k == sequant::BatchModeType::External ? L":E" : L":C")
+                     << L" ";
+        std::wcerr << L"} ectx={";
+        for (auto const& [ix, rng] : occ.ectx)
+          std::wcerr << ix.full_label() << L" ";
+        std::wcerr << L"} home={";
+        for (auto const& ix : occ.home) std::wcerr << ix.full_label() << L" ";
+        std::wcerr << L"} point=" << occ.point << L"\n";
+        // Its operands: every occurrence (of any value) whose structural
+        // consumer is this occurrence.
+        for (std::size_t u = 0; u < rich.cells.size(); ++u)
+          for (auto const& ch : rich.cells[u].occurrences) {
+            if (ch.consumer_point != occ.point || ch.point == occ.point)
+              continue;
+            std::wcerr << L"[role-diag]     operand vid=" << u << L" h="
+                       << (rich.cells[u].hash % 100000)
+                       << (rich.cells[u].is_leaf ? L" leaf" : L"")
+                       << L" carried={";
+            for (std::size_t p = 0; p < ch.carried.size(); ++p)
+              std::wcerr << ch.carried[p].full_label() << L"#"
+                         << (p < ch.loop_slot.size() ? ch.loop_slot[p] : -9)
+                         << L" ";
+            std::wcerr << L"} home={";
+            for (auto const& ix : ch.home)
+              std::wcerr << ix.full_label() << L" ";
+            std::wcerr << L"} ectx={";
+            for (auto const& [ix, rng] : ch.ectx)
+              std::wcerr << ix.full_label() << L" ";
+            std::wcerr << L"}\n";
+          }
+      }
+    }
+  }
 
   std::function<bool(Node const&)> const is_volatile_node =
       [p = policy.is_volatile_leaf](Node const& n) -> bool {

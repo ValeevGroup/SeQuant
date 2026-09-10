@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <set>
 #include <unordered_map>
 #include <utility>
@@ -235,6 +236,22 @@ struct OccurrenceRec {
   container::svector<Index> carried;  //!< this occurrence's canon_indices
   container::svector<Index> home;     //!< home_scope (plain modes)
   detail::BatchContext ectx;  //!< ENCLOSING loops (excludes this node's own)
+  //!< The static point of the occurrence (in the same tree) that OPENED each
+  //!< \c ectx entry, parallel to \c ectx: names the loop INSTANCE each entry
+  //!< is, so the boulevard can read the DP's nesting order off the
+  //!< occurrences (RichSchedule::loop_order).
+  container::svector<std::size_t> ectx_opener_point;
+  //!< Static points of this occurrence's operand occurrences, left then
+  //!< right (empty on a leaf). An operand's LEG is its index here; the
+  //!< sliced-mode seam attributes its facts per leg, so one value read on
+  //!< both legs of a node under different labels (a self-product of a shared
+  //!< intermediate) gets two distinct slicings.
+  container::svector<std::size_t> operand_points;
+  //!< The loops this occurrence's node OPENS, with their kind (Contracted:
+  //!< a mode this node contracts in batches; External: a carried mode whose
+  //!< physical loop is introduced here). Carried into
+  //!< RichSchedule::loop_kind once the loop slots are numbered.
+  container::svector<std::pair<Index, BatchModeType>> opens;
   //!< Task 2 (loop identity): per \c carried position, the \c loop_slot of the
   //!< batch loop that slices it (which MEMBER of its same-space group), or -1
   //!< where the position is not a batched (loop-sliced) mode. Assigned by the
@@ -327,6 +344,27 @@ struct ValueCell {
 struct RichSchedule {
   container::svector<ValueCell> cells;
   std::size_t num_points = 0;  //!< one past the last static point
+  //!< The kind of every numbered loop instance, keyed by (space base_key,
+  //!< loop_slot): Contracted when the open that created the instance
+  //!< contracts the mode in batches at its node, External when it introduces
+  //!< a carried mode's physical loop. A space may hold instances of both kinds
+  //!< (an occupied pair contracted in batches beside an occupied external
+  //!< pair), so the kind is a property of the INSTANCE, not of the space; the
+  //!< ordered schedule builder reads a block's kind here.
+  std::map<std::pair<std::wstring, int>, BatchModeType> loop_kind;
+  //!< Loop NESTING constraints read off the DP's realization: (outer, inner)
+  //!< pairs of loop instances, each (space base_key, loop_slot), such that
+  //!< some occurrence sits inside `outer` and `inner` is opened inside it
+  //!< (a consecutive pair of its enclosing context, or its enclosing context
+  //!< and a loop it opens itself). The ordered schedule builder nests the
+  //!< realized chain to satisfy every pair (a contradiction is a builder
+  //!< error: the loop identity fused two loops that nest in opposite orders).
+  //!< The mapped value is a witness: the value id of the first occurrence
+  //!< that produced the pair (diagnostics only).
+  std::map<
+      std::pair<std::pair<std::wstring, int>, std::pair<std::wstring, int>>,
+      std::size_t>
+      loop_order;
 };
 
 ///
@@ -380,6 +418,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
     container::svector<Index> home;     // home_scope
     container::svector<Index> carried;  // canon_indices
     detail::BatchContext ectx;  // ENCLOSING context (excludes own loops)
+    // Pre-order id of the node that OPENED each ectx entry (parallel to
+    // ectx); resolved to that node's static point on the occurrence record.
+    container::svector<std::size_t> ectx_opener;
+    // Static points of this node's operands, left then right (empty on a
+    // leaf): names each operand OCCURRENCE by its leg, so a value that is
+    // both operands of one node under different labels keeps two identities.
+    container::svector<std::size_t> operand_points;
+    // The batch loops this node OPENS (batch_loops_opened_here), with the
+    // kind of each: the source of every loop instance's kind (see
+    // RichSchedule::loop_kind).
+    container::svector<std::pair<Index, BatchModeType>> opens;
     container::svector<Index> own_modes;  // THIS occurrence's OWN realized
                                           // loop modes -- see the
                                           // own_modes_union note below.
@@ -398,12 +447,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
 
   container::svector<NodeRec> recs;
   std::size_t counter = 0;
+  // Pre-order ids name a node BEFORE its subtree is walked (its post-order
+  // point is not known yet when the children record it as their opener).
+  std::size_t pre_counter = 0;
+  std::unordered_map<std::size_t, std::size_t> pre_to_point;
 
-  auto visit = [&](auto&& self, Node const& n,
-                   detail::BatchContext ectx) -> std::size_t {
+  auto visit = [&](auto&& self, Node const& n, detail::BatchContext ectx,
+                   container::svector<std::size_t> ectx_opener) -> std::size_t {
+    std::size_t const pre = pre_counter++;
     // Children see this node's own realized loops on top of the enclosing
     // context; the node itself does NOT (it is recorded with `ectx`).
     detail::BatchContext child_ectx = ectx;
+    container::svector<std::size_t> child_opener = ectx_opener;
     container::svector<Index> own_modes;
     // Enclosing-loop context is built from the loops OPENED at this node
     // (batch_loops_opened_here), NOT the per-node sliced mask
@@ -420,6 +475,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // slot), so each is taken as itself.
     for (auto const& [ix, kind] : n->batch_loops_opened_here()) {
       child_ectx.push_back({ix, {std::size_t{0}, block_of(ix)}});
+      child_opener.push_back(pre);
       own_modes.push_back(ix);
     }
 
@@ -441,8 +497,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
 
     container::svector<std::size_t> child_recs;
     if (!n.leaf()) {
-      child_recs.push_back(self(self, n.left(), child_ectx));
-      child_recs.push_back(self(self, n.right(), child_ectx));
+      child_recs.push_back(self(self, n.left(), child_ectx, child_opener));
+      child_recs.push_back(self(self, n.right(), child_ectx, child_opener));
     }
 
     std::size_t const point = counter++;
@@ -479,14 +535,20 @@ RichSchedule compute_dag_boulevard(R const& forest,
       }
     }
     r.ectx = std::move(ectx);
+    r.ectx_opener = std::move(ectx_opener);
+    pre_to_point[pre] = point;
     r.own_modes = std::move(own_modes);
+    for (auto const& [ix, kind] : n->batch_loops_opened_here())
+      r.opens.push_back({ix, kind});
+    for (auto ci : child_recs) r.operand_points.push_back(recs[ci].point);
     std::size_t const idx = recs.size();
     recs.push_back(std::move(r));
     for (auto ci : child_recs) recs[ci].consumer_point = point;
     return idx;
   };
 
-  for (auto const& tree : forest) visit(visit, tree, detail::BatchContext{});
+  for (auto const& tree : forest)
+    visit(visit, tree, detail::BatchContext{}, {});
 
   // Cross-occurrence union, per canonical value (hash), of the modes that
   // value EVER realizes as its OWN loop (\c node_slice_mask() at the value's
@@ -557,7 +619,11 @@ RichSchedule compute_dag_boulevard(R const& forest,
       o.carried = r.carried;
       o.home = r.home;
       o.ectx = r.ectx;
+      for (std::size_t pre : r.ectx_opener)
+        o.ectx_opener_point.push_back(pre_to_point.at(pre));
       o.contracted_batched = r.contracted_batched;
+      o.opens = r.opens;
+      o.operand_points = r.operand_points;
       return o;
     };
 
@@ -804,26 +870,21 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // home-sliced child there is no edge for the loop above to unite through,
     // so it never creates a component for (value, mode) and the value's
     // reduction escape is later placed with no loop identity at all. Seed the
-    // reduction node here for every occurrence's own contracted_batched mode
-    // -- SCOPED to modes legality::classify_axis would actually call
-    // Reduction for: classify_axis reaches Reduction only via its Q1 test
-    // (the value carries NO index of the SAME SPACE as the mode); a value
-    // that also carries another index of that space takes the Q2b branch
-    // instead (LoopLocal/LoopCarried) and must not gain a new realized loop
-    // depth here, so mirror that same-space test before seeding and leave
-    // such a mode to the ordinary carried-position path below. The
-    // child-driven union above still fires whenever a home-sliced operand
+    // reduction node here for every occurrence's own contracted_batched mode.
+    // The child-driven union above still fires whenever a home-sliced operand
     // exists and unites its slice loop into this same component
     // (reduction_node is idempotent -- same (value, mode) always encodes to
     // the same synthetic node).
+    // Seeded for EVERY mode contracted in batches at the node, whether or not
+    // the value also carries an index of that space: legality classifies the
+    // contracted axis per axis (classify_axis decides by the axis's identity,
+    // not its space), so such a mode is a Reduction on its own loop instance
+    // and needs a loop identity the escape placement can resolve. (An earlier
+    // guard skipped the same-space-carried case to mirror the per-space
+    // classification that is now gone.)
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences)
         for (Index const& m : occ.contracted_batched) {
-          bool const carries_same_space = std::any_of(
-              occ.carried.begin(), occ.carried.end(), [&](Index const& ix) {
-                return ix.space().base_key() == m.space().base_key();
-              });
-          if (carries_same_space) continue;
           (void)find(reduction_node(c.value_id, m));
           reduction_stamps.push_back({c.value_id, m});
         }
@@ -921,6 +982,88 @@ RichSchedule compute_dag_boulevard(R const& forest,
       for (OccurrenceRec& occ : out.cells[par_vid].occurrences)
         occ.reduced_slot.push_back({m, rit->second});
     }
+    // Per-instance loop KIND and NESTING: every open names one physical loop
+    // -- a Contracted open is the reduction node of (value, mode), an
+    // External open is the carried position of the mode at the opening node
+    // -- and that component's slot takes the open's kind. Two opens of one
+    // instance must agree (an instance is either reduced or carried),
+    // asserted. The same resolution names the loop instance of every ectx
+    // entry (through its opener occurrence), which yields the DP's nesting
+    // order as (outer, inner) constraints.
+    auto const instance_slot =
+        [&](std::size_t vid, OccurrenceRec const& occ, Index const& ix,
+            BatchModeType kind) -> std::optional<std::pair<std::wstring, int>> {
+      std::optional<std::size_t> root;
+      if (kind == BatchModeType::Contracted) {
+        root = find(reduction_node(vid, ix));
+      } else {
+        for (std::size_t pV = 0; pV < occ.carried.size(); ++pV)
+          if (occ.carried[pV] == ix) {
+            root = find(encode(vid, pV));
+            break;
+          }
+      }
+      if (!root) return std::nullopt;
+      auto const rit = root_slot.find(*root);
+      if (rit == root_slot.end()) return std::nullopt;  // never numbered
+      return std::make_pair(std::wstring{ix.space().base_key()}, rit->second);
+    };
+    for (ValueCell const& c : out.cells)
+      for (OccurrenceRec const& occ : c.occurrences)
+        for (auto const& [ix, kind] : occ.opens) {
+          auto const key = instance_slot(c.value_id, occ, ix, kind);
+          if (!key) continue;
+          auto const [kit, inserted] = out.loop_kind.emplace(*key, kind);
+          SEQUANT_ASSERT(kit->second == kind &&
+                         "compute_dag_boulevard: one loop instance opened "
+                         "with two kinds (contracted and external)");
+        }
+    // Two EXTERNAL loops carry no data dependence between them (a value
+    // sliced on both is produced per pair of batches either way, and the
+    // escape placement is order-free), so trees may open them in either
+    // order and the fused nest picks one: no constraint. A pair with a
+    // contracted loop is a real constraint: a reduction completes inside the
+    // loops that enclose it, so its consumers' loops must nest outside.
+    auto const constrains = [&](std::pair<std::wstring, int> const& a,
+                                std::pair<std::wstring, int> const& b) {
+      auto const ka = out.loop_kind.find(a);
+      auto const kb = out.loop_kind.find(b);
+      bool const a_ext =
+          ka != out.loop_kind.end() && ka->second == BatchModeType::External;
+      bool const b_ext =
+          kb != out.loop_kind.end() && kb->second == BatchModeType::External;
+      return !(a_ext && b_ext);
+    };
+    for (ValueCell const& c : out.cells)
+      for (OccurrenceRec const& occ : c.occurrences) {
+        // Enclosing chain, outermost first, each entry resolved through its
+        // opener occurrence (same tree, so the opened Index matches verbatim).
+        container::svector<std::pair<std::wstring, int>> chain;
+        for (std::size_t k = 0;
+             k < occ.ectx.size() && k < occ.ectx_opener_point.size(); ++k) {
+          auto const pit = point_occ.find(occ.ectx_opener_point[k]);
+          auto const vit = point_value.find(occ.ectx_opener_point[k]);
+          if (pit == point_occ.end() || vit == point_value.end()) continue;
+          OccurrenceRec const& opener = *pit->second;
+          for (auto const& [oix, okind] : opener.opens)
+            if (oix == occ.ectx[k].first) {
+              if (auto const key =
+                      instance_slot(vit->second, opener, oix, okind))
+                chain.push_back(*key);
+              break;
+            }
+        }
+        for (auto const& [ix, kind] : occ.opens)
+          if (auto const key = instance_slot(c.value_id, occ, ix, kind))
+            if (!chain.empty() && chain.back() != *key &&
+                constrains(chain.back(), *key))
+              out.loop_order.emplace(std::make_pair(chain.back(), *key),
+                                     c.value_id);
+        for (std::size_t k = 1; k < chain.size(); ++k)
+          if (chain[k - 1] != chain[k] && constrains(chain[k - 1], chain[k]))
+            out.loop_order.emplace(std::make_pair(chain[k - 1], chain[k]),
+                                   c.value_id);
+      }
   }
 
   return out;

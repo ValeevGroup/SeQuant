@@ -242,14 +242,28 @@ struct LegalitySchedule {
                        [&](Index const& s) { return s == ix; });
   };
 
-  bool const carries_axis =
-      std::any_of(carried.begin(), carried.end(), same_type);
-
-  if (!carries_axis) {
-    bool const reduces_axis = std::any_of(contracted_below.begin(),
-                                          contracted_below.end(), same_type);
+  // The role is decided for THIS axis, by identity, not for its space: a
+  // value may carry one index of a space (loop-local on that instance) AND
+  // contract another index of the same space in batches (a reduction over a
+  // different instance) -- e.g. a residual-pair intermediate carrying the
+  // external pair ij while reducing over a contracted pair kl, once the
+  // occupied space is batchable in both roles. Deciding by space conflated
+  // the two: the carried branch won and the reduction was never recorded, so
+  // the builder emitted a scatter escape at the contracted instance with no
+  // sliced position to scatter ("scatters nothing: empty scatter map").
+  auto const carried_pos = std::find(carried.begin(), carried.end(), axis);
+  if (carried_pos == carried.end()) {
+    bool const reduces_axis =
+        std::find(contracted_below.begin(), contracted_below.end(), axis) !=
+        contracted_below.end();
     return reduces_axis ? LoopRole::Reduction : LoopRole::LoopInvariant;
   }
+  // The carried slot this axis occupies; every occurrence's carried list is
+  // positionally aligned with the value's canonical carried list (each
+  // occurrence's frame relabels the same slots), so the slot, not the label,
+  // identifies the axis across occurrences.
+  std::size_t const axis_slot =
+      static_cast<std::size_t>(carried_pos - carried.begin());
 
   bool found_enclosing = false;
   for (OccurrenceRec const& occ : occurrences) {
@@ -291,10 +305,11 @@ struct LegalitySchedule {
     container::svector<int> own_slots;
     {
       OccurrenceRec const& prod = occurrences.front();
-      for (std::size_t pc = 0; pc < prod.carried.size(); ++pc)
-        if (same_type(prod.carried[pc]) && is_batched(prod.carried[pc]) &&
-            pc < prod.loop_slot.size() && prod.loop_slot[pc] >= 0)
-          own_slots.push_back(prod.loop_slot[pc]);
+      std::size_t const pc = axis_slot;
+      if (pc < prod.carried.size() && same_type(prod.carried[pc]) &&
+          is_batched(prod.carried[pc]) && pc < prod.loop_slot.size() &&
+          prod.loop_slot[pc] >= 0)
+        own_slots.push_back(prod.loop_slot[pc]);
     }
     // Direction matters: the value may be read INSIDE loops it is invariant
     // to (a deeper level of its own nest -- enclosing instances beyond its
@@ -319,17 +334,18 @@ struct LegalitySchedule {
               encl_slots.end())
             return LoopRole::LoopCarried;  // own loop instance not enclosing
     }
-    for (Index const& c : occ.carried) {
-      if (!same_type(c)) continue;
-      if (!is_batched(c)) continue;  // free full spectator dim -- not a loop
-      matched_any_same_type = true;
-      bool const lockstep = std::any_of(encl.begin(), encl.end(),
-                                        [&](Index const& L) { return c == L; });
-      if (!lockstep)
-        return LoopRole::LoopCarried;  // free / cross-iteration binding
+    if (axis_slot < occ.carried.size()) {
+      Index const& c = occ.carried[axis_slot];
+      if (same_type(c) && is_batched(c)) {
+        matched_any_same_type = true;
+        bool const lockstep = std::any_of(
+            encl.begin(), encl.end(), [&](Index const& L) { return c == L; });
+        if (!lockstep)
+          return LoopRole::LoopCarried;  // free / cross-iteration binding
+      }
     }
     if (!matched_any_same_type)
-      return LoopRole::LoopCarried;  // no same-type carried slot at all
+      return LoopRole::LoopCarried;  // this slot is not a batched loop slot
   }
   return found_enclosing ? LoopRole::LoopLocal : LoopRole::LoopCarried;
 }

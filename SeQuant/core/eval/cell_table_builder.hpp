@@ -381,7 +381,41 @@ inline void apply_persistence_frontier(
     TableCell const& c = st.table.cells[cid];
     if (c.production.kind != ProductionKind::Build) continue;
     auto const c_bound = detail::bound_instances(c);
-    for (std::size_t op : operands_of(c.value_id)) {
+    auto const ops = operands_of(c.value_id);
+    std::size_t constexpr npos = static_cast<std::size_t>(-1);
+    for (std::size_t oi = 0; oi < ops.size(); ++oi) {
+      std::size_t const op = ops[oi];
+      // The k-th read of value `op` by this consumer pairs with the k-th
+      // distinct LEG the seam recorded for (op, consumer): a value on both
+      // legs of one node has per-leg facts; a single-leg operand (or a seam
+      // that recorded no leg) keeps every fact.
+      std::size_t k = 0;
+      for (std::size_t oj = 0; oj < oi; ++oj)
+        if (ops[oj] == op) ++k;
+      container::svector<std::size_t> legs;
+      for (auto const& [w_vid, pos, lid, consumer_vid, f_leg] :
+           in.sliced->occ_facts) {
+        (void)pos;
+        (void)lid;
+        if (w_vid != op || consumer_vid != c.value_id || f_leg == npos)
+          continue;
+        if (std::find(legs.begin(), legs.end(), f_leg) == legs.end())
+          legs.push_back(f_leg);
+      }
+      for (auto const& [w_vid, lid, consumer_vid, f_leg] :
+           in.sliced->occ_invariant) {
+        (void)lid;
+        if (w_vid != op || consumer_vid != c.value_id || f_leg == npos)
+          continue;
+        if (std::find(legs.begin(), legs.end(), f_leg) == legs.end())
+          legs.push_back(f_leg);
+      }
+      std::sort(legs.begin(), legs.end());
+      std::optional<std::size_t> const my_leg =
+          k < legs.size() ? std::optional<std::size_t>{legs[k]} : std::nullopt;
+      auto const leg_matches = [&](std::size_t f_leg) {
+        return !my_leg || f_leg == npos || f_leg == *my_leg;
+      };
       auto const fit = st.forms_of.find(op);
       if (fit == st.forms_of.end() || fit->second.empty())
         throw std::logic_error("cell table: operand value " +
@@ -401,8 +435,10 @@ inline void apply_persistence_frontier(
           detail::deepest_visible_form(st.table, fit->second, c.scope);
       r.source = best ? *best : fit->second.back();
       TableCell const& s = st.table.cells[r.source];
-      for (auto const& [w_vid, pos, lid, consumer_vid] : in.sliced->occ_facts) {
+      for (auto const& [w_vid, pos, lid, consumer_vid, f_leg] :
+           in.sliced->occ_facts) {
         if (w_vid != op || consumer_vid != c.value_id) continue;
+        if (!leg_matches(f_leg)) continue;
         LoopKey const k = key_of_lid(lid);
         bool enclosing = false;
         for (auto const& [pk, lat] : c.scope.path)
@@ -423,8 +459,10 @@ inline void apply_persistence_frontier(
       // binding this consumer's read of op on a loop the CONSUMER itself is
       // bound to, so the form rule accepts it as whole even though another
       // operand may be bound to that same loop (see Read::invariant_on).
-      for (auto const& [w_vid, lid, consumer_vid] : in.sliced->occ_invariant) {
+      for (auto const& [w_vid, lid, consumer_vid, f_leg] :
+           in.sliced->occ_invariant) {
         if (w_vid != op || consumer_vid != c.value_id) continue;
+        if (!leg_matches(f_leg)) continue;
         LoopKey const k = key_of_lid(lid);
         bool in_consumer_bound = false;
         for (LoopKey const& ck : c_bound)
