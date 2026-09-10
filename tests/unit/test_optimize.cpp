@@ -28,14 +28,14 @@
 
 void disable_outer_product_pruning() {
 #ifdef _WIN32
-  putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1");
+  _putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1");
 #else
   setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
 #endif
 }
 void reenable_outer_product_pruning() {
 #ifdef _WIN32
-  putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "");
+  _putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "");
 #else
   unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
 #endif
