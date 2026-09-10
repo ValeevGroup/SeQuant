@@ -11,6 +11,8 @@ function(target_warnings_as_errors TARGET)
 
     if (IS_GNU_LIKE_COMPILER)
         target_compile_options("${TARGET}" PRIVATE "-Werror")
+    elseif(MSVC)
+        target_compile_options("${TARGET}" PRIVATE "/WX")
     else()
         message(DEBUG "Warnings-as-errors not supported for compiler '${CMAKE_CXX_COMPILER_ID}' - disabling…")
     endif()
@@ -33,9 +35,11 @@ function(target_set_compiler_flags TARGET)
     endif()
 
     if (NOT PROJECT_IS_TOP_LEVEL)
+        # Disable compiler warnings
         if (IS_GNU_LIKE_COMPILER)
-            # Disable compiler warnings
             target_compile_options("${TARGET}" PRIVATE "-w")
+        elseif(MSVC)
+            target_compile_options("${TARGET}" PRIVATE "/w")
         endif()
 
         return()
