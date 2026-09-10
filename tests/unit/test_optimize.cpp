@@ -3151,7 +3151,7 @@ TEST_CASE("binarize stamps per-node batch modes from optimize()",
 // Distinguishes the two kinds even though both get admitted into
 // ctx.batchable_modes.
 TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
-          "[optimize][batch]") {
+          "[.][optimize][batch][blocked-dp-cost-model]") {
   using namespace sequant;
   auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
   auto reg = get_default_context().mutable_index_space_registry();
@@ -3179,6 +3179,15 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
   opts.objective_function = ObjectiveFunction::DenseTimeSpaceBatched;
   opts.reorder = ReorderSum::NoReorder;
   opts.idx_to_extent = idxsz;
+  // This case characterizes the LEGACY emit_external regime -- root-level
+  // forest seed via the `else if (emit_external)` branch, NOT node-level
+  // placement (see the Assertion 1b comment below). Pin order_aware_recompute
+  // OFF explicitly (it is also the BatchPolicy default) so this legacy regime
+  // is pinned regardless of any future default change. Hidden ([.]) as on
+  // evaleev/feature/multimode-batched-eval: with the no-batching revert under
+  // an infinite budget the legacy external seed no longer stamps anything
+  // there.
+  opts.batch_policy.order_aware_recompute = false;
   opts.batch_policy.is_batchable_contracted_index =
       [aux_space](Index const& ix) { return ix.space() == aux_space; };
   opts.batch_policy.batch_target_size = [](Index const&) -> std::size_t {
