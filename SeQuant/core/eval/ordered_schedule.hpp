@@ -938,6 +938,36 @@ inline ForkedSubchain fork_subchain(
 /// \p policy would otherwise provide is already baked into \c
 /// CellLegality::per_axis by \c analyze_legality.
 ///
+namespace detail {
+/// Dump-only (SEQUANT_DUMP_SCHEDULE): the block tree of a built schedule --
+/// per block its depth, axis, kind (contracted/external), own BuildStep count,
+/// child block count and escaped outputs (value:sum|scatter) -- so a
+/// production run shows which batch loops were realized and of which kind.
+inline void dump_schedule_tree(ScopeBlock const& b, int depth) {
+  std::size_t builds = 0, children = 0;
+  for (auto const& st : b.steps) {
+    if (std::get_if<BuildStep>(&st.value)) ++builds;
+    if (std::get_if<ScopeBlock>(&st.value)) ++children;
+  }
+  std::wcerr << L"[sched-tree] " << std::wstring(2 * depth, L' ') << L"depth="
+             << depth << L" axis=" << (b.axis ? b.axis.full_label() : L"<root>")
+             << L" kind="
+             << (b.kind == BatchModeType::External ? L"external"
+                                                   : L"contracted")
+             << L" builds=" << builds << L" children=" << children << L" outs=";
+  for (auto const& [ovid, okind] : b.outputs)
+    std::wcerr << ovid << L":"
+               << (okind == OutputKind::AccumulateSum       ? L"sum"
+                   : okind == OutputKind::AccumulateScatter ? L"scatter"
+                                                            : L"other")
+               << L" ";
+  std::wcerr << L"\n";
+  for (auto const& st : b.steps)
+    if (auto const* child = std::get_if<ScopeBlock>(&st.value))
+      dump_schedule_tree(*child, depth + 1);
+}
+}  // namespace detail
+
 [[nodiscard]] inline OrderedSchedule build_ordered_schedule(
     RichSchedule const& rich, LegalitySchedule const& legality,
     [[maybe_unused]] BatchPolicy const& policy,
@@ -2054,6 +2084,8 @@ inline ForkedSubchain fork_subchain(
   // value (not an ambiguous node hash).
   out.operand_vids = g.depends_on;
 
+  if (std::getenv("SEQUANT_DUMP_SCHEDULE"))
+    detail::dump_schedule_tree(out.root, 0);
   SEQUANT_ASSERT(well_formed(out));
   return out;
 }
