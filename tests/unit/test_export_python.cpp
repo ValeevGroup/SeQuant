@@ -213,20 +213,35 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
   return tensor;
 }
 
-// Helper function to properly escape shell arguments for POSIX shells
+// Helper function to properly escape shell arguments for shells
 // Uses single quotes and escapes embedded single quotes
 std::string shell_escape(const std::string &arg) {
+#ifdef _WIN32
+  std::string result = "\"";
+#else
   std::string result = "'";
+#endif
+
   for (char c : arg) {
     if (c == '\'') {
+#ifdef _WIN32
+      result += "\"\"";
+#else
       // End the current single-quoted string, add an escaped single quote,
       // and start a new single-quoted string
       result += "'\\''";
+#endif
     } else {
       result += c;
     }
   }
+
+#if _WIN32
+  result += "\"";
+#else
   result += "'";
+#endif
+
   return result;
 }
 
@@ -271,22 +286,13 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
   // Execute Python (use CMake-discovered Python executable)
   std::string python_exe = SEQUANT_UNITTESTS_PYTHON_EXECUTABLE;
   // Execute Python directly with properly escaped script path
-  std::string cmd = shell_escape(python_exe) + " " +
-                    shell_escape(script_path.string()) + " 2>&1";
-  FILE *pipe = popen(cmd.c_str(), "r");
-  if (!pipe) return false;
-
-  char buffer[256];
-  std::string output;
-  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-    output += buffer;
-  }
-
-  int exit_code = pclose(pipe);
+  std::string cmd =
+      shell_escape(python_exe) + " " + shell_escape(script_path.string());
+  int exit_code = std::system(cmd.data());
+  if (exit_code < 0) return false;
 
   if (exit_code != 0) {
     std::cerr << "Python execution failed with exit code " << exit_code << "\n";
-    std::cerr << "Output:\n" << output << "\n";
     return false;
   }
 
