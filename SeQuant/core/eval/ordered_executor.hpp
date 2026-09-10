@@ -301,6 +301,27 @@ inline std::size_t& ordered_last_block_skips_slot() {
   return c.produce_if_absent && detail::bound_instances(c).empty();
 }
 
+/// \overload Seedable for a visit of a block whose ENCLOSING scope is \p
+/// parent_scope: a \c produce_if_absent cell bound only to instances that
+/// enclose the visited block. Those loops cannot advance while this block
+/// (and everything nested in it) runs, so no clear can empty the cell under
+/// its mark; a cell bound to the block's own instance or to a nested one is
+/// cleared per batch and stays unseedable. This is what lets a term's
+/// complete partial -- bound to the term's own outer loops, produced once in
+/// the first iteration of an interposed foreign loop -- skip the whole inner
+/// nest on that loop's later iterations (explicit-cells design section 12).
+[[nodiscard]] inline bool ordered_visit_skip_seedable(
+    TableCell const& c, CellScope const& parent_scope) {
+  if (!c.produce_if_absent) return false;
+  for (LoopKey const& k : detail::bound_instances(c)) {
+    bool enclosing = false;
+    for (auto const& [pk, lat] : parent_scope.path)
+      if (detail::same_key(pk, k)) enclosing = true;
+    if (!enclosing) return false;
+  }
+  return true;
+}
+
 /// \overload A skipped VISIT of \p c: one read per leg.
 inline void ordered_forgo_visit(CellRegistry& registry, ForgoPlan const& plan,
                                 CellId c) {
@@ -540,7 +561,9 @@ void run_ordered_contracted_block(
   {
     bool seeded = false;
     for (CellId c = 0; c < table->cells.size(); ++c) {
-      if (skip[c] || !ordered_visit_skip_seedable(table->cells[c])) continue;
+      if (skip[c] ||
+          !ordered_visit_skip_seedable(table->cells[c], parent_scope))
+        continue;
       if (!registry.peek(c)) continue;
       if (!seeded) {
         local_skip_storage = skip;
@@ -1350,13 +1373,17 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     // is the root's Build cell at the root scope, or, for a root produced
     // inside a batch loop and escaped out of it, the Assemble cell the
     // block's close produced at the same root scope.
-    auto cell = registry.build_cell_at(vid, CellScope{});
-    if (!cell) cell = registry.assemble_cell_at(vid, CellScope{});
+    // By RESIDENCY (cell_of), not by production scope: a root reduced over
+    // its own loops inside another term's loop is produced there once and
+    // homed at root (bound to no enclosing instance), the same form the
+    // table's readers would see from the root scope.
+    auto cell = registry.cell_of(vid, CellScope{});
     if (!cell)
       throw Exception(
           "evaluate_ordered_schedule: forest root value " +
           std::to_string(vid) +
-          " has no root-scope cell (cell table/schedule disagreement)");
+          " has no form resident at the root scope (cell table/schedule "
+          "disagreement)");
     root_cells.insert(*cell);
     ResultPtr ptr = registry.peek(*cell);
     if (!ptr)

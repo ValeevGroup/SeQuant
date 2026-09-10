@@ -432,14 +432,35 @@ template <typename Candidates>
         out.push_back({"chain", detail::cell_str(table, id) +
                                     " scatters nothing: empty scatter map"});
     } else if (!s.scope.path.empty()) {
-      LoopKey const closing = s.scope.path.back().first;
-      bool found = false;
-      for (LoopKey const& k : s.partial_over)
-        if (detail::same_key(k, closing)) found = true;
-      if (!found)
-        out.push_back({"chain", detail::cell_str(table, id) +
-                                    " sums a source whose partial_over "
-                                    "lacks the closing instance"});
+      // The instance a Sum CLOSES is the loop just below the Assemble's own
+      // scope along the source's path (the block that emitted the escape),
+      // not the source's innermost scope loop: loops of OTHER terms may be
+      // interposed below it (the fused chain nests a term under loops it
+      // does not open). The source must be a partial over the closed
+      // instance, and must be bound to NONE of the deeper interposed loops
+      // -- it is then complete once per batch of the closed instance,
+      // produced in the first iteration of each interposed loop and
+      // resident across the rest (residency_scope + produce_if_absent), so
+      // the closing Sum reads one complete partial per batch.
+      std::size_t const at = c.scope.path.size();
+      // (A source not nested below the Assemble is the link-direction
+      // violation reported above; nothing to add here.)
+      if (s.scope.path.size() > at) {
+        LoopKey const closing = s.scope.path[at].first;
+        bool found = false;
+        for (LoopKey const& k : s.partial_over)
+          if (detail::same_key(k, closing)) found = true;
+        if (!found)
+          out.push_back({"chain", detail::cell_str(table, id) +
+                                      " sums a source whose partial_over "
+                                      "lacks the closing instance"});
+        for (std::size_t j = at + 1; j < s.scope.path.size(); ++j)
+          for (LoopKey const& b : detail::bound_instances(s))
+            if (detail::same_key(b, s.scope.path[j].first))
+              out.push_back({"chain", detail::cell_str(table, id) +
+                                          " sums a source still bound to an "
+                                          "instance inside the one it closes"});
+      }
     }
   }
 
@@ -477,7 +498,11 @@ template <typename Candidates>
     // A produced cell nobody reads is dead work. Only at the ROOT scope is a
     // zero-read cell legitimate: those are the schedule's results, read by
     // whoever asked for the evaluation.
-    if (c.life == 0 && !c.scope.path.empty())
+    // "At the root scope" is RESIDENCY, not production: a complete form
+    // produced inside loops it is bound to none of (a term root reduced over
+    // its own loops, nested under another term's) is homed at root and is
+    // the schedule's result there.
+    if (c.life == 0 && !detail::residency_scope(c).path.empty())
       out.push_back({"life", detail::cell_str(table, id) +
                                  " zero-read cell at a non-root scope"});
   }

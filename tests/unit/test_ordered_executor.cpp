@@ -2959,6 +2959,33 @@ TEST_CASE(
 
     cache.reset();
     run(o2);  // WARM
+    // SEQUANT_UT_TOP_BUILDS=<N>: the N values built most often over the two
+    // iterations (the recompute tally), with their labels and occurrence
+    // counts -- where a fused chain's interposed loops rebuild a value.
+    if (char const* tb = std::getenv("SEQUANT_UT_TOP_BUILDS")) {
+      std::size_t const n_top = std::strtoul(tb, nullptr, 10);
+      std::vector<std::tuple<std::size_t, std::size_t>> rows;  // builds, vid
+      for (auto const& vc : rich.cells) {
+        if (vc.is_leaf) continue;
+        auto const it = vmap.find(sequant::eval::value_key_of(vc));
+        if (it == vmap.end()) continue;
+        rows.emplace_back(
+            orderedexec_builds_of(cache.recompute_tally(), it->second),
+            vc.value_id);
+      }
+      std::sort(rows.begin(), rows.end(), [](auto const& a, auto const& b) {
+        return std::get<0>(a) > std::get<0>(b);
+      });
+      std::wcerr << L"--- [top-builds] builds vid h label occurrences\n";
+      for (std::size_t k = 0; k < rows.size() && k < n_top; ++k) {
+        auto const [b, v] = rows[k];
+        std::wcerr << L"  " << b << L"  vid=" << v << L" h="
+                   << (rich.cells[v].hash % 100000) << L"  "
+                   << node_kind(rich.cells[v].hash) << L"{"
+                   << space_sig(rich.cells[v].carried) << L"}  occ="
+                   << rich.cells[v].occurrences.size() << L"\n";
+      }
+    }
   }
 
   // Warm-iter needed_build skip count: replicate the executor's gate (BFS from
