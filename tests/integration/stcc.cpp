@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
 
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
-    printf("CC R%d size: %lu time: %5.3f sec.\n", i, cc_st_r[i]->size(),
+    printf("CC R%d size: %zu time: %5.3f sec.\n", i, cc_st_r[i]->size(),
            time_elapsed.count());
   }
 
