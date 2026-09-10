@@ -664,6 +664,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // shared value, but they are two loops (one scatters into the result, the
   // other sums), and the builder realizes a block as one kind.
   std::unordered_map<std::size_t, BatchModeType> comp_kind;
+  // NESTING order between components, keyed by root: inner_of[a] holds the
+  // roots that must sit strictly INSIDE a's loop (read off every
+  // occurrence's enclosing chain and its own opens, see below). Two
+  // components one of which must enclose the other are two loops; a fold
+  // that would unite them (directly, or through what each already encloses)
+  // is rejected -- the builder's nesting constraints then never cycle.
+  std::unordered_map<std::size_t, std::set<std::size_t>> inner_of;
   auto find = [&](std::size_t x) -> std::size_t {
     auto it = uf.find(x);
     if (it == uf.end()) {
@@ -696,9 +703,35 @@ RichSchedule compute_dag_boulevard(R const& forest,
         ka != comp_kind.end() && kb != comp_kind.end() &&
         ka->second != kb->second)
       return false;  // an external loop and a contracted loop stay distinct
+    {
+      // Nesting: reject if either must (transitively) enclose the other.
+      auto const reaches = [&](std::size_t from, std::size_t to) -> bool {
+        container::svector<std::size_t> stack{from};
+        std::set<std::size_t> seen;
+        while (!stack.empty()) {
+          std::size_t const x = find(stack.back());
+          stack.pop_back();
+          if (!seen.insert(x).second) continue;
+          auto const it = inner_of.find(x);
+          if (it == inner_of.end()) continue;
+          for (std::size_t y0 : it->second) {
+            std::size_t const y = find(y0);
+            if (y == to) return true;
+            stack.push_back(y);
+          }
+        }
+        return false;
+      };
+      if (reaches(ra, rb) || reaches(rb, ra)) return false;
+    }
     for (auto const& [o, pos] : ma) mb[o] = pos;
     members.erase(ra);
     uf[ra] = rb;
+    if (auto const ia = inner_of.find(ra); ia != inner_of.end()) {
+      auto moved = std::move(ia->second);
+      inner_of.erase(ia);
+      inner_of[rb].insert(moved.begin(), moved.end());
+    }
     if (auto const ka = comp_kind.find(ra); ka != comp_kind.end()) {
       comp_kind[rb] = ka->second;
       comp_kind.erase(ka);
@@ -791,6 +824,55 @@ RichSchedule compute_dag_boulevard(R const& forest,
                      "two kinds within a tree");
       comp_kind[r] = kind;
     }
+
+  // Nesting constraints (see `inner_of`), from every occurrence's enclosing
+  // chain (consecutive loops opened by DIFFERENT nodes) and from its own
+  // opens inside its enclosing loops; two External loops carry no order.
+  {
+    auto const is_ext = [&](std::size_t root) {
+      auto const it = comp_kind.find(root);
+      return it != comp_kind.end() && it->second == BatchModeType::External;
+    };
+    auto const opened_node =
+        [&](std::size_t opener_idx,
+            Index const& ix) -> std::optional<std::size_t> {
+      NodeRec const& op = recs[opener_idx];
+      for (auto const& [oix, okind] : op.opens)
+        if (oix == ix) {
+          if (okind == BatchModeType::Contracted)
+            return reduction_node(opener_idx, ix);
+          for (std::size_t pV = 0; pV < op.carried.size(); ++pV)
+            if (op.carried[pV] == ix) return encode(opener_idx, pV);
+          return std::nullopt;
+        }
+      return std::nullopt;
+    };
+    for (std::size_t i = 0; i < nrec; ++i) {
+      NodeRec const& o = recs[i];
+      container::svector<std::size_t> chain, opener;
+      for (std::size_t k = 0; k < o.ectx.size() && k < o.ectx_opener.size();
+           ++k) {
+        auto const pit = pre_to_point.find(o.ectx_opener[k]);
+        if (pit == pre_to_point.end()) continue;
+        auto const rit = rec_of_point.find(pit->second);
+        if (rit == rec_of_point.end()) continue;
+        if (auto const nd = opened_node(rit->second, o.ectx[k].first)) {
+          chain.push_back(find(*nd));
+          opener.push_back(rit->second);
+        }
+      }
+      auto const add = [&](std::size_t outer, std::size_t inner) {
+        if (outer == inner) return;
+        if (is_ext(outer) && is_ext(inner)) return;
+        inner_of[outer].insert(inner);
+      };
+      for (std::size_t k = 1; k < chain.size(); ++k)
+        if (opener[k - 1] != opener[k]) add(chain[k - 1], chain[k]);
+      for (auto const& [ix, kind] : o.opens)
+        if (auto const nd = opened_node(i, ix))
+          if (!chain.empty()) add(chain.back(), find(*nd));
+    }
+  }
 
   // Reader-versus-reduction constraints (see `forbid`): for every occurrence
   // O and every operand occurrence c that reduces modes in batches, c's
