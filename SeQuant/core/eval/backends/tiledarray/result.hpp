@@ -462,8 +462,13 @@ class ResultTensorTA final : public Result {
   };
 
   explicit ResultTensorTA(ArrayT arr) : Result{std::move(arr)} {}
-  ResultTensorTA(ArrayT arr, View view)
-      : Result{std::move(arr)}, view_{std::move(view)} {
+  /// @param arr the array to share or own
+  /// @param view the transform pending on it
+  /// @param alias whether @p arr is owned by another result (true for every
+  ///        transform of an existing value; false when @p view rides on a
+  ///        buffer this result just computed, e.g. a phase on a product)
+  ResultTensorTA(ArrayT arr, View view, bool alias = false)
+      : Result{std::move(arr)}, view_{std::move(view)}, alias_{alias} {
     if (view_->trivial()) view_.reset();
   }
 
@@ -472,12 +477,18 @@ class ResultTensorTA final : public Result {
   ///         cache's canonical value); get<>() / logical_array() materialize
   ///         it into a private array on first read, raw<>() does not
   [[nodiscard]] bool is_view() const noexcept { return view_.has_value(); }
+  /// @return whether the array is owned by another result (see
+  ///         Result::is_buffer_alias): true for every value a transform
+  ///         produced, including one whose pending transform composed away
+  [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
 
  private:
   using this_type = ResultTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
 
   mutable std::optional<View> view_;
+  /// the array belongs to another result (see is_buffer_alias())
+  mutable bool alias_ = false;
 
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
@@ -568,6 +579,7 @@ class ResultTensorTA final : public Result {
     log_ta_tensor_host_memory_use();
     reset_value(std::move(r));
     view_.reset();
+    alias_ = false;  // the buffer is this result's own now
   }
 
   /// the array in the view's logical layout: a pending view is
@@ -731,7 +743,7 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     View v = view_.value_or(View{});
     v.phase = static_cast<std::int8_t>(v.phase * factor);
-    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -741,8 +753,8 @@ class ResultTensorTA final : public Result {
 
     detail::log_ta(pre_annot, " = ", post_annot, " (view)\n");
 
-    return eval_result<this_type>(raw<ArrayT>(),
-                                  composed_relabel(pre_annot, post_annot));
+    return eval_result<this_type>(
+        raw<ArrayT>(), composed_relabel(pre_annot, post_annot), /*alias=*/true);
   }
 
   [[nodiscard]] ResultPtr apply_transform(
@@ -754,7 +766,7 @@ class ResultTensorTA final : public Result {
     v.phase = static_cast<std::int8_t>(v.phase * t.phase);
     if constexpr (TA::detail::is_complex_v<numeric_type>)
       if (t.conj) v.conj = !v.conj;
-    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
   [[nodiscard]] ResultPtr clone() const override {
@@ -836,8 +848,13 @@ class ResultTensorOfTensorTA final : public Result {
   };
 
   explicit ResultTensorOfTensorTA(ArrayT arr) : Result{std::move(arr)} {}
-  ResultTensorOfTensorTA(ArrayT arr, View view)
-      : Result{std::move(arr)}, view_{std::move(view)} {
+  /// @param arr the array to share or own
+  /// @param view the transform pending on it
+  /// @param alias whether @p arr is owned by another result (true for every
+  ///        transform of an existing value; false when @p view rides on a
+  ///        buffer this result just computed, e.g. a phase on a product)
+  ResultTensorOfTensorTA(ArrayT arr, View view, bool alias = false)
+      : Result{std::move(arr)}, view_{std::move(view)}, alias_{alias} {
     if (view_->trivial()) view_.reset();
   }
 
@@ -845,6 +862,10 @@ class ResultTensorOfTensorTA final : public Result {
   ///         logical_array() materialize it into a private array on first
   ///         read, raw<>() does not
   [[nodiscard]] bool is_view() const noexcept { return view_.has_value(); }
+  /// @return whether the array is owned by another result (see
+  ///         Result::is_buffer_alias): true for every value a transform
+  ///         produced, including one whose pending transform composed away
+  [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
 
  private:
   using this_type = ResultTensorOfTensorTA<ArrayT>;
@@ -865,6 +886,8 @@ class ResultTensorOfTensorTA final : public Result {
   using that_type = ResultTensorTA<compatible_regular_distarray_type>;
 
   mutable std::optional<View> view_;
+  /// the array belongs to another result (see is_buffer_alias())
+  mutable bool alias_ = false;
 
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
@@ -1015,6 +1038,7 @@ class ResultTensorOfTensorTA final : public Result {
     log_ta_tensor_host_memory_use();
     reset_value(std::move(r));
     view_.reset();
+    alias_ = false;  // the buffer is this result's own now
   }
 
   /// the array in the view's logical layout: a pending view is
@@ -1289,7 +1313,7 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     View v = view_.value_or(View{});
     v.phase = static_cast<std::int8_t>(v.phase * factor);
-    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -1299,8 +1323,8 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(pre_annot, " = ", post_annot, " (view)\n");
 
-    return eval_result<this_type>(raw<ArrayT>(),
-                                  composed_relabel(pre_annot, post_annot));
+    return eval_result<this_type>(
+        raw<ArrayT>(), composed_relabel(pre_annot, post_annot), /*alias=*/true);
   }
 
   [[nodiscard]] ResultPtr apply_transform(
@@ -1312,7 +1336,7 @@ class ResultTensorOfTensorTA final : public Result {
     v.phase = static_cast<std::int8_t>(v.phase * t.phase);
     if constexpr (TA::detail::is_complex_v<numeric_type>)
       if (t.conj) v.conj = !v.conj;
-    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
   [[nodiscard]] ResultPtr clone() const override {

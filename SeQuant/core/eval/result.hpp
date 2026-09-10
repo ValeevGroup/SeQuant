@@ -459,8 +459,21 @@ class Result {
     return *std::any_cast<const T>(&value_);
   }
 
-  /// @return the size of the object in bytes
+  /// @return the size of the object in bytes. For a lazy view (see
+  ///         is_buffer_alias()) this is the LOGICAL size of the value it
+  ///         represents, which is the size of the buffer it shares -- not a
+  ///         buffer of its own.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
+
+  /// @return whether this result's buffer is OWNED BY ANOTHER result -- the
+  ///         value is an alias, produced by a transform (phase, conjugation,
+  ///         relabel) that was recorded instead of performed, whether or not
+  ///         anything is still pending (a transform composing to the identity
+  ///         leaves an alias with nothing to apply). Producing one allocates
+  ///         nothing, so a tracer must charge it 0 allocated bytes
+  ///         (size_in_bytes() still reports the value's logical size) and must
+  ///         not count its buffer twice in a working set.
+  [[nodiscard]] virtual bool is_buffer_alias() const { return false; }
 
  protected:
   template <typename T,

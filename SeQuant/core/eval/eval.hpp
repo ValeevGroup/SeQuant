@@ -226,7 +226,12 @@ enum struct TermMode { Begin, End };
 /// zeroing them, so a logged 0B always means an empty buffer.
 ///
 /// mem_result is the size of the buffer the op produces; for SumInplace
-/// it's the size of the accumulator after the add. mem_alloc is what the
+/// it's the size of the accumulator after the add. A Permute / MultByPhase
+/// that produced an ALIAS (Result::is_buffer_alias(): a phase / conj / relabel
+/// recorded on a buffer another result owns, rather than performed) reports
+/// mem_alloc=0B, with mem_result still the value's logical size -- nothing was
+/// allocated.
+/// mem_alloc is what the
 /// op allocated — equal to mem_result everywhere except SumInplace,
 /// which writes into the accumulator and allocates nothing.
 ///
@@ -573,13 +578,21 @@ ResultPtr evaluate(Node const& node,         //
     });
 
     if constexpr (detail::trace(EvalTrace)) {
+      // An alias allocated nothing and shares the source's buffer: charge it
+      // 0 allocated bytes and count that one buffer once (mem_result stays the
+      // value's logical size). NB this covers the cache store path's round
+      // trip, where the node's transform is applied twice -- once into the
+      // canonical orientation to store, once back out -- and the second
+      // application composes to the identity: still an alias, still no copy.
+      bool const lazy = post->is_buffer_alias();
       size_t hwmark = log::bytes(cache, post).value;
-      if (!cache.alive(nd)) hwmark += log::bytes(res).value;
-      auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
-                                .time = time,
-                                .mem_result = log::bytes(post),
-                                .mem_alloc = log::bytes(post),
-                                .mem_hwmark = {cache.note_working_set(hwmark)}};
+      if (!cache.alive(nd) && !lazy) hwmark += log::bytes(res).value;
+      auto stat =
+          log::EvalStat{.mode = log::EvalMode::MultByPhase,
+                        .time = time,
+                        .mem_result = log::bytes(post),
+                        .mem_alloc = lazy ? log::Bytes{0} : log::bytes(post),
+                        .mem_hwmark = {cache.note_working_set(hwmark)}};
       log::eval(stat,
                 std::format("[{}{}{}] {}", int(tr.phase), tr.conj ? "*" : "",
                             tr.braket_swap ? "^T" : "", nd->label()));
@@ -902,14 +915,18 @@ ResultPtr evaluate(Node const& node,           //
       // result.pre aliases the cache only when the inner evaluate returned
       // the cached buffer unchanged — i.e. the node is cached AND no
       // mult_by_phase fresh allocation happened (phase == 1).
+      // as in the MultByPhase log above: an alias allocated nothing and
+      // shares its buffer with result.pre
+      bool const lazy = result.post->is_buffer_alias();
       size_t hwmark = log::bytes(cache, result.post).value;
-      if (!cache.alive(node) || !node->canon_transform().trivial())
+      if (!lazy && (!cache.alive(node) || !node->canon_transform().trivial()))
         hwmark += log::bytes(result.pre).value;
-      auto stat = log::EvalStat{.mode = log::EvalMode::Permute,
-                                .time = time,
-                                .mem_result = log::bytes(result.post),
-                                .mem_alloc = log::bytes(result.post),
-                                .mem_hwmark = {cache.note_working_set(hwmark)}};
+      auto stat = log::EvalStat{
+          .mode = log::EvalMode::Permute,
+          .time = time,
+          .mem_result = log::bytes(result.post),
+          .mem_alloc = lazy ? log::Bytes{0} : log::bytes(result.post),
+          .mem_hwmark = {cache.note_working_set(hwmark)}};
       log::eval(stat, node->label());
     }
     log::term(log::TermMode::End, xpr);

@@ -4862,6 +4862,73 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   }
 }
 
+TEST_CASE("eval_trace_charges_a_lazy_view_zero_bytes", "[eval][view][trace]") {
+  // The eval trace's `alloc` column is "what the op allocated" -- the column
+  // every memory post-mortem of a CCk iteration is read off. A leaf transform
+  // that returns a LAZY VIEW (a pending phase/conj/relabel on the cache's
+  // buffer) allocates nothing, so it must report alloc=0B while `result`
+  // still carries the value's logical size. Driven on a nested-tile (ToT)
+  // leaf, whose transform used to materialize a real copy.
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  size_t const nocc = 2, nvirt = 3;
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
+                                                                 nvirt};
+
+  auto const canonical =
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
+  auto conj_side = canonical->clone();
+  conj_side->as<Tensor>().conjugate();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const node = binarize<EvalExprTA>(conj_side);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node.leaf());
+  REQUIRE_FALSE(node->canon_transform().trivial());
+
+  auto& lg = Logger::instance();
+  struct Guard {
+    decltype(lg.eval)& eval;
+    std::size_t level;
+    std::ostream* stream;
+    ~Guard() {
+      eval.level = level;
+      eval.stream = stream;
+    }
+  } guard{lg.eval, lg.eval.level, lg.eval.stream};
+  std::ostringstream trace;
+  lg.eval.level = 1;
+  lg.eval.stream = &trace;
+
+  auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
+  auto const res = evaluate<Trace::On>(node, node->annot(), yield, cache);
+  REQUIRE(res);
+  lg.eval.stream = guard.stream;
+  lg.eval.level = guard.level;
+
+  // every transform line must be charged 0 allocated bytes -- including the
+  // second application on the cache store path, whose transform composes to
+  // the identity and so leaves an alias with nothing pending
+  std::string line;
+  std::size_t seen = 0;
+  for (std::istringstream in{trace.str()}; std::getline(in, line);) {
+    if (line.find("MultByPhase") == std::string::npos) continue;
+    ++seen;
+    INFO("transform line: " << line);
+    REQUIRE(line.find("alloc=0B") != std::string::npos);
+  }
+  REQUIRE(seen >= 1);
+  for (std::istringstream in{trace.str()}; std::getline(in, line);)
+    if (line.find("MultByPhase") != std::string::npos) break;
+  REQUIRE(line.find("MultByPhase") != std::string::npos);
+  INFO("trace line: " << line);
+  // alloc=0B -- the view allocated nothing ...
+  REQUIRE(line.find("alloc=0B") != std::string::npos);
+  // ... while result= carries the value's logical size (non-zero)
+  auto const rpos = line.find("result=");
+  REQUIRE(rpos != std::string::npos);
+  REQUIRE(line.compare(rpos, 9, "result=0B") != 0);
+}
+
 TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
   // END-TO-END check of serving the conjugation marker at eval: a starred
   // ToT spelling binarizes to an EvalOp::Adjoint node over its unmarked
