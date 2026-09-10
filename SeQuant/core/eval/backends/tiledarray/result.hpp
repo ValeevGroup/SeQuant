@@ -1015,19 +1015,18 @@ class ResultTensorOfTensorTA final : public Result {
     return raw<ArrayT>();
   }
 
-  /// a plain contraction (every index in exactly two of {l, r, c}, outer and
-  /// inner alike) is what TA's expression engine `*` handles for nested tiles
-  /// (and there it folds a pending conj); anything else (Hadamard indices --
-  /// the CSV pair indices shared by all three operands -- or a DeNest) needs
-  /// einsum, which takes plain tensor expressions only
-  static bool plain_contraction(std::string const& l, std::string const& r,
-                                std::string const& c) {
-    auto all = [](std::string const& s) {
-      auto t = tokens(s);
-      t.outer.insert(t.outer.end(), t.inner.begin(), t.inner.end());
-      return t.outer;
-    };
-    auto lt = all(l), rt = all(r), ct = all(c);
+  /// whether TA's expression engine (`C = A * B`) evaluates this nested
+  /// product -- the shapes TA::einsum itself delegates to it verbatim: outer
+  /// indices either with NO Hadamard index (a plain contraction, every index in
+  /// exactly two of {l, r, c}) or PURELY Hadamard (every outer index in all
+  /// three: the CSV pair product), with the inner indices a plain contraction
+  /// or purely Hadamard. There a pending conj/phase folds into the expression
+  /// (TA conj on nested-tile contractions). Anything else (outer Hadamard mixed
+  /// with contracted or external outer indices, DeNest) is einsum's own
+  /// tile-level product, which takes plain tensor expressions only.
+  static bool expression_delegable(std::string const& l, std::string const& r,
+                                   std::string const& c) {
+    auto lt = tokens(l), rt = tokens(r), ct = tokens(c);
     auto in = [](auto const& v, std::string const& x) {
       return std::find(v.begin(), v.end(), x) != v.end();
     };
@@ -1035,14 +1034,32 @@ class ResultTensorOfTensorTA final : public Result {
       std::sort(v.begin(), v.end());
       return std::adjacent_find(v.begin(), v.end()) == v.end();
     };
-    if (!distinct(lt) || !distinct(rt) || !distinct(ct)) return false;
-    for (auto const& x : lt)
-      if (in(rt, x) == in(ct, x)) return false;
-    for (auto const& x : rt)
-      if (in(lt, x) == in(ct, x)) return false;
-    for (auto const& x : ct)
-      if (!(in(lt, x) != in(rt, x))) return false;
-    return true;
+    // every index of {a, b, c} in exactly two of the three
+    auto plain = [&](auto const& a, auto const& b, auto const& cc) {
+      for (auto const& x : a)
+        if (in(b, x) == in(cc, x)) return false;
+      for (auto const& x : b)
+        if (in(a, x) == in(cc, x)) return false;
+      for (auto const& x : cc)
+        if (in(a, x) == in(b, x)) return false;
+      return true;
+    };
+    // every index of {a, b, c} in all three
+    auto fused = [&](auto const& a, auto const& b, auto const& cc) {
+      if (a.size() != b.size() || a.size() != cc.size()) return false;
+      for (auto const& x : a)
+        if (!in(b, x) || !in(cc, x)) return false;
+      return true;
+    };
+    for (auto const* t : {&lt, &rt, &ct})
+      if (!distinct(t->outer) || !distinct(t->inner)) return false;
+    bool const outer_ok =
+        plain(lt.outer, rt.outer, ct.outer) ||
+        (!lt.outer.empty() && fused(lt.outer, rt.outer, ct.outer));
+    bool const inner_ok =
+        plain(lt.inner, rt.inner, ct.inner) ||
+        (!lt.inner.empty() && fused(lt.inner, rt.inner, ct.inner));
+    return outer_ok && inner_ok;
   }
 
   /// operand for an einsum consumer: the stored array (a pending conj is
@@ -1233,9 +1250,9 @@ class ResultTensorOfTensorTA final : public Result {
       auto const& o = static_cast<this_type const&>(other);
       // ToT * ToT -> ToT
       if ((conjugated() || o.conjugated()) &&
-          plain_contraction(a.lannot, a.rannot, a.this_annot)) {
-        // the expression engine contracts nested tiles and folds a pending
-        // conj/phase (TA conj on nested-tile contractions): no copy
+          expression_delegable(a.lannot, a.rannot, a.this_annot)) {
+        // the expression engine evaluates this shape (einsum would hand it
+        // over verbatim) and folds a pending conj/phase: no conj copy
         ArrayT result;
         with_expr(a.lannot, [&](auto&& le) {
           o.with_expr(a.rannot,

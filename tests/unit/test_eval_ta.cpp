@@ -5292,6 +5292,24 @@ TEST_CASE("result_transform_view_tot_ta", "[eval][conj-transform][view][tot]") {
     REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,k;a,c") < 1e-12);
     REQUIRE(v->as<ResultZToT>().is_view());  // the operand was not copied
   }
+  SECTION("conj view feeds an outer-Hadamard nested product lazily") {
+    // the CSV pair product: outer pair indices fused (Hadamard), inner
+    // contraction -- TA's einsum delegates this shape to the expression
+    // engine itself (pure outer Hadamard), so the conj folds there too
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;b,c"},
+                                 std::string{"i,j;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZToT Rc;
+    Rc("i,j;a,b") = Z(-1.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    ZToT ref = TA::einsum(Rc("i,j;a,b"), S("i,j;b,c"), "i,j;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,j;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());  // no conj copy was made
+  }
   SECTION("relabeled + phased view feeds einsum (Hadamard outer) lazily") {
     // a relabel and a phase ride on the einsum annotation / result view; no
     // conj involved so nothing is materialized
@@ -5309,18 +5327,24 @@ TEST_CASE("result_transform_view_tot_ta", "[eval][conj-transform][view][tot]") {
     REQUIRE(norm_diff(got->get<ZToT>(), nref, "j,i;a,c") < 1e-12);
     REQUIRE(v->as<ResultZToT>().is_view());
   }
-  SECTION("conj view into einsum materializes the operand once, correctly") {
+  SECTION("conj view into einsum's own product materializes the operand once") {
+    // outer Hadamard i mixed with a contracted j and an external k: einsum's
+    // tile-level general product, which takes plain tensor expressions only
+    TA::TiledRange const otr3{{0, 2, 4}, {0, 2, 4}, {0, 2, 4}};
+    ZToT const T3 = build(otr3);
+    ResultPtr third = eval_result<ResultZToT>(T3);
     std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
     auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
-    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;b,c"},
-                                 std::string{"i,j;a,c"}};
-    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"},
+                                 std::string{"i,j,k;b,c"},
+                                 std::string{"i,k;a,c"}};
+    auto got = v->prod(*third, pann, sequant::DeNest::False);
     ZToT Rc;
     Rc("i,j;a,b") = R("i,j;a,b").conj();
     world.gop.fence();
-    ZToT ref = TA::einsum(Rc("i,j;a,b"), S("i,j;b,c"), "i,j;a,c");
+    ZToT ref = TA::einsum(Rc("i,j;a,b"), T3("i,j,k;b,c"), "i,k;a,c");
     world.gop.fence();
-    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,j;a,c") < 1e-12);
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,k;a,c") < 1e-12);
     REQUIRE(!v->as<ResultZToT>().is_view());  // materialized (memoized)
   }
   SECTION("both operands conj: DeNest einsum keeps conj on the flat result") {
