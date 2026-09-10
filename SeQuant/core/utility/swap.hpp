@@ -40,7 +40,7 @@ void count_swap();
 
 /// atomic counter, used by swap overloads for SwapCountable and
 /// SwapCountableRef
-template <typename T>
+template <typename SwapType>
 struct SwapCounter {
   SwapCounter() : even_num_of_swaps_(true) {}
   static SwapCounter& thread_instance() {
@@ -55,11 +55,12 @@ struct SwapCounter {
   std::atomic<bool> even_num_of_swaps_;
   void toggle() { even_num_of_swaps_ = !even_num_of_swaps_; }
 
-  friend void ::sequant::swap<T>(SwapCountable<T>&, SwapCountable<T>&);
-  friend void ::sequant::swap<T>(const SwapCountableRef<T>&,
-                                 const SwapCountableRef<T>&);
-  friend void ::sequant::counted_swap<T>(T& a, T& b);
-  friend void ::sequant::detail::count_swap<T>();
+  friend void ::sequant::swap<SwapType>(SwapCountable<SwapType>&,
+                                        SwapCountable<SwapType>&);
+  friend void ::sequant::swap<SwapType>(const SwapCountableRef<SwapType>&,
+                                        const SwapCountableRef<SwapType>&);
+  friend void ::sequant::counted_swap<SwapType>(SwapType& a, SwapType& b);
+  friend void ::sequant::detail::count_swap<SwapType>();
 };
 
 template <typename T>
