@@ -5431,6 +5431,35 @@ TEST_CASE("result_transform_view_tot_ta", "[eval][conj-transform][view][tot]") {
     world.gop.fence();
     REQUIRE(norm_diff(pvc->get<ZToT>(), ref3, "j,i;b,a") < 1e-12);
   }
+  SECTION("views of a zero ToT (all-empty inner tiles) materialize") {
+    // the initial amplitude leaf: every inner tile empty (tot_inner_rank 0)
+    ZToT zero{world, otr};
+    for (auto it = zero.begin(); it != zero.end(); ++it)
+      if (zero.is_local(it.index()))
+        *it = typename ZToT::value_type{it.make_range()};
+    world.gop.fence();
+    REQUIRE(sequant::detail::tot_inner_rank(zero) == 0);
+    ResultPtr z = eval_result<ResultZToT>(zero);
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto v = z->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    REQUIRE_NOTHROW(v->get<ZToT>());
+    auto const& m = v->get<ZToT>();
+    REQUIRE(m.trange().rank() == 2);
+    REQUIRE(sequant::detail::tot_inner_rank(m) == 0);
+    // materialized into a private array: adding into it leaves the source
+    // (the cache's canonical zero) untouched
+    v->add_inplace(*other);
+    REQUIRE(sequant::detail::tot_inner_rank(zero) == 0);
+    REQUIRE(norm_diff(v->get<ZToT>(), S, "i,j;a,b") < 1e-12);
+    // a phase-only view of the zero and a sum with it
+    auto pz = z->mult_by_phase(-1);
+    std::array<std::any, 3> sann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j;a,b"}};
+    auto sm = pz->sum(*other, sann);
+    REQUIRE(norm_diff(sm->get<ZToT>(), S, "i,j;a,b") < 1e-12);
+  }
   SECTION("a relabeled view still slices and clones correctly") {
     std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;a,b"}};
     auto v = res->permute(ann);

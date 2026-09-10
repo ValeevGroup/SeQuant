@@ -914,7 +914,12 @@ class ResultTensorOfTensorTA final : public Result {
   static void apply_perm(container::svector<std::string>& toks,
                          container::svector<std::size_t> const& perm) {
     if (perm.empty()) return;
-    SEQUANT_ASSERT(toks.size() == perm.size());
+    // a synthetic single inner label (the zero ToT's materialization) has no
+    // inner modes to permute
+    if (toks.size() != perm.size()) {
+      SEQUANT_ASSERT(toks.size() == 1);
+      return;
+    }
     container::svector<std::string> stored(toks.size());
     for (std::size_t m = 0; m < toks.size(); ++m) stored[perm[m]] = toks[m];
     toks = std::move(stored);
@@ -987,18 +992,22 @@ class ResultTensorOfTensorTA final : public Result {
     return f(arr(a));
   }
 
-  /// the annotation TA needs to spell every mode of the stored array
+  /// the annotation TA needs to spell every mode of the stored array. An
+  /// all-empty-inner ToT (tot_inner_rank 0: the zero every amplitude leaf
+  /// starts as) is spelled with ONE synthetic inner label: a TA expression on
+  /// a nested array needs an inner block, its empty inner tiles carry no modes
+  /// to permute, and the outer permutation / phase / conj act on them as on
+  /// any tile (a zero stays a zero).
   [[nodiscard]] std::string dummy_annotation() const {
     auto const& arr = raw<ArrayT>();
-    return TA::detail::dummy_annotation(arr.trange().rank(),
-                                        detail::tot_inner_rank(arr));
+    return TA::detail::dummy_annotation(
+        arr.trange().rank(),
+        std::max<std::size_t>(1, detail::tot_inner_rank(arr)));
   }
 
   void ensure_materialized() const override {
     if (!view_) return;
     auto const& arr = raw<ArrayT>();
-    // an all-empty-inner ToT represents zero: a phase or conj of it is itself,
-    // and its outer relabel is a plain outer permutation
     auto const ann = dummy_annotation();
     ArrayT r;
     with_expr(ann, [&](auto&& e) { r(ann) = e; });
