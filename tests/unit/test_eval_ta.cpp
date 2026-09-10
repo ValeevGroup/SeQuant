@@ -5218,3 +5218,211 @@ TEST_CASE("result_transform_view_ta", "[eval][conj-transform][view]") {
     REQUIRE(norm_diff(got->get<ZArray>(), ref2, "i,a") < 1e-12);
   }
 }
+
+// The nested-tile counterpart of result_transform_view_ta: apply_transform /
+// mult_by_phase / permute on a ResultTensorOfTensorTA return a view sharing
+// the array with a pending {phase, conj, outer+inner relabel}. A consumer
+// that is a TA expression (sum, nested contraction, scale) folds the pending
+// transform into the expression -- conj(A) * B contracts without a conj
+// copy of A (TA conj on nested-tile contractions); einsum consumers fold the
+// relabel and carry the phase on the result's view, materializing only a
+// pending conj (einsum takes plain tensor expressions only).
+TEST_CASE("result_transform_view_tot_ta", "[eval][conj-transform][view][tot]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultScalar;
+  using Z = std::complex<double>;
+  using ZArray = TA::DistArray<TA::Tensor<Z>>;
+  using ZToT = TA::DistArray<TA::Tensor<TA::Tensor<Z>>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  using ResultZToT = sequant::ResultTensorOfTensorTA<ZToT>;
+  auto& world = TA::get_default_world();
+
+  // |<d,d>|^1/2 of the difference d = x - y (a nested-tile norm())
+  auto norm_diff = [&](auto const& x, auto const& y, std::string const& a) {
+    std::decay_t<decltype(x)> d;
+    d(a) = x(a) - y(a);
+    world.gop.fence();
+    Z const dd = d(a).dot(d(a)).get();
+    return std::sqrt(std::abs(dd));
+  };
+
+  TA::TiledRange const otr{{0, 2, 4}, {0, 2, 4}};
+  TA::Range const irng(std::array<std::size_t, 2>{3, 3});
+  auto build = [&](TA::TiledRange const& tr) {
+    ZToT arr{world, tr};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = random_tensor_of_tensor<Z>(it.make_range(), irng);
+    world.gop.fence();
+    return arr;
+  };
+  ZToT const R = build(otr), S = build(otr);
+  ZArray F(world, otr);
+  F.fill_random();
+  world.gop.fence();
+  ResultPtr res = eval_result<ResultZToT>(R);
+  ResultPtr other = eval_result<ResultZToT>(S);
+  ResultPtr flat = eval_result<ResultZ>(F);
+
+  SECTION("view: shares the array, get<> materializes on demand") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto got = res->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(got->as<ResultZToT>().is_view());
+    ZToT ref;
+    ref("j,i;b,a") = Z(-1.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "j,i;b,a") < 1e-12);
+    REQUIRE(!got->as<ResultZToT>().is_view());  // materialized by get<>
+  }
+  SECTION("conj view feeds a nested contraction lazily (ToT * ToT -> ToT)") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    // C(i,k;a,c) = -conj(R)(i,j;a,b) * S(k,j;c,b): outer j and inner b
+    // contracted, TA's expression engine folds the conj
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"k,j;c,b"},
+                                 std::string{"i,k;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZToT ref;
+    ref("i,k;a,c") = Z(-1.0, 0.0) * R("i,j;a,b").conj() * S("k,j;c,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,k;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());  // the operand was not copied
+  }
+  SECTION("relabeled + phased view feeds einsum (Hadamard outer) lazily") {
+    // a relabel and a phase ride on the einsum annotation / result view; no
+    // conj involved so nothing is materialized
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto v = res->apply_transform(CanonTransform{.phase = -1}, ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    std::array<std::any, 3> pann{std::string{"j,i;b,a"}, std::string{"j,i;b,c"},
+                                 std::string{"j,i;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    REQUIRE(got->as<ResultZToT>().is_view());  // phase pending on the result
+    ZToT ref = TA::einsum(R("i,j;a,b"), S("j,i;b,c"), "j,i;a,c");
+    ZToT nref;
+    nref("j,i;a,c") = Z(-1.0, 0.0) * ref("j,i;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), nref, "j,i;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+  }
+  SECTION("conj view into einsum materializes the operand once, correctly") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;b,c"},
+                                 std::string{"i,j;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZToT Rc;
+    Rc("i,j;a,b") = R("i,j;a,b").conj();
+    world.gop.fence();
+    ZToT ref = TA::einsum(Rc("i,j;a,b"), S("i,j;b,c"), "i,j;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,j;a,c") < 1e-12);
+    REQUIRE(!v->as<ResultZToT>().is_view());  // materialized (memoized)
+  }
+  SECTION("both operands conj: DeNest einsum keeps conj on the flat result") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    auto w =
+        other->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j"}};
+    auto got = v->prod(*w, pann, sequant::DeNest::True);
+    REQUIRE(got->as<ResultZ>().is_view());
+    REQUIRE(v->as<ResultZToT>().is_view());
+    REQUIRE(w->as<ResultZToT>().is_view());
+    ZToT Rc, Sc;
+    Rc("i,j;a,b") = R("i,j;a,b").conj();
+    Sc("i,j;a,b") = Z(-1.0, 0.0) * S("i,j;a,b").conj();
+    world.gop.fence();
+    ZArray ref =
+        TA::einsum<TA::DeNest::True>(Rc("i,j;a,b"), Sc("i,j;a,b"), "i,j");
+    world.gop.fence();
+    ZArray rd;
+    rd("i,j") = got->get<ZArray>()("i,j") - ref("i,j");
+    world.gop.fence();
+    REQUIRE(rd("i,j").norm().get() < 1e-12);
+  }
+  SECTION("ToT * T with a phased view: phase rides on the result view") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->mult_by_phase(-1);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"j,k"},
+                                 std::string{"i,k;a,b"}};
+    auto got = v->prod(*flat, pann, sequant::DeNest::False);
+    REQUIRE(got->as<ResultZToT>().is_view());
+    ZToT ref = TA::einsum(R("i,j;a,b"), F("j,k"), "i,k;a,b");
+    ZToT nref;
+    nref("i,k;a,b") = Z(-1.0, 0.0) * ref("i,k;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), nref, "i,k;a,b") < 1e-12);
+  }
+  SECTION("dot with conj views") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = other->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> dann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{}};
+    auto d = res->prod(*v, dann, sequant::DeNest::False);
+    ZToT Sc;
+    Sc("i,j;a,b") = S("i,j;a,b").conj();
+    world.gop.fence();
+    Z const dref = TA::dot(R("i,j;a,b"), Sc("i,j;a,b"));
+    REQUIRE(std::abs(d->get<Z>() - dref) < 1e-12);
+  }
+  SECTION("sum, add_inplace, permute and phase compose on views") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> sann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j;a,b"}};
+    auto s = v->sum(*other, sann);
+    ZToT ref;
+    ref("i,j;a,b") = R("i,j;a,b").conj() + S("i,j;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(s->get<ZToT>(), ref, "i,j;a,b") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    // add_inplace into a view materializes the target, adds the other lazily
+    auto w = res->apply_transform(CanonTransform{.conj = true}, ann);
+    w->add_inplace(*v);
+    ZToT ref2;
+    ref2("i,j;a,b") = Z(2.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(w->get<ZToT>(), ref2, "i,j;a,b") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    // permute of a view stays a view; phase and a second conj compose
+    std::array<std::any, 2> pann{std::string{"i,j;a,b"},
+                                 std::string{"j,i;a,b"}};
+    auto pv = v->permute(pann);
+    REQUIRE(pv->as<ResultZToT>().is_view());
+    auto pvm = pv->mult_by_phase(-1);
+    REQUIRE(pvm->as<ResultZToT>().is_view());
+    auto pvc =
+        pvm->apply_transform(CanonTransform{.conj = true},
+                             {std::string{"j,i;a,b"}, std::string{"j,i;b,a"}});
+    REQUIRE(pvc->as<ResultZToT>().is_view());
+    ZToT ref3;
+    ref3("j,i;b,a") = Z(-1.0, 0.0) * R("i,j;a,b");  // conj twice
+    world.gop.fence();
+    REQUIRE(norm_diff(pvc->get<ZToT>(), ref3, "j,i;b,a") < 1e-12);
+  }
+  SECTION("a relabeled view still slices and clones correctly") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;a,b"}};
+    auto v = res->permute(ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    auto c = v->clone();
+    ZToT ref;
+    ref("j,i;a,b") = R("i,j;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(c->get<ZToT>(), ref, "j,i;a,b") < 1e-12);
+    // slice_mode(0, [0,2)) of the relabeled view == tiles [0,1) of ref's j
+    auto sl = v->slice_mode(0, 0, 2);
+    auto const& sla = sl->get<ZToT>();
+    REQUIRE(sla.trange().dim(0).extent() == 2);
+    ZToT refsl;
+    refsl("j,i;a,b") = ref("j,i;a,b").block({0, 0}, {1, 2});
+    world.gop.fence();
+    REQUIRE(norm_diff(sla, refsl, "j,i;a,b") < 1e-12);
+  }
+}

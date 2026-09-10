@@ -811,7 +811,40 @@ class ResultTensorOfTensorTA final : public Result {
   using Result::id_t;
   using numeric_type = typename ArrayT::numeric_type;
 
+  /// A pending (lazy) transform of the shared array -- the nested-tile
+  /// counterpart of ResultTensorTA::View: a phase, an elementwise conjugation
+  /// and a relabeling of the OUTER and INNER modes (logical outer mode m is
+  /// stored outer mode operm[m], likewise iperm for the inner modes; an empty
+  /// perm is the identity; a relabel never moves a mode across the ';'). The
+  /// phase and the relabel are folded into every consumer for free (einsum
+  /// reads relabeled annotations, the phase rides on the result's view); the
+  /// conjugation is folded into the TA expression where the consumer is an
+  /// expression-engine contraction or sum (TA conj on nested-tile
+  /// contractions), and materialized on demand where the consumer is einsum
+  /// (which takes plain tensor expressions only) or needs the array.
+  struct View {
+    std::int8_t phase = 1;
+    bool conj = false;
+    container::svector<std::size_t> operm;
+    container::svector<std::size_t> iperm;
+    [[nodiscard]] bool trivial() const noexcept {
+      return phase == 1 && !conj && operm.empty() && iperm.empty();
+    }
+    [[nodiscard]] bool relabeled() const noexcept {
+      return !operm.empty() || !iperm.empty();
+    }
+  };
+
   explicit ResultTensorOfTensorTA(ArrayT arr) : Result{std::move(arr)} {}
+  ResultTensorOfTensorTA(ArrayT arr, View view)
+      : Result{std::move(arr)}, view_{std::move(view)} {
+    if (view_->trivial()) view_.reset();
+  }
+
+  /// @return whether this result is a lazy view (see View); get<>() /
+  ///         logical_array() materialize it into a private array on first
+  ///         read, raw<>() does not
+  [[nodiscard]] bool is_view() const noexcept { return view_.has_value(); }
 
  private:
   using this_type = ResultTensorOfTensorTA<ArrayT>;
@@ -831,14 +864,206 @@ class ResultTensorOfTensorTA final : public Result {
   // Only @c that_type type is allowed for ToT * T computation
   using that_type = ResultTensorTA<compatible_regular_distarray_type>;
 
+  mutable std::optional<View> view_;
+
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
+  }
+
+  /// "outer;inner" annotation -> {outer tokens, inner tokens, has ';'}
+  struct Tokens {
+    container::svector<std::string> outer, inner;
+    bool nested = false;
+  };
+  static container::svector<std::string> split_list(std::string const& s) {
+    container::svector<std::string> out;
+    std::string cur;
+    for (char c : s) {
+      if (c == ',') {
+        out.push_back(cur);
+        cur.clear();
+      } else if (c != ' ')
+        cur += c;
+    }
+    if (!cur.empty() || !s.empty()) out.push_back(cur);
+    return out;
+  }
+  static Tokens tokens(std::string const& annot) {
+    Tokens t;
+    auto const semi = annot.find(';');
+    if (semi == std::string::npos) {
+      t.outer = split_list(annot);
+    } else {
+      t.nested = true;
+      t.outer = split_list(annot.substr(0, semi));
+      t.inner = split_list(annot.substr(semi + 1));
+    }
+    return t;
+  }
+  static std::string join(container::svector<std::string> const& toks) {
+    std::string out;
+    for (std::size_t i = 0; i < toks.size(); ++i) {
+      if (i) out += ',';
+      out += toks[i];
+    }
+    return out;
+  }
+  static std::string join(Tokens const& t) {
+    return t.nested ? join(t.outer) + ";" + join(t.inner) : join(t.outer);
+  }
+  static void apply_perm(container::svector<std::string>& toks,
+                         container::svector<std::size_t> const& perm) {
+    if (perm.empty()) return;
+    SEQUANT_ASSERT(toks.size() == perm.size());
+    container::svector<std::string> stored(toks.size());
+    for (std::size_t m = 0; m < toks.size(); ++m) stored[perm[m]] = toks[m];
+    toks = std::move(stored);
+  }
+
+  /// annotation of the STORED array for a consumer annotation given in the
+  /// view's LOGICAL mode order
+  [[nodiscard]] std::string translate(std::string const& logical) const {
+    if (!view_ || !view_->relabeled()) return logical;
+    auto t = tokens(logical);
+    apply_perm(t.outer, view_->operm);
+    apply_perm(t.inner, view_->iperm);
+    return join(t);
+  }
+
+  /// perm such that post[k] = pre[perm[k]] composed onto @p cur (identity ->
+  /// cleared)
+  static void compose_perm(container::svector<std::string> const& pre,
+                           container::svector<std::string> const& post,
+                           container::svector<std::size_t>& cur) {
+    if (pre == post) return;
+    SEQUANT_ASSERT(pre.size() == post.size());
+    container::svector<std::size_t> perm(post.size());
+    for (std::size_t k = 0; k < post.size(); ++k) {
+      auto it = std::find(pre.begin(), pre.end(), post[k]);
+      SEQUANT_ASSERT(it != pre.end());
+      auto const m = static_cast<std::size_t>(it - pre.begin());
+      perm[k] = cur.empty() ? m : cur[m];
+    }
+    bool identity = true;
+    for (std::size_t k = 0; k < perm.size(); ++k)
+      if (perm[k] != k) identity = false;
+    if (identity)
+      cur.clear();
+    else
+      cur = std::move(perm);
+  }
+
+  /// relabel `result(post) = this(pre)` composed onto the current view
+  [[nodiscard]] View composed_relabel(std::string const& pre,
+                                      std::string const& post) const {
+    View v = view_.value_or(View{});
+    auto const pre_t = tokens(pre), post_t = tokens(post);
+    compose_perm(pre_t.outer, post_t.outer, v.operm);
+    compose_perm(pre_t.inner, post_t.inner, v.iperm);
+    return v;
+  }
+
+  [[nodiscard]] std::int8_t phase() const noexcept {
+    return view_ ? view_->phase : std::int8_t{1};
+  }
+  [[nodiscard]] bool conjugated() const noexcept {
+    return view_ && view_->conj;
+  }
+
+  /// invokes @p f with the TA expression of this result under the consumer
+  /// annotation @p annot (logical order), the pending transform folded in
+  template <typename F>
+  decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    auto const& arr = raw<ArrayT>();
+    auto const a = translate(annot);
+    if (view_) {
+      auto const ph = view_->phase;
+      if constexpr (TA::detail::is_complex_v<numeric_type>) {
+        if (view_->conj && ph != 1) return f(numeric_type(ph) * arr(a).conj());
+        if (view_->conj) return f(arr(a).conj());
+      }
+      if (ph != 1) return f(numeric_type(ph) * arr(a));
+    }
+    return f(arr(a));
+  }
+
+  /// the annotation TA needs to spell every mode of the stored array
+  [[nodiscard]] std::string dummy_annotation() const {
+    auto const& arr = raw<ArrayT>();
+    return TA::detail::dummy_annotation(arr.trange().rank(),
+                                        detail::tot_inner_rank(arr));
+  }
+
+  void ensure_materialized() const override {
+    if (!view_) return;
+    auto const& arr = raw<ArrayT>();
+    // an all-empty-inner ToT represents zero: a phase or conj of it is itself,
+    // and its outer relabel is a plain outer permutation
+    auto const ann = dummy_annotation();
+    ArrayT r;
+    with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    ArrayT::wait_for_lazy_cleanup(r.world());
+    log_ta_tensor_host_memory_use();
+    reset_value(std::move(r));
+    view_.reset();
+  }
+
+  /// the array in the view's logical layout: a pending view is
+  /// materialized (and memoized) first, so repeated reads pay once
+  [[nodiscard]] ArrayT const& logical_array() const {
+    ensure_materialized();
+    return raw<ArrayT>();
+  }
+
+  /// a plain contraction (every index in exactly two of {l, r, c}, outer and
+  /// inner alike) is what TA's expression engine `*` handles for nested tiles
+  /// (and there it folds a pending conj); anything else (Hadamard indices --
+  /// the CSV pair indices shared by all three operands -- or a DeNest) needs
+  /// einsum, which takes plain tensor expressions only
+  static bool plain_contraction(std::string const& l, std::string const& r,
+                                std::string const& c) {
+    auto all = [](std::string const& s) {
+      auto t = tokens(s);
+      t.outer.insert(t.outer.end(), t.inner.begin(), t.inner.end());
+      return t.outer;
+    };
+    auto lt = all(l), rt = all(r), ct = all(c);
+    auto in = [](auto const& v, std::string const& x) {
+      return std::find(v.begin(), v.end(), x) != v.end();
+    };
+    auto distinct = [](auto v) {
+      std::sort(v.begin(), v.end());
+      return std::adjacent_find(v.begin(), v.end()) == v.end();
+    };
+    if (!distinct(lt) || !distinct(rt) || !distinct(ct)) return false;
+    for (auto const& x : lt)
+      if (in(rt, x) == in(ct, x)) return false;
+    for (auto const& x : rt)
+      if (in(lt, x) == in(ct, x)) return false;
+    for (auto const& x : ct)
+      if (!(in(lt, x) != in(rt, x))) return false;
+    return true;
+  }
+
+  /// operand for an einsum consumer: the stored array (a pending conj is
+  /// materialized first -- einsum cannot take it -- a relabel is folded into
+  /// the annotation, the phase is returned for the caller to carry on the
+  /// result's view)
+  struct EinsumOperand {
+    std::string annot;
+    std::int8_t phase = 1;
+  };
+  [[nodiscard]] EinsumOperand einsum_operand(std::string const& annot,
+                                             bool keep_conj) const {
+    if (view_ && view_->conj && !keep_conj) ensure_materialized();
+    return {translate(annot), phase()};
   }
 
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = static_cast<this_type const&>(other);
     auto const a = annot_wrap{annot};
 
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
@@ -852,8 +1077,8 @@ class ResultTensorOfTensorTA final : public Result {
         auto p = s.find(';');
         return p == std::string::npos ? std::string{} : s.substr(p + 1);
       };
-      const auto li = inner(a.lannot), ri = inner(a.rannot),
-                 ti = inner(a.this_annot);
+      const auto li = inner(translate(a.lannot)),
+                 ri = inner(o.translate(a.rannot)), ti = inner(a.this_annot);
       if (li != ri || li != ti)
         std::cerr << "[sequant-eval] WARNING: nested sum with mismatched inner "
                      "annotations: "
@@ -861,9 +1086,14 @@ class ResultTensorOfTensorTA final : public Result {
                   << "\n";
     }
 
+    // a relabeled INNER order cannot ride on the addition (TA permutes only
+    // the outer modes of a nested sum): materialize such an operand
+    if (view_ && !view_->iperm.empty()) ensure_materialized();
+    if (o.view_ && !o.view_->iperm.empty()) o.ensure_materialized();
     ArrayT result;
-    result(a.this_annot) =
-        get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
+    with_expr(a.lannot, [&](auto&& le) {
+      o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
+    });
     decltype(result)::wait_for_lazy_cleanup(result.world());
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
@@ -871,6 +1101,7 @@ class ResultTensorOfTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
+    ensure_materialized();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         get<ArrayT>().trange().dim(mode), elem_lo, elem_hi);
     return eval_result<this_type>(
@@ -879,6 +1110,7 @@ class ResultTensorOfTensorTA final : public Result {
 
   [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
   mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
+    ensure_materialized();
     return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
                                    target_batch_size);
   }
@@ -886,6 +1118,7 @@ class ResultTensorOfTensorTA final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
+    ensure_materialized();
     auto& dest = get<ArrayT>();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
@@ -940,23 +1173,24 @@ class ResultTensorOfTensorTA final : public Result {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {
-      auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
 
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
-      result(a.this_annot) = scalar * result(a.lannot);
-
+      ArrayT result;
+      with_expr(a.lannot,
+                [&](auto&& le) { result(a.this_annot) = scalar * le; });
       decltype(result)::wait_for_lazy_cleanup(result.world());
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
-      // DOT product
+      // DOT product: TA::dot takes plain tensor expressions
       SEQUANT_ASSERT(other.is<this_type>());
+      auto const& o = static_cast<this_type const&>(other);
       numeric_type d =
-          TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
+          TA::dot(logical_array()(a.lannot), o.logical_array()(a.rannot));
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
-      ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
+      ArrayT::wait_for_lazy_cleanup(o.template get<ArrayT>().world());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -967,37 +1201,69 @@ class ResultTensorOfTensorTA final : public Result {
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     if (other.is<that_type>()) {
-      // ToT * T -> ToT
-      auto result =
-          TA::einsum(get<ArrayT>()(a.lannot),
-                     other.get<compatible_regular_distarray_type>()(a.rannot),
-                     a.this_annot);
+      // ToT * T -> ToT. The flat operand is read materialized (its own view
+      // is memoized on first read); ours rides on the einsum annotation
+      // (relabel) and the result's view (phase); a pending conj is
+      // materialized (einsum takes plain tensor expressions only).
+      auto const l = einsum_operand(a.lannot, /*keep_conj=*/false);
+      auto result = TA::einsum(
+          raw<ArrayT>()(l.annot),
+          other.template get<compatible_regular_distarray_type>()(a.rannot),
+          a.this_annot);
       log_ta_tensor_host_memory_use();
-      return eval_result<this_type>(std::move(result));
+      return eval_result<this_type>(std::move(result), View{.phase = l.phase});
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::True) {
-      // ToT * ToT -> T
+      // ToT * ToT -> T (einsum only)
+      auto const& o = static_cast<this_type const&>(other);
+      bool const both_conj = conjugated() && o.conjugated();
+      auto const l = einsum_operand(a.lannot, both_conj);
+      auto const r = o.einsum_operand(a.rannot, both_conj);
       auto result = TA::einsum<TA::DeNest::True>(
-          get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
+          raw<ArrayT>()(l.annot), o.template raw<ArrayT>()(r.annot),
+          a.this_annot);
       log_ta_tensor_host_memory_use();
-      return eval_result<that_type>(std::move(result));
+      // conj(A) . conj(B) = conj(A . B): both conjugations ride on the result
+      typename that_type::View rv;
+      rv.phase = static_cast<std::int8_t>(l.phase * r.phase);
+      rv.conj = both_conj;
+      return eval_result<that_type>(std::move(result), std::move(rv));
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::False) {
+      auto const& o = static_cast<this_type const&>(other);
       // ToT * ToT -> ToT
-      auto result = TA::einsum(get<ArrayT>()(a.lannot),
-                               other.get<ArrayT>()(a.rannot), a.this_annot);
+      if ((conjugated() || o.conjugated()) &&
+          plain_contraction(a.lannot, a.rannot, a.this_annot)) {
+        // the expression engine contracts nested tiles and folds a pending
+        // conj/phase (TA conj on nested-tile contractions): no copy
+        ArrayT result;
+        with_expr(a.lannot, [&](auto&& le) {
+          o.with_expr(a.rannot,
+                      [&](auto&& re) { result(a.this_annot) = le * re; });
+        });
+        decltype(result)::wait_for_lazy_cleanup(result.world());
+        log_ta_tensor_host_memory_use();
+        return eval_result<this_type>(std::move(result));
+      }
+      bool const both_conj = conjugated() && o.conjugated();
+      auto const l = einsum_operand(a.lannot, both_conj);
+      auto const r = o.einsum_operand(a.rannot, both_conj);
+      auto result = TA::einsum(raw<ArrayT>()(l.annot),
+                               o.template raw<ArrayT>()(r.annot), a.this_annot);
       log_ta_tensor_host_memory_use();
-      return eval_result<this_type>(std::move(result));
+      View rv;
+      rv.phase = static_cast<std::int8_t>(l.phase * r.phase);
+      rv.conj = both_conj;
+      return eval_result<this_type>(std::move(result), std::move(rv));
     } else {
       throw detail::invalid_operand();
     }
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
-    auto pre = get<ArrayT>();
-    TA::scale(pre, numeric_type(factor));
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(pre));
+    View v = view_.value_or(View{});
+    v.phase = static_cast<std::int8_t>(v.phase * factor);
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -1005,73 +1271,60 @@ class ResultTensorOfTensorTA final : public Result {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
-    detail::log_ta(pre_annot, " = ", post_annot, "\n");
+    detail::log_ta(pre_annot, " = ", post_annot, " (view)\n");
 
-    ArrayT result;
-    result(post_annot) = get<ArrayT>()(pre_annot);
-    ArrayT::wait_for_lazy_cleanup(result.world());
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    return eval_result<this_type>(raw<ArrayT>(),
+                                  composed_relabel(pre_annot, post_annot));
   }
 
   [[nodiscard]] ResultPtr apply_transform(
       CanonTransform t, std::array<std::any, 2> const& ann) const override {
-    // fused phase * conj * relabel in ONE TA expression (conj elided for a
-    // real numeric_type)
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
-    detail::log_ta(post_annot, " = apply_transform(", pre_annot, ")\n");
-    ArrayT result;
-    if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      if (t.conj && t.phase != 1)
-        result(post_annot) =
-            numeric_type(t.phase) * get<ArrayT>()(pre_annot).conj();
-      else if (t.conj)
-        result(post_annot) = get<ArrayT>()(pre_annot).conj();
-      else if (t.phase != 1)
-        result(post_annot) = numeric_type(t.phase) * get<ArrayT>()(pre_annot);
-      else
-        result(post_annot) = get<ArrayT>()(pre_annot);
-    } else {
-      if (t.phase != 1)
-        result(post_annot) = numeric_type(t.phase) * get<ArrayT>()(pre_annot);
-      else
-        result(post_annot) = get<ArrayT>()(pre_annot);
-    }
-    ArrayT::wait_for_lazy_cleanup(result.world());
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    detail::log_ta(post_annot, " = apply_transform(", pre_annot, ") (view)\n");
+    View v = composed_relabel(pre_annot, post_annot);
+    v.phase = static_cast<std::int8_t>(v.phase * t.phase);
+    if constexpr (TA::detail::is_complex_v<numeric_type>)
+      if (t.conj) v.conj = !v.conj;
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v));
   }
 
   [[nodiscard]] ResultPtr clone() const override {
+    ensure_materialized();
     return std::make_shared<this_type>(get<ArrayT>().clone());  // deep copy
   }
 
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = static_cast<this_type const&>(other);
 
+    ensure_materialized();  // the target must be a real, unshared array
     auto& t = get<ArrayT>();
-    auto const& o = other.get<ArrayT>();
+    // a relabeled view has a different stored mode order: materialize it;
+    // a phase/conj-only view is consumed lazily
+    if (o.view_ && o.view_->relabeled()) o.ensure_materialized();
+    auto const& oarr = o.template raw<ArrayT>();
 
-    SEQUANT_ASSERT(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == oarr.trange());
     // ToT annotation needs an inner block ("outer;inner"); tot_inner_rank()
     // reads it from a populated inner tile and is 0 when an operand's inner
     // tiles are all empty. Take the rank from whichever operand has data; if
     // both are empty the add is an identity no-op (t += 0), nothing to
     // annotate.
     auto const inner_rank =
-        std::max(detail::tot_inner_rank(t), detail::tot_inner_rank(o));
+        std::max(detail::tot_inner_rank(t), detail::tot_inner_rank(oarr));
     if (inner_rank == 0) return;
     auto ann = TA::detail::dummy_annotation(t.trange().rank(), inner_rank);
 
     detail::log_ta(ann, " += ", ann, "\n");
 
-    t(ann) += o(ann);
+    o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
     ArrayT::wait_for_lazy_cleanup(t.world());
     log_ta_tensor_host_memory_use();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
+    ensure_materialized();
     return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
   }
 
@@ -1082,7 +1335,9 @@ class ResultTensorOfTensorTA final : public Result {
 
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    auto& v = get<ArrayT>();
+    // the shared array's size (a view is not materialized to be measured;
+    // same convention as ResultTensorTA)
+    auto& v = raw<ArrayT>();
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
     return local_size;
