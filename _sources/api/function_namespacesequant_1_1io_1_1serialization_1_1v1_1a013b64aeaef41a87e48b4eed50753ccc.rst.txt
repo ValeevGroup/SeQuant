@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1a013b64aeaef41a87e48b4eed50753ccc:
+
+Function sequant::io::serialization::v1::to_default_symms
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::to_default_symms(const DeserializationOptions&)
+   :project: SeQuant

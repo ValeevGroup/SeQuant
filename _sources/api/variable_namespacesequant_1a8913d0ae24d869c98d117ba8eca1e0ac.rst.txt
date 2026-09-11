@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a8913d0ae24d869c98d117ba8eca1e0ac:
+
+Variable sequant::antisymmetrizer_symmetries
+============================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::antisymmetrizer_symmetries
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a85e346c4c8387071774ccb710ea5fe93:
+
+Template Function sequant::norm_squared
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_complex.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::norm_squared(const Complex<T>&)
+   :project: SeQuant

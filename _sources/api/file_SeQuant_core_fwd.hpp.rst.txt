@@ -1,0 +1,77 @@
+
+.. _file_SeQuant_core_fwd.hpp:
+
+File fwd.hpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/fwd.hpp``)
+-------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_fwd.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_bitset.hpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_fwd.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__bitset`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1bitset_1a392c9bdebe70a8280160d4dd4e1c31c9`
+
+- :ref:`exhale_typedef_namespacesequant_1a2201b50706fed2b2e8ab9813740d6725`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1bitset_1a481f2d280e76ae124f2ed254f796a29a`
+
+- :ref:`exhale_variable_namespacesequant_1_1bitset_1a3487ba40ecda3f6d9d6368761c7a8385`
+

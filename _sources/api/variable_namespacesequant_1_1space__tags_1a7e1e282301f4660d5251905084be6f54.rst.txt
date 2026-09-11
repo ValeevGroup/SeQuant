@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1space__tags_1a7e1e282301f4660d5251905084be6f54:
+
+Variable sequant::space_tags::is_vacuum_occupied
+================================================
+
+- Defined in :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::space_tags::is_vacuum_occupied
+   :project: SeQuant

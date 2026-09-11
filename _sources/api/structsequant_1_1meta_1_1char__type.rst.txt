@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1meta_1_1char__type:
+
+Template Struct char_type
+=========================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::meta::char_type
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

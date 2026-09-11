@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_operator:
+
+Template Class Operator
+=======================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Types
+**********
+
+- ``public container::svector< Op< Statistics::FermiDirac > >``
+- ``public sequant::Expr`` (:ref:`exhale_class_classsequant_1_1_expr`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Operator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

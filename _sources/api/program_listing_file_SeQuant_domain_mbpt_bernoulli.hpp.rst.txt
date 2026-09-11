@@ -1,0 +1,41 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_bernoulli.hpp:
+
+Program Listing for File bernoulli.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_bernoulli.hpp>` (``SeQuant/domain/mbpt/bernoulli.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_DOMAIN_MBPT_BERNOULLI_HPP
+   #define SEQUANT_DOMAIN_MBPT_BERNOULLI_HPP
+   
+   #include <SeQuant/core/expr.hpp>
+   #include <cstddef>
+   
+   namespace sequant::mbpt::bernoulli {
+   
+   ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
+   
+   namespace detail {
+   
+   ExprPtr wick_reduce(const ExprPtr& expr);
+   
+   ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B);
+   
+   ExprPtr expand_to_blocks(const ExprPtr& expr);
+   
+   ExprPtr N_part(const ExprPtr& expr, std::size_t cutoff,
+                  std::size_t min_rank = 1);
+   
+   ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff,
+                  std::size_t min_rank = 1);
+   
+   }  // namespace detail
+   
+   }  // namespace sequant::mbpt::bernoulli
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_BERNOULLI_HPP

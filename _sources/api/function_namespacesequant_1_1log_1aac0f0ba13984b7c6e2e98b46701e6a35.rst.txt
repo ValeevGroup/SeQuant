@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1aac0f0ba13984b7c6e2e98b46701e6a35:
+
+Template Function sequant::log::eval
+====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::eval(EvalStat const&, Args const&...)
+   :project: SeQuant

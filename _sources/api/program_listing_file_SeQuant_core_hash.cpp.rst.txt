@@ -1,0 +1,20 @@
+
+.. _program_listing_file_SeQuant_core_hash.cpp:
+
+Program Listing for File hash.cpp
+=================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_hash.cpp>` (``SeQuant/core/hash.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/hash.hpp>
+   
+   namespace sequant {
+   
+   std::size_t hash_value(const ExprPtr &expr) { return hash_value(*expr); }
+   
+   }  // namespace sequant

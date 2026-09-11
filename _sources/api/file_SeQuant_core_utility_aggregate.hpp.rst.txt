@@ -1,0 +1,103 @@
+
+.. _file_SeQuant_core_utility_aggregate.hpp:
+
+File aggregate.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/aggregate.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_aggregate.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``compare`` (:ref:`file_SeQuant_core_eval_eval_node_compare.hpp`)
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_batch_policy.hpp`
+
+- :ref:`file_SeQuant_core_context.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+- :ref:`file_SeQuant_core_io_serialization_serialization.hpp`
+
+- :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+- :ref:`file_SeQuant_core_optimize_options.hpp`
+
+- :ref:`file_SeQuant_core_options.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.hpp`
+
+- :ref:`file_SeQuant_core_utility_expr_matcher.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_context.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_utils.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1designated__init__only__probe`
+
+- :ref:`exhale_class_classsequant_1_1detail_1_1designated__init__only`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_aggregate_8hpp_1a7ee16addab865a129a5a613d53179997`
+

@@ -1,0 +1,94 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_antisymmetrizer.hpp:
+
+Program Listing for File antisymmetrizer.hpp
+============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_antisymmetrizer.hpp>` (``SeQuant/domain/mbpt/antisymmetrizer.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // created by Conner Masteran 06/1/2021
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
+   #define SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP
+   
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/math.hpp>
+   #include <SeQuant/core/op.hpp>
+   
+   #include <algorithm>
+   #include <iostream>
+   #include <vector>
+   
+   namespace sequant::mbpt {
+   
+   class antisymm_element {
+     using IndexGroup = std::pair<size_t, size_t>;
+   
+    private:
+     std::vector<IndexGroup>
+         index_group;  // where each tensor begins and ends. assumes particle
+                       // conserving ops. needed to keep track of canonical
+                       // ordering
+     std::vector<std::pair<int, std::vector<Index>>>
+         unique_bras_list;  // list of unique bra orderings with associated integer
+                            // for the sign
+     std::vector<std::pair<int, std::vector<Index>>>
+         unique_kets_list;  // list of unique ket orderings with associated integer
+                            // for the sign
+     ExprPtr current_product;  // used to keep track of the original expression
+                               // recieved by the constructor
+   
+     template <typename T>
+     std::vector<std::pair<int, std::vector<T>>> gen_antisymm_unique(
+         std::vector<T> ordered_indices);
+   
+    public:
+     // takes a sequant::ExprPtr and generates all antisymmetric unique
+     // permutations of that expression. requires that ex_ is a product expression
+     // at this point
+     // @param ex_ as product
+     // populates a result ExprPtr that the user can grab. result is in general a
+     // Sum.
+     antisymm_element(ExprPtr ex_);
+   
+     std::vector<Index> sorted_bra_indices;  // The original order of the upper
+                                             // indices on a given term
+     std::vector<Index> sorted_ket_indices;  // the original order of the lower
+                                             // indices on a given term
+     ExprPtr result;
+   };
+   
+   class antisymmetrize {
+    public:
+     ExprPtr result = ex<Constant>(0);
+   
+     antisymmetrize(ExprPtr s);
+   };
+   
+   namespace antisymm {
+   
+   // TODO Test this function extensively and add more asserts
+   int num_closed_loops(std::vector<Index> init_upper,
+                        std::vector<Index> init_lower,
+                        std::vector<Index> new_upper,
+                        std::vector<Index> new_lower);
+   
+   ExprPtr max_similarity(const std::vector<Index>& original_upper,
+                          const std::vector<Index>& original_lower,
+                          ExprPtr expression);
+   
+   // TODO: use a generalized spin summation for non-singlet states
+   ExprPtr spin_sum(std::vector<Index> original_upper,
+                    std::vector<Index> original_lower, ExprPtr expression,
+                    bool singlet_state = true);
+   
+   }  // namespace antisymm
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_ANTISYMMETRIZER_HPP

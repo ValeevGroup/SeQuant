@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a49da1604cd44fac56a26f2fdbfc1884c:
+
+Function sequant::get_particle_space
+====================================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_particle_space()
+   :project: SeQuant

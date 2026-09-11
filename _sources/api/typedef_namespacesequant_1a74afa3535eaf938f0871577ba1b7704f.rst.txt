@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a74afa3535eaf938f0871577ba1b7704f:
+
+Typedef sequant::EvalExprNode
+=============================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::EvalExprNode
+   :project: SeQuant

@@ -1,0 +1,65 @@
+
+.. _file_SeQuant_domain_mbpt_fwd.hpp:
+
+File fwd.hpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/fwd.hpp``)
+--------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_fwd.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/fwd.hpp`` (:ref:`file_SeQuant_core_fwd.hpp`)
+
+- ``cstdint``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_context.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_convention.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__op`
+
+- :ref:`namespace_sequant__mbpt__op__sequant__mbpt__tensor`
+

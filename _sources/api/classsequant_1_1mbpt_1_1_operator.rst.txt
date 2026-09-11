@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1mbpt_1_1_operator:
+
+Template Class Operator
+=======================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Operator< void, S >`` (:ref:`exhale_class_classsequant_1_1_operator`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::mbpt::Operator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

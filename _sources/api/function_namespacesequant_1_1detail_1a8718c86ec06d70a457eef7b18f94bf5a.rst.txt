@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a8718c86ec06d70a457eef7b18f94bf5a:
+
+Template Function sequant::detail::arg0
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::arg0(Args&&...)
+   :project: SeQuant

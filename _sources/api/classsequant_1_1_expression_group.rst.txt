@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_expression_group:
+
+Template Class ExpressionGroup
+==============================
+
+- Defined in :ref:`file_SeQuant_core_export_expression_group.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::ExpressionGroup
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

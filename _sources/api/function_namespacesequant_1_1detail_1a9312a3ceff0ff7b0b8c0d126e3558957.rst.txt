@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a9312a3ceff0ff7b0b8c0d126e3558957:
+
+Template Function sequant::detail::make_tensor(const BinarizationOptions&, bra<Bra>, ket<Ket>, aux<Aux>, Symmetry, BraKetSymmetry, ColumnSymmetry)
+==================================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::make_tensor(const BinarizationOptions&, bra<Bra>, ket<Ket>, aux<Aux>, Symmetry, BraKetSymmetry, ColumnSymmetry)
+   :project: SeQuant

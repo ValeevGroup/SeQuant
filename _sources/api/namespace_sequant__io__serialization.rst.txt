@@ -1,0 +1,54 @@
+
+.. _namespace_sequant__io__serialization:
+
+Namespace sequant::io::serialization
+====================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__io__serialization__v1`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1_deserialization_options`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1_serialization_error`
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1_serialization_options`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1io_1_1serialization_1a781a756eea82bb5ba140db677806745a`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1a1f34c0295bbd53ba9c4beb8f1b6b6a9d`
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1af2f2a53fe6eb46db8defae04594c631f`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1io_1_1serialization_1a97aff59cbc4d3ee4cbe7f0edaebd7530`

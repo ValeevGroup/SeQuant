@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a9af6567656821ae89c7244f541c62b73:
+
+Define SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1afc8c0e61721e9d23ef85730471b7d5ce:
+
+Function sequant::mbpt::DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t)
+========================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t)
+   :project: SeQuant

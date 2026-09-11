@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a68ef66f6fc26a2f30323fd97a446debe:
+
+Typedef sequant::ExprIterator
+=============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_iterator.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ExprIterator
+   :project: SeQuant

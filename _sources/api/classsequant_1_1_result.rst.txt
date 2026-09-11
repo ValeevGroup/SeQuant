@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_result:
+
+Class Result
+============
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Type
+************
+
+- ``public sequant::ResultScalar< T >`` (:ref:`exhale_class_classsequant_1_1_result_scalar`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Result
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

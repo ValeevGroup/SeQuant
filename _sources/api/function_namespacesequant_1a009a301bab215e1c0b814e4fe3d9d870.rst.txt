@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a009a301bab215e1c0b814e4fe3d9d870:
+
+Template Function sequant::get_ket_idx
+======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_ket_idx(Group&&)
+   :project: SeQuant

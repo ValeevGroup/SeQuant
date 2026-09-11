@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a01a7c1c7f76dd6650a74af6ea976f68c:
+
+Function sequant::detail::get_with_default
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::get_with_default(const auto&, const auto&, auto)
+   :project: SeQuant

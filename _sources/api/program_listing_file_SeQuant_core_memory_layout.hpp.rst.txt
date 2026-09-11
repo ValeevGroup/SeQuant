@@ -1,0 +1,22 @@
+
+.. _program_listing_file_SeQuant_core_memory_layout.hpp:
+
+Program Listing for File memory_layout.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_memory_layout.hpp>` (``SeQuant/core/memory_layout.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_MEMORY_LAYOUT_HPP
+   #define SEQUANT_CORE_MEMORY_LAYOUT_HPP
+   
+   enum class MemoryLayout {
+     RowMajor,
+     ColumnMajor,
+     Unspecified,
+   };
+   
+   #endif  // SEQUANT_CORE_MEMORY_LAYOUT_HPP

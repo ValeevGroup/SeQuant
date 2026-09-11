@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a7f38eba691e292d48d05a428b371f55f:
+
+Define SEQUANT_CONCAT
+=====================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_CONCAT
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1a0ba3085654b9b72463d9f1b81ec986ac:
+
+Function sequant::mbpt::bernoulli::hbar
+=======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_bernoulli.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::bernoulli::hbar(std::size_t, std::size_t, bool)
+   :project: SeQuant

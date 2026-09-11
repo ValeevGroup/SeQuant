@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1aa154204f57996d1821a900a94006470d:
+
+Function sequant::mbpt::operator|
+=================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::operator|(Spin, Spin)
+   :project: SeQuant

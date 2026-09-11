@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1b8cd87c5902d9c1d7f74b0deab67566:
+
+Function sequant::denominator
+=============================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::denominator(const rational&)
+   :project: SeQuant

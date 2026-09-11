@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1af41aa7df99078f36cca02868bb312fe7:
+
+Function sequant::opt::detail::roofline_op_cost
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_cost_model.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::roofline_op_cost(double, double, double, double, double, double)
+   :project: SeQuant

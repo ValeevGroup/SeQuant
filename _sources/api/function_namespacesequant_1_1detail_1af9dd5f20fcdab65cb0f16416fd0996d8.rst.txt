@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1af9dd5f20fcdab65cb0f16416fd0996d8:
+
+Template Function sequant::detail::combine_and_clear_pp_results
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::combine_and_clear_pp_results(Range&&)
+   :project: SeQuant

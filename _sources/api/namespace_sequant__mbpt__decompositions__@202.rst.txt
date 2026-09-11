@@ -1,0 +1,13 @@
+
+.. _namespace_sequant__mbpt__decompositions__@202:
+
+Namespace sequant::mbpt::decompositions::@202
+=============================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

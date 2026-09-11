@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a95b08841fdd47dd8a1c548d38dc44ce1:
+
+Template Function sequant::opt::detail::peak_cost_batched
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_cost_model.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::peak_cost_batched(TensorNetwork const&, TIdxs const&, IdxToSz&&, std::function<bool(Index const&)> const&, std::function<std::size_t(Index const&)> const&, std::function<bool(Tensor const&)> const&)
+   :project: SeQuant

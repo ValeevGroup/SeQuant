@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab1edad192ff4c56db7b5c92e8b2860a9:
+
+Function sequant::subset_target_indices
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::subset_target_indices(meta::range_of<Index, 2> auto const&, meta::range_of<Index> auto const&, container::vector<char> const *)
+   :project: SeQuant

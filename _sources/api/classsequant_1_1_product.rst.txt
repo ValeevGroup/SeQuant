@@ -1,0 +1,33 @@
+.. _exhale_class_classsequant_1_1_product:
+
+Class Product
+=============
+
+- Defined in :ref:`file_SeQuant_core_expressions_product.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Expr`` (:ref:`exhale_class_classsequant_1_1_expr`)
+
+
+Derived Types
+*************
+
+- ``public sequant::CProduct`` (:ref:`exhale_class_classsequant_1_1_c_product`)
+- ``public sequant::NCProduct`` (:ref:`exhale_class_classsequant_1_1_n_c_product`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Product
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

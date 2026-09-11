@@ -1,0 +1,14 @@
+.. _exhale_define_serialization_8cpp_1ae59c343217de4b4f6b7a5ac0077c00f9:
+
+Define SEQUANT_RESOLVE_SERIALIZE_FUNC
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_serialization.cpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_RESOLVE_SERIALIZE_FUNC
+   :project: SeQuant

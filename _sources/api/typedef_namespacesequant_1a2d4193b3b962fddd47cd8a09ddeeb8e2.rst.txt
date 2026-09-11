@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a2d4193b3b962fddd47cd8a09ddeeb8e2:
+
+Typedef sequant::ConstantPtr
+============================
+
+- Defined in :ref:`file_SeQuant_core_expr_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ConstantPtr
+   :project: SeQuant

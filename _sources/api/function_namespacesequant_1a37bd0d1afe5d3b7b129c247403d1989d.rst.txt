@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a37bd0d1afe5d3b7b129c247403d1989d:
+
+Template Function sequant::fetch_and_increment
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_utility_atomic.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::fetch_and_increment(std::atomic<T>&, T)
+   :project: SeQuant

@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1flattened__rangenest_1_1cursor:
+
+Struct flattened_rangenest::cursor
+==================================
+
+- Defined in :ref:`file_SeQuant_core_ranges.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1flattened__rangenest`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::flattened_rangenest::cursor
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

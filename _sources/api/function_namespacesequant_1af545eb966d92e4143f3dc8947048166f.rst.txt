@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af545eb966d92e4143f3dc8947048166f:
+
+Template Function sequant::parallel_do
+======================================
+
+- Defined in :ref:`file_SeQuant_core_runtime.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parallel_do(Lambda&&)
+   :project: SeQuant

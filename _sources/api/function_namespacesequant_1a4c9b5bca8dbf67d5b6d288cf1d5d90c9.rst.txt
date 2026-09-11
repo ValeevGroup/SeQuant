@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4c9b5bca8dbf67d5b6d288cf1d5d90c9:
+
+Template Function sequant::for_each
+===================================
+
+- Defined in :ref:`file_SeQuant_core_runtime.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::for_each(SizedRange&, const UnaryOp&)
+   :project: SeQuant

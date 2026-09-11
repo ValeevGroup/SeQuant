@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1ab7067a981e6c7f1823693cd2e7a9581b:
+
+Function sequant::mbpt::swap_bra_ket
+====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::swap_bra_ket(const ExprPtr&)
+   :project: SeQuant

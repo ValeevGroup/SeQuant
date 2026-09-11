@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1ab22df00f9f26298a6d24e6e89056192c:
+
+Function sequant::mbpt::check_for_batching_space
+================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::check_for_batching_space()
+   :project: SeQuant

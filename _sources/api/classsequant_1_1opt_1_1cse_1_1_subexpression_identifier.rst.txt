@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1opt_1_1cse_1_1_subexpression_identifier:
+
+Template Class SubexpressionIdentifier
+======================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::opt::cse::SubexpressionIdentifier
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

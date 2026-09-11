@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1aaa638644944ea7d9f53e840a026a97df:
+
+Template Function sequant::detail::log_constant
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::log_constant(Args const&...)
+   :project: SeQuant

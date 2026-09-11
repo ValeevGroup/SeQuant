@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8fe366142381357d5201f438bf154cfc:
+
+Template Function sequant::bannx
+================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bannx(Index, Attr&&...)
+   :project: SeQuant

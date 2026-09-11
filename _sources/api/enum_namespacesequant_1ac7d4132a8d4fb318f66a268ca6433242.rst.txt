@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1ac7d4132a8d4fb318f66a268ca6433242:
+
+Enum SlotType
+=============
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::SlotType
+   :project: SeQuant

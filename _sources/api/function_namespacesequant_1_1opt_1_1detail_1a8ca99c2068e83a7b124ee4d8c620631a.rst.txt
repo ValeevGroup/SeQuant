@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a8ca99c2068e83a7b124ee4d8c620631a:
+
+Function sequant::opt::detail::connected_subsets
+================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::connected_subsets(container::vector<std::size_t> const&, std::size_t)
+   :project: SeQuant

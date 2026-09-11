@@ -1,0 +1,41 @@
+
+.. _program_listing_file_SeQuant_core_utility_debug.hpp:
+
+Program Listing for File debug.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_debug.hpp>` (``SeQuant/core/utility/debug.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 7/30/25.
+   //
+   
+   #ifndef SEQUANT_CORE_UTILITY_DEBUG_HPP
+   #define SEQUANT_CORE_UTILITY_DEBUG_HPP
+   
+   #include <cstdio>
+   #include <sstream>
+   
+   namespace sequant {
+   
+   template <typename... Args>
+   void printf(Args&&... args) {
+     std::ostringstream oss;
+     (oss << ... << std::forward<Args>(args));
+     std::printf("%s", oss.str().c_str());
+   }
+   
+   template <typename... Args>
+   void wprintf(Args&&... args) {
+     std::wostringstream oss;
+     (oss << ... << std::forward<Args>(args));
+     std::wprintf(L"%ls", oss.str().c_str());
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_UTILITY_DEBUG_HPP

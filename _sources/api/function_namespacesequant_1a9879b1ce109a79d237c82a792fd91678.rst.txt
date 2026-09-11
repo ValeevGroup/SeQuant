@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9879b1ce109a79d237c82a792fd91678:
+
+Template Function sequant::transform_reduce
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_runtime.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::transform_reduce(SizedRange&&, T, const BinaryReductionOp&, const UnaryMapOp&)
+   :project: SeQuant

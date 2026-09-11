@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_singleton:
+
+Template Class Singleton
+========================
+
+- Defined in :ref:`file_SeQuant_core_utility_singleton.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_singleton_1_1is__default__constructible__helper`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Singleton
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

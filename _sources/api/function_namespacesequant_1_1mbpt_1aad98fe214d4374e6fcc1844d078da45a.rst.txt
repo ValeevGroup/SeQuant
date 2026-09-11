@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1aad98fe214d4374e6fcc1844d078da45a:
+
+Function sequant::mbpt::tensor_hypercontract
+============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_thc.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::tensor_hypercontract(ExprPtr const&, IndexSpace, std::wstring_view, std::wstring_view, std::wstring_view)
+   :project: SeQuant

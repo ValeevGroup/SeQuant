@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1space__tags_1a6c11f0c43b0a1dfd809972c8013d04f3:
+
+Variable sequant::space_tags::is_hole
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::space_tags::is_hole
+   :project: SeQuant

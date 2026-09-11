@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac8b05d7d4e23c1fd2fb086e472da556a:
+
+Template Function sequant::make_indices
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_indices(WstrList)
+   :project: SeQuant

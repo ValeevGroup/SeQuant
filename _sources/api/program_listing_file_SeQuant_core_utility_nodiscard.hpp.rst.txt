@@ -1,0 +1,39 @@
+
+.. _program_listing_file_SeQuant_core_utility_nodiscard.hpp:
+
+Program Listing for File nodiscard.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_nodiscard.hpp>` (``SeQuant/core/utility/nodiscard.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 8/1/23.
+   //
+   
+   #ifndef SEQUANT_CORE_UTILITY_NODISCARD_HPP
+   #define SEQUANT_CORE_UTILITY_NODISCARD_HPP
+   
+   #include <utility>
+   
+   namespace sequant::detail {
+   
+   template <typename F>
+   struct NoDiscard {
+     F f;
+     NoDiscard(const F& ff) : f(ff) {}
+     NoDiscard(F&& ff) : f(std::move(ff)) {}
+   
+     template <typename... T>
+     [[nodiscard]] constexpr auto operator()(T&&... t) const
+         noexcept(noexcept(f(std::forward<T>(t)...))) {
+       return f(std::forward<T>(t)...);
+     }
+   };
+   
+   }  // namespace sequant::detail
+   
+   #endif  // SEQUANT_CORE_UTILITY_NODISCARD_HPP

@@ -1,0 +1,37 @@
+
+.. _program_listing_file_SeQuant_core_expressions_labeled.hpp:
+
+Program Listing for File labeled.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_expressions_labeled.hpp>` (``SeQuant/core/expressions/labeled.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EXPRESSIONS_LABELED_HPP
+   #define SEQUANT_EXPRESSIONS_LABELED_HPP
+   
+   #include <string_view>
+   
+   namespace sequant {
+   
+   class Labeled {
+    public:
+     Labeled() = default;
+     virtual ~Labeled() = default;
+   
+     virtual std::wstring_view label() const = 0;
+   };
+   
+   class MutatableLabeled : public Labeled {
+    public:
+     using Labeled::Labeled;
+   
+     virtual void set_label(std::wstring label) = 0;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EXPRESSIONS_LABELED_HPP

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9e3b9894a344b6a92bb80ed85c50962d:
+
+Template Function sequant::to_export_tree(const ExprPtr&, bool)
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_export_tree(const ExprPtr&, bool)
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_preprocess_result:
+
+Struct PreprocessResult
+=======================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::PreprocessResult
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

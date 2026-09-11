@@ -1,0 +1,14 @@
+.. _exhale_function_namespacebliss_1a37424849c2c754ecc06aece95896fe67:
+
+Template Function bliss::print_auts
+===================================
+
+- Defined in :ref:`file_SeQuant_core_bliss.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: bliss::print_auts(const PermutationSequence&, Stream&, const VectorOfStrings&)
+   :project: SeQuant

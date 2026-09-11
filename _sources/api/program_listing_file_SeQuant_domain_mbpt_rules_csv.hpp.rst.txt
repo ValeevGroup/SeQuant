@@ -1,0 +1,32 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_rules_csv.hpp:
+
+Program Listing for File csv.hpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_rules_csv.hpp>` (``SeQuant/domain/mbpt/rules/csv.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 3/8/25.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
+   #define SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
+   
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/reserved.hpp>
+   
+   namespace sequant::mbpt {
+   
+   ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
+                         std::wstring const& coeff_tensor_label = L"C",
+                         container::svector<std::wstring> const& tensor_labels = {
+                             L"f", L"g", sequant::reserved::overlap_label()});
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP

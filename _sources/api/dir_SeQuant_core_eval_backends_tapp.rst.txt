@@ -1,0 +1,24 @@
+.. _dir_SeQuant_core_eval_backends_tapp:
+
+
+Directory tapp
+==============
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval_backends>` (``SeQuant/core/eval/backends``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/eval/backends/tapp``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_eval_backends_tapp_eval_expr.hpp`
+- :ref:`file_SeQuant_core_eval_backends_tapp_ops.hpp`
+- :ref:`file_SeQuant_core_eval_backends_tapp_result.hpp`
+- :ref:`file_SeQuant_core_eval_backends_tapp_tensor.hpp`
+
+

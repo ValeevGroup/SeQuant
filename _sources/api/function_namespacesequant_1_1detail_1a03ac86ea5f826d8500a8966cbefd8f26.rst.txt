@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a03ac86ea5f826d8500a8966cbefd8f26:
+
+Function sequant::detail::format_power_exponent
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::format_power_exponent(const Power::exponent_type&, bool)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a03b74d1a22c9fa5027001eab86254707:
+
+Template Function sequant::opt::detail::extract_subtrees_visit
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_extract_subtrees.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::extract_subtrees_visit(Node&, Pred&, ResultSet&)
+   :project: SeQuant

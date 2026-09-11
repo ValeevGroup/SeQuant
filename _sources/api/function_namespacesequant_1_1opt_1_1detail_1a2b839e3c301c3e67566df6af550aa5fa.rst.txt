@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a2b839e3c301c3e67566df6af550aa5fa:
+
+Template Function sequant::opt::detail::capture
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_extract_subtrees.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::capture(Node&, ResultSet&)
+   :project: SeQuant

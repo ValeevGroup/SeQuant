@@ -1,0 +1,45 @@
+
+.. _file_SeQuant_core_eval_result.cpp:
+
+File result.cpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/result.cpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_result.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/eval/result.hpp`` (:ref:`file_SeQuant_core_eval_result.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

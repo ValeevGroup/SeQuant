@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a723c60d469058772eaaa7e607a8f4d16:
+
+Template Function sequant::cache_manager(meta::eval_node_range auto const&, auto&&, size_t, FootprintOf, double, IsBatchableIndex)
+==================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::cache_manager(meta::eval_node_range auto const&, auto&&, size_t, FootprintOf, double, IsBatchableIndex)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a39845b7b0bfd51bb19d88715de40aa4f:
+
+Function sequant::make_antisymmetrizer()
+========================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_antisymmetrizer()
+   :project: SeQuant

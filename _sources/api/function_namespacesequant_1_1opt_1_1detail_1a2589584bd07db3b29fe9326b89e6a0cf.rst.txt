@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a2589584bd07db3b29fe9326b89e6a0cf:
+
+Template Function sequant::opt::detail::solve_single_term
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_cost_model.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::solve_single_term(Model const&, TensorNetwork const&, TIdxs const&, typename Model::Context&)
+   :project: SeQuant

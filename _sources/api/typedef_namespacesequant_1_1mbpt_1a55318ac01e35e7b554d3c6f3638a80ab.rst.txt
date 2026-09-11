@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1mbpt_1a55318ac01e35e7b554d3c6f3638a80ab:
+
+Typedef sequant::mbpt::mask_t
+=============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::mbpt::mask_t
+   :project: SeQuant

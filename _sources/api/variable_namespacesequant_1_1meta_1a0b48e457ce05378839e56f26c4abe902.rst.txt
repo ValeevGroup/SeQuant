@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1meta_1a0b48e457ce05378839e56f26c4abe902:
+
+Variable sequant::meta::is_string_convertible_v
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::meta::is_string_convertible_v
+   :project: SeQuant

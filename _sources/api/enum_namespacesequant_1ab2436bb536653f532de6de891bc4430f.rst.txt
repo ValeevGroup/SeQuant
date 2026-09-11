@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1ab2436bb536653f532de6de891bc4430f:
+
+Enum PrunableScalars
+====================
+
+- Defined in :ref:`file_SeQuant_core_export_generator.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::PrunableScalars
+   :project: SeQuant

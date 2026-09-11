@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a08c0043a78d0b3543233060643fd3f54:
+
+Function sequant::mbpt::decompositions::one_body_sub
+====================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::decompositions::one_body_sub(ExprPtr)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa839e62b14e81c3a5923af1600737da0:
+
+Template Function sequant::write_log
+====================================
+
+- Defined in :ref:`file_SeQuant_core_logger.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::write_log(Logger&, Args const&...)
+   :project: SeQuant

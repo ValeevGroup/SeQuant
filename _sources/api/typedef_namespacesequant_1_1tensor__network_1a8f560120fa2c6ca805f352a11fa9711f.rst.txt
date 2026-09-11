@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1tensor__network_1a8f560120fa2c6ca805f352a11fa9711f:
+
+Typedef sequant::tensor_network::NamedIndexSet
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_typedefs.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::tensor_network::NamedIndexSet
+   :project: SeQuant

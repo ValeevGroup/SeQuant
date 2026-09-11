@@ -1,0 +1,35 @@
+.. _dir_SeQuant_core_eval:
+
+
+Directory eval
+==============
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/eval``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_core_eval_backends`
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_eval_cache_manager.cpp`
+- :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+- :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+- :ref:`file_SeQuant_core_eval_eval_expr.hpp`
+- :ref:`file_SeQuant_core_eval_eval_node.hpp`
+- :ref:`file_SeQuant_core_eval_eval_node_compare.hpp`
+- :ref:`file_SeQuant_core_eval_fwd.hpp`
+- :ref:`file_SeQuant_core_eval_result.cpp`
+- :ref:`file_SeQuant_core_eval_result.hpp`
+
+
