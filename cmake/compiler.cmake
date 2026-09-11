@@ -84,6 +84,16 @@ set(SEQUANT_LTO "" CACHE STRING
 	"Whether to build SeQuant's targets with link-time optimization (LTO); leave empty to decide automatically per target type")
 set_property(CACHE SEQUANT_LTO PROPERTY STRINGS "" ON OFF)
 
+# Whether target_set_optimization_flags may end up applying LTO to any of our targets. An explicit
+# SEQUANT_LTO is honored either way, whereas the automatic per-target defaults only kick in when
+# SeQuant is the top-level project: as a subproject, whether to pay LTO's build-time and link-memory
+# cost is the encompassing project's call to make, not ours.
+if (NOT SEQUANT_LTO STREQUAL "")
+	set(SEQUANT_MAY_USE_LTO ${SEQUANT_LTO})
+else()
+	set(SEQUANT_MAY_USE_LTO ${PROJECT_IS_TOP_LEVEL})
+endif()
+
 # Without "fat" objects, a static library built with LTO holds IR rather than machine code, and
 # an archiver that doesn't understand that IR produces an archive without a usable symbol index
 # ("archive has no index" at link time). CMake substitutes the compiler's LTO-aware archiver
@@ -92,9 +102,9 @@ set_property(CACHE SEQUANT_LTO PROPERTY STRINGS "" ON OFF)
 # detection already picks e.g. llvm-ar next to clang++, so the substitution below only kicks in
 # on toolchains where it doesn't - it is a safety net rather than the common path.
 set(SEQUANT_LTO_AWARE_ARCHIVER FALSE)
-if (NOT PROJECT_IS_TOP_LEVEL)
-	# We don't apply LTO flags as a subproject (see target_set_optimization_flags below), so
-	# there is no reason to touch the encompassing project's archiver either
+if (NOT SEQUANT_MAY_USE_LTO)
+	# We won't be applying LTO flags to anything (see target_set_optimization_flags below), so
+	# there is no reason to touch the archiver either
 elseif (CMAKE_CXX_COMPILER_AR)
 	set(SEQUANT_LTO_AWARE_ARCHIVER TRUE)
 	if (NOT CMAKE_AR STREQUAL CMAKE_CXX_COMPILER_AR)
@@ -112,12 +122,6 @@ elseif (APPLE)
 endif()
 
 function(target_set_optimization_flags TARGET)
-	if (NOT PROJECT_IS_TOP_LEVEL)
-		# When SeQuant is consumed as a subproject, how its targets are optimized is the
-		# encompassing project's call, not ours (cf. target_set_warning_flags)
-		return()
-	endif()
-
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 		return()
 	endif()
@@ -136,8 +140,12 @@ function(target_set_optimization_flags TARGET)
 	endif()
 
 	if (NOT SEQUANT_LTO STREQUAL "")
-		# Always honor explicit user choice
+		# Always honor explicit user choice - including when we are consumed as a subproject
 		set(ENABLE_LTO ${SEQUANT_LTO})
+	elseif(NOT PROJECT_IS_TOP_LEVEL)
+		# Absent an explicit choice, how SeQuant's targets are optimized is the encompassing
+		# project's call when we are consumed as a subproject, not ours
+		set(ENABLE_LTO OFF)
 	elseif(IS_ARCHIVE_LIKE_TARGET)
 		# For static/object libraries we only want to enable LTO by default, if we can create
 		# "fat" object files. Those can still be linked without LTO and hence shouldn't
