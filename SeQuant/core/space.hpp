@@ -491,8 +491,7 @@ class IndexSpace {
     using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
 
     auto to_return = [](auto &&range) {
-      std::basic_string_view<CharT> view(&(*begin(range)),
-                                         std::ranges::size(range));
+      std::basic_string_view<CharT> view(begin(range), end(range));
 
       if constexpr (std::same_as<CharT, char>) {
         return toUtf16(view);
