@@ -20,6 +20,8 @@ TEST_CASE("macros", "[elements]") {
 
     const std::string this_file_path = this_file.string();
 
+    CAPTURE(this_file_path);
+
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       try {
         // clang-format off
