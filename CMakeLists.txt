@@ -95,6 +95,7 @@ macro(sequant_add_library _module)
     get_target_property(_type SeQuant-${_module} TYPE)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
         target_set_warning_flags(SeQuant-${_module})
+        target_set_optimization_flags(SeQuant-${_module})
     endif()
 endmacro()
 
@@ -124,6 +125,9 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 # Additional build variables
 ############################
 option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
+# N.B. declared here rather than in benchmarks/ so that setting it is not reported as an
+# unused variable in builds that have SEQUANT_BENCHMARKS=OFF
+option(SEQUANT_QUICK_BENCHMARKS "Whether to exclude computationally expensive benchmarks" OFF)
 option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
 option(SEQUANT_EVAL_TESTS "OBSOLETE: use SEQUANT_TILEDARRAY and SEQUANT_BTAS" OFF)
 option(SEQUANT_BTAS "Enable BTAS eval backend" ${SEQUANT_EVAL_TESTS})
@@ -272,6 +276,7 @@ add_library(SeQuant-bliss
 set_target_properties(SeQuant-bliss PROPERTIES EXPORT_NAME bliss)
 set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 add_library(SeQuant::bliss ALIAS SeQuant-bliss)
+target_set_optimization_flags(SeQuant-bliss)
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
 if (SEQUANT_USE_SYSTEM_BOOST_HASH)
     target_compile_definitions(SeQuant-bliss PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)

@@ -727,7 +727,7 @@ TEST_CASE("optimize", "[optimize]") {
       container::svector<Index> targets;
       auto aux = opt::detail::batchable_index_list(net, is_batchable);
       std::size_t const m = aux.size();
-      auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
+      auto batch_fn = [](Index const&) -> std::size_t { return batch; };
       opt::detail::PeakBatchedModel model{idxsz, is_batchable, batch_fn,
                                           /*is_volatile_leaf=*/{}};
       auto ctx = model.build_context(net, targets);
@@ -769,7 +769,7 @@ TEST_CASE("optimize", "[optimize]") {
         container::svector<Index> targets;
         auto aux = opt::detail::batchable_index_list(net, is_batchable);
         auto vmask = opt::detail::leaf_volatile_mask(net, {});
-        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
+        auto batch_fn = [](Index const&) -> std::size_t { return batch; };
         auto tables = opt::detail::sliced_footprints(
             net, targets, idxsz, is_batchable, batch_fn, aux);
         // open_aux[s] via the SAME detail helper the DP uses, so DP and oracle
@@ -811,7 +811,7 @@ TEST_CASE("optimize", "[optimize]") {
         container::svector<Index> targets;
         // recompute the chosen tree's peak by simulation over the pr
         // back-pointers (independent of the DP's max/+ recurrence):
-        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
+        auto batch_fn = [](Index const&) -> std::size_t { return batch; };
         double recon = opt::detail::reconstructed_batched_peak(
             net, targets, idxsz, is_batchable, batch_fn, {});
         double dp = opt::detail::peak_cost_batched(net, targets, idxsz,
@@ -2342,7 +2342,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   std::function<double(Index const&, std::size_t)> const ip_off = {};
 
   bool composite_inner_checked = false;
-  for (std::wstring const term :
+  for (std::wstring const& term :
        {std::wstring(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
         std::wstring(L"g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
     for (auto const* ip : {&ip_on, &ip_off}) {

@@ -9,6 +9,7 @@ foreach(current IN LISTS EXECUTABLE_SOURCES)
     target_link_libraries(${name} SeQuant)
     
     target_set_warning_flags("${name}")
+    target_set_optimization_flags("${name}")
 endforeach()
 
 add_subdirectory(external-interface)
