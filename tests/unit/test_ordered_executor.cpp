@@ -2678,7 +2678,13 @@ TEST_CASE(
   if (char const* s = std::getenv("SEQUANT_UT_DRYRUN_SYSTEM")) system = s;
   auto const regime = orderedexec_witness_df_regime(
       system == "c60" ? kOrderedExecC60_pVDZF12 : kOrderedExecWater20_pVDZF12);
-  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+  // The dry-run cost model carries the SAME roofline parameters the optimizer
+  // ran with (opts.roofline above), so the sink's `exec` is the realized
+  // roofline cost of the schedule (max(flops, beta*Q) per executed op at its
+  // sliced extents), comparable with the DP's chosen_flops objective.
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(
+      regime, sequant::RooflineParams{.machine_balance = 200.0,
+                                      .fast_mem_elems = 1000000.0});
 
   // BATCH mode (SEQUANT_UT_DRYRUN_BATCH = none | aux [default] | aux_occ |
   // pao | aux_pao | aux_pao_occ). "pao" adds the μ̃ (PAO) contracted axis --
@@ -2862,6 +2868,8 @@ TEST_CASE(
   struct Row {
     std::size_t builds = 0;
     double flops = 0;
+    double exec = 0;        // realized roofline cost (sink.exec)
+    std::size_t n_ops = 0;  // executed product ops (per-batch, sink.n_ops)
     std::size_t peak = 0;
   };
   Row f1, f2, o1, o2;
@@ -2923,6 +2931,8 @@ TEST_CASE(
     cache.set_peak_monitor(&mon);
     auto run = [&](Row& r) {
       double const f0 = sink.flops.load();
+      double const e0 = sink.exec.load();
+      std::size_t const n0 = sink.n_ops.load();
       std::size_t const b0 = total_builds(cache.recompute_tally());
       mon.hwmark_bytes = 0;
       try {
@@ -2933,6 +2943,8 @@ TEST_CASE(
         WARN("ordered evaluate threw: " << e.what());
       }
       r.flops = sink.flops.load() - f0;
+      r.exec = sink.exec.load() - e0;
+      r.n_ops = sink.n_ops.load() - n0;
       r.builds = total_builds(cache.recompute_tally()) - b0;
       r.peak = mon.hwmark_bytes;
     };
@@ -3073,6 +3085,8 @@ TEST_CASE(
     cache.set_peak_monitor(&mon);
     auto run = [&](Row& r) {
       double const f0 = sink.flops.load();
+      double const e0 = sink.exec.load();
+      std::size_t const n0 = sink.n_ops.load();
       std::size_t const b0 = total_builds(cache.recompute_tally());
       mon.hwmark_bytes = 0;
       std::atomic<double> peak{0.0};
@@ -3085,6 +3099,8 @@ TEST_CASE(
         }
       }
       r.flops = sink.flops.load() - f0;
+      r.exec = sink.exec.load() - e0;
+      r.n_ops = sink.n_ops.load() - n0;
       r.builds = total_builds(cache.recompute_tally()) - b0;
       r.peak = std::max<std::size_t>(
           mon.hwmark_bytes,
@@ -3133,7 +3149,8 @@ TEST_CASE(
   logger.eval.stream = prev_stream;
 
   auto pr = [](wchar_t const* tag, Row const& r) {
-    std::wcerr << L"  " << tag << L"  builds=" << r.builds << L"  FLOPs="
+    std::wcerr << L"  " << tag << L"  builds=" << r.builds << L"  ops="
+               << r.n_ops << L"  exec=" << r.exec << L"  FLOPs="
                << std::scientific << r.flops << L"  peak_bytes=" << r.peak
                << L"\n";
   };
