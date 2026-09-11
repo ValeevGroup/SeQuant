@@ -326,8 +326,8 @@ ExprPtr remove_spin(const ExprPtr& expr) {
       }
     }
     return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                      tensor.aux(), tensor.symmetry(),
-                      tensor.braket_symmetry());
+                      tensor.aux(), tensor.symmetry(), tensor.braket_symmetry(),
+                      tensor.column_symmetry());
   };
 
   auto remove_spin_from_product =
@@ -641,8 +641,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   if (A_is_nconserving) {
     SEQUANT_ASSERT(A_tensor.rank() > 1);
     S = Tensor(reserved::symm_label(), A_tensor.bra(), A_tensor.ket(),
-               A_tensor.aux(), Symmetry::Nonsymm);
-  } else {
+               A_tensor.aux(), symmetrizer_symmetries);
+  } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
 
     if (n > 0) {
@@ -651,7 +651,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
       container::svector<Index> ket_list(A_tensor.ket().begin(),
                                          A_tensor.ket().begin() + n);
       S = Tensor(reserved::symm_label(), bra(std::move(bra_list)),
-                 ket(std::move(ket_list)), A_tensor.aux(), Symmetry::Nonsymm);
+                 ket(std::move(ket_list)), A_tensor.aux(),
+                 symmetrizer_symmetries);
     }
   }
 
@@ -1253,7 +1254,15 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   auto b = ranges::views::concat(O1.bra(), O2.bra());
   auto k = ranges::views::concat(O1.ket(), O2.ket());
   auto a = ranges::views::concat(O1.aux(), O2.aux());
-  return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), aux(a), O1.symmetry()));
+  // preserve O1's braket and column symmetry, not just its perm symmetry: all
+  // three take part in the tensor hash. Forward the braket symmetry itself
+  // rather than the Hermiticity back-filled from it -- re-deriving would flip
+  // an explicitly pinned Conjugate to Symm over a real field, the same
+  // corruption v1/ast_conversions.hpp declines to risk. The cost is only the
+  // AntiHermitian preimage, which is outside the hash and derives to the same
+  // braket-Nonsymm anyway.
+  return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), aux(a), O1.symmetry(),
+                           O1.braket_symmetry(), O1.column_symmetry()));
 }
 
 std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
