@@ -18,6 +18,7 @@
 
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/functional/not_fn.hpp>
 #include <range/v3/range/operations.hpp>
@@ -284,15 +285,33 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     canon_transform_ = compose(canon_transform_, {.phase = md.phase});
     expr_ = std::dynamic_pointer_cast<Expr>(tn.tensors().front());
     SEQUANT_ASSERT(expr_ && expr_->is<Tensor>());
-    // array-faithful indices in the Nested (outer;inner) convention: a ToT
-    // array's outer modes are the plain slots PLUS the proto constituents,
-    // deterministically ordered by NestedTensorIndices (the md list is the
-    // same set in named-canonical order, which annots must not depend on)
+    // array-faithful indices in the Nested (outer;inner) convention, i.e. the
+    // layout a leaf provider serves for the STORED spelling: the outer modes
+    // are the pure proto indices (those not occupying a slot of their own,
+    // e.g. the pair labels of C{mu;a<ij>}, laid out i,j,mu) followed by the
+    // plain slots IN SLOT ORDER, the inner modes the proto-carrying slots in
+    // slot order. A plain slot that is also a proto index (the occupied kets
+    // of t{a<ij>,b<ij>;i,j}) takes its SLOT position: the array's outer mode
+    // k pairs with inner mode k as a column, so t{a<ij>,b<ij>;j,i} must be
+    // read j,i;a,b -- the proto-first order (tot_indices) would read the same
+    // array i,j;a,b and serve t^{ab}_{ij} for t^{ab}_{ji}. (The md list is the
+    // same set in named-canonical order, which annots must not depend on.)
     auto const slot_ixs =
         expr_->as<Tensor>().const_indices() | ranges::to<index_vector>;
-    auto const nti = tot_indices<index_vector>(slot_ixs);
-    canon_indices_ =
-        ranges::views::concat(nti.outer, nti.inner) | ranges::to<index_vector>;
+    canon_indices_.clear();
+    auto const is_plain_slot = [&slot_ixs](Index const& p) {
+      return ranges::any_of(slot_ixs, [&p](Index const& s) {
+        return !s.has_proto_indices() && s == p;
+      });
+    };
+    for (auto const& ix : slot_ixs)
+      for (auto const& p : ix.proto_indices())
+        if (!is_plain_slot(p) && !ranges::contains(canon_indices_, p))
+          canon_indices_.emplace_back(p);
+    for (auto const& ix : slot_ixs)
+      if (!ix.has_proto_indices()) canon_indices_.emplace_back(ix);
+    for (auto const& ix : slot_ixs)
+      if (ix.has_proto_indices()) canon_indices_.emplace_back(ix);
     connectivity_ = std::move(md.graph);
   } else {
     auto const& t = expr_->as<Tensor>();

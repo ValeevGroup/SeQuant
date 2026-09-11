@@ -1365,3 +1365,44 @@ TEST_CASE("denoted_expr_is_the_parent_network_spelling",
     REQUIRE(e.denoted_expr()->as<Tensor>() == w);
   }
 }
+
+TEST_CASE("tot_leaf_annotation_is_slot_faithful", "[eval_expr][tot]") {
+  // A ToT leaf's canon_indices() is the layout the provider serves for the
+  // STORED spelling: pure proto indices first (the pair labels of
+  // C{mu;a<ij>}, laid out i,j,mu), then the plain slots IN SLOT ORDER, then
+  // the proto-carrying slots. The occupied kets of t{a<ij>,b<ij>;j,i} are
+  // both plain slots and proto indices; they take their SLOT position, since
+  // the array's outer mode k pairs with inner mode k as a column -- read
+  // i,j;a,b (the proto order) the same array would serve t^{ab}_{ij} for
+  // t^{ab}_{ji} (nonrel PNO CSV-CCD exchange energy, 2026-09-11).
+  using namespace sequant;
+  const Index i1(L"i_1"), i2(L"i_2"), mu(L"a_1");
+  const Index a(L"a_2", {i1, i2}), b(L"a_4", {i1, i2});
+  auto t = [&](Index const& k0, Index const& k1) {
+    return Tensor(L"t", bra{a, b}, ket{k0, k1}, Symmetry::Nonsymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto labels = [](EvalExpr const& e) {
+    std::vector<std::wstring> out;
+    for (auto const& ix : e.canon_indices()) out.emplace_back(ix.label());
+    return out;
+  };
+  using L = std::vector<std::wstring>;
+  REQUIRE(labels(EvalExpr{t(i1, i2)}) == L{L"i_1", L"i_2", L"a_2", L"a_4"});
+  REQUIRE(labels(EvalExpr{t(i2, i1)}) == L{L"i_2", L"i_1", L"a_2", L"a_4"});
+  REQUIRE(EvalExpr{t(i2, i1)}.indices_annot() == "i_2,i_1;a_2i_1i_2,a_4i_1i_2");
+  // the two ket orders are different values (t^{ab}_{ji} vs t^{ab}_{ij});
+  // their slot identity is label-blind (one provider array serves both), so
+  // it is the annotation alone that tells the array's modes apart
+  REQUIRE(EvalExpr{t(i1, i2)}.indices_annot() !=
+          EvalExpr{t(i2, i1)}.indices_annot());
+  // a CSV coefficient in either orientation: pair labels, expansion slot,
+  // then the CSV slot
+  Tensor const c_ket(L"C", bra{mu}, ket{a}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm);
+  Tensor const c_bra(L"C", bra{a}, ket{mu}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm);
+  REQUIRE(labels(EvalExpr{c_ket}) == L{L"i_1", L"i_2", L"a_1", L"a_2"});
+  REQUIRE(labels(EvalExpr{c_bra}) == L{L"i_1", L"i_2", L"a_1", L"a_2"});
+  REQUIRE(EvalExpr{c_ket}.indices_annot() == "i_1,i_2,a_1;a_2i_1i_2");
+}
