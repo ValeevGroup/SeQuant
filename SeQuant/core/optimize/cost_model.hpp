@@ -638,6 +638,26 @@ struct PeakBatchedModel {
   /// under-costs heavily-sliced families and does not reflect the true cost of
   /// batching; kept only as an escape hatch for comparison.
   bool charge_batch_recompute = true;
+  /// If true (the default), a value bound to a batch loop is charged as often
+  /// as the loop RUNS. A loop runs once per production of the value that
+  /// CLOSES it (the node contracting the mode in batches), so a non-volatile
+  /// subtree sliced by a loop that a VOLATILE node closes is rebuilt every
+  /// replay -- it cannot persist across evaluations (the runtime's persistence
+  /// rule, explicit-cells design section 12) -- and takes \ref volatile_weight
+  /// exactly as an amplitude-dependent value does. A non-volatile nest closed
+  /// by a non-volatile node (a persistent intermediate summed over the DF
+  /// index from two persistent factors) runs once and is charged once, as
+  /// before. Without this the model assumed every amplitude-independent
+  /// subtree is computed once, ever, regardless of slicing, and priced slicing
+  /// a persistent operand of an amplitude contraction as free -- part of the
+  /// water-20 occupied-batching cost gap (3x measured vs 1x modelled). Applied
+  /// at the closing node, where its volatility is known: for each child
+  /// subtree that is non-volatile and carries a mode sliced here, the child's
+  /// whole cost is scaled (an over-charge only for descendants of that child
+  /// which do not carry the mode and hoist above the loop). External modes
+  /// close at the term root and are placed after the DP (node-level
+  /// placement); they are not charged here.
+  bool charge_bound_persistence = true;
   /// Opt-in refinement of \ref charge_batch_recompute: do not bill a node for
   /// enclosing batch loops it can hoist above **for free**.
   ///
@@ -1193,7 +1213,8 @@ struct PeakBatchedModel {
     // volatile_weight times for volatile (replayed) contractions. Uses the full
     // (unsliced) operand+result footprint as the per-replay traffic; slicing
     // reduces peak (primary mode), not total work. machine_balance==0 => flops.
-    double const w = (ctx.volatile_mask & n) ? volatile_weight : 1.0;
+    bool const is_volatile = (ctx.volatile_mask & n) != 0;
+    double const w = is_volatile ? volatile_weight : 1.0;
     double const cflops =
         w * roofline_op_cost(
                 ctx.use_fast_flops
@@ -1286,6 +1307,21 @@ struct PeakBatchedModel {
           double const res = (order_aware_recompute && Ap != 0) ? szn : 0.0;
           // Cross every (peak,flops) trade-off of the two children at context
           // C.
+          // Bound-persistence charge (charge_bound_persistence): this node
+          // closes the loops over Ap. If it is volatile, every batch of those
+          // loops re-runs each replay, so a NON-volatile child sliced by them
+          // (it carries a mode of Ap) is rebuilt each replay -- scale that
+          // child's cost by volatile_weight (a volatile child already is).
+          double const lp_scale =
+              (charge_bound_persistence && Ap != 0 && is_volatile &&
+               !(ctx.volatile_mask & lp) && (ctx.open_modes[lp] & Ap) != 0)
+                  ? volatile_weight
+                  : 1.0;
+          double const rp_scale =
+              (charge_bound_persistence && Ap != 0 && is_volatile &&
+               !(ctx.volatile_mask & rp) && (ctx.open_modes[rp] & Ap) != 0)
+                  ? volatile_weight
+                  : 1.0;
           for (int li = 0; li < static_cast<int>(lp_st[C].size()); ++li)
             for (int ri = 0; ri < static_cast<int>(rp_st[C].size()); ++ri) {
               double const pl = lp_st[C][li].peak, prr = rp_st[C][ri].peak;
@@ -1302,10 +1338,10 @@ struct PeakBatchedModel {
                   static_cast<std::size_t>(std::popcount(Ap));
               pareto_insert_ceiling(
                   acc[B],
-                  BFrontPoint{
-                      std::min(lpf, rpf),
-                      lp_st[C][li].flops + rp_st[C][ri].flops + cflops_B, lp,
-                      rp, lpf <= rpf, Ap, li, ri, nsl},
+                  BFrontPoint{std::min(lpf, rpf),
+                              lp_scale * lp_st[C][li].flops +
+                                  rp_scale * rp_st[C][ri].flops + cflops_B,
+                              lp, rp, lpf <= rpf, Ap, li, ri, nsl},
                   ceiling_nsl);
             }
         }  // C != SIZE_MAX
@@ -1412,7 +1448,10 @@ struct PeakBatchedModel {
         // for an over-budget term it must be INVERTED, or the least-sliced
         // (max-peak) schedule is chosen and blows the budget by the most (a
         // giant unbatched integral -> OOM, e.g. the water-20 2.6 TB composite).
-        // This restores the pre-nsl fallback: min flops, then min peak.
+        // This restores the pre-nsl fallback: min flops, then min peak. (A
+        // min-PEAK fallback was tried and rejected: for the infeasible terms it
+        // takes the most-sliced, flops-catastrophic factorizations -- 8x the
+        // FLOPs on water-20 at 100 GB.)
         auto const better_peak = [&](int i, int j) {
           return rootf[i].flops < rootf[j].flops ||
                  (rootf[i].flops == rootf[j].flops &&

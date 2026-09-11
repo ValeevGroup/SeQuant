@@ -1795,7 +1795,11 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   CHECK(n_sliced_builds > 0);
   if (scatter_outputs > 0) CHECK(n_scatter_with_map > 0);
   CHECK(n_partial_over_builds >= blocks_with_sum_output);
-  CHECK(n_partial_over_builds > 0);
+  // A partial-sum Build exists iff the schedule realizes a batched reduction;
+  // whether the DP slices a contracted mode here is its cost decision (the
+  // bound-persistence weight, cost_model.hpp charge_bound_persistence, made
+  // slicing a persistent subtree expensive), not this fixture's to pin.
+  if (blocks_with_sum_output > 0) CHECK(n_partial_over_builds > 0);
   // every Assemble encloses its source strictly, assembles a form of its
   // OWN value, and (for a Sum) the source records the closing instance as
   // partial-summed over; every Build cell's sliced entries name enclosing
