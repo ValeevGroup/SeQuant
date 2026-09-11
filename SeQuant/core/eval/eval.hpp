@@ -1030,7 +1030,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
   });
 
   static_assert(std::is_default_constructible_v<annot_type>);
-  return evaluate(nodes, annot_type{}, leaf_evaluator, cache);
+  return evaluate<EvalTrace>(nodes, annot_type{}, leaf_evaluator, cache);
 }
 
 ///
