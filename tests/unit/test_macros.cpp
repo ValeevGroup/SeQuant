@@ -14,8 +14,9 @@ TEST_CASE("macros", "[elements]") {
       try {
         // clang-format off
 #line 1000  // to make sure the line number of the next line is fixed
-      sequant::assert_failed("test");
+        sequant::assert_failed("test");
         // clang-format on
+        FAIL("Assert should have thrown");
       } catch (sequant::Exception& ex) {
         CAPTURE(ex.what());
         // see #line up there
@@ -31,8 +32,9 @@ TEST_CASE("macros", "[elements]") {
       try {
         // clang-format off
 #line 2000  // to make sure the line number of the next line is fixed
-      SEQUANT_ASSERT(1 == 0 && "1 != 0", "testing SEQUANT_ASSERT");
+        SEQUANT_ASSERT(1 == 0 && "1 != 0", "testing SEQUANT_ASSERT");
         // clang-format on
+        FAIL("Assert should have thrown");
       } catch (sequant::Exception& ex) {
         CAPTURE(ex.what());
         // see #line up there
