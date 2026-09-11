@@ -8,8 +8,18 @@
 
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <filesystem>
+
 TEST_CASE("macros", "[elements]") {
   SECTION("SEQUANT_ASSERT") {
+    std::filesystem::path this_file("tests");
+    this_file /= "unit";
+    this_file /= "test_macros.cpp";
+
+    this_file.make_preferred();
+
+    const std::string this_file_path = this_file.string();
+
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       try {
         // clang-format off
@@ -24,8 +34,8 @@ TEST_CASE("macros", "[elements]") {
         // when initialized as default argument see
         // https://github.com/llvm/llvm-project/issues/56379
 #if !defined(SEQUANT_CXX_COMPILER_IS_CLANG) || __clang_major__ >= 16
-        REQUIRE(std::string_view(ex.what()).find(
-                    "tests/unit/test_macros.cpp:1000 in function ") !=
+        REQUIRE(std::string_view(ex.what()).find(this_file_path +
+                                                 ":1000 in function ") !=
                 std::string::npos);
 #endif
       }
@@ -42,8 +52,8 @@ TEST_CASE("macros", "[elements]") {
         // when initialized as default argument see
         // https://github.com/llvm/llvm-project/issues/56379
 #if defined(SEQUANT_CXX_COMPILER_IS_CLANG) && __clang_major__ >= 16
-        REQUIRE(std::string_view(ex.what()).find(
-                    "tests/unit/test_macros.cpp:2000 in function ") !=
+        REQUIRE(std::string_view(ex.what()).find(this_file_path +
+                                                 ":2000 in function ") !=
                 std::string::npos);
 #endif
       }
