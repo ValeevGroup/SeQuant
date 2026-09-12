@@ -2,6 +2,7 @@
 // Created by Eduard Valeyev on 9/22/24.
 //
 
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 
@@ -38,7 +39,9 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
         sorted_ket_indices.push_back(factor.creators()[i].index());
       }
     } else {
-      throw " unknown type of product, factor is not tensor, constant, or NormalOperator with FermiDirac statistics";
+      throw Exception(
+          "unknown type of product, factor is not tensor, constant, or "
+          "NormalOperator with FermiDirac statistics");
     }
   }
 
@@ -109,7 +112,9 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
         }
 
         else {
-          throw " unknown type of product, factor is not tensor, constant, or NormalOperator with FermiDirac statistics";
+          throw Exception(
+              "unknown type of product, factor is not tensor, constant, or "
+              "NormalOperator with FermiDirac statistics");
         }
       }
       if (!summand_exists(
@@ -451,7 +456,7 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
     return_val->canonicalize();
     return return_val;
   } else {
-    throw " non-singlet states not yet supported";
+    throw Exception("non-singlet states not yet supported");
   }
 }
 
