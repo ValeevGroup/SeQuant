@@ -9,10 +9,12 @@ namespace sequant {
 
 VertexPainterImpl::VertexPainterImpl(
     const VertexPainterImpl::NamedIndexSet &named_indices,
-    bool distinct_named_indices)
+    bool distinct_named_indices,
+    const VertexPainterImpl::NamedIndexColorMap *named_index_colors)
     : used_colors_(),
       named_indices_(named_indices),
-      distinct_named_indices_(distinct_named_indices) {}
+      distinct_named_indices_(distinct_named_indices),
+      named_index_colors_(named_index_colors) {}
 
 std::size_t VertexPainterImpl::to_hash_value(
     const AbstractTensor &tensor) const {
@@ -98,6 +100,12 @@ VertexPainterImpl::Color VertexPainterImpl::operator()(const Index &idx) {
     } else {  // base colors on Index::color(), but shift to keep distinct from
               // unnamed indices
       pre_color = idx.color() + 0xabcd;
+      // If this named (sliced) index carries a DAG-scope loop color, fold it
+      // in so that same-space named indices bound to different loops receive
+      // different colors. Absent color map / absent entry => no-op, i.e.
+      // byte-identical to the space-only named coloring above.
+      if (auto loop_color = loop_color_of(idx))
+        hash::combine(pre_color, *loop_color);
     }
   }
   // shift
@@ -203,6 +211,18 @@ bool VertexPainterImpl::may_have_same_color(const VertexData &data,
     // Either one index is named and the other is not or both are named, but
     // are different indices
     return false;
+  }
+
+  // Two named (sliced) indices bound to different DAG-scope loops are NOT
+  // interchangeable, even if same-space. Guards against an accidental
+  // color-hash collision folding them back together in ensure_uniqueness.
+  // No color map (or both entries absent) => both nullopt => no effect, i.e.
+  // byte-identical to the space-only comparison below.
+  if (named_index_colors_) {
+    const bool lhs_named = it1 != named_indices_.end();
+    const bool rhs_named = it2 != named_indices_.end();
+    if (lhs_named && rhs_named && loop_color_of(lhs) != loop_color_of(idx))
+      return false;
   }
 
   return lhs.color() == idx.color();
