@@ -350,6 +350,22 @@ class Result {
   ///
   virtual void add_inplace(Result const&) = 0;
 
+  /// Diagnostic: the Frobenius norm of the held value (0 for scalars and
+  /// backends without a numeric norm). Default throws.
+  [[nodiscard]] virtual double norm2() const {
+    throw detail::unimplemented_method("norm2");
+  }
+  /// Diagnostic: a short description of the held value's layout (e.g. the
+  /// tiled range of an array). Default: empty.
+  [[nodiscard]] virtual std::string layout_desc() const { return {}; }
+  /// Diagnostic: tile-by-tile comparison with another value of the same
+  /// kind: counts of tiles present (non-zero) only here / only there, and the
+  /// norm of the difference restricted to those one-sided tiles. Default:
+  /// empty.
+  [[nodiscard]] virtual std::string tile_diff(Result const& /*other*/) const {
+    return {};
+  }
+
   ///
   /// \brief An independently owned DEEP copy of this result.
   ///

@@ -245,20 +245,33 @@ class rand_tensor_yield {
   /// read out of the eval DAG; the leaf source owns the tilings, exactly as
   /// mpqc's registries do in production. \tparam ToTArray the nested array type
   /// when a scatter destination is nested (defaults to flat).
+  /// Per-space tile size override (SEQUANT_UT_TILE_<space base key>, e.g.
+  /// SEQUANT_UT_TILE_i=1 SEQUANT_UT_TILE_x=168); falls back to max_tile_.
+  size_t tile_for(std::wstring const& bk) const {
+    std::string key = "SEQUANT_UT_TILE_" + sequant::toUtf8(bk);
+    if (char const* e = std::getenv(key.c_str()); e && std::atol(e) > 0)
+      return static_cast<size_t>(std::atol(e));
+    return max_tile_;
+  }
+  TA::TiledRange1 tr1_for(std::wstring const& bk, size_t e) const {
+    size_t const t = tile_for(bk);
+    sequant::container::svector<size_t> b;
+    for (size_t x = 0; x < e; x += t) b.push_back(x);
+    b.push_back(e);
+    return TA::TiledRange1(b.begin(), b.end());
+  }
+
   template <typename ToTArray = array_type>
   sequant::BackendArrayOps array_ops() const {
-    auto make_tr1 = [this](size_t e) {
-      sequant::container::svector<size_t> b;
-      for (size_t x = 0; x < e; x += max_tile_) b.push_back(x);
-      b.push_back(e);
-      return TA::TiledRange1(b.begin(), b.end());
-    };
     auto isr = sequant::get_default_context().index_space_registry();
     std::map<std::wstring, TA::TiledRange1> m;
-    m[std::wstring(isr->retrieve(L"i").base_key())] = make_tr1(nocc_);
-    m[std::wstring(isr->retrieve(L"a").base_key())] = make_tr1(nvirt_);
-    m[std::wstring(isr->retrieve(L"x").base_key())] = make_tr1(naux_);
-    m[std::wstring(isr->retrieve(L"m").base_key())] = make_tr1(nvirt_);
+    auto const bk = [&](wchar_t const* l) {
+      return std::wstring(isr->retrieve(l).base_key());
+    };
+    m[bk(L"i")] = tr1_for(bk(L"i"), nocc_);
+    m[bk(L"a")] = tr1_for(bk(L"a"), nvirt_);
+    m[bk(L"x")] = tr1_for(bk(L"x"), naux_);
+    m[bk(L"m")] = tr1_for(bk(L"m"), nvirt_);
     return sequant::make_ta_array_ops<array_type, ToTArray>(std::move(m),
                                                             world);
   }
@@ -346,16 +359,15 @@ class rand_tensor_yield {
 
     auto const outer_extent = make_extents(nested.outer);
 
-    auto const outer_tr = [&outer_extent, this]() {
-      auto make_tr1 = [this](size_t e) {
-        container::svector<size_t> b;
-        for (size_t x = 0; x < e; x += max_tile_) b.push_back(x);
-        b.push_back(e);
-        return TA::TiledRange1(b.begin(), b.end());
-      };
+    auto const outer_tr = [&outer_extent, &nested, this]() {
       container::vector<TA::TiledRange1> tr1s;
       tr1s.reserve(outer_extent.size());
-      for (auto e : outer_extent) tr1s.emplace_back(make_tr1(e));
+      std::size_t k = 0;
+      for (auto const& ix : nested.outer) {
+        tr1s.emplace_back(
+            tr1_for(std::wstring(ix.space().base_key()), outer_extent[k]));
+        ++k;
+      }
       return TA::TiledRange(tr1s.begin(), tr1s.end());
     }();
 
@@ -365,9 +377,31 @@ class rand_tensor_yield {
       // regular tensor
       using ArrayT = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
       ArrayT array{world, outer_tr};
-      for (auto it = array.begin(); it != array.end(); ++it)
-        if (array.is_local(it.index()))
+      // SEQUANT_UT_YIELD_SPARSITY=<p>: under a sparse policy, leave a
+      // deterministic fraction p of the tiles ZERO (real block sparsity), so
+      // sparse-shape estimation and truncation are exercised.
+      static double const sparsity = [] {
+        char const* e = std::getenv("SEQUANT_UT_YIELD_SPARSITY");
+        return e ? std::atof(e) : 0.0;
+      }();
+      std::size_t ord = 0;
+      for (auto it = array.begin(); it != array.end(); ++it, ++ord) {
+        if (!array.is_local(it.index())) continue;
+        bool const zero =
+            sparsity > 0.0 &&
+            (static_cast<double>((ord * 2654435761u) % 1000u) / 1000.0 <
+             sparsity);
+        if (zero)
+          *it = world.taskq.add(
+              [](TA::Range const& r) {
+                return TA::Tensor<NumericT>(r, NumericT{0});
+              },
+              it.make_range());
+        else
           *it = world.taskq.add(random_tensor<NumericT>, it.make_range());
+      }
+      if constexpr (!std::is_same_v<TAPolicyT, TA::DensePolicy>)
+        if (sparsity > 0.0) array.truncate();
       result = eval_result<ResultTensorTA<ArrayT>>(array);
     } else {
       // tensor of tensor
@@ -2333,6 +2367,529 @@ TEST_CASE("evaluate_whole_scope matches forest descent over one aux loop",
 // schedule) instead of the whole-scope ScopeSchedule/walk_scope path. Real TA
 // data at a small tractable size (the DryRun backend is zero-data and cannot
 // witness a dropped/mis-accumulated batch).
+// Numeric regression for the w8 aux-c/occ-e/occ-c loss (2026-09-11): the DP
+// opens two External occ loops AND the Contracted occ loop at ONE node (the
+// i_3-reducing node of g{i_3;i_1} * t{a_1,a_2;i_3,i_2}); the builder nests the
+// contracted loop between the externals and the node's value is built inside
+// all three, partial over the contracted loop, escaping scatter -> sum ->
+// scatter. Plain dense arrays; ground truth = the unbatched evaluation.
+TEST_CASE(
+    "evaluate_ordered_schedule: mixed same-node open (two External occ + one "
+    "Contracted occ) matches the unbatched result",
+    "[eval][ordered-executor][mixed-open]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  // nocc 4 tiled by 2 -> two occ batches of one tile each.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(2);
+  auto const occ =
+      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"g{i_3;i_1} * t{a_1,a_2;i_3,i_2}");
+  std::vector<node_t> forest{eval_node(t1)};
+  std::string target;
+  for (auto const& ix : forest[0]->canon_indices()) {
+    if (!target.empty()) target += ",";
+    target += sequant::toUtf8(ix.full_label());
+  }
+
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  // The i_3-reducing root opens all three occ loops; its leaves carry the
+  // externals they hold (the DP stamps External on every carrying node).
+  auto const find = [&](std::wstring const& lbl) {
+    for (auto const& ix : forest[0]->canon_indices())
+      if (ix.full_label() == lbl) return ix;
+    for (auto const& ix : forest[0].left()->canon_indices())
+      if (ix.full_label() == lbl) return ix;
+    for (auto const& ix : forest[0].right()->canon_indices())
+      if (ix.full_label() == lbl) return ix;
+    throw std::runtime_error("index not found");
+  };
+  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  using sequant::BatchModeType;
+  forest[0]->set_node_slice_mask({{i1, BatchModeType::External},
+                                  {i2, BatchModeType::External},
+                                  {i3, BatchModeType::Contracted}});
+  forest[0]->set_batch_loops_opened_here({{i1, BatchModeType::External},
+                                          {i2, BatchModeType::External},
+                                          {i3, BatchModeType::Contracted}});
+  for (auto* leaf : {&forest[0].left(), &forest[0].right()}) {
+    sequant::container::svector<std::pair<sequant::Index, BatchModeType>> m;
+    for (auto const& ix : (*leaf)->canon_indices())
+      if (ix == i1 || ix == i2) m.push_back({ix, BatchModeType::External});
+    if (!m.empty()) (*leaf)->set_node_slice_mask(m);
+  }
+  sequant::stamp_lifetime_masks(forest);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [](sequant::Index const&) -> std::size_t { return 2; };
+  RichSchedule rich = compute_dag_boulevard(forest, cm, block_of);
+  // Force the culprit's nesting: External > Contracted > External. Same-node
+  // opens carry no order of their own (the builder tie-breaks by slot), so
+  // impose it through loop_order exactly as cross-term constraints did in
+  // the w8 schedule.
+  {
+    std::vector<int> ext, con;
+    for (auto const& [key, kind] : rich.loop_kind)
+      if (key.first == L"i")
+        (kind == BatchModeType::External ? ext : con).push_back(key.second);
+    REQUIRE(ext.size() == 2);
+    REQUIRE(con.size() == 1);
+    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
+        b{L"i", ext[1]};
+    rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
+    rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
+  }
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i"});
+  if (std::getenv("SEQUANT_UT_SCHED_TREE"))
+    sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [](sequant::Index const&) -> std::size_t { return 2; };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<TArrayD>();
+
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff = " << rel);
+  CHECK(rel < 1e-10);
+}
+
+TEST_CASE(
+    "evaluate_ordered_schedule: mixed same-node open over an aux-contracted "
+    "inner product (invariant on the inner external loop) matches the "
+    "unbatched "
+    "result",
+    "[eval][ordered-executor][mixed-open][mixed-open-pia]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TA::TArrayD;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  // nocc 4 tiled by 2 -> two occ batches of one tile each.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
+  yield_.set_max_tile(2);
+  auto const occ =
+      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
+  std::vector<node_t> forest{eval_node(t1)};
+  std::string target;
+  for (auto const& ix : forest[0]->canon_indices()) {
+    if (!target.empty()) target += ",";
+    target += sequant::toUtf8(ix.full_label());
+  }
+
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  // The i_3-reducing root opens all three occ loops; its leaves carry the
+  // externals they hold (the DP stamps External on every carrying node).
+  auto const find = [&](std::wstring const& lbl) {
+    std::optional<sequant::Index> out;
+    forest[0].visit([&](node_t const& n) {
+      for (auto const& ix : n->canon_indices())
+        if (ix.full_label() == lbl) out = ix;
+    });
+    if (!out) throw std::runtime_error("index not found");
+    return *out;
+  };
+  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  using sequant::BatchModeType;
+  forest[0]->set_node_slice_mask({{i1, BatchModeType::External},
+                                  {i2, BatchModeType::External},
+                                  {i3, BatchModeType::Contracted}});
+  forest[0]->set_batch_loops_opened_here({{i1, BatchModeType::External},
+                                          {i2, BatchModeType::External},
+                                          {i3, BatchModeType::Contracted}});
+  auto const aux =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  forest[0].visit([&](node_t const& cn) {
+    if (&cn == &forest[0]) return;
+    auto& n = const_cast<node_t&>(cn);
+    sequant::container::svector<std::pair<sequant::Index, BatchModeType>> m;
+    for (auto const& ix : n->canon_indices())
+      if (ix == i1 || ix == i2) m.push_back({ix, BatchModeType::External});
+    if (!n.leaf()) {
+      // the x_1-contracting node opens the aux loop
+      for (auto const& ix : n.left()->canon_indices())
+        if (ix.space() == aux) {
+          m.push_back({ix, BatchModeType::Contracted});
+          n->set_batch_loops_opened_here({{ix, BatchModeType::Contracted}});
+        }
+    }
+    if (!m.empty()) n->set_node_slice_mask(m);
+  });
+  sequant::stamp_lifetime_masks(forest);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [occ, aux](sequant::Index const& ix) {
+    return ix.space() == occ || ix.space() == aux;
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [occ](sequant::Index const& ix) -> std::size_t {
+    return ix.space() == occ ? 2 : 4;
+  };
+  RichSchedule rich = compute_dag_boulevard(forest, cm, block_of);
+  // Force the culprit's nesting: External > Contracted > External. Same-node
+  // opens carry no order of their own (the builder tie-breaks by slot), so
+  // impose it through loop_order exactly as cross-term constraints did in
+  // the w8 schedule.
+  {
+    std::vector<int> ext, con;
+    for (auto const& [key, kind] : rich.loop_kind)
+      if (key.first == L"i")
+        (kind == BatchModeType::External ? ext : con).push_back(key.second);
+    REQUIRE(ext.size() == 2);
+    REQUIRE(con.size() == 1);
+    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
+        b{L"i", ext[1]};
+    rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
+    rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
+  }
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i", L"x"});
+  if (std::getenv("SEQUANT_UT_SCHED_TREE"))
+    sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [occ](sequant::Index const& ix) -> std::size_t {
+    return ix.space() == occ ? 2 : 4;
+  };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<TArrayD>();
+
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff = " << rel);
+  CHECK(rel < 1e-10);
+}
+
+TEST_CASE(
+    "evaluate_ordered_schedule: mixed same-node open over an aux-contracted "
+    "inner product, SPARSE policy, matches the unbatched result",
+    "[eval][ordered-executor][mixed-open][mixed-open-pia-sparse]") {
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using TArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+
+  auto& world = TA::get_default_world();
+  // nocc 4 tiled by 2 -> two occ batches of one tile each.
+  auto const envi = [](char const* k, std::size_t d) {
+    char const* e = std::getenv(k);
+    return e ? static_cast<std::size_t>(std::atol(e)) : d;
+  };
+  std::size_t const nocc = envi("SEQUANT_UT_FIX_NOCC", 4),
+                    tile = envi("SEQUANT_UT_FIX_TILE", 2),
+                    occblk = envi("SEQUANT_UT_FIX_OCCBLK", 2),
+                    naux = envi("SEQUANT_UT_FIX_NAUX", 12),
+                    auxblk = envi("SEQUANT_UT_FIX_AUXBLK", 4);
+  rand_tensor_yield<double, TA::SparsePolicy> yield_{world, nocc, 6, naux};
+  yield_.set_max_tile(tile);
+  auto const occ =
+      sequant::get_default_context().index_space_registry()->retrieve(L"i");
+
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(g{i_3;i_1;x_1} * h{a_3;a_1;x_1}) * t{a_3,a_2;i_3,i_2}");
+  std::vector<node_t> forest{eval_node(t1)};
+  std::string target;
+  for (auto const& ix : forest[0]->canon_indices()) {
+    if (!target.empty()) target += ",";
+    target += sequant::toUtf8(ix.full_label());
+  }
+
+  auto const ref = evaluate(forest, target, yield_)->get<TArrayD>();
+
+  // The i_3-reducing root opens all three occ loops; its leaves carry the
+  // externals they hold (the DP stamps External on every carrying node).
+  auto const find = [&](std::wstring const& lbl) {
+    std::optional<sequant::Index> out;
+    forest[0].visit([&](node_t const& n) {
+      for (auto const& ix : n->canon_indices())
+        if (ix.full_label() == lbl) out = ix;
+    });
+    if (!out) throw std::runtime_error("index not found");
+    return *out;
+  };
+  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  using sequant::BatchModeType;
+  forest[0]->set_node_slice_mask({{i1, BatchModeType::External},
+                                  {i2, BatchModeType::External},
+                                  {i3, BatchModeType::Contracted}});
+  forest[0]->set_batch_loops_opened_here({{i1, BatchModeType::External},
+                                          {i2, BatchModeType::External},
+                                          {i3, BatchModeType::Contracted}});
+  auto const aux =
+      sequant::get_default_context().index_space_registry()->retrieve(L"x");
+  forest[0].visit([&](node_t const& cn) {
+    if (&cn == &forest[0]) return;
+    auto& n = const_cast<node_t&>(cn);
+    sequant::container::svector<std::pair<sequant::Index, BatchModeType>> m;
+    for (auto const& ix : n->canon_indices())
+      if (ix == i1 || ix == i2) m.push_back({ix, BatchModeType::External});
+    if (!n.leaf()) {
+      // the x_1-contracting node opens the aux loop
+      for (auto const& ix : n.left()->canon_indices())
+        if (ix.space() == aux) {
+          m.push_back({ix, BatchModeType::Contracted});
+          n->set_batch_loops_opened_here({{ix, BatchModeType::Contracted}});
+        }
+    }
+    if (!m.empty()) n->set_node_slice_mask(m);
+  });
+  sequant::stamp_lifetime_masks(forest);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [occ, aux](sequant::Index const& ix) {
+    return ix.space() == occ || ix.space() == aux;
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return ix.space() == occ;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [occ, occblk,
+                         auxblk](sequant::Index const& ix) -> std::size_t {
+    return ix.space() == occ ? occblk : auxblk;
+  };
+  RichSchedule rich = compute_dag_boulevard(forest, cm, block_of);
+  // Force the culprit's nesting: External > Contracted > External. Same-node
+  // opens carry no order of their own (the builder tie-breaks by slot), so
+  // impose it through loop_order exactly as cross-term constraints did in
+  // the w8 schedule.
+  {
+    std::vector<int> ext, con;
+    for (auto const& [key, kind] : rich.loop_kind)
+      if (key.first == L"i")
+        (kind == BatchModeType::External ? ext : con).push_back(key.second);
+    REQUIRE(ext.size() == 2);
+    REQUIRE(con.size() == 1);
+    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
+        b{L"i", ext[1]};
+    rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
+    rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
+  }
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i", L"x"});
+  if (std::getenv("SEQUANT_UT_SCHED_TREE"))
+    sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.array_ops();
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [occ, occblk, auxblk](sequant::Index const& ix) -> std::size_t {
+    return ix.space() == occ ? occblk : auxblk;
+  };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<TArrayD>();
+
+  TArrayD diff;
+  diff(target) = got(target) - ref(target);
+  double const rel = TA::norm2(diff) / TA::norm2(ref);
+  INFO("relative L2 diff = " << rel);
+  CHECK(rel < 1e-10);
+}
+
+// Nested-array (ToT, pair composites) replica of the w8 aux-c/occ-e/occ-c
+// culprit: the occupied-Fock-like CSV term with the amplitude t{a<i_2,i_3>,
+// a<i_2,i_3>; i_3, i_2} read sliced on BOTH outer modes (external i_2,
+// contracted i_3) inside external i_1 > contracted i_3 > external i_2, the
+// reduction node N1 opening all three loops, the aux-contracted integral
+// product invariant on the inner external loop. Ground truth = the unbatched
+// evaluation.
+TEST_CASE(
+    "evaluate_ordered_schedule: ToT culprit replica (t sliced on two outer "
+    "modes under external > contracted > external) matches the unbatched "
+    "result",
+    "[.][eval][ordered-executor][mixed-open-tot]") {  // hidden: TA crash in
+  // Tensor<Tensor<double>> BipartitePermutation (lazy tile cast) during the
+  // plain forest evaluation of this expression; see the spec.
+  using sequant::evaluate;
+  using sequant::eval::analyze_legality;
+  using sequant::eval::build_ordered_schedule;
+  using sequant::eval::compute_dag_boulevard;
+  using sequant::eval::evaluate_ordered_schedule;
+  using sequant::eval::OrderedSchedule;
+  using sequant::eval::RichSchedule;
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
+  using sequant::BatchModeType;
+
+  auto& world = TA::get_default_world();
+  // nocc 4 tiled by 2 -> two occ batches; aux 8 tiled by 4 -> two aux batches.
+  rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 8};
+  yield_.set_max_tile(2);
+  auto const isr = sequant::get_default_context().index_space_registry();
+  auto const occ = isr->retrieve(L"i");
+  auto const aux = isr->retrieve(L"x");
+
+  // P = g*h (K node) ; Q = P*C ; U = t*C ; N1 = Q*U (reduces i_3, a_3) ;
+  // R = ((N1*s)*C)*C.
+  auto const t1 = sequant::deserialize<sequant::ExprPtr>(
+      L"(((((g{i_3;i_1;x_1} * h{m_1;m_2;x_1}) * C{m_2;a_3<i_2,i_3>}) * "
+      L"(t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_3,i_2} * C{a_4<i_2,i_3>;m_3})) * "
+      L"s{m_3;m_4}) * C{m_4;a_2<i_1,i_2>}) * C{a_1<i_1,i_2>;m_1}");
+  std::vector<node_t> forest{eval_node(t1)};
+  std::string const target = forest.front()->annot();
+
+  auto const ref = evaluate(forest, target, yield_)->get<ToTArray>();
+  REQUIRE(TA::norm2(ref) > 0.0);
+
+  auto const find = [&](std::wstring const& lbl) {
+    std::optional<sequant::Index> out;
+    forest[0].visit([&](node_t const& n) {
+      for (auto const& ix : n->canon_indices())
+        if (ix.full_label() == lbl) out = ix;
+    });
+    if (!out) throw std::runtime_error("index not found");
+    return *out;
+  };
+  auto const i1 = find(L"i_1"), i2 = find(L"i_2"), i3 = find(L"i_3");
+  // N1 = the node whose result carries no i_3 but whose children do.
+  node_t* n1 = nullptr;
+  forest[0].visit([&](node_t const& cn) {
+    auto& n = const_cast<node_t&>(cn);
+    if (n.leaf()) return;
+    auto const has = [](node_t const& x, sequant::Index const& ix) {
+      for (auto const& c : x->canon_indices())
+        if (c == ix) return true;
+      return false;
+    };
+    if (!has(n, i3) && has(n.left(), i3) && has(n.right(), i3)) n1 = &n;
+  });
+  REQUIRE(n1 != nullptr);
+  (*n1)->set_node_slice_mask({{i1, BatchModeType::External},
+                              {i2, BatchModeType::External},
+                              {i3, BatchModeType::Contracted}});
+  (*n1)->set_batch_loops_opened_here({{i1, BatchModeType::External},
+                                      {i2, BatchModeType::External},
+                                      {i3, BatchModeType::Contracted}});
+  forest[0].visit([&](node_t const& cn) {
+    auto& n = const_cast<node_t&>(cn);
+    if (&n == n1) return;
+    sequant::container::svector<std::pair<sequant::Index, BatchModeType>> m;
+    for (auto const& ix : n->canon_indices())
+      if (ix == i1 || ix == i2) m.push_back({ix, BatchModeType::External});
+    if (!n.leaf()) {
+      for (auto const& ix : n.left()->canon_indices())
+        if (ix.space() == aux) {
+          bool carried = false;
+          for (auto const& c : n->canon_indices()) carried |= (c == ix);
+          if (!carried) {
+            m.push_back({ix, BatchModeType::Contracted});
+            n->set_batch_loops_opened_here({{ix, BatchModeType::Contracted}});
+          }
+        }
+    }
+    if (!m.empty()) n->set_node_slice_mask(m);
+  });
+  sequant::stamp_lifetime_masks(forest);
+
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [occ, aux](sequant::Index const& ix) {
+    return !ix.has_proto_indices() && (ix.space() == occ || ix.space() == aux);
+  };
+  policy.is_batchable_external_index = [occ](sequant::Index const& ix) {
+    return !ix.has_proto_indices() && ix.space() == occ;
+  };
+
+  sequant::eval::dryrun::SizeRegime const regime;
+  sequant::eval::dryrun::CostModel const cm{regime};
+  auto const block_of = [occ](sequant::Index const& ix) -> std::size_t {
+    return ix.space() == occ ? 2 : 4;
+  };
+  RichSchedule rich = compute_dag_boulevard(forest, cm, block_of);
+  {
+    std::vector<int> ext, con;
+    for (auto const& [key, kind] : rich.loop_kind)
+      if (key.first == L"i")
+        (kind == BatchModeType::External ? ext : con).push_back(key.second);
+    REQUIRE(ext.size() == 2);
+    REQUIRE(con.size() == 1);
+    std::pair<std::wstring, int> const a{L"i", ext[0]}, c{L"i", con[0]},
+        b{L"i", ext[1]};
+    rich.loop_order.emplace(std::make_pair(a, c), std::size_t{0});
+    rich.loop_order.emplace(std::make_pair(c, b), std::size_t{0});
+  }
+  auto const legality = analyze_legality(rich, forest, policy);
+  OrderedSchedule const ordered =
+      build_ordered_schedule(rich, legality, policy, {L"i", L"x"});
+  if (std::getenv("SEQUANT_UT_SCHED_TREE"))
+    sequant::eval::detail::dump_schedule_tree(ordered.root, 0);
+
+  auto cache = sequant::CacheManager<node_t>::empty();
+  auto aops = yield_.template array_ops<ToTArray>();
+  cache.set_array_ops(&aops);
+  std::function<std::size_t(sequant::Index const&)> const target_batch =
+      [occ](sequant::Index const& ix) -> std::size_t {
+    return ix.space() == occ ? 2 : 4;
+  };
+  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
+                                             yield_, cache, target_batch)
+                       ->get<ToTArray>();
+
+  ToTArray diff;
+  diff(target) = got(target) - ref(target);
+  double const rel =
+      std::sqrt(diff(target).dot(diff(target)) / ref(target).dot(ref(target)));
+  INFO("relative L2 diff = " << rel);
+  CHECK(rel < 1e-10);
+}
+
 // BLOCKED on Layers 1-2 (use-induced slicing of whole-produced operands +
 // multi-level escape chain); see
 // doc/dev/specs/2026-08-31-occ-use-induced-slicing-and-escape-chain-design.md.

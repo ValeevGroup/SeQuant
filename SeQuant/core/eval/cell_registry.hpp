@@ -573,6 +573,8 @@ class CellReadResolver {
       std::cerr << "}" << std::endl;
     }
     ResultPtr v = table_read(*reg_, r.source).value;
+    last_slice_ = r.slice;  // diagnostic: replayable on another whole value
+    last_ctx_ = &ctx;
     for (auto const& [pos, key] : r.slice) {
       std::optional<std::pair<std::size_t, std::size_t>> range;
       for (auto const& e : ctx)
@@ -587,6 +589,32 @@ class CellReadResolver {
     }
     ++served_;
     return v;
+  }
+
+  /// Diagnostic: apply the slices of the most recent fetch to another whole
+  /// value (same ranges from the same batch context); the slice list as text.
+  [[nodiscard]] ResultPtr slice_like_last(ResultPtr v) const {
+    if (!last_ctx_) return v;
+    for (auto const& [pos, key] : last_slice_) {
+      std::optional<std::pair<std::size_t, std::size_t>> range;
+      for (auto const& e : *last_ctx_)
+        if (detail::same_key(e.level.key(), key)) range = e.range;
+      if (!range) return v;
+      v = v->slice_mode(pos, range->first, range->second);
+    }
+    return v;
+  }
+  [[nodiscard]] std::string last_slice_text() const {
+    std::string out;
+    if (!last_ctx_) return out;
+    for (auto const& [pos, key] : last_slice_) {
+      out += " pos" + std::to_string(pos);
+      for (auto const& e : *last_ctx_)
+        if (detail::same_key(e.level.key(), key))
+          out += "=[" + std::to_string(e.range.first) + "," +
+                 std::to_string(e.range.second) + ")";
+    }
+    return out;
   }
 
   /// Records a leaf's freshly evaluated result in the registry (called after
@@ -647,6 +675,8 @@ class CellReadResolver {
   container::vector<container::svector<std::size_t>> reads_of_;
   std::unordered_map<std::size_t, container::svector<std::size_t>> cursor_;
   std::size_t served_ = 0;
+  container::svector<std::pair<std::size_t, LoopKey>> last_slice_;
+  BatchContext const* last_ctx_ = nullptr;
   /// value id -> the CellId its most recent \c fetch was served from (see
   /// \c operand_drained). Never reset per-consumer (begin_consumer leaves it
   /// alone): "most recent" is global across the whole resolver's lifetime,

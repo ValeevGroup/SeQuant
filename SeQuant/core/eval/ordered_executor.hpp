@@ -18,7 +18,10 @@
 
 #include <cstddef>
 #include <functional>
+#include <iomanip>
 #include <optional>
+#include <set>
+#include <sstream>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -480,7 +483,8 @@ ordered_range_of(eval::BatchContext const& ctx, LoopKey const& key) {
 /// \param built The run-completeness ledger, marked at the exact site each
 ///        scheduled value is produced (or deliberately skipped).
 ///
-template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
+template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC,
+          typename ScopeGuardFactory>
 void run_ordered_contracted_block(
     ScopeBlock const& block,
     std::unordered_map<std::size_t, node_t> const& vmap,
@@ -491,7 +495,8 @@ void run_ordered_contracted_block(
     container::vector<char>& built,
     std::function<bool(node_t const&)> const& is_volatile,
     CellTable const* table, CellRegistry& registry, CellReadResolver& resolver,
-    container::vector<char> const& skip, ForgoPlan const& forgo_plan) {
+    container::vector<char> const& skip, ForgoPlan const& forgo_plan,
+    ScopeGuardFactory const& make_scope_guard) {
   using Cache = CacheManager<N, FHC>;
   using BatchContext = typename Cache::BatchContext;
   // Threaded for symmetry with the entry point and for the recursion below;
@@ -539,6 +544,266 @@ void run_ordered_contracted_block(
     // Null passes through untouched (never dereferenced): a missing result is
     // diagnosed where it is read, not here.
     return (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph);
+  };
+  // Diagnostic cross-check (SEQUANT_XCHECK_VIDS=<vid,...>): re-evaluate the
+  // value's whole subtree with a plain cache (leaves whole, nothing sliced),
+  // slice that reference by the CELL's own declared positions at the current
+  // batch ranges, and report the relative difference to the batched result.
+  static std::set<std::size_t> const xcheck_vids = [] {
+    std::set<std::size_t> v;
+    if (char const* e = std::getenv("SEQUANT_XCHECK_VIDS")) {
+      std::istringstream toks{e};
+      for (std::string tok; std::getline(toks, tok, ',');)
+        if (!tok.empty()) v.insert(std::stoul(tok));
+    }
+    return v;
+  }();
+  static std::map<std::string, ResultPtr> xpart_acc;
+  auto const xcheck = [&](std::size_t vid, TableCell const& cell,
+                          ResultPtr const& got, node_t const& nd,
+                          eval::BatchContext const& rctx, char const* what) {
+    if (!xcheck_vids.count(vid) || !got) return;
+    if (!cell.partial_over.empty()) return;  // per-batch partial: no reference
+    try {
+      auto plain = Cache::empty();
+      plain.set_array_ops(parent_cache.array_ops());
+      ResultPtr whole =
+          canonical(nd, evaluate_impl<EvalTrace>(nd, leaf_evaluator, plain));
+      std::string ranges;
+      for (auto const& [pos, key] : cell.sliced) {
+        auto const range = ordered_range_of(rctx, key);
+        if (!range) {
+          std::cerr << "[xcheck] vid=" << vid << " " << what
+                    << ": slice loop not in context\n";
+          return;
+        }
+        whole = whole->slice_mode(pos, range->first, range->second);
+        ranges += " pos" + std::to_string(pos) + "=[" +
+                  std::to_string(range->first) + "," +
+                  std::to_string(range->second) + ")";
+      }
+      double const nw = whole->norm2();
+      ResultPtr diff = whole->clone();
+      diff->add_inplace(*got->mult_by_phase(-1));
+      double const nd_ = diff->norm2();
+      std::cerr << "[xcheck] vid=" << vid << " " << what << ranges
+                << " |ref|=" << std::setprecision(10) << nw
+                << " |got|=" << got->norm2()
+                << " rel=" << (nw > 0 ? nd_ / nw : nd_)
+                << "\n   ref layout: " << whole->layout_desc()
+                << "\n   got layout: " << got->layout_desc()
+                << "\n   got vs ref " << got->tile_diff(*whole) << "\n";
+      // Sum-of-manual-partials and manual full-reduction probes (two-leaf
+      // product nodes): got vs the accumulated manual partials (accumulation
+      // check) and vs one manual product of the outer-sliced leaves over the
+      // full reduced range (whole-vs-batched GEMM check).
+      if (!nd.leaf() && nd.left().leaf() && nd.right().leaf()) {
+        std::string key = std::to_string(vid);
+        for (std::size_t e = 0; e < rctx.size(); ++e)
+          key += "|" + std::to_string(rctx[e].range.first) + "," +
+                 std::to_string(rctx[e].range.second);
+        if (auto it = xpart_acc.find(key);
+            it != xpart_acc.end() && it->second) {
+          ResultPtr d = it->second->clone();
+          d->add_inplace(*got->mult_by_phase(-1));
+          std::cerr << "   rel(got vs sum of manual partials)="
+                    << d->norm2() / (nw > 0 ? nw : 1.0)
+                    << " |sum partials|=" << it->second->norm2() << "\n";
+          xpart_acc.erase(it);
+        }
+        // manual full-K product: leaves sliced only on the loops present in
+        // rctx (the reduced loop is not in rctx, so it stays whole)
+        auto const slice_for = [&](node_t const& child, ResultPtr v) {
+          auto const ck = value_key_of(child);
+          for (auto const& r : table->reads) {
+            if (table->cells[r.consumer].value_id != vid) continue;
+            if (value_key_of(rich.cells[r.operand_value_id]) != ck) continue;
+            for (auto const& [pos, key2] : r.slice) {
+              auto const range = ordered_range_of(rctx, key2);
+              if (!range) continue;
+              v = v->slice_mode(pos, range->first, range->second);
+            }
+            break;
+          }
+          return v;
+        };
+        ResultPtr L = slice_for(nd.left(), leaf_evaluator(nd.left()));
+        ResultPtr R = slice_for(nd.right(), leaf_evaluator(nd.right()));
+        ResultPtr mf = canonical(nd, apply_one_op(nd, L, R));
+        ResultPtr d1 = mf->clone();
+        d1->add_inplace(*whole->mult_by_phase(-1));
+        ResultPtr d2 = mf->clone();
+        d2->add_inplace(*got->mult_by_phase(-1));
+        std::cerr << "   manual full-K product: |mf|=" << mf->norm2()
+                  << " rel(mf vs ref)=" << d1->norm2() / (nw > 0 ? nw : 1.0)
+                  << " rel(mf vs got)=" << d2->norm2() / (nw > 0 ? nw : 1.0)
+                  << "\n";
+        // Identity probe (SEQUANT_XCHECK_KBOUNDS=b0,b1,...,bn: element
+        // boundaries of the reduced mode): sum over the given blocks of the
+        // blocked products vs the full product, for the leaves sliced on the
+        // outer loops only. The reduced mode's position on each leaf = the
+        // read slice whose loop is NOT in rctx.
+        if (char const* kb = std::getenv("SEQUANT_XCHECK_KBOUNDS")) {
+          std::vector<std::size_t> bounds;
+          {
+            std::istringstream is{kb};
+            for (std::string t; std::getline(is, t, ',');)
+              if (!t.empty()) bounds.push_back(std::stoul(t));
+          }
+          auto const kpos_of =
+              [&](node_t const& child) -> std::optional<std::size_t> {
+            auto const ck = value_key_of(child);
+            for (auto const& r : table->reads) {
+              if (table->cells[r.consumer].value_id != vid) continue;
+              if (value_key_of(rich.cells[r.operand_value_id]) != ck) continue;
+              for (auto const& [pos, key2] : r.slice)
+                if (!ordered_range_of(rctx, key2)) return pos;
+              return std::nullopt;
+            }
+            return std::nullopt;
+          };
+          auto const kl = kpos_of(nd.left()), kr = kpos_of(nd.right());
+          if (kl && kr && bounds.size() >= 2) {
+            for (std::size_t step :
+                 {bounds.size() - 1, std::size_t{2}, std::size_t{1}}) {
+              // blocks of `step` boundary intervals each
+              ResultPtr acc;
+              std::size_t nblk = 0;
+              for (std::size_t b = 0; b + 1 < bounds.size(); b += step) {
+                std::size_t const lo = bounds[b];
+                std::size_t const hi =
+                    bounds[std::min(b + step, bounds.size() - 1)];
+                ResultPtr Lk = L->slice_mode(*kl, lo, hi);
+                ResultPtr Rk = R->slice_mode(*kr, lo, hi);
+                ResultPtr Pk = canonical(nd, apply_one_op(nd, Lk, Rk));
+                if (!acc)
+                  acc = Pk;
+                else
+                  acc->add_inplace(*Pk);
+                ++nblk;
+              }
+              ResultPtr d = acc->clone();
+              d->add_inplace(*whole->mult_by_phase(-1));
+              std::cerr << "   K-identity: nblk=" << nblk
+                        << " rel(sum blocked vs ref)="
+                        << d->norm2() / (nw > 0 ? nw : 1.0) << " "
+                        << acc->tile_diff(*whole) << "\n";
+            }
+          }
+        }
+      }
+      // Transposed-reference probe: the reference sliced with the first two
+      // declared ranges SWAPPED, then modes 0<->1 permuted (same trange as
+      // `got`): rel_T ~ 0 means the batched block is the reference with its
+      // first two modes' roles exchanged.
+      if (cell.sliced.size() >= 2 && cell.sliced[0].first == 0 &&
+          cell.sliced[1].first == 1) {
+        ResultPtr wholeT =
+            canonical(nd, evaluate_impl<EvalTrace>(nd, leaf_evaluator, plain));
+        auto const r0 = ordered_range_of(rctx, cell.sliced[0].second);
+        auto const r1 = ordered_range_of(rctx, cell.sliced[1].second);
+        if (r0 && r1) {
+          wholeT = wholeT->slice_mode(0, r1->first, r1->second);
+          wholeT = wholeT->slice_mode(1, r0->first, r0->second);
+          for (std::size_t k = 2; k < cell.sliced.size(); ++k) {
+            auto const rk = ordered_range_of(rctx, cell.sliced[k].second);
+            if (rk)
+              wholeT = wholeT->slice_mode(cell.sliced[k].first, rk->first,
+                                          rk->second);
+          }
+          // TA annotation convention (indices_annot): proto-free labels are
+          // the outer modes, proto-carrying ones the inner, "outer;inner".
+          std::vector<std::string> labs, inner_labs;
+          for (auto const& ix : nd->canon_indices())
+            (ix.has_proto_indices() ? inner_labs : labs)
+                .push_back(toUtf8(std::wstring(ix.full_label())));
+          std::string inner;
+          for (std::size_t k = 0; k < inner_labs.size(); ++k)
+            inner += (k ? "," : ";") + inner_labs[k];
+          std::string pre;
+          for (std::size_t k = 0; k < labs.size(); ++k)
+            pre += (k ? "," : "") + labs[k];
+          pre += inner;
+          if (labs.size() >= 2) {
+            std::swap(labs[0], labs[1]);
+            std::string post;
+            for (std::size_t k = 0; k < labs.size(); ++k)
+              post += (k ? "," : "") + labs[k];
+            post += inner;
+            ResultPtr refT =
+                wholeT->permute(std::array<std::any, 2>{pre, post});
+            ResultPtr diffT = refT->clone();
+            diffT->add_inplace(*got->mult_by_phase(-1));
+            std::cerr << "   rel_T(got vs transposed ref)="
+                      << (nw > 0 ? diffT->norm2() / nw : diffT->norm2())
+                      << " refT layout: " << refT->layout_desc() << "\n";
+          }
+        }
+      }
+    } catch (std::exception const& ex) {
+      std::cerr << "[xcheck] vid=" << vid << " " << what
+                << " failed: " << ex.what() << "\n";
+    }
+  };
+
+  // Diagnostic (SEQUANT_XCHECK_PARTIAL with SEQUANT_XCHECK_VIDS): for a
+  // two-leaf product, recompute THIS batch's partial from fresh leaves sliced
+  // per the cell's own declared reads and compare with the registry's value.
+  auto const xpart = [&](std::size_t vid, CellId cell_id, node_t const& bn,
+                         eval::BatchContext const& rctx) {
+    static bool const on = std::getenv("SEQUANT_XCHECK_PARTIAL") != nullptr;
+    if (!on || !xcheck_vids.count(vid) || bn.leaf() || !bn.left().leaf() ||
+        !bn.right().leaf())
+      return;
+    try {
+      auto const slice_for = [&](node_t const& child, ResultPtr v,
+                                 std::string& txt) {
+        auto const ck = value_key_of(child);
+        for (auto const& r : table->reads) {
+          if (r.consumer != cell_id) continue;
+          if (value_key_of(rich.cells[r.operand_value_id]) != ck) continue;
+          for (auto const& [pos, key] : r.slice) {
+            auto const range = ordered_range_of(rctx, key);
+            if (!range) continue;
+            v = v->slice_mode(pos, range->first, range->second);
+            txt += " p" + std::to_string(pos) + "=[" +
+                   std::to_string(range->first) + "," +
+                   std::to_string(range->second) + ")";
+          }
+          break;
+        }
+        return v;
+      };
+      std::string lt, rt;
+      ResultPtr L = slice_for(bn.left(), leaf_evaluator(bn.left()), lt);
+      ResultPtr R = slice_for(bn.right(), leaf_evaluator(bn.right()), rt);
+      ResultPtr manual = canonical(bn, apply_one_op(bn, L, R));
+      {
+        // accumulate the manual partial over the innermost (reduced) loop,
+        // keyed by the enclosing context (all but the innermost entry)
+        std::string key = std::to_string(vid);
+        for (std::size_t e = 0; e + 1 < rctx.size(); ++e)
+          key += "|" + std::to_string(rctx[e].range.first) + "," +
+                 std::to_string(rctx[e].range.second);
+        auto& slot = xpart_acc[key];
+        if (!slot)
+          slot = manual->clone();
+        else
+          slot->add_inplace(*manual);
+      }
+      ResultPtr const got = registry.peek(cell_id);
+      if (!got) return;
+      double const nm = manual->norm2();
+      ResultPtr diff = manual->clone();
+      diff->add_inplace(*got->mult_by_phase(-1));
+      std::cerr << "[xpart] vid=" << vid << " L:" << lt << " R:" << rt
+                << " |manual|=" << std::setprecision(10) << nm
+                << " |got|=" << got->norm2()
+                << " rel=" << (nm > 0 ? diff->norm2() / nm : diff->norm2())
+                << "\n";
+    } catch (std::exception const& ex) {
+      std::cerr << "[xpart] failed: " << ex.what() << "\n";
+    }
   };
 
   CellScope const parent_scope = current_scope(ectx);
@@ -688,6 +953,15 @@ void run_ordered_contracted_block(
   container::vector<ResultPtr> acc(block.outputs.size());
   container::vector<ResultPtr> dest(block.outputs.size());
 
+  // Backend scope guard for THIS loop's batches (the whole-scope executor's
+  // per-block call, mirrored): e.g. MPQC lowers the block-sparse screening
+  // threshold by the batch count while a partial over 1/n of a reduced index
+  // is evaluated, since the screening bound of such a partial is ~1/n of the
+  // full-sum bound (a result block kept over the full extent would otherwise
+  // be dropped in every batch). Guards of nested blocks stack (RAII).
+  auto const scope_guard = make_scope_guard(batches.size());
+  (void)scope_guard;
+
   for (auto const& [e_lo, e_hi] : batches) {
     if (e_lo == e_hi) continue;
     // The per-batch reset, expressed on cells: drop every cell bound to THIS
@@ -755,10 +1029,28 @@ void run_ordered_contracted_block(
             *build_cell,
             canonical(build_node, evaluate_impl<EvalTrace>(
                                       build_node, leaf_evaluator, bs_cache)));
+        xcheck(build->value_id, table->cells[*build_cell],
+               registry.peek(*build_cell), build_node, ctx, "build");
+        xpart(build->value_id, *build_cell, build_node, ctx);
+        // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
+        // hash, for cross-schedule comparison of term values.
+        if (static bool const dump_build_norms =
+                std::getenv("SEQUANT_DUMP_ROOT_NORMS") != nullptr;
+            dump_build_norms && ectx.empty()) {
+          double nrm = -2.0;
+          try {
+            if (auto const v = registry.peek(*build_cell)) nrm = v->norm2();
+          } catch (...) {
+          }
+          std::cerr << "[build-norm] vid=" << build->value_id
+                    << " hash=" << rich.cells[build->value_id].hash
+                    << " norm=" << std::setprecision(17) << nrm << "\n";
+        }
       } else if (auto const* child = std::get_if<ScopeBlock>(&step.value)) {
         run_ordered_contracted_block<EvalTrace>(
             *child, vmap, rich, ordered, leaf_evaluator, bs_cache, target, ctx,
-            built, is_volatile, table, registry, resolver, vskip, forgo_plan);
+            built, is_volatile, table, registry, resolver, vskip, forgo_plan,
+            make_scope_guard);
       } else {
         // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives;
         // a valueless-by-exception or future third alternative is a schedule
@@ -816,6 +1108,7 @@ void run_ordered_contracted_block(
         registry.set(src, canonical(part_node,
                                     evaluate_impl<EvalTrace>(
                                         part_node, leaf_evaluator, bs_cache)));
+        xpart(vid, src, part_node, ctx);
       }
       // The read the Assemble DECLARES of its source (the table charged the
       // source +1 life for it): spending it here is what lets the source's
@@ -894,6 +1187,8 @@ void run_ordered_contracted_block(
                    "evaluate_ordered_schedule: a loop block realized zero "
                    "batches for an Assemble step");
     registry.set(out_cells[k], std::move(out));
+    xcheck(vid, table->cells[out_cells[k]], registry.peek(out_cells[k]),
+           resolve(vid), ectx, "assemble");
     if constexpr (::sequant::detail::trace(EvalTrace))
       log::cache(resolve(vid), parent_cache,
                  log::label(resolve(vid), parent_cache.batch_context()) +
@@ -1309,12 +1604,26 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         // the combine below instead of a crash in the phase conversion.
         registry.set(*root_cell,
                      (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph));
+        // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
+        // hash, for cross-schedule comparison of term values.
+        if (static bool const dump_build_norms =
+                std::getenv("SEQUANT_DUMP_ROOT_NORMS") != nullptr;
+            dump_build_norms) {
+          double nrm = -2.0;
+          try {
+            if (auto const v = registry.peek(*root_cell)) nrm = v->norm2();
+          } catch (...) {
+          }
+          std::cerr << "[build-norm] vid=" << vid
+                    << " hash=" << rich.cells[vid].hash
+                    << " norm=" << std::setprecision(17) << nrm << "\n";
+        }
       }
     } else if (auto const* block = std::get_if<ScopeBlock>(&step.value)) {
       run_ordered_contracted_block<EvalTrace>(
           *block, vmap, rich, ordered, leaf_evaluator, cache, target, root_ectx,
-          built, is_volatile, &cell_table, registry, resolver, skip,
-          forgo_plan);
+          built, is_volatile, &cell_table, registry, resolver, skip, forgo_plan,
+          make_scope_guard);
     } else {
       // R4: the Step variant has exactly BuildStep/ScopeBlock alternatives; any
       // other state is a schedule this executor cannot interpret.
@@ -1404,6 +1713,21 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     // other roots are read-only addends, so they are handed out as-is: one
     // copy per evaluation, not one per root.
     if (i == 0) ptr = ptr->clone();
+    // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): every forest root's value at the
+    // combine, by node hash, for cross-schedule comparison.
+    if (static bool const dump_root_norms =
+            std::getenv("SEQUANT_DUMP_ROOT_NORMS") != nullptr;
+        dump_root_norms) {
+      double nrm = -2.0;
+      try {
+        nrm = ptr->norm2();
+      } catch (...) {
+      }
+      std::cerr << "[root-norm] i=" << i << " hash=" << roots[i]->hash_value()
+                << " vid=" << vid << " cell=" << *cell
+                << " phase=" << int(roots[i]->canon_phase())
+                << " norm=" << std::setprecision(17) << nrm << "\n";
+    }
     // Orient the stored value to this root's phase, matching evaluate_impl's
     // own canonical->orientation return convention (apply_phase).
     auto const ph = roots[i]->canon_phase();

@@ -32,6 +32,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <deque>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -1039,6 +1040,30 @@ ResultPtr evaluate_impl(Node const& node,         //
               // read with declared slices like any other cell, with no
               // separate leaf path) -- once this probe runs AHEAD of
               // access_at, a leaf's home is live right here.
+              // Diagnostic (SEQUANT_XCHECK_LEAVES): the stored leaf, sliced
+              // per this read, against a FRESH leaf for THIS occurrence sliced
+              // identically -- unequal means the stored layout is not this
+              // occurrence's layout.
+              if (static bool const xl =
+                      std::getenv("SEQUANT_XCHECK_LEAVES") != nullptr;
+                  xl) {
+                try {
+                  ResultPtr fresh = apply_phase(f.node, leaf_evaluator(f.node));
+                  fresh = rr->slice_like_last(std::move(fresh));
+                  ResultPtr diff = fresh->clone();
+                  diff->add_inplace(*(*v)->mult_by_phase(-1));
+                  double const nf = fresh->norm2(), nd = diff->norm2();
+                  std::string canon;
+                  for (auto const& ix : f.node->canon_indices())
+                    canon += toUtf8(std::wstring(ix.full_label())) + " ";
+                  std::cerr << "[xleaf] " << canon << "|"
+                            << rr->last_slice_text()
+                            << " |fresh|=" << std::setprecision(10) << nf
+                            << " rel=" << (nf > 0 ? nd / nf : nd) << "\n";
+                } catch (std::exception const& ex) {
+                  std::cerr << "[xleaf] failed: " << ex.what() << "\n";
+                }
+              }
               finalize(apply_phase(f.node, *v));  // recorded leaf, sliced
               break;
             }

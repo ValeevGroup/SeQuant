@@ -542,8 +542,58 @@ inline void apply_persistence_frontier(
       std::cerr << "} partial_over={";
       for (auto const& k : c.partial_over)
         std::cerr << "d" << k.depth << "#" << k.loop_slot << " ";
+      std::cerr << "} scatter={";
+      for (auto const& [p, k] : c.production.scatter_map)
+        std::cerr << "pos" << p << "@d" << k.depth << "#" << k.loop_slot << " ";
+      std::cerr << "} carried={";
+      for (auto const& ix : in.rich->cells[c.value_id].carried)
+        std::cerr << toUtf8(std::wstring(ix.full_label())) << ' ';
       std::cerr << "} pia=" << c.produce_if_absent
                 << " persistent=" << c.persistent << "\n";
+    }
+    // Per wanted value: every occurrence's OWN index order (its array layout)
+    // with its consumer, and every table read of the value with its slices --
+    // the two must agree position-for-position on ONE layout.
+    std::map<std::size_t, std::pair<std::size_t, std::size_t>> point_to;
+    for (std::size_t vid = 0; vid < in.rich->cells.size(); ++vid)
+      for (std::size_t o = 0; o < in.rich->cells[vid].occurrences.size(); ++o)
+        point_to[in.rich->cells[vid].occurrences[o].point] = {vid, o};
+    auto const labels = [](container::svector<Index> const& c) {
+      std::string s;
+      for (auto const& ix : c) s += toUtf8(std::wstring(ix.full_label())) + " ";
+      return s;
+    };
+    for (std::size_t vid : want) {
+      if (vid >= in.rich->cells.size()) continue;
+      auto const& vc = in.rich->cells[vid];
+      std::cerr << "[occs] value " << vid << " cell carried={"
+                << labels(vc.carried) << "}\n";
+      for (auto const& occ : vc.occurrences) {
+        std::cerr << "  occurrence carried={" << labels(occ.carried)
+                  << "} loop_slot={";
+        for (int sl : occ.loop_slot) std::cerr << sl << " ";
+        std::cerr << "} consumer=";
+        if (auto it = point_to.find(occ.consumer_point);
+            it != point_to.end() && occ.consumer_point != occ.point) {
+          auto const& co =
+              in.rich->cells[it->second.first].occurrences[it->second.second];
+          std::cerr << it->second.first << " carried={" << labels(co.carried)
+                    << "}";
+        } else {
+          std::cerr << "(root)";
+        }
+        std::cerr << "\n";
+      }
+      for (auto const& r : st.table.reads) {
+        if (st.table.cells[r.source].value_id != vid) continue;
+        std::cerr << "  read by consumer value "
+                  << st.table.cells[r.consumer].value_id << " cell#"
+                  << r.consumer << " slices={";
+        for (auto const& [p, key] : r.slice)
+          std::cerr << "pos" << p << "@d" << key.depth << "#" << key.loop_slot
+                    << " ";
+        std::cerr << "}\n";
+      }
     }
   }
   // Diagnostic (SEQUANT_DUMP_CELLS): every sliced position no enclosing

@@ -579,6 +579,68 @@ class ResultTensorTA final : public Result {
     return r;
   }
 
+  [[nodiscard]] double norm2() const override {
+    if constexpr (requires(ArrayT const& a) {
+                    { TA::squared_norm(a) } -> std::convertible_to<double>;
+                  })
+      return std::sqrt(static_cast<double>(TA::squared_norm(get<ArrayT>())));
+    else
+      return -1.0;
+  }
+  [[nodiscard]] std::string layout_desc() const override {
+    std::ostringstream os;
+    os << get<ArrayT>().trange();
+    return os.str();
+  }
+  [[nodiscard]] std::string tile_diff(Result const& other) const override {
+    if (!other.is<this_type>()) return "(kind mismatch)";
+    auto const& a = get<ArrayT>();
+    auto const& b = other.get<ArrayT>();
+    if (a.trange() != b.trange()) return "(trange mismatch)";
+    std::size_t only_a = 0, only_b = 0, both = 0, none = 0;
+    double n_only_a = 0.0, n_only_b = 0.0, n_both_diff = 0.0;
+    for (auto const& ord : a.tiles_range()) {
+      bool const za = a.is_zero(ord), zb = b.is_zero(ord);
+      if (za && zb) {
+        ++none;
+        continue;
+      }
+      if (!za && zb) {
+        ++only_a;
+        if (a.is_local(ord)) {
+          auto const t = a.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_a += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      if (za && !zb) {
+        ++only_b;
+        if (b.is_local(ord)) {
+          auto const t = b.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_b += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      ++both;
+      if (a.is_local(ord) && b.is_local(ord)) {
+        auto const ta = a.find_local(ord).get();
+        auto const tb = b.find_local(ord).get();
+        if constexpr (requires { TA::norm(ta.subt(tb)); })
+          n_both_diff +=
+              std::pow(static_cast<double>(TA::norm(ta.subt(tb))), 2);
+      }
+    }
+    std::ostringstream os;
+    os << "tiles: both=" << both << " only_this=" << only_a
+       << " only_other=" << only_b << " none=" << none
+       << " |only_this|=" << std::sqrt(n_only_a)
+       << " |only_other|=" << std::sqrt(n_only_b)
+       << " |diff on both|=" << std::sqrt(n_both_diff);
+    return os.str();
+  }
+
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
@@ -819,6 +881,68 @@ class ResultTensorOfTensorTA final : public Result {
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
 
+  [[nodiscard]] double norm2() const override {
+    if constexpr (requires(ArrayT const& a) {
+                    { TA::squared_norm(a) } -> std::convertible_to<double>;
+                  })
+      return std::sqrt(static_cast<double>(TA::squared_norm(get<ArrayT>())));
+    else
+      return -1.0;
+  }
+  [[nodiscard]] std::string layout_desc() const override {
+    std::ostringstream os;
+    os << get<ArrayT>().trange();
+    return os.str();
+  }
+  [[nodiscard]] std::string tile_diff(Result const& other) const override {
+    if (!other.is<this_type>()) return "(kind mismatch)";
+    auto const& a = get<ArrayT>();
+    auto const& b = other.get<ArrayT>();
+    if (a.trange() != b.trange()) return "(trange mismatch)";
+    std::size_t only_a = 0, only_b = 0, both = 0, none = 0;
+    double n_only_a = 0.0, n_only_b = 0.0, n_both_diff = 0.0;
+    for (auto const& ord : a.tiles_range()) {
+      bool const za = a.is_zero(ord), zb = b.is_zero(ord);
+      if (za && zb) {
+        ++none;
+        continue;
+      }
+      if (!za && zb) {
+        ++only_a;
+        if (a.is_local(ord)) {
+          auto const t = a.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_a += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      if (za && !zb) {
+        ++only_b;
+        if (b.is_local(ord)) {
+          auto const t = b.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_b += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      ++both;
+      if (a.is_local(ord) && b.is_local(ord)) {
+        auto const ta = a.find_local(ord).get();
+        auto const tb = b.find_local(ord).get();
+        if constexpr (requires { TA::norm(ta.subt(tb)); })
+          n_both_diff +=
+              std::pow(static_cast<double>(TA::norm(ta.subt(tb))), 2);
+      }
+    }
+    std::ostringstream os;
+    os << "tiles: both=" << both << " only_this=" << only_a
+       << " only_other=" << only_b << " none=" << none
+       << " |only_this|=" << std::sqrt(n_only_a)
+       << " |only_other|=" << std::sqrt(n_only_b)
+       << " |diff on both|=" << std::sqrt(n_both_diff);
+    return os.str();
+  }
+
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
@@ -1014,10 +1138,59 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(ann, " += ", ann, "\n");
 
+    // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): count outer tiles / inner cells
+    // where the accumulator is null or empty while the addend holds data --
+    // exactly the cells an in-place nested add must ALLOCATE, not skip.
+    static bool const diag_empty_lhs =
+        std::getenv("SEQUANT_DUMP_ROOT_NORMS") != nullptr;
+    std::size_t lhs_null_tiles = 0, lhs_empty_cells = 0, rhs_data_cells = 0;
+    if (diag_empty_lhs) {
+      for (auto const& ord : t.tiles_range()) {
+        if (!o.is_local(ord) || o.is_zero(ord)) continue;
+        auto const ot = o.find_local(ord).get();
+        std::size_t rhs_here = 0;
+        for (auto const& c : ot)
+          if (!c.empty()) ++rhs_here;
+        rhs_data_cells += rhs_here;
+        if (rhs_here == 0) continue;
+        if (t.is_zero(ord)) {
+          ++lhs_null_tiles;
+          continue;
+        }
+        auto const tt = t.find_local(ord).get();
+        auto it = tt.begin();
+        for (auto const& c : ot) {
+          if (!c.empty() && it->empty()) ++lhs_empty_cells;
+          ++it;
+        }
+      }
+    }
     auto const t0 = std::chrono::steady_clock::now();
     t(ann) += o(ann);
     ArrayT::wait_for_lazy_cleanup(t.world());
     ::sequant::detail::note_wait();
+    if (diag_empty_lhs) {
+      std::size_t dropped_cells = 0;
+      for (auto const& ord : t.tiles_range()) {
+        if (!o.is_local(ord) || o.is_zero(ord)) continue;
+        auto const ot = o.find_local(ord).get();
+        if (t.is_zero(ord)) {
+          for (auto const& c : ot)
+            if (!c.empty()) ++dropped_cells;
+          continue;
+        }
+        auto const tt = t.find_local(ord).get();
+        auto it = tt.begin();
+        for (auto const& c : ot) {
+          if (!c.empty() && it->empty()) ++dropped_cells;
+          ++it;
+        }
+      }
+      std::cerr << "[tot-add] rhs_data_cells=" << rhs_data_cells
+                << " lhs_null_tiles=" << lhs_null_tiles
+                << " lhs_empty_cells=" << lhs_empty_cells
+                << " dropped_after=" << dropped_cells << "\n";
+    }
     detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, o,
                          ann);
     log_ta_tensor_host_memory_use();
