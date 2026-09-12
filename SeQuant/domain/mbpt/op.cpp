@@ -623,8 +623,8 @@ ExprPtr OpMaker<S>::operator()(
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [opsymm_opt, full_label, op_herm](
-          const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
+      [opsymm_opt, full_label, op_herm](const auto& creidxs,
+                                        const auto& annidxs, Symmetry opsymm) {
         // mbpt operators act on indistinguishable particles, hence are
         // particle (column) symmetric
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
