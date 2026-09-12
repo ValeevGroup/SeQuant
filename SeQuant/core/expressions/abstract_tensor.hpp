@@ -11,11 +11,11 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <cstdlib>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <typeinfo>
@@ -98,7 +98,7 @@ class AbstractTensor {
     std::ostringstream oss;
     oss << "AbstractTensor::" << fn_name << " not implemented in class "
         << boost::core::demangle(typeid(*this).name());
-    return std::runtime_error(oss.str());
+    return Exception(oss.str());
   }
 
  public:

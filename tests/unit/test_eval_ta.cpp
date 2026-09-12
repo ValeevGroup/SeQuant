@@ -11,6 +11,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -367,7 +368,7 @@ class rand_tensor_yield {
     if (found == label_to_er_.end())
       found = label_to_er_.find(tensor_to_key(label));
     if (found == label_to_er_.end())
-      throw std::runtime_error{"attempted access of non-existent ResultPtr!"};
+      throw sequant::Exception{"attempted access of non-existent ResultPtr!"};
     return found->second;
   }
 };

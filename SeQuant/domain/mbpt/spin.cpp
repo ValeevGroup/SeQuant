@@ -13,6 +13,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -1561,7 +1562,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
           } else if (pr->is<Constant>() || pr->is<Variable>()) {
             i_result.append(pr);
           } else
-            throw("Unknown ExprPtr type.");
+            throw Exception("Unknown ExprPtr type.");
         }
         e_result.append(std::make_shared<Sum>(i_result));
       }

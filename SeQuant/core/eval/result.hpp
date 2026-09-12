@@ -8,6 +8,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/conversion.hpp>
@@ -29,16 +30,15 @@ namespace sequant {
 // namespaces in headers ... no" guidance)
 namespace detail {
 
-[[maybe_unused]] inline std::logic_error invalid_operand(
+[[maybe_unused]] inline Exception invalid_operand(
     std::string_view msg = "Invalid operand for binary op") noexcept {
-  return std::logic_error{msg.data()};
+  return Exception{std::string{msg}};
 }
 
-[[maybe_unused]] inline std::logic_error unimplemented_method(
+[[maybe_unused]] inline Exception unimplemented_method(
     std::string_view msg) noexcept {
-  using namespace std::string_literals;
-  return std::logic_error{"Not implemented in this derived class: "s +
-                          msg.data()};
+  return Exception{
+      std::string{"Not implemented in this derived class: "}.append(msg)};
 }
 
 // It is an iterator type
