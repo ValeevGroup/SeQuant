@@ -463,11 +463,23 @@ class FullBinaryNode {
   /// \return Size of the tree rooted at this node
   ///
   [[nodiscard]] std::size_t size() const {
-    if (leaf()) {
-      return 1;
+    // Iterative (explicit stack) node count: recursing left().size() +
+    // right().size() would descend to the tree's depth and overflow the C++
+    // call stack on a deep tree -- e.g. the left-folded Sum-tree binarize
+    // builds for a Sum with thousands of summands (mirrors the iterative
+    // destructor / deep_copy above; the recursive form also made this an
+    // O(N)-deep call on every use, e.g. each equality comparison's size check).
+    std::size_t n = 0;
+    std::vector<FullBinaryNode const*> stk;
+    stk.push_back(this);
+    while (!stk.empty()) {
+      FullBinaryNode const* cur = stk.back();
+      stk.pop_back();
+      ++n;
+      if (cur->left_) stk.push_back(cur->left_.get());
+      if (cur->right_) stk.push_back(cur->right_.get());
     }
-
-    return left().size() + right().size() + 1;
+    return n;
   }
 
   ///
