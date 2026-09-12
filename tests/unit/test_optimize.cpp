@@ -2900,10 +2900,14 @@ TEST_CASE("phase-2 places an external mode on an over-budget node",
   // OFF: pass does not fire => unsliced footprint, no External stamps.
   CHECK(peak_off == Catch::Approx(4872.0));
   CHECK(ext_off == 0u);
-  // ON: F placed on the over-budget root => reported peak drops; F stamped.
-  CHECK(peak_on == Catch::Approx(240.0));
+  // ON: the DP opens F at the over-budget root (dp_external_open) => the
+  // reported peak drops; F stamped. The DP charges what the ordered executor
+  // holds: the F-sliced working set (240 B) PLUS the full pre-sized root
+  // result the external loop scatters into (100 * 3 * 8 = 2400 B). The
+  // retired post-DP cascade reported the working set alone (240 B).
+  CHECK(peak_on == Catch::Approx(2640.0));
   CHECK(ext_on >= 1u);
-  // The point of S3.3: node-level external placement fired and cut the peak.
+  // The point: external placement fired inside the DP and cut the peak.
   CHECK(peak_on < peak_off);
 }
 
