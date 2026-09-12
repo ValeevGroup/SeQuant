@@ -114,16 +114,11 @@ struct NestedTensorIndices {
 
 auto to_ta_node(sequant::FullBinaryNode<sequant::EvalExpr> node) {
   using namespace sequant;
-  return transform_node(node, [](auto&& val) {
-    if (val.is_tensor()) {
-      return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
-                        NestedTensorIndices(val.as_tensor()).outer_inner() |
-                            ranges::to<EvalExpr::index_vector>(),
-                        val.canon_phase(), val.hash_value(),
-                        val.copy_connectivity_graph());
-    } else
-      return EvalExprTA(val);
-  });
+  // The array-mode list of every node is its canon_indices() (outer modes
+  // first, then the proto-carrying inner ones), as produced by the core
+  // canonicalizer; EvalExprTA derives its annotation from that list. No
+  // per-node re-derivation from the tensor's slots.
+  return transform_node(node, [](auto&& val) { return EvalExprTA(val); });
 }
 
 auto eval_node(sequant::ExprPtr const& expr) {
@@ -140,10 +135,15 @@ auto eval_node(sequant::ResultExpr const& res) {
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {
-  static auto const idx_rgx = boost::wregex{L"([iax])([↑↓])?(_?\\d+)"};
+  // One random tensor per tensor LABEL and index STRUCTURE (spaces, spins,
+  // proto pattern), independent of the index names: that is the DAG's own
+  // value identity (a CSE-shared leaf is one array), so forest references
+  // and the ordered executor agree. The PAO-like `m` space is normalized too.
+  static auto const idx_rgx = boost::wregex{L"([iaxm])([↑↓])?(_?\\d+)"};
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
     return (mo[1].str() == L"i"   ? L"o"
             : mo[1].str() == L"a" ? L"v"
+            : mo[1].str() == L"m" ? L"m"
                                   : L"x") +
            mo[2].str();
   };
@@ -213,6 +213,8 @@ class rand_tensor_yield {
   size_t max_tile_ = ~size_t{0};
   mutable sequant::container::map<std::wstring, sequant::ResultPtr>
       label_to_er_;
+  /// the TA annotation (layout) of the array stored under a tensor key
+  mutable sequant::container::map<std::wstring, std::string> layout_of_;
 
  public:
   /// Produce arrays whose modes are tiled in blocks of at most \p n.
@@ -226,7 +228,10 @@ class rand_tensor_yield {
   /// fresh (different) random value -- models an amplitude tensor changing
   /// between CC iterations (a "volatile" leaf), while every other leaf stays
   /// fixed. Used to test cross-iteration cache correctness.
-  void reset_label(std::wstring const& lbl) { label_to_er_.erase(lbl); }
+  void reset_label(std::wstring const& lbl) {
+    label_to_er_.erase(lbl);
+    layout_of_.erase(lbl);
+  }
 
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
   using array_tot_type =
@@ -311,7 +316,9 @@ class rand_tensor_yield {
   sequant::ResultPtr operator()(
       sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
-    if (node->is_tensor()) return (*this)(node->as_tensor());
+    if (node->is_tensor())
+      return (*this)(node->as_tensor(), node->canon_indices(),
+                     std::string(node->annot()));
 
     if (node->is_variable()) return (*this)(node->as_variable());
 
@@ -325,16 +332,116 @@ class rand_tensor_yield {
     return eval_result<result_t>(d);
   }
 
+  /// A tensor leaf by itself: laid out per its own canonical node.
   sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
+    sequant::EvalExprTA const canon{tnsr};
+    return (*this)(canon.as_tensor(), canon.canon_indices(), canon.annot());
+  }
+
+  /// Slot layout of a tensor: outer modes = the proto-free bra/ket/aux
+  /// indices in slot order followed by the composites' proto atoms (each
+  /// once, by label, in slot order); inner modes = the composites in slot
+  /// order. The one physical layout every occurrence of a tensor is
+  /// generated in; a node's canon_indices() is a permutation of it.
+  struct SlotLayout {
+    sequant::container::svector<sequant::Index> outer, inner;
+  };
+  static SlotLayout slot_layout(sequant::Tensor const& tnsr) {
+    using namespace sequant;
+    SlotLayout out;
+    auto has = [](auto const& cont, Index const& ix) {
+      return ranges::any_of(cont, [&ix](Index const& x) {
+        return x.full_label() == ix.full_label();
+      });
+    };
+    for (Index const& ix : tnsr.const_braket_indices())
+      if (ix.has_proto_indices()) {
+        if (!has(out.inner, ix)) out.inner.push_back(ix);
+      } else if (!has(out.outer, ix)) {
+        out.outer.push_back(ix);
+      }
+    for (Index const& ix : tnsr.const_braket_indices())
+      for (Index const& pr : ix.proto_indices())
+        if (!has(out.outer, pr)) out.outer.push_back(pr);
+    for (Index const& ix : tnsr.aux()) {
+      SEQUANT_ASSERT(!ix.has_proto_indices() &&
+                     "Aux indices with proto indices not supported");
+      if (!has(out.outer, ix)) out.outer.push_back(ix);
+    }
+    return out;
+  }
+  /// TA annotation naming modes by slot id: "s0,s1,...;c0,..."
+  static std::string slot_annot(SlotLayout const& sl) {
+    std::string a;
+    for (std::size_t k = 0; k < sl.outer.size(); ++k)
+      a += (k ? "," : "") + std::string("s") + std::to_string(k);
+    for (std::size_t k = 0; k < sl.inner.size(); ++k)
+      a += (k ? "," : ";") + std::string("c") + std::to_string(k);
+    return a;
+  }
+  /// The requested layout (\p canon, the node's canon_indices()) in slot ids.
+  static std::string canon_slot_annot(
+      SlotLayout const& sl, sequant::EvalExpr::index_vector const& canon) {
+    using namespace sequant;
+    auto pos = [](auto const& cont,
+                  Index const& ix) -> std::optional<std::size_t> {
+      for (std::size_t k = 0; k < cont.size(); ++k)
+        if (cont[k].full_label() == ix.full_label()) return k;
+      return std::nullopt;
+    };
+    std::string outer, inner;
+    for (Index const& ix : canon) {
+      if (ix.has_proto_indices()) {
+        auto k = pos(sl.inner, ix);
+        SEQUANT_ASSERT(k && "canonical composite not among the tensor's slots");
+        inner +=
+            (inner.empty() ? ";" : ",") + std::string("c") + std::to_string(*k);
+      } else {
+        auto k = pos(sl.outer, ix);
+        SEQUANT_ASSERT(k && "canonical index not among the tensor's slots");
+        outer +=
+            (outer.empty() ? "" : ",") + std::string("s") + std::to_string(*k);
+      }
+    }
+    return outer + inner;
+  }
+
+  /// The leaf array for \p tnsr laid out per \p canon (the requesting node's
+  /// canon_indices()). One random array per tensor (keyed by tensor_to_key)
+  /// generated in slot layout; a request is served as a permutation of it to
+  /// the requested layout (cached per layout), so every occurrence sees the
+  /// same tensor.
+  sequant::ResultPtr operator()(sequant::Tensor const& tnsr,
+                                sequant::EvalExpr::index_vector const& canon,
+                                std::string const& /*annot*/) const {
     using namespace ranges::views;
     using namespace sequant;
 
     std::wstring const label = tensor_to_key(tnsr);
-    if (auto&& found = label_to_er_.find(label); found != label_to_er_.end()) {
-      //      std::cout << "label = [" << sequant::to_string(label)
-      //                << "] FOUND in cache. Returning.." << std::endl;
-      return found->second;
-    }
+    SlotLayout const sl = slot_layout(tnsr);
+    std::string const requested = canon_slot_annot(sl, canon);
+    std::string const stored = slot_annot(sl);
+    auto const serve = [&](ResultPtr const& base) -> ResultPtr {
+      if (std::getenv("SEQUANT_UT_YIELD_DIAG"))
+        std::cerr << "[yield] key=" << sequant::toUtf8(label)
+                  << " stored=" << stored << " requested=" << requested
+                  << " base_layout=" << base->layout_desc() << std::endl;
+      if (requested == stored) return base;
+      std::wstring const key =
+          label + L"|" + std::wstring(requested.begin(), requested.end());
+      if (auto&& f2 = label_to_er_.find(key); f2 != label_to_er_.end())
+        return f2->second;
+      auto permuted = base->permute(std::array<std::any, 2>{stored, requested});
+      label_to_er_.emplace(key, permuted);
+      return permuted;
+    };
+    if (auto&& found = label_to_er_.find(label); found != label_to_er_.end())
+      return serve(found->second);
+
+    // generate in slot layout
+    struct {
+      container::svector<Index> outer, inner;
+    } nested{sl.outer, sl.inner};
 
     ResultPtr result{nullptr};
     auto isr = get_default_context().index_space_registry();
@@ -354,8 +461,6 @@ class rand_tensor_yield {
              }) |
              ranges::to<container::svector<size_t>>;
     };
-
-    NestedTensorIndices nested{tnsr};
 
     auto const outer_extent = make_extents(nested.outer);
 
@@ -425,10 +530,8 @@ class rand_tensor_yield {
 
     auto success = label_to_er_.emplace(label, result);
     SEQUANT_ASSERT(success.second && "couldn't store ResultPtr!");
-    //    std::cout << "label = [" << sequant::to_string(label)
-    //              << "] NotFound in cache. Creating.." << std::endl;
     SEQUANT_ASSERT(success.first->second);
-    return success.first->second;
+    return serve(success.first->second);
   }
 
   ///
@@ -848,7 +951,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             1.0 / 16 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
                                 yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                                 yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
-      REQUIRE(equal_tarrays(eval1, man1));
+      // the canonical intermediate layouts reorder the summation vs the
+      // hand-written reference: agreement to rounding, not bitwise
+      REQUIRE(equal_tarrays<Loose>(eval1, man1));
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
@@ -1476,7 +1581,10 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"s{a2<i1,i2>;a4<i2,i3>}";
 
       auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
-      std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
+      // The contracted composite a_4<i_2,i_3> leaves the result a function
+      // of i_3 (the pair basis), so i_3 is an outer mode of the result: use
+      // the node's own canonical layout, and keep i_3 in the reference.
+      std::string const target_layout = node->annot();
 
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
 
@@ -1488,7 +1596,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         ref = TA::einsum(lhs("i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"),
                          rhs("i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"), target_layout);
       }
-      REQUIRE(approx_equal("i,j;a,b", result, ref));
+      REQUIRE(approx_equal("i,j,k;a,b", result, ref));
     }
 
     SECTION("ToT_times_ToT_to_Scalar") {
@@ -2059,10 +2167,13 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   // (slice_array_over_mode) and sum ToT partials (add_inplace) -- the two
   // annotation-free ToT array operations that must emit an "outer;inner"
   // annotation rather than a flat one (else DistArray's is_tot_index() trips).
+  // i_3 is explicitly contracted (ket of I, bra of s) together with the
+  // composite a_4<i_2,i_3> it is a proto of, so it leaves the result: a
+  // genuinely contracted occupied index of a ToT x ToT -> ToT product.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"I{a4<i2,i3>,a1<i1,i2>;i1,i2} * s{a2<i1,i2>;a4<i2,i3>}");
-  std::string const target = "i_2,i_1;a_1i_1i_2,a_2i_1i_2";
+      L"I{a4<i2,i3>,a1<i1,i2>;i1,i3} * s{i3;a4<i2,i3>}");
   auto node = eval_node(expr);
+  std::string const target = node->annot();
   // Reference first (non-batched), so yield's random leaf arrays are generated
   // and cached; the batched evaluator reuses the same arrays.
   auto const ref = evaluate(node, target, yield)->get<ArrayToT>();
@@ -2084,7 +2195,7 @@ TEST_CASE("eval_batched_custom_evaluator_tot", "[eval]") {
   // self-dot of each array (a scalar norm^2); reordering the contraction over
   // i3 must not change it.
   auto self_dot = [](auto const& arr) {
-    return arr("i,j;a,b").dot(arr("i,j;a,b"));
+    return arr("i,j;a").dot(arr("i,j;a"));
   };
   auto const ref_dot = self_dot(ref);
 
@@ -2744,6 +2855,69 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
+// Minimal TA-level probe for the nested-tile permutation crash seen in the
+// hidden ToT replica: permute a Tensor<Tensor<double>> array on its outer
+// modes only, on inner only, and on both, through TA expressions.
+TEST_CASE("TA nested-tile permutation probe", "[tot][tot-perm-probe]") {
+  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+  auto& world = TA::get_default_world();
+  TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
+  ToTArray in{world, tr};
+  for (auto it = in.begin(); it != in.end(); ++it) {
+    if (!in.is_local(it.index())) continue;
+    auto const r = it.make_range();
+    TA::Tensor<TA::Tensor<double>> tile(r);
+    std::size_t k = 0;
+    for (auto& el : tile) {
+      // inner 2x3 tensors, a few left EMPTY (screened cells)
+      if ((k++ % 5) == 3) continue;
+      el = TA::Tensor<double>(TA::Range{2, 3}, 1.0 + k);
+    }
+    *it = tile;
+  }
+  world.gop.fence();
+  ToTArray outer_only, inner_only, both;
+  outer_only("j,i;a,b") = in("i,j;a,b");
+  inner_only("i,j;b,a") = in("i,j;a,b");
+  both("j,i;b,a") = in("i,j;a,b");
+  world.gop.fence();
+  CHECK(TA::squared_norm(outer_only) > 0.0);
+  CHECK(TA::squared_norm(inner_only) > 0.0);
+  CHECK(TA::squared_norm(both) > 0.0);
+}
+
+// Tile-level probe: outer transposition of a nested tile holding EMPTY inner
+// cells, through the permuting constructor (the einsum lazy-tile cast path).
+TEST_CASE("TA nested tile with empty inner cells: permuting constructor",
+          "[tot][tot-tile-perm-probe]") {
+  using Inner = TA::Tensor<double>;
+  using Outer = TA::Tensor<Inner>;
+  Outer tile(TA::Range{2, 3});
+  std::size_t k = 0;
+  for (auto& el : tile) {
+    if ((k++ % 2) == 1) continue;  // leave every other inner cell EMPTY
+    el = Inner(TA::Range{2, 2}, 1.0 + k);
+  }
+  TA::Permutation const outer_t{1, 0};
+  TA::Permutation const inner_id{0, 1};
+  std::cerr << "[probe] clone of tile with empty inners" << std::endl;
+  Outer const c0 = tile.clone();
+  CHECK(c0.range().extent(0) == 2);
+  std::cerr << "[probe] outer_t * tile" << std::endl;
+  Outer const t1 = outer_t * tile;  // outer transpose, inner unchanged
+  CHECK(t1.range().extent(0) == 3);
+  std::cerr << "[probe] Outer(tile, bp outer_t x id)" << std::endl;
+  // the concatenated form: second partition offset by the first's size
+  TA::BipartitePermutation const bp(TA::Permutation{1, 0, 2, 3}, 2);
+  Outer const t2(tile, bp);
+  CHECK(t2.range().extent(0) == 3);
+  std::cerr << "[probe] Outer(tile, bp outer_t x inner_t)" << std::endl;
+  TA::BipartitePermutation const bp2(TA::Permutation{1, 0, 3, 2}, 2);
+  Outer const t3(tile, bp2);
+  CHECK(t3.range().extent(0) == 3);
+  std::cerr << "[probe] done" << std::endl;
+}
+
 // Nested-array (ToT, pair composites) replica of the w8 aux-c/occ-e/occ-c
 // culprit: the occupied-Fock-like CSV term with the amplitude t{a<i_2,i_3>,
 // a<i_2,i_3>; i_3, i_2} read sliced on BOTH outer modes (external i_2,
@@ -2755,9 +2929,7 @@ TEST_CASE(
     "evaluate_ordered_schedule: ToT culprit replica (t sliced on two outer "
     "modes under external > contracted > external) matches the unbatched "
     "result",
-    "[.][eval][ordered-executor][mixed-open-tot]") {  // hidden: TA crash in
-  // Tensor<Tensor<double>> BipartitePermutation (lazy tile cast) during the
-  // plain forest evaluation of this expression; see the spec.
+    "[eval][ordered-executor][mixed-open][mixed-open-tot]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -2769,6 +2941,13 @@ TEST_CASE(
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
   using sequant::BatchModeType;
 
+  // the rank-(2,2) non-symmetric amplitude trips the strict-braket assertion
+  // of the tensor-network canonicalizer in Debug; the fixture is about the
+  // array operations, so relax it here.
+  auto ctx_relaxed = sequant::get_default_context().clone();
+  ctx_relaxed.set(sequant::AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter =
+      sequant::set_scoped_default_context(std::move(ctx_relaxed));
   auto& world = TA::get_default_world();
   // nocc 4 tiled by 2 -> two occ batches; aux 8 tiled by 4 -> two aux batches.
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 4, 8};
@@ -2777,12 +2956,14 @@ TEST_CASE(
   auto const occ = isr->retrieve(L"i");
   auto const aux = isr->retrieve(L"x");
 
-  // P = g*h (K node) ; Q = P*C ; U = t*C ; N1 = Q*U (reduces i_3, a_3) ;
-  // R = ((N1*s)*C)*C.
+  // P = g*h (K node) ; Q = (P*C)*C{a_1;m_1} (carries a_1<i_1,i_2>, so i_2
+  // survives the i_3 reduction as in the MPQC tree) ; U = t*C ; N1 = Q*U
+  // (reduces i_3, a_3) ; R = (N1*s)*C{m_4;a_2}.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"(((((g{i_3;i_1;x_1} * h{m_1;m_2;x_1}) * C{m_2;a_3<i_2,i_3>}) * "
+      L"C{a_1<i_1,i_2>;m_1}) * "
       L"(t{a_3<i_2,i_3>,a_4<i_2,i_3>;i_3,i_2} * C{a_4<i_2,i_3>;m_3})) * "
-      L"s{m_3;m_4}) * C{m_4;a_2<i_1,i_2>}) * C{a_1<i_1,i_2>;m_1}");
+      L"s{m_3;m_4}) * C{m_4;a_2<i_1,i_2>}");
   std::vector<node_t> forest{eval_node(t1)};
   std::string const target = forest.front()->annot();
 
@@ -2887,6 +3068,41 @@ TEST_CASE(
   double const rel =
       std::sqrt(diff(target).dot(diff(target)) / ref(target).dot(ref(target)));
   INFO("relative L2 diff = " << rel);
+  if (std::getenv("SEQUANT_UT_REPLICA_DIAG"))
+    std::cerr << "[replica] batched ordered vs forest: rel=" << rel
+              << std::endl;
+
+  // Control: the same DAG through the ordered executor with NO batching
+  // (policy declines every index) must match the forest to FP noise; if it
+  // does not, the discrepancy is in the ordered path itself, not in slicing.
+  {
+    sequant::BatchPolicy none;
+    none.is_batchable_contracted_index = [](sequant::Index const&) {
+      return false;
+    };
+    none.is_batchable_external_index = [](sequant::Index const&) {
+      return false;
+    };
+    std::vector<node_t> forest2{eval_node(t1)};
+    RichSchedule const rich2 = compute_dag_boulevard(forest2, cm, block_of);
+    auto const legality2 = analyze_legality(rich2, forest2, none);
+    OrderedSchedule const ordered2 =
+        build_ordered_schedule(rich2, legality2, none, {});
+    auto cache2 = sequant::CacheManager<node_t>::empty();
+    cache2.set_array_ops(&aops);
+    auto const got2 =
+        evaluate_ordered_schedule(forest2, ordered2, rich2, target, yield_,
+                                  cache2, target_batch)
+            ->get<ToTArray>();
+    ToTArray diff2;
+    diff2(target) = got2(target) - ref(target);
+    double const rel2 = std::sqrt(diff2(target).dot(diff2(target)) /
+                                  ref(target).dot(ref(target)));
+    if (std::getenv("SEQUANT_UT_REPLICA_DIAG"))
+      std::cerr << "[replica] UNBATCHED ordered vs forest: rel=" << rel2
+                << std::endl;
+    CHECK(rel2 < 1e-10);
+  }
   CHECK(rel < 1e-10);
 }
 
@@ -6350,7 +6566,9 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
       L" * "
       L"s{a2<i1,i2>;a4<i2,i3>}";
   auto const node = eval_node(sequant::deserialize<sequant::ExprPtr>(expr_str));
-  std::string const target{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
+  // i_3 (pair basis of the contracted composite) is an outer mode of the
+  // result; the node's canonical layout is the target.
+  std::string const target = node->annot();
 
   // Unshaped reference (no hook).
   auto const ref = evaluate(node, target, yield)->get<ToTArray>();
