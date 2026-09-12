@@ -41,6 +41,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_lifetime_mask.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
@@ -156,6 +157,40 @@ if (SEQUANT_HAS_TAPP)
 endif()
 
 ##########################
+# OBJECT library: DryRun backend tests
+##########################
+set(eval_dryrun_test_sources
+    "test_cell_registry.cpp"
+    "test_cell_table.cpp"
+    "test_dag_dot_dump.cpp"
+    "test_dag_scope.cpp"
+    "test_eval_dryrun.cpp"
+    "test_eval_ordered.cpp"
+    "test_legality.cpp"
+    "test_ordered_executor.cpp"
+    "test_ordered_schedule.cpp"
+    "test_peak_profile.cpp"
+    "test_slicing_signature.cpp"
+)
+add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
+set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+target_link_libraries(unit_tests-sequant-eval-dryrun-obj
+    PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
+    PRIVATE Catch2::Catch2 dtl::dtl)
+# test_eval_ordered.cpp duplicates test_ordered_executor.cpp's own minimal
+# ScalarEvalExpr/ScalarLeafEvaluator/scalar_tree fixture inside an anonymous
+# namespace (that file's own established precedent: no shared test header
+# exists between the two, see both files' own top-of-file comments). Under a
+# Unity build every listed .cpp is concatenated into ONE translation unit, so
+# anonymous-namespace uniqueness (normally per-TU) stops distinguishing the
+# two files' identically-named symbols and they collide. Give this file its
+# own TU.
+set_source_files_properties("test_eval_ordered.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
+    SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+##########################
 # Single executable combining all OBJECT libraries
 # NB linking OBJECT libraries (since CMake 3.21) both includes their object
 # files AND propagates their PUBLIC/INTERFACE usage requirements, so the
@@ -171,6 +206,7 @@ target_link_libraries(unit_tests-sequant PRIVATE
     unit_tests-sequant-optimize-obj
     unit_tests-sequant-export-obj
     unit_tests-sequant-mbpt-obj
+    unit_tests-sequant-eval-dryrun-obj
     Catch2::Catch2
     dtl::dtl)
 if (SEQUANT_HAS_TILEDARRAY)
