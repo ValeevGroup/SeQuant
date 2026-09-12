@@ -1213,8 +1213,8 @@ TEST_CASE("expr", "[elements]") {
 
         ExprPtr res1 = One + L"x";
         simplify(res1);
-        REQUIRE(res1 == simplify(One + ex<Variable>(L"x")));
-        REQUIRE(simplify(L"x" + One) == res1);
+        REQUIRE_THAT(res1, EquivalentTo(One + ex<Variable>(L"x")));
+        REQUIRE_THAT(simplify(L"x" + One), EquivalentTo(res1));
 
         ExprPtr res2 = res1 - "x";
         simplify(res2);
@@ -1222,12 +1222,12 @@ TEST_CASE("expr", "[elements]") {
 
         ExprPtr res3 = L"x" - One;
         simplify(res3);
-        REQUIRE(res3 == ex<Variable>(L"x") - One);
+        REQUIRE_THAT(res3, EquivalentTo(ex<Variable>(L"x") - One));
 
         ExprPtr res4 = Two * "y";
         simplify(res4);
-        REQUIRE(res4 == simplify(Two * ex<Variable>("y")));
-        REQUIRE(simplify("y" * Two) == res4);
+        REQUIRE_THAT(res4, EquivalentTo(Two * ex<Variable>("y")));
+        REQUIRE_THAT("y" * Two, EquivalentTo(res4));
       }
 
       SECTION("Divide by Constant") {
