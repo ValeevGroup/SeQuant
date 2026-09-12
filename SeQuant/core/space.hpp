@@ -508,9 +508,9 @@ class IndexSpace {
 
     const auto digit_pos = std::ranges::find_if(key, [](CharT c) {
       if constexpr (std::same_as<CharT, char>) {
-        return std::isdigit(c);
+        return c >= 0 && std::isdigit(static_cast<unsigned char>(c));
       }
-      return std::iswdigit(c);
+      return std::iswdigit(c) != 0;
     });
 
     if (digit_pos != end(key) && digit_pos != begin(key)) {
