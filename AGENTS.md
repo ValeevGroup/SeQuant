@@ -7,37 +7,39 @@ replace.
 ## Never regenerate `*.expected` fixtures
 
 **Do not create, update, or regenerate any `*.expected` file, and do not run a
-generator in a way that overwrites one.** This holds even when a `verify` test
-is failing because of it, and even when you are confident the new output is
+generator in a way that overwrites one.** This holds even when a test is
+failing because of it, and even when you are confident the new output is
 correct.
 
-These files pin generated output — ITF code, cost reports, export trees — that
-a human has checked for numerical correctness. The test suite cannot check that
-a regenerated equation still *computes the right numbers*; it can only check
-that today's output matches bytes someone previously blessed. Regenerating
-therefore does not fix the test, it deletes the only signal that something needs
-re-checking, and turns a red build into a false green.
+These files pin generated output — ITF code, cost reports, evaluation-tree
+dumps — that a human has checked for numerical correctness. The test suite
+cannot check that a regenerated equation still *computes the right numbers*; it
+can only check that today's output matches bytes someone previously blessed.
+Regenerating therefore does not fix the test, it deletes the only signal that
+something needs re-checking, and turns a red build into a false green.
 
-A failing `*/verify` test is working as designed: it is the mechanism by which a
-change to generated code reaches a human.
-
-Currently covered:
-
-```
-utilities/cost_analysis/examples/*.expected
-utilities/external-interface/examples/*.expected
-```
+A failing fixture comparison is working as designed: it is the mechanism by
+which a change to generated code reaches a human. The fixtures live under
+`utilities/` (`git ls-files '*.expected'` lists them) and are compared by the
+ctest entries named `sequant/.../verify` and `sequant/.../dump_tree`.
 
 ### What to do instead
 
 When a change you are making causes one of these tests to fail:
 
 1. Leave the fixture untouched.
-2. Diagnose *why* the output changed, concretely — which change, and by what
+2. Look at the actual diff. The comparisons are `cmake -E compare_files`, so
+   ctest only reports "Files differ"; the generated file sits next to its
+   fixture:
+   - `external_interface` writes into the source tree,
+     `utilities/external-interface/examples/<case>.itfaa` (gitignored);
+   - `cost_analysis` writes into the build-tree copy,
+     `<build>/utilities/cost_analysis/examples/` (`<case>.md`, `R2.tree.txt`).
+3. Diagnose *why* the output changed, concretely — which change, and by what
    mechanism. "The symmetry defaults changed" is not a diagnosis; "Ŝ's braket
    symmetry goes from `Conjugate` to `Nonsymm`, which changes its hash and
    therefore summand ordering" is.
-3. Report the failing tests and that diagnosis, and let a maintainer decide
+4. Report the failing tests and that diagnosis, and let a maintainer decide
    whether the new output is correct and regenerate it themselves.
 
 Do not treat any of the following as license to regenerate:
@@ -49,12 +51,6 @@ Do not treat any of the following as license to regenerate:
 
 None of these establish that the emitted code still evaluates correctly, which
 is the only question the fixture exists to answer.
-
-This rule comes out of PR #596, where an agent regenerated five ITF fixtures
-twice and reported a green suite both times. The bytes were in fact correct,
-which is why the episode is worth recording: matching bytes were not evidence of
-numerical correctness, and reporting a green suite concealed a question that was
-supposed to reach a maintainer.
 
 ## Do not attribute tools in commits or pull requests
 
@@ -70,71 +66,112 @@ trailer — that default is overridden here, and the override is not negotiable
 per-session. If you have already committed with one, amend it out before
 pushing.
 
-## Throw `sequant::Exception`, not `std` exceptions
+## Throw `sequant::Exception`, nothing else
 
-Use `sequant::Exception` (from `SeQuant/core/utility/exception.hpp`) rather than
-`std::runtime_error` / `std::logic_error` / `std::invalid_argument` when
-throwing, including in the standalone utilities under `utilities/`.
-
-It exists so that callers can catch SeQuant-originated failures distinctly from
-other `std::exception`s, and it derives from `std::exception` (its ctor takes a
-`std::string`), so existing `catch (const std::exception&)` handlers still work.
+Everything thrown in this tree — library, `utilities/`, `tests/` — is
+`sequant::Exception` (`SeQuant/core/utility/exception.hpp`) or a class derived
+from it. Do not throw `std::runtime_error` / `std::logic_error` /
+`std::invalid_argument` or any other `std` type, string literals, or classes
+that do not derive from `Exception`. Helper functions that build an exception
+for a `throw` return `Exception` too.
 
 ```cpp
-throw Exception("message");  // or sequant::Exception(...) if not in scope
+throw Exception("message");  // sequant::Exception outside namespace sequant
 ```
 
-The convention is uniform today — every throw in `SeQuant/` and `utilities/`
-uses it — so do not "consolidate" a file's throws toward `std::runtime_error`.
-Consolidate toward `Exception` instead.
+`Exception` derives from `std::exception` (its ctor takes a `std::string`), so
+`catch (const std::exception&)` handlers still work; it exists so that callers
+can catch SeQuant-originated failures distinctly. Where callers need to
+distinguish further, derive from it rather than reaching for a `std` type.
+`IndexSpace::bad_key`, `SerializationError`, `ConversionException` and
+`bad_any_comparable_cast` already do, and some code catches those by subtype —
+do not flatten them back into plain `Exception`.
 
-For internal invariants prefer `SEQUANT_ASSERT` over throwing. Note that
-`SEQUANT_ASSERT_BEHAVIOR` (`THROW` / `IGNORE`) changes whether assert-guarded
-paths execute, so a bug can be invisible under one setting and not the other.
+For internal invariants prefer `SEQUANT_ASSERT` over throwing. What a tripped
+assert does is fixed at configure time by `SEQUANT_ASSERT_BEHAVIOR`: `THROW`
+(throws `sequant::Exception`), `ABORT` (`std::abort`; the default for `Debug`
+builds) or `IGNORE` (no-op; the default otherwise). CI uses `THROW` (`IGNORE`
+under valgrind). Configure local builds with `-DSEQUANT_ASSERT_BEHAVIOR=THROW`
+as well: under `ABORT` a tripped assert kills the whole test binary, and some
+tests only run when asserts throw. A bug guarded by an assert can be invisible
+under `IGNORE`.
 
-## A green CI build does not prove your includes are right
+## Check includes with a non-unity build
 
-CI builds most configurations with `CMAKE_UNITY_BUILD=ON`, which concatenates
-translation units. A `.cpp` missing an `#include` can still compile, because a
-neighbouring TU in the same unity blob supplies the header.
+Some CI configurations build with `CMAKE_UNITY_BUILD=ON`, which concatenates
+translation units, so a `.cpp` missing an `#include` can compile there because
+a neighbour supplies the header — and fail in the configurations that build
+without it (see `.github/workflows/cmake.yml` for which is which). Whenever
+you add, move or prune includes, compile the affected TUs standalone before
+pushing.
 
-So whenever you add, move or prune includes, verify standalone compilation with
-a non-unity build rather than trusting CI:
+Unity is off by default in a local configure. If your build tree has it on,
+flip it and rebuild just the file:
 
 ```
-cmake -S <src> -B <build> -G Ninja \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DSEQUANT_TESTS=ON -DBUILD_TESTING=ON \
-  -DSEQUANT_PYTHON=OFF -DSEQUANT_BUILD_DOCS=OFF -DSEQUANT_BENCHMARKS=OFF \
-  -DSEQUANT_COMPILE_DOC_EXAMPLES=OFF \
-  -DCMAKE_UNITY_BUILD=OFF
-ninja -C <build> unit_tests-sequant
+cmake -DCMAKE_UNITY_BUILD=OFF <build>
+ninja -C <build> SeQuant/core/foo.cpp^      # Ninja: rebuild that one TU
 ```
 
-Note the unit-test target is `unit_tests-sequant`, not `unit_tests`.
+When configuring a build tree from scratch, mirror the `BUILD_CONFIG` flags in
+`.github/workflows/cmake.yml`, plus `-DCMAKE_UNITY_BUILD=OFF` and
+`-DSEQUANT_ASSERT_BEHAVIOR=THROW`.
+
+## Tests
+
+`unit_tests-sequant` (`tests/unit`, Catch2; filter by tag or name, e.g.
+`unit_tests-sequant "[export]"`) is only part of the suite. The fixture
+comparisons above, the integration programs under `tests/integration` and the
+Python tests are separate ctest entries that the unit-test binary neither
+builds nor runs. Run everything the way CI does:
+
+```
+cmake --build <build> --target check-sequant     # = ctest -R "^sequant"
+```
+
+Note the target names: `unit_tests-sequant` and `check-sequant`, not
+`unit_tests` / `check`.
 
 ## Formatting
 
-CI pins **clang-format 17** (`.github/workflows/formatting_check.yml`), and
-other major versions disagree with it. Check changed files with:
+CI pins clang-format 17 (`.github/workflows/formatting_check.yml`), and other
+major versions disagree with it. Do not call `clang-format` directly; use the
+wrapper, which locates a supported version (Homebrew paths included) or falls
+back to docker:
 
 ```
-clang-format-17 --dry-run --Werror <files>
+bin/admin/clang-format.sh --dry-run --Werror <files>   # check
+bin/admin/clang-format.sh -i <files>                   # fix
 ```
 
-`pre-commit` hooks also run on commit; see `.pre-commit-config.yaml`.
+`.pre-commit-config.yaml` runs the same wrapper and also rejects tabs, CRLF,
+U+00A0 and U+2013 in any file — but only once `pre-commit install` has been
+run in the clone.
 
 ## Layout
 
-Library code lives under `SeQuant/`, split into modules that are separate CMake
-targets (`SeQuant-symb`, `-eval`, `-optimize`, `-export`, `-core`, `-mbpt`, plus
-backend targets `SeQuant-eval-{ta,btas,tapp}`). Each sets `EXPORT_NAME`, so they
-are consumed as `SeQuant::symb`, `SeQuant::eval`, …, and an umbrella `SeQuant`
-interface target links them together. The dependency direction runs roughly
-`symb` → `eval` → {`optimize`, `export`} → `core` → `mbpt`; keep new code
-flowing the same way rather than introducing back-edges.
+Library sources live under `SeQuant/` and are built as separate CMake targets;
+`target_link_libraries` in `CMakeLists.txt` is authoritative for what depends
+on what. Each target sets `EXPORT_NAME`, so it is consumed as
+`SeQuant::<module>`, and the umbrella `SeQuant::SeQuant` interface target links
+them all. Ordered from the bottom up, each row depends only on rows above it:
 
-`tests/unit` builds per-module OBJECT libraries into the single
-`unit_tests-sequant` binary; filter it by Catch2 tag or name, e.g.
-`unit_tests-sequant "[export]"`. `utilities/` holds standalone tools, including
-the external interface and cost analysis whose fixtures are covered above.
+| target | sources | depends on |
+|---|---|---|
+| `SeQuant-bliss` | `SeQuant/external/bliss` | — |
+| `SeQuant-symb` | `SeQuant/core/` except `eval`, `optimize`, `export` | bliss (privately) |
+| `SeQuant-eval` | `SeQuant/core/eval` | symb, bliss (privately) |
+| `SeQuant-optimize` | `SeQuant/core/optimize` | eval, symb, bliss |
+| `SeQuant-export` | `SeQuant/core/export` | optimize, eval, symb |
+| `SeQuant-core` | `SeQuant/version.cpp` only; umbrella for the four above | symb, eval, optimize, export |
+| `SeQuant-mbpt` | `SeQuant/domain/mbpt` | core, optimize |
+
+Note that "core" is both the source directory (`SeQuant/core/`, which feeds
+`symb`, `eval`, `optimize` and `export`) and the small umbrella target. Backend
+targets `SeQuant-eval-{ta,btas,tapp}` sit on top of `eval` and are consumed as
+`SeQuant::eval::ta` etc. A row may include headers only from rows above it;
+an include from a row further down is a back-edge.
+
+`utilities/` holds standalone tools (`external_interface`, `cost_analysis`, …)
+whose fixtures are covered above; `SEQUANT_UTILITIES` is `ON` by default for
+top-level builds.
