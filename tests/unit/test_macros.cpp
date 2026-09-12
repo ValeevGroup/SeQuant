@@ -12,15 +12,16 @@
 
 TEST_CASE("macros", "[elements]") {
   SECTION("SEQUANT_ASSERT") {
-    std::filesystem::path this_file("tests");
-    this_file /= "unit";
-    this_file /= "test_macros.cpp";
+    std::filesystem::path this_file("tests/unit/test_macros.cpp");
+
+    const std::string file_path = this_file.string();
 
     this_file.make_preferred();
 
-    const std::string this_file_path = this_file.string();
+    const std::string file_path_native = this_file.string();
 
-    CAPTURE(this_file_path);
+    CAPTURE(file_path);
+    CAPTURE(file_path_native);
 
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       try {
@@ -36,9 +37,12 @@ TEST_CASE("macros", "[elements]") {
         // when initialized as default argument see
         // https://github.com/llvm/llvm-project/issues/56379
 #if !defined(SEQUANT_CXX_COMPILER_IS_CLANG) || __clang_major__ >= 16
-        REQUIRE(std::string_view(ex.what()).find(this_file_path +
-                                                 ":1000 in function ") !=
-                std::string::npos);
+        bool found = std::string_view(ex.what()).find(
+                         file_path + ":1000 in function ") != std::string::npos;
+        found |=
+            std::string_view(ex.what()).find(
+                file_path_native + ":1000 in function ") != std::string::npos;
+        REQUIRE(found);
 #endif
       }
       try {
@@ -54,9 +58,12 @@ TEST_CASE("macros", "[elements]") {
         // when initialized as default argument see
         // https://github.com/llvm/llvm-project/issues/56379
 #if defined(SEQUANT_CXX_COMPILER_IS_CLANG) && __clang_major__ >= 16
-        REQUIRE(std::string_view(ex.what()).find(this_file_path +
-                                                 ":2000 in function ") !=
-                std::string::npos);
+        bool found = std::string_view(ex.what()).find(
+                         file_path + ":2000 in function ") != std::string::npos;
+        found |=
+            std::string_view(ex.what()).find(
+                file_path_native + ":2000 in function ") != std::string::npos;
+        REQUIRE(found);
 #endif
       }
     }
