@@ -94,7 +94,7 @@ macro(sequant_add_library _module)
     add_library(SeQuant::${_module} ALIAS SeQuant-${_module})
     get_target_property(_type SeQuant-${_module} TYPE)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
-        target_set_warning_flags(SeQuant-${_module})
+        target_set_compiler_flags(SeQuant-${_module})
     endif()
 endmacro()
 
@@ -262,8 +262,6 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/uintseqhash.hh
         SeQuant/external/bliss/heap.cc
         SeQuant/external/bliss/heap.hh
-        SeQuant/external/bliss/timer.cc
-        SeQuant/external/bliss/timer.hh
         SeQuant/external/bliss/utils.cc
         SeQuant/external/bliss/utils.hh
         SeQuant/external/bliss/bliss_C.cc
@@ -595,7 +593,7 @@ target_link_libraries(SeQuant-symb
         SeQuant-bliss
         Threads::Threads
         libperm::libperm
-        $<BUILD_LOCAL_INTERFACE:utfcpp>
+        $<BUILD_LOCAL_INTERFACE:utf8cpp::utf8cpp>
         Eigen3::Eigen)
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant-symb PUBLIC

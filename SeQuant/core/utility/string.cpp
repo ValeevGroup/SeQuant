@@ -5,7 +5,7 @@
 #include <limits>
 #include <string>
 
-#include <utfcpp-src/source/utf8.h>
+#include <utf8/checked.h>
 
 namespace sequant {
 

@@ -11,6 +11,7 @@
 #include <range/v3/view/slice.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <functional>
 #include <iterator>
 #include <tuple>
@@ -200,7 +201,7 @@ constexpr auto bipartitions_ordered(T mask) {
 ///
 constexpr auto bipartitions_unordered(std::unsigned_integral auto mask) {
   auto bps = bipartitions_ordered(mask);
-  size_t const nparts = std::ranges::distance(bps) / 2;
+  const std::integral auto nparts = std::ranges::size(bps) / 2;
   return bps | std::views::take(nparts);
 }
 

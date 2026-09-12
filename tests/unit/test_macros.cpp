@@ -8,39 +8,62 @@
 
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <filesystem>
+
 TEST_CASE("macros", "[elements]") {
   SECTION("SEQUANT_ASSERT") {
+    std::filesystem::path this_file("tests/unit/test_macros.cpp");
+
+    const std::string file_path = this_file.string();
+
+    this_file.make_preferred();
+
+    const std::string file_path_native = this_file.string();
+
+    CAPTURE(file_path);
+    CAPTURE(file_path_native);
+
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       try {
         // clang-format off
 #line 1000  // to make sure the line number of the next line is fixed
-      sequant::assert_failed("test");
+        sequant::assert_failed("test");
         // clang-format on
+        FAIL("Assert should have thrown");
       } catch (sequant::Exception& ex) {
+        CAPTURE(ex.what());
         // see #line up there
         // N.B. clang <16 has std::source_location produce wrong line numbers
         // when initialized as default argument see
         // https://github.com/llvm/llvm-project/issues/56379
 #if !defined(SEQUANT_CXX_COMPILER_IS_CLANG) || __clang_major__ >= 16
-        REQUIRE(std::string_view(ex.what()).find(
-                    "tests/unit/test_macros.cpp:1000 in function ") !=
-                std::string::npos);
+        bool found = std::string_view(ex.what()).find(
+                         file_path + ":1000 in function ") != std::string::npos;
+        found |=
+            std::string_view(ex.what()).find(
+                file_path_native + ":1000 in function ") != std::string::npos;
+        REQUIRE(found);
 #endif
       }
       try {
         // clang-format off
 #line 2000  // to make sure the line number of the next line is fixed
-      SEQUANT_ASSERT(1 == 0 && "1 != 0", "testing SEQUANT_ASSERT");
+        SEQUANT_ASSERT(1 == 0 && "1 != 0", "testing SEQUANT_ASSERT");
         // clang-format on
+        FAIL("Assert should have thrown");
       } catch (sequant::Exception& ex) {
+        CAPTURE(ex.what());
         // see #line up there
         // N.B. clang <16 has std::source_location produce wrong line numbers
         // when initialized as default argument see
         // https://github.com/llvm/llvm-project/issues/56379
 #if defined(SEQUANT_CXX_COMPILER_IS_CLANG) && __clang_major__ >= 16
-        REQUIRE(std::string_view(ex.what()).find(
-                    "tests/unit/test_macros.cpp:2000 in function ") !=
-                std::string::npos);
+        bool found = std::string_view(ex.what()).find(
+                         file_path + ":2000 in function ") != std::string::npos;
+        found |=
+            std::string_view(ex.what()).find(
+                file_path_native + ":2000 in function ") != std::string::npos;
+        REQUIRE(found);
 #endif
       }
     }

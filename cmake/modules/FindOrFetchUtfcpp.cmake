@@ -1,4 +1,4 @@
-if (NOT TARGET utfcpp)
+if (NOT TARGET utf8cpp::utf8cpp)
     include(FetchContent)
 
     FetchContent_Declare(
@@ -6,20 +6,17 @@ if (NOT TARGET utfcpp)
         GIT_REPOSITORY "https://github.com/nemtrif/utfcpp.git"
 		GIT_TAG "${SEQUANT_TRACKED_UTFCPP_TAG}"
         GIT_SHALLOW
-        # Setting SOURCE_SUBDIR to a non-existing directory is the suggested workaround
-        # to prevent FetchContent_MakeAvailable to add_subdirectory until
-        # https://gitlab.kitware.com/cmake/cmake/-/issues/26220 gets implemented
-        # See also https://discourse.cmake.org/t/prevent-fetchcontent-makeavailable-to-execute-cmakelists-txt/12704
-        SOURCE_SUBDIR "_Don't use add_subdirectory_"
     )
 
     FetchContent_MakeAvailable(utfcpp)
 
-    add_library(utfcpp INTERFACE)
-    target_include_directories(utfcpp SYSTEM INTERFACE "${utfcpp_SOURCE_DIR}/..")
+	if (NOT TARGET utf8cpp::utf8cpp)
+		# https://github.com/nemtrif/utfcpp/pull/146
+		add_library(utf8cpp::utf8cpp ALIAS utf8cpp)
+	endif()
 endif()
 
 # postcond check
-if (NOT TARGET utfcpp)
-    message(FATAL_ERROR "FindOrFetchUtfcpp could not make TARGET utfcpp available")
+if (NOT TARGET utf8cpp::utf8cpp)
+    message(FATAL_ERROR "FindOrFetchUtfcpp could not make TARGET utf8cpp::utf8cpp available")
 endif()

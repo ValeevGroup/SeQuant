@@ -42,13 +42,8 @@ template <typename Derived>
 class Singleton {
   // can't use std::is_default_constructible since Derived's ctors should be
   // private
-  template <typename T, typename Enabler = void>
-  struct is_default_constructible_helper : public std::false_type {};
   template <typename T>
-  struct is_default_constructible_helper<T, std::void_t<decltype(T{})>>
-      : public std::true_type {};
-  constexpr static bool derived_is_default_constructible =
-      is_default_constructible_helper<Derived>::value;
+  static constexpr bool has_default_ctor = requires { T{}; };
 
  public:
   /// @return reference to the instance
@@ -58,7 +53,7 @@ class Singleton {
   static Derived& instance() {
     const auto& result_ptr = instance_accessor();
     if (result_ptr != nullptr) return *result_ptr;
-    if constexpr (derived_is_default_constructible) {
+    if constexpr (has_default_ctor<Derived>) {
       return set_default_instance();
     } else
       throw Exception(
@@ -73,7 +68,7 @@ class Singleton {
   static Derived* instance_ptr() {
     const auto& result_ptr = instance_accessor();
     if (result_ptr != nullptr) return result_ptr.get();
-    if constexpr (derived_is_default_constructible) {
+    if constexpr (has_default_ctor<Derived>) {
       return set_default_instance();
     } else
       return nullptr;
@@ -118,10 +113,13 @@ class Singleton {
  private:
   /// Constructs a default-constructed instance. If called from multiple threads
   /// only the first call will construct the instance.
-  static Derived& set_default_instance() {
+  static Derived& set_default_instance()
+    requires(has_default_ctor<Derived>)
+  {
     std::scoped_lock lock(instance_mutex());
     if (!instance_accessor()) {
-      instance_accessor() = std::move(std::unique_ptr<Derived>(new Derived));
+      // Note: std::make_unique can't deal with private friend ctors
+      instance_accessor().reset(new Derived());
     }
     return *instance_accessor();
   }

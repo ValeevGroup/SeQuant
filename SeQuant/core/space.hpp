@@ -16,6 +16,7 @@
 #include <range/v3/algorithm/any_of.hpp>
 
 #include <cmath>
+#include <cwctype>
 #include <string_view>
 #include <type_traits>
 
@@ -444,7 +445,7 @@ class IndexSpace {
   template <basic_string_convertible S>
   IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
-             unsigned long approximate_size = 10, Field field = Field::Complex)
+             std::size_t approximate_size = 10, Field field = Field::Complex)
       : attr_(typeattr, qnattr),
         base_key_(toUtf16(std::forward<S>(type_label))),
         approximate_size_(approximate_size),
@@ -490,8 +491,7 @@ class IndexSpace {
     using CharT = std::remove_cvref_t<std::ranges::range_value_t<View>>;
 
     auto to_return = [](auto &&range) {
-      std::basic_string_view<CharT> view(&(*begin(range)),
-                                         std::ranges::size(range));
+      std::basic_string_view<CharT> view(begin(range), end(range));
 
       if constexpr (std::same_as<CharT, char>) {
         return toUtf16(view);
@@ -508,9 +508,9 @@ class IndexSpace {
 
     const auto digit_pos = std::ranges::find_if(key, [](CharT c) {
       if constexpr (std::same_as<CharT, char>) {
-        return std::isdigit(c);
+        return c >= 0 && std::isdigit(static_cast<unsigned char>(c));
       }
-      return std::iswdigit(c);
+      return std::iswdigit(c) != 0;
     });
 
     if (digit_pos != end(key) && digit_pos != begin(key)) {
@@ -531,7 +531,7 @@ class IndexSpace {
   std::size_t approximate_size() const { return approximate_size_; }
 
   /// Set the approximate size of a space.
-  void approximate_size(size_t n) { approximate_size_ = n; }
+  void approximate_size(std::size_t n) { approximate_size_ = n; }
 
   /// @return the scalar Field over which this space is defined; controls
   /// whether the bra<->ket dual pairing involving this space is real

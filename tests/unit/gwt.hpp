@@ -11,9 +11,9 @@
 #include <range/v3/numeric/accumulate.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/filter.hpp>
-#include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <numeric>
 #include <vector>
 
 namespace sequant {
@@ -51,8 +51,9 @@ class GWT {
     }
 
     // initialize result_
-    result_.emplace(ranges::views::iota(0ul, rank_) | ranges::to_vector,
-                    contrs_t{});
+    oper_t op(rank_);
+    std::iota(op.begin(), op.end(), 0);
+    result_.emplace(std::move(op), contrs_t{});
 
     // recursively apply WT
     {

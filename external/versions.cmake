@@ -11,7 +11,7 @@ set(SEQUANT_TRACKED_LIBPERM_TAG cada3e185549896203cf4d0c7f26ea22c7de428f)
 
 set(SEQUANT_TRACKED_POLYMORPHICVARIANT_TAG 010c69786104c07c5faccffe0e99f99de5a69fd8)
 
-set(SEQUANT_TRACKED_UTFCPP_TAG v4.0.6)
+set(SEQUANT_TRACKED_UTFCPP_TAG v4.2.0)
 
 set(SEQUANT_TRACKED_CLI11_TAG v2.5.0)
 set(SEQUANT_OLDEST_CLI11_VERSION 2)
@@ -25,7 +25,13 @@ set(SEQUANT_OLDEST_JSON_VERSION 3)
 # - Boost.ContainerHash <1.81 uses unary_function that has been deprecated in C++11 and removed in C++17:
 #   https://github.com/boostorg/container_hash/blob/boost-1.80.0/include/boost/container_hash/hash.hpp#L132
 #   Recent stdlibs have removed this class when using C++17 (e.g. Apple Clang 15)
+# - MSVC requires https://github.com/boostorg/spirit/commit/43112c3f055fa109f20b8e8e6e50d0a016da742a due to
+#   a compiler bug: https://github.com/boostorg/spirit/issues/782
+if (MSVC)
+set(SEQUANT_OLDEST_BOOST_VERSION 1.85)
+else()
 set(SEQUANT_OLDEST_BOOST_VERSION 1.81)
+endif()
 
 set(SEQUANT_TRACKED_CATCH2_TAG v3.9.1)
 set(SEQUANT_OLDEST_CATCH2_VERSION 3.3)
