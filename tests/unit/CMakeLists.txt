@@ -188,13 +188,14 @@ target_link_libraries(unit_tests-sequant-eval-dryrun-obj
 set_source_files_properties("test_eval_ordered.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # test_eval_dryrun.cpp opens with `#define SEQUANT_EVAL_TRACE 1` to flip
-# Trace::Default to Trace::On for its WHOLE translation unit (its [dryrun][peak]
-# cases need the compile-time-gated note_working_set() calls inside the batched
-# custom evaluator's nested, un-parameterized evaluate_impl() re-entries). Under
-# a Unity build this file is concatenated AFTER siblings that already pulled in
-# SeQuant/core/eval/eval.hpp, so the Trace enum is fixed at Off before the
-# define is seen and the define silently becomes a no-op. Give this file its own
-# TU so the define is honoured.
+# Trace::Default to Trace::On for its WHOLE translation unit (its
+# [dryrun][peak] cases need the compile-time-gated note_working_set() calls
+# inside the batched custom evaluator's nested evaluate_impl() re-entries;
+# those follow the evaluator's EvalTrace template parameter, which these cases
+# leave at its Trace::Default). Under a Unity build this file is concatenated
+# AFTER siblings that already pulled in SeQuant/core/eval/eval.hpp, so the
+# Trace enum is fixed at Off before the define is seen and the define silently
+# becomes a no-op. Give this file its own TU so the define is honoured.
 set_source_files_properties("test_eval_dryrun.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE

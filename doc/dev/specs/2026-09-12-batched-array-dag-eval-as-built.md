@@ -576,13 +576,14 @@ forest with a fresh, `PeakMonitor`-wired, build-tallying cache and returns a
 `MeterReport`: `peak_bytes` and the op hash where the peak occurred, persistent/volatile
 FLOPs and `CostModel` exec-time split (classified by `compute_volatility`, the same
 bottom-up rule the gated `cache_manager` factory uses), `builds_total`, the per-value
-`HomeFidelity` list (builds versus where the value is homed and used), and the
-`scheduler` the report describes. It drives the SAME driver entry
-(`sequant::evaluate(Nodes const&, BatchPolicy const&, ...)`) a real solve uses, selected
-by the same `policy.scheduler`, so the metered replay is the run the policy describes,
-not a proxy. The `[dryrun-2iter-report]` fixture runs two iterations, cold and warm,
-forest versus ordered, reporting builds / FLOPs / peak at water-20 residual scale; it is
-how persistence and cache-halt effects are measured.
+`HomeFidelity` list (builds versus where the value is homed and used), and the `scheduler`
+the report describes. It drives the SAME driver entry (`sequant::evaluate(Nodes const&,
+BatchPolicy const&, ...)`) a real solve uses, selected by the same `policy.scheduler`, so
+the metered replay is the run the policy describes, not a proxy; the forest-descent
+evaluator is installed at `Trace::On`, since `note_working_set` (which feeds `peak_bytes`)
+is compile-time gated on it. The `[dryrun-2iter-report]` fixture runs two iterations, cold
+and warm, forest versus ordered, reporting builds / FLOPs / peak at water-20 residual
+scale; it is how persistence and cache-halt effects are measured.
 
 ## 10. Diagnostics
 
@@ -656,9 +657,8 @@ fetch through `slice_to_use` (the "hops" model), placement driven by the
 cross-occurrence meet `sliced_modes()` rather than a table. With a finite
 `peak_threshold` the DP still batches, so this is a genuine BATCHED route, not an
 unbatched fallback -- simply the non-DAG one: a value shared across trees is rebuilt per
-tree. The `stamp_lifetime_masks` meet, the node-keyed cache and the shared-buffer
-in-place test are retained for it, as is its `PeakSink` metering -- whose nested
-`note_working_set` calls are compile-time gated, hence the evaluator's `Trace` parameter.
+tree. The `stamp_lifetime_masks` meet, the node-keyed cache, the shared-buffer in-place
+test and the `PeakSink` metering (hence the evaluator's `Trace` parameter) are kept for it.
 
 ### 12.2 Known limitations and open items
 

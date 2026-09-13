@@ -438,9 +438,19 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
   // (which installs NO custom evaluator) actually does. That divergence was
   // a real dry-run/wet-run fidelity bug; restricting this install to forest
   // descent fixes it.
+  // Trace::On EXPLICITLY, matching the evaluate<Trace::On> right below: the
+  // evaluator's nested per-batch/per-member re-entries carry their trace level
+  // in the closure's TYPE (make_batched_custom_evaluator's \tparam EvalTrace),
+  // and note_working_set() -- the call that feeds `mon`, hence
+  // MeterReport::peak_bytes -- is compile-time gated on it. Left at
+  // Trace::Default this would (a) report a peak blind to every batched-inner
+  // scratch in any build without SEQUANT_EVAL_TRACE (mpqc's, i.e. the
+  // production dry-run predictor: measured 458x low on the C60 fixture) and
+  // (b) make meter() itself ODR-divergent between a TU that defines
+  // SEQUANT_EVAL_TRACE and one that does not.
   if (policy.scheduler == BatchScheduler::forest_descent)
-    cache.set_custom_evaluator(
-        sequant::make_evaluator(policy, yield, sequant::make_no_scope_guard{}));
+    cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
+        policy, yield, sequant::make_no_scope_guard{}));
 
   (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
                                      cache, {}, sequant::make_no_scope_guard{});

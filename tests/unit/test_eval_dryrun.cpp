@@ -3415,7 +3415,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   // The global (scratch-folded) peak is at least the outer cached residency.
   CHECK(global_peak >= outer_hwmark);
   // For this specifically-batched term the batched-inner transient dwarfs the
-  // outer residency (~195x observed); a 2x floor is safe and non-flaky.
+  // outer residency (458x measured); a 2x floor is safe and non-flaky.
   CHECK(global_peak > outer_hwmark * 2.0);
 }
 
