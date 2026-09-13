@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 using namespace sequant;
 
@@ -22,7 +23,7 @@ static ExprPtr get_expression(std::size_t i) {
           L"+ Â{p3;p1;}:A 1/3 g{p2,p1;p3,p4}:A t{p4;p2} ");
   }
 
-  throw "Invalid index";
+  throw sequant::Exception("Invalid index");
 }
 
 template <bool rapid_only>

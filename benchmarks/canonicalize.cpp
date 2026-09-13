@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 using namespace sequant;
 
@@ -30,7 +31,7 @@ static ExprPtr get_expression(std::size_t i) {
           L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}");
   }
 
-  throw "Invalid index";
+  throw sequant::Exception("Invalid index");
 }
 
 static void bench_canonicalize(benchmark::State &state) {

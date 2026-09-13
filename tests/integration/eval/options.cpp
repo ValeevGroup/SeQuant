@@ -4,6 +4,8 @@
 
 #include "options.hpp"
 
+#include <SeQuant/core/utility/exception.hpp>
+
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/concat.hpp>
 
