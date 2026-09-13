@@ -260,8 +260,7 @@ schedule with no home-sliced value: every key equals the hash.
 
 `home_scope(n)` returns `n->occurrence_home()` -- the loops opened at or above this node
 filtered to its own result slots, stamped per occurrence by `stamp_occurrence_homes`. It
-is NOT a cross-occurrence meet; the doxygen block above it still describes the retired
-meet-based definition, and the body is authoritative.
+is NOT a cross-occurrence meet; `[lifetime_mask][seed]` pins both halves.
 
 Three distinct fields on `EvalExpr` are routinely confused:
 
@@ -658,7 +657,8 @@ cross-occurrence meet `sliced_modes()` rather than a table. With a finite
 `peak_threshold` the DP still batches, so this is a genuine BATCHED route, not an
 unbatched fallback -- simply the non-DAG one: a value shared across trees is rebuilt per
 tree. The `stamp_lifetime_masks` meet, the node-keyed cache and the shared-buffer
-in-place test are retained for it.
+in-place test are retained for it, as is its `PeakSink` metering -- whose nested
+`note_working_set` calls are compile-time gated, hence the evaluator's `Trace` parameter.
 
 ### 12.2 Known limitations and open items
 

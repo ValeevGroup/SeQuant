@@ -2045,7 +2045,21 @@ template <typename TreeNode, bool FHC, typename Members>
 /// (the default) leaves all existing behavior byte-identical.
 using PeakSink = std::atomic<double>*;
 
-template <typename F, typename IndexPredicate = accept_any_index,
+/// \tparam EvalTrace trace level for the evaluator's own nested re-entries
+///         (the per-batch/per-member \c evaluate_impl calls on the scratch
+///         cache, and the re-installed inner evaluators). It is an EXPLICIT
+///         template parameter rather than an in-body \c Trace::Default because
+///         the returned closure's mangled name does not otherwise encode it:
+///         two TUs that disagree about \c Trace::Default (e.g. one of them
+///         defines \c SEQUANT_EVAL_TRACE) would emit the SAME closure symbol
+///         with different bodies and the linker would silently keep one of
+///         them, so a trace-enabled caller could end up running the
+///         untraced body -- and with it none of the compile-time-gated
+///         \c note_working_set() calls the \p peak sink folds. Defaulting to
+///         \c Trace::Default keeps every existing call site unchanged, while
+///         the value now rides in the type.
+template <Trace EvalTrace = Trace::Default, typename F,
+          typename IndexPredicate = accept_any_index,
           typename ScopeGuardFactory = make_no_scope_guard,
           typename IsVolatile = never_volatile>
 [[nodiscard]] auto make_batched_custom_evaluator(
@@ -2345,7 +2359,7 @@ template <typename F, typename IndexPredicate = accept_any_index,
             // does not carry pass through unsliced (built full over its deeper
             // / invariant modes). Store under the same canonical-phase
             // convention the batched member store uses.
-            ResultPtr built = evaluate_impl(d, sliced_leaf);
+            ResultPtr built = evaluate_impl<EvalTrace>(d, sliced_leaf);
             if (auto const ph = d->canon_phase(); ph != 1)
               built = built->mult_by_phase(ph);
             (void)target->store_and_access(d, std::move(built));
@@ -2444,11 +2458,12 @@ template <typename F, typename IndexPredicate = accept_any_index,
         auto ctx = cache.batch_context();
         ctx.push_back({K, synth_level(K), {e_lo, e_hi}, K});
         bs.cache.set_batch_context(std::move(ctx));
-        bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
+        bs.cache.set_custom_evaluator(make_batched_custom_evaluator<EvalTrace>(
             std::function<ResultPtr(node_t const&)>{leaf_evaluator},
             target_batch_size, accept, make_scope_guard, is_volatile,
             persistent_only, depth + 1, peak));
-        ResultPtr part = evaluate_impl(node, leaf_evaluator, bs.cache);
+        ResultPtr part =
+            evaluate_impl<EvalTrace>(node, leaf_evaluator, bs.cache);
         // Pre-size the full-extent zero destination from the node's own
         // (unsliced) index list on the first block; the backend realizes it
         // (flat or nested) with no array in the DAG consulted.
@@ -2635,11 +2650,13 @@ template <typename F, typename IndexPredicate = accept_any_index,
           auto ctx = cache.batch_context();
           ctx.push_back({Km, synth_level(Km), {e_lo, e_hi}, Km});
           bs.cache.set_batch_context(std::move(ctx));
-          bs.cache.set_custom_evaluator(make_batched_custom_evaluator(
-              std::function<ResultPtr(node_t const&)>{leaf_evaluator},
-              target_batch_size, accept, make_scope_guard, is_volatile,
-              persistent_only, depth + 1, peak));
-          ResultPtr part = evaluate_impl(*mem, leaf_evaluator, bs.cache);
+          bs.cache.set_custom_evaluator(
+              make_batched_custom_evaluator<EvalTrace>(
+                  std::function<ResultPtr(node_t const&)>{leaf_evaluator},
+                  target_batch_size, accept, make_scope_guard, is_volatile,
+                  persistent_only, depth + 1, peak));
+          ResultPtr part =
+              evaluate_impl<EvalTrace>(*mem, leaf_evaluator, bs.cache);
           if (!acc[m])
             acc[m] = std::move(part);
           else
@@ -2702,6 +2719,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
 ///       n.leaf() && n->is_tensor() && policy.is_volatile_leaf(n->as_tensor())
 ///     (when policy.is_volatile_leaf is empty, no node is volatile)
 ///
+/// \tparam EvalTrace trace level forwarded to make_batched_custom_evaluator
+///        (same semantics and same rationale -- see there).
 /// \param policy       BatchPolicy carrying the three batchability predicates.
 /// \param yielder      The leaf evaluator (captured and forwarded).
 /// \param make_scope_guard  Optional scope-guard factory (same semantics as in
@@ -2715,7 +2734,8 @@ template <typename F, typename IndexPredicate = accept_any_index,
 ///        &sink)`); passing `&sink` in the 3rd slot silently binds it to
 ///        \p make_scope_guard (via template deduction) and leaves \p peak
 ///        null.
-template <class F, class ScopeGuardFactory = make_no_scope_guard>
+template <Trace EvalTrace = Trace::Default, class F,
+          class ScopeGuardFactory = make_no_scope_guard>
 [[nodiscard]] auto make_evaluator(BatchPolicy const& policy, F yielder,
                                   ScopeGuardFactory make_scope_guard = {},
                                   PeakSink peak = nullptr) {
@@ -2738,7 +2758,7 @@ template <class F, class ScopeGuardFactory = make_no_scope_guard>
     accept = [](Index const&) { return false; };
     target = [](Index const&) -> std::size_t { return 0; };
   }
-  return make_batched_custom_evaluator(
+  return make_batched_custom_evaluator<EvalTrace>(
       std::move(yielder), std::move(target), std::move(accept),
       std::move(make_scope_guard), std::move(is_volatile_node),
       policy.persistent_only, /*depth=*/0, peak);

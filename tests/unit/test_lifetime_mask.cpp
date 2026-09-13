@@ -22,6 +22,7 @@ using sequant::EvalNode;
 using sequant::ExprPtr;
 using sequant::home_scope;
 using sequant::Index;
+using sequant::stamp_occurrence_homes;
 using sequant::eval::stamp_lifetime_masks;
 
 // A canonical eval-tree head from a two-factor product string. Two independent
@@ -378,27 +379,48 @@ TEST_CASE(
   CHECK(forest[0]->mask_all_full());
 }
 
-TEST_CASE("home_scope is an identity accessor over sliced_modes",
+TEST_CASE("home_scope is the per-occurrence home, not the sliced_modes meet",
           "[lifetime_mask][seed]") {
-  // home_scope is a thin accessor: after stamp_lifetime_masks, home_scope(n)
-  // must return exactly n->sliced_modes() for every stamped node -- this
-  // pins that identity so a future change to the accessor (or to what it
-  // forwards to) is caught here first.
+  // home_scope is a thin accessor over EvalExpr::occurrence_home, stamped by
+  // stamp_occurrence_homes: the loops opened at or above THIS occurrence,
+  // filtered to its own result slots, with NO cross-occurrence meet. It is a
+  // DIFFERENT quantity from EvalExpr::sliced_modes (the meet that
+  // eval::stamp_lifetime_masks stamps, read by the forest-descent route only);
+  // value identity now tells two differently-sliced occurrences of one node
+  // apart via value_key rather than by folding them to a common home (as-built
+  // design section 5.4). This case pins BOTH halves: the accessor identity and
+  // the deliberate divergence from the meet.
   Index const i{L"i_1"}, j{L"i_2"};
 
+  // Two occurrences of the SAME canonical node (same product string, so the
+  // meet groups them), sliced DIFFERENTLY: A opens both contracted loops, B
+  // opens only i.
   auto pair_A = head("P1{i_1;a_1} * P2{a_1;i_2}");
   auto pair_B = head("P1{i_1;a_1} * P2{a_1;i_2}");
   stamp_con_pair(pair_A, i, j);
-  stamp_con_pair(pair_B, i, j);
+  stamp_con(pair_B, i);
 
   std::vector<EvalNode<EvalExpr>> forest{pair_A, pair_B};
-  stamp_lifetime_masks(forest);
 
-  CHECK_FALSE(home_scope(forest[0]).empty());
+  // stamp_lifetime_masks stamps the meet ONLY; it leaves occurrence_home (and
+  // therefore home_scope) untouched -- the two stamps are independent passes.
+  stamp_lifetime_masks(forest);
+  CHECK(home_scope(forest[0]).empty());
+  CHECK(home_scope(forest[1]).empty());
+
+  stamp_occurrence_homes(forest);
+
+  // The accessor IS the field.
   for (auto const& n : forest) {
-    CHECK(as_set(home_scope(n)) == as_set(n->sliced_modes()));
+    CHECK(as_set(home_scope(n)) == as_set(n->occurrence_home()));
   }
+
+  // Per occurrence, never a meet: A keeps {i,j} and B keeps {i}, while the
+  // meet folds BOTH occurrences to the common {i}.
   CHECK(as_set(home_scope(forest[0])) == index_set({i, j}));
+  CHECK(as_set(home_scope(forest[1])) == index_set({i}));
+  CHECK(as_set(forest[0]->sliced_modes()) == index_set({i}));
+  CHECK(as_set(forest[1]->sliced_modes()) == index_set({i}));
 }
 
 // ---------------------------------------------------------------------
