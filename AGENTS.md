@@ -68,9 +68,9 @@ pushing.
 
 ## Throw `sequant::Exception`, nothing else
 
-Everything thrown in this tree — library, `utilities/`, `tests/` — is
-`sequant::Exception` (`SeQuant/core/utility/exception.hpp`) or a class derived
-from it. Do not throw `std::runtime_error` / `std::logic_error` /
+Everything thrown in this tree — library, `utilities/`, `tests/`,
+`benchmarks/` — is `sequant::Exception` (`SeQuant/core/utility/exception.hpp`)
+or a class derived from it. Do not throw `std::runtime_error` / `std::logic_error` /
 `std::invalid_argument` or any other `std` type, string literals, or classes
 that do not derive from `Exception`. Helper functions that build an exception
 for a `throw` return `Exception` too.
