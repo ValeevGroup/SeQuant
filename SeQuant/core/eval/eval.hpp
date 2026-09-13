@@ -1163,7 +1163,14 @@ ResultPtr evaluate_impl(Node const& node,         //
   // wrapper's `evaluate<..., Unchecked>` re-entry).
   enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftAdj };
   struct Frame {
-    Node node;
+    // NON-OWNING pointer into the tree being evaluated (which outlives this
+    // call): a Node member would DEEP-copy the whole subtree into every frame
+    // (binary_node.hpp), so evaluating the left-leaning Sum-tree binarize
+    // builds for a whole equation -- one spine node per summand, each subtree
+    // larger than the last -- would cost O(terms^2) nodes. Fatal on a UCC BCH
+    // energy (thousands of terms).
+    Node const* node_p;
+    Node const& nd() const { return *node_p; }
     bool checked;
     Stage stage = Stage::Enter;
     bool store_after = false;
@@ -1176,20 +1183,20 @@ ResultPtr evaluate_impl(Node const& node,         //
   // pass the raw result through unchanged.
   auto finish_phase_b = [&cache, &apply_phase](Frame const& f,
                                                ResultPtr rb) -> ResultPtr {
-    note_fresh_build(f.node, cache);
+    note_fresh_build(f.nd(), cache);
     if (!f.store_after) return rb;
     auto ptr =
-        cache.store_and_access(f.node, apply_phase(f.node, std::move(rb)));
+        cache.store_and_access(f.nd(), apply_phase(f.nd(), std::move(rb)));
     if constexpr (detail::trace(EvalTrace))
-      log::cache(f.node, cache, log::label(f.node, cache.batch_context()));
-    return apply_phase(f.node, ptr);
+      log::cache(f.nd(), cache, log::label(f.nd(), cache.batch_context()));
+    return apply_phase(f.nd(), ptr);
   };
 
   // A `std::deque` is used so that a reference to the top frame stays valid
   // across push_back (which reallocates a `std::vector`).
   std::deque<Frame> stk;
-  stk.push_back(
-      Frame{.node = node, .checked = (Cache == detail::CacheCheck::Checked)});
+  stk.push_back(Frame{.node_p = &node,
+                      .checked = (Cache == detail::CacheCheck::Checked)});
 
   ResultPtr ret;  // result handed up by the frame that most recently finalized
 
@@ -1207,40 +1214,40 @@ ResultPtr evaluate_impl(Node const& node,         //
         // --- Checked cache wrapper: a hit returns directly; a miss on a node
         //     that exists in the map schedules a store once computed. ---
         if (f.checked) {
-          if (auto m = cache.access_at(f.node); m.ptr) {
+          if (auto m = cache.access_at(f.nd()); m.ptr) {
             if constexpr (detail::trace(EvalTrace))
-              log::cache(f.node, cache,
-                         log::label(f.node, cache.batch_context()));
+              log::cache(f.nd(), cache,
+                         log::label(f.nd(), cache.batch_context()));
             // Slice-on-use: a value fetched `m.hops` scopes up does not have
             // this scope's (and any intervening) batch slices baked in, so
             // slice it to the current block for the loops the fetch crossed.
             // A local hit (hops == 0) or the OFF path (empty batch_context)
             // is a no-op, so this stays byte-identical to apply_phase() alone
             // there.
-            finalize(slice_to_use(apply_phase(f.node, m.ptr), f.node, m.hops));
+            finalize(slice_to_use(apply_phase(f.nd(), m.ptr), f.nd(), m.hops));
             break;
           }
-          f.store_after = cache.exists(f.node);
+          f.store_after = cache.exists(f.nd());
         }
 
         // --- Custom-evaluator interception (non-leaf only): a non-null result
         //     short-circuits the subtree -- children are never pushed. This is
         //     the subtree pruning batched eval relies on; see the class note. A
         //     null return declines to the standard scheme below. ---
-        if (!f.node.leaf()) {
+        if (!f.nd().leaf()) {
           if (ResultPtr intercepted =
-                  try_custom_eval<EvalTrace>(f.node, cache)) {
+                  try_custom_eval<EvalTrace>(f.nd(), cache)) {
             finalize(finish_phase_b(f, std::move(intercepted)));
             break;
           }
         }
 
         // --- Leaf. ---
-        if (f.node.leaf()) {
+        if (f.nd().leaf()) {
           // The FULL leaf (traced and cached full), via the shared leaf
           // fetch (fetch_leaf_traced, above).
           ResultPtr result =
-              fetch_leaf_traced<EvalTrace>(f.node, leaf_evaluator, cache);
+              fetch_leaf_traced<EvalTrace>(f.nd(), leaf_evaluator, cache);
           // Store the FULL leaf under its canonical key (a block slice would
           // corrupt the cache), then return it SLICED to the current block: a
           // freshly built leaf's lifetime is top, so every enclosing carried
@@ -1248,15 +1255,15 @@ ResultPtr evaluate_impl(Node const& node,         //
           // size). This reproduces the old per-block leaf slicing (le_g) on the
           // main value path; the OFF path (empty batch_context) is a no-op.
           ResultPtr stored = finish_phase_b(f, std::move(result));
-          finalize(slice_to_use(stored, f.node, cache.batch_context().size()));
+          finalize(slice_to_use(stored, f.nd(), cache.batch_context().size()));
           break;
         }
 
         // --- Internal node: request the left operand (always Checked). The
         //     stage must advance before the push (push may grow the deque). ---
-        f.stage = (f.node->op_type() == EvalOp::Adjoint) ? Stage::NeedLeftAdj
+        f.stage = (f.nd()->op_type() == EvalOp::Adjoint) ? Stage::NeedLeftAdj
                                                          : Stage::NeedLeft;
-        stk.push_back(Frame{.node = f.node.left(), .checked = true});
+        stk.push_back(Frame{.node_p = &f.nd().left(), .checked = true});
         break;
       }
 
@@ -1268,22 +1275,22 @@ ResultPtr evaluate_impl(Node const& node,         //
         SEQUANT_ASSERT(f.left);
         ResultPtr result;
         auto time = detail::timed_eval_inplace(
-            [&]() { result = apply_one_op(f.node, f.left, f.right); });
+            [&]() { result = apply_one_op(f.nd(), f.left, f.right); });
 
         if constexpr (detail::trace(EvalTrace)) {
           // `right` is null here (see log::bytes() null tolerance).
           size_t hwmark = log::bytes(cache, result).value;
           if (!cache.chain_holds(f.left)) hwmark += log::bytes(f.left).value;
           hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-          log::eval(log::EvalStat{.mode = log::eval_mode(f.node),
+          log::eval(log::EvalStat{.mode = log::eval_mode(f.nd()),
                                   .time = time,
                                   .mem_result = log::bytes(result),
                                   .mem_alloc = log::bytes(result),
                                   .mem_hwmark = {cache.note_working_set(
-                                      hwmark, f.node->hash_value())},
+                                      hwmark, f.nd()->hash_value())},
                                   .mem_left = log::bytes(f.left),
                                   .mem_right = log::bytes(f.right)},
-                    log::label(f.node, cache.batch_context()));
+                    log::label(f.nd(), cache.batch_context()));
         }
         log::release_after_op();
         finalize(finish_phase_b(f, std::move(result)));
@@ -1294,7 +1301,7 @@ ResultPtr evaluate_impl(Node const& node,         //
         f.left = std::move(ret);
         SEQUANT_ASSERT(f.left);
         f.stage = Stage::NeedRight;
-        stk.push_back(Frame{.node = f.node.right(), .checked = true});
+        stk.push_back(Frame{.node_p = &f.nd().right(), .checked = true});
         break;
       }
 
@@ -1306,7 +1313,7 @@ ResultPtr evaluate_impl(Node const& node,         //
         ResultPtr result;
         // In-place accumulation is eligible only when f.left's PROVENANCE is
         // known to be an evaluation-local, exclusively-owned buffer:
-        //  - !f.node.left().leaf(): a leaf's ResultPtr comes straight out of
+        //  - !f.nd().left().leaf(): a leaf's ResultPtr comes straight out of
         //    the caller-supplied leaf_evaluator, whose provenance this engine
         //    cannot see -- a memoizing evaluator (the norm for AO integrals /
         //    amplitudes reused across calls, e.g. rand_tensor_yield in the
@@ -1352,12 +1359,12 @@ ResultPtr evaluate_impl(Node const& node,         //
         // since each already-computed running total is a fresh,
         // evaluation-local buffer.
         bool const inplace_eligible =
-            f.node->op_type() == EvalOp::Sum && f.node->accumulate_in_place() &&
-            !f.node.left().leaf() && !cache.chain_holds_shared(f.left);
+            f.nd()->op_type() == EvalOp::Sum && f.nd()->accumulate_in_place() &&
+            !f.nd().left().leaf() && !cache.chain_holds_shared(f.left);
         if (inplace_eligible) {
           // The accumulate-in-place Sum (sum_in_place_traced, above),
           // shared with the ordered executor's own compute_cell.
-          result = sum_in_place_traced<EvalTrace>(f.node, std::move(f.left),
+          result = sum_in_place_traced<EvalTrace>(f.nd(), std::move(f.left),
                                                   f.right, cache);
           finalize(finish_phase_b(f, std::move(result)));
           break;
@@ -1365,7 +1372,7 @@ ResultPtr evaluate_impl(Node const& node,         //
         // The op itself, with its hook / tally / timing / trace bookkeeping
         // (apply_one_op_traced, above) -- shared verbatim with the ordered
         // executor's own compute_cell.
-        result = apply_one_op_traced<EvalTrace>(f.node, f.left, f.right, cache);
+        result = apply_one_op_traced<EvalTrace>(f.nd(), f.left, f.right, cache);
         finalize(finish_phase_b(f, std::move(result)));
         break;
       }

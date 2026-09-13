@@ -33,8 +33,10 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <ranges>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -1296,7 +1298,7 @@ class CacheManager {
   /// whole-nest invariant's escaped-outer set is empty, so its emitted
   /// effective_count is 1, which as a life would drain the entry on first use;
   /// reset() is the correct lifetime boundary for a hoisted invariant.
-  void ensure_hoist_slot(cache_key_type const& key) {
+  void ensure_hoist_slot(key_type const& key) {
     cache_map_.try_emplace(
         key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
   }
@@ -1412,14 +1414,18 @@ class CacheManager {
   /// Routes to the scope-chain ROOT so every build -- from any per-batch
   /// scratch -- accumulates in ONE map keyed by node identity (see
   /// recompute_tally_). Called only in the dry-run costing replay.
-  void tally_build(cache_key_type const& key, std::string const& slice_sig,
+  /// @param key the NODE whose build is tallied. A node (not a \c
+  /// cache_key_type): converting at the call boundary would COPY the node --
+  /// deep-copying its whole subtree -- on EVERY build, including on the wet
+  /// path where the tally is disabled.
+  void tally_build(key_type const& key, std::string const& slice_sig,
                    double flops, double exec) noexcept {
     if (parent_) {
       parent_->tally_build(key, slice_sig, flops, exec);
       return;
     }
     if (!recompute_tally_enabled_) return;  // wet path: no-op
-    auto& slice = recompute_tally_[key.node].slices[slice_sig];
+    auto& slice = recompute_tally_[key].slices[slice_sig];
     slice.count += 1;     // one more build of this exact (value, slice)
     slice.flops = flops;  // this slice's actual cost (same for repeats)
     slice.exec = exec;    // this slice's actual exec-cost (same for repeats)
@@ -1540,7 +1546,11 @@ class CacheManager {
   /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
-  [[nodiscard]] AccessResult access_at(cache_key_type const& key) noexcept {
+  /// @param key the NODE to look up. Taken as a node (not a \c cache_key_type)
+  /// on purpose: the map is probed heterogeneously, so a lookup never
+  /// materializes a \c CachedValue -- which would COPY the node, i.e.
+  /// deep-copy its whole subtree (see \c CachedValueHasher).
+  [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
@@ -1565,9 +1575,7 @@ class CacheManager {
   /// @param key The key that identifies the cached data.
   /// @return ResultPtr to Result. Thin forwarder to access_at() that drops the
   ///         hop distance, for the non-batched callers that do not slice.
-  ResultPtr access(cache_key_type const& key) noexcept {
-    return access_at(key).ptr;
-  }
+  ResultPtr access(key_type const& key) noexcept { return access_at(key).ptr; }
 
   ///
   /// @param key The key to identify the cached data.
@@ -1579,7 +1587,7 @@ class CacheManager {
   ///         valid pointer to @c data.
   // NOT noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
-  [[nodiscard]] ResultPtr store_and_access(cache_key_type const& key,
+  [[nodiscard]] ResultPtr store_and_access(key_type const& key,
                                            ResultPtr data) {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
@@ -1605,7 +1613,7 @@ class CacheManager {
   /// \brief Check if the key exists in the database: does not check if cache
   ///        exists
   ///
-  [[nodiscard]] bool exists(cache_key_type const& key) const noexcept {
+  [[nodiscard]] bool exists(key_type const& key) const noexcept {
     return cache_map_.find(key) != cache_map_.end();
   }
 
@@ -1626,7 +1634,7 @@ class CacheManager {
 
   /// if the key exists in the database, return the current lifetime count of
   /// the cached data otherwise return -1
-  [[nodiscard]] int life(cache_key_type const& key) const noexcept {
+  [[nodiscard]] int life(key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     auto end = cache_map_.end();
     return iter == end ? -1 : static_cast<int>(iter->second.life_count());
@@ -1635,7 +1643,7 @@ class CacheManager {
   /// if the key exists in the database, return the maximum lifetime count of
   /// the cached data that implies the maximum number of accesses allowed for
   /// this key before the cache is released. This value was set by the c'tor.
-  [[nodiscard]] int max_life(cache_key_type const& key) const noexcept {
+  [[nodiscard]] int max_life(key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     auto end = cache_map_.end();
     return iter == end ? -1 : static_cast<int>(iter->second.max_life_count());
@@ -1644,7 +1652,7 @@ class CacheManager {
   /// \return true iff the key is registered for caching and currently holds
   ///         stored data (i.e. has been stored and not yet drained by its
   ///         final access).
-  [[nodiscard]] bool alive(cache_key_type const& key) const noexcept {
+  [[nodiscard]] bool alive(key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.alive();
   }
@@ -1656,8 +1664,7 @@ class CacheManager {
   ///         already resident at its home is read from there each batch (the
   ///         parent-chain fall-through), so it is neither registered nor
   ///         rebuilt in the per-batch scratch.
-  [[nodiscard]] bool resident_in_chain(
-      cache_key_type const& key) const noexcept {
+  [[nodiscard]] bool resident_in_chain(key_type const& key) const noexcept {
     if (auto iter =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         iter != cache_map_.end() && iter->second.alive())
@@ -1667,15 +1674,14 @@ class CacheManager {
 
   /// \return true iff the key is registered for caching and classified
   ///         persistent (P: never released on access, survives reset()).
-  [[nodiscard]] bool persistent(cache_key_type const& key) const noexcept {
+  [[nodiscard]] bool persistent(key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter != cache_map_.end() && iter->second.persistent();
   }
 
   /// \return size in bytes of the data currently held for @p key, or 0 if
   ///         the key is not registered or no data is currently stored.
-  [[nodiscard]] size_t entry_size_in_bytes(
-      cache_key_type const& key) const noexcept {
+  [[nodiscard]] size_t entry_size_in_bytes(key_type const& key) const noexcept {
     auto iter = cache_map_.find(key);
     return iter == cache_map_.end() ? 0 : iter->second.size_in_bytes();
   }
@@ -1826,6 +1832,16 @@ struct zero_footprint {
 ///                    EXPLICITLY -- a default-argument change is invisible in a
 ///                    diff, and it raises resident memory for callers relying
 ///                    on the default.
+///                    COST NOTE: 1 registers EVERY internal node, and a cached
+///                    node is held in the cache map by value (a deep copy of
+///                    its subtree). On the left-leaning Sum-tree binarize
+///                    builds for a whole equation the spine has one node per
+///                    summand, each with a strictly larger subtree, so
+///                    registering all of them costs O(terms^2) nodes -- fine
+///                    for a residual (tens of terms), fatal for a UCC BCH
+///                    energy (thousands). A forest-descent caller that does not
+///                    need the ordered executor's exact use counts should pass
+///                    2 there.
 /// \param footprint_of `double(TreeNode const&)`: the materialized storage
 ///        footprint of a node's result (e.g. its element count or byte size).
 ///        Consulted only when \p max_footprint > 0.
@@ -1875,18 +1891,37 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
-  std::unordered_map<TreeNode, size_t, Hasher, Comp> counts;  // internal uses
-  std::unordered_map<TreeNode, bool, Hasher, Comp> volatile_of;  // memoized
-  std::unordered_set<TreeNode, Hasher, Comp> persistent;  // NV/V frontier
+  // The DAG walk below keys on NON-OWNING pointers into \p nodes, not on
+  // TreeNode by value: copying a TreeNode DEEP-copies its whole subtree
+  // (binary_node.hpp), so a by-value walk map costs the sum of all subtree
+  // sizes -- QUADRATIC in the number of terms on the left-leaning Sum-tree
+  // binarize now builds for a whole equation (one spine node per summand; a UCC
+  // BCH energy expansion has thousands of them). Only the nodes actually cached
+  // are copied, at the end of this function. \p nodes must therefore be a range
+  // of REFERENCES to nodes that outlive this call (asserted below) -- the same
+  // contract the min_repeats-only overload's pointer-keyed scan already relies
+  // on. Hasher/Comp are heterogeneous (eval_node_compare.hpp): a pointer key
+  // still hashes and compares by node CONTENT, so structurally equal nodes
+  // dedup exactly as they did with by-value keys.
+  static_assert(
+      std::is_reference_v<
+          std::ranges::range_reference_t<std::remove_cvref_t<decltype(nodes)>>>,
+      "cache_manager(): the node range must yield references to "
+      "nodes that outlive the call (the DAG walk keys on their "
+      "addresses)");
+  using NodePtr = TreeNode const*;
+  std::unordered_map<NodePtr, size_t, Hasher, Comp> counts;     // internal uses
+  std::unordered_map<NodePtr, bool, Hasher, Comp> volatile_of;  // memoized
+  std::unordered_set<NodePtr, Hasher, Comp> persistent;         // NV/V frontier
 
   // Single DAG walk: count internal-node uses (CSE), memoize volatility
   // bottom-up, and mark the NV/V frontier. Every (parent, child) edge is
   // visited exactly once (children are recursed only on a node's first visit),
   // so a child is marked persistent iff some volatile parent consumes it.
   auto visit = [&](auto&& self, TreeNode const& n) -> bool {
-    bool const first = !volatile_of.contains(n);
-    if (!n.leaf()) ++counts[n];  // count this use of an internal node
-    if (!first) return volatile_of.at(n);
+    bool const first = !volatile_of.contains(&n);
+    if (!n.leaf()) ++counts[&n];  // count this use of an internal node
+    if (!first) return volatile_of.at(&n);
     bool v;
     if (n.leaf()) {
       v = is_volatile(n);
@@ -1895,11 +1930,11 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
       bool const vr = self(self, n.right());
       v = is_volatile(n) || vl || vr;
       if (v) {  // n is a volatile consumer => its NV internal children are P
-        if (!vl && !n.left().leaf()) persistent.insert(n.left());
-        if (!vr && !n.right().leaf()) persistent.insert(n.right());
+        if (!vl && !n.left().leaf()) persistent.insert(&n.left());
+        if (!vr && !n.right().leaf()) persistent.insert(&n.right());
       }
     }
-    volatile_of.emplace(n, v);
+    volatile_of.emplace(&n, v);
     return v;
   };
   for (auto&& tree : nodes) visit(visit, tree);
@@ -1928,9 +1963,15 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // stamp_lifetime_masks External stamps): every mask is empty (all-full,
   // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
   // and admits exactly what it did before -- byte-identical.
+  // Only the SELECTED nodes are copied by value here -- into the cache map and,
+  // for the frontier, into the owning set the returned is_persistent closes
+  // over. A node that is not cached never pays a (deep) copy.
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
-  for (auto&& [n, c] : counts) {
-    if (!(c >= min_repeats || persistent.contains(n))) continue;
+  std::unordered_set<TreeNode, Hasher, Comp> persistent_nodes;
+  for (auto&& [np, c] : counts) {
+    TreeNode const& n = *np;
+    bool const is_p = persistent.contains(np);
+    if (!(c >= min_repeats || is_p)) continue;
     // Batch-variant: a node whose cross-occurrence lifetime mask is non-empty
     // is sliced by some enclosing external mode in every occurrence => its
     // value differs per batch => refused run-scope residence. all-full (empty
@@ -1938,13 +1979,17 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
     bool const batch_variant = !n->mask_all_full();
     if (batch_variant ||
         (max_footprint > 0. && footprint_of(n) > max_footprint)) {
-      persistent.erase(n);  // keep is_persistent consistent with what is cached
+      // Not cached => not persistent either: skipping the insert below keeps
+      // is_persistent consistent with what is cached (this is what the former
+      // persistent.erase(n) did when the frontier set held nodes by value).
       continue;
     }
     filtered.emplace(n, c);
+    if (is_p) persistent_nodes.insert(n);
   }
 
-  auto is_persistent = [persistent = std::move(persistent)](TreeNode const& n) {
+  auto is_persistent = [persistent =
+                            std::move(persistent_nodes)](TreeNode const& n) {
     return persistent.contains(n);
   };
   return CacheManager<TreeNode, force_hash_collisions>{
