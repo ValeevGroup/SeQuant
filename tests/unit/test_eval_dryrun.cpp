@@ -423,6 +423,8 @@ TEST_CASE("is_valid accepts a CSV proto-indexed residual",
 // destroyed. Without re-keying, the whole-Sum lookup finds nothing, every batch
 // annotation is dropped, and over-budget intermediates materialize whole -- the
 // water-20 OOM. This asserts the re-keying on the real CSV doubles residual.
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
           "[optimize][batch][term_batch_axes]") {
   using namespace sequant;
@@ -510,6 +512,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
     CHECK_NOTHROW(binarize<EvalExpr>(rexpr, bopts));
   }
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // Regression: the exact R1 (singles) summand water-20 PNO-CCSD aborted on --
 // f{mu~;i} * C{a<i>;mu~}, a 2-tensor contraction. The batched optimizer must
@@ -1765,6 +1768,8 @@ TEST_CASE(
 // witnessing what the runtime actually realizes, not what the DP annotated.
 // ===========================================================================
 
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "dryrun eval backend replays the post-transform giant term through the "
     "real batched runtime",
@@ -2095,6 +2100,7 @@ TEST_CASE(
 
   CHECK(peak > 0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // Task 6 (perf-first validation): optimize the C60 giant term (index 38) at
 // the faithful real config and check the factorization the DP picks. The 4-PAO
@@ -2105,6 +2111,8 @@ TEST_CASE(
 // kept for the printed contrast only -- under the ordered cost model it also
 // declines the 4-PAO (its batched peak is priced with accumulator residency),
 // so no ASSERTION is made about it.
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "dryrun perf-first never forms the 4-PAO AO integral and peaks on the "
     "genuine 4-PNO W node (C60 giant)",
@@ -2397,6 +2405,7 @@ TEST_CASE(
   CHECK(perf_first.peak_bytes < 2e12);
   CHECK(perf_first.peak_bytes > 5e11);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // D1.2 (external-mode batching wired into DP SELECTION): the external batch
 // loop must flow into the DP's REPORTED peak. Optimizing the over-budget C60
@@ -3308,6 +3317,8 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
 // to make_evaluator folds each scratch cache's high-watermark into one global
 // accumulator, so the global peak reflects the true batched-replay peak rather
 // than just the outer residency the accessor sees today.
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
@@ -3418,6 +3429,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   // outer residency (458x measured); a 2x floor is safe and non-flaky.
   CHECK(global_peak > outer_hwmark * 2.0);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // Phase 1 Task 2 regression guard: a metered replay's peak_bytes must be the
 // TRUE co-resident sum across the cache scope chain, not

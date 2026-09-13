@@ -2102,6 +2102,8 @@ TEST_CASE(
 // build_ordered_schedule. This reproduces that schedule-build failure as a
 // local dry-run so the failing well_formed invariant (SEQUANT_DUMP_WF) can be
 // diagnosed without the MPI/MPQC run.
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "build_ordered_schedule: water-20 aux+occ residual builds a well-formed "
     "schedule",
@@ -2110,6 +2112,7 @@ TEST_CASE(
   CHECK(well_formed(fx.sched));
   CHECK(fx.sched.num_values == fx.rich.cells.size());
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 namespace {
 
@@ -2198,6 +2201,8 @@ orderedsched_old_partition(
 // for a carried chain of ANY depth, not just the depth-1 case this real
 // fixture happens to produce (max_pass here is 1; deeper chains, where it
 // would be > 1, are exercised by the two synthetic cases above).
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
           "[ordered-schedule][levels]") {
   auto const fx = orderedsched_water20_auxocc_fixture();
@@ -2212,6 +2217,7 @@ TEST_CASE("forced_split_levels: two levels reproduce the two-set partition",
   for (std::size_t v = 0; v < fx.rich.cells.size(); ++v)
     CHECK((lv.pass(v) >= 1) == (old_consumer_pass.count(v) != 0));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // Fix round 1 (review-task-2.md, Important 2): the one-forced-space

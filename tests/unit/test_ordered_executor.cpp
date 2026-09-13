@@ -1053,6 +1053,8 @@ void ut_dump_role_diag(sequant::eval::RichSchedule const& rich,
 }
 }  // namespace
 
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "ordered executor: water-20 aux+occ residual dry-run walk completes "
     "without "
@@ -1548,6 +1550,7 @@ TEST_CASE(
 
   logger.eval.level = prev_level;
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // Explicit value cells (SP4 Task 3): derive the cell table's productions
@@ -1558,6 +1561,8 @@ TEST_CASE(
 // naming an enclosing loop instance of its own scope) -- reads and lives are
 // Task 4.
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("cell table: cells derived from the w20 default schedule",
           "[cell_table][ordered]") {
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -1895,6 +1900,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
     UNSCOPED_INFO("[" << v.rule << "] " << v.what);
   REQUIRE(violations.empty());
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // The SAME derivation on the configuration mirrored from a real input, set
@@ -1913,6 +1919,8 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
 // (DenseTimeSpaceBatched -- also its default). The executor is NOT run here;
 // the [w20-auxocc-walk] case does that.
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
           "[cell_table][ordered]") {
   using sequant::eval::dryrun::EvalExprDryRun;
@@ -2095,6 +2103,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   // the [per-nest-split] fixtures; here it is reported, not required.
   WARN("built_and_escaped_here = " << built_and_escaped_here);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // Diagnostic-only dump (Task 1 of the explicit-cells stage-2 plan):
@@ -2308,6 +2317,8 @@ TEST_CASE(
 // its Transients every iteration. Reuses the SAME water-20 fixture as the
 // witness above.
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "ordered executor: cache-halt gate does not re-form a resident persistent "
     "composite, and skips its dead batch-block prerequisites when present",
@@ -2574,6 +2585,7 @@ TEST_CASE(
     CHECK(b2_dead == b1_dead);
   }
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // [.][dryrun-2iter-report] (hidden report, not a strict gate): a 2-ITERATION
@@ -4204,6 +4216,8 @@ TEST_CASE(
 // The [w20-auxocc-walk] fixture keeps its environment-driven mirroring
 // unchanged; this case makes the mirrored RUN part of the default suite.
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "ordered executor: the input-mirrored configuration RUNS the strict "
     "dry-run walk to completion",
@@ -4324,6 +4338,7 @@ TEST_CASE(
 
   logger.eval.level = prev_level;
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 // ===========================================================================
 // An Assemble step's destination is sized from ITS OWN CELL'S FORM (the
 // table), never inferred from where the escaped axis happens to sit on the
@@ -4340,6 +4355,8 @@ TEST_CASE(
 // both kinds and a value reduced on an inner loop is carried (scattered) on
 // an outer one -- the two-level shape this rule is about.
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "ordered executor: an Assemble step's scatter destination is sized from "
     "its own cell form",
@@ -4633,6 +4650,7 @@ TEST_CASE(
     CHECK(z.lobounds.empty());
   }
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // A loop-invariant escape is not re-formed on later batches.
@@ -4660,6 +4678,8 @@ TEST_CASE(
 // rebuilt on every batch in both old and new code and needs the fill-once
 // property above to be pinned at all.)
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "ordered executor: a loop-invariant escape is not re-formed on later "
     "batches",
@@ -4832,6 +4852,7 @@ TEST_CASE(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // A `produce_if_absent` cell that is BOUND to an enclosing loop instance is
@@ -4851,6 +4872,8 @@ TEST_CASE(
 // (MEASURED: the default configuration's produce_if_absent cells are all
 // unbound), so this case sets that configuration directly.
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE(
     "ordered executor: a produce-if-absent cell bound to an enclosing loop is "
     "re-produced on that loop's batches",
@@ -5030,6 +5053,7 @@ TEST_CASE(
                 << "is bound to has " << n_bound_batches << " batches");
   CHECK(builds >= n_bound_batches);
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // The rule that closes the hazard the case above characterizes, on a
 // hand-built table so the two halves of it are visible side by side: a
@@ -5115,6 +5139,8 @@ TEST_CASE(
 // most one per batch of every loop on that cell's scope path -- and pinned
 // exactly by re-running the identical schedule).
 // ===========================================================================
+// Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
+#ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("ordered executor computes cells through apply_one_op only",
           "[ordered-executor][b-full]") {
   SECTION("unbatched scalar forest: one build per BuildStep, zero probes") {
@@ -5382,6 +5408,7 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     CHECK(again.probes == 0);
   }
 }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
 // SEMANTIC REFUSALS SURVIVE A NON-DEBUG BUILD.
