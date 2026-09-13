@@ -91,16 +91,19 @@ struct ScopeBlock {
                              //!< (depth 0, empty space, altitude/latitude
                              //!< ordinals 0) on the root block.
   BatchModeType kind =
-      BatchModeType::Contracted;    //!< Contracted (accumulate on block exit)
-                                    //!< or External (scatter on block exit);
-                                    //!< meaningless on the root.
-  container::vector<Step> steps{};  //!< ORDERED: build-or-child-block,
-                                    //!< interleaved (see \c Step's doc
-                                    //!< comment for why \c container::vector,
-                                    //!< not \c svector).
+      BatchModeType::Contracted;  //!< Contracted (accumulate on block exit)
+                                  //!< or External (scatter on block exit);
+                                  //!< meaningless on the root.
+  container::vector<Step> steps;  //!< ORDERED: build-or-child-block,
+                                  //!< interleaved (see \c Step's doc
+                                  //!< comment for why \c container::vector,
+                                  //!< not \c svector).
   container::svector<std::pair<std::size_t, OutputKind>>
       outputs{};  //!< value_id -> how it leaves this block on close.
 
+  // NOTE: `steps` deliberately has NO default member initializer: `{}` here
+  // would instantiate std::vector<Step>'s default constructor in-class,
+  // where Step is still incomplete (rejected by clang with libstdc++).
   // Declared here, DEFINED below \c Step (see the out-of-line "= default"
   // definitions there). \c steps is a \c std::vector of the still-incomplete
   // \c Step, which the library tolerates only up to first use; defining
