@@ -10,7 +10,14 @@ concurrency:
 
 jobs:
   build:
-    timeout-minutes: 60
+    # The sanitizer configuration is the long pole and it has outgrown 60
+    # minutes: its last green run spent 28.2 min building and 28.9 min in
+    # ctest, finishing at 59.9 min. 25 of those 28.9 test minutes are eight
+    # long-standing cases (sequant/unit/mbpt_cc alone is 10 min under ASan)
+    # plus the integration suite, so the cap is not a symptom of any one
+    # change and trimming tests further buys almost nothing. Give every
+    # configuration headroom instead of losing runs to a 6-second margin.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
