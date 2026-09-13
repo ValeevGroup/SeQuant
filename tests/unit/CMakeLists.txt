@@ -198,6 +198,16 @@ set_source_files_properties("test_eval_ordered.cpp"
 # becomes a no-op. Give this file its own TU so the define is honoured.
 set_source_files_properties("test_eval_dryrun.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# test_ordered_executor.cpp (~5.4 kLOC) and test_ordered_schedule.cpp (~3.2
+# kLOC) are by far the largest sources here and both instantiate deep
+# Catch2 + eval template stacks. Concatenated into one Unity translation unit
+# they make a single cc1plus invocation whose peak memory exceeds what a
+# 16 GB 2-core CI runner can afford next to a second parallel compile (the
+# GitHub ubuntu-24.04 Debug + CMAKE_UNITY_BUILD job was killed mid-compile of
+# this target's unity_0). Give each its own TU; the remaining seven sources
+# still share one.
+set_source_files_properties("test_ordered_executor.cpp" "test_ordered_schedule.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -287,6 +297,19 @@ endif()
 if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
+endif()
+
+# The water-20-sized eval fixtures (the ordered-executor / dry-run cases that
+# build a schedule out of tests/unit/data/csv_ccsd_doubles_residual_df.txt) run
+# in a second or two natively but take >2 minutes EACH under ASan/UBSan and
+# far longer under valgrind, which by itself blows the CI job budget. Gate them
+# on the SEQUANT_SKIP_LONG_TESTS option ONLY -- deliberately NOT on
+# SEQUANT_INTERNAL_SKIP_LONG_TESTS, which also fires for every Debug build:
+# these cases are the ones that exercise the assertion-heavy Debug paths, so a
+# plain Debug build must keep running them. The CI sanitizer and valgrind jobs
+# are exactly the configurations that set the option.
+if (SEQUANT_SKIP_LONG_TESTS)
+    target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
 
 target_set_warning_flags(unit_tests-sequant)

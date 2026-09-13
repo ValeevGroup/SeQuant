@@ -917,7 +917,24 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                  yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-      REQUIRE(equal_tarrays(prod2_eval, prod2_man));
+      // Unlike the two-tensor cases above, this three-tensor chain does NOT
+      // reproduce the hand-written TA expression bit for bit: eval lays each
+      // intermediate out in the node's canonical mode order, TA lays this
+      // expression's intermediate out in the order the annotations impose, so
+      // the two gemms accumulate in different orders. With nvirt = 20 the
+      // final reduction runs over 80 terms of O(1) random values, so the
+      // resulting last-bit disagreement is O(1e-13) in ABSOLUTE norm -- above
+      // equal_tarrays' fixed margin of 100*eps (2.2e-14), which only ever
+      // passed here because the two orders happened to coincide on some
+      // platforms (it does not on Linux/g++ + reference BLAS). Compare
+      // RELATIVELY, which is what the check is actually about: a wrong
+      // contraction or a wrong permutation shows up at O(0.1), not O(1e-13).
+      TArrayD prod2_diff;
+      prod2_diff("a1,a2,i1,i2") =
+          prod2_eval("a1,a2,i1,i2") - prod2_man("a1,a2,i1,i2");
+      double const prod2_rel = TA::norm2(prod2_diff) / TA::norm2(prod2_man);
+      INFO("prod2 relative L2 diff = " << prod2_rel);
+      REQUIRE(prod2_rel < 1e-12);
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
           L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
@@ -2507,6 +2524,16 @@ TEST_CASE(
   using TA::TArrayD;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
+  // The fixture's a_3 sits in the BRA of both h and t, which trips the
+  // tensor-network canonicalizer's strict bra<->ket policy (an internal index
+  // may appear at most once per side under Conjugate). This case is about the
+  // array operations of a mixed same-node open, not about the canonicalizer's
+  // covariance assumptions, so relax the policy for its scope -- the same
+  // treatment the other multi-bra fixtures in this file already use.
+  auto ctx_relaxed = sequant::get_default_context().clone();
+  ctx_relaxed.set(sequant::AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter =
+      sequant::set_scoped_default_context(std::move(ctx_relaxed));
   auto& world = TA::get_default_world();
   // nocc 4 tiled by 2 -> two occ batches of one tile each.
   rand_tensor_yield<double, TA::DensePolicy> yield_{world, 4, 6, 12};
@@ -2632,6 +2659,16 @@ TEST_CASE(
   using TArrayD = TA::DistArray<TA::Tensor<double>, TA::SparsePolicy>;
   using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
 
+  // The fixture's a_3 sits in the BRA of both h and t, which trips the
+  // tensor-network canonicalizer's strict bra<->ket policy (an internal index
+  // may appear at most once per side under Conjugate). This case is about the
+  // array operations of a mixed same-node open, not about the canonicalizer's
+  // covariance assumptions, so relax the policy for its scope -- the same
+  // treatment the other multi-bra fixtures in this file already use.
+  auto ctx_relaxed = sequant::get_default_context().clone();
+  ctx_relaxed.set(sequant::AssertStrictBraKetSymmetry::No);
+  auto const ctx_resetter =
+      sequant::set_scoped_default_context(std::move(ctx_relaxed));
   auto& world = TA::get_default_world();
   // nocc 4 tiled by 2 -> two occ batches of one tile each.
   auto const envi = [](char const* k, std::size_t d) {
@@ -6251,6 +6288,13 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
   // Unshaped reference (no hook).
   auto const ref = evaluate(node, target, yield)->get<ToTArray>();
   TA::TiledRange const res_tr = ref.trange();
+  // The result's OUTER modes are i_1, i_2 and i_3 -- the contracted composite
+  // a4<i2,i3> is summed over, but its pair-basis index i_3 survives as a free
+  // outer mode (see the comment above `target`). So an outer tile index is
+  // 3-dimensional and the result's TA annotation is `target`, not a hand-made
+  // two-outer-mode string. Pin the rank so a layout change fails here loudly
+  // rather than as an opaque TA_ASSERT inside a tile lookup.
+  REQUIRE(res_tr.tiles_range().rank() == 3);
 
   auto make_ctx = [](auto shape_fn) {
     TAEvalContext ctx;
@@ -6264,10 +6308,10 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
   };
 
   SECTION("real shape: zeroed tile is_zero, survivors match baseline") {
-    // Zero outer tile (0,0); keep the rest.
+    // Zero outer tile (0,0,0); keep the rest.
     auto ctx = make_ctx([](TA::TiledRange const& tr) {
       TA::Tensor<float> norms{tr.tiles_range(), 1.0f};
-      norms[{0, 0}] = 0.0f;
+      norms[{0, 0, 0}] = 0.0f;
       return TA::SparseShape<float>{norms, tr, /*do_not_scale=*/true};
     });
     auto cache = cache_t::empty();
@@ -6276,7 +6320,7 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
     auto const res = evaluate(node, target, yield, cache)->get<ToTArray>();
 
     // (1) zeroed tile gone.
-    REQUIRE(res.is_zero({0, 0}));
+    REQUIRE(res.is_zero({0, 0, 0}));
     // (2) survivors equal the unshaped baseline.
     for (auto it = res.begin(); it != res.end(); ++it) {
       if (!res.is_local(it.index()) || res.is_zero(it.index())) continue;
@@ -6303,7 +6347,7 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
     cache.set_shaped_product_hook(
         TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
     auto const res = evaluate(node, target, yield, cache)->get<ToTArray>();
-    std::string const annot{"i,j;a,b"};
+    std::string const& annot = target;
     REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
             res(annot).dot(res(annot)));
   }
@@ -6317,14 +6361,14 @@ TEST_CASE("shape_provider_general_product", "[shape-provider]") {
     cache.set_shaped_product_hook(
         TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
     auto const res = evaluate(node, target, yield, cache)->get<ToTArray>();
-    std::string const annot{"i,j;a,b"};
+    std::string const& annot = target;
     REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
             res(annot).dot(res(annot)));
   }
 
   SECTION("no hook installed => unshaped behavior unchanged") {
     auto const res = evaluate(node, target, yield)->get<ToTArray>();
-    std::string const annot{"i,j;a,b"};
+    std::string const& annot = target;
     REQUIRE(Catch::Approx(ref(annot).dot(ref(annot))) ==
             res(annot).dot(res(annot)));
   }
