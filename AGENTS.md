@@ -70,10 +70,10 @@ pushing.
 
 Everything thrown in this tree — library, `utilities/`, `tests/`,
 `benchmarks/` — is `sequant::Exception` (`SeQuant/core/utility/exception.hpp`)
-or a class derived from it. Do not throw `std::runtime_error` / `std::logic_error` /
-`std::invalid_argument` or any other `std` type, string literals, or classes
-that do not derive from `Exception`. Helper functions that build an exception
-for a `throw` return `Exception` too.
+or a class derived from it. Do not throw `std::runtime_error` /
+`std::logic_error` / `std::invalid_argument` or any other `std` type, string
+literals, or classes that do not derive from `Exception`. Helper functions
+that build an exception for a `throw` return `Exception` too.
 
 ```cpp
 throw Exception("message");  // sequant::Exception outside namespace sequant
@@ -106,11 +106,13 @@ you add, move or prune includes, compile the affected TUs standalone before
 pushing.
 
 Unity is off by default in a local configure. If your build tree has it on,
-flip it and rebuild just the file:
+flip it and rebuild just the file (Ninja resolves `file^` against the paths
+in `build.ninja`, which CMake writes as absolute, so the source path must be
+absolute):
 
 ```
 cmake -DCMAKE_UNITY_BUILD=OFF <build>
-ninja -C <build> SeQuant/core/foo.cpp^      # Ninja: rebuild that one TU
+ninja -C <build> "$PWD/SeQuant/core/foo.cpp^"   # from the source root
 ```
 
 When configuring a build tree from scratch, mirror the `BUILD_CONFIG` flags in
@@ -121,9 +123,10 @@ When configuring a build tree from scratch, mirror the `BUILD_CONFIG` flags in
 
 `unit_tests-sequant` (`tests/unit`, Catch2; filter by tag or name, e.g.
 `unit_tests-sequant "[export]"`) is only part of the suite. The fixture
-comparisons above, the integration programs under `tests/integration` and the
-Python tests are separate ctest entries that the unit-test binary neither
-builds nor runs. Run everything the way CI does:
+comparisons above, the integration programs under `tests/integration` and,
+with `SEQUANT_PYTHON=ON`, the binding tests under `python/` are separate ctest
+entries that the unit-test binary neither builds nor runs. Run everything the
+way CI does:
 
 ```
 cmake --build <build> --target check-sequant     # = ctest -R "^sequant"
@@ -160,9 +163,10 @@ bin/admin/clang-format.sh --dry-run --Werror <files>   # check
 bin/admin/clang-format.sh -i <files>                   # fix
 ```
 
-`.pre-commit-config.yaml` runs the same wrapper and also rejects tabs, CRLF,
-U+00A0 and U+2013 in any file — but only once `pre-commit install` has been
-run in the clone.
+`.pre-commit-config.yaml` runs the same wrapper on the staged C/C++ files and
+also rejects tabs (except in `.out`, `.cmake`, `.js`, `.xml`, `.css`), CRLF,
+U+00A0 and U+2013 in the files being committed — but only once
+`pre-commit install` has been run in the clone.
 
 ## Layout
 
