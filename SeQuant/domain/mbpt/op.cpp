@@ -2,6 +2,7 @@
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -1058,7 +1059,7 @@ ExprPtr F(bool use_f_tensor, const IndexSpace& occupied_density) {
           qns = combine(op_qnc_t, qns);
         });
   } else {
-    throw "non-tensor use at operator level not yet supported";
+    throw Exception("non-tensor use at operator level not yet supported");
   }
 }
 
