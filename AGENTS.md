@@ -132,6 +132,22 @@ cmake --build <build> --target check-sequant     # = ctest -R "^sequant"
 Note the target names: `unit_tests-sequant` and `check-sequant`, not
 `unit_tests` / `check`.
 
+### TiledArray-backed tests
+
+With `SEQUANT_TILEDARRAY=ON` the suite gains `test_eval_ta.cpp` (inside
+`unit_tests-sequant`, tag `[eval]`) and the `sequant/integration/eval_ta`
+program, plus the backend under `SeQuant/core/eval/backends/tiledarray/`.
+Failures there often come down to TiledArray or MADWorld behaviour rather
+than SeQuant logic: fences and dataflow ordering, `DistArray` state, thread
+and rank budgets. Before debugging, read TiledArray's own agent notes,
+[`AGENTS.md`](https://github.com/ValeevGroup/tiledarray/blob/master/AGENTS.md)
+(a fetched copy sits at `<build>/_deps/tiledarray-src/AGENTS.md`; the pinned
+commit is `SEQUANT_TRACKED_TILEDARRAY_TAG` in `external/versions.cmake`).
+Its *Synchronization*, *Runtime & deployment* and *Debugging aids* sections
+cover the fence hierarchy, `MAD_NUM_THREADS` and the other environment
+variables, and the tracing switches such as `TA::exception_break()`; it in
+turn defers to the MADNESS `AGENTS.md` for the runtime.
+
 ## Formatting
 
 CI pins clang-format 17 (`.github/workflows/formatting_check.yml`), and other
