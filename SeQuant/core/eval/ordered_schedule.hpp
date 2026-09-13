@@ -100,6 +100,24 @@ struct ScopeBlock {
                                     //!< not \c svector).
   container::svector<std::pair<std::size_t, OutputKind>>
       outputs{};  //!< value_id -> how it leaves this block on close.
+
+  // Declared here, DEFINED below \c Step (see the out-of-line "= default"
+  // definitions there). \c steps is a \c std::vector of the still-incomplete
+  // \c Step, which the library tolerates only up to first use; defining
+  // ScopeBlock's special members here -- including implicitly, by defaulting
+  // them in-class or by letting the compiler generate them -- IS that first
+  // use, and instantiates std::vector<Step>'s own special members on an
+  // incomplete element type. libstdc++ then does pointer arithmetic on \c
+  // Step*, which clang rejects ("arithmetic on a pointer to an incomplete
+  // type"); GCC happens to accept it. Moving the definitions past \c Step is
+  // the standard way to close the ScopeBlock <-> Step cycle. Do NOT collapse
+  // these back into in-class "= default".
+  ScopeBlock();
+  ScopeBlock(ScopeBlock const&);
+  ScopeBlock(ScopeBlock&&);
+  ScopeBlock& operator=(ScopeBlock const&);
+  ScopeBlock& operator=(ScopeBlock&&);
+  ~ScopeBlock();
 };
 
 ///
@@ -141,6 +159,16 @@ struct Step {
   Step(BuildStep b) : value(std::move(b)) {}   // NOLINT(*-explicit-*)
   Step(ScopeBlock b) : value(std::move(b)) {}  // NOLINT(*-explicit-*)
 };
+
+// ScopeBlock's special members, defined here rather than in the class because
+// \c Step -- std::vector<Step>'s element type -- is only complete from this
+// point on. See the declarations in \c ScopeBlock.
+inline ScopeBlock::ScopeBlock() = default;
+inline ScopeBlock::ScopeBlock(ScopeBlock const&) = default;
+inline ScopeBlock::ScopeBlock(ScopeBlock&&) = default;
+inline ScopeBlock& ScopeBlock::operator=(ScopeBlock const&) = default;
+inline ScopeBlock& ScopeBlock::operator=(ScopeBlock&&) = default;
+inline ScopeBlock::~ScopeBlock() = default;
 
 ///
 /// \brief The whole ordered schedule: the root block plus the total value
