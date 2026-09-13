@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/cell_table.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <functional>
@@ -128,7 +129,7 @@ class CellRegistry {
   /// already holding a value it was not read past nor cleared since (\c
   /// filled_since_clear) is a duplicate producer -- see \c
   /// CellRegistryHooks::strict_fill_once (throws a named \c
-  /// std::runtime_error, defaulting to the \c SEQUANT_UT_STRICT_FILL_ONCE env
+  /// Exception, defaulting to the \c SEQUANT_UT_STRICT_FILL_ONCE env
   /// gate; a plain \c SEQUANT_ASSERT otherwise). PERSISTENT cells are excluded
   /// from this check, exactly as \c CacheManager::entry::store excludes its own
   /// persistent entries: they legitimately re-store across batch replays and
@@ -141,7 +142,7 @@ class CellRegistry {
     TableCell const& cell = table_->cells[c];
     if (!cell.persistent && s.filled_since_clear) {
       if (hooks_.strict_fill_once)
-        throw std::runtime_error(
+        throw Exception(
             "CellRegistry::set: cell#" + std::to_string(c) + " (value " +
             std::to_string(cell.value_id) +
             ") filled twice without an intervening clear (duplicate "
@@ -188,15 +189,14 @@ class CellRegistry {
     auto& s = slot(c);
     if (exhausted) *exhausted = false;
     if (!s.value)
-      throw std::runtime_error("CellRegistry::read: cell#" + std::to_string(c) +
-                               " (value " +
-                               std::to_string(table_->cells[c].value_id) +
-                               ") has no current result");
+      throw Exception("CellRegistry::read: cell#" + std::to_string(c) +
+                      " (value " + std::to_string(table_->cells[c].value_id) +
+                      ") has no current result");
     if (table_->cells[c].persistent) return s.value;
     if (s.life == 0)
-      throw std::runtime_error("CellRegistry::read: cell#" + std::to_string(c) +
-                               " read past its life " +
-                               std::to_string(table_->cells[c].life));
+      throw Exception("CellRegistry::read: cell#" + std::to_string(c) +
+                      " read past its life " +
+                      std::to_string(table_->cells[c].life));
     --s.life;
     if (s.life != 0) return s.value;
     if (exhausted) *exhausted = true;
@@ -281,12 +281,12 @@ class CellRegistry {
     auto& s = slot(c);
     if (table_->cells[c].persistent) return;
     if (count > s.life)
-      throw std::runtime_error(
-          "CellRegistry::forgo: cell#" + std::to_string(c) + " (value " +
-          std::to_string(table_->cells[c].value_id) + ") forgoes " +
-          std::to_string(count) + " reads but only " + std::to_string(s.life) +
-          " of its declared life " + std::to_string(table_->cells[c].life) +
-          " remain");
+      throw Exception("CellRegistry::forgo: cell#" + std::to_string(c) +
+                      " (value " + std::to_string(table_->cells[c].value_id) +
+                      ") forgoes " + std::to_string(count) +
+                      " reads but only " + std::to_string(s.life) +
+                      " of its declared life " +
+                      std::to_string(table_->cells[c].life) + " remain");
     s.life -= count;
     if (s.life != 0) return;
     s.filled_since_clear = false;
@@ -368,7 +368,7 @@ class CellRegistry {
   };
   Slot& slot(CellId c) {
     if (c >= slots_.size())
-      throw std::out_of_range("CellRegistry: cell id out of range");
+      throw Exception("CellRegistry: cell id out of range");
     return slots_[c];
   }
   Slot const& slot(CellId c) const {
@@ -519,7 +519,7 @@ class CellReadResolver {
     if (!vid) return std::nullopt;  // not a value of the table: a transient
     auto it = cursor_.find(*vid);
     if (it == cursor_.end() || it->second.empty())
-      throw std::runtime_error(
+      throw Exception(
           "CellReadResolver: consumer cell#" + std::to_string(consumer_) +
           " has no remaining read of value " + std::to_string(*vid));
     Read const& r = reg_->table().reads[it->second.front()];
@@ -527,10 +527,10 @@ class CellReadResolver {
     if (!reg_->peek(r.source)) {
       if (src_cell.production.kind == ProductionKind::Leaf)
         return std::nullopt;  // leaf first touch: cursor left UNCONSUMED
-      throw std::runtime_error(
-          "CellReadResolver: consumer cell#" + std::to_string(consumer_) +
-          " source cell#" + std::to_string(r.source) + " (value " +
-          std::to_string(*vid) + ") has no current result");
+      throw Exception("CellReadResolver: consumer cell#" +
+                      std::to_string(consumer_) + " source cell#" +
+                      std::to_string(r.source) + " (value " +
+                      std::to_string(*vid) + ") has no current result");
     }
     it->second.erase(it->second.begin());
     // Record WHICH cell this vid's read was most recently served
@@ -553,11 +553,11 @@ class CellReadResolver {
       for (auto const& e : ctx)
         if (detail::same_key(e.level.key(), key)) range = e.range;
       if (!range)
-        throw std::runtime_error(
-            "CellReadResolver: read of cell#" + std::to_string(r.source) +
-            " by cell#" + std::to_string(consumer_) + " binds position " +
-            std::to_string(pos) +
-            " to a loop instance not in the batch context");
+        throw Exception("CellReadResolver: read of cell#" +
+                        std::to_string(r.source) + " by cell#" +
+                        std::to_string(consumer_) + " binds position " +
+                        std::to_string(pos) +
+                        " to a loop instance not in the batch context");
       v = v->slice_mode(pos, range->first, range->second);
     }
     ++served_;

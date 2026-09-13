@@ -56,6 +56,7 @@
 #include <SeQuant/core/optimize/single_term_detail.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>  // is_valid
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -800,7 +801,7 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   {
     opt::detail::PeakBatchedModel bad{idxsz, bts, is_vol, {}};
     bad.is_batchable_contracted_index = is_aux;
-    CHECK_THROWS_AS(bad.build_context(net, targets), std::invalid_argument);
+    CHECK_THROWS_AS(bad.build_context(net, targets), sequant::Exception);
   }
 
   // (2) With correct composite sizing, the DP forms NO 4-PAO integral.

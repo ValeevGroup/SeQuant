@@ -1586,10 +1586,10 @@ ResultPtr evaluate(Nodes const& nodes,  //
 ///        (there being no per-tree fallback path to consult it on).
 /// \param cache The cache whose `multiroot_driver()` is consulted.
 /// \return One `ResultPtr` per element of \p roots, in \p roots' own order.
-/// \throws std::logic_error if `cache.multiroot_driver()` is unset -- there
+/// \throws Exception if `cache.multiroot_driver()` is unset -- there
 ///         is no per-root fallback; a multi-root caller must explicitly
 ///         install a driver that understands the cross-root CSE contract.
-/// \throws std::logic_error if `layouts.size() != roots.size()`.
+/// \throws Exception if `layouts.size() != roots.size()`.
 ///
 template <Trace EvalTrace = Trace::Default, typename node_t, typename F,
           typename N, bool FHC>
@@ -1603,12 +1603,12 @@ container::svector<ResultPtr> evaluate_multiroot(
       "evaluate_multiroot: the roots' node type must match the cache's key "
       "type");
   if (layouts.size() != roots.size())
-    throw std::logic_error(
+    throw Exception(
         "evaluate_multiroot: layouts.size() must equal roots.size() -- one "
         "layout per root is required");
   auto const& drv = cache.multiroot_driver();
   if (!drv)
-    throw std::logic_error(
+    throw Exception(
         "evaluate_multiroot: no multiroot driver installed on the cache -- "
         "there is no per-root fallback; install one via "
         "cache.set_multiroot_driver(...) (e.g. ordered_executor.hpp's "
@@ -2346,12 +2346,12 @@ template <Trace EvalTrace = Trace::Default, typename F,
               // Release-safe guard (SEQUANT_ASSERT elides in release): never
               // walk the chain off its end and dereference a null parent.
               if (rl > static_cast<int>(depth) - 1)
-                throw std::runtime_error(
+                throw Exception(
                     "hoist home level not strictly outer to this loop");
               for (int lvl = static_cast<int>(depth) - 1; lvl > rl; --lvl) {
                 auto* const p = target->parent();
                 if (!p)
-                  throw std::runtime_error(
+                  throw Exception(
                       "hoist walk-up exceeded the scope chain (a single-batch "
                       "sliced mode may have shifted the runtime nest depth)");
                 target = p;

@@ -13,6 +13,7 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval/value_id.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/for_each.hpp>
@@ -893,7 +894,7 @@ class CacheManager {
         // resident value and rebuild it) passes silently. Under strict mode
         // it is a hard error.
         if (stored_this_eval_ && strict_fill_once)
-          throw std::runtime_error(
+          throw Exception(
               "CacheManager::entry::store: value cell stored twice without an "
               "intervening reset() (duplicate producer / a consumer missed the "
               "resident cell and rebuilt it) -- cache-fill-once violated");

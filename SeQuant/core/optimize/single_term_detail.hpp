@@ -15,6 +15,7 @@
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
@@ -101,7 +102,7 @@ double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
     // (e.g. picking a 4-PAO integral). An empty inner_pow is only valid for a
     // network with NO composites; refuse to guess here.
     if (!ranges::empty(tot_idxs.inner))
-      throw std::invalid_argument(
+      throw Exception(
           "inner_aware_volume: composite (CSV/PNO) indices present but no "
           "inner_pow provided -- sizing composites by base extent is a bug. "
           "Pass a real inner_pow (e.g. SizeRegime::inner_pow_fn()).");

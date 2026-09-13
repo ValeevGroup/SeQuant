@@ -15,6 +15,7 @@
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
@@ -1619,7 +1620,7 @@ TEST_CASE("OSV early-contraction reproducer", "[optimize][osv]") {
   CHECK_THROWS_AS(show(std::integral_constant<ObjectiveFunction,
                                               ObjectiveFunction::DenseFLOPs>{},
                        L"FLOPs"),
-                  std::invalid_argument);
+                  sequant::Exception);
 
   auto ip = [](Index const&, std::size_t) -> double { return 12.0; };
   std::wcout << L"--- with inner_pow (composite a<i> sized small=12, like a "

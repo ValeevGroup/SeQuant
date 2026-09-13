@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -173,7 +174,7 @@ inline void check_shared_ranges(char const* op, annot_t const& lannot,
       for (auto const& x : a) s += toUtf8(x.full_label()) + " ";
       return s;
     };
-    throw std::runtime_error(std::format(
+    throw Exception(std::format(
         "[dryrun] {}: shared label {} realizes DIFFERENT ranges on the two "
         "operands: L[{}]=[{},{}) vs R[{}]=[{},{}) -- a whole operand against "
         "a sliced partner (extent) or two slices of different batches "
@@ -201,7 +202,7 @@ inline void check_accumulate_ranges(
     auto const [lo, ext] = range_at(ov, lob, cm, a, pos);
     auto const [olo, oext] = range_at(oov, olob, cm, a, pos);
     if (lo == olo && (ext == oext || ext == 0 || oext == 0)) continue;
-    throw std::runtime_error(std::format(
+    throw Exception(std::format(
         "[dryrun] add_inplace: mode {} ({}) accumulator range [{},{}) vs "
         "partial range [{},{}) -- accumulating a partial of a different "
         "slicing/batch into this cell",
@@ -409,7 +410,7 @@ struct DryRunOps {
     }
     SEQUANT_ASSERT(block_extent == block_hi - block_lo);
     if (block_extent != block_hi - block_lo)
-      throw std::runtime_error(std::format(
+      throw Exception(std::format(
           "[dryrun] write_into_slice: block extent {} on mode {} ({}) != "
           "destination slice [{},{})",
           block_extent, mode, toUtf8(mix.full_label()), block_lo, block_hi));
@@ -422,7 +423,7 @@ struct DryRunOps {
         auto const bpos = static_cast<std::size_t>(bit - bidx.begin());
         if (auto lit = blob.find(bpos);
             lit != blob.end() && lit->second != block_lo)
-          throw std::runtime_error(std::format(
+          throw Exception(std::format(
               "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "
               "destination slice lobound {}",
               lit->second, mode, toUtf8(mix.full_label()), block_lo));

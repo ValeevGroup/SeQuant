@@ -508,7 +508,7 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
 // call anywhere in the process -- see the caveat in test_cell_registry.cpp),
 // a per-instance setter has no cross-test or cross-instance effect. Under
 // strict mode a duplicate store_and_access() with no intervening reset() throws
-// std::runtime_error unconditionally, regardless of SEQUANT_ASSERT_BEHAVIOR
+// sequant::Exception unconditionally, regardless of SEQUANT_ASSERT_BEHAVIOR
 // (the SEQUANT_ASSERT alone is a no-op unless SEQUANT_ASSERT_ENABLED is
 // #defined, so it alone is not observable in this project's default
 // Release/Debug configs).

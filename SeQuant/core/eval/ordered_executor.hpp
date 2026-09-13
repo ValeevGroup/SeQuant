@@ -1364,7 +1364,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
               std::to_string(cell_table.cells[c].scope.path.size()) + ")";
       }
     if (!offenders.empty())
-      throw std::runtime_error(
+      throw Exception(
           "run_ordered_schedule_pre_results: several persistent cells share "
           "one value (one persistent-store slot):" +
           offenders);

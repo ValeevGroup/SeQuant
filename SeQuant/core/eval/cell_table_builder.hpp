@@ -4,6 +4,7 @@
 #include <SeQuant/core/eval/cell_table.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -244,7 +245,7 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
       // a.value_id = ovid below); kept as a loud guard against a future
       // emission bug rather than a silent cross-value assemble.
       if (s.value_id != ovid)
-        throw std::logic_error(
+        throw Exception(
             "cell table: value_id mismatch between escaping value " +
             std::to_string(ovid) + " and its registered form (value_id " +
             std::to_string(s.value_id) + ")");
@@ -352,7 +353,7 @@ inline void apply_persistence_frontier(
 [[nodiscard]] inline CellTable build_cell_table(CellTableInputs const& in) {
   if (!in.ordered || !in.rich || !in.sliced || !in.sliced_modes_of ||
       !in.volatile_of)
-    throw std::invalid_argument(
+    throw Exception(
         "build_cell_table: ordered, rich, sliced, sliced_modes_of and "
         "volatile_of are all required");
   detail::CellBuildState st;
@@ -438,10 +439,9 @@ inline void apply_persistence_frontier(
       };
       auto const fit = st.forms_of.find(op);
       if (fit == st.forms_of.end() || fit->second.empty())
-        throw std::logic_error("cell table: operand value " +
-                               std::to_string(op) + " of consumer value " +
-                               std::to_string(c.value_id) +
-                               " has no registered form");
+        throw Exception("cell table: operand value " + std::to_string(op) +
+                        " of consumer value " + std::to_string(c.value_id) +
+                        " has no registered form");
       Read r;
       r.consumer = cid;
       r.operand_value_id = op;

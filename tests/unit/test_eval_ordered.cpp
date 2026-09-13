@@ -29,6 +29,7 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <catch2/catch_approx.hpp>
@@ -376,7 +377,7 @@ TEST_CASE(
     CHECK_THROWS_AS(
         sequant::evaluate_multiroot(roots, svector<std::string>(roots.size()),
                                     yield, cache),
-        std::logic_error);
+        sequant::Exception);
   }
 
   SECTION("layouts.size() != roots.size(): throws (size-mismatch guard)") {
@@ -388,7 +389,7 @@ TEST_CASE(
     CHECK_THROWS_AS(
         sequant::evaluate_multiroot(
             roots, svector<std::string>(roots.size() - 1), yield, cache),
-        std::logic_error);
+        sequant::Exception);
   }
 
   SECTION("driver installed: routes to evaluate_ordered_multiroot") {

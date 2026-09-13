@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -535,7 +536,7 @@ inline void assert_valid_cell_table(
   std::string msg =
       "cell table invalid (" + std::to_string(v.size()) + " violation(s)):";
   for (auto const& x : v) msg += "\n  [" + x.rule + "] " + x.what;
-  throw std::runtime_error(msg);
+  throw Exception(msg);
 }
 
 }  // namespace sequant::eval
