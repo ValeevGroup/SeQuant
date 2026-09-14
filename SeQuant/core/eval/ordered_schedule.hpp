@@ -2403,6 +2403,17 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       // to other loop instances, which sliced one operand position by two
       // loops (observed on the water-20 strict dry-run walk: one value's
       // operand position 1 was sliced by two different loop slots at once).
+      //
+      // This guard is also what keeps the ORDER-INDEPENDENT Product identity
+      // (canonical_children, eval_node_compare.hpp) safe. Two spellings of one
+      // contraction -- (X,Y) in one term, (Y,X) in another -- now fold into a
+      // single value, so a consumer cell can own occurrences whose trees carry
+      // X and Y on OPPOSITE legs. Occurrence facts are recorded only from the
+      // consumer's canonical (front) PRODUCTION occurrence, and
+      // cell_table_builder derives an operand's `my_leg` from those
+      // (operand, consumer) facts, so every leg comes from ONE tree and the
+      // legs cannot be crossed. Relaxing the guard to admit non-production
+      // edges would mix the two spellings' legs and mis-pair them.
       if (rich.cells[oit->second].occurrences.empty() ||
           rich.cells[oit->second].occurrences.front().point !=
               occ.consumer_point)

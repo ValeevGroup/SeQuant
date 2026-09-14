@@ -35,20 +35,89 @@ struct TreeNodeHasher {
 };
 
 /// \brief 3-way comparison establishing the CANONICAL order of a commutative
-///        (Product) node's two operands -- a function of the operands' VALUES
-///        only, never of the order the binarizer happened to emit them in.
+///        (Product) node's two operands.
 ///
-/// \see canonical_children, the view that reads a node's children through it.
+/// \details A contraction is commutative, so the binarizer is free to emit its
+/// two operands in either order -- and does, since the single-term DP's
+/// contraction sequence decides which of the pair lands on the stack first.
+/// The node id and the canonical connectivity graph both fold that choice, so
+/// the two spellings ARE one value; this comparison lets the equality
+/// comparator (and anything else deriving IDENTITY from the children) see them
+/// as one, by reading the children through \c canonical_children instead of
+/// through the emitted left/right. Nothing is reordered: the tree keeps the
+/// evaluation order the DP chose, because cost -- peak in particular -- is
+/// order-dependent.
+///
+/// The key is a function of the operands' VALUES only, and is O(1) -- it reads
+/// nothing but the two nodes' own already-computed data, never their subtrees:
+///   1. a scalar operand sorts AFTER a non-scalar one, matching how
+///      \c binarize already builds a `scalar * tensor` node (tensor left,
+///      \c Constant right) and keeping `c * T` and `T * c` one value;
+///   2. then ascending node id (\c hash::value, the operand-order-independent
+///      \c EvalExpr hash);
+///   3. a tie resolves to 0, i.e. to the EMITTED order.
+///
+/// Step 3 is exactly right for the case that occurs: two operands that are ONE
+/// value have one node id, either order is canonical for them, and an ordered
+/// comparison of two swapped spellings succeeds whichever way each is read.
+/// The only other way to reach it is a genuine 64-bit hash collision between
+/// DISTINCT values, and there the cost is a MISSED fold (the two spellings
+/// stay two cache entries, as they were before any folding existed) -- never a
+/// wrong one, because \c TreeNodeEqualityComparator still compares both
+/// subtrees in full and rejects a mismatch. Resolving such a collision instead
+/// would mean comparing the operand subtrees here, and a full comparison per
+/// visit turns the comparator quadratic on nested hash-equal operands (a
+/// `t2 * t2` self-contraction is enough): T(n) = 4 T(n/2). Keeping this O(1)
+/// is what makes the comparator provably linear.
+///
+/// \return <0 if \p a belongs first, >0 if \p b does, 0 if the two are
+///         interchangeable (read them in the order they were emitted).
 template <typename TreeNode>
-int canonical_operand_cmp(TreeNode const &a, TreeNode const &b);
+int canonical_operand_cmp(TreeNode const &a, TreeNode const &b) {
+  if (&a == &b) return 0;
 
-/// \brief A Product node's two children in CANONICAL order (the node itself
-///        is NOT modified; its left/right stay exactly as emitted).
+  bool const a_scalar = a->is_scalar();
+  bool const b_scalar = b->is_scalar();
+  if (a_scalar != b_scalar) return a_scalar ? 1 : -1;
+
+  std::size_t const ha = hash::value(*a);
+  std::size_t const hb = hash::value(*b);
+  if (ha != hb) return ha < hb ? -1 : 1;
+
+  return 0;
+}
+
+/// \brief A node's two children in CANONICAL order -- the order-independent
+///        VIEW that every derivation of node IDENTITY reads them through.
 ///
-/// \see canonical_operand_cmp
+/// \details Returns the children swapped iff \c canonical_operand_cmp says the
+/// right one belongs first. The node is NOT modified and nothing is cached on
+/// it: the decision is one comparison of two already-computed hashes, and
+/// leaving the tree untouched is the whole point -- evaluation, slicing
+/// positions, operand reads, dry-run op costs and the peak sweep all keep the
+/// left/right the DP emitted.
+///
+/// Meaningful for a commutative (Product) node; callers use the emitted order
+/// for everything else (a Sum's left child is the in-place accumulator, an
+/// Adjoint's right child is a sentinel), so this is not applied there.
+///
+/// \note The returned pair holds REFERENCES into \p n, so \p n must outlive
+///       it; binding a temporary is rejected by the deleted overload below.
 template <typename TreeNode>
 std::pair<TreeNode const &, TreeNode const &> canonical_children(
-    TreeNode const &n);
+    TreeNode const &n) {
+  SEQUANT_ASSERT(!n.leaf());
+  if (canonical_operand_cmp(n.left(), n.right()) > 0)
+    return {n.right(), n.left()};
+  return {n.left(), n.right()};
+}
+
+/// The result aliases \p n's children, so a temporary would dangle. (A
+/// `TreeNode const&&` parameter is not a forwarding reference, so this
+/// overload takes rvalues only and leaves lvalue calls to the one above.)
+template <typename TreeNode>
+std::pair<TreeNode const &, TreeNode const &> canonical_children(
+    TreeNode const &&n) = delete;
 
 /// Functor to compare two trees for equivalence
 /// Explicit equivalence checking mitigates (accidental) hash collisions
@@ -82,7 +151,7 @@ struct TreeNodeEqualityComparator {
     // children (individual terms) and Product operands are bounded in depth and
     // stay recursive; only the deep spine is unwound into this loop. Aside from
     // that unwinding this is a faithful transcription of the recursive
-    // comparison -- same per-node checks, same ordered/unordered child logic.
+    // comparison -- same per-node checks, same child logic.
     const TreeNode *lhsp = &lhs_in;
     const TreeNode *rhsp = &rhs_in;
     while (true) {
@@ -159,13 +228,15 @@ struct TreeNodeEqualityComparator {
       //
       // It folds it by comparing the children through a CANONICAL VIEW
       // (canonical_children) rather than by trying both pairings: the view
-      // picks which child comes first from the children's VALUES alone, so the
-      // two spellings present the same ordered pair here and ONE recursion per
-      // child suffices. Matching the children as an unordered pair would fold
-      // them too, but it recurses twice per child and so is exponential in
-      // product depth. Evaluation order is untouched: the node keeps the
-      // left/right the DP emitted (cost, and peak in particular, is
-      // order-dependent), only IDENTITY reads them through the view.
+      // picks which child comes first from the children's VALUES alone -- in
+      // O(1), reading only the two nodes' own data -- so the two spellings
+      // present the same ordered pair here and ONE recursion per child
+      // suffices. The whole comparison is therefore LINEAR in the tree.
+      // Matching the children as an unordered pair would fold them too, but it
+      // recurses twice per child and so is exponential in product depth.
+      // Evaluation order is untouched: the node keeps the left/right the DP
+      // emitted (cost, and peak in particular, is order-dependent), only
+      // IDENTITY reads them through the view.
       //
       // The recursive child comparison is still REQUIRED and is NOT redundant
       // with the graph check above: the connectivity graph encodes only the
@@ -199,183 +270,6 @@ struct TreeNodeEqualityComparator {
  private:
   IndexSpecificTensorBlockEqualComparator block_comparator_;
 };
-
-namespace detail {
-
-/// 3-way compare of two canonical index lists: length first, then
-/// \c Index::full_label lexicographically.
-template <typename Indices>
-int cmp_canon_indices(Indices const &a, Indices const &b) {
-  if (a.size() != b.size()) return a.size() < b.size() ? -1 : 1;
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    auto const &la = a[i].full_label();
-    auto const &lb = b[i].full_label();
-    if (la != lb) return la < lb ? -1 : 1;
-  }
-  return 0;
-}
-
-/// \brief Deterministic, value-determined 3-way tie-break used by
-///        \c canonical_operand_cmp when two operands share a node id AND are
-///        NOT equal -- i.e. a genuine 64-bit hash collision between distinct
-///        values.
-///
-/// \details It inspects, in order, every node-local discriminator the equality
-/// comparator itself uses -- subtree size, leaf-ness, expression type, result
-/// type, the canonical connectivity graph, the canonical index list (which
-/// subsumes the index-block signature used for graph-less tensor nodes), the
-/// phase, the node label, and, for the scalar-valued nodes the comparator
-/// compares symbolically, the expression itself -- and only then descends into
-/// the children.
-///
-/// The descent goes through \c canonical_children at Product nodes, exactly as
-/// the equality comparator does, so the result is a function of the subtrees'
-/// VALUES and not of the order the binarizer emitted any node's operands in.
-/// For the same reason it never compares an INTERNAL node's \c expr(): a
-/// Product node's expression is assembled from its operands in emission order.
-/// Like the equality comparator, the descent is iterative along the left
-/// (potentially thousands-deep Sum) spine and recursive into bounded children.
-///
-/// A wrong answer here cannot make two distinct values compare equal -- the
-/// equality comparator still compares both subtrees in full. The worst a
-/// non-value-determined tie-break could do is order two colliding operands
-/// differently in two terms, i.e. MISS a fold, which is the behaviour that
-/// preceded any folding at all.
-template <typename TreeNode>
-int deep_tie_break(TreeNode const &lhs_in, TreeNode const &rhs_in) {
-  const TreeNode *lhsp = &lhs_in;
-  const TreeNode *rhsp = &rhs_in;
-  while (true) {
-    const TreeNode &lhs = *lhsp;
-    const TreeNode &rhs = *rhsp;
-
-    if (&lhs == &rhs) return 0;
-    if (lhs.size() != rhs.size()) return lhs.size() < rhs.size() ? -1 : 1;
-    if (lhs.leaf() != rhs.leaf()) return lhs.leaf() ? -1 : 1;
-    if (lhs->type_id() != rhs->type_id())
-      return lhs->type_id() < rhs->type_id() ? -1 : 1;
-    if (lhs->result_type() != rhs->result_type())
-      return lhs->result_type() < rhs->result_type() ? -1 : 1;
-    if (lhs->has_connectivity_graph() != rhs->has_connectivity_graph())
-      return lhs->has_connectivity_graph() ? -1 : 1;
-    if (lhs->has_connectivity_graph()) {
-      int const c = bliss::ConstGraphCmp::cmp(lhs->connectivity_graph(),
-                                              rhs->connectivity_graph());
-      if (c != 0) return c < 0 ? -1 : 1;
-    }
-    if (int const c =
-            cmp_canon_indices(lhs->canon_indices(), rhs->canon_indices());
-        c != 0)
-      return c;
-    if (lhs->canon_phase() != rhs->canon_phase())
-      return lhs->canon_phase() < rhs->canon_phase() ? -1 : 1;
-    if (lhs->label() != rhs->label())
-      return lhs->label() < rhs->label() ? -1 : 1;
-    // Symbolic form: only where it is emission-order-independent -- a leaf's
-    // own tensor/constant/variable, and the scalar-valued nodes the equality
-    // comparator compares by `*lhs->expr() != *rhs->expr()`.
-    if (lhs.leaf() || lhs->is_constant() || lhs->is_variable() ||
-        lhs->is_power()) {
-      bool const le = static_cast<bool>(lhs->expr());
-      bool const re = static_cast<bool>(rhs->expr());
-      if (le != re) return le ? -1 : 1;
-      if (le) {
-        auto const la = lhs->expr()->to_latex();
-        auto const lb = rhs->expr()->to_latex();
-        if (la != lb) return la < lb ? -1 : 1;
-      }
-    }
-
-    if (lhs.leaf()) return 0;
-
-    if (lhs->op_type() && *lhs->op_type() == EvalOp::Product) {
-      auto const [lfirst, lsecond] = canonical_children(lhs);
-      auto const [rfirst, rsecond] = canonical_children(rhs);
-      if (int const c = deep_tie_break(lfirst, rfirst); c != 0) return c;
-      return deep_tie_break(lsecond, rsecond);
-    }
-
-    if (int const c = deep_tie_break(lhs.right(), rhs.right()); c != 0)
-      return c;
-    lhsp = &lhs.left();
-    rhsp = &rhs.left();
-  }
-}
-
-}  // namespace detail
-
-/// \brief 3-way comparison establishing the CANONICAL order of a commutative
-///        (Product) node's two operands.
-///
-/// \details A contraction is commutative, so the binarizer is free to emit its
-/// two operands in either order -- and does, since the single-term DP's
-/// contraction sequence decides which of the pair lands on the stack first.
-/// The node id and the canonical connectivity graph both fold that choice, so
-/// the two spellings ARE one value; this comparison lets the equality
-/// comparator (and anything else deriving IDENTITY from the children) see them
-/// as one, by reading the children through \c canonical_children instead of
-/// through the emitted left/right. Nothing is reordered: the tree keeps the
-/// evaluation order the DP chose, because cost -- peak in particular -- is
-/// order-dependent.
-///
-/// The key is a function of the operands' VALUES only and is total:
-///   1. a scalar operand sorts AFTER a non-scalar one, matching how
-///      \c binarize already builds a `scalar * tensor` node (tensor left,
-///      \c Constant right) and keeping `c * T` and `T * c` one value;
-///   2. then ascending node id (\c hash::value, the operand-order-independent
-///      \c EvalExpr hash) -- O(1), and the only step that runs in practice;
-///   3. on a node-id tie, equal VALUES compare 0, established by the equality
-///      comparator itself, so the order can never separate two operands the
-///      comparator would fold (and either order is canonical for them);
-///   4. and only a genuine 64-bit collision between DISTINCT values reaches
-///      \c detail::deep_tie_break.
-///
-/// \note Steps 3 and 4 walk the operand subtrees, so a node whose two operands
-///       collide on the node id costs O(subtree) here rather than O(1). That
-///       is bounded by the subtree and cannot recur into itself (both steps
-///       descend strictly), unlike the either-pairing match it replaces, whose
-///       double recursion per child was exponential in product depth.
-///
-/// \return <0 if \p a belongs first, >0 if \p b does, 0 if the two are
-///         interchangeable.
-template <typename TreeNode>
-int canonical_operand_cmp(TreeNode const &a, TreeNode const &b) {
-  if (&a == &b) return 0;
-
-  bool const a_scalar = a->is_scalar();
-  bool const b_scalar = b->is_scalar();
-  if (a_scalar != b_scalar) return a_scalar ? 1 : -1;
-
-  std::size_t const ha = hash::value(*a);
-  std::size_t const hb = hash::value(*b);
-  if (ha != hb) return ha < hb ? -1 : 1;
-
-  if (TreeNodeEqualityComparator<TreeNode>{}(a, b)) return 0;
-
-  return detail::deep_tie_break(a, b);
-}
-
-/// \brief A node's two children in CANONICAL order -- the order-independent
-///        VIEW that every derivation of node IDENTITY reads them through.
-///
-/// \details Returns the children swapped iff \c canonical_operand_cmp says the
-/// right one belongs first. The node is NOT modified and nothing is cached on
-/// it: the decision is one hash comparison in every case that occurs in
-/// practice (see \c canonical_operand_cmp), and leaving the tree untouched is
-/// the whole point -- evaluation, slicing positions, operand reads, dry-run op
-/// costs and the peak sweep all keep the left/right the DP emitted.
-///
-/// Meaningful for a commutative (Product) node; callers use the emitted order
-/// for everything else (a Sum's left child is the in-place accumulator, an
-/// Adjoint's right child is a sentinel), so this is not applied there.
-template <typename TreeNode>
-std::pair<TreeNode const &, TreeNode const &> canonical_children(
-    TreeNode const &n) {
-  SEQUANT_ASSERT(!n.leaf());
-  if (canonical_operand_cmp(n.left(), n.right()) > 0)
-    return {n.right(), n.left()};
-  return {n.left(), n.right()};
-}
 
 /// A map between (sub)tree hashes and how often they have been found
 /// This is identical to SubexpressionUsageCounts except that we store node

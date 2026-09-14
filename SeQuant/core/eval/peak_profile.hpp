@@ -1013,6 +1013,16 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // they stay in the emitted order. Evaluation order is untouched either
     // way: `child_recs` itself, and everything scheduled off it, is still
     // left-then-right as the DP emitted it.
+    //
+    // The order is taken on the KEYS, deliberately NOT via canonical_children
+    // (eval_node_compare.hpp), whose rule is different (scalar operand last,
+    // then ascending node id). Do not "unify" the two: a node id ties whenever
+    // the two operands are one VALUE, and their keys can still DIFFER there --
+    // one value home-sliced two different ways is two keys -- so
+    // canonical_children would fall back to the emitted order and leave
+    // exactly this combination order-dependent. Ordering the keys themselves
+    // is order-independent unconditionally. Both rules are value-determined,
+    // so the two canonicalizations do not need to agree.
     if (r.is_product) std::sort(child_keys.begin(), child_keys.end());
     for (std::size_t k : child_keys) hash::combine(h, k);
     final_key[i] = sliced ? h : r.hash;

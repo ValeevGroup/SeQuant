@@ -632,8 +632,8 @@ TEST_CASE("canonical child view is deterministic on node-id-equal operands",
   using sequant::TreeNodeEqualityComparator;
 
   // Two occurrences of ONE tensor: the leaf node id is blind to index names,
-  // so the two operands of this outer product collide on it and the ordering
-  // key has to fall through to the tie-break.
+  // so the two operands of this outer product TIE on it -- the case the
+  // ordering key resolves to 0 (read them as emitted).
   auto ab = head("f{a_1;i_1} f{a_2;i_2}");
   auto ba = head("f{a_2;i_2} f{a_1;i_1}");
   REQUIRE(ab->op_type() == sequant::EvalOp::Product);
@@ -646,6 +646,9 @@ TEST_CASE("canonical child view is deterministic on node-id-equal operands",
   // the two operands ARE one value, so either order is canonical and the view
   // leaves the emitted order alone
   CHECK(c == 0);
+  // and it decided that in O(1): the key reads nothing but the two nodes' own
+  // data, so a self-contraction like this one cannot make the comparator
+  // quadratic (see canonical_operand_cmp).
   auto const [first, second] = canonical_children(ab);
   CHECK(&first == &ab.left());
   CHECK(&second == &ab.right());
