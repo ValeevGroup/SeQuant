@@ -114,8 +114,7 @@ Useful CMake Variables
      - empty (decide per target type): `ON` for static/object libraries if the compiler supports "fat" LTO objects, `OFF` otherwise. `ON` for
        other target types (shared libs, executables, etc.)
      - Controls whether SeQuant will be built with link-time optimizations (LTO) in non-debug builds (`CMAKE_BUILD_TYPE` != `Debug`). Set to
-       `ON` or `OFF` to override the per-target-type default for all SeQuant targets. Only has an effect when SeQuant is the top-level project;
-       when SeQuant is consumed as a subproject, optimization flags are left to the encompassing project.
+       `ON` or `OFF` to override the per-target-type default for all SeQuant targets.
 
 
 Configuring and Building
