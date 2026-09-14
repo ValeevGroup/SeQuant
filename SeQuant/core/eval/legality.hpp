@@ -17,6 +17,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace sequant::eval {
 
@@ -431,14 +432,24 @@ template <meta::eval_node_range R>
   // node of the same hash home-sliced elsewhere carries that frame's slice
   // annotations, not this value's.
   std::unordered_map<std::size_t, Node> node_of;
-  auto visit = [&](auto&& self, Node const& n) -> void {
-    node_of.emplace(value_key_of(n), n);
-    if (!n.leaf()) {
-      self(self, n.left());
-      self(self, n.right());
+  {
+    // Iterative pre-order: the residual's Sum spine is as deep as the number
+    // of terms, so a recursive descent would overflow the call stack. Right
+    // child pushed before left, so the pop order is the recursion's.
+    std::vector<Node const*> stack;
+    for (auto const& tree : forest) {
+      stack.push_back(&tree);
+      while (!stack.empty()) {
+        Node const& n = *stack.back();
+        stack.pop_back();
+        node_of.emplace(value_key_of(n), n);
+        if (!n.leaf()) {
+          stack.push_back(&n.right());
+          stack.push_back(&n.left());
+        }
+      }
     }
-  };
-  for (auto const& tree : forest) visit(visit, tree);
+  }
 
   (void)policy;  // build-site now sourced from the DP decision, not the policy
 

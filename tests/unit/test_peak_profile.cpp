@@ -77,6 +77,23 @@ EvalNode<EvalExpr> inode(std::string_view result, EvalNode<EvalExpr> l,
   return EvalNode<EvalExpr>{eval_tensor(result), std::move(l), std::move(r)};
 }
 
+// An EvalExpr carrying \p result's slots but a CALLER-CHOSEN node id (hash):
+// the public EvalExpr ctor takes the hash outright, which is what lets a test
+// force two structurally different values onto one 64-bit key (and, in the
+// deep-spine test, mint thousands of distinct node ids without re-parsing).
+EvalExpr eval_tensor_hashed(std::string_view result, std::size_t hash,
+                            sequant::EvalOp op) {
+  auto expr = sequant::deserialize<ExprPtr>(std::string(result));
+  REQUIRE(static_cast<bool>(expr));
+  EvalExpr const base{expr->as<sequant::Tensor>()};
+  EvalExpr::index_vector ixs{base.canon_indices().begin(),
+                             base.canon_indices().end()};
+  return EvalExpr{op,          sequant::ResultType::Tensor,
+                  expr,        std::move(ixs),
+                  /*phase=*/1, hash,
+                  nullptr};
+}
+
 // Stamp a single External batch loop mode at a node.
 void stamp_ext(EvalNode<EvalExpr>& n, Index ix) {
   // Realizes an External loop AT n: stamp both the per-node sliced mask AND the
@@ -492,4 +509,102 @@ TEST_CASE("peak-profile anchor: static sweep vs metered replay co-resident sum",
   // THE anchor: the static continuous-liveness sweep over seed cells must match
   // the runtime co-resident-sum measurement on this non-demoted forest.
   CHECK(sweep.peak_bytes == replay_peak_bytes);
+}
+
+// ---------------------------------------------------------------------
+// Copilot review (PR #613): value-cell grouping must survive a value-key
+// collision, and the linearizing prepass must survive a deep Sum spine.
+// ---------------------------------------------------------------------
+
+TEST_CASE(
+    "compute_dag_boulevard opens separate cells for two values that COLLIDE "
+    "on the value key",
+    "[peak_profile][value-cell]") {
+  // The grouping used to be `hash_to_cell.find(r.key)` alone: a bucket hit on
+  // the 64-bit value key WAS identity. Two distinct values colliding there
+  // would merge into one ValueCell, and the schedule would then build one of
+  // them and read it as the other -- silently the wrong value. A bucket hit is
+  // now confirmed structurally (TreeNodeEqualityComparator through the
+  // canonical child view, plus the home slicing the key folds in and the
+  // operands' CELLS), and a mismatch opens a new cell in the same bucket.
+  //
+  // The collision is forced through the public EvalExpr ctor, which takes the
+  // node id outright: two products over DIFFERENT operands are stamped with
+  // one hash.
+  std::size_t const collide = 0xC0111DEULL;
+
+  auto X = EvalNode<EvalExpr>{
+      eval_tensor_hashed("I{i_1;a_1}", collide, sequant::EvalOp::Product),
+      leaf("t{i_1;a_3}"), leaf("g{a_3;a_1}")};
+  auto Y = EvalNode<EvalExpr>{
+      eval_tensor_hashed("J{i_1;a_1}", collide, sequant::EvalOp::Product),
+      leaf("u{i_1;a_4}"), leaf("h{a_4;a_1}")};
+  REQUIRE(X->hash_value() == Y->hash_value());
+
+  SizeRegime r;
+  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+  std::vector<EvalNode<EvalExpr>> forest{X, Y};
+
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+
+  // 4 distinct leaves + the two colliding products = 6 cells. (Before the fix
+  // this was 5: the products merged into one cell with two occurrences.)
+  CHECK(rich.cells.size() == 6);
+
+  std::size_t colliding_cells = 0;
+  for (auto const& c : rich.cells)
+    if (c.hash == collide) {
+      ++colliding_cells;
+      CHECK(c.occurrences.size() == 1);  // neither absorbed the other
+    }
+  CHECK(colliding_cells == 2);
+}
+
+TEST_CASE(
+    "the ordered prepasses walk a deep Sum spine without overflowing the "
+    "stack",
+    "[.][peak_profile][stack-safety]") {
+  // An equation's residual/energy reaches the ordered path as a SINGLE
+  // in-place Sum tree with one node per summand, so its LEFT SPINE is as deep
+  // as the number of terms -- thousands for a large equation. Every prepass
+  // that walks the forest therefore has to unwind that spine iteratively (the
+  // executor itself already does); a recursive descent overflows the call
+  // stack long before the executor is reached.
+  //
+  // Covered here: stamp_occurrence_homes (iterative pre-order) and
+  // value_key_of/value_key_impl (left spine unwound, right children still
+  // recursive). compute_dag_boulevard's own post-order walk was converted the
+  // same way and is covered for CORRECTNESS by the [w20-auxocc-walk] /
+  // [cell_table] gates; it cannot be driven at this depth here because the
+  // stamp_lifetime_masks pass it runs first keys its residency meet by a
+  // STRUCTURAL map whose comparator calls FullBinaryNode::size() (O(subtree),
+  // uncached) on every bucket probe -- an unrelated, pre-existing quadratic
+  // that swamps a 20000-node synthetic tree.
+  //
+  // Hidden ([.]) only because 40000 nodes take a few seconds to build and tear
+  // down under the Debug tree's sanitizer; run it by name or by
+  // [stack-safety].
+  constexpr std::size_t N = 20000;
+
+  // Built by COPYING two parsed EvalExprs (no re-parsing per level), so the
+  // test measures the walks, not the parser.
+  EvalExpr const acc = eval_tensor("R{i_1;a_1}");
+  EvalExpr const lf = eval_tensor("t{i_1;a_1}");
+  EvalNode<EvalExpr> tree{lf};
+  for (std::size_t k = 1; k < N; ++k)
+    tree = EvalNode<EvalExpr>{acc, std::move(tree), EvalNode<EvalExpr>{lf}};
+  REQUIRE(tree.size() == 2 * N - 1);
+
+  std::vector<EvalNode<EvalExpr>> forest{tree};
+
+  // Pre-order occurrence-home stamping over the whole spine.
+  REQUIRE_NOTHROW(sequant::stamp_occurrence_homes(forest));
+
+  // Bottom-up value-key fold over the whole spine. Nothing is home-sliced
+  // here, so every key collapses to the node id -- the point is that the fold
+  // REACHES the bottom of the spine at all.
+  CHECK(sequant::value_key_of(tree) == tree->hash_value());
+  CHECK(sequant::value_key_of(tree.left()) == tree.left()->hash_value());
 }

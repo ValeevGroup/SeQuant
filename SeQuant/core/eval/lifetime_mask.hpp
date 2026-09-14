@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -77,8 +78,19 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
   // n. The full \p acc is passed DOWN to children (descendants must know which
   // loops enclose them), but a node's contribution to the meet is \p acc
   // filtered to the modes that live on that node's OWN result slots.
-  auto walk = [&](auto&& self, Node const& n,
-                  container::svector<Index> acc) -> void {
+  // The descent is ITERATIVE (an explicit frame stack), not recursive: an
+  // equation's residual/energy is a single in-place Sum tree with one node per
+  // summand, so its LEFT SPINE is as deep as the number of terms -- thousands
+  // for a large equation -- and a recursive descent would overflow the call
+  // stack. Pushing the RIGHT child before the LEFT one makes the pop order the
+  // same pre-order the recursion visited in (node, left subtree, right
+  // subtree), so `occ` and the meet are built exactly as before.
+  struct Frame {
+    Node const* n;
+    container::svector<Index> acc;
+  };
+  std::vector<Frame> stack;
+  auto const walk_node = [&](Node const& n, container::svector<Index> acc) {
     if (n.leaf()) return;  // leaves are not stamped (they carry no meet)
     // acc = the enclosing loops opened at or above n, each appearing ONCE: a
     // physical loop is opened at a single site (\p modes_of reads opens, not
@@ -102,10 +114,17 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
                                      // intersection
     else
       lifetime_mask_intersect_in_place(it->second, node_modes);
-    self(self, n.left(), acc);
-    self(self, n.right(), acc);
+    stack.push_back({&n.right(), acc});
+    stack.push_back({&n.left(), std::move(acc)});
   };
-  for (auto const& tree : forest) walk(walk, tree, {});
+  for (auto const& tree : forest) {
+    stack.push_back({&tree, {}});
+    while (!stack.empty()) {
+      Frame f = std::move(stack.back());
+      stack.pop_back();
+      walk_node(*f.n, std::move(f.acc));
+    }
+  }
 
   // Pass 2: stamp every occurrence with its canonical meet. The forest is
   // logically mutable (only the parameter binding is const); the setter
@@ -212,8 +231,16 @@ template <meta::eval_node_range R>
 void stamp_occurrence_homes(R const& forest) {
   using Node = std::ranges::range_value_t<R>;
   using Data = typename Node::value_type;
-  auto walk = [&](auto&& self, Node const& n,
-                  container::svector<Index> acc) -> void {
+  // Iterative for the same reason as \c stamp_residency_impl above: the
+  // residual's Sum spine is as deep as the number of terms, and a recursive
+  // descent would overflow the stack. Right child pushed before left, so the
+  // pop order is the recursion's pre-order.
+  struct Frame {
+    Node const* n;
+    container::svector<Index> acc;
+  };
+  std::vector<Frame> stack;
+  auto const walk_node = [&](Node const& n, container::svector<Index> acc) {
     if (n.leaf()) return;
     for (auto const& [ix, kind] : n->batch_loops_opened_here())
       acc.push_back(ix);
@@ -223,10 +250,17 @@ void stamp_occurrence_homes(R const& forest) {
       if (std::find(slots.begin(), slots.end(), m) != slots.end())
         home.push_back(m);
     const_cast<Data&>(*n).set_occurrence_home(std::move(home));
-    self(self, n.left(), acc);
-    self(self, n.right(), acc);
+    stack.push_back({&n.right(), acc});
+    stack.push_back({&n.left(), std::move(acc)});
   };
-  for (auto const& tree : forest) walk(walk, tree, {});
+  for (auto const& tree : forest) {
+    stack.push_back({&tree, {}});
+    while (!stack.empty()) {
+      Frame f = std::move(stack.back());
+      stack.pop_back();
+      walk_node(*f.n, std::move(f.acc));
+    }
+  }
 }
 
 /// \brief The VALUE key of a node: its node id (\c hash_value, the canonical
@@ -256,45 +290,63 @@ namespace detail {
 /// identity). A subtree with nothing home-sliced keys to the node id.
 template <meta::eval_node Node>
 std::pair<std::size_t, bool> value_key_impl(Node const& n) {
-  container::svector<std::size_t> pos;
-  auto const& carried = n->canon_indices();
-  for (Index const& m : home_scope(n))
-    for (std::size_t p = 0; p < carried.size(); ++p)
-      if (carried[p] == m) {
-        pos.push_back(p);
-        break;
-      }
-  bool sliced = !pos.empty();
-  std::size_t h = value_key(n->hash_value(), std::move(pos));
-  if (!n.leaf()) {
-    auto [lk, ls] = value_key_impl(n.left());
-    auto [rk, rs] = value_key_impl(n.right());
-    if (ls || rs) {
-      sliced = true;
-      // A Product (contraction) is commutative and the binarizer may emit the
-      // same contraction as (X,Y) in one term and (Y,X) in another, so the two
-      // operand keys are combined in a CANONICAL order -- ascending -- and the
-      // two spellings key to one value. (The node id they are combined into
-      // already folds the operand order; combining them as emitted did not,
-      // which split swapped occurrences into two builds.) A Sum's operands are
-      // NOT interchangeable -- its left child is the in-place accumulator --
-      // so they stay in the emitted order.
-      //
-      // The order is taken on the KEYS, deliberately NOT via
-      // canonical_children (eval_node_compare.hpp), whose rule is different
-      // (scalar operand last, then ascending node id). Do not "unify" the two:
-      // a node id ties whenever the two operands are one VALUE, and their keys
-      // can still DIFFER there -- one value home-sliced two different ways is
-      // two keys -- so canonical_children would fall back to the emitted order
-      // and leave exactly this combination order-dependent. Ordering the keys
-      // themselves is order-independent unconditionally. Both rules are
-      // value-determined, so the two canonicalizations do not need to agree.
-      if (n->is_product() && lk > rk) std::swap(lk, rk);
-      hash::combine(h, lk);
-      hash::combine(h, rk);
-    }
+  // The LEFT SPINE is unwound iteratively (the `spine` vector and the
+  // bottom-up loop below), exactly as TreeNodeEqualityComparator does: an
+  // equation's residual/energy is one in-place Sum tree with a left spine as
+  // deep as the number of terms, and recursing down it would overflow the
+  // call stack. Right children (single terms) and Product operands are bounded
+  // in depth and stay recursive. Aside from that unwinding this is a faithful
+  // transcription of the recursive form.
+  container::svector<Node const*> spine;
+  for (Node const* c = &n;; c = &(*c).left()) {
+    spine.push_back(c);
+    if ((*c).leaf()) break;
   }
-  return {sliced ? h : n->hash_value(), sliced};
+  std::pair<std::size_t, bool> below{};  // the current node's LEFT child result
+  for (auto sit = spine.rbegin(); sit != spine.rend(); ++sit) {
+    Node const& nd = **sit;
+    container::svector<std::size_t> pos;
+    auto const& carried = nd->canon_indices();
+    for (Index const& m : home_scope(nd))
+      for (std::size_t p = 0; p < carried.size(); ++p)
+        if (carried[p] == m) {
+          pos.push_back(p);
+          break;
+        }
+    bool sliced = !pos.empty();
+    std::size_t h = value_key(nd->hash_value(), std::move(pos));
+    if (!nd.leaf()) {
+      auto [lk, ls] = below;  // the left child, already folded by this loop
+      auto [rk, rs] = value_key_impl(nd.right());
+      if (ls || rs) {
+        sliced = true;
+        // A Product (contraction) is commutative and the binarizer may emit the
+        // same contraction as (X,Y) in one term and (Y,X) in another, so the
+        // two operand keys are combined in a CANONICAL order -- ascending --
+        // and the two spellings key to one value. (The node id they are
+        // combined into already folds the operand order; combining them as
+        // emitted did not, which split swapped occurrences into two builds.) A
+        // Sum's operands are NOT interchangeable -- its left child is the
+        // in-place accumulator -- so they stay in the emitted order.
+        //
+        // The order is taken on the KEYS, deliberately NOT via
+        // canonical_children (eval_node_compare.hpp), whose rule is different
+        // (scalar operand last, then ascending node id). Do not "unify" the
+        // two: a node id ties whenever the two operands are one VALUE, and
+        // their keys can still DIFFER there -- one value home-sliced two
+        // different ways is two keys -- so canonical_children would fall back
+        // to the emitted order and leave exactly this combination
+        // order-dependent. Ordering the keys themselves is order-independent
+        // unconditionally. Both rules are value-determined, so the two
+        // canonicalizations do not need to agree.
+        if (nd->is_product() && lk > rk) std::swap(lk, rk);
+        hash::combine(h, lk);
+        hash::combine(h, rk);
+      }
+    }
+    below = {sliced ? h : nd->hash_value(), sliced};
+  }
+  return below;
 }
 }  // namespace detail
 

@@ -457,7 +457,21 @@ struct DryRunOps {
       auto& lohi = it->second;
       bool const append = block_lo == lohi.second;
       bool const prepend = block_hi == lohi.first;
-      SEQUANT_ASSERT(append || prepend);
+      // REFUSAL, not an invariant: a block that neither appends after nor
+      // prepends before the filled range leaves a GAP or OVERLAPS an already
+      // assembled block (a double count), and the assembled extent below would
+      // then be computed from a coverage that does not describe what was
+      // written. SEQUANT_ASSERT is compiled out in non-Debug builds, so an
+      // assert alone would let the dry run silently accept an incorrect
+      // scatter; throw instead, naming the offending block and the coverage it
+      // does not abut.
+      if (!append && !prepend)
+        throw Exception(std::format(
+            "[dryrun] write_into_slice: block [{},{}) on mode {} ({}) neither "
+            "appends after nor prepends before the assembled coverage [{},{}) "
+            "-- a gapped or overlapping scatter",
+            block_lo, block_hi, mode, toUtf8(mix.full_label()), lohi.first,
+            lohi.second));
       if (append)
         lohi.second = block_hi;
       else

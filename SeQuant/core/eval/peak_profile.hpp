@@ -18,6 +18,7 @@
 #include <set>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace sequant::eval {
 
@@ -482,14 +483,46 @@ RichSchedule compute_dag_boulevard(R const& forest,
   std::size_t pre_counter = 0;
   std::unordered_map<std::size_t, std::size_t> pre_to_point;
 
-  auto visit = [&](auto&& self, Node const& n, detail::BatchContext ectx,
-                   container::svector<std::size_t> ectx_opener) -> std::size_t {
-    std::size_t const pre = pre_counter++;
+  // The post-order walk is ITERATIVE (the explicit frame stack below), not
+  // recursive. On the ordered path an equation's residual/energy reaches this
+  // prepass as a SINGLE in-place Sum tree with one node per summand, so its
+  // LEFT SPINE is as deep as the number of terms -- thousands for a large
+  // equation -- and a recursive descent would overflow the call stack here,
+  // before the (already stack-safe) executor is ever reached. This is the same
+  // unwinding TreeNodeEqualityComparator does, taken one step further: every
+  // child is pushed as a frame, so no descent is recursive at all.
+  //
+  // The machine is a FAITHFUL transcription of the recursion it replaces: a
+  // frame is entered (its `pre` id assigned on entry, its own opens folded
+  // into the context its children see), then its left child is entered, then
+  // its right, then the frame is finalized (its post-order `point` assigned,
+  // its NodeRec pushed). The recorded `pre` ids, `point`s, rec order and
+  // consumer_point stamps are therefore identical to the recursive version's.
+  struct Frame {
+    Node const* n = nullptr;
+    detail::BatchContext ectx;  //!< the node's OWN (enclosing) context
+    container::svector<std::size_t> ectx_opener;
+    detail::BatchContext child_ectx;  //!< what its children see
+    container::svector<std::size_t> child_opener;
+    container::svector<Index> own_modes;
+    container::svector<std::size_t> child_recs;
+    std::size_t pre = 0;
+    int stage = 0;  //!< 0: descend left, 1: descend right, 2: finalize
+  };
+  std::vector<Frame> stack;
+  std::size_t last_rec = 0;  //!< rec index the last finalized frame produced
+
+  // Enter a node: assign its pre-order id and build the context its children
+  // will see.
+  auto const enter = [&](Node const& n, detail::BatchContext ectx,
+                         container::svector<std::size_t> ectx_opener) {
+    Frame f;
+    f.n = &n;
+    f.pre = pre_counter++;
     // Children see this node's own realized loops on top of the enclosing
     // context; the node itself does NOT (it is recorded with `ectx`).
-    detail::BatchContext child_ectx = ectx;
-    container::svector<std::size_t> child_opener = ectx_opener;
-    container::svector<Index> own_modes;
+    f.child_ectx = ectx;
+    f.child_opener = ectx_opener;
     // Enclosing-loop context is built from the loops OPENED at this node
     // (batch_loops_opened_here), NOT the per-node sliced mask
     // (node_slice_mask). The DP stamps an external mode's sliced mask on EVERY
@@ -504,21 +537,24 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // Opened loops are over plain occ/aux modes (never a composite result
     // slot), so each is taken as itself.
     for (auto const& [ix, kind] : n->batch_loops_opened_here()) {
-      child_ectx.push_back({ix, {std::size_t{0}, block_of(ix)}});
-      child_opener.push_back(pre);
-      own_modes.push_back(ix);
+      f.child_ectx.push_back({ix, {std::size_t{0}, block_of(ix)}});
+      f.child_opener.push_back(f.pre);
+      f.own_modes.push_back(ix);
     }
 
     if (detail::dump_enabled("SEQUANT_DUMP_OPENS") &&
         !n->batch_loops_opened_here().empty())
       detail::dump_opens(n);
 
-    container::svector<std::size_t> child_recs;
-    if (!n.leaf()) {
-      child_recs.push_back(self(self, n.left(), child_ectx, child_opener));
-      child_recs.push_back(self(self, n.right(), child_ectx, child_opener));
-    }
+    f.ectx = std::move(ectx);
+    f.ectx_opener = std::move(ectx_opener);
+    stack.push_back(std::move(f));
+  };
 
+  // Finalize a node whose children have both been recorded: assign its
+  // post-order point and push its NodeRec. Returns the rec index.
+  auto const finalize = [&](Frame& f) -> std::size_t {
+    Node const& n = *f.n;
     std::size_t const point = counter++;
     NodeRec r;
     r.hash = n->hash_value();
@@ -554,23 +590,46 @@ RichSchedule compute_dag_boulevard(R const& forest,
           r.contracted_batched.push_back(ix);
       }
     }
-    r.ectx = std::move(ectx);
-    r.ectx_opener = std::move(ectx_opener);
-    pre_to_point[pre] = point;
-    r.own_modes = std::move(own_modes);
+    r.ectx = std::move(f.ectx);
+    r.ectx_opener = std::move(f.ectx_opener);
+    pre_to_point[f.pre] = point;
+    r.own_modes = std::move(f.own_modes);
     for (auto const& [ix, kind] : n->batch_loops_opened_here())
       r.opens.push_back({ix, kind});
-    for (auto ci : child_recs) r.operand_points.push_back(recs[ci].point);
-    r.child_recs = child_recs;
+    for (auto ci : f.child_recs) r.operand_points.push_back(recs[ci].point);
+    r.child_recs = f.child_recs;
     r.node = &n;
     std::size_t const idx = recs.size();
     recs.push_back(std::move(r));
-    for (auto ci : child_recs) recs[ci].consumer_point = point;
+    for (auto ci : f.child_recs) recs[ci].consumer_point = point;
     return idx;
   };
 
-  for (auto const& tree : forest)
-    visit(visit, tree, detail::BatchContext{}, {});
+  for (auto const& tree : forest) {
+    enter(tree, detail::BatchContext{}, {});
+    while (!stack.empty()) {
+      std::size_t const top = stack.size() - 1;
+      int const stage = stack[top].stage++;
+      Node const& n = *stack[top].n;
+      if (stage == 0) {
+        // `enter` copies the two context arguments before it grows the stack,
+        // so reading them out of stack[top] here is safe.
+        if (!n.leaf())
+          enter(n.left(), stack[top].child_ectx, stack[top].child_opener);
+        continue;
+      }
+      if (stage == 1) {
+        if (!n.leaf()) {
+          stack[top].child_recs.push_back(last_rec);
+          enter(n.right(), stack[top].child_ectx, stack[top].child_opener);
+        }
+        continue;
+      }
+      if (!n.leaf()) stack[top].child_recs.push_back(last_rec);
+      last_rec = finalize(stack[top]);
+      stack.pop_back();
+    }
+  }
 
   // ---------------------------------------------------------------------
   // Loop identity FIRST, over OCCURRENCES (explicit-cells design section
@@ -1068,8 +1127,59 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // group.
   RichSchedule out;
   out.num_points = counter;
-  std::unordered_map<std::size_t, std::size_t> hash_to_cell;
-  for (auto const& r : recs) {
+  // The value key is a 64-bit hash, so a bucket hit is a CANDIDATE, not proof
+  // of identity: two distinct values that collide would otherwise be merged
+  // into one cell and the schedule would build one of them and read it as the
+  // other -- silently the wrong value. So the map goes key -> the (normally
+  // one) cells opened under that key, and a hit is confirmed STRUCTURALLY
+  // before it is accepted; a mismatch opens a new cell under the same key.
+  std::unordered_map<std::size_t, container::svector<std::size_t>> hash_to_cell;
+  // The rec that seeded each cell (cell id -> rec index), and each rec's cell.
+  container::svector<std::size_t> cell_rep, cell_of_rec(nrec, 0);
+  TreeNodeEqualityComparator<Node> const node_eq{};
+  // The children of a rec as (value key, cell id) pairs, in the same canonical
+  // order the value key combined them in (ascending key for a commutative
+  // Product, emitted order otherwise).
+  auto const child_cells = [&](NodeRec const& x) {
+    container::svector<std::pair<std::size_t, std::size_t>> cc;
+    for (std::size_t ci : x.child_recs)
+      cc.push_back({recs[ci].key, cell_of_rec[ci]});
+    if (x.is_product) std::sort(cc.begin(), cc.end());
+    return cc;
+  };
+  // Structural confirmation that two recs really are one value, comparing
+  // exactly what the key encodes -- and comparing it structurally rather than
+  // by hash:
+  //   * the node itself, through TreeNodeEqualityComparator (which reads a
+  //     Product's children through the canonical child view, so two swapped
+  //     spellings of one contraction still match);
+  //   * the per-position loop slots and the batch-reduced slots (the home
+  //     slicing the key folds in on top of the node id). Only the SLOT of a
+  //     reduced mode is compared, never its Index: the node id is label-free,
+  //     so two occurrences of one value may spell a reduced mode differently
+  //     and comparing labels would split them;
+  //   * the operands, by CELL -- not by key. recs are in post-order, so every
+  //     child already has its cell, and comparing cells makes the check
+  //     inductive: a collision resolved one level down cannot be re-merged one
+  //     level up.
+  // (The per-value aggregates above -- own_modes_union, carried_union /
+  // carried_isect -- are still keyed by the raw key, so a collision widens a
+  // union and narrows an intersection there. That is conservative: it can only
+  // add a divergent mode or drop a home mode, never point a cell at another
+  // cell's value.)
+  auto const same_value = [&](NodeRec const& a, NodeRec const& b) {
+    if (a.hash != b.hash) return false;
+    if (a.is_leaf != b.is_leaf || a.is_product != b.is_product) return false;
+    if (a.loop_slot != b.loop_slot) return false;
+    if (a.reduced_slot.size() != b.reduced_slot.size()) return false;
+    for (std::size_t i = 0; i < a.reduced_slot.size(); ++i)
+      if (a.reduced_slot[i].second != b.reduced_slot[i].second) return false;
+    if (child_cells(a) != child_cells(b)) return false;
+    if (a.node == nullptr || b.node == nullptr) return a.node == b.node;
+    return node_eq(*a.node, *b.node);
+  };
+  for (std::size_t ri = 0; ri < nrec; ++ri) {
+    NodeRec const& r = recs[ri];
     auto fold_enclosing = [&](container::svector<Index>& enclosing_modes) {
       for (auto const& e : r.ectx)
         if (std::find(enclosing_modes.begin(), enclosing_modes.end(),
@@ -1092,8 +1202,14 @@ RichSchedule compute_dag_boulevard(R const& forest,
       o.reduced_slot = r.reduced_slot;
       return o;
     };
-    auto const it = hash_to_cell.find(r.key);
-    if (it == hash_to_cell.end()) {
+    auto& bucket = hash_to_cell[r.key];
+    std::size_t hit = bucket.size();  // index into `bucket`; size() == miss
+    for (std::size_t bi = 0; bi < bucket.size(); ++bi)
+      if (same_value(recs[cell_rep[bucket[bi]]], r)) {
+        hit = bi;
+        break;
+      }
+    if (hit == bucket.size()) {
       ValueCell c;
       c.value_id = out.cells.size();
       c.is_leaf = r.is_leaf;
@@ -1119,14 +1235,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
       }
       fold_enclosing(c.enclosing_modes);
       c.occurrences.push_back(make_occ());
-      hash_to_cell.emplace(r.key, c.value_id);
+      cell_of_rec[ri] = c.value_id;
+      cell_rep.push_back(ri);
+      bucket.push_back(c.value_id);
       out.cells.push_back(std::move(c));
     } else {
-      ValueCell& c = out.cells[it->second];
+      ValueCell& c = out.cells[bucket[hit]];
       c.first_use = std::min(c.first_use, r.point);
       c.last_use = std::max(c.last_use, r.consumer_point);
       fold_enclosing(c.enclosing_modes);
       c.occurrences.push_back(make_occ());
+      cell_of_rec[ri] = c.value_id;
     }
   }
 

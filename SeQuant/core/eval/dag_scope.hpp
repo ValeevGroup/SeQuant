@@ -5,6 +5,7 @@
 #include <SeQuant/core/index.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -35,17 +36,6 @@ using LoopId = std::size_t;
 struct LoopKey {
   std::size_t depth;  //!< which loop-group
   int loop_slot;      //!< which member-slot within the group (0-based)
-
-  /// \brief A single opaque color encoding the FULL loop identity (\c depth AND
-  /// \c loop_slot), for use where one \c std::size_t must distinguish loops:
-  /// \c ordered_n_batches_by_loop (one batch count PER LOOP, not per
-  /// loop-group -- two members of one group are DISTINCT loops with distinct
-  /// batch counts; see ordered_executor.hpp). Keying on \c depth alone would
-  /// conflate same-group sibling loops. (\c loop_slot < 4096 in every
-  /// realized schedule.)
-  [[nodiscard]] std::size_t color() const {
-    return (depth << 12) | static_cast<std::size_t>(loop_slot);
-  }
 
   friend bool operator==(LoopKey const& a, LoopKey const& b) {
     return a.depth == b.depth && a.loop_slot == b.loop_slot;
@@ -103,5 +93,29 @@ struct ModeToLevel {
 };
 
 }  // namespace sequant
+
+/// \brief Hash of a \c LoopKey, so the FULL loop identity (\c depth AND
+///        \c loop_slot) can key an \c unordered_map directly.
+///
+/// \details Anything that counts or looks up something PER LOOP (e.g.
+/// \c ordered_n_batches_by_loop, one batch count per loop -- two members of
+/// one loop-group are DISTINCT loops with distinct batch counts, so keying on
+/// \c depth alone would conflate them) keys on the pair itself through this
+/// hash plus \c LoopKey::operator==. There is deliberately no packed
+/// single-\c size_t "color": packing \c loop_slot into a fixed bit field
+/// silently aliases two distinct loops once the slot numbering (an unbounded
+/// per-space counter in peak_profile.hpp) exceeds the field, and a
+/// hash+equality pair has no such bound.
+template <>
+struct std::hash<sequant::LoopKey> {
+  std::size_t operator()(sequant::LoopKey const& k) const noexcept {
+    std::size_t h = std::hash<std::size_t>{}(k.depth);
+    // boost-style combine; the two fields are small and would otherwise
+    // collide trivially under a plain xor.
+    h ^= std::hash<int>{}(k.loop_slot) + 0x9e3779b97f4a7c15ULL + (h << 6) +
+         (h >> 2);
+    return h;
+  }
+};
 
 #endif  // SEQUANT_EVAL_DAG_SCOPE_HPP

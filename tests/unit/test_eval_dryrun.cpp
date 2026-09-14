@@ -1645,6 +1645,54 @@ TEST_CASE(
         std::pair<std::size_t, std::size_t>{2, 6});
 }
 
+TEST_CASE(
+    "dryrun result write_into_slice REFUSES a gapped or overlapping block",
+    "[dryrun-result][write-into-slice]") {
+  // Copilot review (PR #613): the contiguity requirement used to be carried by
+  // a SEQUANT_ASSERT alone. Asserts are compiled out in non-Debug builds (and
+  // CI builds with SEQUANT_ASSERT_BEHAVIOR=THROW rather than relying on the
+  // assert), so a gapped or overlapping scatter would have updated the
+  // coverage from stale data and the dry run would have accepted -- and then
+  // MIS-SIZED -- an incorrect scatter. It must throw instead.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+
+  Index i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"};
+  Index a_pno{L"a_1", {i1, i2}};
+  container::svector<Index> outer{i1, a3};
+  container::svector<Index> inner{a_pno};
+  container::svector<Index> canon{i1, a3, a_pno};
+
+  ResultDryRunNested tmpl{outer, inner, cm, {}, canon};
+  Result const& tmpl_r = tmpl;
+
+  // OVERLAP: [0,5) then [3,8) -- [3,8) neither appends after 5 nor prepends
+  // before 0, so it would double-count elements 3 and 4.
+  {
+    ResultDryRunNested dest{outer, inner, cm, {{0, 0}}, canon};
+    Result& dest_w = dest;
+    auto b0 = tmpl_r.slice_mode(0, 0, 5);
+    auto b1 = tmpl_r.slice_mode(0, 3, 8);
+    REQUIRE(b0);
+    REQUIRE(b1);
+    dest_w.write_into_slice(*b0, 0, 0, 5);
+    CHECK_THROWS_AS(dest_w.write_into_slice(*b1, 0, 3, 8), sequant::Exception);
+  }
+
+  // GAP: [0,5) then [6,10) -- element 5 would never be written, yet the
+  // assembled extent would report the full range as covered.
+  {
+    ResultDryRunNested dest{outer, inner, cm, {{0, 0}}, canon};
+    Result& dest_w = dest;
+    auto b0 = tmpl_r.slice_mode(0, 0, 5);
+    auto b1 = tmpl_r.slice_mode(0, 6, 10);
+    REQUIRE(b0);
+    REQUIRE(b1);
+    dest_w.write_into_slice(*b0, 0, 0, 5);
+    CHECK_THROWS_AS(dest_w.write_into_slice(*b1, 0, 6, 10), sequant::Exception);
+  }
+}
+
 TEST_CASE("dryrun nested result uses moment-aware inner extent, not extent^k",
           "[dryrun-nested]") {
   auto r = backend_test_regime();

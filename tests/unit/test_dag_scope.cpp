@@ -17,7 +17,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <functional>
 #include <optional>
+#include <unordered_map>
 
 namespace {
 
@@ -72,4 +74,41 @@ TEST_CASE(
   CHECK_FALSE(m2l.by_mode[2].has_value());
   REQUIRE(m2l.by_mode[3].has_value());
   CHECK(*m2l.by_mode[3] == level_i2);
+}
+
+TEST_CASE("LoopKey keys a map on the FULL loop identity, unpacked",
+          "[dag-scope]") {
+  // Copilot review (PR #613): LoopKey used to expose a `color()` that packed
+  // `depth` and `loop_slot` into one size_t with a 12-bit slot field, guarded
+  // by nothing but a comment ("loop_slot < 4096"); the numbering site
+  // (peak_profile.hpp) hands out slots from an UNBOUNDED per-space counter, so
+  // a large enough schedule would have aliased two distinct loops onto one
+  // color and given them one batch count. The packing is gone: LoopKey is now
+  // hashed and compared as the pair it is, which has no bound at all.
+  using sequant::LoopKey;
+
+  std::unordered_map<LoopKey, int> m;
+  m[LoopKey{1, 0}] = 10;
+  m[LoopKey{1, 1}] = 11;  // same group, sibling slot: a DISTINCT loop
+  m[LoopKey{0, 1}] = 1;
+  CHECK(m.size() == 3);
+  CHECK(m.at(LoopKey{1, 0}) == 10);
+  CHECK(m.at(LoopKey{1, 1}) == 11);
+  CHECK(m.at(LoopKey{0, 1}) == 1);
+
+  // The pair that the old 12-bit packing aliased: depth 1 / slot 4096 packed
+  // to (1 << 12) | 4096 == 8192, exactly what depth 2 / slot 0 packed to.
+  // They are distinct keys now.
+  LoopKey const a{1, 4096}, b{2, 0};
+  CHECK(a != b);
+  m[a] = 40;
+  m[b] = 41;
+  CHECK(m.size() == 5);
+  CHECK(m.at(a) == 40);
+  CHECK(m.at(b) == 41);
+
+  // Equality is on both fields; the hash agrees with it.
+  CHECK(LoopKey{3, 2} == LoopKey{3, 2});
+  CHECK(std::hash<LoopKey>{}(LoopKey{3, 2}) ==
+        std::hash<LoopKey>{}(LoopKey{3, 2}));
 }

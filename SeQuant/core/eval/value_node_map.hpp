@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <unordered_map>
+#include <vector>
 
 namespace sequant::eval {
 
@@ -36,18 +37,30 @@ build_value_node_map(R const& forest) {
   // earlier sliced occurrence of the same node (key != hash) must not claim
   // the hash slot first. Then node hashes, only where no value claimed them
   // (a monitor's op hash, a leaf: any node of that hash).
-  auto visit = [&out](auto&& self, node_t const& n, bool keys) -> void {
-    if (keys)
-      out.emplace(value_key_of(n), n);
-    else
-      out.emplace(n->hash_value(), n);
-    if (!n.leaf()) {
-      self(self, n.left(), keys);
-      self(self, n.right(), keys);
+  // Iterative pre-order (an explicit stack, not recursion): the residual's
+  // in-place Sum tree has a left spine as deep as the number of terms, and a
+  // recursive descent would overflow the call stack. Pushing the RIGHT child
+  // before the LEFT one keeps the pop order the recursion's pre-order, so the
+  // FIRST node visited for a given key -- the one `emplace` keeps -- is the
+  // same one as before.
+  std::vector<node_t const*> stack;
+  auto visit = [&](node_t const& root, bool keys) {
+    stack.push_back(&root);
+    while (!stack.empty()) {
+      node_t const& n = *stack.back();
+      stack.pop_back();
+      if (keys)
+        out.emplace(value_key_of(n), n);
+      else
+        out.emplace(n->hash_value(), n);
+      if (!n.leaf()) {
+        stack.push_back(&n.right());
+        stack.push_back(&n.left());
+      }
     }
   };
-  for (auto const& t : forest) visit(visit, t, true);
-  for (auto const& t : forest) visit(visit, t, false);
+  for (auto const& t : forest) visit(t, true);
+  for (auto const& t : forest) visit(t, false);
   return out;
 }
 
@@ -61,14 +74,20 @@ template <meta::eval_node_range R>
 build_value_key_node_map(R const& forest) {
   using node_t = std::ranges::range_value_t<R>;
   std::unordered_map<std::size_t, node_t> out;
-  auto visit = [&out](auto&& self, node_t const& n) -> void {
-    out.emplace(value_key_of(n), n);
-    if (!n.leaf()) {
-      self(self, n.left());
-      self(self, n.right());
+  // Iterative pre-order, for the same stack-depth reason as above.
+  std::vector<node_t const*> stack;
+  for (auto const& t : forest) {
+    stack.push_back(&t);
+    while (!stack.empty()) {
+      node_t const& n = *stack.back();
+      stack.pop_back();
+      out.emplace(value_key_of(n), n);
+      if (!n.leaf()) {
+        stack.push_back(&n.right());
+        stack.push_back(&n.left());
+      }
     }
-  };
-  for (auto const& t : forest) visit(visit, t);
+  }
   return out;
 }
 

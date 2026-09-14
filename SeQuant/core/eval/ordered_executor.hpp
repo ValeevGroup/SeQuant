@@ -47,7 +47,7 @@ namespace detail {
 /// per loop: a value read from OUTSIDE two nested batch loops of \c n \& \c m
 /// real batches is read \c n*m times, not once, and \c CellRegistry::read
 /// enforces exactly that count at runtime). Keyed
-/// by \c LoopKey::color() (the loop's stable depth+loop_slot identity, not
+/// by the \c LoopKey itself (the loop's stable depth+loop_slot identity, not
 /// its canonical axis label, which a TYPE-keyed count would collapse across
 /// distinct same-space instances) so it is exact per realized loop.
 ///
@@ -56,11 +56,10 @@ ordered_n_batches_by_loop(
     OrderedSchedule const& ordered,
     std::function<std::size_t(Index const&)> const& target,
     BackendArrayOps const* aops) {
-  auto by_loop =
-      std::make_shared<std::unordered_map<std::size_t, std::size_t>>();
+  auto by_loop = std::make_shared<std::unordered_map<LoopKey, std::size_t>>();
   auto const add = [&](auto&& self, ScopeBlock const& b) -> void {
-    std::size_t const color = b.level.key().color();
-    if (!by_loop->count(color)) {
+    LoopKey const key = b.level.key();
+    if (!by_loop->count(key)) {
       // REFUSAL (not an invariant): the caller is required to install the
       // backend array-ops before a batched schedule runs. A throw, not an
       // assert -- SEQUANT_ASSERT is compiled out in non-Debug builds, and
@@ -69,8 +68,7 @@ ordered_n_batches_by_loop(
         throw Exception(
             "ordered_n_batches_by_loop: a batched schedule requires backend "
             "array-ops (CacheManager::set_array_ops)");
-      by_loop->emplace(color,
-                       aops->axis_batches(b.axis, target(b.axis)).size());
+      by_loop->emplace(key, aops->axis_batches(b.axis, target(b.axis)).size());
     }
     for (Step const& s : b.steps)
       if (auto const* child = std::get_if<ScopeBlock>(&s.value))
@@ -79,7 +77,7 @@ ordered_n_batches_by_loop(
   for (Step const& s : ordered.root.steps)
     if (auto const* child = std::get_if<ScopeBlock>(&s.value)) add(add, *child);
   return [by_loop](LoopKey const& k) -> std::size_t {
-    auto const it = by_loop->find(k.color());
+    auto const it = by_loop->find(k);
     return it == by_loop->end() ? std::size_t{1} : it->second;
   };
 }
