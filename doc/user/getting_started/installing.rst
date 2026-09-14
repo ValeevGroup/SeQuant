@@ -111,10 +111,11 @@ Useful CMake Variables
      - Controls how assertions within SeQuant's code are handled. Valid options are ``ABORT``, ``THROW`` and ``IGNORE``. The latter disables
        assertions, whereas the former keep them active and either abort the program or throw an exception on violation respectively.
    * - SEQUANT_LTO
-     - empty (decide per target type): `ON` for static/object libraries if the compiler supports "fat" LTO objects, `OFF` otherwise. `ON` for
-       other target types (shared libs, executables, etc.)
+     - empty (decide per target type): `ON` for static libraries if the compiler supports "fat" LTO objects, `OFF` otherwise. `ON` for
+       other target types (shared libs, executables, etc.). `OFF` for all targets when SeQuant is consumed as a subproject.
      - Controls whether SeQuant will be built with link-time optimizations (LTO) in non-debug builds (`CMAKE_BUILD_TYPE` != `Debug`). Set to
-       `ON` or `OFF` to override the per-target-type default for all SeQuant targets.
+       `ON` or `OFF` to override the per-target-type default for all SeQuant targets; an explicit setting is honored regardless of whether
+       SeQuant is the top-level project.
 
 
 Configuring and Building
