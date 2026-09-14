@@ -14,6 +14,7 @@ add_library(eval_shared STATIC EXCLUDE_FROM_ALL
 set_target_properties(eval_shared PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(eval_shared PUBLIC SeQuant)
 target_include_directories(eval_shared PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_set_optimization_flags(eval_shared)
 
 if (SEQUANT_HAS_TILEDARRAY)
     add_executable(eval_ta ${BUILD_BY_DEFAULT}
