@@ -71,11 +71,23 @@ check_ipo_supported(RESULT SEQUANT_CAN_RELY_ON_CMAKE_LTO LANGUAGES CXX)
 # because the archiver selection below has to happen at directory scope in order to be inherited
 # by the subdirectories that define our targets. The results are cached, so this costs a single
 # round of try-compiles for the entire project.
+# The compile-only probe type is scoped to these three checks: a toolchain file or an encompassing
+# project may have set CMAKE_TRY_COMPILE_TARGET_TYPE for a reason (typically cross-compiling without
+# a usable link step), and since this runs at directory scope every later try_compile in SeQuant
+# would inherit whatever we leave behind.
+if (DEFINED CMAKE_TRY_COMPILE_TARGET_TYPE)
+	set(_sequant_saved_try_compile_target_type "${CMAKE_TRY_COMPILE_TARGET_TYPE}")
+endif()
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 check_cxx_compiler_flag("-flto" SEQUANT_LTO_FLAG_SUPPORTED)
 check_cxx_compiler_flag("-flto=auto" SEQUANT_LTO_AUTO_SUPPORTED)
 check_cxx_compiler_flag("-flto;-ffat-lto-objects" SEQUANT_FAT_LTO_FLAG_SUPPORTED)
-unset(CMAKE_TRY_COMPILE_TARGET_TYPE)
+if (DEFINED _sequant_saved_try_compile_target_type)
+	set(CMAKE_TRY_COMPILE_TARGET_TYPE "${_sequant_saved_try_compile_target_type}")
+	unset(_sequant_saved_try_compile_target_type)
+else()
+	unset(CMAKE_TRY_COMPILE_TARGET_TYPE)
+endif()
 
 # Tri-state on purpose: ON/OFF force LTO on/off for all SeQuant targets, whereas the default
 # (empty) lets target_set_optimization_flags decide per target type. Declared as a cache
@@ -133,7 +145,10 @@ function(target_set_optimization_flags TARGET)
 		return()
 	endif()
 
-	if (TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR TARGET_TYPE STREQUAL "OBJECT_LIBRARY")
+	# Only static libraries leave the build as-is and may get linked by someone else (with or without
+	# LTO); everything else - executables, shared/module libraries, but also object libraries, whose
+	# objects only ever end up in a link step of ours - is linked by us.
+	if (TARGET_TYPE STREQUAL "STATIC_LIBRARY")
 		set(IS_ARCHIVE_LIKE_TARGET TRUE)
 	else()
 		set(IS_ARCHIVE_LIKE_TARGET FALSE)
@@ -147,26 +162,28 @@ function(target_set_optimization_flags TARGET)
 		# project's call when we are consumed as a subproject, not ours
 		set(ENABLE_LTO OFF)
 	elseif(IS_ARCHIVE_LIKE_TARGET)
-		# For static/object libraries we only want to enable LTO by default, if we can create
+		# For static libraries we only want to enable LTO by default, if we can create
 		# "fat" object files. Those can still be linked without LTO and hence shouldn't
 		# break any downstream use.
 		set(ENABLE_LTO ${SEQUANT_FAT_LTO_FLAG_SUPPORTED})
 	elseif(SEQUANT_LTO_FLAG_SUPPORTED OR SEQUANT_CAN_RELY_ON_CMAKE_LTO)
-		# Anything but static/object libraries is also linked by us and
+		# Anything but static libraries is also linked by us and
 		# hence enabling LTO doesn't affect downstream compatibility
 		set(ENABLE_LTO ON)
 	endif()
 
 	if (ENABLE_LTO)
-		if (NOT SEQUANT_FAT_LTO_FLAG_SUPPORTED AND NOT SEQUANT_LTO_AWARE_ARCHIVER
-				AND TARGET_TYPE STREQUAL "STATIC_LIBRARY")
-			message(FATAL_ERROR "Requested LTO for static library '${TARGET}' but your compiler supports neither "
-				"\"fat\" LTO objects nor an LTO-aware archiver (CMAKE_CXX_COMPILER_AR). The resulting archive "
-				"would not be linkable - point CMAKE_AR and CMAKE_RANLIB at an LTO-aware ar/ranlib (e.g. llvm-ar "
-				"and llvm-ranlib) or use SEQUANT_LTO=OFF")
-		endif()
-
 		if (SEQUANT_LTO_FLAG_SUPPORTED)
+			# The archiver concern below only exists because we drive LTO by hand: when CMake does it
+			# (the INTERPROCEDURAL_OPTIMIZATION branch) it also substitutes a matching archiver itself
+			if (NOT SEQUANT_FAT_LTO_FLAG_SUPPORTED AND NOT SEQUANT_LTO_AWARE_ARCHIVER
+					AND TARGET_TYPE STREQUAL "STATIC_LIBRARY")
+				message(FATAL_ERROR "Requested LTO for static library '${TARGET}' but your compiler supports neither "
+					"\"fat\" LTO objects nor an LTO-aware archiver (CMAKE_CXX_COMPILER_AR). The resulting archive "
+					"would not be linkable - point CMAKE_AR and CMAKE_RANLIB at an LTO-aware ar/ranlib (e.g. llvm-ar "
+					"and llvm-ranlib) or use SEQUANT_LTO=OFF")
+			endif()
+
 			# We prefer to manually set the LTO flag(s) rather than CMake doing it for us
 			# due to https://gitlab.kitware.com/cmake/cmake/-/work_items/23136
 			# On some compilers, the thin LTO type requested by CMake is incompatible
@@ -181,7 +198,7 @@ function(target_set_optimization_flags TARGET)
 				target_link_options("${TARGET}" PRIVATE -flto)
 			endif()
 
-			# Only static/object libraries benefit from "fat" objects (see above): everything else
+			# Only static libraries benefit from "fat" objects (see above): everything else
 			# is linked by us, so the extra machine-code copy is never used - while producing it
 			# costs an entire second compilation of every translation unit on GCC.
 			if (SEQUANT_FAT_LTO_FLAG_SUPPORTED AND IS_ARCHIVE_LIKE_TARGET)
