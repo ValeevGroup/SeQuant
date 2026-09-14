@@ -14,6 +14,15 @@ pybind11_add_module(python-sequant MODULE src/sequant/_sequant.cc)
 
 target_link_libraries(python-sequant PRIVATE SeQuant)
 target_include_directories(python-sequant PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+# pybind11_add_module applies LTO to the module by itself (pybind11::lto), which is why the
+# automatic default leaves it alone - but pybind11's envelope is narrower than ours (it skips
+# RelWithDebInfo, and skips LTO entirely when CMAKE_INTERPROCEDURAL_OPTIMIZATION is defined).
+# An explicit SEQUANT_LTO=ON must reach the module in any case: without "fat" objects the
+# SeQuant archives are then bitcode-only and can only be linked with LTO enabled on the
+# consumer too. Where both apply, the duplicate -flto is harmless.
+if (SEQUANT_LTO)
+  target_set_optimization_flags(python-sequant)
+endif()
 
 set_target_properties(
   python-sequant
