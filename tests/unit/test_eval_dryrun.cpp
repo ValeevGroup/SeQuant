@@ -1379,7 +1379,100 @@ TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
   container::svector<Index> contracted{Index{L"i_2"}};
   auto const f = cm.flops(out, contracted);
   CHECK(f > 0.0);
-  CHECK(cm.exec_cost(f, cm.memsize(out), 4096) > 0.0);
+  // exec_cost takes the op's FULL compulsory traffic: both operand footprints
+  // plus the result's (see the roofline note on CostModel::exec_cost).
+  CHECK(cm.exec_cost(f, cm.memsize(out), cm.memsize(contracted),
+                     cm.memsize(out)) > 0.0);
+}
+
+TEST_CASE(
+    "dryrun product roofline exec charges both operands and the result, "
+    "order-independently",
+    "[dryrun-costmodel][roofline]") {
+  // The roofline `traffic` term is the COMPULSORY single-pass data movement of
+  // one contraction -- read both operands, WRITE the result -- which is what
+  // the optimizer's DP charges (S[lp] + S[rp] + S[n]; PeakModel::relax and
+  // BatchedPeakModel::relax in core/optimize/cost_model.hpp). The dry-run
+  // replay must charge the same thing, at realized extents. Two consequences
+  // are pinned here:
+  //   (a) `exec` does not depend on which operand is the left one (data
+  //       movement is symmetric in the operands), and
+  //   (b) `exec` equals roofline_op_cost at |L| + |R| + |out| elements.
+  // Before the fix, prod charged memsize(left) + a 4096-byte placeholder for
+  // the right operand and nothing for the result, so BOTH failed: with the
+  // 4000-vs-100-element operands used below, swapping the operand order moved
+  // `exec` by the whole ratio of the two footprints.
+  sequant::RooflineParams rp{.machine_balance = 200.0,
+                             .fast_mem_elems = 1000000.0};
+  auto const regime = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(regime, rp);
+
+  Index const i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"}, a4{L"a_4"};
+  // Deliberately lopsided operands: big = 20*20*10 = 4000 elements,
+  // small = 10*10 = 100 elements, result = 20*20*10 = 4000 elements.
+  container::svector<Index> const big{a3, a4, i2};
+  container::svector<Index> const small{i2, i1};
+  container::svector<Index> const res{a3, a4, i1};
+
+  // Bytes -> elements without hardcoding the numeric size: a rank-1 `i` tensor
+  // is exactly `i`'s extent (10) elements.
+  double const nsz = static_cast<double>(cm->memsize({i1})) / 10.0;
+  REQUIRE(nsz > 0.0);
+  double const traffic_elems =
+      static_cast<double>(cm->memsize(big) + cm->memsize(small) +
+                          cm->memsize(res)) /
+      nsz;
+  CHECK(traffic_elems == Catch::Approx(4000.0 + 100.0 + 4000.0));
+
+  // The per-op OpCost emission (which is what stashes last_op_flops/exec) is
+  // gated at RUNTIME on Logger::instance().eval.level > 0; redirect the stream
+  // so nothing lands on stdout, and restore the global state afterwards.
+  std::ostringstream trace_os;
+  auto& logger = Logger::instance();
+  auto const prev_level = logger.eval.level;
+  auto* const prev_stream = logger.eval.stream;
+  logger.eval.level = 2;
+  logger.eval.stream = &trace_os;
+
+  // big * small
+  double flops_lr = 0.0, exec_lr = 0.0;
+  {
+    ResultDryRun l{big, cm};
+    ResultDryRun r{small, cm};
+    auto out = static_cast<Result const&>(l).prod(r, annot3(big, small, res),
+                                                  DeNest::False);
+    REQUIRE(out);
+    flops_lr = sequant::eval::detail::last_op_flops();
+    exec_lr = sequant::eval::detail::last_op_exec();
+  }
+  // small * big -- same contraction, operands swapped.
+  double flops_rl = 0.0, exec_rl = 0.0;
+  {
+    ResultDryRun l{small, cm};
+    ResultDryRun r{big, cm};
+    auto out = static_cast<Result const&>(l).prod(r, annot3(small, big, res),
+                                                  DeNest::False);
+    REQUIRE(out);
+    flops_rl = sequant::eval::detail::last_op_flops();
+    exec_rl = sequant::eval::detail::last_op_exec();
+  }
+
+  logger.eval.level = prev_level;
+  logger.eval.stream = prev_stream;
+
+  CHECK(flops_lr > 0.0);
+  CHECK(flops_rl == Catch::Approx(flops_lr));  // flops are order-independent
+  CHECK(exec_lr > 0.0);
+  CHECK(exec_rl == Catch::Approx(exec_lr));  // (a) so is the traffic term
+
+  // (b) and it is exactly the roofline cost at the operand+result footprint.
+  double const expected = sequant::opt::detail::roofline_op_cost(
+      flops_lr, traffic_elems, rp.machine_balance, rp.fast_mem_elems,
+      rp.block_tiles, rp.block_prefactor);
+  CHECK(exec_lr == Catch::Approx(expected));
+  // Guard against the check being vacuous (machine_balance high enough that
+  // the op really is bandwidth-bound, so `traffic` is what is being tested).
+  CHECK(expected > flops_lr);
 }
 
 TEST_CASE("dryrun flat result size delegates to cost model",

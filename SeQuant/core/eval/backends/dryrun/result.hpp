@@ -307,7 +307,23 @@ struct DryRunOps {
         label_extents.emplace(lbl, w);
       double const flops = cm->flops(out, contracted, label_extents);
       sequant::eval::detail::last_op_flops() = flops;  // for the Build event
-      double const exec = cm->exec_cost(flops, cm->memsize(idx, ov), 4096);
+      // Roofline traffic == the op's COMPULSORY single-pass data movement:
+      // read BOTH operands, write the result -- each at its REALIZED (sliced)
+      // extent. This is the same footprint the optimizer's DP charges (S[lp] +
+      // S[rp] + S[n]; PeakModel::relax / BatchedPeakModel::relax), so the
+      // replay prices a DP-chosen tree the way the DP priced it. Each footprint
+      // is sized against ITS OWN index list with ITS OWN positional overrides:
+      // `idx`/`ov` for the left operand, the other value's stored indices and
+      // overrides for the right, and `out`/`merged` for the result (exactly
+      // what make_dryrun_result below hands the result token). Charging only
+      // one operand (as this once did, with a placeholder for the other) both
+      // under-counts the movement and makes `exec` depend on which operand
+      // landed on the left -- which the data movement does not. The
+      // finite-cache re-read effect is the separate Hong-Kung term inside
+      // roofline_op_cost, not this one.
+      double const exec = cm->exec_cost(
+          flops, cm->memsize(idx, ov), cm->memsize(indices_of(other), other_ov),
+          cm->memsize(out, merged));
       sequant::eval::detail::last_op_exec() = exec;  // for the Build event
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
                 std::format(" | {}", exec), '\n');

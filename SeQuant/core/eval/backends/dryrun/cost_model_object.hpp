@@ -167,14 +167,28 @@ class CostModel {
   /// \brief Roofline-projected execution cost of one contraction (see
   ///        \c sequant::opt::detail::roofline_op_cost).
   ///
-  /// \p left_bytes / \p right_bytes are operand footprints in BYTES (as
-  /// reported by \c Result::size_in_bytes()); converted to elements (the
-  /// counter's native unit) via \c numeric_size before delegating.
+  /// \p left_bytes / \p right_bytes / \p result_bytes are the BOTH-OPERANDS-
+  /// AND-RESULT footprints in BYTES (as reported by \c
+  /// Result::size_in_bytes()); converted to elements (the counter's native
+  /// unit) via \c numeric_size before delegating. All three are charged,
+  /// because \c roofline_op_cost's \c traffic is the COMPULSORY single-pass
+  /// data movement of one contraction: read both operands, write the result.
+  /// This is exactly what the optimizer's DP charges (\c S[lp] + S[rp] +
+  /// S[n]; see PeakModel::relax / BatchedPeakModel::relax in
+  /// core/optimize/cost_model.hpp), so a dry-run replay of a DP-chosen tree
+  /// prices each op the same way the DP did, at REALIZED (sliced) extents.
+  /// Charging fewer footprints (e.g. only the left operand) both under-counts
+  /// the traffic and makes the cost depend on operand ORDER, which the
+  /// contraction's data movement does not. The finite-cache re-read effect is
+  /// NOT this term -- it is the separate Hong-Kung bound inside
+  /// \c roofline_op_cost.
   ///
   [[nodiscard]] double exec_cost(double flops_count, std::size_t left_bytes,
-                                 std::size_t right_bytes) const {
+                                 std::size_t right_bytes,
+                                 std::size_t result_bytes) const {
     double const traffic_elems =
-        static_cast<double>(left_bytes + right_bytes) / numeric_size_;
+        static_cast<double>(left_bytes + right_bytes + result_bytes) /
+        numeric_size_;
     return sequant::opt::detail::roofline_op_cost(
         flops_count, traffic_elems, roofline_.machine_balance,
         roofline_.fast_mem_elems, roofline_.block_tiles,
