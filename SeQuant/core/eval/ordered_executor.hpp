@@ -513,6 +513,12 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
     return res;
   };
 
+  // Recursive, but bounded by CELL boundaries rather than by tree depth: the
+  // first `resolver.fetch` below stops the descent at any child that is its own
+  // scheduled value, so the depth is the height of ONE cell's private
+  // production subtree (a handful of contractions), never the residual's Sum
+  // spine. That is why it is not part of the spine-unwinding the prepasses
+  // needed.
   auto const read_operand = [&](auto&& self, node_t const& child) -> ResultPtr {
     std::size_t const key = value_key_of(child);
     if (auto v = resolver.fetch(key, ctx))
@@ -630,8 +636,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
 template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC,
           typename ScopeGuardFactory>
 void run_ordered_contracted_block(
-    ScopeBlock const& block,
-    std::unordered_map<std::size_t, node_t> const& vmap,
+    ScopeBlock const& block, ValueNodeMap<node_t> const& vmap,
     RichSchedule const& rich, OrderedSchedule const& ordered,
     F const& leaf_evaluator, CacheManager<N, FHC>& parent_cache,
     std::function<std::size_t(Index const&)> const& target,
@@ -690,7 +695,10 @@ void run_ordered_contracted_block(
           "evaluate_ordered_schedule: a loop-block value_id was not found in "
           "the forest's value-node map (value " +
           std::to_string(vid) + ")");
-    return it->second;
+    // The map holds non-owning pointers into the forest, which outlives it:
+    // the forest is a parameter of the enclosing call and the map a local of
+    // that call (see ValueNodeMap, value_node_map.hpp).
+    return *it->second;
   };
 
   // A cell holds the CANONICAL orientation (see CellRegistry's own doc);
@@ -1256,7 +1264,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 
   // value id -> node, resolving a BuildStep's value_id (via
   // value_key_of(rich.cells[vid])) to a forest node of that value for
-  // compute_cell to build.
+  // compute_cell to build. Non-owning (ValueNodeMap): `forest` is this
+  // call's own parameter and outlives every use of `vmap`, including the
+  // block walk below, which takes it by const reference.
   auto const vmap = build_value_key_node_map(forest);
 
   // value_id -> forest node: the same lookup run_ordered_contracted_block's
@@ -1272,7 +1282,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           "evaluate_ordered_schedule: a value_id was not found in the "
           "forest's value-node map (value " +
           std::to_string(vid) + ")");
-    return it->second;
+    // The map holds non-owning pointers into the forest, which outlives it:
+    // the forest is a parameter of the enclosing call and the map a local of
+    // that call (see ValueNodeMap, value_node_map.hpp).
+    return *it->second;
   };
 
   // Explicit value cells: build and statically validate the cell
@@ -1517,8 +1530,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       // doc); compute_cell returns the oriented result and the phase is an
       // involution, so a production converts by multiplying it back in.
       {
-        auto const ph = it->second->canon_phase();
-        ResultPtr r = compute_cell<EvalTrace>(it->second, *root_cell, resolver,
+        auto const ph = (*it->second)->canon_phase();
+        ResultPtr r = compute_cell<EvalTrace>(*it->second, *root_cell, resolver,
                                               leaf_evaluator, cache, root_ectx);
         // A null result is recorded as null rather than dereferenced here, so
         // the diagnostic stays the "forest root was never produced" throw at

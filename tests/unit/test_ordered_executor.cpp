@@ -408,13 +408,15 @@ std::size_t orderedexec_builds_of(
 /// with itself would otherwise contribute ONE read where the runtime performs
 /// two home accesses.
 /// \note Captures \p rich and \p vmap by reference: both must outlive the
-/// returned callable.
+/// returned callable. \p vmap holds non-owning pointers into the forest it was
+/// built from (\c sequant::eval::ValueNodeMap), so that forest -- a local of
+/// the test case, declared before both the map and this callable -- must
+/// outlive the callable too.
 ///
 template <typename NodeT>
 std::function<sequant::container::svector<std::size_t>(std::size_t)>
-orderedexec_per_leg_operands(
-    sequant::eval::RichSchedule const& rich,
-    std::unordered_map<std::size_t, NodeT> const& vmap) {
+orderedexec_per_leg_operands(sequant::eval::RichSchedule const& rich,
+                             sequant::eval::ValueNodeMap<NodeT> const& vmap) {
   // Keyed by VALUE id (value_key_of): a child node resolves to the value it
   // is an occurrence of, not to the first value sharing its node hash.
   auto vid_of_key =
@@ -425,13 +427,13 @@ orderedexec_per_leg_operands(
              std::size_t vid) -> sequant::container::svector<std::size_t> {
     sequant::container::svector<std::size_t> out;
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
-    if (it == vmap.end() || it->second.leaf()) return out;
+    if (it == vmap.end() || it->second->leaf()) return out;
     auto const add = [&](NodeT const& child) {
       auto const f = vid_of_key->find(sequant::value_key_of(child));
       if (f != vid_of_key->end()) out.push_back(f->second);
     };
-    add(it->second.left());
-    add(it->second.right());
+    add(it->second->left());
+    add(it->second->right());
     return out;
   };
 }
@@ -573,9 +575,9 @@ TEST_CASE(
       if (mu_mu_hash) break;
       for (auto const& vc : rich.cells) {
         auto const it = vmap.find(sequant::eval::value_key_of(vc));
-        if (it == vmap.end() || it->second.leaf()) continue;
+        if (it == vmap.end() || it->second->leaf()) continue;
         if (carries_type(vc.carried, is_K)) continue;
-        auto const contracted = sequant::contracted_indices(it->second);
+        auto const contracted = sequant::contracted_indices(*it->second);
         if (std::find_if(contracted.begin(), contracted.end(), is_K) ==
             contracted.end())
           continue;
@@ -726,15 +728,15 @@ TEST_CASE(
   std::size_t worst_ord = 0;
   for (auto const& vc : rich.cells) {
     auto const vit = vmap.find(sequant::eval::value_key_of(vc));
-    if (vit == vmap.end() || vit->second.leaf()) continue;
+    if (vit == vmap.end() || vit->second->leaf()) continue;
     if (carries_type(vc.carried, is_K)) continue;
-    auto const pc = sequant::contracted_indices(vit->second);
+    auto const pc = sequant::contracted_indices(*vit->second);
     if (std::find_if(pc.begin(), pc.end(), is_K) != pc.end()) continue;
     if (!orderedexec_index_of_build_step(ordered.root, vc.value_id).has_value())
       continue;
     worst_ord = std::max(
         worst_ord,
-        orderedexec_builds_of(ordered_cache.recompute_tally(), vit->second));
+        orderedexec_builds_of(ordered_cache.recompute_tally(), *vit->second));
   }
   std::wcerr << L"  worst build count over ALL root-homed Κ-free composites: "
              << L"ordered = " << worst_ord << L"\n";
@@ -809,11 +811,11 @@ TEST_CASE(
   std::size_t vol_count = 0, persist_count = 0;
   for (auto const& vc : rich.cells) {
     auto const vit = vmap.find(sequant::eval::value_key_of(vc));
-    if (vit == vmap.end() || vit->second.leaf()) continue;
+    if (vit == vmap.end() || vit->second->leaf()) continue;
     // only the composites the ROOT walk actually homes (root-level BuildSteps)
     if (!orderedexec_index_of_build_step(ordered.root, vc.value_id).has_value())
       continue;
-    if (sequant::subtree_any(vit->second, is_volatile_node)) {
+    if (sequant::subtree_any(*vit->second, is_volatile_node)) {
       ++vol_count;
       vol_bytes += foot(vc);
     } else {
@@ -862,12 +864,12 @@ TEST_CASE(
       REQUIRE(vid < ordered.num_values);
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       REQUIRE(it != vmap.end());
-      if (it->second.leaf()) continue;  // leaves are handed back, never built
-      if (!it->second->is_product()) continue;  // only products are tallied
+      if (it->second->leaf()) continue;  // leaves are handed back, never built
+      if (!(*it->second)->is_product()) continue;  // only products are tallied
       auto const ord_b =
-          orderedexec_builds_of(ordered_cache.recompute_tally(), it->second);
+          orderedexec_builds_of(ordered_cache.recompute_tally(), *it->second);
       auto const fd_b =
-          orderedexec_builds_of(fd_cache.recompute_tally(), it->second);
+          orderedexec_builds_of(fd_cache.recompute_tally(), *it->second);
       if (fd_b >= 1) {
         ++checked;
         if (ord_b < 1) ++ord_missing_vs_fd;
@@ -1200,7 +1202,7 @@ TEST_CASE(
         auto const it =
             vmap_dump.find(sequant::eval::value_key_of(rich.cells[vid]));
         if (it != vmap_dump.end())
-          for (auto const& x : it->second->sliced_modes())
+          for (auto const& x : (*it->second)->sliced_modes())
             s += sequant::toUtf8(x.full_label()) + " ";
       }
       return s;
@@ -1255,7 +1257,7 @@ TEST_CASE(
     if (char const* ch = std::getenv("SEQUANT_UT_CHILDREN")) {
       auto const want = std::strtoul(ch, nullptr, 10);
       for (auto const& [h, nd] : vmap_dump) {
-        if ((h % 100000u) != want || nd.leaf()) continue;
+        if ((h % 100000u) != want || nd->leaf()) continue;
         auto pr = [&](char const* tag, auto const& c) {
           std::cerr << "[children] " << tag
                     << " h=" << (c->hash_value() % 100000u)
@@ -1268,8 +1270,8 @@ TEST_CASE(
           std::cerr << "]\n";
         };
         std::cerr << "[children] parent h=" << (h % 100000u) << "\n";
-        pr("left ", nd.left());
-        pr("right", nd.right());
+        pr("left ", nd->left());
+        pr("right", nd->right());
       }
     }
 
@@ -1286,7 +1288,7 @@ TEST_CASE(
         auto const it =
             vmap_dump.find(sequant::eval::value_key_of(rich.cells[vid]));
         if (it != vmap_dump.end())
-          for (auto const& x : it->second->sliced_modes())
+          for (auto const& x : (*it->second)->sliced_modes())
             v.push_back(sequant::toUtf8(x.full_label()));
       } else if (vid < rich.cells.size()) {
         for (auto const& x : rich.cells[vid].carried)
@@ -1482,12 +1484,12 @@ TEST_CASE(
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       REQUIRE(it != vmap.end());
       return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
-                                                             it->second);
+                                                             *it->second);
     };
     in.volatile_of = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       return it != vmap.end() &&
-             sequant::subtree_any(it->second, is_volatile_node);
+             sequant::subtree_any(*it->second, is_volatile_node);
     };
     // SP4 Task 4 fix1 item 4: the static gate must validate the same lives
     // the executor enforces at runtime -- real per-loop-instance batch
@@ -1661,12 +1663,12 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
     return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
-                                                           it->second);
+                                                           *it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     return it != vmap.end() &&
-           sequant::subtree_any(it->second, [&](auto const& n) {
+           sequant::subtree_any(*it->second, [&](auto const& n) {
              return n.leaf() && n->is_tensor() &&
                     n->as_tensor().label() == L"t";
            });
@@ -2020,12 +2022,12 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
     return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
-                                                           it->second);
+                                                           *it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     return it != vmap.end() &&
-           sequant::subtree_any(it->second, [&](auto const& n) {
+           sequant::subtree_any(*it->second, [&](auto const& n) {
              return n.leaf() && n->is_tensor() &&
                     n->as_tensor().label() == L"t";
            });
@@ -2466,13 +2468,17 @@ TEST_CASE(
   // store now holds -- collect them and their iteration-1 build counts.
   auto const& store = cache.persistent_values();
   REQUIRE(store.size() > 0);  // iteration 1 actually filled the store
-  std::vector<std::pair<Node, std::size_t>> persistent_b1;
+  // Node POINTERS (see ValueNodeMap): `forest` is a local of this test case
+  // declared above and outlives this vector, so there is no reason to
+  // deep-copy a subtree per entry.
+  std::vector<std::pair<Node const*, std::size_t>> persistent_b1;
   for (auto const& vc : rich.cells) {
     auto const it = vmap.find(sequant::eval::value_key_of(vc));
-    if (it == vmap.end() || it->second.leaf()) continue;
+    if (it == vmap.end() || it->second->leaf()) continue;
     if (!store.holds(vc.hash)) continue;
     persistent_b1.emplace_back(
-        it->second, orderedexec_builds_of(cache.recompute_tally(), it->second));
+        it->second,
+        orderedexec_builds_of(cache.recompute_tally(), *it->second));
   }
   REQUIRE(
       !persistent_b1.empty());  // fixture actually has persistent composites
@@ -2480,7 +2486,7 @@ TEST_CASE(
     // One specific known-persistent value, held by its own canonical hash:
     // the composite is genuinely batch-invariant (carries no volatile leaf),
     // which is what makes it eligible to survive between evaluations at all.
-    Node const& known = persistent_b1.front().first;
+    Node const& known = *persistent_b1.front().first;
     CHECK(store.holds(known->hash_value()));
     CHECK_FALSE(sequant::subtree_any(known, is_volatile_node));
   }
@@ -2514,7 +2520,8 @@ TEST_CASE(
       stack.push_back(n.right());
     }
   }
-  std::optional<Node> dead_transient;  // a dead {Κ}-block Transient, if any
+  // A pointer into `forest` (which outlives it), not a subtree copy.
+  Node const* dead_transient = nullptr;  // a dead {Κ}-block Transient, if any
   std::size_t n_Kblocks = 0;
   {
     std::function<void(sequant::eval::ScopeBlock const&, bool)> scan =
@@ -2527,7 +2534,7 @@ TEST_CASE(
                       std::get_if<sequant::eval::BuildStep>(&s.value)) {
                 auto const it2 = vmap.find(
                     sequant::eval::value_key_of(rich.cells[bs->value_id]));
-                if (it2 != vmap.end() && !it2->second.leaf() &&
+                if (it2 != vmap.end() && !it2->second->leaf() &&
                     !needed.count(rich.cells[bs->value_id].hash) &&
                     !dead_transient)
                   dead_transient = it2->second;
@@ -2553,7 +2560,8 @@ TEST_CASE(
   // SAFETY invariant (guards the fix): no persistent composite is re-formed in
   // iteration 2 -- its build count is frozen at the iteration-1 value.
   for (auto const& [node, b1] : persistent_b1) {
-    std::size_t const b2 = orderedexec_builds_of(cache.recompute_tally(), node);
+    std::size_t const b2 =
+        orderedexec_builds_of(cache.recompute_tally(), *node);
     CHECK(b2 == b1);
   }
 
@@ -2576,7 +2584,7 @@ TEST_CASE(
   }
 
   WARN("Kblocks=" << n_Kblocks
-                  << " dead_transient_found=" << dead_transient.has_value());
+                  << " dead_transient_found=" << (dead_transient != nullptr));
   if (dead_transient) {
     // IMPROVEMENT invariant: a batch-block prerequisite that feeds only a
     // now-resident persistent composite is NOT re-formed in iteration 2.
@@ -2853,7 +2861,7 @@ TEST_CASE(
   auto const node_kind = [&](std::size_t hash) -> std::wstring {
     auto it = vmap.find(hash);
     if (it == vmap.end()) return L"<?>";
-    if (it->second.leaf()) return L"leaf";
+    if (it->second->leaf()) return L"leaf";
     return L"I";
   };
   // SEQUANT_UT_VALUE_LABELS: name every value of the ordered schedule
@@ -2962,7 +2970,7 @@ TEST_CASE(
         auto const it = vmap.find(sequant::eval::value_key_of(vc));
         if (it == vmap.end()) continue;
         rows.emplace_back(
-            orderedexec_builds_of(cache.recompute_tally(), it->second),
+            orderedexec_builds_of(cache.recompute_tally(), *it->second),
             vc.value_id);
       }
       std::sort(rows.begin(), rows.end(), [](auto const& a, auto const& b) {
@@ -3020,7 +3028,7 @@ TEST_CASE(
                       std::get_if<sequant::eval::BuildStep>(&s.value)) {
                 auto const it = vmap.find(
                     sequant::eval::value_key_of(rich.cells[bs->value_id]));
-                if (it != vmap.end() && !it->second.leaf() &&
+                if (it != vmap.end() && !it->second->leaf() &&
                     !needed.count(rich.cells[bs->value_id].hash))
                   ++warm_skipped;
               }
@@ -3083,7 +3091,7 @@ TEST_CASE(
         auto const it = vmap.find(sequant::eval::value_key_of(vc));
         if (it == vmap.end()) continue;
         rows.emplace_back(
-            orderedexec_builds_of(cache.recompute_tally(), it->second),
+            orderedexec_builds_of(cache.recompute_tally(), *it->second),
             vc.value_id);
       }
       std::sort(rows.begin(), rows.end(), [](auto const& a, auto const& b) {
@@ -3481,7 +3489,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   auto const node_kind = [&](std::size_t hash) -> std::wstring {
     auto it = vmap.find(hash);
     if (it == vmap.end()) return L"<?>";
-    if (it->second.leaf()) return L"leaf:" + it->second->to_latex();
+    if (it->second->leaf()) return L"leaf:" + (*it->second)->to_latex();
     return L"I";
   };
 
@@ -3666,7 +3674,7 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
                              ? node_kind(mon.peak.op_hash) + L"{" +
                                    space_sig(rich.cells[hc->second].carried) +
                                    L"}"
-                             : it->second->to_latex();
+                             : (*it->second)->to_latex();
       std::wcerr << L"  peak op node = " << lab << L"   [" << where << L"]\n";
     } else {
       std::wcerr << L"  peak op_hash not in vmap (transient/leaf) [" << where
@@ -3700,9 +3708,9 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
       liveB += e.bytes;
     } else {
       auto vit = vmap.find(e.hash);
-      if (vit != vmap.end() && vit->second.leaf()) {
+      if (vit != vmap.end() && vit->second->leaf()) {
         tier = kLeaf;
-        lab = L"leaf:" + vit->second->to_latex();
+        lab = L"leaf:" + (*vit->second)->to_latex();
         liveLeaf += e.bytes;
       } else {
         tier = kOther;
@@ -4480,12 +4488,12 @@ TEST_CASE(
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
     return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
-                                                           it->second);
+                                                           *it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     return it != vmap.end() &&
-           sequant::subtree_any(it->second, is_volatile_node);
+           sequant::subtree_any(*it->second, is_volatile_node);
   };
   in.n_batches_of =
       sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
@@ -4553,7 +4561,7 @@ TEST_CASE(
       auto const batches = aops.axis_batches(*axis, target(*axis));
       REQUIRE(batches.size() > 1);  // a genuine narrowing, not the whole axis
       auto const [lo, hi] = batches.front();
-      auto const full = aops.make_zeros(nit->second->canon_indices());
+      auto const full = aops.make_zeros((*nit->second)->canon_indices());
       auto const narrowed = full->slice_mode(pos, lo, hi);
       auto const ov = sequant::eval::dryrun::detail::overrides_of(*narrowed);
       auto const lb = sequant::eval::dryrun::detail::lobounds_of(*narrowed);
@@ -4638,7 +4646,7 @@ TEST_CASE(
       auto const it =
           vmap.find(sequant::eval::value_key_of(rich.cells[a.value_id]));
       if (it == vmap.end()) continue;
-      auto const& ci = it->second->canon_indices();
+      auto const& ci = (*it->second)->canon_indices();
       if (sequant::container::vector<sequant::Index>(ci.begin(), ci.end()) ==
           z.descriptor)
         matches_a_value = true;
@@ -4807,12 +4815,12 @@ TEST_CASE(
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       REQUIRE(it != vmap.end());
       return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
-                                                             it->second);
+                                                             *it->second);
     };
     in.volatile_of = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       return it != vmap.end() &&
-             sequant::subtree_any(it->second, is_volatile_node);
+             sequant::subtree_any(*it->second, is_volatile_node);
     };
     in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
         ordered, target, &aops);
@@ -4986,12 +4994,12 @@ TEST_CASE(
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     REQUIRE(it != vmap.end());
     return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
-                                                           it->second);
+                                                           *it->second);
   };
   in.volatile_of = [&](std::size_t vid) {
     auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
     return it != vmap.end() &&
-           sequant::subtree_any(it->second, is_volatile_node);
+           sequant::subtree_any(*it->second, is_volatile_node);
   };
   in.n_batches_of =
       sequant::eval::detail::ordered_n_batches_by_loop(ordered, target, &aops);
@@ -5048,7 +5056,7 @@ TEST_CASE(
       vmap.find(sequant::eval::value_key_of(rich.cells[pia.value_id]));
   REQUIRE(nit != vmap.end());
   std::size_t const builds =
-      orderedexec_builds_of(ordered_cache.recompute_tally(), nit->second);
+      orderedexec_builds_of(ordered_cache.recompute_tally(), *nit->second);
   INFO("value " << pia.value_id << " built " << builds << " times; the loop it "
                 << "is bound to has " << n_bound_batches << " batches");
   CHECK(builds >= n_bound_batches);
@@ -5313,12 +5321,12 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       REQUIRE(it != vmap.end());
       return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
-                                                             it->second);
+                                                             *it->second);
     };
     in.volatile_of = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
       return it != vmap.end() &&
-             sequant::subtree_any(it->second, is_volatile_node);
+             sequant::subtree_any(*it->second, is_volatile_node);
     };
     in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
         ordered, target, &aops);

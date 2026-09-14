@@ -14,7 +14,9 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <ranges>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -438,6 +440,17 @@ template <meta::eval_node_range R>
   // 2000, which is OOM long before any stack limit matters. \p forest outlives
   // this call (it is the caller's), so the pointees stay valid; the entries are
   // read-only here.
+  //
+  // Taking addresses requires the range to yield REFERENCES to the caller's
+  // nodes; a range of prvalues (a transform view, say) would hand us dangling
+  // pointers. Same guard, same reason, as cache_manager()'s pointer-keyed DAG
+  // walk (cache_manager.hpp) and the value->node bridges
+  // (value_node_map.hpp).
+  static_assert(
+      std::is_reference_v<std::ranges::range_reference_t<
+          std::remove_cvref_t<decltype(forest)>>>,
+      "analyze_legality(): the forest range must yield references to nodes "
+      "that outlive the call (the value->node map keys on their addresses)");
   std::unordered_map<std::size_t, Node const*> node_of;
   {
     // Iterative pre-order: the residual's Sum spine is as deep as the number

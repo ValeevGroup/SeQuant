@@ -552,9 +552,9 @@ TEST_CASE(
       if (mu_mu_hash) break;
       for (auto const& vc : rich.cells) {
         auto const it = vmap.find(sequant::eval::value_key_of(vc));
-        if (it == vmap.end() || it->second.leaf()) continue;
+        if (it == vmap.end() || it->second->leaf()) continue;
         if (carries_type(vc.carried, is_K)) continue;
-        auto const contracted = sequant::contracted_indices(it->second);
+        auto const contracted = sequant::contracted_indices(*it->second);
         auto const k_it =
             std::find_if(contracted.begin(), contracted.end(), is_K);
         if (k_it == contracted.end()) continue;

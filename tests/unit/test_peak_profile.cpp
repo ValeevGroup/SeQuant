@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <set>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -576,7 +577,27 @@ void check_split_propagates(std::vector<EvalNode<EvalExpr>> const& forest,
   sequant::eval::OrderedSchedule sched;
   REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(rich, legality,
                                                                 policy, {}));
-  CHECK(sched.num_values == rich.cells.size());
+  // NOT `sched.num_values == rich.cells.size()`: build_ordered_schedule
+  // assigns exactly that, so the comparison cannot fail. What bites on a
+  // first-wins collapse is the schedule's actual PRODUCTIONS -- every non-leaf
+  // cell has to be built somewhere in it, under its OWN value id, so a
+  // collapsed colliding pair would leave one of the two products unproduced
+  // (and the other built once for both).
+  std::multiset<std::size_t> built;
+  auto collect = [&](auto&& self, sequant::eval::ScopeBlock const& b) -> void {
+    for (auto const& st : b.steps) {
+      if (auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value))
+        built.insert(bs->value_id);
+      else if (auto const* sb =
+                   std::get_if<sequant::eval::ScopeBlock>(&st.value))
+        self(self, *sb);
+    }
+  };
+  collect(collect, sched.root);
+  std::multiset<std::size_t> expected_built;
+  for (auto const& c : rich.cells)
+    if (!c.is_leaf) expected_built.insert(c.value_id);
+  CHECK(built == expected_built);
 }
 
 TEST_CASE(
@@ -649,16 +670,14 @@ TEST_CASE(
   // themselves are sub-second. Run it by name or by [stack-safety];
   // SEQUANT_UT_SPINE_N overrides the depth.
   //
-  // NOT covered here: build_value_node_map / build_value_key_node_map, whose
-  // walks were converted the same way. Their maps hold the node BY VALUE, and
-  // Node's copy constructor deep-copies the subtree, so one entry per node is
+  // build_value_node_map / build_value_key_node_map are covered here too (see
+  // the end of the test). They used to hold each node BY VALUE, and Node's
+  // copy constructor deep-copies the subtree, so one entry per node cost
   // O(nodes x subtree) memory -- measured on this very tree: 1.8 GB at N=500,
-  // 6.9 GB at N=1000, 15.7 GB at N=2000, OOM past that. That is a separate
-  // (pre-existing, and live on the ordered evaluation path, which builds one
-  // per run) defect from the recursion this test pins, and fixing it means
-  // changing their return type to hold pointers -- ~30 call sites. Their
-  // conversion is exercised for correctness by the [ordered-executor] /
-  // [ordered-schedule] tests that build them.
+  // 6.9 GB at N=1000, 15.7 GB at N=2000, OOM past that, with
+  // evaluate_ordered_schedule building one per run. They now hold non-owning
+  // pointers into the forest (ValueNodeMap), which is what makes them
+  // affordable at this depth at all.
   std::size_t N = 20000;
   if (char const* n = std::getenv("SEQUANT_UT_SPINE_N"))
     N = static_cast<std::size_t>(std::atoll(n));
@@ -701,4 +720,18 @@ TEST_CASE(
   REQUIRE_NOTHROW(legality =
                       sequant::eval::analyze_legality(rich, forest, policy));
   CHECK(legality.cells.size() == rich.cells.size());
+
+  // The two value->node bridges over the same forest. Nothing here is
+  // home-sliced, so every node's value key IS its node id: N-1 distinct spine
+  // ids plus the one folded leaf id, i.e. one entry per cell in both maps.
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  auto const vkmap = sequant::eval::build_value_key_node_map(forest);
+  CHECK(vmap.size() == rich.cells.size());
+  CHECK(vkmap.size() == rich.cells.size());
+  // ... and an entry is a VIEW of the forest node, not a deep copy of its
+  // subtree: the root's entry is the root's own address. (This is the memory
+  // property the numbers in the comment at the top measured; holding it by
+  // value is what made a by-value map quadratic in the tree.)
+  CHECK(vmap.at(sequant::value_key_of(forest.front())) == &forest.front());
+  CHECK(vkmap.at(sequant::value_key_of(forest.front())) == &forest.front());
 }

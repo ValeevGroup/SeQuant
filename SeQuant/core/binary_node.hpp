@@ -407,10 +407,12 @@ class FullBinaryNode {
     data_ = std::move(node.data_);
 
     // We have to save a temporary copy of these, in case the node we're moving
-    // from is pointed to (and thus owned) by either left_.
+    // from is pointed to (and thus owned) by either left_ or right_.
     // If we don't do this, overwriting of the owning pointer leads to deleting
-    // node, in which case subsequent accesses to it are invalid.
+    // node, in which case subsequent accesses to it -- the child steal just
+    // below, and the SOURCE-side size refresh at the end -- are invalid.
     auto left_tmp = std::move(left_);
+    auto right_tmp = std::move(right_);
 
     left_ = std::move(node.left_);
     right_ = std::move(node.right_);
@@ -422,6 +424,16 @@ class FullBinaryNode {
       right_->parent_ = this;
     }
     refresh_size_up();
+
+    // The SOURCE is a leaf now -- its children are ours -- so its own cached
+    // count and every count ABOVE it have to drop: `node` may itself be
+    // someone's child, as in `std::move(n.parent().right())` (the live shape,
+    // export.hpp's prune_scalar_node), which otherwise leaves that parent's
+    // chain over-counting the subtree it no longer holds. `this`'s chain was
+    // refreshed just above; walking the source's chain is safe because both
+    // temporaries above keep `node` alive until this function returns even
+    // when it was owned by one of our former children.
+    if (&node != this) node.refresh_size_up();
 
     // parent_ remains unchanged
 

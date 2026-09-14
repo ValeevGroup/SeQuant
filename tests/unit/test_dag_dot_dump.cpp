@@ -315,8 +315,8 @@ TEST_CASE(
     auto const vmap = ev::build_value_node_map(forest);
     auto cell_is_sum = [&](std::size_t vid) {
       auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
-      return it != vmap.end() && !it->second.leaf() &&
-             it->second->op_type() == EvalOp::Sum;
+      return it != vmap.end() && !it->second->leaf() &&
+             (*it->second)->op_type() == EvalOp::Sum;
     };
     // a Sum cell whose every consumer is a Sum is a chain link: skipped, its
     // operands re-attached to the nearest non-skipped ancestor

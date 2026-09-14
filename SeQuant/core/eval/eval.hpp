@@ -34,6 +34,7 @@
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
+#include <vector>
 
 // Headers for process_rss_bytes() — see log::process_rss_bytes() below.
 #if defined(__APPLE__)
@@ -1876,11 +1877,26 @@ struct never_volatile {
 };
 
 /// \return whether any node in the subtree rooted at \p n satisfies \p pred.
+/// \note Iterative (an explicit stack), not recursive: this is called on WHOLE
+///       values, a forest root included (ordered_executor.hpp's volatile_of
+///       resolves a value id to its node and asks this), and a residual reaches
+///       the evaluator as a single in-place Sum tree whose left spine is as
+///       deep as the term count. Pushing the RIGHT child before the LEFT one
+///       keeps the visit order the recursion's pre-order, so the short-circuit
+///       sees the same first satisfying node.
 template <typename Node, typename Pred>
 [[nodiscard]] bool subtree_any(Node const& n, Pred const& pred) {
-  if (pred(n)) return true;
-  if (n.leaf()) return false;
-  return subtree_any(n.left(), pred) || subtree_any(n.right(), pred);
+  std::vector<Node const*> stack{&n};
+  while (!stack.empty()) {
+    Node const& c = *stack.back();
+    stack.pop_back();
+    if (pred(c)) return true;
+    if (!c.leaf()) {
+      stack.push_back(&c.right());
+      stack.push_back(&c.left());
+    }
+  }
+  return false;
 }
 
 namespace detail {
@@ -1973,41 +1989,54 @@ template <typename TreeNode, bool FHC, typename Members>
     return slicing_signature(n, ext_axes);
   };
 
-  auto visit = [&meta, &ext_sig_of](auto&& self, TreeNode const& n,
+  // Iterative pre-order (an explicit stack, not recursion): a member root can
+  // be the node `evaluate` was called on -- a forest root, i.e. the residual's
+  // single in-place Sum tree, whose left spine is as deep as the term count --
+  // so a recursive descent here is O(spine) in call frames. Pushing the RIGHT
+  // child before the LEFT one keeps the pop order the recursion's pre-order, so
+  // which occurrence is the `first` one (and so every recorded signature and
+  // count) is unchanged.
+  auto visit = [&meta, &ext_sig_of](TreeNode const& root,
                                     Index const& mode) -> void {
-    if (n.leaf()) return;
-    auto const sig = index_position(n, mode);
-    auto const esig = ext_sig_of(n);
-    auto const [it, first] = meta.try_emplace(&n);
-    auto& e = it->second;
-    if (first) {
-      e.sig = sig;
-      e.ext_sig = esig;
-    } else if (e.sig != sig || e.ext_sig != esig) {
-      e.consistent = false;
+    std::vector<TreeNode const*> stack{&root};
+    while (!stack.empty()) {
+      TreeNode const& n = *stack.back();
+      stack.pop_back();
+      if (n.leaf()) continue;
+      auto const sig = index_position(n, mode);
+      auto const esig = ext_sig_of(n);
+      auto const [it, first] = meta.try_emplace(&n);
+      auto& e = it->second;
+      if (first) {
+        e.sig = sig;
+        e.ext_sig = esig;
+      } else if (e.sig != sig || e.ext_sig != esig) {
+        e.consistent = false;
+      }
+      ++e.count;
+      // Prune a re-encounter only when its signature matches the first one:
+      // canonical equality maps canonical position p to position p, so an
+      // equal signature here implies the descendants' signatures equal those
+      // already recorded on the first walk (deeper accesses shared and
+      // counted). A differing signature gives no such guarantee -- descend so
+      // descendants' signatures under this occurrence are recorded too;
+      // otherwise a descendant sliced differently only under this (unshared,
+      // pruned) occurrence could pass the guard and serve wrong slices. The
+      // extra descendant counts are real accesses: an inconsistently-sliced
+      // occurrence is evaluated per occurrence, not served from the scratch at
+      // n. The External signature is invariant across occurrences (a function
+      // of the canonical node), so folding it into the match only tightens the
+      // guard.
+      if (!first && e.sig == sig && e.ext_sig == esig) continue;
+      stack.push_back(&n.right());
+      stack.push_back(&n.left());
     }
-    ++e.count;
-    // Prune a re-encounter only when its signature matches the first one:
-    // canonical equality maps canonical position p to position p, so an equal
-    // signature here implies the descendants' signatures equal those already
-    // recorded on the first walk (deeper accesses shared and counted). A
-    // differing signature gives no such guarantee -- descend so descendants'
-    // signatures under this occurrence are recorded too; otherwise a
-    // descendant sliced differently only under this (unshared, pruned)
-    // occurrence could pass the guard and serve wrong slices. The extra
-    // descendant counts are real accesses: an inconsistently-sliced occurrence
-    // is evaluated per occurrence, not served from the scratch at n. The
-    // External signature is invariant across occurrences (a function of the
-    // canonical node), so folding it into the match only tightens the guard.
-    if (!first && e.sig == sig && e.ext_sig == esig) return;
-    self(self, n.left(), mode);
-    self(self, n.right(), mode);
   };
   for (auto const& [root, mode] : members) {
     if (root->leaf()) continue;
     // member roots are accumulated by the caller, not cached here.
-    visit(visit, root->left(), mode);
-    visit(visit, root->right(), mode);
+    visit(root->left(), mode);
+    visit(root->right(), mode);
   }
 
   std::unordered_map<TreeNode, std::size_t, Hasher, Comp> reg;
@@ -2298,22 +2327,33 @@ template <Trace EvalTrace = Trace::Default, typename F,
           // gone with the placement router, and the table-driven ordered
           // executor makes its own placement decisions on cells instead.)
           std::vector<node_t const*> targets;
-          auto collect = [&](auto&& self, node_t const& n) -> void {
-            if (n.leaf()) return;
-            if (n->batch_order_aware() && residency_all_outer(n) &&
-                !subtree_any(n, is_volatile)) {
-              auto shares = [&](node_t const* p) { return eq(*p, n); };
-              if (std::none_of(targets.begin(), targets.end(), shares))
-                targets.push_back(&n);
-              return;  // built as a unit -- do not descend into it
+          // Iterative pre-order (explicit stack): a member root can be the node
+          // `evaluate` was called on -- a forest root, i.e. the residual's
+          // single in-place Sum tree, whose left spine is as deep as the term
+          // count -- so a recursive descent here is O(spine) in call frames.
+          // RIGHT pushed before LEFT, so the pop order is the recursion's
+          // pre-order and `targets` comes out in the same order.
+          auto collect = [&](node_t const& root) -> void {
+            std::vector<node_t const*> stack{&root};
+            while (!stack.empty()) {
+              node_t const& n = *stack.back();
+              stack.pop_back();
+              if (n.leaf()) continue;
+              if (n->batch_order_aware() && residency_all_outer(n) &&
+                  !subtree_any(n, is_volatile)) {
+                auto shares = [&](node_t const* p) { return eq(*p, n); };
+                if (std::none_of(targets.begin(), targets.end(), shares))
+                  targets.push_back(&n);
+                continue;  // built as a unit -- do not descend into it
+              }
+              stack.push_back(&n.right());
+              stack.push_back(&n.left());
             }
-            self(self, n.left());
-            self(self, n.right());
           };
           for (node_t const* m : member_roots) {
             if (m->leaf()) continue;
-            collect(collect, m->left());
-            collect(collect, m->right());
+            collect(m->left());
+            collect(m->right());
           }
           if (targets.empty()) return;
           // Wire the scope chain only when there is something to hoist (matches
@@ -2518,14 +2558,24 @@ template <Trace EvalTrace = Trace::Default, typename F,
     // evaluates in a later layer, with the inner result by then alive in the
     // real cache -- seeded into the outer pass when slice-free w.r.t. the
     // outer batch mode, re-derived sliced (correct, unshared) otherwise.
+    // Iterative (explicit stack), for the same reason as the walks above: a
+    // group member can be the node `evaluate` was called on, i.e. a forest root
+    // whose left spine is as deep as the term count. RIGHT pushed before LEFT
+    // keeps the pop order the recursion's pre-order, so the same node is found
+    // first (and the answer, a bool, is order-independent anyway).
     auto contains = [&eq](node_t const& outer, node_t const& inner) -> bool {
-      auto rec = [&eq, &inner](auto&& self, node_t const& n) -> bool {
-        if (eq(n, inner)) return true;
-        if (n.leaf()) return false;
-        return self(self, n.left()) || self(self, n.right());
-      };
       if (outer.leaf()) return false;
-      return rec(rec, outer.left()) || rec(rec, outer.right());
+      std::vector<node_t const*> stack{&outer.right(), &outer.left()};
+      while (!stack.empty()) {
+        node_t const& n = *stack.back();
+        stack.pop_back();
+        if (eq(n, inner)) return true;
+        if (!n.leaf()) {
+          stack.push_back(&n.right());
+          stack.push_back(&n.left());
+        }
+      }
+      return false;
     };
     std::vector<std::vector<member_t>> layers;
     {

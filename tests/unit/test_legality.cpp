@@ -310,9 +310,9 @@ TEST_CASE(
       if (mu_mu_hash) break;
       for (auto const& vc : rich.cells) {
         auto const it = vmap.find(sequant::eval::value_key_of(vc));
-        if (it == vmap.end() || it->second.leaf()) continue;
+        if (it == vmap.end() || it->second->leaf()) continue;
         if (carries_type(vc.carried, is_K)) continue;  // Q1 would be true
-        auto const contracted = sequant::contracted_indices(it->second);
+        auto const contracted = sequant::contracted_indices(*it->second);
         auto const k_it =
             std::find_if(contracted.begin(), contracted.end(), is_K);
         if (k_it == contracted.end()) continue;  // does not reduce Κ here
@@ -443,7 +443,7 @@ TEST_CASE(
       if (!carries_type(vc.carried, is_K)) continue;
       auto const it = vmap.find(sequant::eval::value_key_of(vc));
       if (it == vmap.end()) continue;
-      auto const contracted = sequant::contracted_indices(it->second);
+      auto const contracted = sequant::contracted_indices(*it->second);
       sequant::container::svector<sequant::Index> contracted_below(
           contracted.begin(), contracted.end());
       auto const role = sequant::eval::classify_axis(
@@ -469,7 +469,7 @@ TEST_CASE(
         // report rather than forcing agreement.
         CHECK(carries_type(cl_it->home_floor, is_K));
         WARN("Κ-local value hash="
-             << vc.hash << " leaf=" << it->second.leaf()
+             << vc.hash << " leaf=" << it->second->leaf()
              << " home_floor has Κ=" << carries_type(cl_it->home_floor, is_K)
              << " home_modes has Κ=" << carries_type(vc.home_modes, is_K));
       } else if (role == sequant::eval::LoopRole::LoopCarried) {
@@ -901,8 +901,8 @@ TEST_CASE(
     for (auto const& vc : rich.cells) {
       if (carries_K(vc.carried)) continue;
       auto const it = vmap.find(sequant::eval::value_key_of(vc));
-      if (it == vmap.end() || it->second.leaf()) continue;
-      auto const contracted = sequant::contracted_indices(it->second);
+      if (it == vmap.end() || it->second->leaf()) continue;
+      auto const contracted = sequant::contracted_indices(*it->second);
       if (std::any_of(contracted.begin(), contracted.end(), is_K)) continue;
       sequant::container::svector<sequant::Index> contracted_below(
           contracted.begin(), contracted.end());
