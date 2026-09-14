@@ -168,23 +168,61 @@ std::unordered_map<std::size_t, bool> compute_volatility(
 
   std::unordered_map<std::size_t, bool> volatile_of;
 
-  auto visit = [&](auto&& self, Node const& n) -> bool {
-    std::size_t const h = n->hash_value();
-    if (auto it = volatile_of.find(h); it != volatile_of.end())
-      return it->second;
-    bool v;
-    if (n.leaf()) {
-      v = is_volatile(n);
-    } else {
-      bool const vl = self(self, n.left());
-      bool const vr = self(self, n.right());
-      v = is_volatile(n) || vl || vr;
+  // ITERATIVE bottom-up walk (explicit frame stack), not recursion: this
+  // classifier runs on the ORDERED arm of assemble_report too, where an
+  // equation's residual/energy is a single in-place Sum tree whose left spine
+  // is as deep as the number of terms -- thousands for a large equation -- so a
+  // recursive descent would overflow the call stack while merely ASSEMBLING
+  // THE REPORT. Same shape as the recursion it replaces: a frame is pushed,
+  // its left child resolved, then its right, then the node itself is
+  // classified and memoized, so `volatile_of` comes out identical.
+  struct Frame {
+    Node const* n = nullptr;
+    int stage = 0;  //!< 0: resolve left, 1: resolve right, 2: classify
+    bool vl = false;
+    bool vr = false;
+  };
+  std::vector<Frame> stack;
+  bool last_v = false;  //!< volatility of the most recently resolved node
+
+  // Resolve \p n: answer straight away if it is memoized or a leaf, else push
+  // a frame for it.
+  auto const resolve = [&](Node const& n) {
+    if (auto it = volatile_of.find(n->hash_value()); it != volatile_of.end()) {
+      last_v = it->second;
+      return;
     }
-    volatile_of.emplace(h, v);
-    return v;
+    if (n.leaf()) {
+      bool const v = is_volatile(n);
+      volatile_of.emplace(n->hash_value(), v);
+      last_v = v;
+      return;
+    }
+    stack.push_back(Frame{.n = &n});
   };
 
-  for (auto const& tree : forest) visit(visit, tree);
+  for (auto const& tree : forest) {
+    resolve(tree);
+    while (!stack.empty()) {
+      std::size_t const top = stack.size() - 1;
+      int const stage = stack[top].stage++;
+      Node const& n = *stack[top].n;
+      if (stage == 0) {
+        resolve(n.left());
+        continue;
+      }
+      if (stage == 1) {
+        stack[top].vl = last_v;
+        resolve(n.right());
+        continue;
+      }
+      stack[top].vr = last_v;
+      bool const v = is_volatile(n) || stack[top].vl || stack[top].vr;
+      volatile_of.emplace(n->hash_value(), v);
+      last_v = v;
+      stack.pop_back();
+    }
+  }
   return volatile_of;
 }
 

@@ -71,8 +71,14 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
                      TreeNodeHasher<Node>, TreeNodeEqualityComparator<Node>>
       meet;
   // Every internal-node occurrence, in visitation order, for the stamping
-  // pass.
-  container::svector<Node const*> occ;
+  // pass, PAIRED WITH A POINTER TO ITS MEET ENTRY. Pass 2 used to re-find each
+  // occurrence in `meet`, and a hit there is a structural comparison that walks
+  // the whole subtree -- so stamping an in-place Sum tree cost O(nodes x
+  // subtree), i.e. quadratic in forest size (measured: 116 s for a
+  // 20000-summand spine, all of it in the comparator). Pass 1 already knows the
+  // entry, so it records it. `std::unordered_map` keeps references to its
+  // elements valid across rehashing, so these stay good while pass 1 inserts.
+  container::svector<std::pair<Node const*, container::svector<Index>*>> occ;
 
   // Pass 1: top-down walk accumulating the enclosing loops OPENED at or above
   // n. The full \p acc is passed DOWN to children (descendants must know which
@@ -108,12 +114,14 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
     for (auto const& m : acc)
       if (std::find(slots.begin(), slots.end(), m) != slots.end())
         node_modes.push_back(m);
-    occ.push_back(&n);
-    if (auto it = meet.find(&n); it == meet.end())
-      meet.emplace(&n, node_modes);  // first occurrence seeds the
-                                     // intersection
-    else
+    if (auto it = meet.find(&n); it == meet.end()) {
+      // first occurrence seeds the intersection
+      auto const ins = meet.emplace(&n, std::move(node_modes)).first;
+      occ.push_back({&n, &ins->second});
+    } else {
       lifetime_mask_intersect_in_place(it->second, node_modes);
+      occ.push_back({&n, &it->second});
+    }
     stack.push_back({&n.right(), acc});
     stack.push_back({&n.left(), std::move(acc)});
   };
@@ -128,9 +136,10 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 
   // Pass 2: stamp every occurrence with its canonical meet. The forest is
   // logically mutable (only the parameter binding is const); the setter
-  // reaches the node payload to stamp it.
-  for (Node const* n : occ)
-    if (auto it = meet.find(n); it != meet.end()) setter(n, it->second);
+  // reaches the node payload to stamp it. No lookup: pass 1 recorded which
+  // entry each occurrence belongs to, and the entry it points at now holds the
+  // FINAL intersection (later occurrences narrowed it in place).
+  for (auto const& [n, modes] : occ) setter(n, *modes);
 }
 
 }  // namespace detail

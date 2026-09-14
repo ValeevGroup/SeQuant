@@ -241,6 +241,33 @@ class FullBinaryNode {
 
   FullBinaryNode<T>* parent_{nullptr};
 
+  /// Number of nodes in the subtree rooted here, CACHED. A node's children are
+  /// fixed once it exists (every constructor takes them; only assignment
+  /// replaces them, and both assignment operators refresh this), so the count
+  /// can be maintained in O(1) at construction instead of being walked on
+  /// every call. It is walked on every \c TreeNodeEqualityComparator probe --
+  /// a structurally-keyed map over a deep tree (the residency meet in
+  /// lifetime_mask.hpp, the CSE scan in cache_manager.hpp) probes once per
+  /// node -- so an O(subtree) size() made those quadratic in tree SIZE, and
+  /// each call heap-allocated its stack vector besides.
+  std::size_t size_{1};
+
+  /// Recompute \c size_ from the children's cached counts (O(1)).
+  void refresh_size() noexcept {
+    size_ = 1 + (left_ ? left_->size_ : 0) + (right_ ? right_->size_ : 0);
+  }
+
+  /// Recompute \c size_ here and in every ancestor. Assigning to a node that
+  /// is already SOMEONE'S CHILD (\c n.left() = other, which the public
+  /// left()/right() accessors permit) changes the enclosing tree's node count
+  /// too, and only the assignment operators can see that; constructors run
+  /// before \c parent_ is set, so they use \c refresh_size alone. Iterative,
+  /// so a deep tree costs stack depth 1.
+  void refresh_size_up() noexcept {
+    for (FullBinaryNode<T>* n = this; n != nullptr; n = n->parent_)
+      n->refresh_size();
+  }
+
   node_ptr deep_copy() const {
     // Iterative post-order clone: build the copy bottom-up with an explicit
     // stack so cloning a deep tree does not recurse to the tree's depth (which
@@ -335,6 +362,7 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size();
   }
 
   FullBinaryNode(FullBinaryNode<T> const& other)
@@ -348,6 +376,7 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size();
   }
 
   FullBinaryNode& operator=(FullBinaryNode<T> const& other) {
@@ -361,6 +390,7 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size_up();
     // parent_ remains unchanged
     return *this;
   }
@@ -391,6 +421,7 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size_up();
 
     // parent_ remains unchanged
 
@@ -462,24 +493,12 @@ class FullBinaryNode {
   ///
   /// \return Size of the tree rooted at this node
   ///
-  [[nodiscard]] std::size_t size() const {
-    // Iterative (explicit stack) node count: recursing left().size() +
-    // right().size() would descend to the tree's depth and overflow the C++
-    // call stack on a deep tree -- e.g. the left-folded Sum-tree binarize
-    // builds for a Sum with thousands of summands (mirrors the iterative
-    // destructor / deep_copy above; the recursive form also made this an
-    // O(N)-deep call on every use, e.g. each equality comparison's size check).
-    std::size_t n = 0;
-    std::vector<FullBinaryNode const*> stk;
-    stk.push_back(this);
-    while (!stk.empty()) {
-      FullBinaryNode const* cur = stk.back();
-      stk.pop_back();
-      ++n;
-      if (cur->left_) stk.push_back(cur->left_.get());
-      if (cur->right_) stk.push_back(cur->right_.get());
-    }
-    return n;
+  [[nodiscard]] std::size_t size() const noexcept {
+    // O(1): maintained at construction / assignment (see size_ above). It used
+    // to walk the subtree through an explicit stack -- correct and stack-safe,
+    // but O(subtree) and heap-allocating on EVERY call, which made every
+    // structurally-keyed map probe over a deep tree quadratic in tree size.
+    return size_;
   }
 
   ///

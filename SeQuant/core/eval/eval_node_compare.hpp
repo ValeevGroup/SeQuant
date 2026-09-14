@@ -162,11 +162,17 @@ struct TreeNodeEqualityComparator {
         return false;
       }
 
-      if (lhs.size() != rhs.size()) {
+      // Cheapest discriminator first: hash::value is the EvalExpr's cached
+      // node id (a load), size() the subtree's cached node count (also a load
+      // now, see FullBinaryNode::size_ -- it used to WALK the subtree, which
+      // made every probe of a structurally-keyed map over a deep tree
+      // quadratic in tree size). Both are necessary conditions, so the order
+      // is semantically free; the node id is the more selective of the two.
+      if (hash::value(*lhs) != hash::value(*rhs)) {
         return false;
       }
 
-      if (hash::value(*lhs) != hash::value(*rhs)) {
+      if (lhs.size() != rhs.size()) {
         return false;
       }
 

@@ -1919,26 +1919,69 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // bottom-up, and mark the NV/V frontier. Every (parent, child) edge is
   // visited exactly once (children are recursed only on a node's first visit),
   // so a child is marked persistent iff some volatile parent consumes it.
-  auto visit = [&](auto&& self, TreeNode const& n) -> bool {
+  // ITERATIVE (explicit frame stack), not recursion: the forest's residual /
+  // energy is a single in-place Sum tree whose left spine is as deep as the
+  // number of summands (thousands for a UCC BCH expansion), and a recursive
+  // descent would overflow the call stack here, while merely BUILDING the
+  // cache. A faithful transcription of the recursion it replaces -- the use
+  // count is still bumped on every visit, children are still descended only on
+  // a node's first visit, and the frontier is still marked from the parent
+  // once both children's volatility is known -- so `counts`, `volatile_of` and
+  // `persistent` come out identical.
+  struct Frame {
+    TreeNode const* n = nullptr;
+    int stage = 0;  //!< 0: descend left, 1: descend right, 2: classify
+    bool vl = false;
+    bool vr = false;
+  };
+  std::vector<Frame> stack;
+  bool last_v = false;  //!< volatility of the most recently classified node
+
+  // Visit \p n: bump its use count, then answer straight away if it is
+  // already classified or is a leaf, else push a frame for it.
+  auto const descend = [&](TreeNode const& n) {
     bool const first = !volatile_of.contains(&n);
     if (!n.leaf()) ++counts[&n];  // count this use of an internal node
-    if (!first) return volatile_of.at(&n);
-    bool v;
+    if (!first) {
+      last_v = volatile_of.at(&n);
+      return;
+    }
     if (n.leaf()) {
-      v = is_volatile(n);
-    } else {
-      bool const vl = self(self, n.left());
-      bool const vr = self(self, n.right());
-      v = is_volatile(n) || vl || vr;
+      bool const v = is_volatile(n);
+      volatile_of.emplace(&n, v);
+      last_v = v;
+      return;
+    }
+    stack.push_back(Frame{.n = &n});
+  };
+
+  for (auto&& tree : nodes) {
+    descend(tree);
+    while (!stack.empty()) {
+      std::size_t const top = stack.size() - 1;
+      int const stage = stack[top].stage++;
+      TreeNode const& n = *stack[top].n;
+      if (stage == 0) {
+        descend(n.left());
+        continue;
+      }
+      if (stage == 1) {
+        stack[top].vl = last_v;
+        descend(n.right());
+        continue;
+      }
+      stack[top].vr = last_v;
+      bool const vl = stack[top].vl, vr = stack[top].vr;
+      bool const v = is_volatile(n) || vl || vr;
       if (v) {  // n is a volatile consumer => its NV internal children are P
         if (!vl && !n.left().leaf()) persistent.insert(&n.left());
         if (!vr && !n.right().leaf()) persistent.insert(&n.right());
       }
+      volatile_of.emplace(&n, v);
+      last_v = v;
+      stack.pop_back();
     }
-    volatile_of.emplace(&n, v);
-    return v;
-  };
-  for (auto&& tree : nodes) visit(visit, tree);
+  }
 
   // Cache NP repeats + every P node; persistence = membership in `persistent`.
   // Footprint gate: a node whose result is larger than max_footprint is never

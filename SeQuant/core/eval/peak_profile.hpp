@@ -17,6 +17,7 @@
 #include <optional>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -1162,11 +1163,51 @@ RichSchedule compute_dag_boulevard(R const& forest,
   //     child already has its cell, and comparing cells makes the check
   //     inductive: a collision resolved one level down cannot be re-merged one
   //     level up.
+  //
+  // A candidate is compared against each cell's REPRESENTATIVE occurrence
+  // only, not against every occurrence already folded into it. The relation is
+  // therefore not required to be transitive, and deliberately is not made so:
+  // if two occurrences that ARE one value somehow compare unequal to one
+  // representative, the worst outcome is a MISSED fold (an extra cell, built
+  // twice -- exactly the state before any folding existed), never a wrong
+  // merge. Comparing against all occurrences would make bucket insertion
+  // quadratic in the occurrence count to buy nothing: the merge direction,
+  // the only unsafe one, is already guarded by the representative.
   // (The per-value aggregates above -- own_modes_union, carried_union /
   // carried_isect -- are still keyed by the raw key, so a collision widens a
   // union and narrows an intersection there. That is conservative: it can only
   // add a divergent mode or drop a home mode, never point a cell at another
   // cell's value.)
+  // Every cell gets a value id that is UNIQUE ACROSS THE SCHEDULE. Without
+  // this the two cells a confirmed mismatch opens would both carry `r.key`,
+  // and every downstream resolution -- ordered_schedule's `value_id_of` /
+  // `hash_to_rich`, legality's `CellLegality::hash`, the executor's
+  // key -> forest-node maps -- is a first-wins `emplace` on
+  // `value_key_of(ValueCell)`, so BOTH split cells would resolve to the first
+  // one's value_id and the split would not propagate at all. A key that is
+  // already taken (a genuine collision, or the salted key of an earlier
+  // split) is salted until it is free, and the cell's occurrences' NODES are
+  // re-stamped with it (`adopt` below) so `value_key_of(node)` and
+  // `value_key_of(cell)` -- which those maps join on -- keep agreeing. In the
+  // ordinary collision-free case nothing is salted and every key is exactly
+  // the `r.key` of before.
+  std::unordered_set<std::size_t> used_keys;
+  auto const fresh_key = [&used_keys](std::size_t k) {
+    // 0 is reserved: value_key_of(ValueCell) reads it as "no key, use hash".
+    if (k != 0 && used_keys.insert(k).second) return k;
+    for (std::size_t salt = 1;; ++salt) {
+      std::size_t k2 = k;
+      hash::combine(k2, salt);
+      if (k2 != 0 && used_keys.insert(k2).second) return k2;
+    }
+  };
+  // Point a rec (and its forest node) at the value id its cell ended up with.
+  auto const adopt = [&](std::size_t rx, std::size_t cell_key) {
+    if (recs[rx].key == cell_key) return;
+    recs[rx].key = cell_key;
+    if (recs[rx].node)
+      const_cast<Data&>(**recs[rx].node).set_value_key(cell_key);
+  };
   auto const same_value = [&](NodeRec const& a, NodeRec const& b) {
     if (a.hash != b.hash) return false;
     if (a.is_leaf != b.is_leaf || a.is_product != b.is_product) return false;
@@ -1235,10 +1276,15 @@ RichSchedule compute_dag_boulevard(R const& forest,
       }
       fold_enclosing(c.enclosing_modes);
       c.occurrences.push_back(make_occ());
+      // Everything above read the per-value aggregates by the UNSALTED r.key;
+      // only now does the cell take its unique id.
+      c.key = fresh_key(r.key);
       cell_of_rec[ri] = c.value_id;
       cell_rep.push_back(ri);
       bucket.push_back(c.value_id);
+      std::size_t const cell_key = c.key;
       out.cells.push_back(std::move(c));
+      adopt(ri, cell_key);
     } else {
       ValueCell& c = out.cells[bucket[hit]];
       c.first_use = std::min(c.first_use, r.point);
@@ -1246,6 +1292,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       fold_enclosing(c.enclosing_modes);
       c.occurrences.push_back(make_occ());
       cell_of_rec[ri] = c.value_id;
+      adopt(ri, c.key);
     }
   }
 

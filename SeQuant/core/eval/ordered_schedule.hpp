@@ -225,8 +225,9 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
       // rejected two DISTINCT same-space sibling loops the un-fuse legitimately
       // emits at different (depth, loop_slot) -- the w20 aux+occ case: two occ
       // (space "i") nests at (1,0) and (2,1), same latitude 0, are different
-      // loops, not a duplicate. (See LoopKey::color / the same
-      // space-vs-identity correction in the home-scope coloring.)
+      // loops, not a duplicate. (See LoopKey -- whose identity is the
+      // (depth, loop_slot) PAIR -- and the same space-vs-identity correction
+      // in the home-scope coloring.)
       if (ci->level.depth == cj->level.depth &&
           ci->level.loop_slot == cj->level.loop_slot &&
           ci->latitude_ordinal == cj->latitude_ordinal)

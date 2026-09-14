@@ -431,7 +431,14 @@ template <meta::eval_node_range R>
   // id): a value's roles are read off one of its OWN occurrences' nodes -- a
   // node of the same hash home-sliced elsewhere carries that frame's slice
   // annotations, not this value's.
-  std::unordered_map<std::size_t, Node> node_of;
+  //
+  // Held by POINTER, not by value: \c Node's copy constructor deep-copies the
+  // whole subtree, so one entry per node cost O(subtree) and the map as a whole
+  // was O(n^2) in forest size -- 1.8 GB for a 1000-summand spine, 15 GB for
+  // 2000, which is OOM long before any stack limit matters. \p forest outlives
+  // this call (it is the caller's), so the pointees stay valid; the entries are
+  // read-only here.
+  std::unordered_map<std::size_t, Node const*> node_of;
   {
     // Iterative pre-order: the residual's Sum spine is as deep as the number
     // of terms, so a recursive descent would overflow the call stack. Right
@@ -442,7 +449,7 @@ template <meta::eval_node_range R>
       while (!stack.empty()) {
         Node const& n = *stack.back();
         stack.pop_back();
-        node_of.emplace(value_key_of(n), n);
+        node_of.emplace(value_key_of(n), &n);
         if (!n.leaf()) {
           stack.push_back(&n.right());
           stack.push_back(&n.left());
@@ -468,7 +475,7 @@ template <meta::eval_node_range R>
       auto const it = node_of.find(value_key_of(vc));
       SEQUANT_ASSERT(it != node_of.end());
       container::svector<Index> contracted_below;
-      for (Index const& ix : contracted_indices(it->second))
+      for (Index const& ix : contracted_indices(*it->second))
         contracted_below.push_back(ix);
 
       // Build-site axes come from the cost model's ACTUAL per-node decision,
@@ -489,14 +496,14 @@ template <meta::eval_node_range R>
         if (std::find(site.begin(), site.end(), ix) == site.end())
           site.push_back(ix);
       };
-      auto const& dp_sliced = sequant::home_scope(it->second);
-      auto const& dp_stamps = it->second->node_slice_mask();
+      auto const& dp_sliced = sequant::home_scope(*it->second);
+      auto const& dp_stamps = (*it->second)->node_slice_mask();
       // POSITIONAL: the representative node's home is labeled in ITS tree's
       // frame, vc.carried in the first occurrence's; positions are canonical
       // across occurrences (explicit-cells design section 11), labels are
       // not.
       {
-        auto const& rep_carried = it->second->canon_indices();
+        auto const& rep_carried = (*it->second)->canon_indices();
         for (std::size_t p = 0; p < vc.carried.size() && p < rep_carried.size();
              ++p)
           if (std::find(dp_sliced.begin(), dp_sliced.end(), rep_carried[p]) !=

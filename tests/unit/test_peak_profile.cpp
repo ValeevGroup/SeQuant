@@ -14,7 +14,10 @@
 #include <SeQuant/core/eval/backends/dryrun/meter.hpp>
 #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
+#include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -23,6 +26,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
+#include <cstdlib>
 #include <set>
 #include <string_view>
 #include <vector>
@@ -516,6 +520,65 @@ TEST_CASE("peak-profile anchor: static sweep vs metered replay co-resident sum",
 // collision, and the linearizing prepass must survive a deep Sum spine.
 // ---------------------------------------------------------------------
 
+// Shared by the two collision tests: build the rich schedule for `forest`,
+// then push it through the downstream resolutions the review flagged --
+// ordered_schedule_dep_graph's `value_id_of`, analyze_legality's
+// `CellLegality::hash`, build_ordered_schedule -- and assert that every cell
+// keeps its OWN value id all the way through. All of those are first-wins
+// `emplace`s on `value_key_of(ValueCell)`, so two cells sharing one key would
+// silently collapse to the first one's value_id and the split the structural
+// check made would not propagate at all.
+void check_split_propagates(std::vector<EvalNode<EvalExpr>> const& forest,
+                            std::size_t expected_cells,
+                            std::size_t collide_hash) {
+  SizeRegime r;
+  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  REQUIRE(rich.cells.size() == expected_cells);
+
+  // Two cells carry the colliding NODE id, one occurrence each ...
+  std::size_t colliding_cells = 0;
+  for (auto const& c : rich.cells)
+    if (c.hash == collide_hash) {
+      ++colliding_cells;
+      CHECK(c.occurrences.size() == 1);
+    }
+  CHECK(colliding_cells == 2);
+
+  // ... and every cell's VALUE id is distinct, which is what makes the split
+  // visible downstream.
+  std::set<std::size_t> keys;
+  for (auto const& c : rich.cells) keys.insert(sequant::eval::value_key_of(c));
+  CHECK(keys.size() == rich.cells.size());
+
+  // Node-side agreement: compute_dag_boulevard re-stamps EvalExpr::value_key,
+  // so the key->node maps the executor and legality join on resolve each cell
+  // to one of its OWN nodes.
+  std::set<std::size_t> node_keys;
+  for (auto const& t : forest)
+    t.visit([&](auto const& n) { node_keys.insert(sequant::value_key_of(n)); });
+  CHECK(node_keys == keys);
+
+  // The dep graph's value_id_of is the first-wins map: one entry per cell.
+  auto const g = sequant::eval::detail::ordered_schedule_dep_graph(rich);
+  CHECK(g.value_id_of.size() == rich.cells.size());
+
+  sequant::BatchPolicy policy;
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  REQUIRE(legality.cells.size() == rich.cells.size());
+  std::set<std::size_t> legality_keys;
+  for (auto const& cl : legality.cells) legality_keys.insert(cl.hash);
+  CHECK(legality_keys == keys);
+
+  sequant::eval::OrderedSchedule sched;
+  REQUIRE_NOTHROW(sched = sequant::eval::build_ordered_schedule(rich, legality,
+                                                                policy, {}));
+  CHECK(sched.num_values == rich.cells.size());
+}
+
 TEST_CASE(
     "compute_dag_boulevard opens separate cells for two values that COLLIDE "
     "on the value key",
@@ -526,11 +589,12 @@ TEST_CASE(
   // them and read it as the other -- silently the wrong value. A bucket hit is
   // now confirmed structurally (TreeNodeEqualityComparator through the
   // canonical child view, plus the home slicing the key folds in and the
-  // operands' CELLS), and a mismatch opens a new cell in the same bucket.
+  // operands' CELLS), and a mismatch opens a new cell whose value id is salted
+  // so the split reaches the schedule.
   //
   // The collision is forced through the public EvalExpr ctor, which takes the
-  // node id outright: two products over DIFFERENT operands are stamped with
-  // one hash.
+  // node id outright. Here the two products differ in their OPERANDS, so the
+  // inductive child-cell comparison is what separates them.
   std::size_t const collide = 0xC0111DEULL;
 
   auto X = EvalNode<EvalExpr>{
@@ -541,25 +605,33 @@ TEST_CASE(
       leaf("u{i_1;a_4}"), leaf("h{a_4;a_1}")};
   REQUIRE(X->hash_value() == Y->hash_value());
 
-  SizeRegime r;
-  r.space_extent = {{L"i", 5}, {L"a", 10}};
-  CostModel const cm{r};
-  auto const block_of = [](Index const&) -> std::size_t { return 1; };
-  std::vector<EvalNode<EvalExpr>> forest{X, Y};
-
-  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
-
   // 4 distinct leaves + the two colliding products = 6 cells. (Before the fix
   // this was 5: the products merged into one cell with two occurrences.)
-  CHECK(rich.cells.size() == 6);
+  check_split_propagates({X, Y}, 6, collide);
+}
 
-  std::size_t colliding_cells = 0;
-  for (auto const& c : rich.cells)
-    if (c.hash == collide) {
-      ++colliding_cells;
-      CHECK(c.occurrences.size() == 1);  // neither absorbed the other
-    }
-  CHECK(colliding_cells == 2);
+TEST_CASE(
+    "compute_dag_boulevard separates key-colliding values with IDENTICAL "
+    "operands",
+    "[peak_profile][value-cell]") {
+  // The companion case: the two colliding products contract the SAME two
+  // leaves, so they fold to the same child CELLS and the same (empty)
+  // loop_slot / reduced_slot -- every cheap discriminator ties, and only
+  // TreeNodeEqualityComparator on the nodes themselves can tell them apart
+  // (here on the result tensor's block, I{i_1;a_1} vs J{i_1;a_1}, since
+  // neither carries a connectivity graph). Without that last comparison the
+  // two would merge.
+  std::size_t const collide = 0xC0111DE2ULL;
+
+  auto X = EvalNode<EvalExpr>{
+      eval_tensor_hashed("I{i_1;a_1}", collide, sequant::EvalOp::Product),
+      leaf("t{i_1;a_3}"), leaf("g{a_3;a_1}")};
+  auto Y = EvalNode<EvalExpr>{
+      eval_tensor_hashed("J{i_1;a_1}", collide, sequant::EvalOp::Product),
+      leaf("t{i_1;a_3}"), leaf("g{a_3;a_1}")};
+  REQUIRE(X->hash_value() == Y->hash_value());
+  // The operands really are one value each (2 leaf cells, not 4).
+  check_split_propagates({X, Y}, 4, collide);
 }
 
 TEST_CASE(
@@ -573,38 +645,60 @@ TEST_CASE(
   // executor itself already does); a recursive descent overflows the call
   // stack long before the executor is reached.
   //
-  // Covered here: stamp_occurrence_homes (iterative pre-order) and
-  // value_key_of/value_key_impl (left spine unwound, right children still
-  // recursive). compute_dag_boulevard's own post-order walk was converted the
-  // same way and is covered for CORRECTNESS by the [w20-auxocc-walk] /
-  // [cell_table] gates; it cannot be driven at this depth here because the
-  // stamp_lifetime_masks pass it runs first keys its residency meet by a
-  // STRUCTURAL map whose comparator calls FullBinaryNode::size() (O(subtree),
-  // uncached) on every bucket probe -- an unrelated, pre-existing quadratic
-  // that swamps a 20000-node synthetic tree.
+  // Hidden ([.]) only because 40000 nodes cost ~4 GB to hold; the walks
+  // themselves are sub-second. Run it by name or by [stack-safety];
+  // SEQUANT_UT_SPINE_N overrides the depth.
   //
-  // Hidden ([.]) only because 40000 nodes take a few seconds to build and tear
-  // down under the Debug tree's sanitizer; run it by name or by
-  // [stack-safety].
-  constexpr std::size_t N = 20000;
+  // NOT covered here: build_value_node_map / build_value_key_node_map, whose
+  // walks were converted the same way. Their maps hold the node BY VALUE, and
+  // Node's copy constructor deep-copies the subtree, so one entry per node is
+  // O(nodes x subtree) memory -- measured on this very tree: 1.8 GB at N=500,
+  // 6.9 GB at N=1000, 15.7 GB at N=2000, OOM past that. That is a separate
+  // (pre-existing, and live on the ordered evaluation path, which builds one
+  // per run) defect from the recursion this test pins, and fixing it means
+  // changing their return type to hold pointers -- ~30 call sites. Their
+  // conversion is exercised for correctness by the [ordered-executor] /
+  // [ordered-schedule] tests that build them.
+  std::size_t N = 20000;
+  if (char const* n = std::getenv("SEQUANT_UT_SPINE_N"))
+    N = static_cast<std::size_t>(std::atoll(n));
 
   // Built by COPYING two parsed EvalExprs (no re-parsing per level), so the
-  // test measures the walks, not the parser.
-  EvalExpr const acc = eval_tensor("R{i_1;a_1}");
+  // test measures the walks, not the parser. Each spine node gets its own node
+  // id, as the real per-summand accumulators do.
   EvalExpr const lf = eval_tensor("t{i_1;a_1}");
   EvalNode<EvalExpr> tree{lf};
   for (std::size_t k = 1; k < N; ++k)
-    tree = EvalNode<EvalExpr>{acc, std::move(tree), EvalNode<EvalExpr>{lf}};
+    tree = EvalNode<EvalExpr>{
+        eval_tensor_hashed("R{i_1;a_1}", k, sequant::EvalOp::Sum),
+        std::move(tree), EvalNode<EvalExpr>{lf}};
   REQUIRE(tree.size() == 2 * N - 1);
 
   std::vector<EvalNode<EvalExpr>> forest{tree};
 
-  // Pre-order occurrence-home stamping over the whole spine.
-  REQUIRE_NOTHROW(sequant::stamp_occurrence_homes(forest));
+  // The full ordered prepass entry point: stamp_lifetime_masks +
+  // stamp_occurrence_homes + the post-order linearizing walk, all three of
+  // which were converted.
+  SizeRegime r;
+  r.space_extent = {{L"i", 5}, {L"a", 10}};
+  CostModel const cm{r};
+  auto const block_of = [](Index const&) -> std::size_t { return 1; };
+  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
+  CHECK(rich.num_points == 2 * N - 1);
+  // N-1 distinct spine values plus the one folded leaf value.
+  CHECK(rich.cells.size() == N);
 
   // Bottom-up value-key fold over the whole spine. Nothing is home-sliced
   // here, so every key collapses to the node id -- the point is that the fold
   // REACHES the bottom of the spine at all.
   CHECK(sequant::value_key_of(tree) == tree->hash_value());
   CHECK(sequant::value_key_of(tree.left()) == tree.left()->hash_value());
+
+  // The remaining converted walks over the same forest: the two value->node
+  // bridges and analyze_legality's node_of pre-order.
+  sequant::BatchPolicy policy;
+  sequant::eval::LegalitySchedule legality;
+  REQUIRE_NOTHROW(legality =
+                      sequant::eval::analyze_legality(rich, forest, policy));
+  CHECK(legality.cells.size() == rich.cells.size());
 }
