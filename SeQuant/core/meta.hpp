@@ -638,6 +638,16 @@ template <typename Rng, typename V, size_t Rank = 1>
 concept sized_range_of =
     std::ranges::sized_range<Rng> && range_of<Rng, V, Rank>;
 
+template <typename Container, typename Value>
+concept can_emplace =
+    requires(std::remove_cvref_t<Container> &c,
+             const std::remove_cvref<Value> &v) { c.emplace(v); };
+
+template <typename Container, typename Value>
+concept can_emplace_back =
+    requires(std::remove_cvref_t<Container> &c,
+             const std::remove_cvref<Value> &v) { c.emplace_back(v); };
+
 }  // namespace meta
 }  // namespace sequant
 

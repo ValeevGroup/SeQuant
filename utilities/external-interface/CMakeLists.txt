@@ -40,7 +40,7 @@ target_link_libraries(external_interface
         spdlog::spdlog
 )
 
-target_set_warning_flags(external_interface)
+target_set_compiler_flags(external_interface)
 
 
 # CCSD

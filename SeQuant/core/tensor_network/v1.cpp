@@ -727,7 +727,7 @@ TensorNetworkV1::GraphData TensorNetworkV1::make_bliss_graph(
   });
 
   // allocate graph
-  graph = std::make_shared<bliss::Graph>(nv);
+  graph = std::make_shared<bliss::Graph>(static_cast<unsigned int>(nv));
 
   // add edges
   // - each index's degree <= 2 + # of protoindex terminals

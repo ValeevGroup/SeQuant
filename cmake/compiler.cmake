@@ -11,18 +11,38 @@ function(target_warnings_as_errors TARGET)
 
     if (IS_GNU_LIKE_COMPILER)
         target_compile_options("${TARGET}" PRIVATE "-Werror")
+    elseif(MSVC)
+        target_compile_options("${TARGET}" PRIVATE "/WX")
     else()
         message(DEBUG "Warnings-as-errors not supported for compiler '${CMAKE_CXX_COMPILER_ID}' - disabling…")
     endif()
 endfunction()
 
-function(target_set_warning_flags TARGET)
+function(target_set_compiler_flags TARGET)
     __check_gnu_like_compiler()
 
+    if (MSVC)
+        # By default MSVC is not standard-compliant in its preprocessor implementation
+        # but we need it to be (partially in headers, which is why this is a public option)
+        target_compile_options("${TARGET}" PUBLIC "/Zc:preprocessor")
+        # By default MSVC does not set the __cplusplus macro to the correct value
+        # That breaks any code that tries to be compatible with different C++ standards
+        target_compile_options("${TARGET}" PUBLIC "/Zc:__cplusplus")
+        # Don't error due to object files being too big
+        target_compile_options("${TARGET}" PRIVATE "/bigobj")
+        # Make MSVC use and understand UTF-8 encoding in source files
+        target_compile_options("${TARGET}" PUBLIC "/utf-8")
+
+        # Increase the available stack memory to what appears to be the default on Linux/macOS (8MB)
+        target_link_options("${TARGET}" PRIVATE "/STACK:8388608")
+    endif()
+
     if (NOT PROJECT_IS_TOP_LEVEL)
+        # Disable compiler warnings
         if (IS_GNU_LIKE_COMPILER)
-            # Disable compiler warnings
             target_compile_options("${TARGET}" PRIVATE "-w")
+        elseif(MSVC)
+            target_compile_options("${TARGET}" PRIVATE "/w")
         endif()
 
         return()
@@ -35,6 +55,7 @@ function(target_set_warning_flags TARGET)
     if (IS_GNU_LIKE_COMPILER)
         target_compile_options("${TARGET}" PRIVATE "-Wall" "-Wpedantic" "-Wextra" "-Wno-sign-conversion" "-Wno-sign-compare" "-Wno-parentheses")
     endif()
+
     if (CMAKE_COMPILER_IS_GNUCXX)
         # Certain kinds of warnings are no longer suppressed inside system headers (under all circumstances) when using GCC 12+
         # Hence, we have to ensure we're not causing a compile error for those warnings as the warning might
@@ -50,6 +71,7 @@ function(target_set_warning_flags TARGET)
         # causing it to effectively only create noise. Hence, we disable it entirely.
         target_compile_options("${TARGET}" PRIVATE "-Wno-maybe-uninitialized")
     endif()
+
     if (CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|AppleClang)$")
         # This warning can be a bit odd in that it seems like some Clang versions emit it incorrectly,
         # others don't emit it and some emit it correctly but in places where fixing the code causes

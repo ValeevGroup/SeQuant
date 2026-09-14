@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <optional>
 
 namespace sequant {
 
@@ -62,8 +63,9 @@ class flattened_rangenest
     std::conditional_t<std::is_const_v<Range>, typename Range::const_iterator,
                        typename Range::iterator>
         elem_iter_;  // iterator pointing to the current element
-    mutable int64_t ordinal_ =
-        -1;  // index of the current element within the sequence
+    using ordinal_t = std::size_t;
+    // index of the current element within the sequence
+    mutable std::optional<ordinal_t> ordinal_ = std::nullopt;
 
     // *range_iter_ produces a const lvalue ref, this return nonconst lvalue ref
     Range &current_range() const { return const_cast<Range &>(*range_iter_); }
@@ -71,11 +73,11 @@ class flattened_rangenest
     void compute_ordinal() const {
       // accumulate all elements before this range_iter_
       ordinal_ = std::accumulate(
-          _begin(*range_), range_iter_, 0,
-          [](std::size_t v, const Range &r) { return v + std::size(r); });
+          _begin(*range_), range_iter_, static_cast<ordinal_t>(0),
+          [](ordinal_t v, const Range &r) { return v + std::size(r); });
       // accumulate all elements before this elem_iter_
       if (range_iter_ != _end(*range_))
-        ordinal_ += elem_iter_ - this->_begin(current_range());
+        ordinal_.value() += elem_iter_ - this->_begin(current_range());
     }
 
     static auto _begin(Range &rng) {
@@ -111,7 +113,9 @@ class flattened_rangenest
           elem_iter_(range_iter_ != this->_end(*range)
                          ? this->_begin(current_range())
                          : decltype(elem_iter_){}),
-          ordinal_{range_iter_ != this->_end(*range) ? 0 : -1} {}
+          ordinal_{range_iter_ != this->_end(*range)
+                       ? std::optional<ordinal_t>(0)
+                       : std::nullopt} {}
     /// constructs a cursor pointing to the end
     /// @note has O(1) complexity
     cursor(RangeNest *range, ranges::default_sentinel_t)
@@ -141,7 +145,8 @@ class flattened_rangenest
         return false;
     }
     void next() {
-      ++ordinal_;
+      SEQUANT_ASSERT(ordinal_.has_value());
+      ++ordinal_.value();
       ++elem_iter_;
       if (elem_iter_ == this->_end(current_range())) {
         ++range_iter_;
@@ -162,9 +167,9 @@ class flattened_rangenest
     auto elem_iter() const { return elem_iter_; }
     /// @return ordinal index of the element at which this is located (i.e.
     /// distance to the first element of the first range)
-    auto ordinal() const {
-      if (ordinal_ < 0) compute_ordinal();
-      return ordinal_;
+    ordinal_t ordinal() const {
+      if (!ordinal_.has_value()) compute_ordinal();
+      return ordinal_.value();
     }
 
     /// calls erase on the current iterator

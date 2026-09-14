@@ -8,7 +8,7 @@ foreach(current IN LISTS EXECUTABLE_SOURCES)
     set_target_properties(${name} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(${name} SeQuant)
     
-    target_set_warning_flags("${name}")
+    target_set_compiler_flags("${name}")
 endforeach()
 
 add_subdirectory(external-interface)
