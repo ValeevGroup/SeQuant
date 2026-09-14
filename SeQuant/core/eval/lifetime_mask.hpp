@@ -267,10 +267,19 @@ std::pair<std::size_t, bool> value_key_impl(Node const& n) {
   bool sliced = !pos.empty();
   std::size_t h = value_key(n->hash_value(), std::move(pos));
   if (!n.leaf()) {
-    auto const [lk, ls] = value_key_impl(n.left());
-    auto const [rk, rs] = value_key_impl(n.right());
+    auto [lk, ls] = value_key_impl(n.left());
+    auto [rk, rs] = value_key_impl(n.right());
     if (ls || rs) {
       sliced = true;
+      // A Product (contraction) is commutative and the binarizer may emit the
+      // same contraction as (X,Y) in one term and (Y,X) in another, so the two
+      // operand keys are combined in a CANONICAL order -- ascending -- and the
+      // two spellings key to one value. (The node id they are combined into
+      // already folds the operand order; combining them as emitted did not,
+      // which split swapped occurrences into two builds.) A Sum's operands are
+      // NOT interchangeable -- its left child is the in-place accumulator --
+      // so they stay in the emitted order.
+      if (n->is_product() && lk > rk) std::swap(lk, rk);
       hash::combine(h, lk);
       hash::combine(h, rk);
     }

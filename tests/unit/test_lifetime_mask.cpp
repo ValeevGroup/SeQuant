@@ -103,6 +103,14 @@ EvalNode<EvalExpr> inode(std::string_view result, EvalNode<EvalExpr> l,
   return EvalNode<EvalExpr>{eval_tensor(result), std::move(l), std::move(r)};
 }
 
+// The number of distinct cache entries a cache manager holds (CacheManager
+// exposes its keys only through for_each_key).
+std::size_t n_cache_keys(auto const& man) {
+  std::size_t n = 0;
+  man.for_each_key([&n](auto const&) { ++n; });
+  return n;
+}
+
 }  // namespace
 
 TEST_CASE("lifetime mask cross-occurrence meet", "[lifetime_mask]") {
@@ -558,4 +566,91 @@ TEST_CASE(
   CHECK(forest[0]->sliced_modes().empty());
   CHECK(as_set(forest[0]->sliced_modes()).count(i) == 0);
   CHECK(as_set(forest[0]->sliced_modes()).count(a_pno) == 0);
+}
+
+TEST_CASE("product operand order is not part of node identity",
+          "[lifetime_mask][eval][cache_manager]") {
+  using node_t = EvalNode<EvalExpr>;
+  using sequant::canonical_children;
+  using sequant::TreeNodeEqualityComparator;
+  using sequant::value_key_of;
+
+  // The SAME contraction, its two operands handed to binarize in the two
+  // orders the single-term DP is free to choose between (which of the pair
+  // lands on its stack first decides the eval tree's left/right).
+  auto ab = head("g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_3,i_4}");
+  auto ba = head("t{a_1,a_2;i_3,i_4} g{i_1,i_2;a_1,a_2}");
+
+  // Evaluation order is UNTOUCHED: each tree keeps the operands where the
+  // binarizer put them (nothing below reorders children).
+  REQUIRE(ab->op_type() == sequant::EvalOp::Product);
+  REQUIRE(ba->op_type() == sequant::EvalOp::Product);
+  REQUIRE(ab.left()->as_tensor().label() == L"g");
+  REQUIRE(ba.left()->as_tensor().label() == L"t");
+
+  // The node id folds the operand order already (it is an unordered
+  // combination of the factor hashes plus the canonical graph) ...
+  REQUIRE(ab->hash_value() == ba->hash_value());
+
+  // ... and so, now, does the equality comparator, via the canonical view.
+  TreeNodeEqualityComparator<node_t> const eq;
+  CHECK(eq(ab, ba));
+
+  // The canonical view presents the same ordered pair for both spellings --
+  // and does so by reading exactly one of them through a swap.
+  auto const [ab_first, ab_second] = canonical_children(ab);
+  auto const [ba_first, ba_second] = canonical_children(ba);
+  CHECK(ab_first->hash_value() == ba_first->hash_value());
+  CHECK(ab_second->hash_value() == ba_second->hash_value());
+  CHECK((&ab_first == &ab.left()) != (&ba_first == &ba.left()));
+
+  // One cache entry, not two: the two spellings are one value.
+  CHECK(n_cache_keys(sequant::cache_manager(std::vector<node_t>{ab, ba})) == 1);
+
+  // And one VALUE key. Home-slice the `g` operand in BOTH spellings on the
+  // same canonical position: the key then combines a non-trivial operand key
+  // with a plain one, which is exactly the combination that used to depend on
+  // which side `g` was emitted on.
+  auto& g_in_ab = ab.left();
+  auto& g_in_ba = ba.right();
+  REQUIRE(!g_in_ab->canon_indices().empty());
+  REQUIRE(g_in_ab->canon_indices().front() == g_in_ba->canon_indices().front());
+  sequant::container::svector<Index> const home{
+      g_in_ab->canon_indices().front()};
+  g_in_ab->set_occurrence_home(home);
+  g_in_ba->set_occurrence_home(home);
+  // the key really is a sliced one (otherwise the check below is vacuous)
+  REQUIRE(value_key_of(ab) != ab->hash_value());
+  CHECK(value_key_of(ab) == value_key_of(ba));
+}
+
+TEST_CASE("canonical child view is deterministic on node-id-equal operands",
+          "[lifetime_mask][eval][cache_manager]") {
+  using node_t = EvalNode<EvalExpr>;
+  using sequant::canonical_children;
+  using sequant::canonical_operand_cmp;
+  using sequant::TreeNodeEqualityComparator;
+
+  // Two occurrences of ONE tensor: the leaf node id is blind to index names,
+  // so the two operands of this outer product collide on it and the ordering
+  // key has to fall through to the tie-break.
+  auto ab = head("f{a_1;i_1} f{a_2;i_2}");
+  auto ba = head("f{a_2;i_2} f{a_1;i_1}");
+  REQUIRE(ab->op_type() == sequant::EvalOp::Product);
+  REQUIRE(ab.left()->hash_value() == ab.right()->hash_value());
+
+  int const c = canonical_operand_cmp(ab.left(), ab.right());
+  // total, antisymmetric, and stable across repeated evaluation
+  CHECK(c == -canonical_operand_cmp(ab.right(), ab.left()));
+  CHECK(c == canonical_operand_cmp(ab.left(), ab.right()));
+  // the two operands ARE one value, so either order is canonical and the view
+  // leaves the emitted order alone
+  CHECK(c == 0);
+  auto const [first, second] = canonical_children(ab);
+  CHECK(&first == &ab.left());
+  CHECK(&second == &ab.right());
+
+  // ... and the two spellings still fold to one value
+  CHECK(TreeNodeEqualityComparator<node_t>{}(ab, ba));
+  CHECK(n_cache_keys(sequant::cache_manager(std::vector<node_t>{ab, ba})) == 1);
 }

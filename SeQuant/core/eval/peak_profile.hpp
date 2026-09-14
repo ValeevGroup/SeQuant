@@ -449,7 +449,10 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // both operands of one node under different labels keeps two identities.
     container::svector<std::size_t> operand_points;
     container::svector<std::size_t> child_recs;  // rec indices, left, right
-    container::svector<int> loop_slot;           // per carried position
+    // Whether the node is a commutative contraction, i.e. whether its two
+    // operand keys are interchangeable when the VALUE key below combines them.
+    bool is_product = false;
+    container::svector<int> loop_slot;  // per carried position
     container::svector<std::pair<Index, int>> reduced_slot;
     Node const* node = nullptr;  // the forest node, to stamp its value key
     // The batch loops this node OPENS (batch_loops_opened_here), with the
@@ -521,6 +524,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
     r.hash = n->hash_value();
     r.key = n->hash_value();  // the FINAL value key is assigned below
     r.is_leaf = n.leaf();
+    r.is_product = !n.leaf() && n->is_product();
     r.point = point;
     r.consumer_point = point;  // root default; overwritten by parent below
     r.home = home_scope(n);    // sliced_modes (empty on leaves)
@@ -994,10 +998,23 @@ RichSchedule compute_dag_boulevard(R const& forest,
       hash::combine(h, CONTRACTED_BASE + j);
       hash::combine(h, static_cast<std::size_t>(r.reduced_slot[j].second));
     }
+    container::svector<std::size_t> child_keys;
     for (std::size_t ci : r.child_recs) {
       if (final_key[ci] != recs[ci].hash) sliced = true;
-      hash::combine(h, final_key[ci]);
+      child_keys.push_back(final_key[ci]);
     }
+    // A Product (contraction) is commutative and the binarizer may emit the
+    // same contraction as (X,Y) in one term and (Y,X) in another, so its two
+    // operand keys are combined in a CANONICAL order -- ascending -- and the
+    // two spellings key to ONE value (the node id `h` starts from already
+    // folds the operand order; combining the operand keys as emitted did not,
+    // which split swapped occurrences into two builds). A Sum's operands are
+    // NOT interchangeable -- its left child is the in-place accumulator -- so
+    // they stay in the emitted order. Evaluation order is untouched either
+    // way: `child_recs` itself, and everything scheduled off it, is still
+    // left-then-right as the DP emitted it.
+    if (r.is_product) std::sort(child_keys.begin(), child_keys.end());
+    for (std::size_t k : child_keys) hash::combine(h, k);
     final_key[i] = sliced ? h : r.hash;
     recs[i].key = final_key[i];
     if (r.node) const_cast<Data&>(**r.node).set_value_key(final_key[i]);
