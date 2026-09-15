@@ -126,7 +126,7 @@ struct Read {
   /// instance; the form rule accepts it as whole, so this table check is
   /// necessary, not sufficient -- the dry-run range check remains the
   /// ground truth. Empty = no such record.
-  container::svector<LoopKey> invariant_on;
+  container::svector<LoopKey> invariant_on{};
 };
 
 struct CellTable {

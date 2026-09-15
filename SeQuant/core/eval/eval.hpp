@@ -264,8 +264,8 @@ struct EvalStat {
   Bytes mem_result{};
   Bytes mem_alloc{};
   Bytes mem_hwmark{};
-  std::optional<Bytes> mem_left;
-  std::optional<Bytes> mem_right;
+  std::optional<Bytes> mem_left{};
+  std::optional<Bytes> mem_right{};
 };
 
 struct CacheStat {
