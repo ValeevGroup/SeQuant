@@ -513,12 +513,17 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
     return res;
   };
 
-  // Recursive, but bounded by CELL boundaries rather than by tree depth: the
-  // first `resolver.fetch` below stops the descent at any child that is its own
-  // scheduled value, so the depth is the height of ONE cell's private
-  // production subtree (a handful of contractions), never the residual's Sum
-  // spine. That is why it is not part of the spine-unwinding the prepasses
-  // needed.
+  // Recursive, but bounded by CELL boundaries rather than by tree depth --
+  // given the schedule this executor is handed. The first `resolver.fetch`
+  // below stops the descent at any child that is its own scheduled value, so
+  // the depth is the height of ONE cell's private production subtree (a handful
+  // of contractions), never the residual's Sum spine. That bound is a SCHEDULE
+  // property, not a structural one: `fetch` returns an optional, and a miss on
+  // a child that IS a cell (not yet produced, or a read cursor out of step)
+  // falls through to the transient arm below, which descends the whole subtree.
+  // The schedule's topological order is what makes the miss impossible -- every
+  // operand cell is produced before its consumer runs -- which is why this was
+  // left out of the prepasses' spine-unwinding.
   auto const read_operand = [&](auto&& self, node_t const& child) -> ResultPtr {
     std::size_t const key = value_key_of(child);
     if (auto v = resolver.fetch(key, ctx))
@@ -1595,8 +1600,12 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   for (auto const& c : rich.cells)
     hash_to_vid.emplace(value_key_of(c), c.value_id);
 
-  container::svector<node_t> roots;
-  for (auto&& n : forest) roots.push_back(n);
+  // POINTERS into `forest` (this call's own parameter, which outlives them):
+  // pushing NODES here deep-copied every root's whole subtree -- for a
+  // single-root residual, the entire tree cloned once per evaluation -- purely
+  // to enumerate the roots.
+  container::svector<node_t const*> roots;
+  for (auto const& n : forest) roots.push_back(&n);
 
   container::svector<ResultPtr> pre_results(roots.size());
   // The CELLS the roots' results were taken from -- the residency diagnostic
@@ -1605,7 +1614,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // and its retention must not be excused as "that is just the root".
   container::set<CellId> root_cells;
   for (std::size_t i = 0; i != roots.size(); ++i) {
-    auto const vid_it = hash_to_vid.find(value_key_of(roots[i]));
+    auto const vid_it = hash_to_vid.find(value_key_of(*roots[i]));
     // REFUSAL: an ill-formed schedule -- it does not cover this forest root.
     if (vid_it == hash_to_vid.end())
       throw Exception("evaluate_ordered_schedule: forest root " +
@@ -1655,12 +1664,12 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     if (static bool const dump_root_norms =
             detail::dump_enabled("SEQUANT_DUMP_ROOT_NORMS");
         dump_root_norms)
-      detail::dump_root_norm(i, roots[i]->hash_value(), vid, *cell,
-                             int(roots[i]->canon_phase()),
+      detail::dump_root_norm(i, (*roots[i])->hash_value(), vid, *cell,
+                             int((*roots[i])->canon_phase()),
                              detail::dump_norm2(ptr));
     // Orient the stored value to this root's phase, matching the
     // canonical->orientation return convention every production uses.
-    auto const ph = roots[i]->canon_phase();
+    auto const ph = (*roots[i])->canon_phase();
     pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
     if (!pre_results[i])
       throw Exception(
@@ -1773,8 +1782,11 @@ ResultPtr evaluate_ordered_schedule(
           forest, ordered, rich, leaf_evaluator, cache, target,
           make_scope_guard, is_volatile);
 
-  container::svector<node_t> roots;
-  for (auto&& n : forest) roots.push_back(n);
+  // POINTERS, for the reason combine_forest_roots' own doc gives: pushing
+  // nodes deep-copied every root's whole subtree. `forest` is this call's
+  // parameter and outlives them.
+  container::svector<node_t const*> roots;
+  for (auto const& n : forest) roots.push_back(&n);
 
   // -------- Shared combine: permute each root to layout and sum. --------
   // combine_forest_roots (forest_combine.hpp) is shared with
@@ -1845,8 +1857,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
           roots, ordered, rich, leaf_evaluator, cache, target, make_scope_guard,
           is_volatile);
 
-  container::svector<node_t> root_nodes;
-  for (auto&& n : roots) root_nodes.push_back(n);
+  // POINTERS, same reason -- and here the copies were doubled: once into this
+  // vector, once into the singleton passed to each combine below. `roots` is
+  // this call's parameter and outlives them.
+  container::svector<node_t const*> root_nodes;
+  for (auto const& n : roots) root_nodes.push_back(&n);
   SEQUANT_ASSERT(pre_results.size() == root_nodes.size());
   SEQUANT_ASSERT(layouts.size() == root_nodes.size());
 
@@ -1857,7 +1872,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // accumulated together -- the map, not the sum.
   container::svector<ResultPtr> results(root_nodes.size());
   for (std::size_t i = 0; i != root_nodes.size(); ++i) {
-    container::svector<node_t> one_root{root_nodes[i]};
+    container::svector<node_t const*> one_root{root_nodes[i]};
     container::svector<ResultPtr> one_pre{std::move(pre_results[i])};
     results[i] =
         combine_forest_roots<EvalTrace>(one_root, one_pre, layouts[i], cache);

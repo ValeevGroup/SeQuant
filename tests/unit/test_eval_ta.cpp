@@ -3076,7 +3076,6 @@ TEST_CASE(
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
-  using sequant::eval::build_value_node_map;
   using sequant::eval::compute_dag_boulevard;
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
@@ -3171,9 +3170,8 @@ TEST_CASE(
   for (auto const& [vid, kind] : x_block->outputs)
     REQUIRE(kind == sequant::eval::OutputKind::AccumulateSum);
 
-  // value_id -> node bridge: the x_1 block must home the shared composite S
-  // as a plain BuildStep (LoopLocal).
-  auto const vmap = build_value_node_map(forest);
+  // The x_1 block must home the shared composite S as a plain BuildStep
+  // (LoopLocal).
   std::size_t n_build_ids = 0;
   for (auto const& step : x_block->steps)
     if (std::holds_alternative<sequant::eval::BuildStep>(step.value))
@@ -3701,7 +3699,6 @@ TEST_CASE(
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
-  using sequant::eval::build_value_node_map;
   using sequant::eval::compute_dag_boulevard;
   using sequant::eval::evaluate_ordered_schedule;
   using sequant::eval::OrderedSchedule;
@@ -3792,10 +3789,8 @@ TEST_CASE(
     REQUIRE(kind == OutputKind::AccumulateScatter);
   }
 
-  // value_id -> node bridge: the i_1 block must home the shared composite S
-  // as a plain BuildStep (LoopLocal), exactly like the Task-2 test's
-  // n_build_ids > 0 check.
-  auto const vmap = build_value_node_map(forest);
+  // The i_1 block must home the shared composite S as a plain BuildStep
+  // (LoopLocal), exactly like the Task-2 test's n_build_ids > 0 check.
   std::size_t n_build_ids = 0;
   for (auto const& step : i_block->steps)
     if (std::holds_alternative<sequant::eval::BuildStep>(step.value))

@@ -404,6 +404,13 @@ class FullBinaryNode {
   }
 
   FullBinaryNode& operator=(FullBinaryNode<T>&& node) {
+    // Self-move is a no-op, checked FIRST: every line below would otherwise
+    // read `node`'s members after moving out of them -- `data_` self-moved, and
+    // both children parked in the temporaries below while `node.left_/right_`
+    // (the same members) read null, which would leave the node a childless leaf
+    // and destroy both subtrees at scope exit.
+    if (&node == this) return *this;
+
     data_ = std::move(node.data_);
 
     // We have to save a temporary copy of these, in case the node we're moving
@@ -428,12 +435,13 @@ class FullBinaryNode {
     // The SOURCE is a leaf now -- its children are ours -- so its own cached
     // count and every count ABOVE it have to drop: `node` may itself be
     // someone's child, as in `std::move(n.parent().right())` (the live shape,
-    // export.hpp's prune_scalar_node), which otherwise leaves that parent's
+    // export.hpp's prune_scalar_factor), which otherwise leaves that parent's
     // chain over-counting the subtree it no longer holds. `this`'s chain was
     // refreshed just above; walking the source's chain is safe because both
     // temporaries above keep `node` alive until this function returns even
-    // when it was owned by one of our former children.
-    if (&node != this) node.refresh_size_up();
+    // when it was owned by one of our former children. (`node` is not `this`:
+    // self-move returned at the top.)
+    node.refresh_size_up();
 
     // parent_ remains unchanged
 

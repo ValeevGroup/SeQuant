@@ -2506,18 +2506,21 @@ TEST_CASE(
   // is a DEAD prerequisite -- it must not be re-formed in iteration 2.
   sequant::container::set<std::size_t> needed;
   {
-    sequant::container::svector<Node> stack;
+    // POINTERS into `forest` (a local declared above, which outlives this
+    // walk): both the stack and `Node const n = stack.back()` deep-copied a
+    // whole subtree per entry, which is O(nodes x subtree) for the walk.
+    sequant::container::svector<Node const*> stack;
     sequant::container::set<std::size_t> visited;
-    for (auto&& n : forest) stack.push_back(n);
+    for (auto const& n : forest) stack.push_back(&n);
     while (!stack.empty()) {
-      Node const n = stack.back();
+      Node const& n = *stack.back();
       stack.pop_back();
       if (n.leaf()) continue;
       if (!visited.insert(n->hash_value()).second) continue;
       if (store.holds(n->hash_value())) continue;  // held: read, do not descend
       needed.insert(n->hash_value());
-      stack.push_back(n.left());
-      stack.push_back(n.right());
+      stack.push_back(&n.left());
+      stack.push_back(&n.right());
     }
   }
   // A pointer into `forest` (which outlives it), not a subtree copy.

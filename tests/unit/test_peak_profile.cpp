@@ -29,7 +29,6 @@
 #include <cstdlib>
 #include <set>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 namespace {
@@ -579,25 +578,29 @@ void check_split_propagates(std::vector<EvalNode<EvalExpr>> const& forest,
                                                                 policy, {}));
   // NOT `sched.num_values == rich.cells.size()`: build_ordered_schedule
   // assigns exactly that, so the comparison cannot fail. What bites on a
-  // first-wins collapse is the schedule's actual PRODUCTIONS -- every non-leaf
-  // cell has to be built somewhere in it, under its OWN value id, so a
-  // collapsed colliding pair would leave one of the two products unproduced
-  // (and the other built once for both).
-  std::multiset<std::size_t> built;
-  auto collect = [&](auto&& self, sequant::eval::ScopeBlock const& b) -> void {
-    for (auto const& st : b.steps) {
-      if (auto const* bs = std::get_if<sequant::eval::BuildStep>(&st.value))
-        built.insert(bs->value_id);
-      else if (auto const* sb =
-                   std::get_if<sequant::eval::ScopeBlock>(&st.value))
-        self(self, *sb);
-    }
-  };
-  collect(collect, sched.root);
-  std::multiset<std::size_t> expected_built;
+  // first-wins collapse is the schedule's actual PRODUCTION SITES -- every
+  // non-leaf cell has to be produced somewhere in it, under its OWN value id,
+  // so a collapsed colliding pair would leave one of the two products
+  // unproduced (and the other produced once for both).
+  //
+  // "Produced" is `detail::collect_production_ids`' notion, the one
+  // `well_formed` uses: a BuildStep ANYWHERE in the block tree, or an
+  // `outputs` entry of a block. Both count, because a value that escapes by
+  // its own per_axis roles (any Reduction / LoopCarried entry) has NO
+  // BuildStep at all -- it is produced as an AccumulateSum/AccumulateScatter
+  // output of each escaped block (build_ordered_schedule's contract,
+  // ordered_schedule.hpp). Compared as SETS, not multisets: a multi-level
+  // escape chain legitimately lists one value at several depths, and a built
+  // value may also escape through its own chain (well_formed's rules (b)/(c)),
+  // so the population, not the repetition count, is the invariant. Leaves are
+  // excluded on both sides (the builder skips leaf cells).
+  sequant::container::vector<std::size_t> prods;
+  sequant::eval::detail::collect_production_ids(sched.root, prods);
+  std::set<std::size_t> const produced(prods.begin(), prods.end());
+  std::set<std::size_t> expected_produced;
   for (auto const& c : rich.cells)
-    if (!c.is_leaf) expected_built.insert(c.value_id);
-  CHECK(built == expected_built);
+    if (!c.is_leaf) expected_produced.insert(c.value_id);
+  CHECK(produced == expected_produced);
 }
 
 TEST_CASE(
@@ -653,6 +656,39 @@ TEST_CASE(
   REQUIRE(X->hash_value() == Y->hash_value());
   // The operands really are one value each (2 leaf cells, not 4).
   check_split_propagates({X, Y}, 4, collide);
+}
+
+TEST_CASE("the value->node bridges hold the FOREST's nodes, not copies of them",
+          "[peak_profile][value-node-map]") {
+  // Deliverable of the pointer conversion, pinned in a test that RUNS by
+  // default (the deep-spine case that carries the memory numbers is hidden
+  // behind [.]). ValueNodeMap holds `Node const*`; an entry must therefore BE
+  // the address of the forest node it was built from. A by-value map -- the
+  // shape this replaced, whose entries were deep copies of whole subtrees --
+  // cannot satisfy this, and cannot even compile against it.
+  std::vector<EvalNode<EvalExpr>> const forest{
+      inode("R{i_1;a_5}", leaf("A{i_1;a_3}"), leaf("B{a_3;a_5}"))};
+  auto const& root = forest.front();
+
+  auto const vmap = sequant::eval::build_value_node_map(forest);
+  auto const vkmap = sequant::eval::build_value_key_node_map(forest);
+
+  // Nothing is home-sliced here, so each node's value key is its node id: one
+  // entry per distinct node in both maps.
+  CHECK(vmap.size() == 3);
+  CHECK(vkmap.size() == 3);
+  for (auto const* n : {&root, &root.left(), &root.right()}) {
+    auto const key = sequant::value_key_of(*n);
+    REQUIRE(vmap.count(key) == 1);
+    REQUIRE(vkmap.count(key) == 1);
+    CHECK(vmap.at(key) == n);   // the forest node itself ...
+    CHECK(vkmap.at(key) == n);  // ... in both bridges
+  }
+  // And the pointee is the live forest node, not a detached clone: the root's
+  // children are reachable through it and the parent link is intact (a deep
+  // copy is always a root).
+  CHECK(!vmap.at(sequant::value_key_of(root))->leaf());
+  CHECK(&vmap.at(sequant::value_key_of(root.left()))->parent() == &root);
 }
 
 TEST_CASE(

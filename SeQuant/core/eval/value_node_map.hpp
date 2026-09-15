@@ -60,8 +60,10 @@ template <meta::eval_node_range R>
   // The entries are ADDRESSES of the caller's nodes, so the range has to yield
   // references to them; a range of prvalues (a transform view, say) would hand
   // back pointers to temporaries. Same guard, same reason, as cache_manager()'s
-  // pointer-keyed DAG walk (cache_manager.hpp).
-  static_assert(std::is_reference_v<std::ranges::range_reference_t<R>>,
+  // pointer-keyed DAG walk (cache_manager.hpp). `R const`, because the walk
+  // iterates `forest`, which is bound as `R const&` -- a range yielding
+  // references only when mutable must not pass.
+  static_assert(std::is_reference_v<std::ranges::range_reference_t<R const>>,
                 "build_value_node_map(): the forest range must yield "
                 "references to nodes that outlive the map");
   ValueNodeMap<node_t> out;
@@ -111,8 +113,9 @@ template <meta::eval_node_range R>
 [[nodiscard]] ValueNodeMap<std::ranges::range_value_t<R>>
 build_value_key_node_map(R const& forest) {
   using node_t = std::ranges::range_value_t<R>;
-  // See build_value_node_map: the entries are addresses into \p forest.
-  static_assert(std::is_reference_v<std::ranges::range_reference_t<R>>,
+  // See build_value_node_map: the entries are addresses into \p forest, read
+  // through a `R const&` binding.
+  static_assert(std::is_reference_v<std::ranges::range_reference_t<R const>>,
                 "build_value_key_node_map(): the forest range must yield "
                 "references to nodes that outlive the map");
   ValueNodeMap<node_t> out;

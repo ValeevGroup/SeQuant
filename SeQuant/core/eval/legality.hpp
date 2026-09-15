@@ -446,9 +446,12 @@ template <meta::eval_node_range R>
   // pointers. Same guard, same reason, as cache_manager()'s pointer-keyed DAG
   // walk (cache_manager.hpp) and the value->node bridges
   // (value_node_map.hpp).
+  // `R const`, not `R`: the walk below iterates `forest`, which is bound as
+  // `R const&`, so the const-qualified range's reference type is the one that
+  // has to be a reference. A range that yields references when mutable and
+  // prvalues when const would slip past the unqualified form.
   static_assert(
-      std::is_reference_v<std::ranges::range_reference_t<
-          std::remove_cvref_t<decltype(forest)>>>,
+      std::is_reference_v<std::ranges::range_reference_t<R const>>,
       "analyze_legality(): the forest range must yield references to nodes "
       "that outlive the call (the value->node map keys on their addresses)");
   std::unordered_map<std::size_t, Node const*> node_of;

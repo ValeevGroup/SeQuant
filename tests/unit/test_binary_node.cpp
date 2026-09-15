@@ -173,7 +173,7 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
     REQUIRE(tree.left().size() == 5);
 
     // Move-construct FROM A CHILD -- the live shape (export.hpp's
-    // prune_scalar_node does `std::move(node.parent().right())`). The source
+    // prune_scalar_factor does `std::move(node.parent().right())`). The source
     // stays attached to `tree` and is left a leaf, so `tree` loses the two
     // nodes that went with the steal; an unrefreshed SOURCE chain would keep
     // reporting 7.
@@ -187,6 +187,19 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
     tree.left().left() = std::move(hoisted);
     CHECK(tree.left().left().size() == 3);
     CHECK(tree.size() == 7);
+
+    // Self-move-assignment is a NO-OP, not an amputation: the target's children
+    // are the source's, so a move that parked them in temporaries and then read
+    // the (same, already moved-from) members would leave a childless leaf and
+    // destroy both subtrees. Aliased through a reference so this is a real
+    // runtime self-assignment rather than a -Wself-move diagnostic.
+    FullBinaryNode<int>& alias = tree;
+    tree = std::move(alias);
+    CHECK(*tree == 13);
+    CHECK(tree.size() == 7);
+    CHECK(tree.left().size() == 5);
+    CHECK(tree.left().left().size() == 3);
+    CHECK(tree.right().leaf());
   }
 
   SECTION("digraph generation") {

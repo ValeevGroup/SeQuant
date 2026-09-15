@@ -366,22 +366,28 @@ TEST_CASE(
   // (whole-subtree) build_site_of would have gotten wrong (it would have
   // seen Κ in the subtree and reported Reduction).
   {
-    std::optional<Node> parent;
-    std::function<void(Node const&)> find_parent = [&](Node const& n) {
-      if (parent || n.leaf()) return;
-      if (n.left()->hash_value() == *mu_mu_hash ||
-          n.right()->hash_value() == *mu_mu_hash) {
-        parent = n;
-        return;
+    // A POINTER into `forest` (a local declared above, which outlives it), not
+    // a subtree copy, found by an iterative pre-order walk: the forest reaches
+    // us as a single in-place Sum tree whose left spine is as deep as the term
+    // count, so neither the copy nor a recursive search belongs here.
+    Node const* parent = nullptr;
+    {
+      sequant::container::svector<Node const*> stack;
+      for (auto const& tree : forest) stack.push_back(&tree);
+      while (!parent && !stack.empty()) {
+        Node const& n = *stack.back();
+        stack.pop_back();
+        if (n.leaf()) continue;
+        if (n.left()->hash_value() == *mu_mu_hash ||
+            n.right()->hash_value() == *mu_mu_hash) {
+          parent = &n;
+          break;
+        }
+        stack.push_back(&n.right());
+        stack.push_back(&n.left());
       }
-      find_parent(n.left());
-      find_parent(n.right());
-    };
-    for (auto const& tree : forest) {
-      find_parent(tree);
-      if (parent) break;
     }
-    REQUIRE(parent.has_value());
+    REQUIRE(parent != nullptr);
 
     auto const parent_hash = (*parent)->hash_value();
     auto const cell_it =

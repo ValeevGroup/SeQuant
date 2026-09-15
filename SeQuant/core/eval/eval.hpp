@@ -1886,7 +1886,14 @@ struct never_volatile {
 ///       sees the same first satisfying node.
 template <typename Node, typename Pred>
 [[nodiscard]] bool subtree_any(Node const& n, Pred const& pred) {
-  std::vector<Node const*> stack{&n};
+  // Small-buffer stack: the hot callers are per-node / per-value
+  // (place_at_this_level's `collect` asks this of every non-leaf node of every
+  // member root, and the ordered path's volatile_of asks it once per value),
+  // and the recursion this replaced allocated nothing -- so the pending
+  // frontier, which for anything but a deep spine is a handful of pointers,
+  // stays on the stack. It still grows onto the heap for the spine case, which
+  // is the point.
+  container::svector<Node const*, 32> stack{&n};
   while (!stack.empty()) {
     Node const& c = *stack.back();
     stack.pop_back();

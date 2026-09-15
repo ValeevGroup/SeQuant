@@ -29,7 +29,12 @@ namespace sequant::eval {
 /// hand-syncing a second copy that would silently drift as later work extends
 /// either entry point.
 ///
-/// \param roots The forest's own top-level trees, in forest order.
+/// \param roots POINTERS to the forest's own top-level trees, in forest order
+///        -- pointers, not nodes, because \c FullBinaryNode's copy constructor
+///        deep-copies the whole subtree, and a caller assembling a node vector
+///        here would clone the entire forest (thousands of nodes for a
+///        residual) once per call just to name its roots. The pointees are the
+///        caller's forest, which outlives this call.
 /// \param pre_results Each root's own UNPERMUTED, already-built result,
 ///        aligned index-for-index with \p roots. Moved out of on use (each
 ///        entry is consumed), so the caller's own copy is left empty after
@@ -44,7 +49,7 @@ namespace sequant::eval {
 ///
 template <Trace EvalTrace, meta::can_evaluate node_t, typename N, bool FHC>
 [[nodiscard]] ResultPtr combine_forest_roots(
-    container::svector<node_t> const& roots,
+    container::svector<node_t const*> const& roots,
     container::svector<ResultPtr>& pre_results, auto const& layout,
     CacheManager<N, FHC>& cache) {
   SEQUANT_ASSERT(pre_results.size() == roots.size());
@@ -55,7 +60,7 @@ template <Trace EvalTrace, meta::can_evaluate node_t, typename N, bool FHC>
 
   ResultPtr result;
   for (std::size_t i = 0; i != roots.size(); ++i) {
-    node_t const& n = roots[i];
+    node_t const& n = *roots[i];
     // Per-root term boundary -- mirrors sequant::evaluate(Node const&,
     // layout, ...)'s identical log::term(Begin/End) bracket around its
     // evaluate_impl + permute.
