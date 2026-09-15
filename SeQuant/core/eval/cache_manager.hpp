@@ -54,7 +54,7 @@ class CellReadResolver;
 /// capture one evaluation's batched schedule to \c os; \c fired is a fire-once
 /// latch the caller raises after the first capture so a later re-entry (e.g. a
 /// subsequent CC iteration) does not re-dump. Null sink / null \c os => no dump
-/// (the default, byte-identical to before this seam). Non-owning: \c os must
+/// (the default). Non-owning: \c os must
 /// outlive the cache.
 struct ScheduleSink {
   std::ostream* os = nullptr;
@@ -78,7 +78,7 @@ struct ScheduleSink {
 /// value's final last-read clock across the whole run regardless of which
 /// (root or transient scratch) scope held it. Reset by the harness before a
 /// measured run. Single-threaded dry-run only. When \c enabled() is false every
-/// stamp site is a no-op and the eval path stays byte-identical.
+/// stamp site is a no-op and the eval path is left untouched.
 struct AccessClock {
   /// One-shot env gate (SEQUANT_UT_ACCESS_CLOCK). Read once; when unset every
   /// stamp site below is inert.
@@ -121,7 +121,7 @@ struct AccessClock {
 ///        costs, so a schedule that issues more read-from-home lookups
 ///        (ordered) can be compared against one that inlines (forest). Env gate
 ///        SEQUANT_UT_LOOKUP_METER; when unset every site is a no-op passthrough
-///        and the eval path stays byte-identical. Single-threaded runs only.
+///        and the eval path is left untouched. Single-threaded runs only.
 struct LookupMeter {
   static bool enabled() noexcept {
     static bool const on = std::getenv("SEQUANT_UT_LOOKUP_METER") != nullptr;
@@ -713,8 +713,8 @@ class CacheManager {
   /// left/right operands and the [left, right, result] annotations.  It returns
   /// a non-null ResultPtr to *replace* the normal product (e.g. a shape-
   /// constrained emission of it), or a null ResultPtr to decline (the standard
-  /// prod() then runs).  Empty (default) => never consulted; existing behavior
-  /// is byte-identical.
+  /// prod() then runs).  Empty (default) => never consulted, and every product
+  /// takes the standard path.
   ///
   /// All backend-specific types (TA shapes, tranges, set_shape) stay inside the
   /// hook's closure (built by the backend, e.g. TAEvalContext::make_hook());
@@ -754,8 +754,7 @@ class CacheManager {
   /// re-enters evaluate(); read by the Enter-stage slice-on-use so a cached
   /// intermediate fetched from an ancestor scope is sliced to the modes of the
   /// loops the fetch crossed (see eval.hpp). Empty (default) => no enclosing
-  /// batch loop, so slice-on-use is inert and behavior is byte-identical to
-  /// the pre-slice-on-use path.
+  /// batch loop, so slice-on-use is inert and a fetched value is served whole.
   using BatchContext = container::svector<BatchContextEntry>;
 
   /// Result of access_at(): the fetched pointer plus the hop distance (number
@@ -1047,7 +1046,7 @@ class CacheManager {
   /// once storage moves onto the table (see \c set_external_residency).
   /// Looked up along the parent chain like \c array_ops_ (only the root
   /// cache is wired in practice); empty (default) => \c chain_residency()
-  /// is byte-identical to before this field existed.
+  /// counts this hierarchy's own entries alone.
   std::function<std::size_t()> external_residency_{};
 
   /// Optional source of an external alive-entry enumeration (hash,
@@ -1342,7 +1341,7 @@ class CacheManager {
       // Diagnostic (analysis-only): if a live-set capture hook is installed,
       // enumerate the chain's alive entries before observe() advances the mark,
       // on each real high-water advance. Gated on on_peak_liveset being set, so
-      // the default path is byte-identical (no enumeration).
+      // the default path enumerates nothing.
       if (m->on_peak_liveset && current_bytes > m->hwmark_bytes) {
         std::vector<eval::PeakLiveEntry> live;
         for (CacheManager const* c = this; c; c = c->parent_)
@@ -1904,11 +1903,10 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // energy is a single in-place Sum tree whose left spine is as deep as the
   // number of summands (thousands for a UCC BCH expansion), and a recursive
   // descent would overflow the call stack here, while merely building the
-  // cache. A faithful transcription of the recursion it replaces -- the use
-  // count is still bumped on every visit, children are still descended only on
-  // a node's first visit, and the frontier is still marked from the parent
-  // once both children's volatility is known -- so `counts`, `volatile_of` and
-  // `persistent` come out identical.
+  // cache. The per-node logic matches the recursive form: the use count is
+  // bumped on every visit, children are descended only on a node's first
+  // visit, and the frontier is marked from the parent once both children's
+  // volatility is known.
   struct Frame {
     TreeNode const* n = nullptr;
     int stage = 0;  //!< 0: descend left, 1: descend right, 2: classify
@@ -1987,7 +1985,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // entry, e.g. gC) lands. Off path (no order-aware annotations, hence no \c
   // stamp_lifetime_masks External stamps): every mask is empty (all-full,
   // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
-  // and admits exactly what it did before -- byte-identical.
+  // and every candidate is admitted.
   // Only the selected nodes are copied by value here -- into the cache map and,
   // for the frontier, into the owning set the returned is_persistent closes
   // over. A node that is not cached never pays a (deep) copy.
@@ -2005,8 +2003,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
     if (batch_variant ||
         (max_footprint > 0. && footprint_of(n) > max_footprint)) {
       // Not cached => not persistent either: skipping the insert below keeps
-      // is_persistent consistent with what is cached (this is what the former
-      // persistent.erase(n) did when the frontier set held nodes by value).
+      // is_persistent consistent with what is cached.
       continue;
     }
     filtered.emplace(n, c);

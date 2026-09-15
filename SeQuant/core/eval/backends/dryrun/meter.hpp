@@ -173,9 +173,9 @@ std::unordered_map<std::size_t, bool> compute_volatility(
   // equation's residual/energy is a single in-place Sum tree whose left spine
   // is as deep as the number of terms -- thousands for a large equation -- so a
   // recursive descent would overflow the call stack while merely assembling
-  // the report. Same shape as the recursion it replaces: a frame is pushed,
+  // the report. The walk order matches the recursive form: a frame is pushed,
   // its left child resolved, then its right, then the node itself is
-  // classified and memoized, so `volatile_of` comes out identical.
+  // classified and memoized.
   struct Frame {
     Node const* n = nullptr;
     int stage = 0;  //!< 0: resolve left, 1: resolve right, 2: classify
@@ -473,9 +473,7 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
   // policy.scheduler) -- installing the forest custom evaluator for ordered
   // would silently reroute its builds through the forest evaluator instead
   // of run_ordered_contracted_block, diverging from what the wet ordered run
-  // (which installs no custom evaluator) actually does. That divergence was
-  // a real dry-run/wet-run fidelity bug; restricting this install to forest
-  // descent fixes it.
+  // (which installs no custom evaluator) actually does.
   // Trace::On explicitly, matching the evaluate<Trace::On> right below: the
   // evaluator's nested per-batch/per-member re-entries carry their trace level
   // in the closure's type (make_batched_custom_evaluator's \tparam EvalTrace),

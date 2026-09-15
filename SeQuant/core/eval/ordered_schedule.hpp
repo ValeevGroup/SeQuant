@@ -80,7 +80,7 @@ struct Step;        // fwd; see immediately below.
 ///
 struct ScopeBlock {
   Index axis{};  //!< the loop axis; default (sentinel) on the root block.
-  int latitude_ordinal = 0;  //!< layout: the pass index (was: ordinal) --
+  int latitude_ordinal = 0;  //!< layout: the pass index --
                              //!< disambiguates recurring sibling blocks
                              //!< realizing the same axis (a forced-split nest
                              //!< emits one sibling block per pass it holds; see
@@ -438,18 +438,14 @@ struct OrderedScheduleStepMeta {
 /// first, for a deterministic result when the true dependency order leaves
 /// steps genuinely unordered relative to each other.
 ///
-/// \details Replaces an earlier (unsound) scalar-key-only sort: a single
-/// scalar per step can be made to sort a child block before every value that
-/// reads its output (see \c build_ordered_schedule's own doc comment, part
-/// 3), but it cannot also guarantee a step sorts after every value its own
-/// content reads as an input -- those are two independent constraints a
-/// single total order can satisfy only when they happen to agree, which
-/// water-20's own aux-only fixture never stresses (its single auxiliary-space
-/// block's content is leaf-only, needing no root-homed input). A real
-/// topological sort over the actual per-step dependency edges satisfies both
-/// directions by construction, superseding the scalar key -- the key survives
-/// only as the tie-break \c build_ordered_schedule still needs for the (usual)
-/// case of two steps with no dependency relation to each other at all.
+/// \details A single scalar per step can be made to sort a child block before
+/// every value that reads its output (see \c build_ordered_schedule's own doc
+/// comment, part 3), but it cannot also guarantee a step sorts after every
+/// value its own content reads as an input -- those are two independent
+/// constraints a single total order satisfies only when they happen to agree.
+/// A topological sort over the actual per-step dependency edges satisfies both
+/// directions by construction, and \c tie_key serves only to break ties among
+/// steps with no dependency relation to each other at all.
 ///
 /// \c SEQUANT_ASSERT's that every item is placed exactly once (a cycle in
 /// this local edge set would be a bug -- these edges are a sub-relation of
@@ -621,19 +617,19 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// by the builder's rule 4 when a later same-nest reader needs it).
 ///
 /// Every dependency edge points to an equal or earlier pass. With only
-/// LoopCarried bumps present (no Reduction-source bump fires) this is
-/// exactly the former single-space two-set partition.
+/// LoopCarried bumps present (no Reduction-source bump fires) the passes
+/// reduce to a two-set partition: carried sources and everything else.
 ///
 struct ForcedSplitLevels {
   std::unordered_set<std::size_t> carried;  //!< LoopCarried (any space) ids
   std::unordered_set<std::size_t>
       pinned;  //!< sources of a bumping edge (carried values, and Reduction
-               //!< sources with at least one in-loop reader): skipped by the
-               //!< reverse lift, exactly as \c carried alone was before.
+               //!< sources with at least one in-loop reader): the reverse lift
+               //!< skips every id in this set.
   std::unordered_map<std::size_t, int>
       pass_of;  //!< value id -> pass, for every value \c
                 //!< ordered_schedule_dep_graph reached (has a legality cell
-                //!< and takes part in the dependency graph); Absent for a
+                //!< and takes part in the dependency graph); absent for a
                 //!< value with no legality cell, which \c pass() below
                 //!< reports as pass 0 rather than throwing.
   int max_pass = 0;
@@ -923,17 +919,15 @@ inline ForkedSubchain fork_subchain(
 ///     rests on the real edges, which enforce both directions -- it places a
 ///     block as early as its own true dependency slack allows).
 ///
-/// A single scalar key alone cannot express both directions of this at
-/// once: an earlier version of this function used the min-\c first_use
-/// value itself as the sort key (not just a tie-break), which is provably
-/// sound for "the block sorts before every true consumer" (see the min vs
-/// max reasoning that was here, now superseded) but has no corresponding
-/// guarantee for "the block sorts after every true input it reads" -- a
-/// value produced by a same-level sibling \c BuildStep (e.g. a root-homed
-/// operand consumed by content nested inside a child block) could still
-/// land, by raw point value, after the block's min-derived key, silently
-/// mis-ordering the schedule with no structural check to catch it. The real
-/// topological sort above satisfies both directions by construction and is
+/// A single scalar key alone cannot express both directions of this at once.
+/// Taking the min \c first_use as the sort key itself is sound for "the block
+/// sorts before every true consumer", but carries no corresponding guarantee
+/// for "the block sorts after every true input it reads": a value produced by
+/// a same-level sibling \c BuildStep (e.g. a root-homed operand consumed by
+/// content nested inside a child block) can land, by raw point value, after
+/// the block's min-derived key, mis-ordering the schedule with no structural
+/// check to catch it. The topological sort above satisfies both directions by
+/// construction and is
 /// checked twice (no-cycle placement count, then a second pass confirming
 /// every edge survived the final order) -- see \c
 /// ordered_schedule_topo_sort_steps's own doc comment.
@@ -1086,10 +1080,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // both group and member nesting.
   // Members present per space = the distinct fusion loop_slots that
   // appear on that space across all cells. Each distinct slot becomes one
-  // realized loop. (Was: the max same-space per_axis count with local 0..m-1
-  // slots -- e8bcee766's position-based numbering, which the atlas could not
-  // match to a value's own frame; the fusion slot is that occurrence-invariant
-  // identity.)
+  // realized loop. The fusion slot is the occurrence-invariant identity: a
+  // count of same-space per_axis modes with local 0..m-1 slots would be a
+  // per-position numbering the atlas cannot match to a value's own frame.
   std::map<std::wstring, std::set<int>> slots_of_space;
   std::map<std::wstring, Index> rep;  // space -> representative axis
   for (CellLegality const& cl : legality.cells)
@@ -1358,9 +1351,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // fusion_slot (which already reads \c reduced_slot for a Reduction mode)
   // gives the instance's slot, depth_of_instance gives its depth, and the
   // reader is "inside" when its own production_depth is at or below that
-  // depth in the same nest (type_cluster equal). Moved here (after
-  // production_depth and cl_by_vid, which it needs) rather than at its
-  // former position ahead of the loop chain. Computed unconditionally, no
+  // depth in the same nest (type_cluster equal). Defined here because it
+  // needs production_depth and cl_by_vid. Computed unconditionally, no
   // per-space loop, no "more than one forced space" throw: an empty
   // carried and reduction-source set yields all-zero passes, so a schedule
   // with no forced-split axis at all is unaffected.
@@ -2208,15 +2200,14 @@ inline void assert_global_level_axis_uniqueness(
 /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
 ///
 /// \note Defined in \c dag_scope.hpp so the low-level DAG-scope types can be
-/// named without depending on this schedule header; re-exported here for the
-/// schedule-side code that has always referred to \c eval::LoopId.
+/// named without depending on this schedule header; re-exported here so the
+/// schedule-side code can name it as \c eval::LoopId.
 using sequant::LoopId;
 
 ///
 /// \brief The per-(value, sliced-mode) -> DAG-scope-loop assignment: the
 /// coloring input fed to \c canonicalize_slots's \c NamedIndexColorMap.
-/// Unlike the per-cell \c ModeToLevel map this deliberately superseded (since
-/// removed), this is plain data keyed by the value's own physical \c Index
+/// This is plain data keyed by the value's own physical \c Index
 /// label for each mode it is sliced on -- not a per-cell position map -- so a
 /// relabeled CSE participant is keyed by
 /// its own label, and a symmetric value's two occurrence-bound physical slots

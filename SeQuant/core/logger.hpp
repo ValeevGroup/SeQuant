@@ -79,8 +79,8 @@ struct Logger : public Singleton<Logger> {
     /// so a line can also carry schedule properties the running annotation
     /// cannot see -- e.g. the value's home scope and its use scopes. Consulted
     /// only under \c log::printing() at the trace-emission sites; empty
-    /// function = nothing appended (default), so the annotation is
-    /// byte-identical to before.
+    /// function = nothing appended (default), so the annotation carries
+    /// nothing beyond the running one.
     std::function<std::string(std::size_t hash)> node_meta = {};
   } eval = {0, nullptr, {}, {}, {}, {}};
 

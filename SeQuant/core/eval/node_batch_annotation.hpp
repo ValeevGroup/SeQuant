@@ -54,7 +54,7 @@ struct NodeBatchAnnotation {
   /// union is empty). The per-level placement order-aware gate: a positive
   /// signal an empty union cannot provide, distinguishing an off-path all-full
   /// node (do not hoist) from an order-aware whole-nest invariant (hoist to the
-  /// run/term-scope root). Default false keeps the off path byte-identical. See
+  /// run/term-scope root). Default false leaves the off path unhoisted. See
   /// \c EvalExpr::batch_order_aware.
   bool order_aware = false;
 };

@@ -59,38 +59,39 @@ struct CellLegality {
                          //!< id + home-sliced positions), the join key with
                          //!< the rich schedule
 
-  //!< The batch-loop axes this value depends on at its own node -- carried in
-  //!< its own result or contracted at its own node (not recursively over its
-  //!< operand subtrees; each operand is itself a value with its own,
-  //!< separately-analyzed \c CellLegality). Filled by \c build_site_of.
+  /// The batch-loop axes this value depends on at its own node -- carried in
+  /// its own result or contracted at its own node (not recursively over its
+  /// operand subtrees; each operand is itself a value with its own,
+  /// separately-analyzed \c CellLegality). Filled by \c build_site_of.
   container::svector<Index> build_site;
 
-  //!< One entry per \c build_site axis, classifying its role. Filled in
-  //!< note: \c LoopRole::LoopInvariant is never stored here --
-  //!< every \c build_site axis is by construction carried or contracted, so
-  //!< \c classify_axis returns only LoopLocal/Reduction/LoopCarried at these
-  //!< axes. A LoopInvariant axis is the implicit case (batchable + enclosing
-  //!< but absent from \c build_site); recover it from that absence, not from a
-  //!< \c per_axis entry (see \c home_floor).
+  /// One entry per \c build_site axis, classifying its role. Filled by
+  /// \c analyze_legality.
+  /// \note \c LoopRole::LoopInvariant is never stored here --
+  /// every \c build_site axis is by construction carried or contracted, so
+  /// \c classify_axis returns only LoopLocal/Reduction/LoopCarried at these
+  /// axes. A LoopInvariant axis is the implicit case (batchable + enclosing
+  /// but absent from \c build_site); recover it from that absence, not from a
+  /// \c per_axis entry (see \c home_floor).
   container::svector<AxisClass> per_axis;
 
-  //!< The shallowest legal home mode-set for this value: the \c per_axis
-  //!< axes whose role is \c LoopLocal (the axes the value stays sliced on --
-  //!< the value is homed inside these). Every other \c build_site axis --
-  //!< \c Reduction, \c LoopCarried -- is lifted out (the value is homed
-  //!< above it), as is any axis absent from \c build_site altogether (the
-  //!< implicit \c LoopInvariant case: the value never depended on it, so it
-  //!< was trivially hoisted over it). Filled by \c
-  //!< analyze_legality.
+  /// The shallowest legal home mode-set for this value: the \c per_axis
+  /// axes whose role is \c LoopLocal (the axes the value stays sliced on --
+  /// the value is homed inside these). Every other \c build_site axis --
+  /// \c Reduction, \c LoopCarried -- is lifted out (the value is homed
+  /// above it), as is any axis absent from \c build_site altogether (the
+  /// implicit \c LoopInvariant case: the value never depended on it, so it
+  /// was trivially hoisted over it). Filled by \c
+  /// analyze_legality.
   container::svector<Index> home_floor;
 
-  //!< Loops that must re-enter (the value cannot be homed above them without
-  //!< a re-materializing split). Entries are per-\c
-  //!< Index-instance, not per-space-type -- an outer product like \c
-  //!< A{;i_3}*A{;i_4} lists both i_3 and i_4 (both LoopCarried on space i),
-  //!< yet they name a single occ loop to split. Consumers that want the
-  //!< distinct loops (axes) to split, not the raw per-instance list, should
-  //!< use \c forced_split_types below.
+  /// Loops that must re-enter (the value cannot be homed above them without
+  /// a re-materializing split). Entries are per-\c
+  /// Index-instance, not per-space-type -- an outer product like \c
+  /// A{;i_3}*A{;i_4} lists both i_3 and i_4 (both LoopCarried on space i),
+  /// yet they name a single occ loop to split. Consumers that want the
+  /// distinct loops (axes) to split, not the raw per-instance list, should
+  /// use \c forced_split_types below.
   container::svector<Index> forced_split_axes;
 };
 
@@ -434,9 +435,9 @@ template <meta::eval_node_range R>
   // annotations, not this value's.
   //
   // Held by pointer, not by value: \c Node's copy constructor deep-copies the
-  // whole subtree, so one entry per node cost O(subtree) and the map as a whole
-  // was O(n^2) in forest size -- 1.8 GB for a 1000-summand spine, 15 GB for
-  // 2000, which is OOM long before any stack limit matters. \p forest outlives
+  // whole subtree, so one entry per node costs O(subtree) and a by-value map is
+  // O(n^2) in forest size -- gigabytes on a thousand-summand spine, which is
+  // OOM long before any stack limit matters. \p forest outlives
   // this call (it is the caller's), so the pointees stay valid; the entries are
   // read-only here.
   //

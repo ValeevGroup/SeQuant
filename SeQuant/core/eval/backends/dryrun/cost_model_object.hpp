@@ -35,7 +35,7 @@ namespace sequant::eval::dryrun {
 ///
 /// Mirrors \c sequant::eval::PeakSink (eval.hpp): an optional sink, defaulting
 /// off, so the production runtime path (which never constructs a dry-run \c
-/// CostModel) is byte-identical. The atomics let a fold from a concurrent
+/// CostModel) folds nothing. The atomics let a fold from a concurrent
 /// evaluator stay correct, though a metered replay itself is single-threaded.
 ///
 /// Per-node avoidable-recompute tally, keyed by the label signature (result +
@@ -204,8 +204,8 @@ class CostModel {
   /// by every dry-run \c Result token; a metered replay sets this on its one
   /// shared model just before the \c Trace::On replay so each product op can
   /// fold into it. The pointee (a \c CostSink) is external and owns the mutable
-  /// state; this only records where to fold. Off by default => no fold => the
-  /// dry-run backend is byte-identical when unused.
+  /// state; this only records where to fold. Off by default => no fold, and
+  /// the dry-run backend meters nothing.
   ///
   void set_cost_sink(CostSink* sink) const noexcept { sink_ = sink; }
 
@@ -245,9 +245,8 @@ class CostModel {
   // Resolve a value's positional overrides against its own index list: override
   // at mode position `pos` binds to `idxset[pos]`. Yields an Index-keyed map so
   // make_extent_fn's per-atom lookup finds the sliced extent wherever that
-  // Index recurs in idxset (including as a composite's outer proto), exactly as
-  // the pre-positional Index-keyed table did -- but now the key is derived from
-  // this list, not carried from a producer's labels.
+  // Index recurs in idxset (including as a composite's outer proto). The key
+  // is derived from this list, never carried from a producer's labels.
   [[nodiscard]] static container::map<Index, std::size_t> resolve_overrides(
       container::svector<Index> const& idxset,
       ExtentOverrides const& overrides) {

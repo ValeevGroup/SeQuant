@@ -451,7 +451,7 @@ std::string slice_home_annot(Node const& node, BatchContext const& active) {
                            scope_annot(active));
   // Append any schedule-derived per-node metadata (e.g. the value's home
   // scope + use scopes -- properties the running annotation cannot see). Empty
-  // provider => nothing appended => byte-identical to the base annotation.
+  // provider => nothing appended => the base annotation as it stands.
   if (auto const& nm = Logger::instance().eval.node_meta; nm)
     annot += " " + nm(node->hash_value());
   return annot;
@@ -660,7 +660,7 @@ template <typename Node>
 /// the innermost `left->adjoint/sum/prod(...)` compute that both the
 /// tree-walking
 /// \c evaluate_impl and the value/occurrence-driven ordered executor perform,
-/// so extracting it is a byte-identical seam. Not handled here (all
+/// so both reach the op through this one function. Not handled here (all
 /// caller-side): a leaf (a \c leaf_evaluator fetch, not an op), the
 /// shaped-product hook (the caller calls this only when the hook declines), \c
 /// apply_phase + store, the in-place-Sum fast path, and all tally / trace /
@@ -688,9 +688,9 @@ template <meta::can_evaluate Node>
 ///
 /// \details A cell/cache holds the canonical orientation of a value while
 /// every consumer wants the node's own oriented one; the phase is an
-/// involution, so one multiply converts either way. Factored out of
-/// \c evaluate_impl (where it was the local `apply_phase` lambda) so the
-/// ordered executor's \c detail::compute_cell converts identically --
+/// involution, so one multiply converts either way. Shared by
+/// \c evaluate_impl (through its \c apply_phase lambda) and the ordered
+/// executor's \c detail::compute_cell, so both convert identically --
 /// including the \c MultByPhase trace event, whose \c note_working_set call
 /// is what puts the transient second buffer on the peak monitor.
 ///
@@ -773,7 +773,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     // evaluated operands and annotations; a non-null return *replaces*
     // the normal product (e.g. a shape-constrained emission of it), a
     // null return declines and the standard prod() below runs. An empty
-    // hook is never consulted; default-empty => byte-identical behavior.
+    // hook is never consulted; default-empty => the standard product runs.
     auto const _tp0 = std::chrono::steady_clock::now();  // node-eval start
     if (auto const& hook = cache.shaped_product_hook(); hook) {
       time = detail::timed_eval_inplace([&]() {
@@ -804,8 +804,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
       // an invariant's projection is identical (empty for that loop)
       // every block and its rebuilds fold. A no-op unless the dry-run
       // replay enabled the tally on the root cache (the wet TA path
-      // leaves it disabled), so this is byte-identical off the costing
-      // path.
+      // leaves it disabled), so nothing is tallied off the costing path.
       if (eval::detail::last_op_flops() >= 0.0) {
         std::string slice_sig;
         for (auto const& entry : cache.batch_context()) {
@@ -1128,8 +1127,7 @@ ResultPtr evaluate_impl(Node const& node,         //
   // innermost batch_context entries, filtered by index_position(nd, axis).
   // slice_mode is non-mutating, so a cached full value is left undisturbed.
   // Empty batch_context (the off path) => d == hops == 0 => the loop is empty
-  // and the value is returned unchanged, byte-identical to the pre-slice-on-use
-  // path.
+  // and the value is returned unchanged.
   auto slice_to_use = [&cache](ResultPtr value, auto const& nd,
                                std::size_t hops) -> ResultPtr {
     auto const& ctx = cache.batch_context();
@@ -1222,8 +1220,7 @@ ResultPtr evaluate_impl(Node const& node,         //
             // this scope's (and any intervening) batch slices baked in, so
             // slice it to the current block for the loops the fetch crossed.
             // A local hit (hops == 0) or the off path (empty batch_context)
-            // is a no-op, so this stays byte-identical to apply_phase() alone
-            // there.
+            // is a no-op, leaving apply_phase()'s own result.
             finalize(slice_to_use(apply_phase(f.nd(), m.ptr), f.nd(), m.hops));
             break;
           }
@@ -1964,8 +1961,8 @@ template <typename TreeNode, bool FHC, typename Members>
   // (unsliced-external) value would be wrong under the outer slice. Tracking
   // the External modes in the signature (below) forbids seeding/sharing such
   // nodes. When there is no External mode this list is empty and every
-  // External-derived test is a no-op, keeping the Contracted-only behavior
-  // byte-identical.
+  // External-derived test is a no-op, leaving the Contracted-only behavior
+  // untouched.
   container::svector<Index> ext_axes;
   for (auto const& [root, mode] : members) {
     if (root->leaf()) continue;
@@ -2083,7 +2080,7 @@ template <typename TreeNode, bool FHC, typename Members>
 /// PeakSink is threaded through make_batched_custom_evaluator (and its nested
 /// re-instantiations), each scratch's high-watermark folds (max) into this one
 /// global accumulator, yielding the true batched-replay peak. A null sink
-/// (the default) leaves all existing behavior byte-identical.
+/// (the default) folds nothing and leaves each scratch's mark local.
 using PeakSink = std::atomic<double>*;
 
 /// \tparam EvalTrace trace level for the evaluator's own nested re-entries
@@ -2244,9 +2241,8 @@ template <Trace EvalTrace = Trace::Default, typename F,
     // accumulate) or external (an external index free on the node's result ->
     // block partials are disjoint slices, scattered into a pre-sized result).
     // The depth-0 heuristic fallback only ever yields a contracted index, so an
-    // mode absent from node_slice_mask() is Contracted -- keeping the
-    // Contracted-only path (no External entry) byte-identical to before this
-    // branch existed.
+    // mode absent from node_slice_mask() is Contracted, so an unannotated
+    // node takes the Contracted-only path with no External entry.
     BatchModeType picked_kind = BatchModeType::Contracted;
     for (auto const& [ix, knd] : node->node_slice_mask())
       if (ix == K) {

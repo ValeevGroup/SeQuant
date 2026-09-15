@@ -410,7 +410,7 @@ class EvalExpr {
   ///
   /// \brief Whether the order-aware cost model emitted this node -- the
   /// per-level placement order-aware gate. \c false (default, off path) means
-  /// the node is never hoisted (byte-identical). See
+  /// the node is never hoisted. See
   /// \c NodeBatchAnnotation::order_aware.
   ///
   [[nodiscard]] bool batch_order_aware() const noexcept {

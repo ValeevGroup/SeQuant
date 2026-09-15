@@ -50,9 +50,9 @@ struct SizeRegime {
   // Moment tables for CSV cluster ranks >= 3 (CSV-CCSDT triples and beyond),
   // keyed by cluster rank (= number of proto indices). csv_moment_by_rank[r][k]
   // is the k-th power mean of the rank-r cluster domain. A rank not present
-  // falls back to csv_pno_moment (the rank-2 table) in inner_pow(), preserving
-  // the pre-rank-general behavior where every proto-rank >= 2 used the PNO
-  // table. Ranks 1 and 2 are held by csv_osv_moment / csv_pno_moment above and
+  // falls back to csv_pno_moment (the rank-2 table) in inner_pow(), so a
+  // proto-rank >= 2 with no table of its own is sized by the PNO table.
+  // Ranks 1 and 2 are held by csv_osv_moment / csv_pno_moment above and
   // are not expected here (an entry for 1 or 2 is ignored by inner_pow()).
   std::map<std::size_t, std::array<double, 5>> csv_moment_by_rank;
 

@@ -1307,12 +1307,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // table fails validation is a real finding on that fixture: the assertion
   // is not bypassed.
   //
-  // n_batches_of must be the exact per-realized-loop-instance batch count. An
-  // earlier constant-1 stub was self-consistent for static validation (builder
-  // and validator both used it, so life came out internally consistent) but is
-  // a real undercount once CellRegistry::read enforces life at runtime: a value
-  // read from outside n*m nested real batches is read n*m times, not once, and
-  // the stub made read() throw "read past its life" on a well-formed schedule.
+  // n_batches_of must be the exact per-realized-loop-instance batch count,
+  // which CellRegistry::read enforces as life at runtime: a value read from
+  // outside n*m nested real batches is read n*m times, not once, and any
+  // undercount makes read() throw "read past its life" on a well-formed
+  // schedule.
   // Sourced from ordered_n_batches_by_loop (exact per realized loop instance),
   // passed to
   // both the builder and the validator so their life computations (which
@@ -1794,9 +1793,9 @@ ResultPtr evaluate_ordered_schedule(
 
   // -------- Shared combine: permute each root to layout and sum. --------
   // combine_forest_roots (forest_combine.hpp) is shared with
-  // evaluate_ordered_multiroot below, so both entry points emit
-  // byte-identical Term/Permute/SumInplace trace bookkeeping without a
-  // hand-synced second copy.
+  // evaluate_ordered_multiroot below, so both entry points emit the same
+  // Term/Permute/SumInplace trace bookkeeping without a hand-synced second
+  // copy.
   return combine_forest_roots<EvalTrace>(roots, pre_results, layout, cache);
 }
 
@@ -2012,10 +2011,9 @@ namespace sequant {
 /// default) is an unconditional forward to the existing \c
 /// sequant::evaluate(Nodes const&, layout, leaf_evaluator, cache) overload --
 /// no schedule is built, nothing else runs on this path. Because this is an
-/// additive overload (distinguished by the extra \p policy argument) and the
-/// pre-existing overload is not modified, every caller of that overload stays
-/// byte-identical; a caller opts into this driver only by supplying a \c
-/// BatchPolicy explicitly.
+/// additive overload (distinguished by the extra \p policy argument), a caller
+/// reaches this driver only by supplying a \c BatchPolicy explicitly; every
+/// other call resolves to the policy-free overload.
 ///
 /// \p policy.scheduler == BatchScheduler::ordered builds the schedule from
 /// \p forest's own placement and drives the ordered executor -- see

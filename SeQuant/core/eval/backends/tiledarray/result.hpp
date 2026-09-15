@@ -846,16 +846,12 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   /// Allocating addition. For nested arrays an addend whose inner tiles are
-  /// all empty must act as the additive identity; that was once not the case
-  /// (the empty inner tiles propagated into the result and annihilated the
-  /// other addend, which surfaced as a not-a-number norm in an iterative
-  /// nested-array evaluation once in-place accumulation stopped being
-  /// eligible). The cause was in TiledArray's arena nested-tensor addition,
-  /// which dropped populated cells against a null-cell operand; it is fixed
-  /// upstream (TiledArray pull request 575, merge 55795e180), which is the
-  /// pinned TiledArray from SeQuant 7509b0d90 on. No guard is needed here;
-  /// \c add_inplace() keeps its explicit empty-accumulator branch for the
-  /// in-place path.
+  /// all empty acts as the additive identity, which relies on the arena
+  /// nested-tensor addition the pinned TiledArray provides (an addition that
+  /// dropped populated cells against a null-cell operand would annihilate the
+  /// other addend and surface as a not-a-number norm in an iterative
+  /// nested-array evaluation). No guard is needed here; \c add_inplace() keeps
+  /// its explicit empty-accumulator branch for the in-place path.
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {

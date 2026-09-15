@@ -79,7 +79,7 @@ EvalSequence single_term_opt(
   double const accumulation_factor = cost.accumulation_factor;
   RooflineParams const& roofline = cost.roofline;
   bool const prune_outer_products = cost.prune_outer_products;
-  // Batching config now lives on CostParams (was loose positional args).
+  // Batching config travels on CostParams.
   auto const& is_batchable_contracted_index =
       cost.is_batchable_contracted_index;
   auto const& batch_target_size = cost.batch_target_size;
@@ -222,7 +222,7 @@ EvalSequence single_term_opt(
 ///       verbatim to the detail \ref single_term_opt overload; see it for
 ///       their semantics. All batching config (contracted/external role
 ///       predicates, \c batch_target_size, \c inner_pow, \c
-///       batch_persistent_only) now lives on \ref CostParams.
+///       batch_persistent_only) lives on \ref CostParams.
 /// \param out_axes When non-null and \p Metric ==
 ///        ObjectiveFunction::DenseSpaceTimeBatched, filled with the per-node
 ///        sliced-sets of the returned Product tree's contraction nodes, in

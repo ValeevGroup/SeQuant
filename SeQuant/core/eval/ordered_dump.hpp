@@ -24,8 +24,8 @@
 /// in one place.
 ///
 /// \details Every dump below is off unless its environment variable is set;
-/// when it is unset the call site is a single \c std::getenv test and the
-/// evaluated result is byte-identical. Nothing here participates in
+/// when it is unset the call site is a single \c std::getenv test and no
+/// output is produced. Nothing here participates in
 /// evaluation -- these functions only print.
 ///
 /// The dumps take their operands as template parameters rather than including

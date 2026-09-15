@@ -171,7 +171,7 @@ class CellRegistry {
   /// reference (the cell has no reader left this evaluation, and holding on
   /// would both pin the memory and make the buffer look shared to the reader
   /// that just took it -- the same thing \c CacheManager::entry::access()
-  /// has always done at the same point for the scope cache). A later
+  /// does at the same point for the scope cache). A later
   /// production of the cell restores both value and life via \c set.
   [[nodiscard]] ResultPtr read(CellId c) { return read(c, nullptr); }
 

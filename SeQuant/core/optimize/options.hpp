@@ -171,8 +171,8 @@ struct CostParams {
   /// Gate for external-index batching; see
   /// BatchPolicy::batch_spectator_indices. false (default) => the DP opens no
   /// external loop, so \ref opt::detail::PeakBatchedModel emits no \c
-  /// BatchModeType::External entries and every existing (non-external-aware)
-  /// caller stays byte-identical. Note this is necessary but not sufficient:
+  /// BatchModeType::External entries, so a non-external-aware caller sees
+  /// none. Note this is necessary but not sufficient:
   /// the per-node gate in \c PeakBatchedModel::relax is
   /// `batch_spectator_indices && std::isfinite(peak_threshold)`, so a finite
   /// \c peak_threshold is required too. It is not conditioned on the

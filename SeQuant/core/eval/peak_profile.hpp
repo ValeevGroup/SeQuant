@@ -88,18 +88,13 @@ using BatchContext =
 /// \p block_of is any `Index -> std::size_t` callable giving the block
 /// (sliced) element count for a mode.
 ///
-/// \p divergent_modes is now informational only. It once triggered a flat 2x
-/// pricing fudge here (the placeholder `46b495eba` shipped): a home that sliced
-/// a relabeled mode was priced as two co-resident copies. That flat 2x captured
-/// neither of the split's two real costs (peak co-residency and the replication
-/// recompute) and silently dropped the dominant, mis-priced recompute term. It
-/// is deleted: a divergent value homed at a sub-scope is un-folded into two
-/// real, non-divergent \c ValueCell s, each priced once here at its own home;
-/// peak co-residency is priced structurally by \c peak_profile_sweep over the
-/// two cells' liveness intervals (which keys on \c value_id, so two cells of
-/// one hash need no sweep change), and the replication recompute is a
-/// separate, report-only term. The parameter is retained for signature
-/// compatibility with existing callers.
+/// \p divergent_modes is informational only, and is retained for signature
+/// compatibility with existing callers. A divergent value homed at a sub-scope
+/// is un-folded into two non-divergent \c ValueCell s, each priced once here
+/// at its own home; peak co-residency is priced structurally by
+/// \c peak_profile_sweep over the two cells' liveness intervals (which keys on
+/// \c value_id, so two cells of one hash need no sweep change), and the
+/// replication recompute is a separate, report-only term.
 template <typename BlockOfFn>
 [[nodiscard]] inline std::size_t cell_footprint(
     container::svector<Index> const& carried,
@@ -229,9 +224,9 @@ inline double peak_profile_replay(Schedule const& s) {
 /// \c carried / \c home / liveness / enclosing nest.
 ///
 /// \details These are the per-\c NodeRec fields \c compute_dag_boulevard
-/// computes during its post-order walk and once discarded at grouping (keeping
-/// only the first occurrence's home/carried + the union/min/max). They are now
-/// retained: (a) two occurrences that bind a relabeled mode to different
+/// computes during its post-order walk and retains through grouping, beside
+/// the per-value union/min/max: (a) two occurrences that bind a relabeled
+/// mode to different
 /// physical labels (the g.C legs' \c i_3 vs \c i_4) are told apart by their \c
 /// carried; (b) each split cell's replication factor is a product over the
 /// levels it is homed-within-but-does-not-carry, read from its subset-local \c
@@ -243,52 +238,52 @@ struct OccurrenceRec {
   container::svector<Index> carried;  //!< this occurrence's canon_indices
   container::svector<Index> home;     //!< home_scope (plain modes)
   detail::BatchContext ectx;  //!< enclosing loops (excludes this node's own)
-  //!< The static point of the occurrence (in the same tree) that opened each
-  //!< \c ectx entry, parallel to \c ectx: names the loop instance each entry
-  //!< is, so the boulevard can read the DP's nesting order off the
-  //!< occurrences (RichSchedule::loop_order).
+  /// The static point of the occurrence (in the same tree) that opened each
+  /// \c ectx entry, parallel to \c ectx: names the loop instance each entry
+  /// is, so the boulevard can read the DP's nesting order off the
+  /// occurrences (RichSchedule::loop_order).
   container::svector<std::size_t> ectx_opener_point;
-  //!< Static points of this occurrence's operand occurrences, left then
-  //!< right (empty on a leaf). An operand's leg is its index here; the
-  //!< sliced-mode seam attributes its facts per leg, so one value read on
-  //!< both legs of a node under different labels (a self-product of a shared
-  //!< intermediate) gets two distinct slicings.
+  /// Static points of this occurrence's operand occurrences, left then
+  /// right (empty on a leaf). An operand's leg is its index here; the
+  /// sliced-mode seam attributes its facts per leg, so one value read on
+  /// both legs of a node under different labels (a self-product of a shared
+  /// intermediate) gets two distinct slicings.
   container::svector<std::size_t> operand_points;
-  //!< The loops this occurrence's node opens, with their kind (Contracted:
-  //!< a mode this node contracts in batches; External: a carried mode whose
-  //!< physical loop is introduced here). Carried into
-  //!< RichSchedule::loop_kind once the loop slots are numbered.
+  /// The loops this occurrence's node opens, with their kind (Contracted:
+  /// a mode this node contracts in batches; External: a carried mode whose
+  /// physical loop is introduced here). Carried into
+  /// RichSchedule::loop_kind once the loop slots are numbered.
   container::svector<std::pair<Index, BatchModeType>> opens;
-  //!< Loop identity: per \c carried position, the \c loop_slot of the
-  //!< batch loop that slices it (which member of its same-space group), or -1
-  //!< where the position is not a batched (loop-sliced) mode. Assigned by the
-  //!< union-find over producer->consumer slot connectivity in \c
-  //!< compute_dag_boulevard (as-built design section 5.2; this file's header
-  //!< comment carries the path). Parallel to \c carried.
+  /// Loop identity: per \c carried position, the \c loop_slot of the
+  /// batch loop that slices it (which member of its same-space group), or -1
+  /// where the position is not a batched (loop-sliced) mode. Assigned by the
+  /// union-find over producer->consumer slot connectivity in \c
+  /// compute_dag_boulevard (as-built design section 5.2; this file's header
+  /// comment carries the path). Parallel to \c carried.
   container::svector<int> loop_slot;
-  //!< Loop identity for the modes this occurrence's value contracts (reduces)
-  //!< in batches at its own node: assigned either by uniting a producing
-  //!< operand's home-sliced carried-mode node with a synthetic reduction node
-  //!< (the reduction loop and the operand's slice loop are one physical loop
-  //!< and must share \c loop_slot), or -- when no operand is home-sliced on
-  //!< the mode -- by seeding that synthetic node directly (see \c
-  //!< contracted_batched below). A reduced mode has no \c carried position,
-  //!< so its slot is recorded here as (mode, loop_slot). Read by \c
-  //!< ordered_schedule's \c fusion_slot when it places a Reduction escape; a
-  //!< Reduction mode that still resolves to no slot here is a hard error
-  //!< there (\c build_ordered_schedule throws in its escape-placement loop),
-  //!< not a slot-0 default.
+  /// Loop identity for the modes this occurrence's value contracts (reduces)
+  /// in batches at its own node: assigned either by uniting a producing
+  /// operand's home-sliced carried-mode node with a synthetic reduction node
+  /// (the reduction loop and the operand's slice loop are one physical loop
+  /// and must share \c loop_slot), or -- when no operand is home-sliced on
+  /// the mode -- by seeding that synthetic node directly (see \c
+  /// contracted_batched below). A reduced mode has no \c carried position,
+  /// so its slot is recorded here as (mode, loop_slot). Read by \c
+  /// ordered_schedule's \c fusion_slot when it places a Reduction escape; a
+  /// Reduction mode that still resolves to no slot here is a hard error
+  /// there (\c build_ordered_schedule throws in its escape-placement loop),
+  /// not a slot-0 default.
   container::svector<std::pair<Index, int>> reduced_slot;
-  //!< Modes this occurrence's value contracts in batches at its own node
-  //!< (the legality \c build_site_of contracted test, mirrored -- see \c
-  //!< NodeRec::contracted_batched). A mode here owns a loop identity even
-  //!< when no operand of the contraction is itself home-sliced on it (an
-  //!< all-input reduction): the union-find below seeds a component for every
-  //!< entry here that \c classify_axis would actually call \c Reduction (no
-  //!< carried index of the same space as the mode), instead of relying
-  //!< solely on a home-sliced child to create one; an entry beside a
-  //!< same-space carried index is \c classify_axis LoopLocal/LoopCarried, not
-  //!< Reduction, and is left to the ordinary carried-position path.
+  /// Modes this occurrence's value contracts in batches at its own node
+  /// (the legality \c build_site_of contracted test, mirrored -- see \c
+  /// NodeRec::contracted_batched). A mode here owns a loop identity even
+  /// when no operand of the contraction is itself home-sliced on it (an
+  /// all-input reduction): the union-find below seeds a component for every
+  /// entry here that \c classify_axis would actually call \c Reduction (no
+  /// carried index of the same space as the mode), instead of relying
+  /// solely on a home-sliced child to create one; an entry beside a
+  /// same-space carried index is \c classify_axis LoopLocal/LoopCarried, not
+  /// Reduction, and is left to the ordinary carried-position path.
   container::svector<Index> contracted_batched;
 };
 
@@ -325,7 +320,7 @@ struct ValueCell {
                                          //!< own_modes_union[hash], read off
                                          //!< the first occurrence
   container::svector<Index>
-      enclosing_modes;  //!< new: union, over all occurrences, of every
+      enclosing_modes;  //!< union, over all occurrences, of every
                         //!< loop mode that ever encloses this value (\c
                         //!< ectx[i].first for each level of each
                         //!< occurrence's ectx)
@@ -364,25 +359,26 @@ struct ValueCell {
 /// home slicing -- the analysis-side input every later stage (legality, the
 /// ordered schedule, the cell table) reads.
 struct RichSchedule {
+  /// One entry per value, indexed by \c ValueCell::value_id.
   container::svector<ValueCell> cells;
   std::size_t num_points = 0;  //!< one past the last static point
-  //!< The kind of every numbered loop instance, keyed by (space base_key,
-  //!< loop_slot): Contracted when the open that created the instance
-  //!< contracts the mode in batches at its node, External when it introduces
-  //!< a carried mode's physical loop. A space may hold instances of both kinds
-  //!< (an occupied pair contracted in batches beside an occupied external
-  //!< pair), so the kind is a property of the instance, not of the space; the
-  //!< ordered schedule builder reads a block's kind here.
+  /// The kind of every numbered loop instance, keyed by (space base_key,
+  /// loop_slot): Contracted when the open that created the instance
+  /// contracts the mode in batches at its node, External when it introduces
+  /// a carried mode's physical loop. A space may hold instances of both kinds
+  /// (an occupied pair contracted in batches beside an occupied external
+  /// pair), so the kind is a property of the instance, not of the space; the
+  /// ordered schedule builder reads a block's kind here.
   std::map<std::pair<std::wstring, int>, BatchModeType> loop_kind;
-  //!< Loop nesting constraints read off the DP's realization: (outer, inner)
-  //!< pairs of loop instances, each (space base_key, loop_slot), such that
-  //!< some occurrence sits inside `outer` and `inner` is opened inside it
-  //!< (a consecutive pair of its enclosing context, or its enclosing context
-  //!< and a loop it opens itself). The ordered schedule builder nests the
-  //!< realized chain to satisfy every pair (a contradiction is a builder
-  //!< error: the loop identity fused two loops that nest in opposite orders).
-  //!< The mapped value is a witness: the value id of the first occurrence
-  //!< that produced the pair (diagnostics only).
+  /// Loop nesting constraints read off the DP's realization: (outer, inner)
+  /// pairs of loop instances, each (space base_key, loop_slot), such that
+  /// some occurrence sits inside `outer` and `inner` is opened inside it
+  /// (a consecutive pair of its enclosing context, or its enclosing context
+  /// and a loop it opens itself). The ordered schedule builder nests the
+  /// realized chain to satisfy every pair (a contradiction is a builder
+  /// error: the loop identity fused two loops that nest in opposite orders).
+  /// The mapped value is a witness: the value id of the first occurrence
+  /// that produced the pair (diagnostics only).
   std::map<
       std::pair<std::pair<std::wstring, int>, std::pair<std::wstring, int>>,
       std::size_t>
@@ -1170,8 +1166,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // therefore not required to be transitive, and deliberately is not made so:
   // if two occurrences that are one value somehow compare unequal to one
   // representative, the worst outcome is a missed fold (an extra cell, built
-  // twice -- exactly the state before any folding existed), never a wrong
-  // merge. Comparing against all occurrences would make bucket insertion
+  // twice), never a wrong merge. Comparing against all occurrences would make
+  // bucket insertion
   // quadratic in the occurrence count to buy nothing: the merge direction,
   // the only unsafe one, is already guarded by the representative.
   // (The per-value aggregates above -- own_modes_union, carried_union /
@@ -1191,7 +1187,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // re-stamped with it (`adopt` below) so `value_key_of(node)` and
   // `value_key_of(cell)` -- which those maps join on -- keep agreeing. In the
   // ordinary collision-free case nothing is salted and every key is exactly
-  // the `r.key` of before.
+  // its `r.key`.
   std::unordered_set<std::size_t> used_keys;
   auto const fresh_key = [&used_keys](std::size_t k) {
     // 0 is reserved: value_key_of(ValueCell) reads it as "no key, use hash".

@@ -72,7 +72,7 @@ struct BatchPolicy {
   /// If true, an external/spectator index -- open on the whole network's result
   /// yet contracted at no node -- is eligible for batching; its per-slice size
   /// comes from \c batch_target_size(ix) like any batchable index. Default
-  /// false = no spectator batching (byte-identical to non-spectator behavior).
+  /// false = no spectator batching.
   /// Necessary but not sufficient: the DP opens externals per node, and only
   /// where \c peak_threshold is finite -- the gate inside \c
   /// PeakBatchedModel::relax is exactly

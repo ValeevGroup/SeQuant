@@ -281,7 +281,7 @@ void pareto_insert(container::vector<FP>& f, FP p) {
 
 /// \brief Slice-count-aware Pareto insert for the perf-first batched frontier.
 ///
-/// With \p use_nsl == false this is byte-identical to \ref pareto_insert (plain
+/// With \p use_nsl == false this behaves as \ref pareto_insert does (plain
 /// (peak, flops) domination; \c FP::nsl is not consulted). With
 /// \p use_nsl == true (perf-first + a finite peak_threshold) the cumulative
 /// sliced-mode count \c FP::nsl becomes a third Pareto objective, so a point
@@ -706,7 +706,7 @@ struct PeakBatchedModel {
   /// / BatchPolicy::batch_spectator_indices. Default false so every other
   /// PeakBatchedModel construction (peak_cost_batched, compute_external_batch_
   /// axis's own model, existing tests) is unaffected and emits no External
-  /// entries -- byte-identical to before this member existed. With it on, an
+  /// entries. With it on, an
   /// external batch loop is a per-node DP choice (\ref BFrontPoint::eopen):
   /// external bits become nestable cell modes and \ref
   /// reconstruct_batched_modes stamps \c External exactly where the DP opened
@@ -1233,7 +1233,7 @@ struct PeakBatchedModel {
     // the unsliced realization incomparable-to (hence co-resident with) the
     // sliced ones on the frontier; select_root then declines to slice below the
     // ceiling. Off for peak-first, or for a +inf budget where relax already
-    // forces contracted_here == 0 (nothing to slice): byte-identical.
+    // forces contracted_here == 0 (nothing to slice).
     bool const ceiling_nsl = perf_first && std::isfinite(peak_threshold);
     for (std::size_t B = 0; B < ctx.nCells; ++B) {
       // Batch recomputation charge: this node sits inside the ancestor batch
@@ -1248,8 +1248,7 @@ struct PeakBatchedModel {
         // charge). ordered: only escaped modes outer to the node's
         // innermost- carried placement (escaped modes inner to it hoist above
         // for free; Carr == 0 hoists above the whole nest => none, subsuming
-        // A3a). escaped_outer collapses to the set charge when !ordered,
-        // byte-identical.
+        // A3a). escaped_outer collapses to the set charge when !ordered.
         std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
         for (std::size_t k = 0; k < ctx.m; ++k)
           if (esc & (std::size_t{1} << k)) rf *= ctx.nbatches[k];
@@ -1298,8 +1297,8 @@ struct PeakBatchedModel {
         std::size_t const E = S & ctx.external_mask;
         std::size_t const C = ctx.descend_pt(B, E, Ap);
         // ordered: skip an over-cap / repeat descent (SIZE_MAX). !ordered:
-        // descend == B|Ap and never returns SIZE_MAX, so this is
-        // byte-identical.
+        // descend == B|Ap and never returns SIZE_MAX, so the test always
+        // passes.
         if (C != std::numeric_limits<std::size_t>::max()) {
           double const szlp = ctx.sz(lp, C), szrp = ctx.sz(rp, C),
                        szn = ctx.sz(n, B);
@@ -1440,15 +1439,14 @@ struct PeakBatchedModel {
       // perf-first character and fall back to global min flops (best effort,
       // accepting the overage) rather than peak-first's min-peak fallback.
       // peak_threshold == +inf (the default when no budget is set) makes every
-      // point feasible, reducing this to the pure min-flops selection --
-      // byte-identical to before this ceiling existed.
+      // point feasible, reducing this to the pure min-flops selection.
       // Among the feasible frontier, min flops; ties broken toward the
       // least-sliced realization (fewer nsl), then lower peak. The nsl tiebreak
       // is what realizes the ceiling's intent: when the unsliced and a sliced
       // schedule both fit the budget at equal flops (kept distinct by
       // pareto_insert_ceiling), pick the unsliced one -- no free slicing below
       // the ceiling. With +inf / peak-first the frontier carries a single point
-      // per flops, so nsl never discriminates: byte-identical.
+      // per flops, so nsl never discriminates.
       auto better = [&](int i, int j) {
         return rootf[i].flops < rootf[j].flops ||
                (rootf[i].flops == rootf[j].flops &&
@@ -1469,10 +1467,9 @@ struct PeakBatchedModel {
         // for an over-budget term it must be inverted, or the least-sliced
         // (max-peak) schedule is chosen and blows the budget by the most (a
         // giant unbatched integral -> OOM, e.g. the water-20 2.6 TB composite).
-        // This restores the pre-nsl fallback: min flops, then min peak. (A
-        // min-peak fallback was tried and rejected: for the infeasible terms it
-        // takes the most-sliced, flops-catastrophic factorizations -- 8x the
-        // FLOPs on water-20 at 100 GB.)
+        // For an over-budget term the fallback is min flops, then min peak:
+        // a min-peak fallback would take the most-sliced, flops-catastrophic
+        // factorizations.
         auto const better_peak = [&](int i, int j) {
           return rootf[i].flops < rootf[j].flops ||
                  (rootf[i].flops == rootf[j].flops &&

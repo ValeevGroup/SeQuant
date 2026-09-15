@@ -336,7 +336,7 @@ struct DryRunOps {
       // attached (the replay's recompute-aware tally). merged/ov carry the
       // runtime slicing, so a contraction re-executed once per occ block is
       // charged once per block at its sliced size -- the same numbers already
-      // logged above, now summed. No-op (byte-identical) when unattached.
+      // logged above, summed here. A no-op when no sink is attached.
       cm->tally_op(flops, exec);
       // last_op_flops (set above) is this build's actual realized-extent cost.
       // The eval loop's build choke point reads it and records it against the

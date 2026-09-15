@@ -96,7 +96,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
   // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
   // Batching config (both role predicates, batch_target_size, inner_pow,
-  // batch_persistent_only) now travels on CostParams rather than as loose args.
+  // batch_persistent_only) travels on CostParams.
   CostParams cost;
   cost.is_volatile_leaf = opts.batch_policy.is_volatile_leaf;
   cost.volatile_weight = opts.volatile_weight;
