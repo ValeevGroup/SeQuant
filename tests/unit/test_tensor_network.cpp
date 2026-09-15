@@ -47,6 +47,7 @@
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/utility/timer.hpp>
 #include <range/v3/range/conversion.hpp>
@@ -60,7 +61,7 @@ using namespace std::literals;
 TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
                    TensorNetworkV2, TensorNetworkV3) {
   auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_spaces(isr);
+  mbpt::add_pao_spaces(isr, mbpt::Spin::null);
   auto ctx = get_default_context();
   ctx.set(isr);
   ctx.set(Vacuum::SingleProduct);

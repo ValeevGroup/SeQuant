@@ -461,15 +461,33 @@ set(SeQuant_mbpt_src
 
 # Eval framework sources (backend-agnostic)
 set(SeQuant_eval_src
+        SeQuant/core/eval/backend_array_ops.hpp
         SeQuant/core/eval/cache_manager.cpp
         SeQuant/core/eval/cache_manager.hpp
+        SeQuant/core/eval/cell_registry.hpp
+        SeQuant/core/eval/cell_table.hpp
+        SeQuant/core/eval/cell_table_builder.hpp
+        SeQuant/core/eval/dag_scope.hpp
         SeQuant/core/eval/eval.hpp
         SeQuant/core/eval/eval_expr.cpp
         SeQuant/core/eval/eval_expr.hpp
         SeQuant/core/eval/eval_node.hpp
         SeQuant/core/eval/eval_node_compare.hpp
+        SeQuant/core/eval/forest_combine.hpp
+        SeQuant/core/eval/legality.hpp
+        SeQuant/core/eval/lifetime_mask.hpp
+        SeQuant/core/eval/node_batch_annotation.hpp
+        SeQuant/core/eval/ordered_dump.hpp
+        SeQuant/core/eval/ordered_executor.hpp
+        SeQuant/core/eval/ordered_schedule.hpp
+        SeQuant/core/eval/peak_monitor.hpp
+        SeQuant/core/eval/peak_profile.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
+        SeQuant/core/eval/schedule_dump.hpp
+        SeQuant/core/eval/slicing_signature.hpp
+        SeQuant/core/eval/value_id.hpp
+        SeQuant/core/eval/value_node_map.hpp
         SeQuant/core/eval/fwd.hpp
 )
 

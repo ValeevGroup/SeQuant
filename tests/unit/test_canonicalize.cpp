@@ -11,6 +11,7 @@
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -36,7 +37,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
 
   auto isr = sequant::mbpt::make_legacy_spaces();
-  mbpt::add_pao_spaces(isr);
+  mbpt::add_pao_spaces(isr, mbpt::Spin::null);
   auto ctx = get_default_context();
   ctx.set(isr);
   auto ctx_resetter = set_scoped_default_context(ctx);
@@ -324,8 +325,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
     // intermediate.
     {
       auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-      mbpt::add_pao_spaces(sr_reg);  // μ̃ (PAO)
-      mbpt::add_df_spaces(sr_reg);   // Κ  (DF aux)
+      mbpt::add_pao_spaces(sr_reg, mbpt::Spin::any);  // μ̃ (PAO)
+      mbpt::add_df_spaces(sr_reg);                    // Κ  (DF aux)
       std::vector<std::wstring> keys;
       for (auto const& s : *sr_reg) keys.push_back(s.base_key());
       for (auto const& k : keys)

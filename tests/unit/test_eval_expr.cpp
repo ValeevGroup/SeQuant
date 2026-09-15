@@ -12,8 +12,10 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -557,4 +559,48 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }
+}
+
+TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
+  using namespace sequant;
+  auto const tnsr =
+      parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
+  EvalExpr node{tnsr};
+  container::svector<std::pair<Index, BatchModeType>> modes{
+      {Index{L"a_1"}, BatchModeType::Contracted},
+      {Index{L"i_1"}, BatchModeType::External}};
+  node.set_node_slice_mask(modes);
+  REQUIRE(node.node_slice_mask().size() == 2);
+  REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
+  REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
+}
+
+// Task 5 (multiroot-single-dag-eval): binarize(Sum const&, ...)'s make_sum
+// lambda used to capture its prefix-hash range (imed_hashes(hvals)) as a
+// LAZY, stateful view; ranges::at(hs, ++i) re-begin()s that view on every
+// access, which re-drives inits' internal mutable `++n` counter and
+// silently drops the LAST summand from the running hash -- so two Sums
+// differing only in their last summand collided on hash_value(). The
+// Product path in this same file already materializes its prefix-hash
+// range eagerly (`auto const hs = imed_hashes(hvals) | ranges::to_vector;`)
+// and was unaffected.
+TEST_CASE("Sum-node hash is sensitive to every summand",
+          "[eval][binarize][hash]") {
+  using namespace sequant;
+
+  auto const root = [](std::wstring_view s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize(deserialize(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+
+  auto const last_a = root(L"(a * b) + c");  // differ in LAST summand
+  auto const last_b = root(L"(a * b) - c");
+  auto const first_a = root(L"c + (a * b)");  // differ in FIRST summand
+  auto const first_b = root(L"d + (a * b)");  // (already worked pre-fix)
+
+  CHECK(last_a->hash_value() != last_b->hash_value());
+  CHECK(first_a->hash_value() != first_b->hash_value());
+  // (a*b)+c and c+(a*b) are the same multiset of summands -> same hash.
+  CHECK(last_a->hash_value() == first_a->hash_value());
 }

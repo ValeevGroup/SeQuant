@@ -43,6 +43,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_lifetime_mask.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 target_set_warning_flags(unit_tests-sequant-eval-obj)
@@ -172,6 +173,61 @@ if (SEQUANT_HAS_TAPP)
 endif()
 
 ##########################
+# OBJECT library: DryRun backend tests
+##########################
+set(eval_dryrun_test_sources
+    "test_cell_registry.cpp"
+    "test_cell_table.cpp"
+    "test_dag_dot_dump.cpp"
+    "test_dag_scope.cpp"
+    "test_eval_dryrun.cpp"
+    "test_eval_ordered.cpp"
+    "test_legality.cpp"
+    "test_ordered_executor.cpp"
+    "test_ordered_schedule.cpp"
+    "test_peak_profile.cpp"
+    "test_slicing_signature.cpp"
+)
+add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
+set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+target_link_libraries(unit_tests-sequant-eval-dryrun-obj
+    PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
+    PRIVATE Catch2::Catch2 dtl::dtl)
+# test_eval_ordered.cpp duplicates test_ordered_executor.cpp's own minimal
+# ScalarEvalExpr/ScalarLeafEvaluator/scalar_tree fixture inside an anonymous
+# namespace (that file's own established precedent: no shared test header
+# exists between the two, see both files' own top-of-file comments). Under a
+# Unity build every listed .cpp is concatenated into ONE translation unit, so
+# anonymous-namespace uniqueness (normally per-TU) stops distinguishing the
+# two files' identically-named symbols and they collide. Give this file its
+# own TU.
+set_source_files_properties("test_eval_ordered.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# test_eval_dryrun.cpp opens with `#define SEQUANT_EVAL_TRACE 1` to flip
+# Trace::Default to Trace::On for its WHOLE translation unit (its
+# [dryrun][peak] cases need the compile-time-gated note_working_set() calls
+# inside the batched custom evaluator's nested evaluate_impl() re-entries;
+# those follow the evaluator's EvalTrace template parameter, which these cases
+# leave at its Trace::Default). Under a Unity build this file is concatenated
+# AFTER siblings that already pulled in SeQuant/core/eval/eval.hpp, so the
+# Trace enum is fixed at Off before the define is seen and the define silently
+# becomes a no-op. Give this file its own TU so the define is honoured.
+set_source_files_properties("test_eval_dryrun.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# test_ordered_executor.cpp (~5.4 kLOC) and test_ordered_schedule.cpp (~3.2
+# kLOC) are by far the largest sources here and both instantiate deep
+# Catch2 + eval template stacks. Concatenated into one Unity translation unit
+# they make a single cc1plus invocation whose peak memory exceeds what a
+# 16 GB 2-core CI runner can afford next to a second parallel compile (the
+# GitHub ubuntu-24.04 Debug + CMAKE_UNITY_BUILD job was killed mid-compile of
+# this target's unity_0). Give each its own TU; the remaining seven sources
+# still share one.
+set_source_files_properties("test_ordered_executor.cpp" "test_ordered_schedule.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE
+    SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+##########################
 # Single executable combining all OBJECT libraries
 # NB linking OBJECT libraries (since CMake 3.21) both includes their object
 # files AND propagates their PUBLIC/INTERFACE usage requirements, so the
@@ -187,6 +243,7 @@ target_link_libraries(unit_tests-sequant PRIVATE
     unit_tests-sequant-optimize-obj
     unit_tests-sequant-export-obj
     unit_tests-sequant-mbpt-obj
+    unit_tests-sequant-eval-dryrun-obj
     Catch2::Catch2
     dtl::dtl)
 if (SEQUANT_HAS_TILEDARRAY)
@@ -256,6 +313,19 @@ endif()
 if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
+endif()
+
+# The water-20-sized eval fixtures (the ordered-executor / dry-run cases that
+# build a schedule out of tests/unit/data/csv_ccsd_doubles_residual_df.txt) run
+# in a second or two natively but take >2 minutes EACH under ASan/UBSan and
+# far longer under valgrind, which by itself blows the CI job budget. Gate them
+# on the SEQUANT_SKIP_LONG_TESTS option ONLY -- deliberately NOT on
+# SEQUANT_INTERNAL_SKIP_LONG_TESTS, which also fires for every Debug build:
+# these cases are the ones that exercise the assertion-heavy Debug paths, so a
+# plain Debug build must keep running them. The CI sanitizer and valgrind jobs
+# are exactly the configurations that set the option.
+if (SEQUANT_SKIP_LONG_TESTS)
+    target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
 
 target_set_warning_flags(unit_tests-sequant)
