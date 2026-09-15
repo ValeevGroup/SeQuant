@@ -184,10 +184,10 @@ class TensorNetworkV3 {
 
   TensorNetworkV3(const Expr &expr) {
     if (expr.size() > 0) {
-      // PRECONDITION: the subexpressions are iterated as the FACTORS of a
+      // Precondition: the subexpressions are iterated as the factors of a
       // single tensor network, which is only meaningful for a Product. Any
       // other aggregate (a Sum, whose summands are independent terms that reuse
-      // dummy labels; a Power; etc.) is NOT a tensor network -- treating its
+      // dummy labels; a Power; etc.) is not a tensor network -- treating its
       // subexpressions as factors would glue unrelated tensors together. Reject
       // up front with a clear diagnostic rather than deep inside create_graph.
       if (!expr.is<Product>()) {
@@ -315,9 +315,8 @@ class TensorNetworkV3 {
   /// @param named_index_colors optional per-named-index loop-color map; when
   /// non-null, a named index found here has its DAG-scope loop-color folded
   /// into its graph vertex color so that same-space named indices bound to
-  /// different loops are no longer interchangeable. A null (default) or empty
-  /// map leaves the canonicalization byte-identical to today's space-only
-  /// named coloring.
+  /// different loops are not interchangeable. A null (default) or empty map
+  /// leaves the canonicalization at the space-only named coloring.
   /// @return the computed canonicalization metadata
   SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},

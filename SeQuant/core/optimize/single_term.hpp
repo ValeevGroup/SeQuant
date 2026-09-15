@@ -39,11 +39,11 @@ namespace detail {
 ///        deemed equivalent by the subnet-CSE canonicalization also agree on
 ///        volatility (the CSE path stores one cost per canonical subnet).
 ///        footprint_weight applies to DenseFLOPs only; volatile_weight applies
-///        to DenseFLOPs AND the peak objectives (primary mode for the
+///        to DenseFLOPs and the peak objectives (primary mode for the
 ///        time-first ones, tie-break for the space-first ones); roofline
 ///        applies to the peak objectives only; peak_flops_tolerance applies to
 ///        DenseSpaceTime only (DenseSpaceTimeBatched's final selection is
-///        instead threshold-gated by peak_threshold, which under the TIME-first
+///        instead threshold-gated by peak_threshold, which under the time-first
 ///        batched objective gates only external-mode emission, not root
 ///        selection). All batching config lives on \p cost (\ref CostParams):
 ///        is_batchable_contracted_index / is_batchable_external_index mark an
@@ -52,7 +52,7 @@ namespace detail {
 ///        inner_pow is the optional k-aware CSV/PNO composite extent, and
 ///        batch_persistent_only restricts batching to persistent subnetworks --
 ///        all ObjectiveFunction::DenseSpaceTimeBatched only.
-/// \param out_axes When non-null AND \p Metric ==
+/// \param out_axes When non-null and \p Metric ==
 ///        ObjectiveFunction::DenseSpaceTimeBatched, filled with the per-node
 ///        sliced-sets of the returned sequence's contraction (\c -1) nodes, in
 ///        the same left-first post-order the sequence itself was built in
@@ -223,7 +223,7 @@ EvalSequence single_term_opt(
 ///       their semantics. All batching config (contracted/external role
 ///       predicates, \c batch_target_size, \c inner_pow, \c
 ///       batch_persistent_only) now lives on \ref CostParams.
-/// \param out_axes When non-null AND \p Metric ==
+/// \param out_axes When non-null and \p Metric ==
 ///        ObjectiveFunction::DenseSpaceTimeBatched, filled with the per-node
 ///        sliced-sets of the returned Product tree's contraction nodes, in
 ///        the same left-first post-order the nested Product below is built
@@ -243,7 +243,7 @@ ExprPtr single_term_opt(
 
   if (out_axes) out_axes->clear();
   if (prod.factors().size() < 3) {
-    // No DP needed for < 3 factors, but out_axes must still carry ONE entry per
+    // No DP needed for < 3 factors, but out_axes must still carry one entry per
     // contraction node (= #tensor factors - 1), or the caller's concatenated
     // node_batch_axes ends up one short of what binarize emits (binarize folds
     // the tensor factors into #tensors-1 contraction nodes) and trips its

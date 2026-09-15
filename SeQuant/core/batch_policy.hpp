@@ -12,7 +12,7 @@ namespace sequant {
 class Index;
 class Tensor;
 
-/// The two RUNTIME EXECUTION MODELS for batched evaluation (see
+/// The two runtime execution models for batched evaluation (see
 /// `doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md`,
 /// sections 8 and 12.1):
 ///   - \c forest_descent (default): one tree at a time,
@@ -28,9 +28,9 @@ enum class BatchScheduler { forest_descent, ordered };
 /// batched evaluator (make_evaluator, Task A3). All predicates default empty.
 struct BatchPolicy {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  /// Spaces batchable in the CONTRACTED role: a mode of such a space is
+  /// Spaces batchable in the contracted role: a mode of such a space is
   /// batchable where it is summed. Companion to \ref
-  /// is_batchable_external_index (the EXTERNAL role). Splitting batchability by
+  /// is_batchable_external_index (the external role). Splitting batchability by
   /// role lets a caller admit a space only where batching it is meaningful --
   /// e.g. a space batchable only as an external spectator contributes none of
   /// its contracted occurrences to the optimizer's 2^m search. Building block;
@@ -38,7 +38,7 @@ struct BatchPolicy {
   /// Defaults to decline every index; a caller opts spaces in explicitly.
   std::function<bool(Index const&)> is_batchable_contracted_index =
       [](Index const&) { return false; };
-  /// Spaces batchable in the EXTERNAL role: a mode of such a space is batchable
+  /// Spaces batchable in the external role: a mode of such a space is batchable
   /// where it is open on the term root (a spectator carried to the result), not
   /// where it is contracted. Building block; declared adjacent to its
   /// contracted companion. Defaults to decline every index; a caller that wants
@@ -47,8 +47,8 @@ struct BatchPolicy {
   std::function<bool(Index const&)> is_batchable_external_index =
       [](Index const&) { return false; };
 
-  /// Derived "batchable in ANY role": the union of the two building-block
-  /// predicates. This is NEVER a settable field -- it is computed from
+  /// Derived "batchable in any role": the union of the two building-block
+  /// predicates. This is never a settable field -- it is computed from
   /// \ref is_batchable_contracted_index and \ref is_batchable_external_index.
   /// The runtime batched evaluator's accept predicate is this union (a mode is
   /// accepted at runtime if it is batchable in either role); the factorizer's
@@ -73,11 +73,11 @@ struct BatchPolicy {
   /// yet contracted at no node -- is eligible for batching; its per-slice size
   /// comes from \c batch_target_size(ix) like any batchable index. Default
   /// false = no spectator batching (byte-identical to non-spectator behavior).
-  /// Necessary but not sufficient: the DP opens externals PER NODE, and only
+  /// Necessary but not sufficient: the DP opens externals per node, and only
   /// where \c peak_threshold is finite -- the gate inside \c
   /// PeakBatchedModel::relax is exactly
   /// `batch_spectator_indices && std::isfinite(peak_threshold)`
-  /// (\c optimize/cost_model.hpp), with NO objective condition and NO
+  /// (\c optimize/cost_model.hpp), with no objective condition and no
   /// post-DP placement pass. Both batched objectives therefore admit
   /// spectator axes; an infinite budget admits none.
   bool batch_spectator_indices = false;
@@ -106,23 +106,22 @@ struct BatchPolicy {
   /// above). Consulted by the
   /// `sequant::evaluate(Nodes const&, BatchPolicy const&, ...)` driver
   /// overload (`ordered_executor.hpp`) to select the driver. Default
-  /// \c forest_descent reproduces today's behavior on every existing call
-  /// site byte-for-byte.
+  /// \c forest_descent selects the forest-descent evaluator.
   BatchScheduler scheduler = BatchScheduler::forest_descent;
 
-  /// Peak-memory budget in BYTES. It is a FEASIBILITY CEILING under BOTH
+  /// Peak-memory budget in bytes. It is a feasibility ceiling under both
   /// batched objectives, and it is the single knob that turns batching on:
   /// \c PeakBatchedModel::relax opens neither a contracted nor an external
   /// loop unless `std::isfinite(peak_threshold)`, so the default +infinity
   /// means no batching at all.
   ///
-  /// - SPACE-FIRST (\c DenseSpaceTimeBatched): among the frontier points whose
-  ///   modeled byte peak is <= peak_threshold, minimize FLOPS, ties broken by
+  /// - space-first (\c DenseSpaceTimeBatched): among the frontier points whose
+  ///   modeled byte peak is <= peak_threshold, minimize flops, ties broken by
   ///   lower peak; fall back to global min-peak (best effort) when none fit.
   ///
-  /// - TIME-FIRST (\c DenseTimeSpaceBatched): among the frontier points whose
+  /// - time-first (\c DenseTimeSpaceBatched): among the frontier points whose
   ///   modeled byte peak is <= peak_threshold, minimize flops, ties broken
-  ///   toward the LEAST-SLICED realization (\c nsl) and then lower peak --
+  ///   toward the least-sliced realization (\c nsl) and then lower peak --
   ///   so a schedule is not sliced for free below the ceiling. When nothing
   ///   fits, the fallback keeps the perf-first character: global min flops,
   ///   ties by min peak (accepting the overage).

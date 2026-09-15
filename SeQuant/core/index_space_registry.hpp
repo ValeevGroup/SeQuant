@@ -1405,7 +1405,7 @@ class IndexSpaceRegistry {
   /// @brief non-throwing counterpart of `vacuum_occupied_space(qn).type()`
   /// @param qn quantum numbers (typically already reduced to
   ///        physical-particle attributes)
-  /// @return the vacuum-occupied TYPE registered for @p qn (per-qns override if
+  /// @return the vacuum-occupied type registered for @p qn (per-qns override if
   ///         present, else the default), or IndexSpace::Type::null when no
   ///         occupied space is registered at @p qn -- e.g. a non-physical
   ///         auxiliary space (density-fitting, batching) that carries no
@@ -1422,7 +1422,7 @@ class IndexSpaceRegistry {
 
   /// @brief non-throwing counterpart of `complete_space(qn).type()`
   /// @param qn quantum numbers
-  /// @return the complete-space TYPE registered for @p qn, or
+  /// @return the complete-space type registered for @p qn, or
   ///         IndexSpace::Type::null when none is registered at @p qn
   IndexSpace::Type complete_type_or_null(IndexSpace::QuantumNumbers qn) const {
     auto const& qn2type = std::get<1>(complete_);
@@ -1436,7 +1436,7 @@ class IndexSpaceRegistry {
   /// @brief non-throwing counterpart of `vacuum_unoccupied_space(qn).type()`
   /// @param qn quantum numbers (typically already reduced to
   ///        physical-particle attributes)
-  /// @return the vacuum-unoccupied TYPE (complete minus vacuum-occupied) for
+  /// @return the vacuum-unoccupied type (complete minus vacuum-occupied) for
   ///         @p qn, or IndexSpace::Type::null when no complete space is
   ///         registered at @p qn (non-physical auxiliary space)
   IndexSpace::Type vacuum_unoccupied_type_or_null(

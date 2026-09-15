@@ -21,18 +21,18 @@
 ///
 /// \file ordered_dump.hpp
 /// \brief The ordered (DAG) evaluator's environment-gated diagnostic dumps,
-/// in ONE place.
+/// in one place.
 ///
-/// \details Every dump below is OFF unless its environment variable is set;
+/// \details Every dump below is off unless its environment variable is set;
 /// when it is unset the call site is a single \c std::getenv test and the
 /// evaluated result is byte-identical. Nothing here participates in
 /// evaluation -- these functions only print.
 ///
 /// The dumps take their operands as template parameters rather than including
-/// the schedule/table/executor headers, so this header sits BELOW all of them
+/// the schedule/table/executor headers, so this header sits below all of them
 /// and can be included from any of them without an include cycle.
 ///
-/// ENVIRONMENT VARIABLES (the complete list of what SeQuant reads)
+/// Environment variables (the complete list of what SeQuant reads)
 ///
 /// Ordered-evaluator dumps (this header):
 ///
@@ -59,9 +59,9 @@
 /// |                           | of every root-scope build and of every      |
 /// |                           | forest root at the combine, for comparing   |
 /// |                           | term values across schedules.               |
-/// | SEQUANT_UT_READ_DIAG      | `[READ]` -- every table-driven operand      |
+/// | SEQUANT_UT_READ_DIAG      | `[read]` -- every table-driven operand      |
 /// |                           | read, with consumer, source and slices.     |
-/// | SEQUANT_UT_BLOCK_DIAG     | `[BLOCK]` / `[cell-registry]` -- per-batch  |
+/// | SEQUANT_UT_BLOCK_DIAG     | `[block]` / `[cell-registry]` -- per-batch  |
 /// |                           | build and assemble steps, block skips, and  |
 /// |                           | the end-of-call registry residency.         |
 /// | SEQUANT_SCHED_DUMP        | `ORDERED_RUN_BLOCK` / `SCHEDULE_RUN_GROUP`  |
@@ -77,8 +77,8 @@
 /// SEQUANT_UT_STRICT_FILL_ONCE, SEQUANT_SYNC_STATS.
 ///
 /// SEQUANT_UT_FORCE_SYNC and SEQUANT_UT_PROD_TR name per-op diagnostics in \c
-/// apply_one_op_traced / \c Result::fence that the LIBRARY never reads itself:
-/// the gate is evaluated at the CALL SITE, by the consuming backend (mpqc's
+/// apply_one_op_traced / \c Result::fence that the library never reads itself:
+/// the gate is evaluated at the call site, by the consuming backend (mpqc's
 /// dry-run and wet drivers). They are listed here because the library's own
 /// doxygen names them (\c eval.hpp, \c result.hpp), not because SeQuant reads
 /// them.
@@ -129,7 +129,7 @@ void dump_loop_chain(LoopOrder const& loop_order, Types const& types,
   std::wcerr << L"\n";
 }
 
-/// \brief `[sched-collapse]`: a value with more than one non-local mode of ONE
+/// \brief `[sched-collapse]`: a value with more than one non-local mode of one
 /// space has its distinct per-instance escapes collapsed to fewer escapes (one
 /// per depth == one per space). \p nonlocal is that value's non-LoopLocal axes
 /// with a one-character role tag each, \p escapes its (depth, kind) list.
@@ -150,7 +150,7 @@ void dump_sched_collapse(std::size_t hash, Nonlocal const& nonlocal,
   std::wcerr << L"}\n";
 }
 
-/// \brief `[sched-materialize]`: the members built AND escaped across a forced
+/// \brief `[sched-materialize]`: the members built and escaped across a forced
 /// loop split (their in-nest readers take the per-batch cell, the other pass
 /// the assembled form).
 template <typename Ids>
@@ -236,7 +236,7 @@ inline void dump_use_induced(std::size_t value_h, Index const& mode,
 
 /// \brief `[opens]`: the batch loops node \p n opens at its own node (the
 /// group nest structure the factorizer emits) with its carried modes -- which
-/// same-space modes open at ONE node (a multi-loop group) vs at different
+/// same-space modes open at one node (a multi-loop group) vs at different
 /// nodes (separate groups).
 template <typename Node>
 void dump_opens(Node const& n) {
@@ -297,9 +297,9 @@ void dump_cells_of(Table const& table, Rich const& rich,
   }
 }
 
-/// \brief `[occs]`: per wanted value, every occurrence's OWN index order (its
+/// \brief `[occs]`: per wanted value, every occurrence's own index order (its
 /// array layout) with its consumer, and every table read of the value with its
-/// slices -- the two must agree position-for-position on ONE layout.
+/// slices -- the two must agree position-for-position on one layout.
 template <typename Table, typename Rich>
 void dump_occs_of(Table const& table, Rich const& rich,
                   std::set<std::size_t> const& want) {
@@ -350,7 +350,7 @@ void dump_occs_of(Table const& table, Rich const& rich,
 // SEQUANT_UT_READ_DIAG
 // ---------------------------------------------------------------------------
 
-/// \brief `[READ]`: one table-driven operand read -- its consumer cell, the
+/// \brief `[read]`: one table-driven operand read -- its consumer cell, the
 /// value, the source cell and the declared slices (each resolved against the
 /// in-scope batch context where it names an enclosing loop).
 template <typename Cell, typename Read, typename Ctx, typename SameKey>
@@ -388,7 +388,7 @@ void dump_read(std::size_t consumer, Cell const& ccell, std::size_t vid,
 // SEQUANT_UT_BLOCK_DIAG
 // ---------------------------------------------------------------------------
 
-/// \brief `[BLOCK] ... SKIPPED WHOLE`: every production of this block (its
+/// \brief `[block] ... Skipped whole`: every production of this block (its
 /// steps', its descendants' and its outputs') was already resident.
 inline void dump_block_skipped(Index const& axis, std::size_t depth,
                                int loop_slot) {
@@ -397,7 +397,7 @@ inline void dump_block_skipped(Index const& axis, std::size_t depth,
             << " SKIPPED WHOLE (every production resident)" << std::endl;
 }
 
-/// \brief `[BLOCK] ... BUILD`: one per-batch BuildStep of this block.
+/// \brief `[block] ... Build`: one per-batch BuildStep of this block.
 inline void dump_block_build(Index const& axis, std::size_t lo, std::size_t hi,
                              std::size_t vid, std::size_t cell,
                              std::size_t hash) {
@@ -406,7 +406,7 @@ inline void dump_block_build(Index const& axis, std::size_t lo, std::size_t hi,
             << " hash=" << hash << std::endl;
 }
 
-/// \brief `[BLOCK] ... ASSEMBLE`: one per-batch fold of this block's output.
+/// \brief `[block] ... Assemble`: one per-batch fold of this block's output.
 inline void dump_block_assemble(Index const& axis, std::size_t lo,
                                 std::size_t hi, std::size_t vid,
                                 std::size_t cell, std::size_t src,
@@ -454,7 +454,7 @@ template <typename Ptr>
   return -2.0;
 }
 
-/// \brief \c dump_norm2 of whatever \p fetch returns, with the FETCH ITSELF
+/// \brief \c dump_norm2 of whatever \p fetch returns, with the fetch itself
 /// inside the guard: a registry lookup (\c CellRegistry::peek) can throw on a
 /// bad cell id, and computing the argument at the call site would put that
 /// throw outside \c dump_norm2's own try -- i.e. a diagnostic that aborts the

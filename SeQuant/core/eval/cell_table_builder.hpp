@@ -30,10 +30,10 @@ struct CellTableInputs {
   std::function<container::svector<Index>(std::size_t)> sliced_modes_of;
   std::function<bool(std::size_t)> volatile_of;
   std::function<std::size_t(LoopKey const&)> n_batches_of;
-  /// OPTIONAL: the value's direct operand value ids WITH REPETITION -- one
-  /// entry per LEG of its production tree, so a value contracted with itself
+  /// Optional: the value's direct operand value ids with repetition -- one
+  /// entry per leg of its production tree, so a value contracted with itself
   /// appears twice. Both \c ordered_schedule_dep_graph's \c depends_on and
-  /// the \c OrderedSchedule::operand_vids copied from it DE-DUPLICATE their
+  /// the \c OrderedSchedule::operand_vids copied from it de-duplicate their
   /// operand lists, and a de-duplicated list loses exactly the read the
   /// runtime does perform (a home access per leg); a caller that can see the
   /// production tree (the forest node's two children, resolved back to value
@@ -44,6 +44,8 @@ struct CellTableInputs {
 };
 
 namespace detail {
+/// The table under construction plus the per-value form index the block walk
+/// resolves operand reads against.
 struct CellBuildState {
   CellTable table;
   // per value: the cell id of its form visible at each scope depth during the
@@ -52,7 +54,7 @@ struct CellBuildState {
 };
 
 /// The home of value \p vid (the per-occurrence home of one of its forest
-/// nodes, \p nd, explicit-cells design section 11) translated POSITIONALLY
+/// nodes, \p nd, explicit-cells design section 11) translated positionally
 /// into the rich cell's own frame -- the first occurrence's labels, which the
 /// table builder matches \c CellTableInputs::sliced_modes_of against. The
 /// node's home is labeled in its own tree; positions are canonical across
@@ -72,14 +74,14 @@ template <typename Node>
 
 /// The loop instance among \p path (with its axis spaces) that slices carried
 /// position \p p of value \p vid: an enclosing entry whose index space is the
-/// position's own AND whose slot is the fusion slot ANY occurrence of the
+/// position's own and whose slot is the fusion slot any occurrence of the
 /// value records for that position. Every occurrence is tested, not just the
 /// production one, because that is the runtime's own test: a value CSE-shared
 /// by several consumers is sliced on this loop if any of its occurrences was
 /// bound to that slot, and the first occurrence is not privileged.
 ///
 /// \note The match is on (space, slot), and so relies on fusion never giving
-/// two levels of the SAME space one slot -- were that to happen, a position
+/// two levels of the same space one slot -- were that to happen, a position
 /// could match the wrong level of its own space. Outermost enclosing entry
 /// wins (\p path is outermost-first).
 [[nodiscard]] inline std::optional<LoopKey> slicing_instance(
@@ -108,14 +110,14 @@ template <typename Node>
   return false;
 }
 
-/// Sets the \c produce_if_absent flag and the persistence CANDIDACY of \p
+/// Sets the \c produce_if_absent flag and the persistence candidacy of \p
 /// cell from its bound instances (\c bound_instances) against the current \p
 /// path: a cell is a persistence candidate iff it carries no volatile leaf and
 /// is bound to none of its enclosing loops; it is produced only on first visit
-/// (\c produce_if_absent) iff its scope is nested inside a loop it is NOT
+/// (\c produce_if_absent) iff its scope is nested inside a loop it is not
 /// bound to on that loop's own instance.
 ///
-/// \note Candidacy, not the final answer: persistence is the FRONTIER of the
+/// \note Candidacy, not the final answer: persistence is the frontier of the
 /// invariant region, not all of it, and the remaining condition (at least one
 /// volatile consumer, or no consumer at all) can only be decided once the
 /// table's reads exist. \c apply_persistence_frontier demotes the rest at the
@@ -142,7 +144,7 @@ inline void set_residency_flags(
 /// own outputs -- so a value with a genuine \c BuildStep gets the same
 /// treatment as one synthesized for an escape with no in-block form of its
 /// own; residency flags via \c set_residency_flags. A sliced mode whose
-/// position matches no enclosing instance is recorded WHOLE and reported in
+/// position matches no enclosing instance is recorded whole and reported in
 /// \c CellTable::unresolved. Returns the new cell's id.
 [[nodiscard]] inline CellId emit_build_cell(
     CellTableInputs const& in, std::size_t vid,
@@ -179,6 +181,9 @@ inline void set_residency_flags(
   return id;
 }
 
+/// Emits the cells of \p block and, recursively, of its child blocks, pushing
+/// each child's loop instance onto \p path / \p path_spaces / \p block_stack
+/// for the duration of that recursion.
 inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
                        container::svector<std::pair<LoopKey, int>>& path,
                        container::svector<std::wstring>& path_spaces,
@@ -195,9 +200,9 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     path_spaces.push_back(std::wstring{child.axis.space().base_key()});
     block_stack.push_back(&child);
     emit_cells(in, child, path, path_spaces, block_stack, st);
-    // The child's outputs assemble at THIS (the parent's) scope, while an
-    // implicit Build synthesized for one of them belongs at the CHILD's. Leave
-    // the child ONCE here, keeping a snapshot of the child-inclusive scope,
+    // The child's outputs assemble at this (the parent's) scope, while an
+    // implicit Build synthesized for one of them belongs at the child's. Leave
+    // the child once here, keeping a snapshot of the child-inclusive scope,
     // rather than pushing and popping all three stacks per output entry.
     CellScope const child_scope{path};  // path still has child on top
     auto const child_path = path;
@@ -208,15 +213,15 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     block_stack.pop_back();
     for (auto const& [ovid, okind] : child.outputs) {
       LoopKey const inst = child.level.key();
-      // The child's IN-BLOCK form of ovid: the LAST form registered at a scope
-      // the child's own scope ENCLOSES (the child's path is a prefix of it) --
+      // The child's in-block form of ovid: the last form registered at a scope
+      // the child's own scope encloses (the child's path is a prefix of it) --
       // the child's own scope qualifies, and so does any scope deeper inside
-      // it. Enclosure, not equality: an escape chain may SKIP a level the
-      // value is INVARIANT to, so the form that is live at the child's close
+      // it. Enclosure, not equality: an escape chain may skip a level the
+      // value is invariant to, so the form that is live at the child's close
       // can be one the child's grandchild registered (an Assemble one or more
       // levels further in), and the runtime's home walk carries it out through
-      // the skipped level. Taking the LAST such form takes the outermost
-      // already-assembled one when several exist. A SIBLING block's forms live
+      // the skipped level. Taking the last such form takes the outermost
+      // already-assembled one when several exist. A sibling block's forms live
       // at a scope the child does not enclose (a different loop_slot or
       // latitude even at the same depth), so they are still ruled out.
       CellId src = 0;
@@ -228,11 +233,11 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
             found = true;
           }
       if (!found) {
-        // ovid has NO form anywhere inside the child: its production
+        // ovid has no form anywhere inside the child: its production
         // fuses the reduction/scatter with an operand contraction (the
         // escaped value's hash differs from any single operand's by
-        // exactly the closing axis), so the legacy schedule never emits a
-        // plain BuildStep for it. The per-batch partial is nonetheless a
+        // exactly the closing axis), so no plain BuildStep is emitted for
+        // it. The per-batch partial is nonetheless a
         // real form of ovid itself, realized once per batch at the child's
         // own scope; synthesize its Build cell here.
         src = emit_build_cell(in, ovid, child_path, child_spaces, child_stack,
@@ -277,28 +282,28 @@ inline void emit_cells(CellTableInputs const& in, ScopeBlock const& block,
     }
   }
 }
-/// Demotes every persistence CANDIDATE (\c set_residency_flags: no volatile
-/// leaf, bound to no enclosing loop) that is not on the FRONTIER of the
+/// Demotes every persistence candidate (\c set_residency_flags: no volatile
+/// leaf, bound to no enclosing loop) that is not on the frontier of the
 /// invariant region, so that
 ///
 ///   \c persistent == carries no volatile leaf
-///                 AND is bound to no enclosing loop instance
-///                 AND (some CONSUMER of it holds a volatile value
-///                      OR it has no consumer at all -- a forest root;
+///                 and is bound to no enclosing loop instance
+///                 and (some consumer of it holds a volatile value
+///                      or it has no consumer at all -- a forest root;
 ///                      validator rule 4 admits a zero-consumer cell only at
 ///                      the root scope).
 ///
-/// The CONSUMERS of a cell are the consumer cells of every \c Read whose \c
+/// The consumers of a cell are the consumer cells of every \c Read whose \c
 /// source is it, plus every \c Assemble whose \c production.source is it --
-/// the SAME edge set the runtime's cache-halt closure walks, by SOURCE CELL
+/// the same edge set the runtime's cache-halt closure walks, by source cell
 /// and not by value, so the two cannot disagree about what reads a form.
 ///
 /// Why the frontier and not the whole invariant region: a persistent cell is
 /// held across evaluations and skipped by cache-halt on every later one. A
 /// non-volatile cell all of whose consumers are non-volatile is therefore
-/// never READ again -- each such consumer is itself either persistent-and-held
+/// never read again -- each such consumer is itself either persistent-and-held
 /// (skipped by cache-halt rule 1) or demoted here and, by induction from the
-/// roots, skipped by rule 2 because ALL of ITS consumers are skipped. Keeping
+/// roots, skipped by rule 2 because all of its consumers are skipped. Keeping
 /// such a cell resident across evaluations buys nothing and costs its bytes in
 /// the persistent value store for the life of the cache handle. Only the cells
 /// feeding volatile work -- and the forest's own results -- have a reader on a
@@ -339,11 +344,11 @@ inline void apply_persistence_frontier(
 }
 }  // namespace detail
 
-/// Derives the cell table's PRODUCTIONS from an ordered schedule already
+/// Derives the cell table's productions from an ordered schedule already
 /// built by \c build_ordered_schedule: one \c Build cell per \c BuildStep,
 /// one \c Assemble cell per block output entry (at the block's parent
 /// scope, sourced from the deepest form of that value registered inside the
-/// block -- an escape chain may SKIP a level the value is invariant to), and
+/// block -- an escape chain may skip a level the value is invariant to), and
 /// one \c Leaf cell for every leaf value that is an operand of
 /// some computed value; then one \c Read per leg of every Build cell's
 /// production tree, and every cell's \c life from those reads (weighted by
@@ -362,7 +367,7 @@ inline void apply_persistence_frontier(
   container::svector<ScopeBlock const*> block_stack;
   detail::emit_cells(in, in.ordered->root, path, path_spaces, block_stack, st);
   auto const g = detail::ordered_schedule_dep_graph(*in.rich);
-  // The per-LEG operand list of a value (see CellTableInputs::operands_of),
+  // The per-leg operand list of a value (see CellTableInputs::operands_of),
   // falling back to the de-duplicated dependency graph when the caller cannot
   // supply one. Every operand question below -- which leaves are used, and
   // which reads exist -- goes through this one accessor, so the two never
@@ -375,7 +380,7 @@ inline void apply_persistence_frontier(
     return it->second;
   };
   // Leaf cells: every leaf value that is an operand of some value. Emitted by
-  // walking rich.cells in VALUE-ID order (the dependency map's iteration order
+  // walking rich.cells in value-id order (the dependency map's iteration order
   // is unspecified), so cell ids are a deterministic function of the schedule.
   std::unordered_set<std::size_t> used_as_operand;
   for (ValueCell const& vc : in.rich->cells)
@@ -392,9 +397,9 @@ inline void apply_persistence_frontier(
       st.forms_of[vc.value_id].push_back(st.table.cells.size() - 1);
     }
 
-  // Reads: one per (consumer Build cell, production-tree LEG). The
+  // Reads: one per (consumer Build cell, production-tree leg). The
   // occ_facts/occ_invariant scans below are linear per read (O(reads x
-  // facts)); acceptable at this stage.
+  // facts)).
   auto const key_of_lid = [&](LoopId lid) {
     return in.sliced->levels[lid].key();
   };
@@ -407,7 +412,7 @@ inline void apply_persistence_frontier(
     for (std::size_t oi = 0; oi < ops.size(); ++oi) {
       std::size_t const op = ops[oi];
       // The k-th read of value `op` by this consumer pairs with the k-th
-      // distinct LEG the seam recorded for (op, consumer): a value on both
+      // distinct leg the seam recorded for (op, consumer): a value on both
       // legs of one node has per-leg facts; a single-leg operand (or a seam
       // that recorded no leg) keeps every fact.
       std::size_t k = 0;
@@ -445,10 +450,10 @@ inline void apply_persistence_frontier(
       Read r;
       r.consumer = cid;
       r.operand_value_id = op;
-      // Source = the operand's form VISIBLE at the consumer's scope, by the
+      // Source = the operand's form visible at the consumer's scope, by the
       // one shared rule (detail::deepest_visible_form, which the runtime's
       // CellRegistry::cell_of uses too): deepest resident form wins, ties
-      // broken by emission order. If none is resident, fall back to the LAST
+      // broken by emission order. If none is resident, fall back to the last
       // form so the validator's visibility rule surfaces the gap rather than
       // the builder hiding it.
       auto const best =
@@ -476,7 +481,7 @@ inline void apply_persistence_frontier(
         if (!dup) r.slice.push_back({pos, k});
       }
       // Explicit invariant records: the seam found no slicing decision
-      // binding this consumer's read of op on a loop the CONSUMER itself is
+      // binding this consumer's read of op on a loop the consumer itself is
       // bound to, so the form rule accepts it as whole even though another
       // operand may be bound to that same loop (see Read::invariant_on).
       for (auto const& [w_vid, lid, consumer_vid, f_leg] :
@@ -496,7 +501,7 @@ inline void apply_persistence_frontier(
       st.table.reads.push_back(std::move(r));
     }
   }
-  // Persistence is the FRONTIER of the invariant region, and the frontier is
+  // Persistence is the frontier of the invariant region, and the frontier is
   // only knowable once the reads exist: demote every candidate whose every
   // consumer is itself non-volatile (see apply_persistence_frontier).
   detail::apply_persistence_frontier(st.table, in.volatile_of);

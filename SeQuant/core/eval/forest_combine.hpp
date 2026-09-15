@@ -16,7 +16,7 @@
 namespace sequant::eval {
 
 ///
-/// \brief The shared per-root COMBINE step every whole-forest executor ends
+/// \brief The shared per-root combine step every whole-forest executor ends
 /// with: permute each root's own (already-built) result to \p layout, then
 /// sum across roots -- the identical Term Begin/End boundary, Permute
 /// EvalStat, and cross-root \c add_inplace + SumInplace EvalStat trace/hwmark
@@ -25,17 +25,17 @@ namespace sequant::eval {
 ///
 /// \details Factored into its own header so every whole-forest executor
 /// entry -- \c evaluate_ordered_schedule and \c evaluate_ordered_multiroot
-/// (ordered_executor.hpp) -- reuses the IDENTICAL bookkeeping rather than
+/// (ordered_executor.hpp) -- reuses the identical bookkeeping rather than
 /// hand-syncing a second copy that would silently drift as later work extends
 /// either entry point.
 ///
-/// \param roots POINTERS to the forest's own top-level trees, in forest order
+/// \param roots pointers to the forest's own top-level trees, in forest order
 ///        -- pointers, not nodes, because \c FullBinaryNode's copy constructor
 ///        deep-copies the whole subtree, and a caller assembling a node vector
 ///        here would clone the entire forest (thousands of nodes for a
 ///        residual) once per call just to name its roots. The pointees are the
 ///        caller's forest, which outlives this call.
-/// \param pre_results Each root's own UNPERMUTED, already-built result,
+/// \param pre_results Each root's own unpermuted, already-built result,
 ///        aligned index-for-index with \p roots. Moved out of on use (each
 ///        entry is consumed), so the caller's own copy is left empty after
 ///        this call returns.

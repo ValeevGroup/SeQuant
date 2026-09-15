@@ -241,14 +241,14 @@ class FullBinaryNode {
 
   FullBinaryNode<T>* parent_{nullptr};
 
-  /// Number of nodes in the subtree rooted here, CACHED. A node's children are
+  /// Number of nodes in the subtree rooted here, cached. A node's children are
   /// fixed once it exists (every constructor takes them; only assignment
   /// replaces them, and both assignment operators refresh this), so the count
   /// can be maintained in O(1) at construction instead of being walked on
   /// every call. It is walked on every \c TreeNodeEqualityComparator probe --
   /// a structurally-keyed map over a deep tree (the residency meet in
   /// lifetime_mask.hpp, the CSE scan in cache_manager.hpp) probes once per
-  /// node -- so an O(subtree) size() made those quadratic in tree SIZE, and
+  /// node -- so an O(subtree) size() made those quadratic in tree size, and
   /// each call heap-allocated its stack vector besides.
   std::size_t size_{1};
 
@@ -258,7 +258,7 @@ class FullBinaryNode {
   }
 
   /// Recompute \c size_ here and in every ancestor. Assigning to a node that
-  /// is already SOMEONE'S CHILD (\c n.left() = other, which the public
+  /// is already someone'S child (\c n.left() = other, which the public
   /// left()/right() accessors permit) changes the enclosing tree's node count
   /// too, and only the assignment operators can see that; constructors run
   /// before \c parent_ is set, so they use \c refresh_size alone. Iterative,
@@ -404,7 +404,7 @@ class FullBinaryNode {
   }
 
   FullBinaryNode& operator=(FullBinaryNode<T>&& node) {
-    // Self-move is a no-op, checked FIRST: every line below would otherwise
+    // Self-move is a no-op, checked first: every line below would otherwise
     // read `node`'s members after moving out of them -- `data_` self-moved, and
     // both children parked in the temporaries below while `node.left_/right_`
     // (the same members) read null, which would leave the node a childless leaf
@@ -417,7 +417,7 @@ class FullBinaryNode {
     // from is pointed to (and thus owned) by either left_ or right_.
     // If we don't do this, overwriting of the owning pointer leads to deleting
     // node, in which case subsequent accesses to it -- the child steal just
-    // below, and the SOURCE-side size refresh at the end -- are invalid.
+    // below, and the source-side size refresh at the end -- are invalid.
     auto left_tmp = std::move(left_);
     auto right_tmp = std::move(right_);
 
@@ -432,8 +432,8 @@ class FullBinaryNode {
     }
     refresh_size_up();
 
-    // The SOURCE is a leaf now -- its children are ours -- so its own cached
-    // count and every count ABOVE it have to drop: `node` may itself be
+    // The source is a leaf now -- its children are ours -- so its own cached
+    // count and every count above it have to drop: `node` may itself be
     // someone's child, as in `std::move(n.parent().right())` (the live shape,
     // export.hpp's prune_scalar_factor), which otherwise leaves that parent's
     // chain over-counting the subtree it no longer holds. `this`'s chain was
@@ -516,7 +516,7 @@ class FullBinaryNode {
   [[nodiscard]] std::size_t size() const noexcept {
     // O(1): maintained at construction / assignment (see size_ above). It used
     // to walk the subtree through an explicit stack -- correct and stack-safe,
-    // but O(subtree) and heap-allocating on EVERY call, which made every
+    // but O(subtree) and heap-allocating on every call, which made every
     // structurally-keyed map probe over a deep tree quadratic in tree size.
     return size_;
   }

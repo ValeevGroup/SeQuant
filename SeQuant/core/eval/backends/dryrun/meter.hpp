@@ -29,7 +29,7 @@ namespace sequant::eval::dryrun {
 
 /// Configuration for a faithful (gated) dry-run cache: the same footprint gate
 /// and cross-occurrence batch-variant veto the real batched eval loop applies,
-/// so a batch-variant giant (a `mu~`/`K`-carrying DF intermediate) is NOT
+/// so a batch-variant giant (a `mu~`/`K`-carrying DF intermediate) is not
 /// cached whole but recomputed sliced under each consumer's batch trigger.
 ///
 /// The element types mirror the gated \c sequant::cache_manager overload
@@ -55,14 +55,14 @@ struct CacheConfig {
 /// footprint gate.
 ///
 /// The footprint functor sizes a node's result (its \c canon_indices()) with
-/// the SAME moment-aware counter the DryRun \c Result uses
+/// the same moment-aware counter the DryRun \c Result uses
 /// (\c memsize_counter over \c regime.idx_to_extent()/inner_pow_fn()), scaled
 /// to bytes, so the gate compares like-for-like against \c cfg.max_footprint.
 ///
-/// Unlike the SIMPLE \c cache_manager(nodes) factory the ad-hoc dry-run test
-/// sites use, this routes through the GATED overload so free-batchable-axis
+/// Unlike the simple \c cache_manager(nodes) factory the ad-hoc dry-run test
+/// sites use, this routes through the gated overload so free-batchable-axis
 /// giants are vetoed (matching the real run). The returned cache is used across
-/// the WHOLE forest without a per-summand reset (matching a real solve's
+/// the whole forest without a per-summand reset (matching a real solve's
 /// whole-iteration cache scope; the replay relies on the lifetime mask to
 /// release each value after its last cross-term use, so cross-summand-shared
 /// values are reused, not rebuilt).
@@ -77,7 +77,7 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
                                                        regime.inner_pow_fn());
 
-  // Footprint (bytes) of a node's RESULT: canon_indices() fed to the
+  // Footprint (bytes) of a node's result: canon_indices() fed to the
   // moment-aware counter (as the counter's `result` slot; the empty lhs/rhs
   // contribute nothing) times 8 bytes/element. Same arithmetic as the DryRun
   // Result::size_in_bytes(), so the gate is faithful.
@@ -106,7 +106,7 @@ auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
 ///
 /// \brief One value's build-vs-home fidelity witness for a \c MeterReport
 /// (see \c assemble_report): how many times a distinct value was built (over
-/// its whole recompute tally) versus WHERE it is homed and WHERE it is used,
+/// its whole recompute tally) versus where it is homed and where it is used,
 /// read off the matching \c RichSchedule::ValueCell (looked up by hash).
 ///
 struct HomeFidelity {
@@ -146,12 +146,12 @@ struct MeterReport {
 ///
 /// \brief Bottom-up memoized volatility over an evaluation \p forest: a node
 /// is volatile iff \p is_volatile flags it directly, or (for an internal
-/// node) either child is volatile -- the SAME rule the gated
+/// node) either child is volatile -- the same rule the gated
 /// \c sequant::cache_manager factory applies while building its NV/V
 /// frontier (see cache_manager.hpp's DAG walk). Keyed by
 /// \c TreeNode::hash_value() (rather than the node identity itself) so a
 /// caller can classify a \c CacheManager::recompute_tally() entry -- keyed by
-/// the SAME node identity but not necessarily the SAME node object -- by its
+/// the same node identity but not necessarily the same node object -- by its
 /// hash.
 ///
 /// \param forest the evaluation forest (a range of eval nodes).
@@ -168,12 +168,12 @@ std::unordered_map<std::size_t, bool> compute_volatility(
 
   std::unordered_map<std::size_t, bool> volatile_of;
 
-  // ITERATIVE bottom-up walk (explicit frame stack), not recursion: this
-  // classifier runs on the ORDERED arm of assemble_report too, where an
+  // Iterative bottom-up walk (explicit frame stack), not recursion: this
+  // classifier runs on the ordered arm of assemble_report too, where an
   // equation's residual/energy is a single in-place Sum tree whose left spine
   // is as deep as the number of terms -- thousands for a large equation -- so a
-  // recursive descent would overflow the call stack while merely ASSEMBLING
-  // THE REPORT. Same shape as the recursion it replaces: a frame is pushed,
+  // recursive descent would overflow the call stack while merely assembling
+  // the report. Same shape as the recursion it replaces: a frame is pushed,
   // its left child resolved, then its right, then the node itself is
   // classified and memoized, so `volatile_of` comes out identical.
   struct Frame {
@@ -230,7 +230,7 @@ std::unordered_map<std::size_t, bool> compute_volatility(
 /// \brief Assemble a \c MeterReport from a metered replay: a walked
 /// \p cache (its \c recompute_tally() populated by \c CacheManager::
 /// tally_build over the replay), the hierarchy-wide \p mon (\c PeakMonitor),
-/// the \p rich linearized schedule (\c compute_dag_boulevard over the SAME
+/// the \p rich linearized schedule (\c compute_dag_boulevard over the same
 /// \p forest, supplying each value's home/use dag-scope), and \p is_volatile
 /// (fed to \c compute_volatility to classify each distinct value).
 ///
@@ -249,7 +249,7 @@ std::unordered_map<std::size_t, bool> compute_volatility(
 /// \param mon the \c PeakMonitor wired onto \p cache's scope chain during the
 ///        replay.
 /// \param rich the linearized schedule (\c compute_dag_boulevard) over the
-///        SAME forest the replay walked.
+///        same forest the replay walked.
 /// \param forest the evaluation forest (fed to \c compute_volatility).
 /// \param is_volatile `bool(TreeNode const&)`: intrinsic volatility
 ///        predicate, as for \c compute_volatility.
@@ -340,11 +340,11 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 /// DryRun sizing backend, metering the replay with a fresh, \c PeakMonitor
 /// -wired, build-tallying cache, and returns the assembled \c MeterReport.
 ///
-/// Mirrors MPQC's wet dispatch: this drives the SAME driver entry
+/// Mirrors MPQC's wet dispatch: this drives the same driver entry
 /// point (\c sequant::evaluate(Nodes const&, BatchPolicy const&, layout, F,
 /// CacheManager&, mode_order, ScopeGuardFactory), \c ordered_executor.hpp) a
 /// real solve would use under \p policy -- both executors are selected
-/// by the SAME \c policy.scheduler, not independently maintained code paths --
+/// by the same \c policy.scheduler, not independently maintained code paths --
 /// so the metered replay is exactly the run \p policy describes, not a
 /// hand-rolled proxy of it. Non-throwing wrapper (if desired) is the
 /// caller's responsibility; an exception from the replay propagates out of
@@ -355,20 +355,20 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 /// \param policy the batch policy driving the coexistence entry -- in
 ///        particular \c scheduler (executor selection) and
 ///        \c batch_target_size (the batch-partition source; also the source
-///        of the \c block_of function this call builds its OWN \c rich
+///        of the \c block_of function this call builds its own \c rich
 ///        schedule with, for \c assemble_report -- the coexistence entry
 ///        builds an independent, internal \c RichSchedule of its own from
-///        the SAME \p policy.batch_target_size to drive the executor).
+///        the same \p policy.batch_target_size to drive the executor).
 /// \param regime the size regime supplying the DryRun \c CostModel.
 /// \param cfg cache configuration (footprint gate, min repeats, volatility)
 ///        for the metered cache, built exactly as \c build_dryrun_cache does
-///        (same footprint arithmetic, same is_volatile default) -- NOT via
+///        (same footprint arithmetic, same is_volatile default) -- not via
 ///        that builder directly, since its is_volatile default (substituted
 ///        for an empty \c cfg.is_volatile) is internal to it and would
 ///        otherwise be invisible to \c assemble_report below, which also
 ///        needs a callable predicate (an empty \c cfg.is_volatile passed to
 ///        it directly throws \c std::bad_function_call from
-///        \c compute_volatility). The SAME locally-defaulted predicate is
+///        \c compute_volatility). The same locally-defaulted predicate is
 ///        used for both.
 /// \param trace optional sink for the eval trace; when non-null,
 ///        \c Logger::instance().eval.stream is redirected there for the
@@ -385,16 +385,16 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
   auto cm = std::make_shared<CostModel const>(regime);
   DryRunLeafEvaluator yield{cm};
 
-  // Default is_volatile the SAME way build_dryrun_cache does (an empty
+  // Default is_volatile the same way build_dryrun_cache does (an empty
   // cfg.is_volatile means nothing is volatile) -- but keep the defaulted
-  // function LOCAL rather than routing through that builder, so the exact
+  // function local rather than routing through that builder, so the exact
   // same predicate can also be threaded to assemble_report below.
   std::function<bool(EvalNodeDryRun const&)> const is_volatile =
       cfg.is_volatile ? cfg.is_volatile
                       : std::function<bool(EvalNodeDryRun const&)>(
                             [](EvalNodeDryRun const&) { return false; });
 
-  // Footprint (bytes) of a node's RESULT, identical to build_dryrun_cache's
+  // Footprint (bytes) of a node's result, identical to build_dryrun_cache's
   // footprint_of (above): the moment-aware memsize counter over
   // canon_indices(), scaled to bytes, so cfg.max_footprint gates like-for-like.
   auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
@@ -415,14 +415,14 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
   cache.set_peak_monitor(&mon);
 
   // Backend array-ops for the dry-run backend: the batched executors build a
-  // scatter destination / enumerate axis batches through this seam (the SAME
+  // scatter destination / enumerate axis batches through this seam (the same
   // one the wet run uses), so the dry replay realizes the same scatter
   // footprint and batch count. Sourced from the shared CostModel -- no array in
   // the DAG is consulted. Must outlive the replay below (it is a local here).
   auto const dry_aops = make_dryrun_array_ops(cm);
   cache.set_array_ops(&dry_aops);
 
-  // The SAME block_of source the driver entry itself derives from
+  // The same block_of source the driver entry itself derives from
   // policy.batch_target_size (ordered_executor.hpp's evaluate(Nodes const&,
   // BatchPolicy const&, ...)) -- an empty batch_target_size means "no
   // batching", guarded identically so compute_dag_boulevard never invokes an
@@ -452,33 +452,33 @@ inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
 
   // Ensure printing() so DryRunOps::prod records flops/exec (feeding
   // cache.tally_build) and note_working_set() actually observes the
-  // PeakMonitor -- without raising the level any HIGHER than a caller who
+  // PeakMonitor -- without raising the level any higher than a caller who
   // already wants a louder trace.
   logger.eval.level = std::max<std::size_t>(logger.eval.level, 1);
   if (trace) logger.eval.stream = trace;
   logger.eval.node_meta = make_node_meta(rich);
 
-  // Forest descent (BatchScheduler::forest_descent) needs the SAME batched
+  // Forest descent (BatchScheduler::forest_descent) needs the same batched
   // custom evaluator MPQC's wet forest path installs (cck.ipp's `else`
   // branch, `cache.set_custom_evaluator(sequant::make_evaluator(ctx.
   // batch_policy, yielder, make_scope_guard))`): without it, plain
   // sequant::evaluate(Nodes const&, ...) ignores every node_slice_mask()
   // stamp and runs an unbatched, no-schedule single pass -- an infidelity
-  // vs. the wet run this meter is supposed to mirror. Installed ONLY on
-  // this branch: evaluate_impl consults cache.custom_evaluator() on every
-  // non-leaf node, so installing it unconditionally would also fire on the
+  // vs. the wet run this meter is supposed to mirror. Installed on the
+  // forest path only: evaluate_impl consults cache.custom_evaluator() on
+  // every non-leaf node, so installing it unconditionally would fire on the
   // ordered path's own evaluate_impl calls too. Ordered
-  // (evaluate_ordered_schedule) drives its OWN executor via the driver entry
+  // (evaluate_ordered_schedule) drives its own executor via the driver entry
   // (sequant::evaluate(forest, policy, ...) below, which dispatches on
   // policy.scheduler) -- installing the forest custom evaluator for ordered
   // would silently reroute its builds through the forest evaluator instead
   // of run_ordered_contracted_block, diverging from what the wet ordered run
-  // (which installs NO custom evaluator) actually does. That divergence was
+  // (which installs no custom evaluator) actually does. That divergence was
   // a real dry-run/wet-run fidelity bug; restricting this install to forest
   // descent fixes it.
-  // Trace::On EXPLICITLY, matching the evaluate<Trace::On> right below: the
+  // Trace::On explicitly, matching the evaluate<Trace::On> right below: the
   // evaluator's nested per-batch/per-member re-entries carry their trace level
-  // in the closure's TYPE (make_batched_custom_evaluator's \tparam EvalTrace),
+  // in the closure's type (make_batched_custom_evaluator's \tparam EvalTrace),
   // and note_working_set() -- the call that feeds `mon`, hence
   // MeterReport::peak_bytes -- is compile-time gated on it. Left at
   // Trace::Default this would (a) report a peak blind to every batched-inner

@@ -18,44 +18,44 @@
 namespace sequant::eval::dryrun {
 
 ///
-/// \brief Opt-in accumulator for the REPLAY-tallied (recompute-aware) cost.
+/// \brief Opt-in accumulator for the replay-tallied (recompute-aware) cost.
 ///
 /// A static per-node cost walk reports order-/batching-blind DP-model
-/// quantities: each internal node is priced ONCE, so such a walk never sees
-/// the per-occ-block REPLAY recompute the batched evaluator incurs at runtime.
+/// quantities: each internal node is priced once, so such a walk never sees
+/// the per-occ-block replay recompute the batched evaluator incurs at runtime.
 /// This sink is the replay-side counterpart: when a non-null \c CostSink is
 /// attached to the \c CostModel shared by every dry-run \c Result token, each
-/// ACTUAL product-op execution during the \c Trace::On replay folds its own
-/// SLICED-extent cost here (see \c CostModel::tally_op and \c
-/// DryRunOps::prod). Because a sliced, occ-DEPENDENT op executed N times does
+/// actual product-op execution during the \c Trace::On replay folds its own
+/// sliced-extent cost here (see \c CostModel::tally_op and \c
+/// DryRunOps::prod). Because a sliced, occ-dependent op executed N times does
 /// ~1/N work each pass, its sliced-cost sum is work-neutral (~= its unsliced
-/// cost); only the occ-INDEPENDENT work re-executed at full size once per
+/// cost); only the occ-independent work re-executed at full size once per
 /// block inflates -- so the totals here isolate the recompute the model walk
 /// cannot.
 ///
-/// Mirrors \c sequant::eval::PeakSink (eval.hpp): an OPTIONAL sink, defaulting
+/// Mirrors \c sequant::eval::PeakSink (eval.hpp): an optional sink, defaulting
 /// off, so the production runtime path (which never constructs a dry-run \c
 /// CostModel) is byte-identical. The atomics let a fold from a concurrent
 /// evaluator stay correct, though a metered replay itself is single-threaded.
 ///
-/// Per-node AVOIDABLE-recompute tally, keyed by the LABEL signature (result +
+/// Per-node avoidable-recompute tally, keyed by the label signature (result +
 /// operand indices). Avoidable recompute is measured in FLOPs against the
-/// BATCHING-FREE (unlimited-memory) ideal, where each distinct value is built
-/// ONCE at full extent and reused: \c total_flops accumulates the actual
+/// batching-free (unlimited-memory) ideal, where each distinct value is built
+/// once at full extent and reused: \c total_flops accumulates the actual
 /// (possibly sliced) FLOPs over every build of this value; \c full_flops is the
-/// FLOPs to build it once at FULL extent (constant per label). The rollup takes
+/// FLOPs to build it once at full extent (constant per label). The rollup takes
 /// avoidable = max(0, total_flops - full_flops) -- the arithmetic batching
 /// repeats beyond building the value once, which is exactly the recompute
 /// hoisting exists to avoid.
 ///
-/// FLOPs (unlike roofline exec) is LINEAR in extents, hence ADDITIVE across
+/// FLOPs (unlike roofline exec) is linear in extents, hence additive across
 /// slices: disjoint slices that tile the full value sum to exactly \c
 /// full_flops => 0 avoidable (tiling repeats no arithmetic), while a value
 /// rebuilt full once per block sums to N*full => (N-1)*full avoidable. That
 /// additivity is why no slice-context bucketing is needed and why the
 /// pathological >100% roofline-spread of the exec-weighted metric cannot arise.
 ///
-/// NOTE: the per-DISTINCT-value avoidable rollup does NOT live here. It is kept
+/// Note: the per-distinct-value avoidable rollup does not live here. It is kept
 /// by \c CacheManager::recompute_tally(), keyed by the exact cache node
 /// identity (TreeNodeHasher + TreeNodeEqualityComparator) so 64-bit hash
 /// collisions are not folded; a string-keyed sink here could not reproduce that
@@ -69,24 +69,24 @@ struct CostSink {
   std::atomic<std::size_t> n_ops{0};
 };
 
-/// Per-index extent OVERRIDE table: narrows specific indices (by identity, so
+/// Per-index extent override table: narrows specific indices (by identity, so
 /// it survives reshaping across prod/sum/permute -- the same shared/
-/// tensor MODE POSITION (0-based, in the value's canon index order) to a
-/// runtime-realized element count. Positional -- NOT keyed by Index -- because
+/// tensor mode position (0-based, in the value's canon index order) to a
+/// runtime-realized element count. Positional -- not keyed by Index -- because
 /// a DAG value has no intrinsic labels: only an op binds labels to it, so the
 /// only stable handle on a mode across ops is its position. Populated by
 /// Result::slice_mode()/mode_batches() call sites (see result.hpp); empty =>
 /// no override, the regime's nominal extent applies. This table -- not a
 /// second cost model -- is what lets a zero-data DryRun Result report the
-/// REALIZED (possibly runtime-sliced) size rather than always the full
+/// realized (possibly runtime-sliced) size rather than always the full
 /// regime extent, which is exactly the signal a metered replay witnesses.
-/// Consumers that operate in LABEL space (flops, keyed by the op's annotation)
+/// Consumers that operate in label space (flops, keyed by the op's annotation)
 /// resolve positions to labels through that annotation first.
 using ExtentOverrides = container::map<std::size_t, std::size_t>;
 
 ///
 /// \brief Bundles the optimizer's own cost closures (memsize/flops/roofline)
-/// behind one value type so dry-run Results report MODEL size (not an
+/// behind one value type so dry-run Results report model size (not an
 /// allocated size), and the harness can additionally read FLOPs and
 /// projected execution cost per operation.
 ///
@@ -121,7 +121,7 @@ class CostModel {
   [[nodiscard]] std::size_t memsize(
       container::svector<Index> const& idxset,
       ExtentOverrides const& overrides = {}) const {
-    // Resolve the POSITIONAL overrides against THIS index list: override at
+    // Resolve the positional overrides against this index list: override at
     // mode position `pos` applies to `idxset[pos]`, whatever its label. Build a
     // per-call Index->extent map so make_extent_fn's atom lookup finds it (the
     // counter revisits idxset[pos] by identity, incl. as a composite proto).
@@ -147,10 +147,10 @@ class CostModel {
   /// contraction, since by construction `contracted` holds precisely the
   /// indices present in both operands but absent from the result.
   ///
-  /// \p label_extents maps an ANNOTATION label (an Index appearing in \p out or
+  /// \p label_extents maps an annotation label (an Index appearing in \p out or
   /// \p contracted) to its runtime-realized (sliced) extent. Unlike the value's
   /// positional \c ExtentOverrides, this is keyed by Index because \p out /
-  /// \p contracted ARE labels -- the op's annotation is the sole source of
+  /// \p contracted are labels -- the op's annotation is the sole source of
   /// labels. \c DryRunOps::prod builds it from each operand's positional
   /// overrides via that operand's annotation (see \c extents_by_label).
   [[nodiscard]] double flops(
@@ -167,20 +167,20 @@ class CostModel {
   /// \brief Roofline-projected execution cost of one contraction (see
   ///        \c sequant::opt::detail::roofline_op_cost).
   ///
-  /// \p left_bytes / \p right_bytes / \p result_bytes are the BOTH-OPERANDS-
-  /// AND-RESULT footprints in BYTES (as reported by \c
+  /// \p left_bytes / \p right_bytes / \p result_bytes are the both-operands-
+  /// and-result footprints in bytes (as reported by \c
   /// Result::size_in_bytes()); converted to elements (the counter's native
   /// unit) via \c numeric_size before delegating. All three are charged,
-  /// because \c roofline_op_cost's \c traffic is the COMPULSORY single-pass
+  /// because \c roofline_op_cost's \c traffic is the compulsory single-pass
   /// data movement of one contraction: read both operands, write the result.
   /// This is exactly what the optimizer's DP charges (\c S[lp] + S[rp] +
   /// S[n]; see PeakModel::relax / BatchedPeakModel::relax in
   /// core/optimize/cost_model.hpp), so a dry-run replay of a DP-chosen tree
-  /// prices each op the same way the DP did, at REALIZED (sliced) extents.
+  /// prices each op the same way the DP did, at realized (sliced) extents.
   /// Charging fewer footprints (e.g. only the left operand) both under-counts
-  /// the traffic and makes the cost depend on operand ORDER, which the
+  /// the traffic and makes the cost depend on operand order, which the
   /// contraction's data movement does not. The finite-cache re-read effect is
-  /// NOT this term -- it is the separate Hong-Kung bound inside
+  /// not this term -- it is the separate Hong-Kung bound inside
   /// \c roofline_op_cost.
   ///
   [[nodiscard]] double exec_cost(double flops_count, std::size_t left_bytes,
@@ -210,7 +210,7 @@ class CostModel {
   void set_cost_sink(CostSink* sink) const noexcept { sink_ = sink; }
 
   ///
-  /// \brief Fold one product op's SLICED-extent \p flops_count / \p exec into
+  /// \brief Fold one product op's sliced-extent \p flops_count / \p exec into
   ///        the attached sink (no-op when none is attached).
   ///
   /// Called at each actual product execution in the replay, so a contraction
@@ -227,7 +227,7 @@ class CostModel {
  private:
   // Index-to-extent callable consulting `overrides` first, else the
   // regime's nominal extent. The returned std::function captures `overrides`
-  // (and `this`) BY REFERENCE and is only ever used -- never stored --
+  // (and `this`) by reference and is only ever used -- never stored --
   // within the (memsize/flops) call that constructs it, so the reference
   // stays valid for its entire lifetime. Explicit (non-deduced) return type
   // so this can be called from memsize()/flops(), which appear earlier in
@@ -242,12 +242,12 @@ class CostModel {
     };
   }
 
-  // Resolve a value's POSITIONAL overrides against its own index list: override
+  // Resolve a value's positional overrides against its own index list: override
   // at mode position `pos` binds to `idxset[pos]`. Yields an Index-keyed map so
   // make_extent_fn's per-atom lookup finds the sliced extent wherever that
   // Index recurs in idxset (including as a composite's outer proto), exactly as
   // the pre-positional Index-keyed table did -- but now the key is derived from
-  // THIS list, not carried from a producer's labels.
+  // this list, not carried from a producer's labels.
   [[nodiscard]] static container::map<Index, std::size_t> resolve_overrides(
       container::svector<Index> const& idxset,
       ExtentOverrides const& overrides) {

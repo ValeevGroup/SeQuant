@@ -20,28 +20,28 @@ namespace sequant::eval::dryrun {
 struct SizeRegime {
   std::map<std::wstring, std::size_t> space_extent;
 
-  /// OPTIONAL per-space BATCH PARTITION: the element extent of each realized
+  /// Optional per-space batch partition: the element extent of each realized
   /// batch slice along the space's batch axis, keyed by space base_key, in
-  /// order. Empty (default) => the dry-run batches a mode into UNIFORM
+  /// order. Empty (default) => the dry-run batches a mode into uniform
   /// target_batch_size blocks (backend-model-agnostic fallback). When present
-  /// for a batch axis, ResultDryRun::mode_batches uses THIS partition directly
-  /// (accumulated to [lo,hi) ranges), so the dry-run's batch COUNT -- hence its
+  /// for a batch axis, ResultDryRun::mode_batches uses this partition directly
+  /// (accumulated to [lo,hi) ranges), so the dry-run's batch count -- hence its
   /// recompute -- matches whatever the wet backend realizes, even when a tile
   /// is coarser than target_batch_size.
   ///
-  /// The dry-run backend deliberately does NOT know how these were derived: the
-  /// CALLER converts its backend's structure into slice extents and supplies
+  /// The dry-run backend deliberately does not know how these were derived: the
+  /// caller converts its backend's structure into slice extents and supplies
   /// them here, so a new backend model is supported without touching dry-run
-  /// eval internals. For a TILE-based wet backend, \c batch_slice_extents_from_
+  /// eval internals. For a tile-based wet backend, \c batch_slice_extents_from_
   /// tiles is the ready-made converter. The extents must sum to space_extent.
   std::map<std::wstring, container::svector<std::size_t>> space_slice_extents;
 
-  // csv_pno_moment[k] / csv_osv_moment[k] hold the k-th POWER MEAN
+  // csv_pno_moment[k] / csv_osv_moment[k] hold the k-th power mean
   // M_k = (mean_over_pairs d^k)^(1/k) of the per-pair PNO / per-orbital OSV
   // domain size d, for k in [1,4] (index 0 is unused, set to 1). inner_pow()
   // returns M_k so that inner_aware_volume's per-member product over a
   // k-composite group is M_k^k = mean(d^k), and outer_nocc^N * M_k^k equals
-  // the true block-sparse volume Sum_pairs d^k. Do NOT store raw moments
+  // the true block-sparse volume Sum_pairs d^k. Do not store raw moments
   // mean(d^k) here: that would over-count k-composite groups by a further
   // power of k. For a constant domain d, M_k = d for all k.
   std::array<double, 5> csv_pno_moment{1.0, 1.0, 1.0, 1.0, 1.0};
@@ -53,7 +53,7 @@ struct SizeRegime {
   // falls back to csv_pno_moment (the rank-2 table) in inner_pow(), preserving
   // the pre-rank-general behavior where every proto-rank >= 2 used the PNO
   // table. Ranks 1 and 2 are held by csv_osv_moment / csv_pno_moment above and
-  // are NOT expected here (an entry for 1 or 2 is ignored by inner_pow()).
+  // are not expected here (an entry for 1 or 2 is ignored by inner_pow()).
   std::map<std::size_t, std::array<double, 5>> csv_moment_by_rank;
 
   /// \return the flat extent of \p ix's space; throws \c std::out_of_range
@@ -103,14 +103,14 @@ struct SizeRegime {
   }
 };
 
-/// Convert a TILE-extent sequence into a BATCH-slice-extent sequence
-/// (SizeRegime::space_slice_extents) by the SAME whole-tile grouping the wet
+/// Convert a tile-extent sequence into a batch-slice-extent sequence
+/// (SizeRegime::space_slice_extents) by the same whole-tile grouping the wet
 /// batched evaluator uses (mode_batches_of_trange1, tiledarray/result.hpp):
 /// accumulate consecutive tiles into a slice until appending the next would
 /// push the slice over \p target_batch_size, then start a new slice; a lone
 /// tile larger than the target still forms its own slice. Slice boundaries fall
-/// on tile edges. This is a convenience converter for a TILE-based caller; the
-/// dry-run backend never calls it -- it only READS the resulting slice extents,
+/// on tile edges. This is a convenience converter for a tile-based caller; the
+/// dry-run backend never calls it -- it only reads the resulting slice extents,
 /// so any other backend model can populate space_slice_extents differently
 /// without touching dry-run internals.
 [[nodiscard]] inline container::svector<std::size_t>

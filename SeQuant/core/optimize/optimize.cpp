@@ -114,7 +114,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   cost.batch_target_size = opts.batch_policy.batch_target_size;
   cost.inner_pow = opts.inner_pow;
   cost.batch_persistent_only = opts.batch_policy.persistent_only;
-  // Filled by EITHER batched arm below (both pass &node_axes as out_axes when
+  // Filled by either batched arm below (both pass &node_axes as out_axes when
   // term_batch_axes is set); every other objective leaves it empty, so the
   // term_batch_axes insertion at the end is then a no-op-shaped empty-vector
   // entry (harmless: the binarizer only consumes entries for summands a
@@ -153,8 +153,8 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
     // heavy DP above stays parallel. Without this the map is corrupted and the
     // downstream whole-Sum re-key reads a wrong-sized node_batch_axes, tripping
     // binarize's node_counter == size assertion (a nondeterministic, thread-
-    // count-dependent SIGABRT -- e.g. water-20 PNO-CCSD on Owl, absent under a
-    // sequential par_unseq fallback such as libc++).
+    // count-dependent SIGABRT, absent under a sequential par_unseq fallback
+    // such as libc++).
     static std::mutex term_batch_axes_mutex;
     std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
     (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
@@ -264,15 +264,15 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
 
-    // Re-key the per-summand batch annotations onto the FINAL reassembled Sum.
+    // Re-key the per-summand batch annotations onto the final reassembled Sum.
     // opt_pure_product keyed each summand's node_batch_axes (one entry per
-    // contraction node, left-first post-order) by that OPTIMIZED SUMMAND's
+    // contraction node, left-first post-order) by that optimized summand's
     // Product pointer. But the caller binarizes the whole reassembled Sum in
     // one call and looks the annotation up by the final Sum pointer -- and
     // under reorder, opt::reorder's clone-on-append (Sum::append clones) gives
-    // the final summands NEW pointers while new_sum (which still holds the
+    // the final summands new pointers while new_sum (which still holds the
     // keyed pointers) is destroyed on return. So gather the per-summand vectors
-    // in the FINAL summand order into one whole-tree vector -- binarize walks
+    // in the final summand order into one whole-tree vector -- binarize walks
     // the Sum-tree in that same order, one entry per contraction node, so the
     // flat node_batch_axes stays aligned with its node counter -- and store it
     // under the final Sum pointer, dropping the now-unreachable per-summand

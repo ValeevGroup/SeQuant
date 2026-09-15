@@ -61,21 +61,21 @@ struct ScheduleSink {
   bool fired = false;
 };
 
-/// \brief DIAGNOSTIC (analysis-only, OFF by default): a global monotonic
-///        "access clock" stamped on every genuine cache READ, plus a
-///        per-value (keyed by canonical node hash) record of the LAST clock at
+/// \brief diagnostic (analysis-only, off by default): a global monotonic
+///        "access clock" stamped on every genuine cache read, plus a
+///        per-value (keyed by canonical node hash) record of the last clock at
 ///        which that value was read.
 ///
 /// Home (root-homed) cache entries are pinned (life_c == SIZE_MAX), so their
 /// lifetime counter never drains and cannot be used to infer their genuine last
 /// use. This clock records the real thing: \c CacheManager::access_at (the
-/// ONLY genuine consumer-read path -- the store-return
+/// only genuine consumer-read path -- the store-return
 /// \c entry::access() bypasses it) calls \c tick() and stamps the read value's
 /// hash into \c last_access_map on every hit when \c enabled(). The record is a
-/// GLOBAL map keyed by node hash (not a per-entry field) deliberately: a
+/// global map keyed by node hash (not a per-entry field) deliberately: a
 /// batch-loop tier-B value lives on a per-block scratch cache that is destroyed
 /// at block close, so a per-entry field would be lost; the global map keeps the
-/// value's FINAL last-read clock across the whole run regardless of which
+/// value's final last-read clock across the whole run regardless of which
 /// (root or transient scratch) scope held it. Reset by the harness before a
 /// measured run. Single-threaded dry-run only. When \c enabled() is false every
 /// stamp site is a no-op and the eval path stays byte-identical.
@@ -98,7 +98,7 @@ struct AccessClock {
   }
   /// Advance and return the clock (one genuine read == one tick).
   static std::size_t tick() noexcept { return ++counter(); }
-  /// Current clock value WITHOUT advancing (used to timestamp the peak).
+  /// Current clock value without advancing (used to timestamp the peak).
   static std::size_t now() noexcept { return counter(); }
   /// Record a genuine read of the value with hash @p h at a fresh clock tick.
   static void stamp(std::size_t h) noexcept {
@@ -112,7 +112,7 @@ struct AccessClock {
   }
 };
 
-/// \brief DIAGNOSTIC (analysis-only, OFF by default): counts and times every
+/// \brief diagnostic (analysis-only, off by default): counts and times every
 ///        `cache_map_.find(key)` performed by CacheManager. Each such find runs
 ///        TreeNodeEqualityComparator on any bucket match -- a recursive
 ///        structural compare of the whole subtree (memoized-hash O(1) per node
@@ -135,7 +135,7 @@ struct LookupMeter {
     static std::uint64_t n = 0;
     return n;
   }
-  /// Time ONLY the find() call in @p f (a nullary functor returning the
+  /// Time only the find() call in @p f (a nullary functor returning the
   /// iterator); accumulate count + elapsed ns; return f()'s result. Works for
   /// const and non-const maps alike (return type is deduced).
   template <typename F>
@@ -167,10 +167,10 @@ struct LookupMeter {
   inline static Reporter reporter_{};
 };
 
-/// \brief DIAGNOSTIC (analysis-only, OFF by default): scoped wall-clock timer
+/// \brief diagnostic (analysis-only, off by default): scoped wall-clock timer
 ///        that accumulates elapsed time into named buckets, for locating where
 ///        the (single-threaded) ordered-executor driver spends time. Times are
-///        INCLUSIVE (a region's time includes any nested regions and any TA
+///        inclusive (a region's time includes any nested regions and any TA
 ///        dispatch inside it), so compare siblings and drill into the hot one.
 ///        Env gate SEQUANT_UT_PHASE; inert when unset. Single-threaded only.
 struct PhaseTimer {
@@ -179,7 +179,7 @@ struct PhaseTimer {
     return on;
   }
   // Backend-supplied barrier that drains all pending async work (set by the TA
-  // backend to a world fence). When present, each Scope fences at BOTH
+  // backend to a world fence). When present, each Scope fences at both
   // boundaries so async work cannot leak across timer regions and every
   // region's time reflects the work it actually dispatched-and-completed.
   static std::function<void()>& fence_hook() noexcept {
@@ -221,7 +221,7 @@ struct PhaseTimer {
     }
     ~Scope() {
       if (!on) return;
-      barrier();  // dtor-only: drain the async WE dispatched before stopping
+      barrier();  // dtor-only: drain the async we dispatched before stopping
       auto const d = std::chrono::duration_cast<std::chrono::nanoseconds>(
                          std::chrono::steady_clock::now() - t0)
                          .count();
@@ -242,8 +242,8 @@ struct PhaseTimer {
   inline static Reporter reporter_{};
 };
 
-/// \brief DIAGNOSTIC (analysis-only, OFF by default): splits CC-eval wall into
-///        (a) time INSIDE top-level evaluate_impl (the "body") and (b) the GAP
+/// \brief diagnostic (analysis-only, off by default): splits CC-eval wall into
+///        (a) time inside top-level evaluate_impl (the "body") and (b) the gap
 ///        between successive top-level evaluate_impl calls (the ordered
 ///        executor's schedule-walk / block-structure / call-site machinery).
 ///        Fences at body exit (via PhaseTimer::barrier) so each call owns its
@@ -283,7 +283,7 @@ struct EvalImplTimeline {
     static std::uint64_t v = 0;
     return v;
   }
-  // Node-evaluation (prod / TA contraction) time INSIDE the body, fenced so it
+  // Node-evaluation (prod / TA contraction) time inside the body, fenced so it
   // captures the contraction's full sync+async cost. body - prod == "other
   // inside evaluate_impl" (stack machine, cache access, apply_phase, store).
   static std::uint64_t& prod_ns() noexcept {
@@ -299,7 +299,7 @@ struct EvalImplTimeline {
             .count());
   }
   // apply_phase (canonicalization-phase tensor multiply) time inside the body:
-  // node-eval-adjacent TA work that is NOT the contraction.
+  // node-eval-adjacent TA work that is not the contraction.
   static std::uint64_t& phase_ns() noexcept {
     static std::uint64_t v = 0;
     return v;
@@ -370,14 +370,14 @@ struct EvalImplTimeline {
   inline static Reporter reporter_{};
 };
 
-/// \brief DIAGNOSTIC (analysis-only, OFF by default): counts ACTUAL builds at
+/// \brief diagnostic (analysis-only, off by default): counts actual builds at
 ///        the single build chokepoint (finish_phase_b) -- every freshly
 ///        computed non-leaf node, cached or not. Unlike DefUseMeter (which
 ///        counts cache.store_and_access() calls, and so also counts
 ///        re-home/placement
 ///        stores of an already-built value), this counts real contraction
 ///        executions, so build_count > iterations for a node == genuine
-///        recompute (re-run contraction), the ground truth the FLOP count
+///        recompute (re-run contraction), the ground truth the flop count
 ///        reflects. Env gate SEQUANT_UT_BUILD_METER. Single-threaded only.
 /// Strict cache-fill-once mode (see entry::store): env
 /// SEQUANT_UT_STRICT_FILL_ONCE.
@@ -456,7 +456,7 @@ struct BuildMeter {
   inline static Reporter reporter_{};
 };
 
-/// \brief DIAGNOSTIC (analysis-only, OFF by default): measures def-to-use
+/// \brief diagnostic (analysis-only, off by default): measures def-to-use
 ///        distance -- how many production "ops" elapse between a value being
 ///        stored (produced by a contraction) and each time it is consumed. A
 ///        global op-clock ticks once per genuine \c store_and_access(key,data);
@@ -572,10 +572,10 @@ struct DefUseMeter {
 ///        evaluations, keyed by the value's canonical hash.
 ///
 /// Owned as a plain value member of the cache handle (see
-/// \c CacheManager::persistent_values()) -- NOT chained through \c parent_,
-/// so each handle's store is local to it, unlike the router/array-ops/
+/// \c CacheManager::persistent_values()) -- not chained through \c parent_,
+/// so each handle's store is local to it, unlike the array-ops and
 /// peak-monitor hooks that fall through to the scope-chain parent. It exists
-/// so a value whose CELL is marked persistent by the table-driven batched
+/// so a value whose cell is marked persistent by the table-driven batched
 /// executor's registry (the explicit value cells; see
 /// \c CellReadResolver, cell_registry.hpp) can be written once and read back
 /// across repeated evaluations (e.g. successive CC iterations) without being
@@ -584,12 +584,12 @@ struct DefUseMeter {
 /// \c reset(). The batched executor's registry is the sole intended writer;
 /// readers are the same registry resolving a persistent cell's operand read.
 ///
-/// WHAT IT HOLDS is the FRONTIER of the invariant region, not all of it: the
+/// What it holds is the frontier of the invariant region, not all of it: the
 /// table marks a cell persistent only when some consumer of it is volatile,
 /// or it is a forest root (see \c TableCell::persistent and \c
 /// detail::apply_persistence_frontier), so what accumulates here is the values
 /// that feed the next evaluation's volatile work plus its results -- not every
-/// invariant intermediate behind them. NOTHING here is dropped by \c reset()
+/// invariant intermediate behind them. Nothing here is dropped by \c reset()
 /// by design; its lifetime is bounded by \c clear_persistent_values() or by
 /// the cache handle itself going away.
 class PersistentValueStore {
@@ -646,28 +646,20 @@ namespace sequant {
 /// fields depend on the owning \c CacheManager's \c TreeNode /
 /// \c force_hash_collisions template parameters.
 ///
-/// \c axis is the KEPT field: the forest-descent resolution path
-/// (\c evaluate_impl's Enter-stage \c slice_to_use) still looks a fetched
-/// node's mode up by this exact \c Index (via \c index_position(nd, axis))
-/// -- unchanged by this struct's introduction. \c level is the NEW DAG-scope
-/// nest position a future resolution path will consult instead. \c range
-/// is the loop's current element block (renamed from the old pair's \c second,
-/// same meaning).
-/// \c exact_axis is NEW: the ordered executor (which co-evaluates a whole
-/// type-bucketed block under one canonical \c block.axis) leaves it
+/// \c axis is what the forest-descent resolution path
+/// (\c evaluate_impl's Enter-stage \c slice_to_use) resolves against: it looks
+/// a fetched node's mode up by this exact \c Index (via
+/// \c index_position(nd, axis)). \c level is the DAG-scope nest position a
+/// level-based resolution path consults instead. \c range is the loop's
+/// current element block.
+/// \c exact_axis distinguishes the two producers: the ordered executor (which
+/// co-evaluates a whole type-bucketed block under one canonical
+/// \c block.axis) leaves it
 /// \c nullopt, while the forest evaluator (which pushes each member's own
 /// physical axis) fills it with that same axis -- redundant with
-/// \c axis today, but keeping the two fields separate lets a future
-/// level-based resolution tell the two strategies apart without re-deriving
-/// which one produced this entry.
-///
-/// Purely ADDITIVE relative to the old `std::pair<Index,
-/// std::pair<std::size_t, std::size_t>>`: every existing reader that used to
-/// destructure `{axis, {lo, hi}}` continues to compile once updated to name
-/// `.axis` / `.range` instead of `.first` / `.second` (a mechanical rename;
-/// see the callers this task updates), and every writer still populates
-/// exactly the same `{axis, {lo, hi}}` pair, now alongside `level` and
-/// `exact_axis`.
+/// \c axis in practice, but keeping the two fields separate lets a level-based
+/// resolution tell the two strategies apart without re-deriving which one
+/// produced this entry.
 struct BatchContextEntry {
   Index axis;
   DagScopeLevel level{};
@@ -686,16 +678,16 @@ struct BatchContextEntry {
 template <typename TreeNode, bool force_hash_collisions>
 class CacheManager {
  public:
-  /// The NODE type. Used for everything node-facing: the custom evaluator, the
+  /// The node type. Used for everything node-facing: the custom evaluator, the
   /// multiroot driver, the persistence predicate, and \c for_each_key --
   /// all of which see plain forest nodes, distinct from the
-  /// CACHE-MAP key (\c cache_key_type, see below).
+  /// cache-map key (\c cache_key_type, see below).
   using key_type = TreeNode;
 
-  /// The CACHE-MAP key. \c CachedValue wraps a node; its identity on the
+  /// The cache-map key. \c CachedValue wraps a node; its identity on the
   /// forest-descent path is the node's canonical hash (\c hash::value). The
   /// batched (table-driven) executor never uses this map for values -- it
-  /// keys by cell id instead. \c CachedValue is IMPLICITLY constructible from
+  /// keys by cell id instead. \c CachedValue is implicitly constructible from
   /// a node, so every call site that passes a bare node keeps compiling.
   using cache_key_type = eval::CachedValue<TreeNode>;
 
@@ -733,23 +725,23 @@ class CacheManager {
 
   /// A multi-root driver type. When set, the free function
   /// `evaluate_multiroot(roots, layouts, leaf, cache)` (eval.hpp) routes the
-  /// WHOLE set of independent \p roots through this driver instead of
+  /// whole set of independent \p roots through this driver instead of
   /// evaluating each root as its own separate forest. This driver returns a
-  /// MAP: one result per root, in input order, with NO cross-root summation
+  /// map: one result per root, in input order, with no cross-root summation
   /// -- the roots need not even be commensurate in shape (e.g. independent
   /// CC residual equations). \p
   /// layouts holds one layout string per root, in the same order as \p
   /// roots, so heterogeneous roots (e.g. distinct CC residual annotations
   /// like R1 `{a;i}` vs R2 `{ab;ij}`) can each be permuted to their own
   /// result layout. The intended installer (ordered_executor.hpp)
-  /// concatenates \p roots into ONE schedule so a subexpression shared
+  /// concatenates \p roots into one schedule so a subexpression shared
   /// across roots is built once (the same CSE `compute_dag_boulevard`
   /// already gives a concatenated node list), then returns each root's own
   /// (unsummed) `value_result`. The captured leaf evaluator and any
   /// batching policy live inside the closure, which is built at the call site
   /// that owns those concrete types (e.g. MPQC's batched CSV-CCk residual
   /// install). Empty (default) => `evaluate_multiroot` throws: there is no
-  /// per-root fallback, so a multi-root caller MUST explicitly wire a driver
+  /// per-root fallback, so a multi-root caller must explicitly wire a driver
   /// that understands the cross-root CSE contract.
   using multiroot_driver_type = std::function<container::svector<ResultPtr>(
       container::svector<key_type> const& roots,
@@ -774,25 +766,25 @@ class CacheManager {
     std::size_t hops;
   };
 
-  /// DIAGNOSTIC (dry-run costing): per-DISTINCT-value build tally for the
-  /// avoidable-recompute rollup, keyed by the SAME node identity the cache
+  /// Diagnostic (dry-run costing): per-distinct-value build tally for the
+  /// avoidable-recompute rollup, keyed by the same node identity the cache
   /// dedups on (TreeNodeHasher + TreeNodeEqualityComparator = topological hash
   /// bin + Bliss connectivity 3-way cmp + recursive child compare), so two
-  /// topologically-distinct nodes sharing a 64-bit hash are NOT folded and
-  /// per-block / alpha-renamed builds of ONE value ARE folded.
+  /// topologically-distinct nodes sharing a 64-bit hash are not folded and
+  /// per-block / alpha-renamed builds of one value are folded.
   ///
-  /// Recompute is measured with ACTUAL replay FLOPs, deduped at the (value,
-  /// SLICE) granularity -- NOT against a build-once "full extent" denominator,
-  /// which is ill-defined when slicing is non-uniform. \c slices maps a SLICE
-  /// signature -- the enclosing batch context PROJECTED onto the modes THIS
+  /// Recompute is measured with actual replay FLOPs, deduped at the (value,
+  /// slice) granularity -- not against a build-once "full extent" denominator,
+  /// which is ill-defined when slicing is non-uniform. \c slices maps a slice
+  /// signature -- the enclosing batch context projected onto the modes this
   /// value actually carries (empty for a value invariant to every live loop) --
   /// to that slice's {build count, one build's actual cost}. Then:
   ///   total     = sum over slices of builds*cost   (== the replay's dryrun
-  ///   sum) build-once = sum over slices of cost         (each DISTINCT slice
+  ///   sum) build-once = sum over slices of cost         (each distinct slice
   ///   once) avoidable = sum over slices of (builds-1)*cost.
-  /// A value tiled over DISTINCT slices (different blocks) has builds==1 per
+  /// A value tiled over distinct slices (different blocks) has builds==1 per
   /// slice -> 0 avoidable (tiling is not recompute, even if the blocks are
-  /// unequal). A value rebuilt at the SAME slice -- e.g. a node invariant to an
+  /// unequal). A value rebuilt at the same slice -- e.g. a node invariant to an
   /// enclosing loop, whose projected signature is identical every block -- has
   /// builds>1 at one slice -> (builds-1)*cost avoidable. Costs need not be
   /// uniform across slices; each slice carries its own realized cost.
@@ -832,12 +824,12 @@ class CacheManager {
     /// cleared by reset() (the default, and historical, behavior).
     bool persistent_;
 
-    /// Regression tripwire (see \c store()): true iff a NON-persistent entry
+    /// Regression tripwire (see \c store()): true iff a non-persistent entry
     /// has already been \c store()'d since its last \c reset(). After the
     /// combined single-DAG evaluation (every value built exactly once per
     /// evaluation), a second \c store() into the same NP entry with no
     /// intervening \c reset() means a duplicate producer survived -- a bug.
-    /// Not consulted (or set) for PERSISTENT entries, which legitimately
+    /// Not consulted (or set) for persistent entries, which legitimately
     /// re-store across batch replays. Cleared by \c reset().
     bool stored_this_eval_ = false;
 
@@ -854,7 +846,7 @@ class CacheManager {
       if (decay() == 0) {              // last use: release the data
         size_bytes_.reset();
         // The value has now been fully consumed and released, so a later
-        // store() of this key is a fresh RE-PRODUCTION (e.g. the CCk energy
+        // store() of this key is a fresh re-production (e.g. the CCk energy
         // observable, evaluated on the residual's cache, recomputing a volatile
         // whose residual-side lifetime just drained), not a duplicate producer
         // within one eval. Clear the re-store tripwire so that legitimate
@@ -867,11 +859,10 @@ class CacheManager {
       return data_p;
     }
 
-    // NOT noexcept: SEQUANT_ASSERT below can throw (SEQUANT_ASSERT_BEHAVIOR
-    // = THROW) -- see the tripwire comment on stored_this_eval_. In every
-    // default build config (IGNORE, or Debug's ABORT) this never actually
-    // throws, so callers written against the historical noexcept contract
-    // are unaffected in practice.
+    // Not noexcept: SEQUANT_ASSERT below can throw (SEQUANT_ASSERT_BEHAVIOR
+    // = throw) -- see the tripwire comment on stored_this_eval_. In every
+    // default build config (ignore, or Debug's abort) this never actually
+    // throws.
     /// @param strict_fill_once whether a duplicate-producer store on a
     ///        non-persistent entry throws; the caller
     ///        (CacheManager::store_and_access) passes its own \c
@@ -881,13 +872,13 @@ class CacheManager {
     ///        tests can flip strictness deterministically without a
     ///        process-wide static latch.
     void store(ResultPtr&& data, bool strict_fill_once) {
-      // Regression tripwire: a NON-persistent entry re-stored without an
+      // Regression tripwire: a non-persistent entry re-stored without an
       // intervening reset() means the same value was produced twice within
-      // one evaluation (a duplicate producer). PERSISTENT entries are
+      // one evaluation (a duplicate producer). Persistent entries are
       // excluded: they legitimately re-store across batch replays.
       if (!persistent_) {
         SEQUANT_ASSERT(!stored_this_eval_);
-        // STRICT cache-fill-once (dry-run schedule test-drive): the assert
+        // Strict cache-fill-once (dry-run schedule test-drive): the assert
         // above is compiled out in Release/RelWithDebInfo, so a duplicate
         // producer (the same value cell built twice without an intervening
         // reset -- e.g. a frame-sensitive key that made a consumer miss a
@@ -929,9 +920,9 @@ class CacheManager {
 
     [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
 
-    /// \return true iff this entry currently holds the SAME buffer (pointer
+    /// \return true iff this entry currently holds the same buffer (pointer
     ///         identity) as @p other. A sliced/permuted/phase-shifted read of
-    ///         this entry is a DISTINCT buffer, so it compares unequal. Used by
+    ///         this entry is a distinct buffer, so it compares unequal. Used by
     ///         the peak trace to detect an operand that aliases a cached buffer
     ///         (whose bytes are then already counted, and must not be added
     ///         again).
@@ -946,7 +937,7 @@ class CacheManager {
 
   };  // entry
 
-  // NOT noexcept: forwards to entry::store(), which is not noexcept (see
+  // Not noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
   ResultPtr store_and_access(entry& ent, ResultPtr&& data) {
     ent.store(std::move(data), strict_fill_once_);
@@ -956,15 +947,15 @@ class CacheManager {
   std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
       cache_map_;
 
-  /// DIAGNOSTIC: per-DISTINCT-value build tally (see BuildTally), keyed by the
+  /// Diagnostic: per-distinct-value build tally (see BuildTally), keyed by the
   /// same node identity as cache_map_. Populated by tally_build() from the eval
-  /// loop's build choke point (eval.hpp finish_phase_b) for EVERY product
+  /// loop's build choke point (eval.hpp finish_phase_b) for every product
   /// build, whether that value is a cache entry, a footprint-gated recompute,
   /// or a per-batch rebuild -- so the rollup is complete. Held only on the
-  /// scope- chain ROOT (tally_build routes there); scratch caches never
-  /// populate it, and reset() does NOT clear it (the tally spans the whole
+  /// scope- chain root (tally_build routes there); scratch caches never
+  /// populate it, and reset() does not clear it (the tally spans the whole
   /// forest replay).
-  // Keyed by NODE identity (not the cache's value-id): a per-DISTINCT-value
+  // Keyed by node identity (not the cache's value-id): a per-distinct-value
   // build diagnostic the dry-run costing rolls up, consumed node-by-node by the
   // eval tests. The node-keyed value identity lives in cache_map_
   // (correctness); this rollup is node-keyed as well.
@@ -984,8 +975,8 @@ class CacheManager {
   /// sets this to the cache one level up; access() delegates on a local miss
   /// so a loop-invariant node stored once at an ancestor level is found by
   /// every inner body without copy-down. Null (default) => standalone cache,
-  /// byte-identical to pre-scope-chain behavior. Non-owning; the parent must
-  /// outlive this cache.
+  /// with no chain to delegate to. Non-owning; the parent must outlive this
+  /// cache.
   CacheManager* parent_ = nullptr;
 
   /// Backend realizations of external-axis batching's array ops (zero
@@ -994,9 +985,9 @@ class CacheManager {
   /// pointee must outlive this cache.
   BackendArrayOps const* array_ops_ = nullptr;
 
-  /// Persistent value store local to THIS handle (see
+  /// Persistent value store local to this handle (see
   /// \c eval::PersistentValueStore) -- unlike \c array_ops_ and the other
-  /// hooks above, deliberately NOT chained through \c parent_: a child
+  /// hooks above, deliberately not chained through \c parent_: a child
   /// scratch's store is its own, not the root's. Written by the table-driven
   /// batched executor's registry for cells it has marked persistent; \c
   /// reset() leaves it untouched by design (see \c reset()), so a value
@@ -1008,10 +999,10 @@ class CacheManager {
   /// ordered run currently in flight (see \c CellReadResolver,
   /// cell_registry.hpp), published here for the duration of that run.
   ///
-  /// It is NOT a read path of this cache and has NO production reader: the
+  /// It is not a read path of this cache and has no production reader: the
   /// ordered executor holds the resolver itself and passes it to \c
   /// detail::compute_cell explicitly, and \c evaluate_impl (the
-  /// forest-descent engine) never consults it. It is a TEST-ONLY observation
+  /// forest-descent engine) never consults it. It is a test-only observation
   /// seam -- a \c custom_evaluator_ hook, which receives the live cache, can
   /// ask the table what it currently holds and whether a value is drained,
   /// which is what test_eval_ordered.cpp's in-place-eligibility case does.
@@ -1050,7 +1041,7 @@ class CacheManager {
   /// pointee must outlive this cache.
   eval::PeakMonitor* peak_monitor_ = nullptr;
 
-  /// Explicit value cells: optional source of bytes held OUTSIDE
+  /// Explicit value cells: optional source of bytes held outside
   /// this cache hierarchy's own \c cache_map_ entries that must still count
   /// toward \c chain_residency() -- the ordered executor's \c CellRegistry,
   /// once storage moves onto the table (see \c set_external_residency).
@@ -1059,7 +1050,7 @@ class CacheManager {
   /// is byte-identical to before this field existed.
   std::function<std::size_t()> external_residency_{};
 
-  /// Optional source of an EXTERNAL alive-entry enumeration (hash,
+  /// Optional source of an external alive-entry enumeration (hash,
   /// bytes) to fold into \c note_working_set()'s diagnostic liveset capture
   /// alongside this hierarchy's own \c cache_map_ entries -- the counterpart
   /// of \c external_residency_ for \c PeakMonitor::on_peak_liveset. Looked
@@ -1192,7 +1183,7 @@ class CacheManager {
   }
 
   /// \return the persistent value store local to this handle (see
-  ///         \c persistent_values_). NOT inherited from \c parent_ -- each
+  ///         \c persistent_values_). Not inherited from \c parent_ -- each
   ///         handle's store is its own.
   [[nodiscard]] eval::PersistentValueStore& persistent_values() noexcept {
     return persistent_values_;
@@ -1203,7 +1194,7 @@ class CacheManager {
   }
 
   /// Explicitly drop every value in the persistent store (see
-  /// \c persistent_values_). \c reset() does NOT do this by design: the
+  /// \c persistent_values_). \c reset() does not do this by design: the
   /// persistent store outlives repeated evaluations of this handle.
   void clear_persistent_values() noexcept { persistent_values_.clear(); }
 
@@ -1228,9 +1219,9 @@ class CacheManager {
   /// Sets the external residency source (see \c external_residency_). Pass
   /// an empty \c std::function to detach.
   ///
-  /// Installed on the CHAIN-ROOT handle only, and asserted so: \c
+  /// Installed on the chain-root handle only, and asserted so: \c
   /// chain_residency() folds the hook in exactly where its parent walk bottoms
-  /// out (\c parent_ == nullptr), and the lookup that finds it walks UPWARD,
+  /// out (\c parent_ == nullptr), and the lookup that finds it walks upward,
   /// so a hook installed on a child would never be folded in at all -- its
   /// bytes would silently vanish from every residency and peak figure.
   void set_external_residency(std::function<std::size_t()> f) noexcept {
@@ -1241,7 +1232,7 @@ class CacheManager {
     external_residency_ = std::move(f);
   }
 
-  /// \return the RAW external-residency hook visible from this cache (local
+  /// \return the raw external-residency hook visible from this cache (local
   ///         if set, else \c parent_'s, like \c array_ops() / \c
   ///         cell_read_resolver()) -- an empty \c std::function if none is
   ///         wired anywhere along the chain. \c chain_residency() invokes
@@ -1261,7 +1252,7 @@ class CacheManager {
   }
 
   /// Sets the external liveset source (see \c external_liveset_). Pass an
-  /// empty \c std::function to detach. Installed on the CHAIN-ROOT handle
+  /// empty \c std::function to detach. Installed on the chain-root handle
   /// only, and asserted so, for the same reason \c set_external_residency is.
   void set_external_liveset(
       std::function<
@@ -1289,7 +1280,7 @@ class CacheManager {
 
   /// Ensure a scope-hoist slot exists for @p key so a loop-invariant
   /// intermediate can be stored here (store_and_access() is a no-op for an
-  /// unregistered key). The slot is NON-persistent with an effectively
+  /// unregistered key). The slot is non-persistent with an effectively
   /// unbounded life, so it is never drained by access() and lives until the
   /// next reset() -- per-batch for a batch scratch (rebuilt for the next
   /// batch of the loop it is scoped to), per-term for the real cache
@@ -1328,7 +1319,7 @@ class CacheManager {
   ///
   /// Resets all cached data.
   ///
-  /// Does NOT touch \c persistent_values_ (see \c persistent_values()): that
+  /// Does not touch \c persistent_values_ (see \c persistent_values()): that
   /// store is a separate, explicitly-managed handle-local cache meant to
   /// survive repeated evaluations; use \c clear_persistent_values() to drop
   /// it deliberately.
@@ -1343,13 +1334,13 @@ class CacheManager {
   /// per-op eval trace; monotonically non-decreasing until reset(). @p op_hash
   /// (default 0) identifies the op node being evaluated at the call site (0
   /// when no node is in scope there); forwarded to \c peak_monitor()'s
-  /// \c observe() so a wired \c PeakMonitor can report WHERE its hierarchy-
+  /// \c observe() so a wired \c PeakMonitor can report where its hierarchy-
   /// wide high-water was observed.
   size_t note_working_set(size_t current_bytes, size_t op_hash = 0) noexcept {
     working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
     if (auto* m = peak_monitor()) {
-      // DIAGNOSTIC (analysis-only): if a live-set capture hook is installed,
-      // enumerate the chain's alive entries BEFORE observe() advances the mark,
+      // Diagnostic (analysis-only): if a live-set capture hook is installed,
+      // enumerate the chain's alive entries before observe() advances the mark,
       // on each real high-water advance. Gated on on_peak_liveset being set, so
       // the default path is byte-identical (no enumeration).
       if (m->on_peak_liveset && current_bytes > m->hwmark_bytes) {
@@ -1369,7 +1360,7 @@ class CacheManager {
       }
       m->observe(current_bytes, op_hash);
     }
-    // DIAGNOSTIC (SEQUANT_UT_PEAK_COMPOSE): on each new GLOBAL max working set,
+    // Diagnostic (SEQUANT_UT_PEAK_COMPOSE): on each new global max working set,
     // print what composes it -- the co-resident cache chain vs the single
     // transient result/scratch being formed (current_bytes - chain_residency),
     // plus the largest single alive entry. Answers whether the realized peak is
@@ -1407,17 +1398,17 @@ class CacheManager {
     return working_set_hwmark_;
   }
 
-  /// DIAGNOSTIC: record one product build of @p key at slice @p slice_sig
+  /// Diagnostic: record one product build of @p key at slice @p slice_sig
   /// costing @p flops (this build's actual, realized-extent cost). @p slice_sig
   /// is the enclosing batch context projected onto the modes @p key carries
-  /// (empty when the value is invariant to every live loop), so repeats of ONE
+  /// (empty when the value is invariant to every live loop), so repeats of one
   /// slice fold (recompute) while distinct slices stay separate (tiling).
-  /// Routes to the scope-chain ROOT so every build -- from any per-batch
-  /// scratch -- accumulates in ONE map keyed by node identity (see
+  /// Routes to the scope-chain root so every build -- from any per-batch
+  /// scratch -- accumulates in one map keyed by node identity (see
   /// recompute_tally_). Called only in the dry-run costing replay.
-  /// @param key the NODE whose build is tallied. A node (not a \c
-  /// cache_key_type): converting at the call boundary would COPY the node --
-  /// deep-copying its whole subtree -- on EVERY build, including on the wet
+  /// @param key the node whose build is tallied. A node (not a \c
+  /// cache_key_type): converting at the call boundary would copy the node --
+  /// deep-copying its whole subtree -- on every build, including on the wet
   /// path where the tally is disabled.
   void tally_build(key_type const& key, std::string const& slice_sig,
                    double flops, double exec) noexcept {
@@ -1440,7 +1431,7 @@ class CacheManager {
     recompute_tally_enabled_ = on;
   }
 
-  /// \return the per-DISTINCT-value build tally accumulated by tally_build()
+  /// \return the per-distinct-value build tally accumulated by tally_build()
   ///         on this (root) cache (see recompute_tally_). Read after the replay
   ///         to roll up avoidable recompute per node identity.
   [[nodiscard]] std::unordered_map<
@@ -1450,8 +1441,8 @@ class CacheManager {
     return recompute_tally_;
   }
 
-  /// Sum over ALIVE entries of this cache's own residency (bytes). Unlike
-  /// working_set_hwmark() (a high-water MAX over time), this is the CURRENT
+  /// Sum over alive entries of this cache's own residency (bytes). Unlike
+  /// working_set_hwmark() (a high-water max over time), this is the current
   /// live residency at the instant of the call.
   [[nodiscard]] size_t current_residency() const noexcept {
     size_t s = 0;
@@ -1460,7 +1451,7 @@ class CacheManager {
     return s;
   }
   /// current_residency() of this cache plus every ancestor along the scope
-  /// chain (parent_), PLUS -- exactly where the chain walk bottoms out
+  /// chain (parent_), plus -- exactly where the chain walk bottoms out
   /// (parent_ == nullptr) -- the external residency hook's bytes: the total
   /// live residency visible at this scope at one instant, table-owned
   /// storage (the \c CellRegistry, once wired via \c
@@ -1474,15 +1465,15 @@ class CacheManager {
     return current_residency() + (ext ? ext() : 0);
   }
 
-  /// \return true iff some ALIVE entry on this cache or any ancestor along the
+  /// \return true iff some alive entry on this cache or any ancestor along the
   ///         scope chain physically holds @p value (pointer identity).
   ///         Read-only: unlike access_at() it decays no lifetime. The peak
   ///         trace uses it to skip an operand whose bytes are already counted
   ///         -- locally in \c bytes(cache,...) or up-chain in \c
   ///         chain_residency()
   ///         -- because the operand aliases that resident buffer. A sliced (or
-  ///         permuted, or phase-shifted) read of a resident value is a DISTINCT
-  ///         buffer with a different pointer, so it is correctly NOT skipped.
+  ///         permuted, or phase-shifted) read of a resident value is a distinct
+  ///         buffer with a different pointer, so it is correctly not skipped.
   [[nodiscard]] bool chain_holds(ResultPtr const& value) const noexcept {
     if (!value) return false;
     for (auto const& [k, e] : cache_map_)
@@ -1490,38 +1481,38 @@ class CacheManager {
     return parent_ ? parent_->chain_holds(value) : false;
   }
 
-  /// \return true iff some ALIVE entry on this cache or any ancestor along the
-  ///         scope chain physically holds @p value (pointer identity) AND that
-  ///         entry is either PERSISTENT (\c persistent(), never drained --
-  ///         survives across evaluations) or has MORE THAN ONE consumer (\c
-  ///         max_life_count() > 1) -- i.e. @p value is a SHARED buffer with at
+  /// \return true iff some alive entry on this cache or any ancestor along the
+  ///         scope chain physically holds @p value (pointer identity) and that
+  ///         entry is either persistent (\c persistent(), never drained --
+  ///         survives across evaluations) or has more than one consumer (\c
+  ///         max_life_count() > 1) -- i.e. @p value is a shared buffer with at
   ///         least one read still pending (or a resident/persistent home read
   ///         by every consumer), so mutating it in place would corrupt those
   ///         other reads.
   ///
   /// This is the runtime safety gate the in-place \c Sum accumulation
   /// (eval.hpp) needs, and is strictly the "the accumulator is shared" test:
-  /// a PRIVATE single-use buffer is NOT reported here, so in-place still fires
+  /// a private single-use buffer is not reported here, so in-place still fires
   /// for it. Two cases yield a private (unshared) accumulator, both correctly
   /// returning false:
-  ///   - a TRANSIENT running total (freshly allocated by a prior \c sum() /
+  ///   - a transient running total (freshly allocated by a prior \c sum() /
   ///     \c prod(), never \c store'd) is held by no entry at all; and
-  ///   - a single-use CSE entry (\c max_life == 1) MOVES its buffer out on its
+  ///   - a single-use CSE entry (\c max_life == 1) moves its buffer out on its
   ///     sole \c entry::access() (\c decay() reaches 0 -> \c
   ///     std::move(data_p)), so once it has been read as an operand it no
   ///     longer \c holds() it -- and even were it somehow still alive, \c
   ///     max_life > 1 excludes it.
   /// A value with a genuine multi-use count (\c max_life > 1, e.g. a
   /// subexpression shared across two roots) is never drained by a single read,
-  /// so it stays held and IS reported here -- the case the elided \c
-  /// SEQUANT_ASSERT could not catch at runtime. A PERSISTENT entry
+  /// so it stays held and is reported here -- the case the elided \c
+  /// SEQUANT_ASSERT could not catch at runtime. A persistent entry
   /// (registered via the \c CacheManager(Iterable&&, PersistencePred) ctor,
-  /// e.g. the \c make_batched_scratch path) is ALSO reported even when its
+  /// e.g. the \c make_batched_scratch path) is also reported even when its
   /// \c max_life == 1: \c entry::access() never drains a persistent entry, so
   /// it stays resident-forever and is shared across the batched replays --
   /// mutating it in place would corrupt every later read. Hence the guard is
-  /// \c persistent() OR \c max_life > 1, not \c max_life alone.
-  /// A held NON-persistent single-use entry (\c max_life == 1) is NOT reported
+  /// \c persistent() or \c max_life > 1, not \c max_life alone.
+  /// A held non-persistent single-use entry (\c max_life == 1) is not reported
   /// (it drained its buffer out on its sole read, so it no longer holds it),
   /// keeping in-place enabled for the private common case.
   [[nodiscard]] bool chain_holds_shared(ResultPtr const& value) const noexcept {
@@ -1547,21 +1538,21 @@ class CacheManager {
   /// miss returns {nullptr, 0}. The hop distance surfaces the value's lifetime
   /// scope so the caller (Enter-stage slice-on-use) can slice it to exactly the
   /// batch loops the fetch crossed.
-  /// @param key the NODE to look up. Taken as a node (not a \c cache_key_type)
+  /// @param key the node to look up. Taken as a node (not a \c cache_key_type)
   /// on purpose: the map is probed heterogeneously, so a lookup never
-  /// materializes a \c CachedValue -- which would COPY the node, i.e.
+  /// materializes a \c CachedValue -- which would copy the node, i.e.
   /// deep-copy its whole subtree (see \c CachedValueHasher).
   [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
       if (auto data = found->second.access(); data) {
-        // DIAGNOSTIC (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
+        // Diagnostic (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
         // read into the global access clock. No-op when the gate is off.
         eval::AccessClock::stamp(found->first->hash_value());
         eval::BuildMeter::on_read(found->first->hash_value(),
                                   found->second.max_life_count());
-        // NB: size_in_bytes() walks the array; only pay it when metering.
+        // Nb: size_in_bytes() walks the array; only pay it when metering.
         if (eval::DefUseMeter::enabled())
           eval::DefUseMeter::on_read(found->first->hash_value(),
                                      found->second.size_in_bytes());
@@ -1586,15 +1577,15 @@ class CacheManager {
   ///         entry. Passing @c key that was not present during construction of
   ///         this CacheManager object, stores nothing, but still returns a
   ///         valid pointer to @c data.
-  // NOT noexcept: forwards to entry::store(), which is not noexcept (see
+  // Not noexcept: forwards to entry::store(), which is not noexcept (see
   // there).
   [[nodiscard]] ResultPtr store_and_access(key_type const& key,
                                            ResultPtr data) {
     if (auto found =
             eval::LookupMeter::timed([&] { return cache_map_.find(key); });
         found != cache_map_.end()) {
-      // INSTRUMENTATION (SEQUANT_REBUILD_TRACE, analysis-only): a store onto an
-      // entry that is ALREADY alive means the value was still resident in cache
+      // Instrumentation (SEQUANT_REBUILD_TRACE, analysis-only): a store onto an
+      // entry that is already alive means the value was still resident in cache
       // yet got rebuilt anyway -- a hash-bypassing recompute. Emit the hash and
       // the persistent flag so a persistent (should-never-recompute) value that
       // is nonetheless rebuilt-while-resident is caught. No-op when the gate is
@@ -1628,7 +1619,7 @@ class CacheManager {
   template <typename F>
     requires std::invocable<F&, key_type const&>
   void for_each_key(F&& fn) const {
-    // The map key is a CachedValue; callers enumerate NODES (key_type), so hand
+    // The map key is a CachedValue; callers enumerate nodes (key_type), so hand
     // them the node.
     for (auto const& [k, v] : cache_map_) fn(k.node);
   }
@@ -1658,7 +1649,7 @@ class CacheManager {
     return iter != cache_map_.end() && iter->second.alive();
   }
 
-  /// \return true iff @p key is alive (holding data) at THIS cache or ANY
+  /// \return true iff @p key is alive (holding data) at this cache or any
   ///         ancestor scope up the parent chain. Non-decrementing (unlike \c
   ///         access_at): a pure residency probe. Used by \c
   ///         make_batched_scratch to decide that a batch-invariant value
@@ -1736,18 +1727,13 @@ class CacheManager {
 /// \param min_repeats Minimum number of repeats for a node to be cached. By
 ///                    default (1) everything is cached, so use-count tracking
 ///                    is exact.
-///                    NOTE this default was 2 on master; it was changed to 1 by
-///                    0301aca1a (aux+occ ordered-DAG batched CCSD). The
-///                    table-driven ordered executor derives every life from the
-///                    cell table's exact per-cell read count, and a
+///                    The table-driven ordered executor derives every life
+///                    from the cell table's exact per-cell read count, and a
 ///                    use-count-tracking cache that silently declines
-///                    single-use nodes makes that count wrong; with 1 the cache
-///                    and the table agree by construction. Every water-8 /
-///                    water-20 gate on this branch was run with 1. A caller
-///                    that wants the old CSE-only behaviour must pass 2
-///                    EXPLICITLY -- a default-argument change is invisible in a
-///                    diff, and it raises resident memory for callers relying
-///                    on the default.
+///                    single-use nodes makes that count wrong; with 1 the
+///                    cache and the table agree by construction. Pass 2 to
+///                    cache only nodes reached more than once, which caches
+///                    less and leaves the use counts approximate.
 ///
 /// \return A cache manager.
 ///
@@ -1821,19 +1807,14 @@ struct zero_footprint {
 ///        intrinsically volatile. Only its value on leaves matters in practice
 ///        (volatility propagates up), but it is consulted on every node.
 /// \param min_repeats minimum NP repeats to cache (default 1).
-///                    NOTE this default was 2 on master; it was changed to 1 by
-///                    0301aca1a (aux+occ ordered-DAG batched CCSD). The
-///                    table-driven ordered executor derives every life from the
-///                    cell table's exact per-cell read count, and a
+///                    The table-driven ordered executor derives every life
+///                    from the cell table's exact per-cell read count, and a
 ///                    use-count-tracking cache that silently declines
-///                    single-use nodes makes that count wrong; with 1 the cache
-///                    and the table agree by construction. Every water-8 /
-///                    water-20 gate on this branch was run with 1. A caller
-///                    that wants the old CSE-only behaviour must pass 2
-///                    EXPLICITLY -- a default-argument change is invisible in a
-///                    diff, and it raises resident memory for callers relying
-///                    on the default.
-///                    COST NOTE: 1 registers EVERY internal node, and a cached
+///                    single-use nodes makes that count wrong; with 1 the
+///                    cache and the table agree by construction. Pass 2 to
+///                    cache only nodes reached more than once, which caches
+///                    less and leaves the use counts approximate.
+///                    Cost note: 1 registers every internal node, and a cached
 ///                    node is held in the cache map by value (a deep copy of
 ///                    its subtree). On the left-leaning Sum-tree binarize
 ///                    builds for a whole equation the spine has one node per
@@ -1854,7 +1835,7 @@ struct zero_footprint {
 ///        half-transformed DF integral with a free projected-AO index), at the
 ///        cost of recomputation. 0 (default) disables the gate.
 ///
-/// A node is also refused run-scope residence when it is BATCH-VARIANT: its
+/// A node is also refused run-scope residence when it is batch-variant: its
 /// cross-occurrence lifetime mask is non-empty (\c !EvalExpr::mask_all_full();
 /// this builder itself calls \c stamp_lifetime_masks over \p nodes before the
 /// DAG walk below, so the mask is always current here regardless of caller --
@@ -1862,7 +1843,7 @@ struct zero_footprint {
 /// batch mode in every occurrence, so its value differs per batch of that mode
 /// -- caching it whole at run scope would serve a wrong-batch value to a deeper
 /// consumer on cache fall-through (the F1 hazard). Only an all-full node (empty
-/// mask, including every node on the OFF path) is admitted.
+/// mask, including every node on the off path) is admitted.
 /// \see CacheManager, cache_manager
 template <bool force_hash_collisions = false,
           typename FootprintOf = zero_footprint>
@@ -1876,7 +1857,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
     { footprint_of(n) } -> std::convertible_to<double>;
   }
 {
-  // Stamp the cross-occurrence lifetime mask on this SAME forest before the
+  // Stamp the cross-occurrence lifetime mask on this same forest before the
   // DAG walk / veto below reads it (the batch-variant veto reads
   // EvalExpr::mask_all_full()). Doing this here -- rather than leaving it to
   // each caller -- makes "mask is current for the veto" an invariant of this
@@ -1884,7 +1865,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // (SeQuant's build_dryrun_cache, mpqc's build_cache_manager) is covered
   // uniformly. Unconditional and idempotent; a no-op when the forest carries
   // no External node_slice_mask() stamps (every mask stays empty/all-full), so
-  // this never changes behavior on the OFF path.
+  // this never changes behavior on the off path.
   eval::stamp_lifetime_masks(nodes);
 
   using TreeNode =
@@ -1892,17 +1873,17 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
   using Comp = TreeNodeEqualityComparator<TreeNode>;
 
-  // The DAG walk below keys on NON-OWNING pointers into \p nodes, not on
-  // TreeNode by value: copying a TreeNode DEEP-copies its whole subtree
+  // The DAG walk below keys on non-owning pointers into \p nodes, not on
+  // TreeNode by value: copying a TreeNode deep-copies its whole subtree
   // (binary_node.hpp), so a by-value walk map costs the sum of all subtree
-  // sizes -- QUADRATIC in the number of terms on the left-leaning Sum-tree
+  // sizes -- quadratic in the number of terms on the left-leaning Sum-tree
   // binarize now builds for a whole equation (one spine node per summand; a UCC
   // BCH energy expansion has thousands of them). Only the nodes actually cached
   // are copied, at the end of this function. \p nodes must therefore be a range
-  // of REFERENCES to nodes that outlive this call (asserted below) -- the same
+  // of references to nodes that outlive this call (asserted below) -- the same
   // contract the min_repeats-only overload's pointer-keyed scan already relies
   // on. Hasher/Comp are heterogeneous (eval_node_compare.hpp): a pointer key
-  // still hashes and compares by node CONTENT, so structurally equal nodes
+  // still hashes and compares by node content, so structurally equal nodes
   // dedup exactly as they did with by-value keys.
   static_assert(
       std::is_reference_v<
@@ -1919,10 +1900,10 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // bottom-up, and mark the NV/V frontier. Every (parent, child) edge is
   // visited exactly once (children are recursed only on a node's first visit),
   // so a child is marked persistent iff some volatile parent consumes it.
-  // ITERATIVE (explicit frame stack), not recursion: the forest's residual /
+  // Iterative (explicit frame stack), not recursion: the forest's residual /
   // energy is a single in-place Sum tree whose left spine is as deep as the
   // number of summands (thousands for a UCC BCH expansion), and a recursive
-  // descent would overflow the call stack here, while merely BUILDING the
+  // descent would overflow the call stack here, while merely building the
   // cache. A faithful transcription of the recursion it replaces -- the use
   // count is still bumped on every visit, children are still descended only on
   // a node's first visit, and the frontier is still marked from the parent
@@ -1989,25 +1970,25 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
   // and held), bounding the footprint of huge free-large-index intermediates.
   // Batch-variant veto ("a batched node cannot be run-scope"): this builder
   // populates the outermost / persistent (run-scope) cache, so it must refuse
-  // any node that is batch-VARIANT -- one whose cached value would depend on
+  // any node that is batch-variant -- one whose cached value would depend on
   // which batch is live. Such a node is refused for two reasons: caching it
   // whole contradicts the runtime slicing it (and the optimizer pricing it
   // sliced), and -- the F1 safety invariant -- a child batch scratch that
-  // misses locally falls through to this cache for ANY key, so a batch-variant
+  // misses locally falls through to this cache for any key, so a batch-variant
   // final left here could be served full (wrong-batch) to an inner body. A node
   // is batch-variant iff its cross-occurrence lifetime mask is non-empty (\c
   // !n->mask_all_full(), \c lifetime_mask.hpp) -- some External batch mode (of
-  // this node or an enclosing ancestor, over ALL its occurrences under the
+  // this node or an enclosing ancestor, over all its occurrences under the
   // canonical meet) slices it, so its value differs per batch of that mode even
   // if it slices nothing itself.
-  // A node that is invariant to every batched mode is NOT vetoed and stays
+  // A node that is invariant to every batched mode is not vetoed and stays
   // cacheable at run scope -- this is where a hoisted loop-invariant
   // intermediate (all-full mask; or an External-only / no node_slice_mask
-  // entry, e.g. gC) lands. OFF path (no order-aware annotations, hence no \c
+  // entry, e.g. gC) lands. Off path (no order-aware annotations, hence no \c
   // stamp_lifetime_masks External stamps): every mask is empty (all-full,
   // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
   // and admits exactly what it did before -- byte-identical.
-  // Only the SELECTED nodes are copied by value here -- into the cache map and,
+  // Only the selected nodes are copied by value here -- into the cache map and,
   // for the frontier, into the owning set the returned is_persistent closes
   // over. A node that is not cached never pays a (deep) copy.
   std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
@@ -2019,7 +2000,7 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
     // Batch-variant: a node whose cross-occurrence lifetime mask is non-empty
     // is sliced by some enclosing external mode in every occurrence => its
     // value differs per batch => refused run-scope residence. all-full (empty
-    // mask; incl. the OFF path) is admitted.
+    // mask; incl. the off path) is admitted.
     bool const batch_variant = !n->mask_all_full();
     if (batch_variant ||
         (max_footprint > 0. && footprint_of(n) > max_footprint)) {

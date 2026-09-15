@@ -33,12 +33,12 @@ inline void lifetime_mask_intersect_in_place(
   acc = std::move(keep);
 }
 
-/// A node's OWN result-slot modes: its canonical indices, each taken as itself.
+/// A node's own result-slot modes: its canonical indices, each taken as itself.
 ///
-/// Batch loops are always over PLAIN occ/aux modes (the DP's batchable modes;
+/// Batch loops are always over plain occ/aux modes (the DP's batchable modes;
 /// a PAO/PNO composite \c a<i,j> is the CSV inner dimension, never a loop
 /// axis), so a batch mode lives on this node iff it appears here as a plain
-/// slot. A composite slot \c a<i,j> therefore contributes only mode \c a, NOT
+/// slot. A composite slot \c a<i,j> therefore contributes only mode \c a, not
 /// its proto pair \c i,j: in array land \c a<i,j> is just mode \c a over an \c
 /// <i,j>-tied range, and slicing an \c i / \c j loop does nothing to mode \c a.
 /// Callers (the residency meet in \c stamp_residency_impl, and \c
@@ -52,8 +52,8 @@ container::svector<Index> slot_modes_of(Node const& n) {
 }
 
 /// Shared cross-occurrence meet walk underlying \c stamp_lifetime_masks.
-/// \p modes_of extracts the batch loops a node OPENS (each physical loop once,
-/// at its open site -- \c batch_loops_opened_here, NOT the per-carrying-node
+/// \p modes_of extracts the batch loops a node opens (each physical loop once,
+/// at its open site -- \c batch_loops_opened_here, not the per-carrying-node
 /// \c node_slice_mask), which the top-down accumulation propagates down as a
 /// set (no dedup); \p setter stamps the resulting per-canonical-node meet onto
 /// the node (e.g. \c set_sliced_modes). Everything else -- the meet map, the
@@ -64,31 +64,30 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
                           Setter const& setter) {
   using Node = std::ranges::range_value_t<R>;
 
-  // Running per-canonical intersection, keyed by a live pointer INTO the
+  // Running per-canonical intersection, keyed by a live pointer into the
   // forest (hashed/compared by pointee structure via the tree
   // hasher/comparator) so grouping does not deep-copy subtrees.
   std::unordered_map<Node const*, container::svector<Index>,
                      TreeNodeHasher<Node>, TreeNodeEqualityComparator<Node>>
       meet;
   // Every internal-node occurrence, in visitation order, for the stamping
-  // pass, PAIRED WITH A POINTER TO ITS MEET ENTRY. Pass 2 used to re-find each
-  // occurrence in `meet`, and a hit there is a structural comparison that walks
-  // the whole subtree -- so stamping an in-place Sum tree cost O(nodes x
-  // subtree), i.e. quadratic in forest size (measured: 116 s for a
-  // 20000-summand spine, all of it in the comparator). Pass 1 already knows the
+  // pass, paired with a pointer to its meet entry. Pass 2 does not re-find an
+  // occurrence in `meet`: a lookup there is a structural comparison that walks
+  // the whole subtree, so re-finding would make stamping an in-place Sum tree
+  // O(nodes x subtree), i.e. quadratic in forest size. Pass 1 already knows the
   // entry, so it records it. `std::unordered_map` keeps references to its
   // elements valid across rehashing, so these stay good while pass 1 inserts.
   container::svector<std::pair<Node const*, container::svector<Index>*>> occ;
 
-  // Pass 1: top-down walk accumulating the enclosing loops OPENED at or above
-  // n. The full \p acc is passed DOWN to children (descendants must know which
+  // Pass 1: top-down walk accumulating the enclosing loops opened at or above
+  // n. The full \p acc is passed down to children (descendants must know which
   // loops enclose them), but a node's contribution to the meet is \p acc
-  // filtered to the modes that live on that node's OWN result slots.
-  // The descent is ITERATIVE (an explicit frame stack), not recursive: an
+  // filtered to the modes that live on that node's own result slots.
+  // The descent is iterative (an explicit frame stack), not recursive: an
   // equation's residual/energy is a single in-place Sum tree with one node per
-  // summand, so its LEFT SPINE is as deep as the number of terms -- thousands
+  // summand, so its left spine is as deep as the number of terms -- thousands
   // for a large equation -- and a recursive descent would overflow the call
-  // stack. Pushing the RIGHT child before the LEFT one makes the pop order the
+  // stack. Pushing the right child before the left one makes the pop order the
   // same pre-order the recursion visited in (node, left subtree, right
   // subtree), so `occ` and the meet are built exactly as before.
   struct Frame {
@@ -98,7 +97,7 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
   std::vector<Frame> stack;
   auto const walk_node = [&](Node const& n, container::svector<Index> acc) {
     if (n.leaf()) return;  // leaves are not stamped (they carry no meet)
-    // acc = the enclosing loops opened at or above n, each appearing ONCE: a
+    // acc = the enclosing loops opened at or above n, each appearing once: a
     // physical loop is opened at a single site (\p modes_of reads opens, not
     // the per-carrying-node slice mask), so accumulating opens down every
     // root-to- node path visits each loop exactly once -- no dedup needed, acc
@@ -107,7 +106,7 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
     // loop reaches its below-the-reduction carriers likewise, without either
     // being double-counted.)
     for (auto const& ix : modes_of(n)) acc.push_back(ix);
-    // n's meet contribution: acc filtered to n's OWN result slots, in acc
+    // n's meet contribution: acc filtered to n's own result slots, in acc
     // order.
     auto const slots = slot_modes_of(n);
     container::svector<Index> node_modes;
@@ -138,7 +137,7 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
   // logically mutable (only the parameter binding is const); the setter
   // reaches the node payload to stamp it. No lookup: pass 1 recorded which
   // entry each occurrence belongs to, and the entry it points at now holds the
-  // FINAL intersection (later occurrences narrowed it in place).
+  // final intersection (later occurrences narrowed it in place).
   for (auto const& [n, modes] : occ) setter(n, *modes);
 }
 
@@ -147,17 +146,17 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// Stamp each canonical eval node's cross-occurrence sliced-mode mask
 /// (\c EvalExpr::sliced_modes) -- the runtime residency \c place_at_this_level
 /// consumes to home each value. A mode slices a canonical node iff it slices
-/// EVERY occurrence of that node in \p forest (a *meet* / set-intersection over
+/// every occurrence of that node in \p forest (a *meet* / set-intersection over
 /// occurrences). A node's occurrence-local sliced set is the union of the
-/// enclosing loops OPENED at or above it -- \c batch_loops_opened_here (any
+/// enclosing loops opened at or above it -- \c batch_loops_opened_here (any
 /// \c BatchModeType: External opened at its open site, Contracted opened at its
 /// reduction site), each physical loop appearing once -- filtered to the modes
-/// that live on the node's OWN result slots (\c slot_modes_of, i.e.
+/// that live on the node's own result slots (\c slot_modes_of, i.e.
 /// \c canon_indices() taken as-is -- see there for why a composite slot
 /// \c a<i,j> is just mode \c a, never its \c i,j proto pair). A node invariant
 /// to an outer batched loop -- it does not carry that loop's mode on any slot
 /// -- is thus left all-full even under a batched ancestor, so it stays eligible
-/// for loop-invariant reuse. (Sourcing OPENS, not the per-carrying-node
+/// for loop-invariant reuse. (Sourcing opens, not the per-carrying-node
 /// \c node_slice_mask, is what makes the accumulation a set: an External loop
 /// reaches its carriers by inheritance rather than a redundant own-node stamp,
 /// and a Contracted loop reaches its below-the-reduction carriers the same way
@@ -176,7 +175,7 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
 /// block-agnostic node (e.g. \c s*C) whose occurrences bind disjoint concrete
 /// modes intersects to empty (all-full).
 ///
-/// Idempotent; a no-op on the OFF path: with no \c node_slice_mask() stamps
+/// Idempotent; a no-op on the off path: with no \c node_slice_mask() stamps
 /// every occurrence set is empty, so every meet is empty and every mask is
 /// all-full
 /// (\c EvalExpr::sliced_modes_ is default-empty), leaving runtime behavior
@@ -186,16 +185,16 @@ void stamp_lifetime_masks(R const& forest) {
   using Node = std::ranges::range_value_t<R>;
   using Data = typename Node::value_type;
 
-  // The batch loops OPENED at a node (EVERY kind: External at its open site,
-  // Contracted at its reduction site), each physical loop named exactly ONCE --
-  // NOT node_slice_mask(), which the DP stamps on every CARRYING node. Reading
+  // The batch loops opened at a node (every kind: External at its open site,
+  // Contracted at its reduction site), each physical loop named exactly once --
+  // not node_slice_mask(), which the DP stamps on every carrying node. Reading
   // opens is what makes the accumulation below a genuine set: each enclosing
   // loop reaches a node once, propagated down from its single open site, so an
-  // External loop reaches its carriers by INHERITANCE (not a redundant own-node
+  // External loop reaches its carriers by inheritance (not a redundant own-node
   // stamp) and a Contracted loop reaches its below-the-reduction carriers the
-  // SAME way -- the one case that genuinely needs the propagation.
+  // same way -- the one case that genuinely needs the propagation.
   // (peak_profile reads opens for the identical reason.) The resulting
-  // sliced_modes IS the runtime residency place_at_this_level consumes and \c
+  // sliced_modes is the runtime residency place_at_this_level consumes and \c
   // home_scope returns.
   auto opened_loops_of = [](Node const& n) {
     container::svector<Index> v;
@@ -212,12 +211,12 @@ void stamp_lifetime_masks(R const& forest) {
 }  // namespace eval
 
 /// \brief The home residency of \p n: the loops opened at or above this node
-/// filtered to its own result slots, stamped PER OCCURRENCE by \c
+/// filtered to its own result slots, stamped per occurrence by \c
 /// stamp_occurrence_homes. The body -- \c n->occurrence_home() -- is the
 /// definition.
 ///
-/// It is NOT a cross-occurrence meet. \c EvalExpr::sliced_modes (stamped by \c
-/// eval::stamp_lifetime_masks) is the meet, and it is a DIFFERENT quantity,
+/// It is not a cross-occurrence meet. \c EvalExpr::sliced_modes (stamped by \c
+/// eval::stamp_lifetime_masks) is the meet, and it is a different quantity,
 /// read by the forest-descent route only; one node sliced along different
 /// modes in different terms keeps each occurrence's own slicing here, and
 /// value identity (\c value_key_of) tells those occurrences apart. See the
@@ -228,9 +227,9 @@ container::svector<Index> const& home_scope(Node const& n) noexcept {
   return n->occurrence_home();
 }
 
-/// \brief Stamps every occurrence's OWN home (\c EvalExpr::occurrence_home):
+/// \brief Stamps every occurrence's own home (\c EvalExpr::occurrence_home):
 /// the loops opened at or above the node, filtered to its own result slots,
-/// with NO cross-occurrence meet. One node sliced along different modes in
+/// with no cross-occurrence meet. One node sliced along different modes in
 /// different terms, or read whole in one term and sliced in another, keeps
 /// each occurrence's slicing; value identity (\c value_key_of) then tells the
 /// occurrences apart instead of the meet folding them to a whole home
@@ -272,9 +271,9 @@ void stamp_occurrence_homes(R const& forest) {
   }
 }
 
-/// \brief The VALUE key of a node: its node id (\c hash_value, the canonical
+/// \brief The value key of a node: its node id (\c hash_value, the canonical
 /// colored graph of its tensor network, label-free) combined with the sorted
-/// canonical POSITIONS it is home-sliced on (explicit-cells design section
+/// canonical positions it is home-sliced on (explicit-cells design section
 /// 11). Equal to the node id when nothing is home-sliced, so every unbatched
 /// value keeps the identity it has today. Two occurrences are one value iff
 /// they are one node and are home-sliced on the same positions: one node
@@ -292,14 +291,14 @@ inline std::size_t value_key(std::size_t node_hash,
 
 namespace detail {
 /// (key, any node of the subtree is home-sliced). The key is over the
-/// PRODUCTION subtree: a node's own id and home-sliced positions combined
+/// production subtree: a node's own id and home-sliced positions combined
 /// with its operands' keys -- a value that reduces a differently-sliced
 /// operand in another nest is a different production, hence a different
 /// value (the recursive, whole-subtree form of the node's own canonical
 /// identity). A subtree with nothing home-sliced keys to the node id.
 template <meta::eval_node Node>
 std::pair<std::size_t, bool> value_key_impl(Node const& n) {
-  // The LEFT SPINE is unwound iteratively (the `spine` vector and the
+  // The left spine is unwound iteratively (the `spine` vector and the
   // bottom-up loop below), exactly as TreeNodeEqualityComparator does: an
   // equation's residual/energy is one in-place Sum tree with a left spine as
   // deep as the number of terms, and recursing down it would overflow the
@@ -311,7 +310,7 @@ std::pair<std::size_t, bool> value_key_impl(Node const& n) {
     spine.push_back(c);
     if ((*c).leaf()) break;
   }
-  std::pair<std::size_t, bool> below{};  // the current node's LEFT child result
+  std::pair<std::size_t, bool> below{};  // the current node's left child result
   for (auto sit = spine.rbegin(); sit != spine.rend(); ++sit) {
     Node const& nd = **sit;
     container::svector<std::size_t> pos;
@@ -331,18 +330,18 @@ std::pair<std::size_t, bool> value_key_impl(Node const& n) {
         sliced = true;
         // A Product (contraction) is commutative and the binarizer may emit the
         // same contraction as (X,Y) in one term and (Y,X) in another, so the
-        // two operand keys are combined in a CANONICAL order -- ascending --
+        // two operand keys are combined in a canonical order -- ascending --
         // and the two spellings key to one value. (The node id they are
         // combined into already folds the operand order; combining them as
         // emitted did not, which split swapped occurrences into two builds.) A
-        // Sum's operands are NOT interchangeable -- its left child is the
+        // Sum's operands are not interchangeable -- its left child is the
         // in-place accumulator -- so they stay in the emitted order.
         //
-        // The order is taken on the KEYS, deliberately NOT via
+        // The order is taken on the keys, deliberately not via
         // canonical_children (eval_node_compare.hpp), whose rule is different
         // (scalar operand last, then ascending node id). Do not "unify" the
-        // two: a node id ties whenever the two operands are one VALUE, and
-        // their keys can still DIFFER there -- one value home-sliced two
+        // two: a node id ties whenever the two operands are one value, and
+        // their keys can still differ there -- one value home-sliced two
         // different ways is two keys -- so canonical_children would fall back
         // to the emitted order and leave exactly this combination
         // order-dependent. Ordering the keys themselves is order-independent

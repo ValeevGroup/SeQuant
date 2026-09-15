@@ -95,12 +95,12 @@ double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
       mem *= inner_pow(c, k);
     }
   } else {
-    // No inner_pow, but this tensor HAS composite (CSV/PNO tensor-of-tensor)
+    // No inner_pow, but this tensor has composite (CSV/PNO tensor-of-tensor)
     // indices: sizing them by the base extent silently mis-sizes the tensor
     // (each composite counted at its full base-space extent instead of its
     // per-proto domain), which has repeatedly inverted factorization choices
     // (e.g. picking a 4-PAO integral). An empty inner_pow is only valid for a
-    // network with NO composites; refuse to guess here.
+    // network with no composites; refuse to guess here.
     if (!ranges::empty(tot_idxs.inner))
       throw Exception(
           "inner_aware_volume: composite (CSV/PNO) indices present but no "
@@ -268,14 +268,14 @@ container::vector<double> subset_footprints(
 ///
 ///  - the pure-occupied protoindices of composite (CSV/PNO/OSV
 ///    tensor-of-tensor) legs. A composite leg carries its external occupied
-///    indices ONLY as protoindices -- they never appear as a top-level
+///    indices only as protoindices -- they never appear as a top-level
 ///    bra/ket/aux slot -- so the slot scan alone drops them.
 ///  - an explicit pure-occupied index that is open (external) on the network
 ///    root, i.e. a member of \c network.ext_indices(). Such an index is a
 ///    genuine top-level slot, but \p is_batchable is typically scoped to a
 ///    non-occupied space (e.g. DF/RI aux), so it would otherwise never be
 ///    admitted as a batching candidate. Contracted (internal) occupied
-///    indices -- those that connect two or more tensors -- are NOT open on
+///    indices -- those that connect two or more tensors -- are not open on
 ///    the root and so are never admitted by this pass.
 ///
 /// Admitting either lets the batched DP slice that external-occ external
@@ -288,16 +288,16 @@ container::vector<double> subset_footprints(
 ///        space (e.g. a DF/RI auxiliary space).
 /// \return Ordered, deduplicated list of batchable indices.
 /// \brief Candidate batchable modes: every index (and protoindex) whose space
-/// is batchable in EITHER role.
+/// is batchable in either role.
 ///
 /// Batchability is role-based and caller-defined, keeping this layer
 /// domain-generic (no index-space kind is named here):
-/// - \p is_batchable admits a space batchable when the mode is CONTRACTED
+/// - \p is_batchable admits a space batchable when the mode is contracted
 ///   (summed at some node);
 /// - \p is_batchable_external admits a space batchable when the mode is
-///   EXTERNAL (open on the term root -- a spectator carried to the result).
+///   external (open on the term root -- a spectator carried to the result).
 ///
-/// This returns the UNION of both roles. Each mode's actual role is resolved by
+/// This returns the union of both roles. Each mode's actual role is resolved by
 /// \ref PeakBatchedModel::build_context from the root open set, which then
 /// drops any mode its role's predicate rejects -- e.g. a mode admitted only as
 /// external but appearing contracted is not batchable, which keeps the 2^m
@@ -368,10 +368,10 @@ container::vector<container::vector<double>> sliced_footprints(
   for (std::size_t B = 0; B < tables.size(); ++B) {
     auto extent = [&, B](Index const& ix) -> std::size_t {
       std::size_t e = idxsz(ix);
-      // Membership in aux_list IS the authoritative "this is a batchable mode"
-      // test: that list spans ALL batchability roles (contracted and external).
+      // Membership in aux_list is the authoritative "this is a batchable mode"
+      // test: that list spans all batchability roles (contracted and external).
       // Gating additionally on the contracted-role predicate silently makes a
-      // slice of any mode admitted outside it a NO-OP -- the mode sits in the
+      // slice of any mode admitted outside it a no-op -- the mode sits in the
       // sliced set B yet keeps its full extent, so the DP sees no benefit and
       // never batches it.
       auto it = ranges::find(aux_list, ix);
@@ -628,11 +628,11 @@ container::vector<std::size_t> subset_open_aux(
     container::vector<Index> const& aux_list) {
   container::vector<OptRes> results(
       (std::size_t{1} << network.tensors().size()));
-  // NOT pruned: is_external_mode consumes open_modes over the full subset
+  // Not pruned: is_external_mode consumes open_modes over the full subset
   // lattice (including disconnected subsets), so every entry must be real.
   init_results(network, tidxs, results);
-  // A batchable mode may be open either DIRECTLY (a top-level open index) or as
-  // a PROTOINDEX of an open index: protoindices become plain outer modes in the
+  // A batchable mode may be open either directly (a top-level open index) or as
+  // a protoindex of an open index: protoindices become plain outer modes in the
   // array view, so a mode carried as a proto of an open index is open too. Both
   // are checked structurally -- no index-space kind is consulted, keeping this
   // layer domain-generic.

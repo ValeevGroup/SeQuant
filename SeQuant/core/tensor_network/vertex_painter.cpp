@@ -213,7 +213,7 @@ bool VertexPainterImpl::may_have_same_color(const VertexData &data,
     return false;
   }
 
-  // Two named (sliced) indices bound to different DAG-scope loops are NOT
+  // Two named (sliced) indices bound to different DAG-scope loops are not
   // interchangeable, even if same-space. Guards against an accidental
   // color-hash collision folding them back together in ensure_uniqueness.
   // No color map (or both entries absent) => both nullopt => no effect, i.e.

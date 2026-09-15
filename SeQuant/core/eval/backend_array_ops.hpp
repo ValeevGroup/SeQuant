@@ -15,21 +15,17 @@ namespace sequant {
 /// batching needs but that are backend-specific: constructing a zero
 /// destination array and chunking an axis into batches.
 ///
-/// \details The neutral eval layer names only INDICES (which carry their
+/// \details The neutral eval layer names only indices (which carry their
 /// spaces); the backend (the "user", e.g. mpqc) supplies these closures, so no
 /// backend artifact -- a TiledArray tiling has no meaning for, say, an on-disk
 /// backend -- ever leaks into the eval layer.
 ///
-/// This replaced the old "carrier" model, in which the batched executor
-/// borrowed an axis's tiling from whichever array in the DAG happened to carry
-/// it (through \c Result members named \c pre_sized_zeros_over_mode and \c
-/// mode_batches, both since REMOVED) and then had to reconcile that array's
-/// Result TYPE and mode ordinal against the scatter destination's. Tiling is a
-/// property of the space, not of any one array, so it is sourced once,
-/// backend-side, from the index alone.
+/// Tiling is a property of the space, not of any one array, so it is sourced
+/// once, backend-side, from the index alone rather than borrowed from whichever
+/// array in the DAG carries that axis.
 struct BackendArrayOps {
-  /// Construct a sufficiently-initialized ZERO result shaped by \p descriptor
-  /// -- a FULL (unsliced) index list, e.g. a node's \c canon_indices(). The
+  /// Construct a sufficiently-initialized zero result shaped by \p descriptor
+  /// -- a full (unsliced) index list, e.g. a node's \c canon_indices(). The
   /// backend maps each index's space to its own artifact and applies its own
   /// outer/inner split for proto-bearing (nested) indices, so flat-vs-nested
   /// is decided by the descriptor, not by any type reconciliation here.

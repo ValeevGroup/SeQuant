@@ -40,9 +40,9 @@ struct CachedValueHasher {
   [[nodiscard]] std::size_t operator()(CachedValue<Node> const& cv) const {
     return (*this)(cv.node);
   }
-  /// Heterogeneous overload: probe the map with a BARE node. Without it every
+  /// Heterogeneous overload: probe the map with a bare node. Without it every
   /// lookup would convert the node to a CachedValue first, and that conversion
-  /// COPIES the node -- which deep-copies its whole subtree (binary_node.hpp),
+  /// copies the node -- which deep-copies its whole subtree (binary_node.hpp),
   /// so probing a deep left-leaning Sum-tree would cost O(terms^2) node
   /// allocations. The hash is the node's canonical hash either way.
   [[nodiscard]] std::size_t operator()(Node const& n) const {
@@ -51,9 +51,8 @@ struct CachedValueHasher {
   }
 };
 
-/// \brief Equality for \c CachedValue: the structural \c
-///        TreeNodeEqualityComparator on the nodes, i.e. byte-identical to
-///        today.
+/// \brief Equality for \c CachedValue: the structural
+///        \c TreeNodeEqualityComparator on the nodes.
 template <meta::eval_node Node>
 struct CachedValueEqual {
   using is_transparent = void;
@@ -61,7 +60,7 @@ struct CachedValueEqual {
                                 CachedValue<Node> const& b) const {
     return (*this)(a.node, b.node);
   }
-  /// Heterogeneous overloads: compare a stored key against a BARE node
+  /// Heterogeneous overloads: compare a stored key against a bare node
   /// probe, without materializing a CachedValue (which would deep-copy the
   /// probed node's subtree -- see CachedValueHasher).
   [[nodiscard]] bool operator()(CachedValue<Node> const& a,

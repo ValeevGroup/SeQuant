@@ -28,8 +28,8 @@ namespace sequant {
 ///        result-slot position of each mode (via \c index_position), or nullopt
 ///        where \p node does not carry that mode on its result.
 ///
-/// \details The signature is a function of the CANONICAL node alone, so it is
-/// identical across canonically-equal occurrences EXCEPT where the modes bind
+/// \details The signature is a function of the canonical node alone, so it is
+/// identical across canonically-equal occurrences except where the modes bind
 /// different physical indices -- which is exactly the divergence the batched
 /// runtime must not share (see \c make_batched_scratch in eval.hpp, and the
 /// as-built design doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md,
@@ -46,11 +46,11 @@ template <meta::eval_node Node>
   return sig;
 }
 
-/// \return true iff every occurrence in \p occurrences has the SAME slicing
+/// \return true iff every occurrence in \p occurrences has the same slicing
 ///         signature over \p modes -- i.e. the value may be materialized once
 ///         and shared across all of them. False means at least one mode binds a
 ///         different physical slot across occurrences (a relabeled mode): the
-///         value cannot be shared sliced and must be SPLIT (materialized per
+///         value cannot be shared sliced and must be split (materialized per
 ///         occurrence).
 template <typename Range>
 [[nodiscard]] bool signatures_consistent(

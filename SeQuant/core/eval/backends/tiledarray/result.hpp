@@ -29,7 +29,7 @@ namespace sequant {
 // SF.21 / "Use unnamed namespaces in headers ... no" guidance)
 namespace detail {
 
-// INSTRUMENTATION (SEQUANT_SYNC_STATS, analysis-only): count gop.fence() calls
+// Instrumentation (SEQUANT_SYNC_STATS, analysis-only): count gop.fence() calls
 // so the ordered-executor's synchronization overhead can be localized.
 inline std::atomic<std::size_t>& fence_counter() {
   static std::atomic<std::size_t> c{0};
@@ -280,7 +280,7 @@ inline void log_ta(Args const&... args) noexcept {
 /// Slice: an operand block gathered out of a mode for one batch step;
 /// Scatter: a per-batch block written into its pre-sized destination;
 /// Accumulate: a per-batch block added into its accumulator. `bytes` is the
-/// host size of the MOVED block, summed over ranks (collective, so every rank
+/// host size of the moved block, summed over ranks (collective, so every rank
 /// must reach this call whenever the level is nonzero -- the level is
 /// identical across ranks). These movements are not eval-tree ops, so the
 /// `Eval` records never see them; this is the only accounting of their cost.
@@ -420,8 +420,8 @@ template <typename LArrayT, typename RArrayT>
 /// to the tile range `[tile_lo, tile_hi)` it must coincide with. A tiled
 /// backend can only cut or scatter whole tiles, so the element bounds must be
 /// in-range and fall on tile boundaries; this asserts both (mode_batches()
-/// yields exactly such tile-aligned ranges). Shared by slice_mode() (GATHER a
-/// block out) and write_into_slice() (SCATTER a block in) so both agree on the
+/// yields exactly such tile-aligned ranges). Shared by slice_mode() (gather a
+/// block out) and write_into_slice() (scatter a block in) so both agree on the
 /// element-to-tile contract and its alignment preconditions.
 [[nodiscard]] inline std::pair<std::size_t, std::size_t> slice_bounds_to_tiles(
     TA::TiledRange1 const& tr1, std::size_t elem_lo, std::size_t elem_hi) {
@@ -538,7 +538,7 @@ class ResultTensorTA final : public Result {
     return id_for_type<this_type>();
   }
 
-  // DIAGNOSTIC (see Result::fence): force all pending async work in this
+  // Diagnostic (see Result::fence): force all pending async work in this
   // array's world to complete so a lazily-executed op's timer captures
   // execution, not just dispatch.
   void fence() const noexcept override {
@@ -837,7 +837,7 @@ class ResultTensorOfTensorTA final : public Result {
     return id_for_type<this_type>();
   }
 
-  // DIAGNOSTIC (see Result::fence): force all pending async work in this
+  // Diagnostic (see Result::fence): force all pending async work in this
   // array's world to complete so a lazily-executed op's timer captures
   // execution, not just dispatch.
   void fence() const noexcept override {
@@ -846,7 +846,7 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   /// Allocating addition. For nested arrays an addend whose inner tiles are
-  /// all empty must act as the additive identity; that was once NOT the case
+  /// all empty must act as the additive identity; that was once not the case
   /// (the empty inner tiles propagated into the result and annihilated the
   /// other addend, which surfaced as a not-a-number norm in an iterative
   /// nested-array evaluation once in-place accumulation stopped being
@@ -1212,7 +1212,7 @@ template <typename... Args>
 /// Implemented with TA's block() on the assignment LHS, so only the addressed
 /// sub-block is written and block-sparse shape is preserved. Every mode's
 /// element lobound is preserved (via TA's `preserve_lobound`), exactly as the
-/// lobound-preserving GATHER in slice_array_over_mode(): the destination
+/// lobound-preserving gather in slice_array_over_mode(): the destination
 /// sub-block and the source share element coordinates, so a spectator index
 /// carrying a nonzero lobound (e.g. a frozen-core offset) lands at its true
 /// offset rather than being rebased to 0. Reconstructs a whole result from a

@@ -324,9 +324,9 @@ class Result {
   /// \brief Scatter \p block into the `[block_lo, block_hi)` element slice of
   ///        this result's mode \p mode.
   ///
-  /// The inverse of slice_mode(): where slice_mode() GATHERS one contiguous
-  /// element block OUT of a mode, write_into_slice() SCATTERS a per-block
-  /// result INTO a pre-sized destination's `[block_lo, block_hi)` slice along
+  /// The inverse of slice_mode(): where slice_mode() gathers one contiguous
+  /// element block out of a mode, write_into_slice() scatters a per-block
+  /// result into a pre-sized destination's `[block_lo, block_hi)` slice along
   /// outer \p mode, leaving every other mode untouched. Used to assemble a
   /// result that is evaluated one block at a time over a partitioned
   /// (Hadamard/spectator) mode: partitioning the mode into disjoint blocks,
@@ -367,7 +367,7 @@ class Result {
   }
 
   ///
-  /// \brief An independently owned DEEP copy of this result.
+  /// \brief An independently owned deep copy of this result.
   ///
   /// The copy shares no mutable state with this object: \c add_inplace() or
   /// \c write_into_slice() on either one leaves the other unchanged. Needed
@@ -415,10 +415,10 @@ class Result {
   /// @return the size of the object in bytes
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
 
-  /// DIAGNOSTIC (analysis-only): force any deferred/asynchronous computation
+  /// Diagnostic (analysis-only): force any deferred/asynchronous computation
   /// backing this result to complete. Default no-op (scalars are always ready);
   /// distributed-array backends override to fence their world. Used to make an
-  /// otherwise lazily-executed op's wall-clock timer capture EXECUTION rather
+  /// otherwise lazily-executed op's wall-clock timer capture execution rather
   /// than just dispatch, when SEQUANT_UT_FORCE_SYNC is set at the call site.
   virtual void fence() const noexcept {}
 

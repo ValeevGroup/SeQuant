@@ -33,12 +33,12 @@ namespace sequant::eval {
 
 ///
 /// \brief The \c
-/// OrderedSchedule IR -- an ORDERED tree of loop blocks and build steps.
-/// Purely data + a structural \c well_formed check; no sequencer/executor
-/// here (that is a later task).
+/// OrderedSchedule IR -- an ordered tree of loop blocks and build steps.
+/// Purely data + a structural \c well_formed check; the sequencer and
+/// executor live elsewhere (\c ordered_executor.hpp).
 ///
 /// \details \c OrderedSchedule threads builds and child loop blocks through a
-/// single ORDERED sequence (\c ScopeBlock::steps): a value built AFTER a
+/// single ordered sequence (\c ScopeBlock::steps): a value built after a
 /// child block in that sequence may read the child block's accumulated
 /// output, so relative order among steps is load-bearing, not incidental --
 /// unlike an unordered per-scope bag of homed values, which cannot express
@@ -49,15 +49,15 @@ namespace sequant::eval {
 /// \brief What happens to a value at the close of its home \c ScopeBlock.
 ///
 enum class OutputKind {
-  Transient,      //!< the value's home IS this block; nothing carries out.
-                  //!< NOTE (SP3 readers): a Transient value NEVER appears in
-                  //!< any block's \c outputs list -- it is realized purely
-                  //!< as a plain \c BuildStep, and an explicit Transient \c
-                  //!< outputs entry would double-produce it (violating \c
-                  //!< well_formed's single-producer check). Do NOT scan \c
-                  //!< outputs for Transient; it is the ABSENCE of an escape
-                  //!< output, not a recorded one.
-  AccumulateSum,  //!< reduction: summed into an outer accumulator
+  Transient,          //!< the value's home is this block; nothing carries out.
+                      //!< \note a Transient value never appears in
+                      //!< any block's \c outputs list -- it is realized purely
+                      //!< as a plain \c BuildStep, and an explicit Transient \c
+                      //!< outputs entry would double-produce it (violating \c
+                      //!< well_formed's single-producer check). Do not scan \c
+                      //!< outputs for Transient; it is the absence of an escape
+                      //!< output, not a recorded one.
+  AccumulateSum,      //!< reduction: summed into an outer accumulator
   AccumulateScatter,  //!< loop-carried: scattered into a disjoint outer slice
 };
 
@@ -74,13 +74,13 @@ struct Step;        // fwd; see immediately below.
 
 ///
 /// \brief One loop block: a batch loop over \c axis (sentinel/default on the
-/// root block, which sits outside every loop), containing an ORDERED
+/// root block, which sits outside every loop), containing an ordered
 /// sequence of build steps and nested child blocks, plus the set of values
 /// that leave this block (and how) when it closes.
 ///
 struct ScopeBlock {
   Index axis{};  //!< the loop axis; default (sentinel) on the root block.
-  int latitude_ordinal = 0;  //!< layout: the PASS index (was: ordinal) --
+  int latitude_ordinal = 0;  //!< layout: the pass index (was: ordinal) --
                              //!< disambiguates recurring sibling blocks
                              //!< realizing the same axis (a forced-split nest
                              //!< emits one sibling block per pass it holds; see
@@ -94,26 +94,26 @@ struct ScopeBlock {
       BatchModeType::Contracted;  //!< Contracted (accumulate on block exit)
                                   //!< or External (scatter on block exit);
                                   //!< meaningless on the root.
-  container::vector<Step> steps;  //!< ORDERED: build-or-child-block,
+  container::vector<Step> steps;  //!< ordered: build-or-child-block,
                                   //!< interleaved (see \c Step's doc
                                   //!< comment for why \c container::vector,
                                   //!< not \c svector).
   container::svector<std::pair<std::size_t, OutputKind>>
       outputs{};  //!< value_id -> how it leaves this block on close.
 
-  // NOTE: `steps` deliberately has NO default member initializer: `{}` here
+  // Note: `steps` deliberately has no default member initializer: `{}` here
   // would instantiate std::vector<Step>'s default constructor in-class,
   // where Step is still incomplete (rejected by clang with libstdc++).
-  // Declared here, DEFINED below \c Step (see the out-of-line "= default"
+  // Declared here, defined below \c Step (see the out-of-line "= default"
   // definitions there). \c steps is a \c std::vector of the still-incomplete
   // \c Step, which the library tolerates only up to first use; defining
   // ScopeBlock's special members here -- including implicitly, by defaulting
-  // them in-class or by letting the compiler generate them -- IS that first
+  // them in-class or by letting the compiler generate them -- is that first
   // use, and instantiates std::vector<Step>'s own special members on an
   // incomplete element type. libstdc++ then does pointer arithmetic on \c
   // Step*, which clang rejects ("arithmetic on a pointer to an incomplete
   // type"); GCC happens to accept it. Moving the definitions past \c Step is
-  // the standard way to close the ScopeBlock <-> Step cycle. Do NOT collapse
+  // the standard way to close the ScopeBlock <-> Step cycle. Do not collapse
   // these back into in-class "= default".
   ScopeBlock();
   ScopeBlock(ScopeBlock const&);
@@ -124,19 +124,19 @@ struct ScopeBlock {
 };
 
 ///
-/// \brief One ORDERED step of a \c ScopeBlock: build a value at this scope,
+/// \brief One ordered step of a \c ScopeBlock: build a value at this scope,
 /// or enter a nested child loop block.
 ///
 /// \details The design brief's target shape is a bare alias, \c using Step =
 /// std::variant<BuildStep, ScopeBlock>. That is not directly expressible:
 /// \c ScopeBlock::steps must hold a sequence of \c Step (so a build
-/// interleaves with child blocks in one ORDERED list, per the class doc
+/// interleaves with child blocks in one ordered list, per the class doc
 /// above), which means \c Step has to be at least forward-declared before \c
-/// ScopeBlock; but \c std::variant requires every alternative type COMPLETE
+/// ScopeBlock; but \c std::variant requires every alternative type complete
 /// at the point the variant specialization is instantiated (unlike \c
 /// container::vector / \c std::vector, which the C++17 library tolerates
 /// holding an incomplete element type up to first use -- the same relaxation
-/// \c ScopeBlock::steps itself relies on for ITS
+/// \c ScopeBlock::steps itself relies on for its
 /// self-reference). A bare \c using Step = std::variant<BuildStep,
 /// ScopeBlock> declared before \c ScopeBlock therefore cannot compile
 /// (\c ScopeBlock incomplete there), and a type alias cannot be
@@ -144,13 +144,13 @@ struct ScopeBlock {
 /// forward declaration exists in C++) to defer it to after \c ScopeBlock
 /// either.
 ///
-/// The fix: make \c Step a real (forward-declarable) class wrapping the
-/// variant, not a bare alias -- \c ScopeBlock::steps holds \c
+/// Hence \c Step is a real (forward-declarable) class wrapping the
+/// variant, not a bare alias: \c ScopeBlock::steps holds \c
 /// container::vector<Step> while \c Step is still only forward-declared
 /// (legal, per the \c std::vector incomplete-type allowance above), and \c
 /// Step's own definition (with the variant member) follows \c ScopeBlock,
 /// where \c ScopeBlock is by then complete. This preserves the single
-/// ORDERED sequence of interleaved build/child-block steps the design
+/// ordered sequence of interleaved build/child-block steps the design
 /// requires, and preserves real \c std::variant semantics (\c
 /// std::holds_alternative / \c std::get_if / \c std::visit all work on \c
 /// Step::value) -- the only change from the brief's literal shape is the one
@@ -181,9 +181,9 @@ inline ScopeBlock::~ScopeBlock() = default;
 struct OrderedSchedule {
   ScopeBlock root{};
   std::size_t num_values = 0;
-  /// Per value_id, the value_ids of its DIRECT operands -- the value/
+  /// Per value_id, the value_ids of its direct operands -- the value/
   /// occurrence DAG edges the value-driven ordered executor consumes to fetch
-  /// each operand by its OWN cell id (see \c CellTable / \c CellRegistry).
+  /// each operand by its own cell id (see \c CellTable / \c CellRegistry).
   /// Recorded here from `ordered_schedule_dep_graph(rich).depends_on`, whose
   /// edges come from every `OccurrenceRec`'s `consumer_point` (so split
   /// operands resolve to the specific consumed value, not an ambiguous node
@@ -212,21 +212,21 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
   }
 
   // Ordinal uniqueness among same-axis sibling child blocks (direct children
-  // of THIS block only; deeper levels are checked by the recursion above).
+  // of this block only; deeper levels are checked by the recursion above).
   for (std::size_t i = 0; i < block.steps.size(); ++i) {
     auto const* ci = std::get_if<ScopeBlock>(&block.steps[i].value);
     if (!ci) continue;
     for (std::size_t j = i + 1; j < block.steps.size(); ++j) {
       auto const* cj = std::get_if<ScopeBlock>(&block.steps[j].value);
       if (!cj) continue;
-      // Two sibling blocks are the SAME realized loop only when their FULL
-      // loop IDENTITY collides: (depth, loop_slot) AND the latitude (pass
-      // index). Keying on the axis SPACE (a fusion color, not identity) wrongly
-      // rejected two DISTINCT same-space sibling loops the un-fuse legitimately
-      // emits at different (depth, loop_slot) -- the w20 aux+occ case: two occ
+      // Two sibling blocks are the same realized loop only when their full
+      // loop identity collides: (depth, loop_slot) and the latitude (pass
+      // index). Keying on the axis space (a fusion color, not identity) would
+      // wrongly reject two distinct same-space sibling loops that the un-fuse
+      // legitimately emits at different (depth, loop_slot): two occupied
       // (space "i") nests at (1,0) and (2,1), same latitude 0, are different
       // loops, not a duplicate. (See LoopKey -- whose identity is the
-      // (depth, loop_slot) PAIR -- and the same space-vs-identity correction
+      // (depth, loop_slot) pair -- and the same space-vs-identity correction
       // in the home-scope coloring.)
       if (ci->level.depth == cj->level.depth &&
           ci->level.loop_slot == cj->level.loop_slot &&
@@ -244,7 +244,7 @@ inline bool ordered_schedule_block_well_formed(ScopeBlock const& block,
 }
 
 ///
-/// \brief Append every value_id \p block PRODUCES -- as a \c BuildStep
+/// \brief Append every value_id \p block produces -- as a \c BuildStep
 /// (recursively, through every nested child block) or as a value_id in
 /// \p block's own \c outputs -- to \p out.
 ///
@@ -270,10 +270,10 @@ inline void collect_production_ids(ScopeBlock const& block,
 }
 
 ///
-/// \brief A single escape (output) site: a value_id and the root-to-block PATH
+/// \brief A single escape (output) site: a value_id and the root-to-block path
 /// at which it escapes. Feeds \c well_formed's multi-level escape-chain check
-/// (a value carried on an outer axis AND reduced on an inner one escapes at
-/// BOTH -- see \c build_ordered_schedule's escape emission).
+/// (a value carried on an outer axis and reduced on an inner one escapes at
+/// both -- see \c build_ordered_schedule's escape emission).
 ///
 struct OutputSite {
   std::size_t value_id;
@@ -284,7 +284,7 @@ struct OutputSite {
 ///
 /// \brief Collect every \c BuildStep site (value_id + its root-to-block path)
 /// into \p builds and every output escape site into \p sites. Both carry the
-/// path: \c well_formed's built-and-escaped rule compares WHERE a value is
+/// path: \c well_formed's built-and-escaped rule compares where a value is
 /// built against where it escapes, not merely whether it does both.
 ///
 inline void collect_productions(ScopeBlock const& block,
@@ -314,27 +314,27 @@ inline void collect_productions(ScopeBlock const& block,
 ///   - ordinals are unique among same-axis (\c IndexSpace::base_key())
 ///     sibling blocks within a parent;
 ///   - every \c ScopeBlock::outputs value_id is < \c sched.num_values;
-///   - SINGLE-PRODUCER (SSA-like), with the multi-level escape chain allowed:
+///   - single-producer (SSA-like), with the multi-level escape chain allowed:
 ///     no value_id is built (\c BuildStep) more than once; a built value_id may
-///     ALSO escape only through its OWN chain -- every block listing it in \c
+///     also escape only through its own chain -- every block listing it in \c
 ///     outputs either holds its \c BuildStep or is an ancestor of the block
 ///     that does (a member materialized across a forced loop split is built
 ///     at its production site for its in-nest readers and escapes from that
 ///     same site outward; see \c build_ordered_schedule's mixed-pass rule) --
 ///     and any
 ///     other combination of build and escape sites is duplicate production;
-///     and a value_id may escape (\c outputs) at MORE than
-///     one block ONLY when those blocks lie on a single root-to-node nesting
+///     and a value_id may escape (\c outputs) at more than
+///     one block only when those blocks lie on a single root-to-node nesting
 ///     path (distinct depths, each shallower one an ancestor of the deepest) --
 ///     the inner-sum / outer-scatter escape chain of \c build_ordered_schedule.
 ///     Escapes in unrelated (sibling) blocks, or two escapes at one depth, are
 ///     rejected as duplicate production.
 ///
-/// \note This checks single-producer (no DUPLICATE production) but NOT
-/// completeness (no value_id GAPS -- that every id in `[0, num_values)` is
+/// \note This checks single-producer (no duplicate production) but not
+/// completeness (no value_id gaps -- that every id in `[0, num_values)` is
 /// produced somewhere). Completeness holds by construction of \c
-/// build_ordered_schedule and is asserted in the Task-5 acceptance test, so an
-/// SP3 reader must NOT assume \c well_formed implies every value_id is present.
+/// build_ordered_schedule and is covered by its own test, so a caller cannot
+/// read \c well_formed as a guarantee that every value_id is present.
 ///
 [[nodiscard]] inline bool well_formed(OrderedSchedule const& sched) {
   if (!detail::ordered_schedule_block_well_formed(sched.root, sched.num_values))
@@ -353,11 +353,11 @@ inline void collect_productions(ScopeBlock const& block,
     if (auto const it = std::adjacent_find(b.begin(), b.end()); it != b.end())
       return false;
   }
-  // (b) a built value_id may ALSO escape, but only through its OWN chain:
-  // every block listing it in `outputs` must either BE the block holding its
+  // (b) a built value_id may also escape, but only through its own chain:
+  // every block listing it in `outputs` must either be the block holding its
   // BuildStep (built and escaped in one block -- a mixed-pass member of a
   // forced split: its in-nest readers take the per-batch cell, the other pass
-  // takes the assembled form) or an ANCESTOR of it (the chain levels above
+  // takes the assembled form) or an ancestor of it (the chain levels above
   // the production site). An escape in a sibling or descendant of the
   // production site is a second, unrelated producer.
   {
@@ -373,7 +373,7 @@ inline void collect_productions(ScopeBlock const& block,
       if (!ok) return false;
     }
   }
-  // (c) a value_id's escape sites (>1 => a multi-level chain) must lie on ONE
+  // (c) a value_id's escape sites (>1 => a multi-level chain) must lie on one
   // root-to-node nesting path: distinct depths, and every shorter path a
   // prefix of the deepest (so each is an ancestor of the next).
   {
@@ -417,8 +417,8 @@ struct OrderedScheduleDepthBucket {
 ///
 /// \brief Per-candidate-step metadata for \c ordered_schedule_topo_sort_steps:
 /// which value_id's this step (a \c BuildStep or a nested child \c
-/// ScopeBlock, already built) makes visible to ITS OWN siblings at this
-/// SAME block level (\c produced), which value_id's its content directly
+/// ScopeBlock, already built) makes visible to its own siblings at this
+/// same block level (\c produced), which value_id's its content directly
 /// needs (\c requires_, unfiltered -- see \c ordered_schedule_topo_sort_steps
 /// for how the irrelevant/external entries are dropped), and a tie-break key
 /// for when the true dependency order leaves two ready steps unordered.
@@ -431,31 +431,31 @@ struct OrderedScheduleStepMeta {
 
 ///
 /// \brief Topologically sort \p items (one already-built \c Step per entry,
-/// paired index-for-index with \p meta) by the LOCAL dependency edges among
-/// THIS block's own steps: step A must precede step B whenever B's \c
+/// paired index-for-index with \p meta) by the local dependency edges among
+/// this block's own steps: step A must precede step B whenever B's \c
 /// requires_ names a value_id that's in A's \c produced. Kahn's algorithm;
 /// among simultaneously-ready steps, always picks the smallest \c tie_key
 /// first, for a deterministic result when the true dependency order leaves
 /// steps genuinely unordered relative to each other.
 ///
 /// \details Replaces an earlier (unsound) scalar-key-only sort: a single
-/// scalar per step can be MADE to sort a child block before every value that
+/// scalar per step can be made to sort a child block before every value that
 /// reads its output (see \c build_ordered_schedule's own doc comment, part
-/// 3), but it cannot ALSO guarantee a step sorts after every value its own
+/// 3), but it cannot also guarantee a step sorts after every value its own
 /// content reads as an input -- those are two independent constraints a
 /// single total order can satisfy only when they happen to agree, which
 /// water-20's own aux-only fixture never stresses (its single auxiliary-space
 /// block's content is leaf-only, needing no root-homed input). A real
-/// topological sort over the ACTUAL per-step dependency edges satisfies both
+/// topological sort over the actual per-step dependency edges satisfies both
 /// directions by construction, superseding the scalar key -- the key survives
 /// only as the tie-break \c build_ordered_schedule still needs for the (usual)
 /// case of two steps with no dependency relation to each other at all.
 ///
 /// \c SEQUANT_ASSERT's that every item is placed exactly once (a cycle in
-/// this LOCAL edge set would be a bug -- these edges are a sub-relation of
+/// this local edge set would be a bug -- these edges are a sub-relation of
 /// the whole-forest DAG's edges, restricted to one block's own siblings, so
-/// they inherit its acyclicity), then re-derives the local edges a SECOND
-/// time against the FINAL order and \c SEQUANT_ASSERT's every one is
+/// they inherit its acyclicity), then re-derives the local edges a second
+/// time against the final order and \c SEQUANT_ASSERT's every one is
 /// actually satisfied (a loud tripwire against any future violation of this
 /// invariant, per the design review that requested it, rather than a silent
 /// mis-order).
@@ -466,8 +466,8 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
   std::size_t const m = items.size();
   SEQUANT_ASSERT(meta.size() == m);
 
-  // value_id -> which LOCAL item produces it. well_formed's whole-schedule
-  // single-producer invariant guarantees at most one item at ANY level can
+  // value_id -> which local item produces it. well_formed's whole-schedule
+  // single-producer invariant guarantees at most one item at any level can
   // claim a given value_id; a value_id absent here is external to this
   // level (resolved at an ancestor level, not a local ordering constraint).
   std::unordered_map<std::size_t, std::size_t> produced_by;
@@ -541,9 +541,9 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
 }
 
 ///
-/// \brief The GLOBAL direct-dependency edges of a \c RichSchedule, recovered
+/// \brief The global direct-dependency edges of a \c RichSchedule, recovered
 /// from \c rich alone (no forest access): \c depends_on[p] lists every value_id
-/// the value \c p directly READS, and \c consumers_of[c] lists every value_id
+/// the value \c p directly reads, and \c consumers_of[c] lists every value_id
 /// that directly reads \c c (the reverse). Same recovery \c
 /// build_ordered_schedule uses inline (occurrence \c consumer_point ->
 /// producing value_id via \c point_owner); factored here so \c
@@ -555,6 +555,8 @@ struct OrderedScheduleDepGraph {
   std::unordered_map<std::size_t, container::svector<std::size_t>> consumers_of;
 };
 
+/// Recovers the global direct-dependency edges of \p rich (see
+/// \c OrderedScheduleDepGraph).
 inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
     RichSchedule const& rich) {
   OrderedScheduleDepGraph g;
@@ -583,18 +585,18 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 }
 
 ///
-/// \brief Pass levels, GLOBAL over every batched space (amendment 8, design
-/// section 9.2): every value gets an integer pass such that a value that
-/// needs another value's COMPLETED form sits in a later pass than that
+/// \brief Pass levels, global over every batched space (design section 9.2):
+/// every value gets an integer pass such that a value that
+/// needs another value's completed form sits in a later pass than that
 /// other value.
 ///
 /// Two kinds of dependency edge bump the reader's pass, both keyed on the
-/// OPERAND (the "source") rather than the axis space:
+/// operand (the "source") rather than the axis space:
 ///   - the source is \c LoopCarried on some axis (any space): its full array
-///     exists only after its own loop closes, so EVERY direct reader is
-///     bumped (as amendment 7's single-space carried set did);
+///     exists only after its own loop closes, so every direct reader is
+///     bumped;
 ///   - the source is a \c Reduction on some instance (an \c AccumulateSum
-///     escape) and the reader is produced INSIDE that same instance (its
+///     escape) and the reader is produced inside that same instance (its
 ///     production site is at or below the reduction's depth, in the same
 ///     nest): such a reader would otherwise see the current batch's partial
 ///     sum rather than the completed reduction (the finding pinned by the
@@ -610,10 +612,10 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// Forward sweep (operands before consumers):
 ///   level(v) = max over direct operands o of (bump(o, v) ? pass(o) + 1
 ///              : level(o)), 0 with no operands;
-///   a bumping-edge source's pass is its level (it is PINNED, see below); a
-///   value that is the source of no bumping edge has its level as its BASE.
+///   a bumping-edge source's pass is its level (it is pinned, see below); a
+///   value that is the source of no bumping edge has its level as its base.
 /// Reverse sweep (consumers before operands): a non-pinned value with at
-/// least one consumer is LIFTED to max(base, min over its direct consumers'
+/// least one consumer is lifted to max(base, min over its direct consumers'
 /// passes), so a value whose readers all sit later is built with them; a
 /// value with readers in several passes keeps its base (and is materialized
 /// by the builder's rule 4 when a later same-nest reader needs it).
@@ -631,7 +633,7 @@ struct ForcedSplitLevels {
   std::unordered_map<std::size_t, int>
       pass_of;  //!< value id -> pass, for every value \c
                 //!< ordered_schedule_dep_graph reached (has a legality cell
-                //!< and takes part in the dependency graph); ABSENT for a
+                //!< and takes part in the dependency graph); Absent for a
                 //!< value with no legality cell, which \c pass() below
                 //!< reports as pass 0 rather than throwing.
   int max_pass = 0;
@@ -641,6 +643,10 @@ struct ForcedSplitLevels {
   }
 };
 
+/// Assigns every value of \p rich its pass level (see \c ForcedSplitLevels),
+/// reading the carried/reduction roles from \p legality, the dependency edges
+/// from \p g, and deciding with \p inside whether a reader is produced inside
+/// a source's own reduced loop instance.
 inline ForcedSplitLevels forced_split_levels(
     RichSchedule const& rich, LegalitySchedule const& legality,
     OrderedScheduleDepGraph const& g,
@@ -736,7 +742,7 @@ struct ForkedSubchain {
 };
 
 ///
-/// \brief Fork an already-built inner sub-chain (an ORDERED list of \c Step)
+/// \brief Fork an already-built inner sub-chain (an ordered list of \c Step)
 /// into a predicate-false copy and a predicate-true copy, used once per pass
 /// at a nest holding a forced-split axis (\c build_ordered_schedule): for pass
 /// \p k, \p in_consumer(value_id) is `pass_of(value_id) == k`, so the
@@ -746,12 +752,12 @@ struct ForkedSubchain {
 ///
 /// \details A \c BuildStep goes wholly to one side by \p in_consumer of its
 /// value. A nested \c ScopeBlock (an inner loop) is recursively forked; each
-/// side that has surviving steps OR surviving escape \c outputs is rebuilt as a
+/// side that has surviving steps or surviving escape \c outputs is rebuilt as a
 /// per-side copy of the loop (same \c axis / \c ordinal / \c kind) carrying
 /// only that side's steps and the escape \c outputs whose value lands on that
-/// side; a side with neither is dropped (an empty loop is never emitted). NOTE:
-/// a loop can be ALL-ESCAPE -- no \c BuildStep, only scatter \c outputs
-/// contracted at the output step -- so "no surviving steps" does NOT imply "no
+/// side; a side with neither is dropped (an empty loop is never emitted). Note:
+/// a loop can be all-escape -- no \c BuildStep, only scatter \c outputs
+/// contracted at the output step -- so "no surviving steps" does not imply "no
 /// outputs to strand"; such a side must still be emitted for its outputs, else
 /// a whole nested loop is silently dropped.
 ///
@@ -779,10 +785,10 @@ inline ForkedSubchain fork_subchain(
       container::svector<std::pair<std::size_t, OutputKind>> side_outputs;
       for (auto const& o : block.outputs)
         if (in_consumer(o.first) == consumer_side) side_outputs.push_back(o);
-      // Emit the per-side loop when it has surviving STEPS *or* surviving
-      // OUTPUTS. An ALL-ESCAPE loop -- one with no BuildStep, whose scatter
+      // Emit the per-side loop when it has surviving steps *or* surviving
+      // outputs. An all-escape loop -- one with no BuildStep, whose scatter
       // values are contracted at the output step itself -- is legitimate and
-      // must NOT be dropped: doing so strands a whole nested loop (e.g. an
+      // must not be dropped: doing so strands a whole nested loop (e.g. an
       // inner occ member loop or an aux loop) together with its escape outputs,
       // leaving the forced-split axis as the only realized loop (the
       // is_range_set_congruent crash).
@@ -811,11 +817,11 @@ inline ForkedSubchain fork_subchain(
 /// (per-value \c first_use / \c last_use over the forest's single post-order
 /// static-point timeline) into an \c OrderedSchedule.
 ///
-/// The realized chain is PER LOOP INSTANCE, not per axis TYPE: one block per
-/// distinct FUSION \c loop_slot appearing on a space across all cells, so a
-/// value carrying two same-space modes on different slots gets TWO nested
-/// loops, not one. A nest holding members of more than one PASS additionally
-/// emits one SIBLING BLOCK PER PASS (latitude = pass), run in schedule order
+/// The realized chain is per loop instance, not per axis type: one block per
+/// distinct fusion \c loop_slot appearing on a space across all cells, so a
+/// value carrying two same-space modes on different slots gets two nested
+/// loops, not one. A nest holding members of more than one pass additionally
+/// emits one sibling block per pass (latitude = pass), run in schedule order
 /// (see step 2b and \c forced_split_levels). See the as-built design
 /// section 6.1, \c
 /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md.
@@ -823,17 +829,17 @@ inline ForkedSubchain fork_subchain(
 /// \details Four-part algorithm, pure scheduling (no cost choice):
 ///
 /// \par 1. The canonical chain
-/// For each batch axis space (\c IndexSpace::base_key()) appearing in ANY
+/// For each batch axis space (\c IndexSpace::base_key()) appearing in any
 /// cell's \c CellLegality::per_axis (not just \c home_floor -- a \c
 /// Reduction/\c LoopCarried-only axis must still get a block to host its
-/// escape output, even though NO cell is homed inside it in that role), one
+/// escape output, even though no cell is homed inside it in that role), one
 /// realized depth per distinct fusion \c loop_slot on it (\c
 /// slots_of_space / \c type_slot, resolved through \c fusion_slot). Spaces
 /// are ordered by \p mode_order (most-significant/outermost first), ties/
 /// unlisted spaces alphabetical, slot-ascending within a space -- but that is
-/// only a stable TIE-BREAK: the nesting actually satisfies every \c
+/// only a stable tie-break: the nesting actually satisfies every \c
 /// RichSchedule::loop_order pair, and a cycle among those is a builder error.
-/// Loop members that never CO-OCCUR (no value is home-sliced on both) are then
+/// Loop members that never co-occur (no value is home-sliced on both) are then
 /// cut into disjoint nests by a union-find (\c type_cluster / \c
 /// cluster_min) and concatenated at root, rather than realized as one
 /// over-deep chain.
@@ -843,99 +849,98 @@ inline ForkedSubchain fork_subchain(
 /// CellLegality::per_axis's own doc comment), only \c LoopLocal, \c
 /// Reduction, or \c LoopCarried entries (never the implicit \c
 /// LoopInvariant). Two cases:
-///   - EVERY \c per_axis entry is \c LoopLocal (this includes the empty
+///   - every \c per_axis entry is \c LoopLocal (this includes the empty
 ///     case: no batch-axis dependence at all, e.g. water-20's \c
 ///     I(i,i;a,a)) -- the value is a plain \c BuildStep. Its home block is
-///     the depth whose accumulated (root-to-depth) TYPE SET equals \c
-///     home_floor's TYPE SET (root if \c home_floor is empty), by SET
+///     the depth whose accumulated (root-to-depth) type set equals \c
+///     home_floor's type set (root if \c home_floor is empty), by set
 ///     equality (an unmatched/non-prefix \c home_floor falls back to
 ///     root). This value
-///     gets NO \c outputs entry anywhere (see \c well_formed's single-
+///     gets no \c outputs entry anywhere (see \c well_formed's single-
 ///     producer invariant): "Transient" (design point 4) is realized as
 ///     "produced by a \c BuildStep and nothing else", not as an explicit
 ///     \c OutputKind::Transient \c outputs record, since \c
-///     well_formed::detail::collect_production_ids counts EVERY \c outputs
+///     well_formed::detail::collect_production_ids counts every \c outputs
 ///     entry (regardless of \c OutputKind) as an independent production
 ///     site -- a \c Transient \c outputs entry alongside the \c BuildStep
 ///     would be flagged as double-production.
-///   - AT LEAST ONE \c per_axis entry is \c Reduction or \c LoopCarried
+///   - at least one \c per_axis entry is \c Reduction or \c LoopCarried
 ///     ("escapes" that axis, per design point 4: \c Reduction ->
 ///     accumulate-summed out, \c LoopCarried -> accumulate-scattered out)
-///     -- the value has NO \c BuildStep anywhere; instead it is recorded as
+///     -- the value has no \c BuildStep anywhere; instead it is recorded as
 ///     an \c outputs entry (kind \c AccumulateSum / \c AccumulateScatter)
-///     of EACH escaped instance's block. With more than one escape this is a
-///     multi-level ESCAPE CHAIN: raw production at the DEEPEST escape site,
+///     of each escaped instance's block. With more than one escape this is a
+///     multi-level escape chain: raw production at the deepest escape site,
 ///     pure forwarding at every shallower one. The innermost escaped loop is
 ///     where the accumulation the value's own node performs actually happens,
 ///     so that block is its true production site; an outer escape on a
-///     SHALLOWER axis needs this value already complete before the outer loop
+///     shallower axis needs this value already complete before the outer loop
 ///     can close -- exactly consistent with an outer accumulator reading an
-///     inner one. A chain may legitimately SKIP a level the value is
-///     invariant on; that crossing is carried by RESIDENCY plus \c
+///     inner one. A chain may legitimately skip a level the value is
+///     invariant on; that crossing is carried by residency plus \c
 ///     produce_if_absent, not by an escape (as-built section 6.2).
 ///
-/// \par 3. Topological order within a block -- a REAL topological sort
+/// \par 3. Topological order within a block -- a real topological sort
 /// Each block's own \c steps interleave its \c BuildStep's (one per value
-/// homed there) with, if the chain continues, ONE nested child \c
+/// homed there) with, if the chain continues, one nested child \c
 /// ScopeBlock \c Step for the next-deeper axis. These are ordered by
-/// \c detail::ordered_schedule_topo_sort_steps against a per-step DEPENDENCY
-/// GRAPH, not a scalar key alone (see below for why a scalar key cannot
+/// \c detail::ordered_schedule_topo_sort_steps against a per-step dependency
+/// graph, not a scalar key alone (see below for why a scalar key cannot
 /// suffice), reconstructed from \p rich alone -- no forest access needed:
-///   - GLOBAL direct-dependency edges: for every \c OccurrenceRec of every
+///   - global direct-dependency edges: for every \c OccurrenceRec of every
 ///     value, its \c consumer_point names the static point of its
-///     structural PARENT node; resolving that point back to the value_id
-///     whose OWN occurrence starts there (\c point_owner, built once up
+///     structural parent node; resolving that point back to the value_id
+///     whose own occurrence starts there (\c point_owner, built once up
 ///     front) recovers "this parent value directly reads that child value"
 ///     -- the exact same edges the forest itself encodes, without needing
 ///     the forest.
-///   - Per LEVEL (one \c ScopeBlock's own \c steps list, including root),
+///   - Per level (one \c ScopeBlock's own \c steps list, including root),
 ///     each candidate step gets a \c detail::OrderedScheduleStepMeta:
 ///     - a \c BuildStep{v}'s \c produced = `{v}`; its \c requires_ = every
 ///       value_id \c v directly reads (raw, unfiltered -- irrelevant/
 ///       external entries are dropped by the topo-sort itself, since they
-///       simply never match a LOCAL \c produced set).
-///     - a nested child block's \c produced = that block's OWN top-level
-///       \c outputs value_id's (what it makes visible to ITS OWN parent's
-///       siblings -- its internal \c BuildStep's and any FURTHER-nested
+///       simply never match a local \c produced set).
+///     - a nested child block's \c produced = that block's own top-level
+///       \c outputs value_id's (what it makes visible to its own parent's
+///       siblings -- its internal \c BuildStep's and any further-nested
 ///       child's content are never directly readable from outside it: by
 ///       construction, a value crossing a block boundary as an operand
 ///       must first have been resolved out of that axis, which is exactly
-///       the escape/\c outputs case). Its \c requires_ is the FULL,
-///       recursively bubbled external need of its WHOLE subtree (built
+///       the escape/\c outputs case). Its \c requires_ is the full,
+///       recursively bubbled external need of its whole subtree (built
 ///       bottom-up alongside the block itself: \c requires_all(level) =
-///       (this level's own direct needs UNION its child's already-bubbled
-///       \c requires_all) MINUS \c produced_all(level), where
-///       \c produced_all is everything ever produced ANYWHERE in the
+///       (this level's own direct needs union its child's already-bubbled
+///       \c requires_all) minus \c produced_all(level), where
+///       \c produced_all is everything ever produced anywhere in the
 ///       subtree, recursively) -- so a need that is only satisfiable
 ///       several levels further out (e.g. a root-homed common factor
 ///       consumed by a value nested two axes deep) still surfaces at
 ///       whichever level can actually satisfy it.
 ///   - Ties (two ready steps with no dependency relation to each other) are
 ///     broken by \c tie_key ascending: a \c BuildStep's is its value's own
-///     \c ValueCell::first_use; a child block's is the MIN \c first_use
-///     over its own \c produced_all (deterministic, and -- though no longer
-///     load-bearing for correctness, since the real edges now enforce both
-///     directions -- still places a block as early as its own true
-///     dependency slack allows).
+///     \c ValueCell::first_use; a child block's is the min \c first_use
+///     over its own \c produced_all (deterministic, and -- though correctness
+///     rests on the real edges, which enforce both directions -- it places a
+///     block as early as its own true dependency slack allows).
 ///
-/// A single SCALAR key alone cannot express both directions of this at
-/// once: an earlier version of this function used the MIN-\c first_use
+/// A single scalar key alone cannot express both directions of this at
+/// once: an earlier version of this function used the min-\c first_use
 /// value itself as the sort key (not just a tie-break), which is provably
-/// sound for "the block sorts before every true consumer" (see the MIN vs
-/// MAX reasoning that was here, now superseded) but has NO corresponding
+/// sound for "the block sorts before every true consumer" (see the min vs
+/// max reasoning that was here, now superseded) but has no corresponding
 /// guarantee for "the block sorts after every true input it reads" -- a
 /// value produced by a same-level sibling \c BuildStep (e.g. a root-homed
 /// operand consumed by content nested inside a child block) could still
-/// land, by raw point value, AFTER the block's MIN-derived key, silently
+/// land, by raw point value, after the block's min-derived key, silently
 /// mis-ordering the schedule with no structural check to catch it. The real
 /// topological sort above satisfies both directions by construction and is
 /// checked twice (no-cycle placement count, then a second pass confirming
 /// every edge survived the final order) -- see \c
 /// ordered_schedule_topo_sort_steps's own doc comment.
 ///
-/// \p policy is accepted for interface symmetry with the rest of the SP1/
-/// SP2 pipeline (every stage from \c analyze_legality onward threads it)
-/// and as a hook for a future split threshold; the logic here
+/// \p policy is accepted for interface symmetry with the rest of the pipeline
+/// (every stage from \c analyze_legality onward threads it)
+/// and as a hook for a split threshold; the logic here
 /// only consults \p rich and \p legality; the batchable-axis filtering
 /// \p policy would otherwise provide is already baked into \c
 /// CellLegality::per_axis by \c analyze_legality.
@@ -943,18 +948,18 @@ inline ForkedSubchain fork_subchain(
 namespace detail {
 
 ///
-/// \brief True iff \p mode's index TYPE (\c IndexSpace::base_key()) ever
-/// survives, un-summed, into a forest-ROOT value's own carried slots.
+/// \brief True iff \p mode's index type (\c IndexSpace::base_key()) ever
+/// survives, un-summed, into a forest-root value's own carried slots.
 ///
 /// \details \c RichSchedule does not carry \c BatchModeType directly: the
-/// cross-occurrence meet in \c stamp_lifetime_masks folds EVERY kind
+/// cross-occurrence meet in \c stamp_lifetime_masks folds every kind
 /// (External or Contracted) into one \c Index set (see \c
 /// stamp_residency_impl's doc comment -- "any BatchModeType"), so a mode's
 /// kind is not a field anywhere on \c ValueCell. It is still recoverable from
 /// \p rich alone: a batch mode realized in the forest is either Contracted
-/// (summed away below every root -- an ACCUMULATE loop, so it never appears
+/// (summed away below every root -- an accumulate loop, so it never appears
 /// on a root's own result) or External (a free/spectator index of some final
-/// output -- a SCATTER loop, one output slice per block, so it DOES appear on
+/// output -- a scatter loop, one output slice per block, so it does appear on
 /// a root's own result). A forest-root occurrence is identified by \c
 /// OccurrenceRec::point == \c consumer_point: \c compute_dag_boulevard's
 /// post-order walk only ever overwrites a child's \c consumer_point (to its
@@ -962,8 +967,8 @@ namespace detail {
 /// anyone's child -- a top-level tree of the forest -- keeps its
 /// default-seeded \c consumer_point == its own \c point.
 ///
-/// Matches by TYPE (\c base_key()) -- NOT by exact \c Index identity (\c
-/// Index::operator== compares space AND ordinal). More than one physical \c
+/// Matches by type (\c base_key()) -- not by exact \c Index identity (\c
+/// Index::operator== compares space and ordinal). More than one physical \c
 /// Index label of the same type can appear across \p rich's cells (e.g. one
 /// occurrence's K_1 vs another's K_2), so an exact-Index match could miss a
 /// root occurrence that uses a different physical label of the very type
@@ -978,7 +983,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                       return occ.point == occ.consumer_point;
                     });
     if (!is_root) continue;
-    // A batch axis (occ/aux) is external iff its SPACE appears on a root's own
+    // A batch axis (occ/aux) is external iff its space appears on a root's own
     // result slots. Slots are matched as-is: batch axes are plain, and a root
     // carrying a composite PAO leg a<i,j> always carries its occ pair i,j
     // plainly too, so no space is reachable only through a proto.
@@ -992,6 +997,19 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
 }  // namespace detail
 
+/// \brief Builds the \c OrderedSchedule of \p rich: the loop-block tree, the
+///        build steps inside each block, and each value's escape chain.
+///
+/// \param rich the schedule's values, their occurrences and loop instances
+/// \param legality the per-value, per-axis roles \c analyze_legality derived
+/// \param policy accepted for interface symmetry with the rest of the
+///        pipeline; the axis filtering it would provide is already baked into
+///        \c CellLegality::per_axis
+/// \param mode_order optional outer-to-inner order of index-space base keys,
+///        used to order the loop chain
+/// \return a schedule satisfying \c well_formed
+/// \throw Exception when a batched mode has no loop identity to place its
+///        escape on
 [[nodiscard]] inline OrderedSchedule build_ordered_schedule(
     RichSchedule const& rich, LegalitySchedule const& legality,
     [[maybe_unused]] BatchPolicy const& policy,
@@ -999,10 +1017,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   OrderedSchedule out;
   out.num_values = rich.cells.size();
 
-  // hash -> value_id and the GLOBAL direct-dependency edges, recovered from
+  // hash -> value_id and the global direct-dependency edges, recovered from
   // rich alone (see the function doc comment's part 3, and \c
   // ordered_schedule_dep_graph): for every occurrence of every value, its
-  // consumer_point names its structural PARENT's own production point,
+  // consumer_point names its structural parent's own production point,
   // resolved back to the parent value_id.
   auto const g = detail::ordered_schedule_dep_graph(rich);
   auto const& value_id_of = g.value_id_of;
@@ -1013,10 +1031,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return it == g.depends_on.end() ? kNoDeps : it->second;
   };
 
-  // The FUSION-assigned loop_slot (compute_dag_boulevard) of a
-  // legality cell's per_axis[pos]: which MEMBER of its same-space loop group
+  // The fusion-assigned loop_slot (compute_dag_boulevard) of a
+  // legality cell's per_axis[pos]: which member of its same-space loop group
   // slices it -- an occurrence-invariant identity, established by producer->
-  // consumer connectivity, NOT a within-cell position. Read off a
+  // consumer connectivity, not a within-cell position. Read off a
   // representative occurrence in the value's own frame (per_axis modes match
   // the occurrence's `carried` by label). Returns -1 if unavailable (a leaf, a
   // not-batched mode, or a divergent occurrence): the LoopCarried caller
@@ -1042,7 +1060,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       // either via carried->reduced propagation (uniting the home-sliced
       // operand's carried-mode node with a synthetic reduction node) or,
       // absent any home-sliced operand, by seeding that synthetic node
-      // directly; read that slot so the reduction escape lands in the SAME
+      // directly; read that slot so the reduction escape lands in the same
       // same-space nest as the operand it reduces, instead of a different
       // nest (the operand vanishes before the reduction reaches it) or,
       // absent a slot altogether, the hard-error throw above.
@@ -1054,22 +1072,21 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return p < occ.loop_slot.size() ? occ.loop_slot[p] : -1;
   };
 
-  // 1. The canonical chain: one representative Index per distinct axis TYPE
-  // present in ANY cell's per_axis (LoopLocal, Reduction, OR LoopCarried --
-  // NOT just home_floor; see the function doc comment's part 1).
-  // Per-INSTANCE loop chain (2026-08-29 position-based de-collapse): for each
-  // space, m_s = the MAX over cells of the number of same-space per_axis modes
-  // in one cell; emit m_s consecutive depths, one per within-space SLOT
-  // (loop_slot 0..m_s-1). A value carrying two same-space batched modes (a
-  // doubles amplitude's two occ externals) thus gets TWO distinct loops instead
-  // of one -- the collapse fix. `types[d]` is a representative Index of the
-  // depth's space; `type_slot[d]` is its within-space slot (the DagScopeLevel
-  // loop_slot). NOTE: same-space slots occupy distinct DEPTHS here (the
-  // assembly is one loop per depth); depth carries both group and member
-  // nesting for now.
-  // Members present per space = the distinct FUSION loop_slots that
+  // 1. The canonical chain: one representative Index per distinct axis type
+  // present in any cell's per_axis (LoopLocal, Reduction, or LoopCarried --
+  // not just home_floor; see the function doc comment's part 1).
+  // Per-instance loop chain (position-based): for each space, m_s = the max
+  // over cells of the number of same-space per_axis modes in one cell; emit
+  // m_s consecutive depths, one per within-space slot (loop_slot 0..m_s-1). A
+  // value carrying two same-space batched modes (a doubles amplitude's two occ
+  // externals) thus gets two distinct loops rather than one. `types[d]` is a
+  // representative Index of the depth's space; `type_slot[d]` is its
+  // within-space slot (the DagScopeLevel loop_slot). Same-space slots occupy
+  // distinct depths here (the assembly is one loop per depth); depth carries
+  // both group and member nesting.
+  // Members present per space = the distinct fusion loop_slots that
   // appear on that space across all cells. Each distinct slot becomes one
-  // realized loop. (Was: the MAX same-space per_axis COUNT with local 0..m-1
+  // realized loop. (Was: the max same-space per_axis count with local 0..m-1
   // slots -- e8bcee766's position-based numbering, which the atlas could not
   // match to a value's own frame; the fusion slot is that occurrence-invariant
   // identity.)
@@ -1099,7 +1116,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
               return a < b;
             });
   container::svector<Index> types;
-  container::svector<int> type_slot;  // the FUSION loop_slot of this loop
+  container::svector<int> type_slot;  // the fusion loop_slot of this loop
   for (auto const& bk : spaces)
     for (int s : slots_of_space.at(bk)) {  // ascending (std::set)
       types.push_back(rep.at(bk));
@@ -1190,13 +1207,13 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   };
 
   // Co-occurrence clusters (un-fuse). Two loop members co-occur iff some value
-  // is home-sliced on BOTH (carries both in one term, so its fusion loop_slots
+  // is home-sliced on both (carries both in one term, so its fusion loop_slots
   // -- home-based -- name both). Members that never co-occur live
-  // in DISJOINT nests: e.g. two residual sub-DAGs that both batch occ i,j but
-  // are connected only THROUGH a full symmetric intermediate (home meet empties
+  // in disjoint nests: e.g. two residual sub-DAGs that both batch occ i,j but
+  // are connected only through a full symmetric intermediate (home meet empties
   // it, so it seeds no loop) -- they are genuinely separate loop groups.
   // Realizing them as one over-deep nested chain (slot0 superset ... superset
-  // slotK) is the structure that deadlocks; each cluster must be a SEPARATE
+  // slotK) is the structure that deadlocks; each cluster must be a separate
   // sequential nest at root. Union-find over member depths.
   container::svector<std::size_t> mem_parent(n);
   for (std::size_t d = 0; d < n; ++d) mem_parent[d] = d;
@@ -1226,7 +1243,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
   // Assembly processing order: cluster by cluster (each cluster ordered by its
   // outermost = min depth, for determinism), and within a cluster innermost
-  // (larger d) FIRST, so the loop wraps a cluster's members into one nest and
+  // (larger d) first, so the loop wraps a cluster's members into one nest and
   // finalizes that nest at the cluster boundary.
   std::map<std::size_t, std::size_t> cluster_min;  // cluster -> outermost depth
   container::svector<std::size_t> order;
@@ -1262,27 +1279,27 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // escaped axis's depth.
   container::vector<detail::OrderedScheduleDepthBucket> buckets(n);
   container::svector<std::size_t> root_build_ids;
-  // Values that keep their BuildStep AND escape it (the mixed-pass members of
+  // Values that keep their BuildStep and escape it (the mixed-pass members of
   // a forced split, below): dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) --
   // the live signal downstream is the per-value \c materialized_across_split
   // bool below, not this list.
   container::svector<std::size_t> materialized_across_split_ids;
 
-  // The LoopLocal home depth of a value: the INNERMOST loop it is LoopLocal
-  // on, resolved PER-INSTANCE by fusion loop_slot -- NOT by shallowest
+  // The LoopLocal home depth of a value: the innermost loop it is LoopLocal
+  // on, resolved per-instance by fusion loop_slot -- not by shallowest
   // same-space count. A value local to slots 2,3 (its own fusion nest) homes
-  // in THAT nest, not the FIRST same-space nest a space-multiset cover would
+  // in that nest, not the first same-space nest a space-multiset cover would
   // pick; picking the wrong same-space nest homes the value where its
   // consumer's nest has not opened (or has already closed), so an
   // in-consumer-nest read misses and the value vanishes. Resolve each
   // LoopLocal mode's (space, fusion slot) to its realized depth (exactly as
-  // the escape placement does), and home at the MAX such depth: within a
+  // the escape placement does), and home at the max such depth: within a
   // co-occurrence cluster larger depth nests inside smaller, so the innermost
   // of the value's own home slots is inside all of them. home_floor is the
   // LoopLocal subset, but it drops the pos->slot map, so walk per_axis
   // directly for the slot. Nullopt = no realized loop-local mode: root. This
-  // is a value's plain BuildStep production site UNLESS it is materialized
-  // across a forced split AND a role escape nests deeper than this depth, in
+  // is a value's plain BuildStep production site unless it is materialized
+  // across a forced split and a role escape nests deeper than this depth, in
   // which case \c build_depth (below, in the placement loop) seeds from this
   // and deepens it to the true production site.
   auto const local_home_depth =
@@ -1299,19 +1316,19 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return target;
   };
 
-  // The DAG-scope nest a value is PRODUCED inside, for rule-4 reader
-  // classification: the deepest depth ANY of its own per_axis modes (any
+  // The DAG-scope nest a value is produced inside, for rule-4 reader
+  // classification: the deepest depth any of its own per_axis modes (any
   // role, not just LoopLocal) resolves to. A value with only carried/
   // reduction roles -- a forest root delivered in full, or a carried value
-  // of a later pass -- is still produced per BATCH inside its own nest (its
+  // of a later pass -- is still produced per batch inside its own nest (its
   // production is the accumulation folded into its escape bucket), so
   // testing only LoopLocal modes (local_home_depth) would report such a
   // value as homed at root: rule 4 would then neither fire the mixed-pass
   // materialization for a value it reads, nor guard the tripwire against
   // it. production_depth instead considers every per_axis mode regardless
   // of role. A mode whose fusion slot does not resolve (\c fusion_slot
-  // returns -1) is SKIPPED rather than guessed at slot 0 -- a guessed slot
-  // can land in the WRONG nest (fusion_slot's own doc comment), and this
+  // returns -1) is skipped rather than guessed at slot 0 -- a guessed slot
+  // can land in the wrong nest (fusion_slot's own doc comment), and this
   // result feeds the outside-its-nest tripwire below, where a wrong nest
   // decides whether to throw. Nullopt = no mode resolves at all, whether
   // because the value is genuinely unbatched (root) or because every one of
@@ -1332,8 +1349,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return target;
   };
 
-  // 2a. PASS LEVELS (per-nest forced split design, section 3.1, amendment 8
-  // section 9.2). Global over every batched space: a bumping edge is either
+  // 2a. Pass levels (per-nest forced split design, sections 3.1 and 9.2).
+  // Global over every batched space: a bumping edge is either
   // a LoopCarried source (any space, every direct reader bumped) or a
   // Reduction source with a direct reader produced inside that same
   // reduced instance. \c inside resolves the second kind exactly as the
@@ -1341,7 +1358,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   // fusion_slot (which already reads \c reduced_slot for a Reduction mode)
   // gives the instance's slot, depth_of_instance gives its depth, and the
   // reader is "inside" when its own production_depth is at or below that
-  // depth in the SAME nest (type_cluster equal). Moved here (after
+  // depth in the same nest (type_cluster equal). Moved here (after
   // production_depth and cl_by_vid, which it needs) rather than at its
   // former position ahead of the loop chain. Computed unconditionally, no
   // per-space loop, no "more than one forced space" throw: an empty
@@ -1372,9 +1389,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   auto const pass_of = [&](std::size_t vid) -> int { return levels.pass(vid); };
 
   // Dump-only diagnostic (SEQUANT_DUMP_SCHEDULE) for the outside-nest
-  // tripwire rejection (rule 4 itself no longer rejects loudly): print the
-  // value's axes with roles/slots/depths, its later-pass readers, and the
-  // carried set, each with home depth and nest.
+  // tripwire rejection: print the value's axes with roles/slots/depths, its
+  // later-pass readers, and the carried set, each with home depth and nest.
   auto const dump_reject = [&](std::size_t v0, std::size_t nest,
                                container::svector<std::size_t> const& readers) {
     auto const role_str = [](LoopRole r) -> wchar_t const* {
@@ -1441,21 +1457,21 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     SEQUANT_ASSERT(vid_it != value_id_of.end());
     std::size_t const vid = vid_it->second;
 
-    // A forest LEAF is an input fetched on demand by its consumers, never a
-    // computed value: it must NOT be emitted as a BuildStep (doing so makes the
+    // A forest leaf is an input fetched on demand by its consumers, never a
+    // computed value: it must not be emitted as a BuildStep (doing so makes the
     // executor evaluate it as a standalone root -- one wasted leaf fetch per
     // iteration -- which the forest descent never does). Its consumers reach it
     // through the leaf evaluator exactly as in forest descent.
     if (rich.cells[vid].is_leaf) continue;
 
-    // Emit an escape at EVERY non-local axis DEPTH (the multi-level escape
-    // CHAIN, SP2 non-innermost split): a value that reduces an inner axis AND
-    // is carried on an outer one escapes at BOTH -- AccumulateSum at the inner
+    // Emit an escape at every non-local axis depth (the multi-level escape
+    // chain of a non-innermost split): a value that reduces an inner axis and
+    // is carried on an outer one escapes at both -- AccumulateSum at the inner
     // (into the accumulator one level out) then AccumulateScatter at the outer
     // (that accumulator to full). The bottom-up assembly materializes them
-    // inner -> outer. A value non-local on a SINGLE axis keeps exactly one
+    // inner -> outer. A value non-local on a single axis keeps exactly one
     // escape, unchanged. Same-depth axis-classes (e.g. two carried occ indices,
-    // or a same-type reduce+carry pair) collapse to ONE escape at that depth,
+    // or a same-type reduce+carry pair) collapse to one escape at that depth,
     // with LoopCarried (AccumulateScatter) dominating Reduction: a carried axis
     // must materialize to full even if a same-type index reduces.
     container::svector<std::pair<std::size_t, OutputKind>> escapes;
@@ -1468,11 +1484,11 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       // (peak_profile's union-find never numbered a component for it) --
       // guessing slot 0 places the AccumulateSum escape in whatever nest
       // happens to own slot 0, not the loop the operands were actually
-      // sliced on, and every batch then silently contracts the FULL
+      // sliced on, and every batch then silently contracts the full
       // operands (the sum over n batches overcounts by n). A LoopCarried
       // mode keeps the existing slot-0 fallback: it always carries a real
-      // position, so home_scope + compute_dag_boulevard still resolve it in
-      // the ordinary case, and the fallback is legacy/defensive there.
+      // position, so home_scope + compute_dag_boulevard resolve it in the
+      // ordinary case and the fallback is purely defensive there.
       if (ac.role == LoopRole::Reduction && fs < 0)
         throw Exception(
             "build_ordered_schedule: value " + std::to_string(vid) +
@@ -1484,9 +1500,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           (ac.role == LoopRole::Reduction)
               ? OutputKind::AccumulateSum
               : OutputKind::AccumulateScatter;  // LoopCarried
-      // Each per-instance mode escapes to its OWN depth (distinct loop_slot),
-      // so same-space modes no longer collapse to one escape; the dedup below
-      // only merges a genuine reduce+carry pair that lands at ONE depth.
+      // Each per-instance mode escapes to its own depth (distinct loop_slot),
+      // so same-space modes keep separate escapes; the dedup below
+      // only merges a genuine reduce+carry pair that lands at one depth.
       auto it = std::find_if(escapes.begin(), escapes.end(),
                              [&](auto const& e) { return e.first == *d; });
       if (it == escapes.end())
@@ -1495,9 +1511,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         it->second = OutputKind::AccumulateScatter;
     }
 
-    // A value with >1 non-local mode of ONE space (a doubles amplitude / PPL
+    // A value with >1 non-local mode of one space (a doubles amplitude / PPL
     // product carrying two occ externals) has its distinct per-instance
-    // escapes COLLAPSED to fewer escapes (one per depth == one per space).
+    // escapes collapsed to fewer escapes (one per depth == one per space).
     // Dump those cells (SEQUANT_DUMP_SCHEDULE) to expose the collapse.
     if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE")) {
       container::svector<std::pair<Index, wchar_t const*>> nonlocal;
@@ -1516,7 +1532,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       if (collapse) detail::dump_sched_collapse(cl.hash, nonlocal, escapes);
     }
 
-    // MIXED-PASS MEMBER (per-nest forced split design, sections 3.3 and 7).
+    // Mixed-pass member (per-nest forced split design, sections 3.3 and 7).
     // A reader of a later pass produced inside this value's nest is the only
     // reader that can see a per-batch slice from another traversal; it must
     // read a full form that resides at root. The value keeps its Build step
@@ -1531,12 +1547,12 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // value is invariant to is simply skipped.
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
-    // Whether this value has a LoopLocal instance of ITS OWN nest that is
-    // NOT covered by a role-driven escape (before rule 4 adds anything) --
+    // Whether this value has a LoopLocal instance of its own nest that is
+    // not covered by a role-driven escape (before rule 4 adds anything) --
     // the invariant the outside-nest tripwire below actually needs. A
     // per-batch-only instance like that is never delivered to root, so a
     // later-pass reader outside the nest contradicts legality regardless of
-    // whether some OTHER instance of this same value happens to be
+    // whether some other instance of this same value happens to be
     // role-escaped elsewhere, at a different depth (a coarser gate on
     // "any role escape at all" would miss exactly this two-different-depth
     // case).
@@ -1558,7 +1574,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         }
       }
     }
-    // Direct readers PRODUCED in the same nest with a later pass. Nest
+    // Direct readers produced in the same nest with a later pass. Nest
     // membership is decided by production_depth, not by local_home_depth: a
     // reader with only carried/reduction roles is still produced per batch
     // inside its own nest even though it reports no LoopLocal home.
@@ -1580,10 +1596,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       std::size_t const nest = type_cluster[*home_depth];
       auto const readers = later_same_nest_readers(nest);
       if (!readers.empty()) {
-        // RULE 4 (section 7.3): escape every instance of this nest the
+        // Rule 4 (section 7.3): escape every instance of this nest the
         // value is loop-local on and not already escaped by a role as a
         // Scatter; a role escape already scattering (LoopCarried) that
-        // instance is left as-is, a role escape SUMMING it (Reduction) is
+        // instance is left as-is, a role escape summing it (Reduction) is
         // upgraded to a Scatter (a loop-local mode's batches are disjoint,
         // so summing them across a depth it also shares with a reduced mode
         // would silently combine values that must stay separate -- the same
@@ -1621,18 +1637,18 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           }
         }
       } else if (unescaped_local_instance) {
-        // TRIPWIRE (controller ruling I3; reader test corrected by ruling
-        // I4): a value with an unescaped LoopLocal instance of its OWN nest
+        // Tripwire (controller ruling I3; reader test corrected by ruling
+        // I4): a value with an unescaped LoopLocal instance of its own nest
         // (checked before rule 4 above ran, via unescaped_local_instance)
-        // has a per-batch-only form of THAT instance that is never
+        // has a per-batch-only form of that instance that is never
         // delivered to root -- and there is no same-nest later-pass reader
         // to trigger rule 4 above and fix it (this is the `readers.empty()`
         // branch). A direct later-pass reader whose production site
-        // RESOLVES to a nest other than this one is the reader's location,
+        // resolves to a nest other than this one is the reader's location,
         // not this value's escapes: it cannot see the per-batch home form,
         // and legality and the schedule disagree, regardless of whether
-        // some OTHER instance of this value happens to be role-escaped
-        // elsewhere. A value whose EVERY LoopLocal instance of its own nest
+        // some other instance of this value happens to be role-escaped
+        // elsewhere. A value whose every LoopLocal instance of its own nest
         // is already role-escaped is exempt: each such escape already
         // assembles a full form with root residency (rule 4's own
         // scatter-dominance above ensures no instance is left half-summed),
@@ -1644,11 +1660,11 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         // must not spuriously trip this guard.
         //
         // production_depth never guesses: a reader whose production depth
-        // does NOT resolve at all (every one of its modes has an
+        // does not resolve at all (every one of its modes has an
         // unresolvable fusion slot, or it has no per_axis modes) is neither
-        // confidently inside this nest NOR confidently outside it, so it
+        // confidently inside this nest nor confidently outside it, so it
         // neither trips this guard nor counts as an in-nest reader -- the
-        // guard fires only for a CONFIDENTLY resolved different nest. An
+        // guard fires only for a confidently resolved different nest. An
         // unresolved reader is not silently accepted, either: the table
         // validator's visibility rule is the net that catches a reader the
         // builder could not locate. Thrown loudly, for the case this guard
@@ -1679,18 +1695,18 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       }
     }
 
-    // Where the value's plain BuildStep sits: \c home_depth (the INNERMOST
-    // loop it is LoopLocal on), UNLESS it is materialized across the split
+    // Where the value's plain BuildStep sits: \c home_depth (the innermost
+    // loop it is LoopLocal on), unless it is materialized across the split
     // (below) and its escape chain reaches deeper than that -- a role
     // escape nested inside the LoopLocal home (a Reduction axis, say) --
     // in which case the deepest site on that chain is the true production
     // site and home's rule-4 escape is pure forwarding, like any other link
     // in the chain.
-    // COMPLETENESS INVARIANT of amendment 8 (design section 9.2): a value
+    // Completeness invariant (design section 9.2): a value
     // reduced over a loop instance (an AccumulateSum escape at depth d) is
-    // complete only after that loop closes; a reader produced INSIDE that
+    // complete only after that loop closes; a reader produced inside that
     // instance (production depth at or below d in the same nest) in the
-    // SAME pass would be served the current batch's partial sum. The pass
+    // same pass would be served the current batch's partial sum. The pass
     // levels above (2a) now bump exactly such a reader to a later pass via
     // the Reduction-source bumping edge, so this shape should never survive
     // to here; this check stays as a loud tripwire on the levels
@@ -1721,15 +1737,15 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     if (!escapes.empty()) {
       for (auto const& [d, kind] : escapes)
         buckets[d].outputs.push_back({vid, kind});
-      // A value that escapes by its OWN per-axis roles has no BuildStep: its
-      // production is the accumulation itself, at the DEEPEST escape site
+      // A value that escapes by its own per-axis roles has no BuildStep: its
+      // production is the accumulation itself, at the deepest escape site
       // (the multi-level chain's bottom-up assembly: raw production at the
       // deepest site, pure forwarding at every shallower one). One
-      // materialized across the split by rule 4 above is different: it IS
+      // materialized across the split by rule 4 above is different: it is
       // produced, at the deepest site of its full chain (role escapes and
       // the rule-4 scatter together), which same-pass consumers read inside
       // its own nest, per batch. It keeps its BuildStep there, so that
-      // block both BUILDS it (for its same-pass in-nest readers, and as the
+      // block both builds it (for its same-pass in-nest readers, and as the
       // per-batch input of the rest of its chain) and lists it as an output
       // (for the later-pass reader). `well_formed` admits exactly this
       // shape: every block that lists a value in `outputs` either holds its
@@ -1809,7 +1825,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                                 .space = std::wstring{axis.space().base_key()},
                                 .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
-    // The block's kind is the kind of ITS loop instance (the open that
+    // The block's kind is the kind of its loop instance (the open that
     // created the (space, slot) component -- RichSchedule::loop_kind); a
     // space can hold both a contracted-in-batches instance and an external
     // one, so the per-space test (does the space appear on a root result?)
@@ -1828,14 +1844,14 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return block;
   };
 
-  // 3. Assemble the chain bottom-up (innermost first). Thread up a LIST of
-  // child block Steps to embed one level out -- normally ONE (the single block
-  // for the deeper axis), but ONE PER PASS at a nest's
+  // 3. Assemble the chain bottom-up (innermost first). Thread up a list of
+  // child block Steps to embed one level out -- normally one (the single block
+  // for the deeper axis), but one per pass at a nest's
   // outermost depth when that nest holds a forced-split axis (its pass
-  // blocks) -- each paired with the meta the outer topo-sort needs (its OWN
+  // blocks) -- each paired with the meta the outer topo-sort needs (its own
   // escape outputs as `produced`, its whole subtree's external need as
   // `requires_`, and a deterministic `tie_key`). child_produced_all /
-  // child_requires_all carry the FULL recursive produced/external-need sets of
+  // child_requires_all carry the full recursive produced/external-need sets of
   // everything built at this depth (identical whichever way -- the outer
   // level sees the same production/need set either way) to grow the next
   // level's own sets, per the function doc comment's part 3.
@@ -1981,11 +1997,11 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
                 types[d], latitude_ordinal, d + 1, type_slot[d], builds, outs,
                 std::move(child_steps), std::move(child_metas))});
             detail::OrderedScheduleStepMeta m;
-            // RECURSIVE produced (not just this pass's own outputs): a pass
+            // Recursive produced (not just this pass's own outputs): a pass
             // block is now always a root-level sibling of every other nest
             // (the split always lands at the nest's outermost depth), so an
             // under-reported `produced` orders a sibling nest that requires a
-            // value this pass BUILDS (no escape of its own) before this pass
+            // value this pass builds (no escape of its own) before this pass
             // runs -- the same read-before-build hazard the single-block
             // path's `produced_all` comment already explains.
             m.produced.assign(pass_produced.begin(), pass_produced.end());
@@ -2016,9 +2032,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           std::move(pending_steps), std::move(pending_metas));
       next_steps.push_back(Step{std::move(block)});
       detail::OrderedScheduleStepMeta m;
-      // RECURSIVE produced (not just this block's own outputs): a nest
-      // advertises EVERYTHING it produces so the topo sort can order a sibling
-      // nest that consumes a value produced by an INNER block of this one. With
+      // Recursive produced (not just this block's own outputs): a nest
+      // advertises everything it produces so the topo sort can order a sibling
+      // nest that consumes a value produced by an inner block of this one. With
       // the single chain this never mattered (one block per level, no
       // siblings); the un-fuse emits separate sibling nests at root, so an
       // under-reported `produced` orders a consumer nest before its producer ->
@@ -2034,13 +2050,13 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     child_produced_all = std::move(produced_all);
     child_requires_all = std::move(requires_all);
   }
-  // Finalize the LAST cluster's nest.
+  // Finalize the last cluster's nest.
   for (std::size_t k = 0; k < pending_steps.size(); ++k) {
     finished_steps.push_back(std::move(pending_steps[k]));
     finished_metas.push_back(std::move(pending_metas[k]));
   }
 
-  // Root assembly: root-level BuildStep's plus the SEPARATE cluster nests as
+  // Root assembly: root-level BuildStep's plus the separate cluster nests as
   // sibling top-level Steps (each an independent nest; the topo sort orders
   // them by dependency, and the executor runs sibling root steps sequentially).
   container::vector<Step> root_items;
@@ -2070,7 +2086,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
 
   if (detail::dump_enabled("SEQUANT_DUMP_SCHEDULE"))
     detail::dump_schedule_tree(out.root, 0);
-  // REFUSAL: the builder's own structural self-check. A throw, not a
+  // Refusal: the builder's own structural self-check. A throw, not a
   // SEQUANT_ASSERT -- the latter is compiled out in non-Debug builds, which
   // would hand an ill-formed schedule to the executor in exactly the builds
   // that run production work.
@@ -2086,7 +2102,7 @@ namespace detail {
 /// \brief One enclosing loop block on a value's realized eval scope: the
 /// block's canonical representative \c axis and its \c DagScopeLevel (\c
 /// depth / \c space / \c ordinal), read straight off \c ordered's block tree
-/// (so the \c ordinal of a forced-split sibling is the REAL one the runtime
+/// (so the \c ordinal of a forced-split sibling is the real one the runtime
 /// pushes, not a guessed one).
 struct ScopeBlockAxisLevel {
   Index axis;
@@ -2094,17 +2110,17 @@ struct ScopeBlockAxisLevel {
 };
 
 /// \brief \c compute_sliced_mode_assignment's block-tree walk: record, for
-/// every value PRODUCED (a \c BuildStep) or ESCAPED (a block \c outputs
+/// every value produced (a \c BuildStep) or escaped (a block \c outputs
 /// entry), the ordered list of enclosing loop blocks (\c axis + \c level) it
-/// is EVALUATED under -- i.e. the loops whose batch it reads its operands
+/// is evaluated under -- i.e. the loops whose batch it reads its operands
 /// inside. This is the build-scope walk itself, keeping each block's \c
 /// DagScopeLevel (not just its axis) so the map can name the runtime \c
 /// BatchContextEntry::level.
 ///
-/// \p enc is the root-to-\p block path INCLUDING \p block's own (axis, level)
+/// \p enc is the root-to-\p block path including \p block's own (axis, level)
 /// -- a value built or escaping inside \p block reads its operands inside
 /// \p block's own loop, so the block's own axis encloses that read (this walk
-/// always includes the block axis; only the HOME of an escape sits one level
+/// always includes the block axis; only the home of an escape sits one level
 /// out, which is irrelevant here -- we want the read/fetch scope, not the
 /// home).
 inline void populate_build_scope_walk(
@@ -2123,13 +2139,13 @@ inline void populate_build_scope_walk(
   }
   for (auto const& [vid, kind] : block.outputs) {
     (void)kind;
-    // escape is BUILT inside `block` (reads operands in this loop); its HOME is
-    // one level out, but we want the read/fetch scope here. DEEPEST-escape
-    // wins: a value carried on more than one nested axis escapes at EACH depth,
+    // escape is built inside `block` (reads operands in this loop); its home is
+    // one level out, but we want the read/fetch scope here. Deepest-escape
+    // wins: a value carried on more than one nested axis escapes at each depth,
     // but the outer escapes only scatter an already-built value (read no
     // operands); the contraction runs at the innermost escape, so its operands
     // are sliced there. The child recursion above visits the deeper block
-    // first, so a shallower outer escape must NOT clobber the deeper scope --
+    // first, so a shallower outer escape must not clobber the deeper scope --
     // else the seam slices the contraction's operands on only the outer axis
     // while the inner axis is open (the is_range_set_congruent crash at the
     // multi-occ product).
@@ -2141,15 +2157,15 @@ inline void populate_build_scope_walk(
 
 /// \brief Debug safety net: \c compute_sliced_mode_assignment's canonical
 /// level enumeration (\c enumerate_realized_levels, which folds every
-/// realized \c ScopeBlock's \c DagScopeLevel into one \c LoopId per DISTINCT
+/// realized \c ScopeBlock's \c DagScopeLevel into one \c LoopId per distinct
 /// level) leans on \c (level.depth, level.space, level.ordinal) being unique
-/// GLOBALLY across the whole realized tree -- i.e. any two blocks sharing
+/// globally across the whole realized tree -- i.e. any two blocks sharing
 /// that triple must also share the same representative \c axis, or the
 /// enumeration could fold two structurally-different loops onto one \c
-/// LoopId. \c well_formed only checks ordinal uniqueness among a block's OWN
-/// same-axis DIRECT children (sibling-local, see \c
+/// LoopId. \c well_formed only checks ordinal uniqueness among a block's own
+/// same-axis direct children (sibling-local, see \c
 /// ordered_schedule_block_well_formed above) -- it says nothing about two
-/// blocks at the same (depth, space, ordinal) that are NOT siblings (say,
+/// blocks at the same (depth, space, ordinal) that are not siblings (say,
 /// nested under different parents). Walk every block in the tree and assert
 /// the stronger, global invariant loudly: a violation means the scheduler
 /// emitted two structurally-distinct loops the level-to-\c LoopId mapping
@@ -2183,10 +2199,10 @@ inline void assert_global_level_axis_uniqueness(
 /// build_ordered_schedule -- an index into \c SlicedModeAssignment::levels,
 /// the schedule's own canonical (deterministic pre-order) enumeration of
 /// every non-root \c ScopeBlock's \c DagScopeLevel. Two blocks that are
-/// STRUCTURALLY the same loop (identical \c (depth, space, ordinal)) always
-/// share one \c LoopId; two blocks that differ in ANY of those three --
+/// structurally the same loop (identical \c (depth, space, ordinal)) always
+/// share one \c LoopId; two blocks that differ in any of those three --
 /// including two of a nest's own pass blocks (one per pass, latitude =
-/// pass), which differ only in \c latitude_ordinal -- get DISTINCT ids by
+/// pass), which differ only in \c latitude_ordinal -- get distinct ids by
 /// construction: a nest's pass blocks must be distinguishable colors, not
 /// folded (as-built design section 5.1, \c
 /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
@@ -2197,40 +2213,40 @@ inline void assert_global_level_axis_uniqueness(
 using sequant::LoopId;
 
 ///
-/// \brief The per-(value, sliced-mode) -> DAG-scope-loop ASSIGNMENT: the
+/// \brief The per-(value, sliced-mode) -> DAG-scope-loop assignment: the
 /// coloring input fed to \c canonicalize_slots's \c NamedIndexColorMap.
 /// Unlike the per-cell \c ModeToLevel map this deliberately superseded (since
-/// removed), this is plain DATA keyed by the value's OWN physical \c Index
+/// removed), this is plain data keyed by the value's own physical \c Index
 /// label for each mode it is sliced on -- not a per-cell position map -- so a
 /// relabeled CSE participant is keyed by
 /// its own label, and a symmetric value's two occurrence-bound physical slots
 /// are both recoverable (one entry per distinct (value, Index) pair actually
 /// sliced).
 struct SlicedModeAssignment {
-  /// Every DISTINCT DAG-scope loop realized anywhere in the schedule, in
+  /// Every distinct DAG-scope loop realized anywhere in the schedule, in
   /// canonical (deterministic pre-order over the block tree) order; a
   /// value's assigned \c LoopId is its position in this list. The root block
-  /// itself (sentinel axis, outside every loop) is NEVER an entry here.
+  /// itself (sentinel axis, outside every loop) is never an entry here.
   container::vector<DagScopeLevel> levels;
 
-  /// CONSUMER-attributed per-occurrence sliced-mode facts (sliced-value
-  /// canonical-layout / loop-coloring design, PILLAR 2): each entry is
+  /// Consumer-attributed per-occurrence sliced-mode facts (sliced-value
+  /// canonical-layout / loop-coloring design, pillar 2): each entry is
   /// (value_id, this occurrence's own sliced-mode Index, the slicing LoopId,
-  /// the CONSUMER value_id -- the use-site whose fetch of \c value_id binds the
-  /// loop to that Index). Recorded ONLY by the regime-2 (occurrence-driven)
+  /// the consumer value_id -- the use-site whose fetch of \c value_id binds the
+  /// loop to that Index). Recorded only by the regime-2 (occurrence-driven)
   /// pass, the one pass that can attribute a stamp to a specific occurrence and
   /// hence to a specific consumer. This is the raw material the cell table
   /// builder (cell_table_builder.hpp) consumes to disambiguate the
-  /// w8-symmetric case (one value, one loop, two free modes bound by two
+  /// symmetric case (one value, one loop, two free modes bound by two
   /// different consumers): a consumer-blind (value, mode) map cannot express
   /// "pos0 here, pos1 there" because it folds away which occurrence bound
   /// which mode.
-  /// (value_id, this occurrence's own sliced-mode PHYSICAL POSITION -- its
-  /// index in occ.carried, computed in THAT occurrence's own index-frame,
-  /// LoopId, CONSUMER value_id). The position (not an Index label) is what the
+  /// (value_id, this occurrence's own sliced-mode physical position -- its
+  /// index in occ.carried, computed in that occurrence's own index-frame,
+  /// LoopId, consumer value_id). The position (not an Index label) is what the
   /// table builder consumes, so the runtime never re-matches a label across
   /// index-frames.
-  /// The fifth element is the operand's LEG at the consumer (its index in
+  /// The fifth element is the operand's leg at the consumer (its index in
   /// the consumer occurrence's \c operand_points; \c npos when unknown): a
   /// value read on both legs of one consumer under different labels has
   /// facts per leg, and the table builder pairs each leg's read with its own.
@@ -2238,10 +2254,10 @@ struct SlicedModeAssignment {
       std::tuple<std::size_t, std::size_t, LoopId, std::size_t, std::size_t>>
       occ_facts;
 
-  /// EXPLICIT per-occurrence INVARIANT facts: (value_id, LoopId, CONSUMER
+  /// Explicit per-occurrence invariant facts: (value_id, LoopId, consumer
   /// value_id) triples recording that this consumer's fetch of the value is
-  /// correctly UNSLICED on this loop -- the consumer is building that loop's
-  /// batch, but the value's occurrence IN THIS CONSUMER'S FRAME does not carry
+  /// correctly unsliced on this loop -- the consumer is building that loop's
+  /// batch, but the value's occurrence in this consumer'S frame does not carry
   /// the loop's mode (a CSE-shared value can carry the mode in one frame and
   /// not another). Recording the negative decision lets the runtime tell
   /// "correctly invariant" apart from "no decision recorded" (a real gap), so
@@ -2268,7 +2284,7 @@ namespace detail {
 /// objects in the tree are, per \c assert_global_level_axis_uniqueness's
 /// invariant (consulted by \c compute_sliced_mode_assignment before this
 /// runs), each other's only witness for a given \c (depth, space, ordinal) --
-/// i.e. no two DIFFERENT blocks visited here ever carry an equal \c level.
+/// i.e. no two different blocks visited here ever carry an equal \c level.
 ///
 inline void enumerate_realized_levels(ScopeBlock const& block,
                                       container::vector<DagScopeLevel>& out) {
@@ -2286,23 +2302,23 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
 /// \brief
 /// build the per-(value, sliced-mode) -> DAG-scope-loop \c
 /// SlicedModeAssignment from an already-built \p ordered (must be \c
-/// build_ordered_schedule(rich, ...)'s return value for this SAME \p rich).
+/// build_ordered_schedule(rich, ...)'s return value for this same \p rich).
 ///
 /// \details Uses a two-pass fetch-site walk (\c populate_build_scope_walk
 /// for the enclosing-loop scope of every produced/escaped value, and \c
 /// ordered_schedule_dep_graph for the operand edges, leaves included): an
-/// EXACT pass matching a block's representative axis against a value's own
-/// carried \c Index (step (3) below), then a REGIME-2 RELABEL pass (step (4)
+/// exact pass matching a block's representative axis against a value's own
+/// carried \c Index (step (3) below), then a regime-2 relabel pass (step (4)
 /// below) recovering a CSE value's own label from its occurrences when it
 /// was canonicalized independently of the block's representative axis (the
-/// SAME physical loop, relabeled) -- but records the raw facts keyed by the
-/// value's OWN \c Index label (not a \c ValueCell::carried POSITION),
+/// same physical loop, relabeled) -- but records the raw facts keyed by the
+/// value's own \c Index label (not a \c ValueCell::carried position),
 /// consistency-checked the same way (two fetch sites disagreeing on one
 /// value's mode's level is a scheduler bug, never resolved by averaging or
 /// last-write-wins), then remapped through the canonical \c LoopId
 /// enumeration (\c detail::enumerate_realized_levels) instead of storing the
 /// \c DagScopeLevel directly -- this is what makes forced-split siblings
-/// (same depth/space, different ordinal) come out as DISTINCT colors: they
+/// (same depth/space, different ordinal) come out as distinct colors: they
 /// are distinct entries in the canonical \c levels list by construction.
 ///
 [[nodiscard]] inline SlicedModeAssignment compute_sliced_mode_assignment(
@@ -2341,13 +2357,13 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   detail::OrderedScheduleDepGraph const g =
       detail::ordered_schedule_dep_graph(rich);
 
-  // (3) PER-OCCURRENCE POSITIONAL pass (2026-08-25 loop-open design; replaces
-  // the former EXACT + REGIME-2 base_key passes). For each occurrence occ of a
-  // value W consumed by C, the loops the runtime crosses when fetching W are
-  // C's enclosing DAG blocks build_scope[owner(consumer_point)], outermost
-  // first. occ.ectx -- now built from loop-OPENS (peak_profile), so one
-  // physical loop appears exactly once -- names those same loops in W's OWN
-  // frame, outermost first. Pairing them by NEST POSITION gives, per realized
+  // (3) per-occurrence positional pass (the loop-open design). For each
+  // occurrence occ of a value W consumed by C, the loops the runtime crosses
+  // when fetching W are C's enclosing DAG blocks
+  // build_scope[owner(consumer_point)], outermost first. occ.ectx -- built
+  // from loop-opens (peak_profile), so one physical loop appears exactly once
+  // -- names those same loops in W's own
+  // frame, outermost first. Pairing them by nest position gives, per realized
   // enclosing loop, the occ-frame mode it slices; the physical slice position
   // is that mode's index in occ.carried. Everything is in occ's own frame: no
   // base_key, no cross-frame label match, no first-match guess. Divergent
@@ -2358,26 +2374,26 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
   // consumer, so the consumer-keyed facts cover every sliced fetch, and a
   // value sliced on one mode by two sibling loops via two consumers has no
   // single consumer-blind answer anyway.
-  (void)g;  // dependency graph no longer consulted by this pass
+  (void)g;  // the dependency graph is not consulted by this pass
   std::unordered_map<std::size_t, std::size_t> point_owner;
   for (ValueCell const& vc : rich.cells)
     for (OccurrenceRec const& occ : vc.occurrences)
       point_owner[occ.point] = vc.value_id;
 
-  // point -> that occurrence record (to reach the PARENT occurrence on an
-  // edge: the consumer's occurrence in the SAME tree as the operand's).
+  // point -> that occurrence record (to reach the parent occurrence on an
+  // edge: the consumer's occurrence in the same tree as the operand's).
   std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
   for (ValueCell const& vc : rich.cells)
     for (OccurrenceRec const& occ : vc.occurrences) point_occ[occ.point] = &occ;
 
-  // The VALUE-LEVEL component slot per carried position: the loop_slot the
-  // union-find assigned to (value, position), recovered UNMASKED.
+  // The value-level component slot per carried position: the loop_slot the
+  // union-find assigned to (value, position), recovered unmasked.
   // compute_dag_boulevard stamps occ.loop_slot = -1 wherever a mode is not
-  // batched AT THAT OCCURRENCE (i.e. the value was produced whole in that mode
-  // in that term). But a value produced whole is still READ SLICED wherever a
+  // batched at that occurrence (i.e. the value was produced whole in that mode
+  // in that term). But a value produced whole is still read sliced wherever a
   // consumer sits inside that mode's realized loop -- the atlas must key the
-  // slice fact off which loops the consumer is IN and which modes the value
-  // CARRIES, not off the per-occurrence production mask. So recover the
+  // slice fact off which loops the consumer is in and which modes the value
+  // carries, not off the per-occurrence production mask. So recover the
   // value-level slot as any non-(-1) loop_slot across the value's occurrences
   // at each position.
   std::unordered_map<std::size_t, container::svector<int>> value_slot;
@@ -2395,24 +2411,24 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       if (occ.consumer_point == occ.point) continue;  // forest root
       auto const oit = point_owner.find(occ.consumer_point);
       if (oit == point_owner.end()) continue;  // defensive
-      // PRODUCTION EDGE ONLY (2026-09-02): a consumer value is PRODUCED once,
+      // production edge only: a consumer value is produced once,
       // from its canonical (front) occurrence's tree; its other occurrences
-      // are READS of the finished value, and the W->C edges inside those
+      // are reads of the finished value, and the W->C edges inside those
       // trees never execute. Slice facts recorded from such a non-production
-      // edge are keyed by the same (W, C, loop) triple and MERGE with the
+      // edge are keyed by the same (W, C, loop) triple and merge with the
       // production edge's facts -- in a permuted frame that binds C's modes
       // to other loop instances, which sliced one operand position by two
       // loops (observed on the water-20 strict dry-run walk: one value's
       // operand position 1 was sliced by two different loop slots at once).
       //
-      // This guard is also what keeps the ORDER-INDEPENDENT Product identity
+      // This guard is also what keeps the order-independent Product identity
       // (canonical_children, eval_node_compare.hpp) safe. Two spellings of one
       // contraction -- (X,Y) in one term, (Y,X) in another -- now fold into a
       // single value, so a consumer cell can own occurrences whose trees carry
-      // X and Y on OPPOSITE legs. Occurrence facts are recorded only from the
-      // consumer's canonical (front) PRODUCTION occurrence, and
+      // X and Y on opposite legs. Occurrence facts are recorded only from the
+      // consumer's canonical (front) production occurrence, and
       // cell_table_builder derives an operand's `my_leg` from those
-      // (operand, consumer) facts, so every leg comes from ONE tree and the
+      // (operand, consumer) facts, so every leg comes from one tree and the
       // legs cannot be crossed. Relaxing the guard to admit non-production
       // edges would mix the two spellings' legs and mis-pair them.
       if (rich.cells[oit->second].occurrences.empty() ||
@@ -2426,14 +2442,12 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
       if (scope.empty()) continue;
       // The atlas: for each of the consumer's enclosing loops `scope[k]`
       // (space S, loop_slot L), the mode of W it slices is W's carried position
-      // whose VALUE-LEVEL component slot is L and whose space is S. A LOOP-
-      // IDENTITY match in W's own frame (occurrence-invariant), keyed off the
+      // whose value-level component slot is L and whose space is S. A loop-
+      // identity match in W's own frame (occurrence-invariant), keyed off the
       // value-level slot -- so a value produced whole in a mode is still sliced
-      // there when THIS consumer sits inside that mode's realized loop (the
+      // there when this consumer sits inside that mode's realized loop (the
       // measured i_3-contracted case). Over-nested loops the value carries no
-      // mode of get no fact, correct (the value is invariant to them). Replaces
-      // the old raw ectx<->scope POSITIONAL zip (which mis-sliced divergent
-      // occurrences: the multi-occ collapse / ToTxToT deadlock).
+      // mode of get no fact, correct (the value is invariant to them).
       auto const& vs = value_slot[w_vid];
       // This occurrence's leg at its consumer (left 0 / right 1).
       std::size_t leg = static_cast<std::size_t>(-1);
@@ -2448,14 +2462,13 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         bool self_sliced = false;
         for (std::size_t pos = 0; pos < occ.carried.size() && pos < vs.size();
              ++pos) {
-          // PER-OCCURRENCE slot (2026-09-02): value_slot folds every
-          // occurrence's loop_slot into ONE per-value vector, so a CSE-shared
-          // value whose mode is sliced by DIFFERENT loop instances in
-          // different occurrences (w20: 51337's K position under K-loop slot
-          // 0 for one consumer, slot 1 / depth 43 for a K-reduction
-          // consumer) keeps only one slot and silently misses the other
-          // occurrence (served WHOLE under a K batch -> TA sparse-gemm
-          // out-of-bounds read). The occurrence's own loop_slot is the
+          // Per-occurrence slot: value_slot folds every occurrence's
+          // loop_slot into one per-value vector, so a CSE-shared value whose
+          // mode is sliced by different loop instances in different
+          // occurrences (one consumer slicing a mode under a K-loop slot,
+          // another under a second slot for a K-reduction) keeps only one slot
+          // and silently misses the other occurrence (served whole under a K
+          // batch -> TA sparse-gemm out-of-bounds read). The occurrence's own
           // truth; the per-value slot is only the fallback where it is
           // unstamped (-1).
           int const occ_slot =
@@ -2471,15 +2484,15 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           break;  // one W-position per enclosing loop
         }
         if (self_sliced) continue;
-        // Use-induced slicing (Layer 2): W is WHOLE-produced on this loop's
-        // space (no own sliced slot), but THIS CONSUMER C is sliced on a mode M
-        // there. If M is a SHARED external W also carries, the C = ...*W
+        // Use-induced slicing (Layer 2): W is whole-produced on this loop's
+        // space (no own sliced slot), but this consumer C is sliced on a mode M
+        // there. If M is a shared external W also carries, the C = ...*W
         // contraction binds W's M to C's sliced M -- so W must be sliced on M
-        // at this loop for THIS fetch. Record it CONSUMER-KEYED in occ_facts,
+        // at this loop for this fetch. Record it consumer-keyed in occ_facts,
         // never consumer-blind: W may be
-        // CSE-shared between C (sliced here) and a DIFFERENT consumer that
+        // CSE-shared between C (sliced here) and a different consumer that
         // reads it whole (invariant), and a blind fact would wrongly slice it
-        // for both. Bounded to a mode C actually slices (conformability), NOT
+        // for both. Bounded to a mode C actually slices (conformability), not
         // every carried-mode coincidence, so a genuinely invariant shared
         // operand is not sliced.
         std::size_t const c_vid = oit->second;
@@ -2488,9 +2501,9 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
         bool recorded = false;
         for (std::size_t cp = 0; cp < c_carried.size() && cp < cvs.size();
              ++cp) {
-          // The consumer's slot for position cp IN THIS TREE: the parent
+          // The consumer's slot for position cp in this tree: the parent
           // occurrence on this edge (point == occ.consumer_point). Mixing C's
-          // OTHER occurrences (other trees, permuted frames) leaked a slot
+          // other occurrences (other trees, permuted frames) leaked a slot
           // binding from a different frame and sliced one operand position
           // by two loops (observed on the water-20 strict dry-run walk: one
           // value's operand position 1 was sliced by two different loop slots
@@ -2516,7 +2529,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
               break;
             }
           if (pos_a == occ.carried.size()) {
-            // W does not carry C's sliced mode in THIS occurrence's frame: its
+            // W does not carry C's sliced mode in this occurrence's frame: its
             // fetch by C is correctly unsliced on this loop. Record that
             // explicitly so the guard does not mistake it for a gap.
             result.occ_invariant.push_back(
@@ -2533,9 +2546,9 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                                      rich.cells[c_vid].hash % 100000);
           break;  // one shared mode per enclosing loop
         }
-        // REDUCTION consumer (2026-09-02): C REDUCES a mode under this loop
+        // Reduction consumer: C reduces a mode under this loop
         // (its result does not carry it, so it is in no carried/value_slot
-        // position) -- C is building a per-batch PARTIAL of that reduction,
+        // position) -- C is building a per-batch partial of that reduction,
         // so an operand occurrence carrying the reduced mode is sliced on
         // it; one that does not carry it is legitimately whole. Recorded
         // per occurrence from C's own reduced_slot (fusion union-find).
@@ -2563,7 +2576,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           }
         }
         // Nothing sliced this operand here and nothing declared it invariant:
-        // record the invariant EXPLICITLY so the completeness guard (whose
+        // record the invariant explicitly so the completeness guard (whose
         // consumer oracle is a per-value union over C's occurrences) does not
         // mistake a legitimately whole read for a gap. Range conformance is
         // enforced by the dry-run/wet backends themselves.

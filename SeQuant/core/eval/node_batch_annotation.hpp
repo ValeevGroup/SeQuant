@@ -25,36 +25,36 @@ namespace sequant {
 /// evaluator that hoists loop-invariant intermediates: \c order_aware (the
 /// gate) feeds per-level placement together with the runtime residency
 /// \c EvalExpr::sliced_modes (the all-batched-modes cross-occurrence meet,
-/// which now carries the enclosing-contracted residency directly); \c
+/// which carries the enclosing-contracted residency directly); \c
 /// effective_count is the node's effective use count -- how many times its
-/// value is (re)referenced across the enclosing batch loops it does NOT
+/// value is (re)referenced across the enclosing batch loops it does not
 /// carry, the product of per-mode batch counts over its escaped-outer set.
 ///
 /// The defaults (\c order_aware == false, \c effective_count == 1) are the
 /// order-blind values, so a node annotated by a non-batched objective (or not
 /// annotated at all) rides along inert.
 struct NodeBatchAnnotation {
-  /// Batchable indices sliced AT this node, each tagged with its
+  /// Batchable indices sliced at this node, each tagged with its
   /// \c BatchModeType (see \c EvalExpr::node_slice_mask).
   container::svector<std::pair<Index, BatchModeType>> axes{};
-  /// Subset of \c axes for which THIS node is the loop-OPEN site (the outermost
+  /// Subset of \c axes for which this node is the loop-open site (the outermost
   /// node at which the physical batch loop over the index is introduced), as
   /// opposed to a deeper node that merely carries the sliced mode. An external
   /// batch loop opens once, at the term root (an external mode is on the final
   /// result, so the root is its outermost carrier); a contracted batch loop
   /// opens at its (unique) contraction node. Distinguished from \c axes so a
-  /// consumer that needs the loop NEST (\c peak_profile's ectx) counts each
-  /// physical loop once instead of once-per-carrying-node. Default empty (OFF
+  /// consumer that needs the loop nest (\c peak_profile's ectx) counts each
+  /// physical loop once instead of once-per-carrying-node. Default empty (off
   /// path and every non-open node). See \c EvalExpr::batch_loops_opened_here.
   container::svector<std::pair<Index, BatchModeType>> opened_here{};
   /// Effective use count; see the class doc.
   std::size_t effective_count = 1;
-  /// True iff the order-aware cost model emitted this node (set for EVERY node
+  /// True iff the order-aware cost model emitted this node (set for every node
   /// on the order-aware path, including a whole-nest invariant whose residency
-  /// union is empty). The per-level placement order-aware GATE: a positive
-  /// signal an empty union cannot provide, distinguishing an OFF-path all-full
+  /// union is empty). The per-level placement order-aware gate: a positive
+  /// signal an empty union cannot provide, distinguishing an off-path all-full
   /// node (do not hoist) from an order-aware whole-nest invariant (hoist to the
-  /// run/term-scope root). Default false keeps the OFF path byte-identical. See
+  /// run/term-scope root). Default false keeps the off path byte-identical. See
   /// \c EvalExpr::batch_order_aware.
   bool order_aware = false;
 };

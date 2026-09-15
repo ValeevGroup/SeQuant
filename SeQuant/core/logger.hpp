@@ -57,7 +57,7 @@ struct Logger : public Singleton<Logger> {
     /// backend to report allocator-level memory that RSS alone cannot
     /// distinguish -- e.g. glibc all-arena in-use vs system bytes, so one can
     /// tell live heap from retained-free heap right at an RSS jump. Runs on
-    /// EVERY rank on the eval log path (printing() is level>0, identical across
+    /// every rank on the eval log path (printing() is level>0, identical across
     /// ranks), so an injected collective reduction here is matched across
     /// ranks. Returns a preformatted, already-reduced string (e.g.
     /// "heap_inuse=...B | heap_sys=...B"); empty function = omit the suffix.
@@ -76,7 +76,7 @@ struct Logger : public Singleton<Logger> {
     /// Optional per-node metadata provider, keyed by a node's
     /// \c EvalExpr::hash_value(). When set, the per-op trace annotation (see
     /// \c log::slice_home_annot) appends this provider's string for the node,
-    /// so a line can also carry SCHEDULE properties the running annotation
+    /// so a line can also carry schedule properties the running annotation
     /// cannot see -- e.g. the value's home scope and its use scopes. Consulted
     /// only under \c log::printing() at the trace-emission sites; empty
     /// function = nothing appended (default), so the annotation is

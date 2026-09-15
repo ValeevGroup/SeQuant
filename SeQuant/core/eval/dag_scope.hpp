@@ -22,14 +22,14 @@ namespace sequant {
 ///        in the schedule machinery.
 using LoopId = std::size_t;
 
-/// \brief The STABLE identity of a batch loop: which loop-GROUP (\c depth) and
-///        which member-SLOT within that group (\c loop_slot).
+/// \brief The stable identity of a batch loop: which loop-group (\c depth) and
+///        which member-slot within that group (\c loop_slot).
 ///
 /// \details The cell table, the per-occurrence mode<->loop atlas, and
 /// \c ordered_n_batches_by_loop (see ordered_executor.hpp) all key on this
 /// identity; the layout (\c altitude_ordinal /
 /// \c latitude_ordinal on \c DagScopeLevel) never enters it. \c depth
-/// distinguishes even two groups of the SAME space (an "external" and a
+/// distinguishes even two groups of the same space (an "external" and a
 /// "contracted" group of one space); \c loop_slot distinguishes the members of
 /// one group. See doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md,
 /// section 5.1.
@@ -46,32 +46,31 @@ struct LoopKey {
 };
 
 /// \brief A batch loop's realized placement: its identity (\c depth, \c
-///        loop_slot) plus its LAYOUT (\c altitude_ordinal, \c
+///        loop_slot) plus its layout (\c altitude_ordinal, \c
 ///        latitude_ordinal).
 ///
 /// \details Identity coordinates (\c depth, \c loop_slot) name the loop; layout
 /// coordinates say where a schedule placed it. \c altitude_ordinal is the
 /// nesting rank the schedule assigned the slot within its group
 /// (free/interchangeable);
-/// \c latitude_ordinal is the PASS index within a forced-split nest (formerly
-/// \c ordinal): a nest holding members of more than one pass emits one
+/// \c latitude_ordinal is the pass index within a forced-split nest: a nest
+/// holding members of more than one pass emits one
 /// sibling block per pass, and \c latitude_ordinal disambiguates them (see
 /// \c forced_split_levels, ordered_schedule.hpp). \c space is a color for
 /// fusion group-matching, never identity. See
 /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 5.1.
 struct DagScopeLevel {
   std::size_t depth;   //!< which loop-group (identity)
-  std::wstring space;  //!< color only, NOT identity
+  std::wstring space;  //!< color only, not identity
   int loop_slot = 0;   //!< which member-slot within the group (identity)
   int altitude_ordinal =
       0;  //!< layout: nesting rank of the slot within its group
-  int latitude_ordinal = 0;  //!< layout: pass index (was: ordinal)
+  int latitude_ordinal = 0;  //!< layout: pass index
 
   [[nodiscard]] LoopKey key() const { return LoopKey{depth, loop_slot}; }
 
   friend bool operator==(DagScopeLevel const& lhs, DagScopeLevel const& rhs) {
-    // Full-tuple comparison; identity migrates to key() alone in a later
-    // task.
+    // Full-tuple comparison; \c key() alone is the loop's identity.
     return lhs.depth == rhs.depth && lhs.space == rhs.space &&
            lhs.loop_slot == rhs.loop_slot &&
            lhs.altitude_ordinal == rhs.altitude_ordinal &&
@@ -94,12 +93,12 @@ struct ModeToLevel {
 
 }  // namespace sequant
 
-/// \brief Hash of a \c LoopKey, so the FULL loop identity (\c depth AND
+/// \brief Hash of a \c LoopKey, so the full loop identity (\c depth and
 ///        \c loop_slot) can key an \c unordered_map directly.
 ///
-/// \details Anything that counts or looks up something PER LOOP (e.g.
+/// \details Anything that counts or looks up something per loop (e.g.
 /// \c ordered_n_batches_by_loop, one batch count per loop -- two members of
-/// one loop-group are DISTINCT loops with distinct batch counts, so keying on
+/// one loop-group are distinct loops with distinct batch counts, so keying on
 /// \c depth alone would conflate them) keys on the pair itself through this
 /// hash plus \c LoopKey::operator==. There is deliberately no packed
 /// single-\c size_t "color": packing \c loop_slot into a fixed bit field

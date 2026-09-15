@@ -13,7 +13,7 @@
 namespace sequant::eval {
 
 ///
-/// \brief The map type both bridges below return: a key -> a NON-OWNING
+/// \brief The map type both bridges below return: a key -> a non-owning
 /// pointer to a node of the caller's forest.
 ///
 /// \details The pointer is what keeps the bridge cheap. \c FullBinaryNode's
@@ -23,7 +23,7 @@ namespace sequant::eval {
 /// that -- for data the forest already holds.
 ///
 /// \warning Non-owning: the map is only valid while the forest it was built
-/// from is alive AND unmodified (a node's children may be replaced in place
+/// from is alive and unmodified (a node's children may be replaced in place
 /// through \c FullBinaryNode::left() / \c right(), which would leave these
 /// pointers addressing replaced subtrees). Every builder in this library
 /// satisfies both: the forest is a parameter of the enclosing call
@@ -46,7 +46,7 @@ using ValueNodeMap = std::unordered_map<std::size_t, Node const*>;
 /// all a homed value needs (every occurrence is the same value). Pure lookup
 /// construction -- no execution.
 ///
-/// \return A \c ValueNodeMap pointing INTO \p forest -- see its warning; the
+/// \return A \c ValueNodeMap pointing into \p forest -- see its warning; the
 /// result must not outlive \p forest.
 ///
 /// \note Lives in its own header so that `ordered_executor.hpp` -- which
@@ -57,7 +57,7 @@ template <meta::eval_node_range R>
 [[nodiscard]] ValueNodeMap<std::ranges::range_value_t<R>> build_value_node_map(
     R const& forest) {
   using node_t = std::ranges::range_value_t<R>;
-  // The entries are ADDRESSES of the caller's nodes, so the range has to yield
+  // The entries are addresses of the caller's nodes, so the range has to yield
   // references to them; a range of prvalues (a transform view, say) would hand
   // back pointers to temporaries. Same guard, same reason, as cache_manager()'s
   // pointer-keyed DAG walk (cache_manager.hpp). `R const`, because the walk
@@ -67,16 +67,16 @@ template <meta::eval_node_range R>
                 "build_value_node_map(): the forest range must yield "
                 "references to nodes that outlive the map");
   ValueNodeMap<node_t> out;
-  // Two passes. Value keys first, over the WHOLE forest: a whole value's key
-  // IS its node hash, and that entry must be the whole occurrence -- an
+  // Two passes. Value keys first, over the whole forest: a whole value's key
+  // is its node hash, and that entry must be the whole occurrence -- an
   // earlier sliced occurrence of the same node (key != hash) must not claim
   // the hash slot first. Then node hashes, only where no value claimed them
   // (a monitor's op hash, a leaf: any node of that hash).
   // Iterative pre-order (an explicit stack, not recursion): the residual's
   // in-place Sum tree has a left spine as deep as the number of terms, and a
-  // recursive descent would overflow the call stack. Pushing the RIGHT child
-  // before the LEFT one keeps the pop order the recursion's pre-order, so the
-  // FIRST node visited for a given key -- the one `emplace` keeps -- is the
+  // recursive descent would overflow the call stack. Pushing the right child
+  // before the left one keeps the pop order the recursion's pre-order, so the
+  // first node visited for a given key -- the one `emplace` keeps -- is the
   // same one as before.
   std::vector<node_t const*> stack;
   auto visit = [&](node_t const& root, bool keys) {
@@ -101,13 +101,13 @@ template <meta::eval_node_range R>
   return out;
 }
 
-/// \brief Like \c build_value_node_map but keyed by VALUE id (\c
+/// \brief Like \c build_value_node_map but keyed by value id (\c
 /// value_key_of: node id + home-sliced positions), one representative node
 /// per value -- the map the ordered executor resolves a \c value_id through,
 /// so a value is always built from one of its own occurrences' nodes (a node
 /// of the same hash home-sliced on other positions is another value).
 ///
-/// \return A \c ValueNodeMap pointing INTO \p forest -- see its warning; the
+/// \return A \c ValueNodeMap pointing into \p forest -- see its warning; the
 /// result must not outlive \p forest.
 template <meta::eval_node_range R>
 [[nodiscard]] ValueNodeMap<std::ranges::range_value_t<R>>

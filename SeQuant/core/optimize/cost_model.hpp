@@ -283,15 +283,15 @@ void pareto_insert(container::vector<FP>& f, FP p) {
 ///
 /// With \p use_nsl == false this is byte-identical to \ref pareto_insert (plain
 /// (peak, flops) domination; \c FP::nsl is not consulted). With
-/// \p use_nsl == true (perf-first + a FINITE peak_threshold) the cumulative
-/// sliced-mode count \c FP::nsl becomes a THIRD Pareto objective, so a point
-/// dominates only when it is no worse in peak, flops, AND slice count. Because
+/// \p use_nsl == true (perf-first + a finite peak_threshold) the cumulative
+/// sliced-mode count \c FP::nsl becomes a third Pareto objective, so a point
+/// dominates only when it is no worse in peak, flops, and slice count. Because
 /// contracted slicing is flops-neutral, the unsliced realization (higher peak,
 /// \c nsl == 0) and a sliced one (lower peak, \c nsl > 0) are then Pareto-
-/// INCOMPARABLE: both survive on the frontier, all the way to the root, so an
-/// ancestor that needs the lower-peak (sliced) subtree still has it AND the
+/// incomparable: both survive on the frontier, all the way to the root, so an
+/// ancestor that needs the lower-peak (sliced) subtree still has it and the
 /// root selection still has the unsliced one to pick when it fits the budget.
-/// \ref select_root then chooses the LEAST-sliced feasible schedule -- no free
+/// \ref select_root then chooses the least-sliced feasible schedule -- no free
 /// slicing below the ceiling. (A per-flops peak/nsl trade-off keeps at most one
 /// point per distinct slice count, so the frontier stays bounded: slicing more
 /// modes monotonically lowers peak.) The peak-first path passes false and is
@@ -354,7 +354,7 @@ inline double roofline_op_cost(double flops, double traffic,
 template <typename IdxToSz>
 struct PeakModel {
   IdxToSz idxsz;
-  /// k-aware inner (CSV/PNO composite) extent; see footprint_counter. REQUIRED
+  /// k-aware inner (CSV/PNO composite) extent; see footprint_counter. Required
   /// whenever the network has composite indices (empty => inner_aware_volume
   /// throws); pass an explicit no-op only for composite-free networks. No
   /// default: omitting it silently mis-sized composites (4-PAO-integral bug).
@@ -581,7 +581,7 @@ struct PeakBatchedModel {
   IdxToSz idxsz;
   std::function<std::size_t(Index const&)> batch;
   std::function<bool(Tensor const&)> is_volatile_leaf;
-  /// k-aware inner (CSV/PNO composite) extent; see footprint_counter. REQUIRED
+  /// k-aware inner (CSV/PNO composite) extent; see footprint_counter. Required
   /// whenever the network has composite indices (empty => inner_aware_volume
   /// throws); pass an explicit no-op only for composite-free networks. No
   /// default: omitting it silently mis-sized composites (4-PAO-integral bug).
@@ -611,7 +611,7 @@ struct PeakBatchedModel {
   /// batchable index (Ap != 0), into the all-co-resident peak term, to price
   /// the accumulator + contribution co-residency of K += contribution.
   double accumulation_factor = 0.0;
-  /// Peak-memory budget (BYTES) for threshold-gated selection; see
+  /// Peak-memory budget (bytes) for threshold-gated selection; see
   /// BatchPolicy::peak_threshold. +infinity (default) => min-flops (no
   /// batching).
   double peak_threshold = std::numeric_limits<double>::infinity();
@@ -619,34 +619,34 @@ struct PeakBatchedModel {
   /// peak_threshold (bytes). Default 8 (double / TensorD).
   double numeric_size = 8.0;
   /// Perf-first / peak-second selection: when true, `select_root` selects the
-  /// root-frontier point by (flops, then peak) and does NOT consult
-  /// `peak_threshold` as a feasibility gate (it can no longer force a
-  /// FLOPS-catastrophic factorization for its sliceability). Default false =
-  /// peak-first threshold-gated selection (unchanged).
+  /// root-frontier point by (flops, then peak) and does not consult
+  /// `peak_threshold` as a feasibility gate, so the threshold cannot force a
+  /// flops-catastrophic factorization for its sliceability. Default false =
+  /// peak-first, threshold-gated selection.
   bool perf_first = false;
 
-  /// If true (the default), charge the batch RECOMPUTATION cost on the flops/
+  /// If true (the default), charge the batch recomputation cost on the flops/
   /// exec mode. The batched evaluator re-executes each contraction per tile of
-  /// the ancestor batch modes its result does NOT carry (across-batch work is
+  /// the ancestor batch modes its result does not carry (across-batch work is
   /// recomputed; within-batch sharing is cached -- see eval.hpp "replays the
   /// build of every compatible persistent final"). A node at ancestor-sliced-
   /// set B is charged nbatches(b) for each b in B not open in the node, so a
   /// schedule that slices many modes it must recompute across pays for it. The
-  /// alternative (false) assumes WORK PARITY (batching is free on flops), which
+  /// alternative (false) assumes work parity (batching is free on flops), which
   /// under-costs heavily-sliced families and does not reflect the true cost of
   /// batching; kept only as an escape hatch for comparison.
   ///
-  /// The charge is ORDER-AWARE: DP cells are ordered nests (see \ref
-  /// Context::ordered), so a node is billed only for the enclosing loops OUTER
+  /// The charge is order-aware: DP cells are ordered nests (see \ref
+  /// Context::ordered), so a node is billed only for the enclosing loops outer
   /// to its innermost-carried placement (\ref Context::escaped_outer). Loops
-  /// inner to that placement, and every loop when the node carries NONE of the
+  /// inner to that placement, and every loop when the node carries none of the
   /// enclosing modes, hoist above for free (rf == 1). An order-blind set charge
   /// would systematically over-bill the hoistable case.
   bool charge_batch_recompute = true;
   /// If true (the default), a value bound to a batch loop is charged as often
-  /// as the loop RUNS. A loop runs once per production of the value that
-  /// CLOSES it (the node contracting the mode in batches), so a non-volatile
-  /// subtree sliced by a loop that a VOLATILE node closes is rebuilt every
+  /// as the loop runs. A loop runs once per production of the value that
+  /// closes it (the node contracting the mode in batches), so a non-volatile
+  /// subtree sliced by a loop that a volatile node closes is rebuilt every
   /// replay -- it cannot persist across evaluations (the runtime's persistence
   /// rule, explicit-cells design section 12) -- and takes \ref volatile_weight
   /// exactly as an amplitude-dependent value does. A non-volatile nest closed
@@ -659,25 +659,25 @@ struct PeakBatchedModel {
   /// at the closing node, where its volatility is known: for each child
   /// subtree that is non-volatile and carries a mode sliced here, the child's
   /// whole cost is scaled (an over-charge only for descendants of that child
-  /// which do not carry the mode and hoist above the loop). An EXTERNAL loop
+  /// which do not carry the mode and hoist above the loop). An external loop
   /// the DP opens here (\ref BFrontPoint::eopen) closes here too -- the full
   /// result is assembled outside it, per production of this node -- so it is
   /// charged the same way: the scale keys on the whole sliced set S (the
-  /// contracted \c aprime OR the external opens), not on \c aprime alone.
+  /// contracted \c aprime or the external opens), not on \c aprime alone.
   bool charge_bound_persistence = true;
-  /// Spaces batchable in the CONTRACTED role -- i.e. a mode of such a space is
+  /// Spaces batchable in the contracted role -- i.e. a mode of such a space is
   /// batchable where it is summed at some node. Building block; companion to
   /// \ref is_batchable_external_index. Declared here (outside the
-  /// positionally-initialized prefix) and ADJACENT to its external companion so
+  /// positionally-initialized prefix) and adjacent to its external companion so
   /// the two roles read together; set it by member assignment. Defaults to
   /// decline every index => no mode is batchable in the contracted role.
   std::function<bool(Index const&)> is_batchable_contracted_index =
       [](Index const&) { return false; };
-  /// Spaces batchable in the EXTERNAL role -- i.e. a mode of such a space is
+  /// Spaces batchable in the external role -- i.e. a mode of such a space is
   /// batchable when it is open on the term root (a spectator carried to the
-  /// result), NOT when it is contracted. Companion to \ref
+  /// result), not when it is contracted. Companion to \ref
   /// is_batchable_contracted_index, which admits spaces batchable in the
-  /// CONTRACTED role. Keeping the two roles as separate caller-supplied space
+  /// contracted role. Keeping the two roles as separate caller-supplied space
   /// sets is what lets this layer stay domain-generic: the caller decides which
   /// spaces are batchable in which role, and \ref build_context drops every
   /// mode whose role's predicate rejects it (so a space batchable only as
@@ -690,8 +690,8 @@ struct PeakBatchedModel {
   std::function<bool(Index const&)> is_batchable_external_index =
       [](Index const&) { return false; };
 
-  /// Derived "batchable in ANY role": true iff the index is batchable in the
-  /// contracted OR the external role. This is NOT a settable field; the DP's
+  /// Derived "batchable in any role": true iff the index is batchable in the
+  /// contracted or the external role. This is not a settable field; the DP's
   /// role filters consume the individual building blocks, never this union.
   /// The building blocks default-decline, so both are always callable here.
   bool is_batchable(Index const& ix) const {
@@ -703,11 +703,11 @@ struct PeakBatchedModel {
   /// Term-level gate for \ref reconstruct_batched_modes emitting \c
   /// BatchModeType::External entries (genuine external modes; see \ref
   /// is_external_mode), threaded from \ref CostParams::batch_spectator_indices
-  /// / BatchPolicy::batch_spectator_indices. Default false so every OTHER
+  /// / BatchPolicy::batch_spectator_indices. Default false so every other
   /// PeakBatchedModel construction (peak_cost_batched, compute_external_batch_
   /// axis's own model, existing tests) is unaffected and emits no External
   /// entries -- byte-identical to before this member existed. With it on, an
-  /// external batch loop is a per-node DP CHOICE (\ref BFrontPoint::eopen):
+  /// external batch loop is a per-node DP choice (\ref BFrontPoint::eopen):
   /// external bits become nestable cell modes and \ref
   /// reconstruct_batched_modes stamps \c External exactly where the DP opened
   /// or inherited them. There is no post-DP placement pass.
@@ -728,15 +728,15 @@ struct PeakBatchedModel {
     int lp_idx = -1;
     int rp_idx = -1;
     /// Cumulative count of batchable modes sliced anywhere in this realization
-    /// (this node's \c aprime popcount plus both children's \c nsl). Used ONLY
+    /// (this node's \c aprime popcount plus both children's \c nsl). Used only
     /// by the perf-first ceiling's threshold-aware frontier domination
     /// (\ref pareto_insert_ceiling) to break peak-below-budget ties toward the
-    /// LEAST-sliced realization, so the unsliced schedule survives whenever it
+    /// least-sliced realization, so the unsliced schedule survives whenever it
     /// fits the budget. Zero for leaves and for the unbatched / peak-first
     /// paths, where it is never consulted.
     std::size_t nsl = 0;
-    /// External modes whose batch loop this node OPENS: carried by the node,
-    /// absent from its enclosing set, nested OUTER of \c aprime. The node is
+    /// External modes whose batch loop this node opens: carried by the node,
+    /// absent from its enclosing set, nested outer of \c aprime. The node is
     /// produced per batch and scattered into its full result outside the loop;
     /// the children see the mode in their enclosing set, non-carriers under it
     /// pay the recompute charge, and the opener is the loop's closer for
@@ -858,13 +858,13 @@ struct PeakBatchedModel {
       return mem == 1.0 ? 0.0 : mem;
     }
 
-    /// Footprint of subset s under an explicit sliced-set UNION mask (the
+    /// Footprint of subset s under an explicit sliced-set union mask (the
     /// order-independent bitmask, as returned by \ref cell_union). Slicing is a
     /// pure footprint change, so the size depends only on which modes are in
     /// the union, never on the cell's nesting order -- this is the primitive
     /// that
     /// \ref sz and the external-placement re-price (\ref subtree_peak) share,
-    /// so an EXTERNAL mode can be injected into the union directly without a
+    /// so an external mode can be injected into the union directly without a
     /// precomputed ordered cell (external bits are excluded from build_cells).
     double sz_u(std::size_t U, std::size_t s) const {
       return tables[U & open_modes[s]][s];
@@ -889,25 +889,25 @@ struct PeakBatchedModel {
 
     // --- ordered-cell layer ------------------------------------------------
     // A DP cell is identified by `id`. Normally (`ordered` true) `id` indexes
-    // an ordered SEQUENCE of batched modes (outer to inner): cell_union
+    // an ordered sequence of batched modes (outer to inner): cell_union
     // recovers the bitmask for the (order-independent) footprint tables,
     // descend appends a contracted-here set as inner modes, and escaped_outer
-    // charges only enclosing modes OUTER to a node's innermost-carried
-    // placement. `ordered` is cleared ONLY by build_cells' enumeration-blowup
-    // guard, after which `id` IS the sliced-set bitmask B (identity;
+    // charges only enclosing modes outer to a node's innermost-carried
+    // placement. `ordered` is cleared only by build_cells' enumeration-blowup
+    // guard, after which `id` is the sliced-set bitmask B (identity;
     // nCells == nB) and every helper here reduces to the plain bitmask ops --
     // a bounded-nest schedule is still correct, only optimality is lost.
     bool ordered = true;
     std::size_t cap = 3;     // max sequence length when ordered
     std::size_t nCells = 1;  // number of DP cells (== nB when !ordered)
-    // Bitmask of EXTERNAL batchable modes (bit k set iff is_external_mode(k)):
+    // Bitmask of external batchable modes (bit k set iff is_external_mode(k)):
     // open on the root, contracted at no node (built from open_modes, which
     // build_context assigns before build_cells()). Unless the term batches
     // spectators, build_cells skips these bits when enumerating sequences, so a
     // cell's union/sequence never contains an external mode -- nesting order is
     // meaningless for a mode that is never a contracted-here set at any node,
     // and admitting it would blow up the enumeration for nothing. With
-    // spectator batching on they ARE nestable: the DP opens an external loop at
+    // spectator batching on they are nestable: the DP opens an external loop at
     // a node of its choosing (BFrontPoint::eopen).
     std::size_t external_mask = 0;
     container::vector<std::size_t> cell_union_;  // id -> union bitmask
@@ -932,7 +932,7 @@ struct PeakBatchedModel {
       return id;
     }
     // The children's context of a frontier point: its external opens
-    // (OUTER) then its contracted-here modes (inner).
+    // (outer) then its contracted-here modes (inner).
     std::size_t descend_pt(std::size_t id, std::size_t eopen,
                            std::size_t Ap) const {
       if (eopen) {
@@ -942,7 +942,7 @@ struct PeakBatchedModel {
       return descend(id, Ap);
     }
     // Enclosing modes charged as recompute for a node carrying `carried`:
-    // those OUTER to the node's innermost-carried placement it does not carry.
+    // those outer to the node's innermost-carried placement it does not carry.
     // Carr == 0 (no carried enclosing mode) hoists above every loop => none.
     std::size_t escaped_outer(std::size_t id, std::size_t carried) const {
       if (!ordered) return id & ~carried;
@@ -1030,26 +1030,26 @@ struct PeakBatchedModel {
     // CSE is not supported for DenseSpaceTimeBatched.
     Context ctx;
     ctx.nt = network.tensors().size();
-    // Candidates from BOTH batchability roles (contracted / external); the role
+    // Candidates from both batchability roles (contracted / external); the role
     // filter below keeps each mode only if its actual role admits it.
     ctx.batchable_modes = batchable_mode_list(
         network, is_batchable_contracted_index, is_batchable_external_index);
-    // open_modes must be assigned BEFORE build_cells() so the ordered-cell
-    // enumeration can identify and exclude EXTERNAL modes (see
-    // Context::external_mask below). NOT pruned: is_external_mode scans it
-    // over the FULL subset lattice (including disconnected subsets) to verify
+    // open_modes must be assigned before build_cells() so the ordered-cell
+    // enumeration can identify and exclude external modes (see
+    // Context::external_mask below). Not pruned: is_external_mode scans it
+    // over the full subset lattice (including disconnected subsets) to verify
     // a mode is never contracted, so every subset's open-mode bitmask must be
     // real. Computed here first because the role filter needs the root open
     // set, then recomputed if the filter shrinks the mode list.
     ctx.open_modes = subset_open_aux(network, tidxs, ctx.batchable_modes);
     {
-      // Role filter: a mode open on the root occurs in the EXTERNAL role and is
+      // Role filter: a mode open on the root occurs in the external role and is
       // batchable only if is_batchable_external_index admits it; otherwise it
-      // occurs CONTRACTED and is batchable only if
+      // occurs contracted and is batchable only if
       // is_batchable_contracted_index admits it. Dropping the rest keeps 2^m
       // free of modes that can never be batched in the role they actually occur
       // in (e.g. the contracted members of a space that is only
-      // external-batchable). Each role consults ONLY its own building block --
+      // external-batchable). Each role consults only its own building block --
       // there is no fallback from the external role to the contracted one, so a
       // space batchable only in the contracted role never admits its external
       // occurrences. Both building blocks default-decline, hence are always
@@ -1095,7 +1095,7 @@ struct PeakBatchedModel {
     // Order-aware cell layer: DP cells index ordered sequences of batched
     // modes. cap == m => full enumeration (never worse than the set-keyed DP);
     // build_cells falls back to set-keyed if m is large.
-    // Cap the ordered nest DEPTH (sequence length), NOT m: the number of modes
+    // Cap the ordered nest depth (sequence length), not m: the number of modes
     // that co-nest in a single term (m_B) is small (<=3 for C60 contracted),
     // while m (all batchable indices) can be large -- cap==m gives Sum P(m,k)
     // cells (13700 at m=7). Depth 3 => Sum_{k<=3} P(m,k) (260 at m=7),
@@ -1227,7 +1227,7 @@ struct PeakBatchedModel {
                     : ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
                 ctx.sz(lp, 0) + ctx.sz(rp, 0) + ctx.sz(n, 0), machine_balance,
                 fast_mem_elems, block_tiles, block_prefactor);
-    // Perf-first ceiling gate: under a FINITE budget, peak below the budget is
+    // Perf-first ceiling gate: under a finite budget, peak below the budget is
     // free, so flops-neutral contracted slicing must not be applied merely to
     // lower a sub-budget peak. Enabling nsl as a third Pareto objective keeps
     // the unsliced realization incomparable-to (hence co-resident with) the
@@ -1238,14 +1238,14 @@ struct PeakBatchedModel {
     for (std::size_t B = 0; B < ctx.nCells; ++B) {
       // Batch recomputation charge: this node sits inside the ancestor batch
       // loops over the modes in B. For each b in B whose mode this node's
-      // result does NOT carry (b not open in n), the node is re-executed
+      // result does not carry (b not open in n), the node is re-executed
       // nbatches(b) times (across-batch recompute); modes it carries are
-      // partitioned (x1). Default off => rf==1 => historical work-parity cost.
+      // partitioned (x1). Default off => rf==1 => work-parity cost.
       double rf = 1.0;
       if (charge_batch_recompute) {
         // Recompute charge over the enclosing modes this node is re-executed
-        // across. !ordered: B & ~carried (every escaped mode -- the historical
-        // set charge). ordered: only escaped modes OUTER to the node's
+        // across. !ordered: B & ~carried (every escaped mode -- the set
+        // charge). ordered: only escaped modes outer to the node's
         // innermost- carried placement (escaped modes inner to it hoist above
         // for free; Carr == 0 hoists above the whole nest => none, subsuming
         // A3a). escaped_outer collapses to the set charge when !ordered,
@@ -1262,17 +1262,17 @@ struct PeakBatchedModel {
       // persistence gate would only ever raise the modelled peak. Set
       // batch_persistent_only to restore the persistent-only gate (decline to
       // slice subsets that contain a volatile leaf).
-      // Revert-to-no-batching gate: an INFINITE peak_threshold is an unlimited
+      // Revert-to-no-batching gate: an infinite peak_threshold is an unlimited
       // budget -- no term can ever be over budget, so nothing should batch.
       // Because contracted-index slicing is flops-neutral, the min-flops
       // frontier would otherwise always keep its fully-sliced (min-peak)
       // realization and slice unconditionally (a free peak reduction nobody
       // asked for). Forcing contracted_here == 0 here makes the batched cost
-      // model produce the SAME schedule as the unbatched model when the budget
+      // model produce the same schedule as the unbatched model when the budget
       // is unlimited: one model, cleanly reverting, rather than two models that
       // might disagree on the factorization. (No batchable axes -> ctx.m == 0
       // -> open_modes are all 0 -> contracted_here is already 0, so that revert
-      // case needs no special handling.) A FINITE budget still enumerates
+      // case needs no special handling.) A finite budget still enumerates
       // slicing; whether a term actually needs it is the select_root ceiling's
       // job.
       std::size_t const contracted_here =
@@ -1281,7 +1281,7 @@ struct PeakBatchedModel {
               ? std::size_t{0}
               : ((ctx.open_modes[lp] | ctx.open_modes[rp]) &
                  ~ctx.open_modes[n]);
-      // External loops this node may OPEN: carried here, not already sliced by
+      // External loops this node may open: carried here, not already sliced by
       // an enclosing loop. Under an unlimited budget nothing batches (the same
       // revert as contracted_here above). External bits are nestable cell modes
       // only under spectator batching, so this is 0 without it.
@@ -1334,7 +1334,7 @@ struct PeakBatchedModel {
           // C.
           // Bound-persistence charge (charge_bound_persistence): this node
           // closes the loops over Ap. If it is volatile, every batch of those
-          // loops re-runs each replay, so a NON-volatile child sliced by them
+          // loops re-runs each replay, so a non-volatile child sliced by them
           // (it carries a mode of Ap) is rebuilt each replay -- scale that
           // child's cost by volatile_weight (a volatile child already is).
           // (An external loop opened here is closed here too: the full result
@@ -1357,7 +1357,7 @@ struct PeakBatchedModel {
               double const rpf =
                   std::max({Llp + prr + res, szrp + pl + res, both});
               // Cumulative sliced-mode count of this realization: the modes
-              // sliced at THIS node (popcount Ap) plus both children's. Fed to
+              // sliced at this node (popcount Ap) plus both children's. Fed to
               // the perf-first ceiling's threshold-aware domination so the
               // unsliced realization survives when it fits the budget.
               std::size_t const nsl =
@@ -1382,10 +1382,10 @@ struct PeakBatchedModel {
                 container::vector<State>& /*st*/) const {}
 
   /// \brief True iff batchable mode bit \p k is a genuine external mode of
-  /// this network: it is OPEN on the root result AND is contracted at NO node.
+  /// this network: it is open on the root result and is contracted at no node.
   ///
   /// An external mode is carried unchanged from the leaves up to the root:
-  /// whenever any tensor in a subset carries the mode, the mode stays OPEN in
+  /// whenever any tensor in a subset carries the mode, the mode stays open in
   /// that subset, so it never appears in any node's contracted-at-node set
   /// (\c contracted_here = (open_modes[lp]|open_modes[rp]) & ~open_modes[n])
   /// and slicing it is purely a footprint change with identical work. This is
@@ -1401,8 +1401,8 @@ struct PeakBatchedModel {
     for (std::size_t b = 0; b < ctx.nt; ++b)
       if ((ctx.open_modes[std::size_t{1} << b] >> k) & 1u)
         leafmask |= (std::size_t{1} << b);
-    // Whenever the mode is AVAILABLE in a subset (some carrying leaf is in it)
-    // it must be OPEN in that subset -- else it is contracted at the node that
+    // Whenever the mode is available in a subset (some carrying leaf is in it)
+    // it must be open in that subset -- else it is contracted at the node that
     // forms that subset, i.e. not a pure external mode.
     for (std::size_t n = 1; n <= root; ++n)
       if ((leafmask & n) && !((ctx.open_modes[n] >> k) & 1u)) return false;
@@ -1416,7 +1416,7 @@ struct PeakBatchedModel {
   /// flops => the non-batched schedule. Returns the chosen index into
   /// \c st[root][0] -- the term root is always read at cell 0 (the empty
   /// sequence): every loop the schedule uses, contracted or external, is
-  /// opened INSIDE the tree by the DP, so the root has no enclosing nest.
+  /// opened inside the tree by the DP, so the root has no enclosing nest.
   int select_root(Context const& ctx,
                   container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
@@ -1430,20 +1430,20 @@ struct PeakBatchedModel {
       // equal-flops higher-peak points), so this both picks the cheapest
       // factorization and takes its fully-sliced (min-peak) realization.
       //
-      // peak_threshold acts as a CEILING, not a min-peak objective: among the
+      // peak_threshold acts as a ceiling, not a min-peak objective: among the
       // points whose byte peak fits the budget, take the fewest flops (ties by
       // lower peak). A term is therefore batched only when its cheapest
       // (unbatched) schedule would exceed the budget -- flops are never traded
-      // for peak BELOW the ceiling, so this cannot force the flops-catastrophic
+      // for peak below the ceiling, so this cannot force the flops-catastrophic
       // factorization that peak-first (the !perf_first branch) can. If no point
       // fits (the budget is below even the min-peak schedule) keep the
-      // perf-first character and fall back to GLOBAL min flops (best effort,
+      // perf-first character and fall back to global min flops (best effort,
       // accepting the overage) rather than peak-first's min-peak fallback.
       // peak_threshold == +inf (the default when no budget is set) makes every
       // point feasible, reducing this to the pure min-flops selection --
       // byte-identical to before this ceiling existed.
       // Among the feasible frontier, min flops; ties broken toward the
-      // LEAST-sliced realization (fewer nsl), then lower peak. The nsl tiebreak
+      // least-sliced realization (fewer nsl), then lower peak. The nsl tiebreak
       // is what realizes the ceiling's intent: when the unsliced and a sliced
       // schedule both fit the budget at equal flops (kept distinct by
       // pareto_insert_ceiling), pick the unsliced one -- no free slicing below
@@ -1463,14 +1463,14 @@ struct PeakBatchedModel {
           pbest = i;
       bool const fit = pbest >= 0;  // a schedule met the ceiling
       if (!fit) {
-        // Nothing fits the budget: best-effort MIN FLOPS, ties by MIN PEAK (the
-        // most-sliced realization). NOT min nsl -- the nsl "don't slice below
-        // the ceiling" tiebreak in `better` applies ONLY among feasible points;
-        // for an over-budget term it must be INVERTED, or the least-sliced
+        // Nothing fits the budget: best-effort min flops, ties by min peak (the
+        // most-sliced realization). Not min nsl -- the nsl "don't slice below
+        // the ceiling" tiebreak in `better` applies only among feasible points;
+        // for an over-budget term it must be inverted, or the least-sliced
         // (max-peak) schedule is chosen and blows the budget by the most (a
         // giant unbatched integral -> OOM, e.g. the water-20 2.6 TB composite).
         // This restores the pre-nsl fallback: min flops, then min peak. (A
-        // min-PEAK fallback was tried and rejected: for the infeasible terms it
+        // min-peak fallback was tried and rejected: for the infeasible terms it
         // takes the most-sliced, flops-catastrophic factorizations -- 8x the
         // FLOPs on water-20 at 100 GB.)
         auto const better_peak = [&](int i, int j) {
@@ -1533,13 +1533,13 @@ struct PeakBatchedModel {
   /// Modeled peak (in elements) of the chosen back-pointer subtree rooted at
   /// subset \p n, read at DP schedule cell \p Bsched and sized under the
   /// explicit union mask \p Usize. This is the reusable, node-level re-price of
-  /// the \c sim recursion in \ref reconstructed_batched_peak: it follows the
-  /// SAME back-pointer walk (children/order/aprime chosen by the DP) and the
-  /// SAME staged-peak algebra (\c stage_first / \c stage_second / \c stage_form
+  /// the peak reconstruction in \ref reconstructed_batched_peak: it follows the
+  /// same back-pointer walk (children/order/aprime chosen by the DP) and the
+  /// same staged-peak algebra (\c stage_first / \c stage_second / \c stage_form
   /// with the resident-scan \c res and accumulation \c contrib terms), but
   /// sizes every subset from \p Usize instead of from the schedule cell's
   /// union. With
-  /// \p Usize == \c cell_union(Bsched) it reproduces \c sim exactly.
+  /// \p Usize == \c cell_union(Bsched) the two agree exactly.
   double subtree_peak(Context const& ctx, container::vector<State> const& st,
                       std::size_t n, std::size_t Bsched, std::size_t Usize,
                       int idx) const {
@@ -1571,7 +1571,7 @@ struct PeakBatchedModel {
   /// the two walks are kept in lock-step so the RPN order and the per-node
   /// modes line up.
   ///
-  /// \p out_root_peak_bytes (when non-null) receives the term's REPORTED root
+  /// \p out_root_peak_bytes (when non-null) receives the term's reported root
   /// peak in bytes: the selected root frontier point's footprint, which already
   /// reflects every loop -- contracted and external alike -- the DP chose to
   /// open, since external opens are priced inside the DP (\ref
@@ -1582,7 +1582,7 @@ struct PeakBatchedModel {
                             double* out_root_peak_bytes = nullptr) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
     int const best = select_root(ctx, st);  // shared helper (see below)
-    // The selected root frontier point's own footprint IS the reported peak:
+    // The selected root frontier point's own footprint is the reported peak:
     // every external loop the schedule uses was opened by the DP inside that
     // cost (BFrontPoint::eopen), so there is nothing to re-size afterwards.
     if (out_root_peak_bytes)
@@ -1617,10 +1617,10 @@ struct PeakBatchedModel {
       EvalSequence b = build(ss, C, si);
       s.insert(s.end(), b.begin(), b.end());
       container::svector<std::pair<Index, BatchModeType>> modes;
-      // External modes FIRST (outer), then Contracted: `modes` becomes
+      // External modes first (outer), then Contracted: `modes` becomes
       // `ann.axes`, the node's own realized-loop order == the runtime pick
       // order (eval.hpp), so emitting External before Contracted realizes a
-      // co-carried external mode OUTER of the contracted loop, preventing the
+      // co-carried external mode outer of the contracted loop, preventing the
       // scatter from widening the external mode to full extent per contracted
       // block. Emit follows selection: stamp the external loops the DP itself
       // opened -- every external mode of this node's enclosing cell (or opened
@@ -1639,7 +1639,7 @@ struct PeakBatchedModel {
           modes.push_back({ctx.batchable_modes[k], BatchModeType::Contracted});
       NodeBatchAnnotation ann;
       ann.axes = std::move(modes);
-      // Loop-OPEN emission (2026-08-25): the subset of axes for which THIS node
+      // Loop-open emission: the subset of axes for which this node
       // introduces the physical batch loop (vs a node that only carries the
       // sliced mode). peak_profile builds its enclosing-loop nest (ectx) from
       // this, so one physical loop counts once instead of
@@ -1666,7 +1666,7 @@ struct PeakBatchedModel {
       // node's ordered enclosing cell, so all the needed pieces (open_modes,
       // escaped_outer, nbatches) are in hand at this frame -- no second
       // structure or pass. The node's runtime residency (its
-      // enclosing-contracted AND external modes alike) is not emitted here: it
+      // enclosing-contracted and external modes alike) is not emitted here: it
       // is the all-batched-modes cross-occurrence meet stamped onto
       // EvalExpr::sliced_modes by stamp_lifetime_masks.
       {
@@ -1675,9 +1675,9 @@ struct PeakBatchedModel {
         // invariant -> root scope).
         ann.order_aware = true;
         // effective_count = rf = prod of nbatches[k] over the escaped-outer set
-        // (enclosing loops the node does NOT carry). With no CSE on this path
+        // (enclosing loops the node does not carry). With no CSE on this path
         // the back-pointer object is a strict tree (single consumer), so this
-        // per-node rf IS the effective use count.
+        // per-node rf is the effective use count.
         std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
         double rf = 1.0;
         for (std::size_t k = 0; k < ctx.m; ++k)
@@ -1779,7 +1779,7 @@ double reconstructed_batched_peak(
   // the accumulation contrib term), rather than reading the DP's minimized
   // st[*].peak table. This is exactly PeakBatchedModel::subtree_peak sized at
   // the schedule cell's own union (no external injection): sizing under
-  // cell_union(B) reproduces the historical `sim` byte-for-byte. What this
+  // cell_union(B) is what makes the two agree exactly. What this
   // validates independently is the back-pointer walk itself; the batched oracle
   // is the independent guard on the staged-peak algebra.
   std::size_t const root = (std::size_t{1} << nt) - 1;

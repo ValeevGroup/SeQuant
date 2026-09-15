@@ -21,7 +21,7 @@ using VertexColor = std::uint32_t;
 /// Per named (sliced) index loop-color: maps an Index to a small integer
 /// identifying the DAG-scope loop that slices it. Passed to
 /// TensorNetwork::canonicalize_slots / create_graph so that two same-space
-/// named indices bound to DIFFERENT loops receive DIFFERENT graph colors (no
+/// named indices bound to different loops receive different graph colors (no
 /// longer interchangeable), while same-loop indices stay interchangeable. An
 /// empty (or null) map leaves canonicalization byte-identical to space-only
 /// named coloring.

@@ -22,19 +22,21 @@ namespace sequant::eval {
 /// literally the same type under every instantiation -- naming it here lets
 /// this header (and its tests) spell it without a CacheManager instance.
 using BatchContextEntry = sequant::BatchContextEntry;
+/// One entry per enclosing realized batch loop, outermost first.
 using BatchContext = container::svector<BatchContextEntry>;
+/// A batch loop's realized placement; see \c dag_scope.hpp.
 using DagScopeLevel = sequant::DagScopeLevel;
 
 /// Wiring \c CellRegistry needs from its owner (the ordered executor's
 /// Stage-3 storage move) but must not construct itself: the cross-call \c
 /// PersistentValueStore (a \c CacheManager member, one instance
 /// per top-level evaluation call, outliving any one \c CellRegistry), the map
-/// from a table value id to the canonical hash the store and the legacy scope
-/// caches both key persistence on, and an optional metering hook. Every field
-/// defaults to "off": a \c CellRegistry built with a default-constructed \c
-/// CellRegistryHooks behaves exactly as it did before persistence/bytes
-/// tracking existed (persistent cells are simply never seeded or published,
-/// and \c live_bytes stays a bookkeeping-only counter nobody observes).
+/// from a table value id to the canonical hash that the store and the
+/// \c CacheManager scope caches both key persistence on, and an optional
+/// metering hook. Every field defaults to "off": a \c CellRegistry built with
+/// a default-constructed \c CellRegistryHooks does no persistence or bytes
+/// tracking (persistent cells are never seeded or published, and
+/// \c live_bytes stays a bookkeeping-only counter nobody observes).
 struct CellRegistryHooks {
   /// Cross-call persistence store; \c seed_persistent reads it, \c set
   /// publishes to it. Null disables both.
@@ -46,31 +48,31 @@ struct CellRegistryHooks {
   /// Metering: invoked with the new \c live_bytes total after every change.
   /// May be empty -- \c CellRegistry does not require a metering consumer.
   std::function<void(std::size_t live_bytes)> on_bytes_changed;
-  /// Whether a fill-once violation THROWS (see \c CellRegistry::set). The
+  /// Whether a fill-once violation throws (see \c CellRegistry::set). The
   /// default is the process-wide env gate \c eval::strict_fill_once(), which
-  /// is latched on ITS first call anywhere in the process -- so a test that
+  /// is latched on its first call anywhere in the process -- so a test that
   /// needs strictness sets this field instead of the environment, which by
   /// then may be too late to have any effect.
   bool strict_fill_once = eval::strict_fill_once();
 };
 
 /// Runtime side of the cell table: the current result of each cell and its
-/// remaining life. This is the OWNER of those results (the
+/// remaining life. This is the owner of those results (the
 /// explicit-value-cells design): it tracks the live byte total across held
 /// slots, enforces fill-once (a non-persistent cell produced twice without an
 /// intervening clear is a duplicate producer -- a bug, not a legitimate
 /// replay), and seeds/publishes persistent cells through a \c
 /// PersistentValueStore so they survive across top-level evaluation calls
-/// without depending on the legacy scope caches' own persistence. Bound cells
+/// without depending on the scope caches' own persistence. Bound cells
 /// are cleared at the start of every batch of a loop instance they are bound
 /// to (the per-batch scratch reset, expressed on cells).
 ///
-/// ORIENTATION CONVENTION (the legacy scope cache's, kept verbatim): a cell
-/// holds the value in its node's CANONICAL orientation, and every reader
+/// Orientation convention, shared with the \c CacheManager scope caches: a cell
+/// holds the value in its node's canonical orientation, and every reader
 /// applies that node's own \c canon_phase once. A producer therefore stores
-/// \c apply_phase(node, result) -- \c evaluate_impl hands back the ORIENTED
-/// result, and the phase is an involution -- exactly as \c
-/// CacheManager::store_and_access did (\c cache.store_and_access(node,
+/// \c apply_phase(node, result) -- \c evaluate_impl hands back the oriented
+/// result, and the phase is an involution -- matching \c
+/// CacheManager::store_and_access (\c cache.store_and_access(node,
 /// apply_phase(node, rb)), readers \c apply_phase again, roots \c
 /// mult_by_phase). Storing the
 /// oriented value here instead would double-apply the phase at every read
@@ -100,7 +102,7 @@ class CellRegistry {
   }
 
   /// Seeds every persistent cell whose canonical hash is currently held by
-  /// \c hooks_.persistent with the store's value, WITHOUT spending life (the
+  /// \c hooks_.persistent with the store's value, without spending life (the
   /// value just arrived from a prior top-level call; nothing has read it
   /// yet this call). A no-op for a cell the store does not (yet) hold, and
   /// entirely a no-op when \c hooks_.persistent or \c hooks_.hash_of is
@@ -125,12 +127,12 @@ class CellRegistry {
 
   /// Production: overwrites the cell's current result and restores its life
   /// from the table (a new batch's/iteration's production of a cell whose
-  /// prior life was drained starts fresh). FILL-ONCE: a NON-persistent cell
+  /// prior life was drained starts fresh). Fill-once: a non-persistent cell
   /// already holding a value it was not read past nor cleared since (\c
   /// filled_since_clear) is a duplicate producer -- see \c
   /// CellRegistryHooks::strict_fill_once (throws a named \c
   /// Exception, defaulting to the \c SEQUANT_UT_STRICT_FILL_ONCE env
-  /// gate; a plain \c SEQUANT_ASSERT otherwise). PERSISTENT cells are excluded
+  /// gate; a plain \c SEQUANT_ASSERT otherwise). Persistent cells are excluded
   /// from this check, exactly as \c CacheManager::entry::store excludes its own
   /// persistent entries: they legitimately re-store across batch replays and
   /// repeated top-level evaluation calls (e.g. successive CC iterations), often
@@ -165,7 +167,7 @@ class CellRegistry {
 
   /// Decrementing read: throws if the cell has no current result, or (for a
   /// non-persistent cell) its life is already exhausted. The read that spends
-  /// a non-persistent cell's LAST life also DROPS the registry's own
+  /// a non-persistent cell's last life also drops the registry's own
   /// reference (the cell has no reader left this evaluation, and holding on
   /// would both pin the memory and make the buffer look shared to the reader
   /// that just took it -- the same thing \c CacheManager::entry::access()
@@ -179,7 +181,7 @@ class CellRegistry {
   /// In-place eligibility is re-derived from this table's own \c life /
   /// \c persistent directly (see \c CellReadResolver::operand_drained,
   /// which queries \c drained() rather than this flag). The \p exhausted
-  /// output tells a reader whether it took OWNERSHIP of the buffer: the
+  /// output tells a reader whether it took ownership of the buffer: the
   /// ordered executor's Assemble step seeds its running sum with the first
   /// batch's partial when this read exhausted the source, and with a \c
   /// Result::clone of it otherwise (a source with life left, or a persistent
@@ -214,21 +216,21 @@ class CellRegistry {
   /// per-batch scratch reset, expressed on cells instead of on a whole
   /// scope's storage. A cell is bound to \p k either explicitly (\c
   /// detail::bound_instances: a carried \c sliced position or a \c
-  /// partial_over reduction on \p k) or IMPLICITLY, for a non-persistent
-  /// cell whose own DECLARED home scope's deepest loop instance is \p k: the
+  /// partial_over reduction on \p k) or implicitly, for a non-persistent
+  /// cell whose own declared home scope's deepest loop instance is \p k: the
   /// executor re-runs whatever this cell's tree position computes fresh
   /// every batch of that position's innermost enclosing loop (a step's own
   /// block for a Build; a block-close aggregation for an Assemble),
   /// independent of whether the value it holds happens to carry \p k as a
   /// mode or a reduced axis -- a "whole" cell unsliced and unsummed on its
   /// own home loop is still re-run every batch of it, only its declared
-  /// life/persistence say how long the RESULT is then read for. A PERSISTENT
+  /// life/persistence say how long the result is then read for. A persistent
   /// cell is never cleared here (by definition it is bound to no loop
   /// instance -- see \c TableCell::persistent -- so neither check ever
   /// matches it; the explicit \c continue is a defensive redundant guard).
-  /// A \c produce_if_absent cell is the ONE exception to the implicit rule:
-  /// it is precisely a cell whose home scope sits inside a loop it is NOT
-  /// bound to, and the table says it is produced on first visit and REUSED on
+  /// A \c produce_if_absent cell is the one exception to the implicit rule:
+  /// it is precisely a cell whose home scope sits inside a loop it is not
+  /// bound to, and the table says it is produced on first visit and reused on
   /// every later batch of that loop (the executor's Build step skips its
   /// production while it is resident), so the implicit "its scope's innermost
   /// loop is \p k" clear would defeat the flag by dropping it at every batch
@@ -258,7 +260,7 @@ class CellRegistry {
     }
   }
 
-  /// Spends \p count of cell \p c's declared reads WITHOUT taking the value:
+  /// Spends \p count of cell \p c's declared reads without taking the value:
   /// the accounting half of a read the executor decided not to perform. A
   /// consumer the runtime cache-halt skipped (nothing left this evaluation
   /// reads its result, or a \c produce_if_absent cell that is resident and so
@@ -270,7 +272,7 @@ class CellRegistry {
   /// Releases the value when the life reaches zero, exactly as the draining
   /// \c read does (bytes accounted, fill-once mark cleared so a later
   /// production of the cell is a fresh one). A no-op for a persistent cell,
-  /// which never drains, and for \p count == 0. THROWS when \p count exceeds
+  /// which never drains, and for \p count == 0. Throws when \p count exceeds
   /// the remaining life: forgoing more reads than the table declared is an
   /// accounting bug in the caller, and silently saturating would release a
   /// value another consumer is still owed (see \c remaining_life, which the
@@ -340,12 +342,12 @@ class CellRegistry {
     return it->second;
   }
 
-  /// The value's form VISIBLE at \p scope, by RESIDENCY (not exact scope
+  /// The value's form visible at \p scope, by residency (not exact scope
   /// equality) -- the table's own visibility contract, decided by the one
   /// shared rule \c detail::deepest_visible_form states (deepest resident
   /// form wins; at equal depth the earlier candidate does), which the table
   /// builder's read-source selection uses too. Build cells are offered
-  /// FIRST, which is how a tie prefers a Build. Leaf cells are not
+  /// first, which is how a tie prefers a Build. Leaf cells are not
   /// candidates here (see \c leaf_cell): a leaf has no scope in this sense.
   [[nodiscard]] std::optional<CellId> cell_of(std::size_t vid,
                                               CellScope const& scope) const {
@@ -404,23 +406,23 @@ class CellRegistry {
 /// The value and exhaustion flag of one \c table_read.
 struct TableRead {
   ResultPtr value;
-  /// Whether this read spent \c source's LAST declared life (always \c false
+  /// Whether this read spent \c source's last declared life (always \c false
   /// for a persistent cell, which never exhausts).
   bool exhausted = false;
 };
 
-/// The OWNERSHIP half of one table-driven read of \p source: spend one life
+/// The ownership half of one table-driven read of \p source: spend one life
 /// of \p source in \p reg and report whether that read spent the cell's
-/// LAST life. \c CellReadResolver::fetch calls it for a consumer's operand
+/// last life. \c CellReadResolver::fetch calls it for a consumer's operand
 /// reads; an \c Assemble step reads its \c production.source through \c
 /// CellRegistry::read directly, for the same accounting. A read served from
 /// somewhere other than the registry would still owe the table that life:
 /// skipping it leaves the source holding a fully consumed buffer, which pins
 /// the memory and makes every later reader see the value as shared.
 ///
-/// \c CellReadResolver::fetch no longer consults \c TableRead::exhausted
-/// itself (\c CellReadResolver::operand_drained re-derives in-place
-/// eligibility straight from \c CellRegistry::drained instead); an Assemble
+/// \c CellReadResolver::fetch does not consult \c TableRead::exhausted itself
+/// (\c CellReadResolver::operand_drained re-derives in-place eligibility
+/// straight from \c CellRegistry::drained instead); an Assemble
 /// step does, to decide whether the partial it just read is its own to
 /// accumulate into (see \c CellRegistry::read's overload).
 [[nodiscard]] inline TableRead table_read(CellRegistry& reg, CellId source) {
@@ -434,18 +436,18 @@ struct TableRead {
 /// the per-operand read cursors); \c fetch is consulted by \c evaluate_impl
 /// ahead of every other probe.
 ///
-/// POSITIONAL MATCHING -- the invariant that makes a cursor per operand VALUE
+/// Positional matching -- the invariant that makes a cursor per operand value
 /// sufficient, and the reason a \c Read carries no leg number:
-/// 1. the table emits a consumer's \c Read entries in PRODUCTION-TREE LEG
+/// 1. the table emits a consumer's \c Read entries in production-tree leg
 ///    order (cell_table_builder.hpp walks \c CellTableInputs::operands_of,
-///    which is per-leg WITH repetition, left leg then right leg);
-/// 2. the executor fetches a consumer's legs in that SAME order
+///    which is per-leg with repetition, left leg then right leg);
+/// 2. the executor fetches a consumer's legs in that same order
 ///    (\c evaluate_impl requests the left operand, then the right);
 /// 3. therefore the i-th surviving \c Read of one value in \c cursor_ is the
 ///    i-th leg of that value, and popping the front matches legs to reads
 ///    with no leg index anywhere. \c begin_consumer asserts (1) by checking
 ///    each per-value cursor is ordered by table position;
-/// 4. every table value in a consumer's production tree is a DIRECT leg. A
+/// 4. every table value in a consumer's production tree is a direct leg. A
 ///    non-leg intermediate node of that tree is a transient (not a value of
 ///    the table) and \c fetch reports it as such; a table value reached from
 ///    an intermediate node instead of a leg has no \c Read of its own and
@@ -456,7 +458,7 @@ class CellReadResolver {
       CellRegistry& reg,
       std::function<std::optional<std::size_t>(std::size_t)> vid_of_hash)
       : reg_(&reg), vid_of_hash_(std::move(vid_of_hash)) {
-    // Index the table's reads by consumer ONCE: begin_consumer runs before
+    // Index the table's reads by consumer once: begin_consumer runs before
     // every build step and every per-batch output evaluation, and scanning
     // the whole read list there made each step cost O(all reads).
     auto const& t = reg_->table();
@@ -466,7 +468,7 @@ class CellReadResolver {
   }
 
   /// Resets the per-operand read cursors to every \c Read of \p consumer, in
-  /// table order -- i.e. in the consumer's production-tree LEG order, which
+  /// table order -- i.e. in the consumer's production-tree leg order, which
   /// is what makes the front of a per-value cursor the next leg to fetch
   /// (see the positional-matching invariant on this class).
   void begin_consumer(CellId consumer) {
@@ -488,22 +490,22 @@ class CellReadResolver {
   [[nodiscard]] CellId consumer() const { return consumer_; }
 
   /// The registry this resolver reads from -- the storage the table owns.
-  /// Read-only: a caller that wants to OBSERVE what a cell currently holds
+  /// Read-only: a caller that wants to observe what a cell currently holds
   /// (a test probe, a diagnostic) goes through here; production is the
   /// executor's business.
   [[nodiscard]] CellRegistry const& registry() const noexcept { return *reg_; }
 
   /// \return nullopt when \p operand_node_hash is not a value of the table
   /// (a transient of this production tree, evaluated in place by the
-  /// caller), OR when the matched Read's source is a LEAF cell with no
+  /// caller), or when the matched Read's source is a leaf cell with no
   /// current result yet (first touch: the caller must evaluate the leaf and
-  /// call \c record_leaf; the cursor entry is left UNCONSUMED so the SAME
+  /// call \c record_leaf; the cursor entry is left unconsumed so the same
   /// Read is served -- and consumed -- by a later fetch once the leaf is
-  /// recorded). Any OTHER matched Read whose source has no current result
-  /// THROWS naming the consumer cell, the source cell and the value (spec
+  /// recorded). Any other matched Read whose source has no current result
+  /// throws naming the consumer cell, the source cell and the value (spec
   /// section 4: "missing entry or non-resident source: throw with both
   /// ids") -- a well-formed table guarantees a Build cell's own source is
-  /// always resident when read (registry lookups go by RESIDENCY, see \c
+  /// always resident when read (registry lookups go by residency, see \c
   /// CellRegistry::cell_of, and persistent cross-call values are seeded into
   /// the registry at entry, see \c run_ordered_schedule_pre_results), so
   /// this is a genuine table/tree or recording gap, never deferred.
@@ -526,14 +528,14 @@ class CellReadResolver {
     TableCell const& src_cell = reg_->table().cells[r.source];
     if (!reg_->peek(r.source)) {
       if (src_cell.production.kind == ProductionKind::Leaf)
-        return std::nullopt;  // leaf first touch: cursor left UNCONSUMED
+        return std::nullopt;  // leaf first touch: cursor left unconsumed
       throw Exception("CellReadResolver: consumer cell#" +
                       std::to_string(consumer_) + " source cell#" +
                       std::to_string(r.source) + " (value " +
                       std::to_string(*vid) + ") has no current result");
     }
     it->second.erase(it->second.begin());
-    // Record WHICH cell this vid's read was most recently served
+    // Record which cell this vid's read was most recently served
     // from -- operand_drained() below re-derives exhaustion from the
     // registry's own current state (life/value) at that cell instead of a
     // cached bool, so it can never drift from what the registry actually
@@ -573,9 +575,9 @@ class CellReadResolver {
   }
 
   /// Whether \p operand_node_hash's operand is currently safe for
-  /// in-place accumulation -- the registry-derived replacement for the
-  /// legacy \c CacheManager::chain_holds_shared(f.left) check \c eval.hpp's
-  /// in-place gate used before storage moved onto the table.
+  /// in-place accumulation -- the registry-derived counterpart of the
+  /// \c CacheManager::chain_holds_shared(f.left) check that \c eval.hpp's
+  /// in-place gate applies on the forest path.
   ///
   /// True in exactly two cases:
   ///  - \p operand_node_hash is not a value of this table at all (a private
@@ -584,8 +586,8 @@ class CellReadResolver {
   ///    promoted to its own cell) -- no table cell could possibly be sharing
   ///    it, exactly as \c chain_holds_shared() reports "not held" for the
   ///    analogous untracked case; or
-  ///  - it IS a table value, has been \c fetch()'d at least once, and its
-  ///    MOST RECENT fetch's source cell (\c last_served_source_) is
+  ///  - it is a table value, has been \c fetch()'d at least once, and its
+  ///    most recent fetch's source cell (\c last_served_source_) is
   ///    currently \c CellRegistry::drained -- i.e. that read spent the
   ///    source's last declared life (never true for a persistent cell, which
   ///    never drains) and the registry has already let go of its own
@@ -593,7 +595,7 @@ class CellReadResolver {
   ///    so nothing this evaluation will read it again.
   ///
   /// A table value never yet \c fetch()'d through this resolver (no entry in
-  /// \c last_served_source_) is reported NOT drained -- the safe default. The
+  /// \c last_served_source_) is reported not drained -- the safe default. The
   /// registry may well be holding that value for other readers (it is a
   /// table cell, so some cell owns it), and this resolver has no evidence
   /// either way; answering "drained" would license an in-place mutation of a

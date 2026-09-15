@@ -274,7 +274,7 @@ class EvalExpr {
       const noexcept;
 
   ///
-  /// \brief Batchable indices the single-term optimizer chose to slice AT
+  /// \brief Batchable indices the single-term optimizer chose to slice at
   /// this node (its DP `aprime`), each tagged with its \c BatchModeType. Empty
   /// unless set by \c binarize from \c BinarizationOptions::node_batch_axes
   /// (itself populated from \c OptimizeOptions::term_batch_axes by the
@@ -295,14 +295,14 @@ class EvalExpr {
   }
 
   ///
-  /// \brief Batch loops OPENED at this node: the subset of \c node_slice_mask()
+  /// \brief Batch loops opened at this node: the subset of \c node_slice_mask()
   /// for which this node is the loop-open site (the outermost node introducing
   /// the physical batch loop), as opposed to a deeper node that only carries
   /// the sliced mode. Empty unless set by \c binarize from
   /// \c NodeBatchAnnotation::opened_here. Unlike \c node_slice_mask() -- which
   /// the runtime consults per node to slice that node's operands, and which the
-  /// DP stamps on EVERY carrying node -- this names each physical loop exactly
-  /// ONCE, so a consumer reconstructing the enclosing-loop NEST (e.g.
+  /// DP stamps on every carrying node -- this names each physical loop exactly
+  /// once, so a consumer reconstructing the enclosing-loop nest (e.g.
   /// \c peak_profile's \c OccurrenceRec::ectx) does not multi-count one loop as
   /// one-per-carrying-node.
   ///
@@ -321,11 +321,11 @@ class EvalExpr {
   }
 
   ///
-  /// \brief Canonical batch modes that slice this node in EVERY occurrence
+  /// \brief Canonical batch modes that slice this node in every occurrence
   /// (the cross-occurrence meet; see \c stamp_lifetime_masks). Empty =>
   /// all-full (block-agnostic, run-scope). Proto-aware: a composite slot
   /// contributes its proto indices. Set by \c stamp_lifetime_masks; empty by
-  /// default (OFF path).
+  /// default (off path).
   ///
   [[nodiscard]] container::svector<Index> const& sliced_modes() const noexcept {
     return sliced_modes_;
@@ -347,11 +347,11 @@ class EvalExpr {
   }
 
   ///
-  /// \brief The batch modes that slice THIS occurrence of the node: the loops
+  /// \brief The batch modes that slice this occurrence of the node: the loops
   /// opened at or above it that live on its own result slots. The value's
-  /// HOME in the table-driven engine (explicit-cells design section 11,
+  /// home in the table-driven engine (explicit-cells design section 11,
   /// \c home_scope / \c value_key_of), stamped per occurrence by \c
-  /// stamp_occurrence_homes -- NOT the cross-occurrence meet (\c
+  /// stamp_occurrence_homes -- not the cross-occurrence meet (\c
   /// sliced_modes), which folds occurrences by node identity and by label and
   /// serves the forest-descent path's residency. Empty = whole.
   ///
@@ -366,7 +366,7 @@ class EvalExpr {
   }
 
   ///
-  /// \brief This occurrence's VALUE key (explicit-cells design section 11):
+  /// \brief This occurrence's value key (explicit-cells design section 11):
   /// node id + (position, loop slot) of every home-sliced position + the
   /// operands' keys, stamped by \c compute_dag_boulevard once loop instances
   /// are numbered; 0 = not stamped (\c value_key_of then falls back to the
@@ -385,7 +385,7 @@ class EvalExpr {
   /// `(((t1+t2)+t3)+t4)`, every binary \c Sum's left operand is the running
   /// accumulator (the chain seed or a prior chain \c Sum), so every chain
   /// \c Sum is marked \c true. Never set based on the right operand.
-  /// Default \c false (OFF path, behavior-neutral).
+  /// Default \c false (off path, behavior-neutral).
   ///
   [[nodiscard]] bool accumulate_in_place() const noexcept {
     return accumulate_in_place_;
@@ -399,7 +399,7 @@ class EvalExpr {
   ///
   /// \brief Emitted effective use count of this contraction node: the number of
   /// times its value is (re)referenced across the enclosing batch loops it does
-  /// not carry. \c 1 (the default and the order-blind / OFF-path value) means
+  /// not carry. \c 1 (the default and the order-blind / off-path value) means
   /// the node is used once (no across-loop reuse). See
   /// \c NodeBatchAnnotation::effective_count.
   ///
@@ -409,7 +409,7 @@ class EvalExpr {
 
   ///
   /// \brief Whether the order-aware cost model emitted this node -- the
-  /// per-level placement order-aware gate. \c false (default, OFF path) means
+  /// per-level placement order-aware gate. \c false (default, off path) means
   /// the node is never hoisted (byte-identical). See
   /// \c NodeBatchAnnotation::order_aware.
   ///
@@ -574,9 +574,9 @@ namespace impl {
 
 /// \param node_counter Running left-first-post-order count of contraction
 ///        (Product) nodes constructed so far, threaded by reference through
-///        the whole recursive descent for ONE top-level \c binarize call, so
+///        the whole recursive descent for one top-level \c binarize call, so
 ///        it can be checked against \c opts.node_batch_axes.size() by the
-///        caller. Must be the SAME counter object across the entire call
+///        caller. Must be the same counter object across the entire call
 ///        tree of a single top-level invocation; do not reset per subtree.
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
                                   const BinarizationOptions& opts,

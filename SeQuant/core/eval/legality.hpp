@@ -24,10 +24,10 @@
 namespace sequant::eval {
 
 ///
-/// \brief Legality analysis output types (SP1 of the ordered-scope batched-
-/// eval design): per-value classification of which batch-loop axes a value's
-/// computation depends on, and (later tasks) whether it is legal to home the
-/// value at each such axis.
+/// \brief Legality analysis output types of the ordered-scope batched-eval
+/// design: per-value classification of which batch-loop axes a value's
+/// computation depends on, and whether it is legal to home the value at each
+/// such axis.
 ///
 
 ///
@@ -55,40 +55,40 @@ struct AxisClass {
 /// build-site, per-axis role, and home-placement legality.
 ///
 struct CellLegality {
-  std::size_t hash = 0;  //!< == value_key_of(ValueCell): the VALUE id (node
+  std::size_t hash = 0;  //!< == value_key_of(ValueCell): the value id (node
                          //!< id + home-sliced positions), the join key with
                          //!< the rich schedule
 
-  //!< The batch-loop axes this value depends on AT ITS OWN NODE -- carried in
-  //!< its own result OR contracted at its own node (NOT recursively over its
+  //!< The batch-loop axes this value depends on at its own node -- carried in
+  //!< its own result or contracted at its own node (not recursively over its
   //!< operand subtrees; each operand is itself a value with its own,
   //!< separately-analyzed \c CellLegality). Filled by \c build_site_of.
   container::svector<Index> build_site;
 
   //!< One entry per \c build_site axis, classifying its role. Filled in
-  //!< NOTE: \c LoopRole::LoopInvariant is NEVER stored here --
+  //!< note: \c LoopRole::LoopInvariant is never stored here --
   //!< every \c build_site axis is by construction carried or contracted, so
   //!< \c classify_axis returns only LoopLocal/Reduction/LoopCarried at these
-  //!< axes. A LoopInvariant axis is the IMPLICIT case (batchable + enclosing
+  //!< axes. A LoopInvariant axis is the implicit case (batchable + enclosing
   //!< but absent from \c build_site); recover it from that absence, not from a
   //!< \c per_axis entry (see \c home_floor).
   container::svector<AxisClass> per_axis;
 
   //!< The shallowest legal home mode-set for this value: the \c per_axis
   //!< axes whose role is \c LoopLocal (the axes the value stays sliced on --
-  //!< the value is homed INSIDE these). Every other \c build_site axis --
-  //!< \c Reduction, \c LoopCarried -- is lifted OUT (the value is homed
+  //!< the value is homed inside these). Every other \c build_site axis --
+  //!< \c Reduction, \c LoopCarried -- is lifted out (the value is homed
   //!< above it), as is any axis absent from \c build_site altogether (the
-  //!< IMPLICIT \c LoopInvariant case: the value never depended on it, so it
+  //!< implicit \c LoopInvariant case: the value never depended on it, so it
   //!< was trivially hoisted over it). Filled by \c
   //!< analyze_legality.
   container::svector<Index> home_floor;
 
   //!< Loops that must re-enter (the value cannot be homed above them without
   //!< a re-materializing split). Entries are per-\c
-  //!< Index-INSTANCE, not per-space-type -- an outer product like \c
-  //!< A{;i_3}*A{;i_4} lists BOTH i_3 and i_4 (both LoopCarried on space i),
-  //!< yet they name a SINGLE occ loop to split. Consumers that want the
+  //!< Index-instance, not per-space-type -- an outer product like \c
+  //!< A{;i_3}*A{;i_4} lists both i_3 and i_4 (both LoopCarried on space i),
+  //!< yet they name a single occ loop to split. Consumers that want the
   //!< distinct loops (axes) to split, not the raw per-instance list, should
   //!< use \c forced_split_types below.
   container::svector<Index> forced_split_axes;
@@ -104,13 +104,13 @@ struct LegalitySchedule {
 };
 
 ///
-/// \brief Group \p cell's \c forced_split_axes by axis SPACE TYPE (\c
-/// base_key()), collapsing multiple same-type \c Index INSTANCES into the
+/// \brief Group \p cell's \c forced_split_axes by axis space type (\c
+/// base_key()), collapsing multiple same-type \c Index instances into the
 /// single loop (axis) they jointly force to split.
 ///
 /// \details \c forced_split_axes is recorded per \c Index instance (see its
-/// field doc): an outer product like \c A{;i_3}*A{;i_4} lists BOTH \c i_3 and
-/// \c i_4, both \c LoopCarried on the occ space, but they name only ONE occ
+/// field doc): an outer product like \c A{;i_3}*A{;i_4} lists both \c i_3 and
+/// \c i_4, both \c LoopCarried on the occ space, but they name only one occ
 /// loop that must re-enter. This returns one representative \c Index per
 /// distinct \c base_key(), in \c forced_split_axes's discovery order, so a
 /// consumer that needs "which loops must split" (not "which indices are
@@ -130,15 +130,15 @@ struct LegalitySchedule {
 }
 
 ///
-/// \brief The AT-NODE build-site of the value rooted at \p node: the
-/// batch-loop axes (per \p policy.is_batchable_index()) that appear AT this
-/// node -- carried in \p node's own result indices, OR contracted AT \p node.
+/// \brief The at-node build-site of the value rooted at \p node: the
+/// batch-loop axes (per \p policy.is_batchable_index()) that appear at this
+/// node -- carried in \p node's own result indices, or contracted at \p node.
 ///
-/// \details Deliberately NOT a subtree union: in the ordered-scope model
-/// every node is itself a VALUE, and a value is one contraction of already
-/// -cached OPERAND values (its children), so its build-site is only the axes
+/// \details Deliberately not a subtree union: in the ordered-scope model
+/// every node is itself a value, and a value is one contraction of already
+/// -cached operand values (its children), so its build-site is only the axes
 /// it carries or contracts at its own node -- the axes below it belong to
-/// the operand VALUES' own (separately-analyzed) build-sites, not to this
+/// the operand values' own (separately-analyzed) build-sites, not to this
 /// one. Concretely, the union of
 ///   - \p node's own \c canon_indices() (its result/free indices), and
 ///   - \p node's own \c contracted_indices(node) (see eval.hpp; empty for a
@@ -155,18 +155,18 @@ struct LegalitySchedule {
       result.push_back(ix);
   };
 
-  // Source the build-site axes from the cost model's ACTUAL per-node decision,
-  // NOT from policy.is_batchable_index() (what COULD be batched). Using the
+  // Source the build-site axes from the cost model's actual per-node decision,
+  // not from policy.is_batchable_index() (what could be batched). Using the
   // predicate made the ordered schedule loop over every batchable axis (e.g.
   // aux whenever batch:aux_target_size>0) at every node carrying/contracting
   // it, regardless of whether the peak-constrained optimizer decided to slice
   // it -- always-on batching independent of peak_threshold, and over-scoping
   // relative to the DP even under a finite budget. The two authoritative
   // sources are:
-  //   - a RESULT (carried) index is a build-site axis iff it slices this node's
+  //   - a result (carried) index is a build-site axis iff it slices this node's
   //     own result slots per the cross-occurrence meet (\c sliced_modes, which
   //     already folds in ancestor batch loops the value is variant to); and
-  //   - a CONTRACTED-at-node index iff the DP batched it here (a \c Contracted
+  //   - a contracted-at-node index iff the DP batched it here (a \c Contracted
   //     \c node_slice_mask stamp == the node's chosen aprime).
   // With an infinite budget (or no batchable axis) the DP emits no stamps, so
   // both are empty and the schedule is flat -- matching forest descent.
@@ -186,43 +186,42 @@ struct LegalitySchedule {
 
 ///
 /// \brief Classify one batch-loop axis \p axis against one value, given the
-/// value's own result indices \p carried, the axes it contracts AT its own
+/// value's own result indices \p carried, the axes it contracts at its own
 /// node \p contracted_below (see \c contracted_indices in eval.hpp), and
 /// every use-site \p occurrences of the value in the forest.
 ///
 /// \details The four-way decision tree:
 ///   - Q1: does \p carried hold an index of \p axis's \c IndexSpace (compared
-///     by \c base_key(), i.e. TYPE not identity)?
-///     - NO  -> Q2a: does \p contracted_below hold an index of that type
+///     by \c base_key(), i.e. Type not identity)?
+///     - no  -> Q2a: does \p contracted_below hold an index of that type
 ///       (the value reduces the axis at its own node)? -> \c Reduction;
 ///       otherwise the axis merely encloses the value without touching it
 ///       -> \c LoopInvariant.
-///     - YES -> Q2b: for every occurrence that has an ENCLOSING loop of that
-///       axis type in its \c OccurrenceRec::ectx, gather ALL same-type
-///       enclosing loops (there may be several NESTED loops of one space,
-///       each binding a distinct carried index) and check that EVERY one of
+///     - yes -> Q2b: for every occurrence that has an enclosing loop of that
+///       axis type in its \c OccurrenceRec::ectx, gather all same-type
+///       enclosing loops (there may be several nested loops of one space,
+///       each binding a distinct carried index) and check that every one of
 ///       the occurrence's own carried indices of that type is bound (via the
-///       ordinal-and-proto-aware \c Index::operator==) to SOME enclosing
+///       ordinal-and-proto-aware \c Index::operator==) to some enclosing
 ///       loop. An occurrence may carry more than one same-space index -- e.g.
 ///       an outer product carrying two occ indices, each lockstep with its
-///       OWN nested loop, or a lockstep slot beside a free one. Every
+///       own nested loop, or a lockstep slot beside a free one. Every
 ///       same-type carried slot lockstep with some enclosing loop, at every
-///       such occurrence -> \c LoopLocal; a carried slot with NO matching
+///       such occurrence -> \c LoopLocal; a carried slot with no matching
 ///       enclosing loop at any occurrence (a free / cross-iteration read) ->
 ///       \c LoopCarried. If no occurrence has an enclosing loop of that type
 ///       at all, the axis is a plain free result index with nothing to lock
 ///       it to a loop iteration -> \c LoopCarried.
 ///
-/// \param enclosing_slot (optional) the fusion loop_slot of the ENCLOSING loop
+/// \param enclosing_slot (optional) the fusion loop_slot of the enclosing loop
 ///        with tree-frame label \p L at occurrence \p occ (the parent
 ///        occurrence's slot for L; -1 if unknown). Lockstep with an enclosing
-///        loop is then LOOP-INSTANCE-aware: a same-space enclosing loop of a
-///        DIFFERENT fusion instance is NOT this value's loop -- the value is
+///        loop is then loop-instance-aware: a same-space enclosing loop of a
+///        different fusion instance is not this value's loop -- the value is
 ///        LoopCarried (an assembled escape of its own nest that the other nest
-///        reads sliced), not LoopLocal. Label equality alone conflated the
-///        instances (w20: a 4-occ intermediate built per batch inside its own
-///        nest and read from a sibling nest -> "read-from-home value
-///        vanished").
+///        reads sliced), not LoopLocal. Label equality alone would conflate
+///        the instances (e.g. a 4-occupied intermediate built per batch inside
+///        its own nest and read from a sibling nest).
 [[nodiscard]] inline LoopRole classify_axis(
     container::svector<Index> const& carried,
     container::svector<Index> const& contracted_below, Index const& axis,
@@ -233,10 +232,10 @@ struct LegalitySchedule {
   auto const same_type = [&](Index const& ix) {
     return ix.space().base_key() == axis.space().base_key();
   };
-  // A carried same-space index is a BATCHED loop mode (subject to the lockstep
+  // A carried same-space index is a batched loop mode (subject to the lockstep
   // test below) iff it is one of the value's sliced modes; otherwise it is a
-  // free FULL "spectator" dimension (e.g. a retained occ index the DP did not
-  // batch) that has no loop at all and must NOT make the axis LoopCarried --
+  // free full "spectator" dimension (e.g. a retained occ index the DP did not
+  // batch) that has no loop at all and must not make the axis LoopCarried --
   // the value is still loop-local w.r.t. the axis's own loop, carrying the
   // spectator dimension through as full. Compared by identity (same
   // ordinal/proto), so a spectator i_4 beside a batched i_1 is skipped.
@@ -245,8 +244,8 @@ struct LegalitySchedule {
                        [&](Index const& s) { return s == ix; });
   };
 
-  // The role is decided for THIS axis, by identity, not for its space: a
-  // value may carry one index of a space (loop-local on that instance) AND
+  // The role is decided for this axis, by identity, not for its space: a
+  // value may carry one index of a space (loop-local on that instance) and
   // contract another index of the same space in batches (a reduction over a
   // different instance) -- e.g. a residual-pair intermediate carrying the
   // external pair ij while reducing over a contracted pair kl, once the
@@ -270,14 +269,14 @@ struct LegalitySchedule {
 
   bool found_enclosing = false;
   for (OccurrenceRec const& occ : occurrences) {
-    // ALL same-type enclosing loops at this occurrence, not just the first:
-    // nested same-space loops each bind a DISTINCT carried index of that
+    // All same-type enclosing loops at this occurrence, not just the first:
+    // nested same-space loops each bind a distinct carried index of that
     // type (i_1 under the outer loop, i_2 under the inner). Matching every
     // carried slot against only the first enclosing loop mis-flags a value
-    // that carries two same-space indices, each lockstep with its OWN nested
+    // that carries two same-space indices, each lockstep with its own nested
     // loop, as LoopCarried -- because the second carried index (i_2) never
     // equals the first loop's Index (i_1). Collect the whole same-type
-    // enclosing set and let each carried slot lock to ANY member.
+    // enclosing set and let each carried slot lock to any member.
     container::svector<Index> encl;
     for (auto const& e : occ.ectx)
       if (same_type(e.first)) encl.push_back(e.first);
@@ -285,25 +284,25 @@ struct LegalitySchedule {
       continue;  // no enclosing loop of this type at this occurrence
     found_enclosing = true;
 
-    // A carried slot is lockstep iff it equals SOME enclosing loop's Index
-    // (any nesting level). Only an occurrence whose EVERY same-type carried
+    // A carried slot is lockstep iff it equals some enclosing loop's Index
+    // (any nesting level). Only an occurrence whose every same-type carried
     // slot is lockstep with some enclosing loop is truly loop-local; a single
     // carried slot with no matching enclosing loop (a free / cross-iteration
     // read) makes the whole occurrence -- and thus the axis -- LoopCarried.
     bool matched_any_same_type = false;
-    // Loop-INSTANCE test at the SET level: the fusion slots of the value's
+    // Loop-instance test at the set level: the fusion slots of the value's
     // own same-space batched positions at this occurrence. An enclosing loop
-    // whose instance is NOT among them is a loop this value is not sliced by
-    // in ANY position -- a SIBLING nest (w20 pVDZ-F12: a 4-occ intermediate
+    // whose instance is not among them is a loop this value is not sliced by
+    // in any position -- a sibling nest (e.g. a 4-occupied intermediate
     // built in nest {s3,s4} and read from nest {s5,s6}) -- so the value must
-    // be an assembled escape of its own nest: LoopCarried. A PERMUTATION of
+    // be an assembled escape of its own nest: LoopCarried. A permutation of
     // the same instances (a symmetric value read with i_1/i_2 transposed,
-    // slots {1,2} either way) is NOT this case: the value-keyed cache serves
+    // slots {1,2} either way) is not this case: the value-keyed cache serves
     // it as a distinct colored cell in-nest, and forcing it to the root would
     // strand the in-nest read.
-    // The value's PRODUCTION instances: the front occurrence's stamps (the
+    // The value's production instances: the front occurrence's stamps (the
     // value is built there; a read occurrence's own stamps follow the
-    // CONSUMER's instance at that read -- a sibling-nest read is stamped with
+    // consumer's instance at that read -- a sibling-nest read is stamped with
     // the sibling's slots and would pass a self-comparison).
     container::svector<int> own_slots;
     {
@@ -314,10 +313,10 @@ struct LegalitySchedule {
           prod.loop_slot[pc] >= 0)
         own_slots.push_back(prod.loop_slot[pc]);
     }
-    // Direction matters: the value may be read INSIDE loops it is invariant
+    // Direction matters: the value may be read inside loops it is invariant
     // to (a deeper level of its own nest -- enclosing instances beyond its
-    // own are fine), but every one of ITS OWN instances must be among the
-    // enclosing loops, else it is being read OUTSIDE its own loops (a sibling
+    // own are fine), but every one of its own instances must be among the
+    // enclosing loops, else it is being read outside its own loops (a sibling
     // nest) and must be an assembled escape. Skipped when any enclosing
     // instance cannot be resolved (incomplete evidence -> label-only test).
     if (enclosing_slot && !own_slots.empty()) {
@@ -339,7 +338,7 @@ struct LegalitySchedule {
     }
     if (axis_slot < occ.carried.size()) {
       Index const& c = occ.carried[axis_slot];
-      // Batched-ness of THIS occurrence's position is read off its OWN home
+      // Batched-ness of this occurrence's position is read off its own home
       // (same frame as `c`), never off `sliced`, which is labeled in the
       // representative occurrence's frame: one node's occurrences carry
       // different labels at one position across terms (i_3 here, i_4
@@ -379,20 +378,20 @@ struct LegalitySchedule {
 ///
 /// \par Forced splits
 /// A value classified \c LoopCarried on axis \c L survives the axis into its
-/// own result indices, so its producing \c L-loop must CLOSE before any
+/// own result indices, so its producing \c L-loop must close before any
 /// cross-iteration consumer can read it (the consumer, at a different \c L
 /// iteration, reads a value bound to a foreign \c L index). \c L is therefore
 /// recorded in that value's \c forced_split_axes: the axis cannot be a single
 /// unbroken loop around this value. This is directly derivable from the
-/// per-axis roles alone and is the deliverable this task ships as sound.
+/// per-axis roles alone.
 ///
 /// \par No fixpoint: a value read across a forced split is not demoted here
 /// A value \c LoopLocal on a forced-split axis \c L that is read by a
-/// later-pass reader is handled entirely by the SP2 sequencer (\c
+/// later-pass reader is handled entirely by the sequencer (\c
 /// build_ordered_schedule's per-nest pass placement, rule 4), which
 /// materializes such a value across the pass boundary at schedule-build time
-/// -- "used across the split" is a property of the ORDERED pass structure SP2
-/// builds, not of the DAG this function sees, so classification here never
+/// -- "used across the split" is a property of the ordered pass structure the
+/// sequencer builds, not of the DAG this function sees, so classification here
 /// needs to react to it. \c analyze_legality is therefore a single
 /// deterministic round: one classification per cell, with no re-derivation
 /// loop.
@@ -402,7 +401,7 @@ template <meta::eval_node_range R>
     RichSchedule const& rich, R const& forest, BatchPolicy const& policy) {
   using Node = std::ranges::range_value_t<R>;
 
-  // point -> occurrence, to reach the PARENT occurrence (same tree) of an
+  // point -> occurrence, to reach the parent occurrence (same tree) of an
   // occurrence and read the fusion slot of an enclosing loop by its
   // tree-frame label (carried position, or a reduced mode of the parent).
   std::unordered_map<std::size_t, OccurrenceRec const*> point_occ;
@@ -410,7 +409,7 @@ template <meta::eval_node_range R>
     for (OccurrenceRec const& occ : vc.occurrences) point_occ[occ.point] = &occ;
   std::function<int(OccurrenceRec const&, Index const&)> const enclosing_slot =
       [&point_occ](OccurrenceRec const& occ, Index const& L) -> int {
-    // Walk up the tree: the loop labeled L is opened by SOME ancestor; the
+    // Walk up the tree: the loop labeled L is opened by some ancestor; the
     // nearest ancestor carrying (or reducing) L in its own frame stamps its
     // slot.
     std::size_t pt = occ.consumer_point;
@@ -429,19 +428,19 @@ template <meta::eval_node_range R>
     return -1;
   };
 
-  // One representative forest node per VALUE (keyed by value id, not node
-  // id): a value's roles are read off one of its OWN occurrences' nodes -- a
+  // One representative forest node per value (keyed by value id, not node
+  // id): a value's roles are read off one of its own occurrences' nodes -- a
   // node of the same hash home-sliced elsewhere carries that frame's slice
   // annotations, not this value's.
   //
-  // Held by POINTER, not by value: \c Node's copy constructor deep-copies the
+  // Held by pointer, not by value: \c Node's copy constructor deep-copies the
   // whole subtree, so one entry per node cost O(subtree) and the map as a whole
   // was O(n^2) in forest size -- 1.8 GB for a 1000-summand spine, 15 GB for
   // 2000, which is OOM long before any stack limit matters. \p forest outlives
   // this call (it is the caller's), so the pointees stay valid; the entries are
   // read-only here.
   //
-  // Taking addresses requires the range to yield REFERENCES to the caller's
+  // Taking addresses requires the range to yield references to the caller's
   // nodes; a range of prvalues (a transform view, say) would hand us dangling
   // pointers. Same guard, same reason, as cache_manager()'s pointer-keyed DAG
   // walk (cache_manager.hpp) and the value->node bridges
@@ -484,7 +483,7 @@ template <meta::eval_node_range R>
       CellLegality cl;
       cl.hash = value_key_of(vc);
 
-      // Every RichSchedule cell was produced by walking THIS SAME forest (see
+      // Every RichSchedule cell was produced by walking this same forest (see
       // compute_dag_boulevard), so its hash must resolve here; a miss would
       // silently leave contracted_below empty and misclassify the cell rather
       // than surface the underlying bug.
@@ -494,16 +493,16 @@ template <meta::eval_node_range R>
       for (Index const& ix : contracted_indices(*it->second))
         contracted_below.push_back(ix);
 
-      // Build-site axes come from the cost model's ACTUAL per-node decision,
-      // NOT policy.is_batchable_index() (what COULD be batched). Sourcing from
+      // Build-site axes come from the cost model's actual per-node decision,
+      // not policy.is_batchable_index() (what could be batched). Sourcing from
       // the predicate made the ordered schedule loop over every batchable axis
       // (e.g. aux whenever batch:aux_target_size>0) regardless of whether the
       // peak-constrained optimizer sliced it -- always-on batching independent
       // of peak_threshold, and over-scoping relative to the DP under a finite
-      // budget. A RESULT (carried) axis is a build-site axis iff it slices this
+      // budget. A result (carried) axis is a build-site axis iff it slices this
       // node's own result slots per the cross-occurrence meet (sliced_modes,
       // which folds in the ancestor batch loops the value is variant to); a
-      // CONTRACTED-at-node axis iff the DP batched it here (a Contracted
+      // contracted-at-node axis iff the DP batched it here (a Contracted
       // node_slice_mask stamp == the node's chosen aprime). With an infinite
       // budget (or no batchable axis) the DP emits no stamps, so the site is
       // empty and the schedule is flat -- identical to forest descent.
@@ -514,7 +513,7 @@ template <meta::eval_node_range R>
       };
       auto const& dp_sliced = sequant::home_scope(*it->second);
       auto const& dp_stamps = (*it->second)->node_slice_mask();
-      // POSITIONAL: the representative node's home is labeled in ITS tree's
+      // Positional: the representative node's home is labeled in its tree's
       // frame, vc.carried in the first occurrence's; positions are canonical
       // across occurrences (explicit-cells design section 11), labels are
       // not.

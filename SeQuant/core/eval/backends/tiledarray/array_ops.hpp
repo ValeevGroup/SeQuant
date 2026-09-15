@@ -22,7 +22,7 @@ namespace sequant {
 /// \tparam FlatArray the flat (Tensor-of-Scalars) \c TA::DistArray type;
 /// \tparam ToTArray  the nested (Tensor-of-Tensor) \c TA::DistArray type.
 ///
-/// \param tr1_of_base space base_key -> the space's FULL \c TA::TiledRange1.
+/// \param tr1_of_base space base_key -> the space's full \c TA::TiledRange1.
 /// \param world       the World the zero destinations are built in; it must
 ///                    outlive the returned closures' use.
 ///

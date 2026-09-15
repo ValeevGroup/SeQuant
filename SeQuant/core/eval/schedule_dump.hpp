@@ -2,16 +2,16 @@
 // Per-term schedule-record emitter (JSON) for the batched-evaluation
 // visualizer. Two producers share this schema:
 //   * IR side (this header): schedule_ir_json() walks an annotated eval tree
-//     and emits the factorizer's INTENDED schedule -- node_slice_mask loops,
+//     and emits the factorizer's intended schedule -- node_slice_mask loops,
 //     sliced/contracted modes, order-aware gate, effective (replay) count.
-//   * Runtime side (eval.hpp): the evaluator emits the SAME node-keyed schema
-//     with the ACTUAL lifetimes (life/max_life), hoist placement, replay, and
+//   * Runtime side (eval.hpp): the evaluator emits the same node-keyed schema
+//     with the actual lifetimes (life/max_life), hoist placement, replay, and
 //     footprint, so the two can be diffed node-by-node.
 //
 // The schema is deliberately minimal JSON (no external dependency): a per-term
 // object { term_id, kind, root } whose nodes carry the fields below and a
 // `children` array (binary: [left,right] for the IR tree; runtime nodes may
-// carry richer children). Index labels and expr identities are emitted RAW
+// carry richer children). Index labels and expr identities are emitted raw
 // (SeQuant full_label / serialization); the renderer formats them.
 //
 
@@ -31,27 +31,27 @@ namespace sequant::eval {
 
 namespace detail {
 
-/// DIAGNOSTIC: the flops the LAST product op computed (cm->flops), stashed by
+/// Diagnostic: the flops the last product op computed (cm->flops), stashed by
 /// DryRunOps::prod and read by the Build-event emitter in eval.hpp so each
-/// per-build event can carry the SAME cost the replay tallied -- letting a
-/// caller sum per DISTINCT node (by hash) with the replay's own flop method,
+/// per-build event can carry the same cost the replay tallied -- letting a
+/// caller sum per distinct node (by hash) with the replay's own flop method,
 /// no second flop path. Thread-local; single-threaded dry-run replay.
 inline double& last_op_flops() noexcept {
   static thread_local double f = 0.0;
   return f;
 }
 
-/// DIAGNOSTIC: the roofline exec-cost estimate (cm->exec_cost) for the LAST
+/// Diagnostic: the roofline exec-cost estimate (cm->exec_cost) for the last
 /// product op, stashed by DryRunOps::prod alongside \c last_op_flops() and
 /// read by the Build-event choke in eval.hpp so each per-build tally entry
-/// carries the SAME time estimate the replay computed. Thread-local;
+/// carries the same time estimate the replay computed. Thread-local;
 /// single-threaded dry-run replay.
 inline double& last_op_exec() noexcept {
   static thread_local double f = 0.0;
   return f;
 }
 
-/// TEST-FACING (and cheap enough to stay live): what the most recent ordered
+/// Test-facing (and cheap enough to stay live): what the most recent ordered
 /// evaluation did, by op kind.
 ///
 ///  - \c builds     -- \c compute_cell calls (ordered_executor.hpp): one per
@@ -62,7 +62,7 @@ inline double& last_op_exec() noexcept {
 ///                     \c evaluate_impl (eval.hpp) while the evaluation ran.
 ///                     The ordered executor computes every cell itself from
 ///                     table reads, so a completed ordered run leaves this at
-///                     ZERO; a nonzero count means some production fell back
+///                     zero; a nonzero count means some production fell back
 ///                     to the tree-walking engine.
 ///
 /// Reset at \c run_ordered_schedule_pre_results entry; thread-local, so a
@@ -73,6 +73,8 @@ struct OrderedOpCounts {
   std::size_t probes = 0;
 };
 
+/// The per-thread counters behind \c ordered_op_counts; the executor tallies
+/// into this slot directly.
 inline OrderedOpCounts& ordered_op_counts_slot() noexcept {
   static thread_local OrderedOpCounts c;
   return c;
@@ -83,6 +85,7 @@ inline OrderedOpCounts& ordered_op_counts_slot() noexcept {
   return ordered_op_counts_slot();
 }
 
+/// \p s with the characters JSON string syntax reserves escaped.
 inline std::string sched_json_escape(std::string const& s) {
   std::string o;
   o.reserve(s.size() + 8);
@@ -99,10 +102,12 @@ inline std::string sched_json_escape(std::string const& s) {
   return o;
 }
 
+/// The JSON spelling of batch mode \p m.
 inline char const* sched_mode_name(BatchModeType m) {
   return m == BatchModeType::External ? "External" : "Contracted";
 }
 
+/// Writes the indices of \p r to \p os as a JSON array of their full labels.
 template <typename Range>
 void sched_json_index_array(Range const& r, std::ostream& os) {
   os << '[';
@@ -117,12 +122,11 @@ void sched_json_index_array(Range const& r, std::ostream& os) {
 
 }  // namespace detail
 
-// NOTE: the former `cost_op_signature` (a full-label string keying the
-// avoidable-recompute rollup) was REMOVED: a signature is dummy-label- and
-// batch-slice-dependent, so per-block and alpha-renamed builds of one value
-// split across keys and the rollup mis-attributed them. Nodes are now joined to
-// the replay's per-node recompute tally by their TOPOLOGICAL hash (\c
-// EvalExpr::hash_value), the same identity the CacheManager dedups on.
+// Nodes are joined to the replay's per-node recompute tally by their
+// topological hash (\c EvalExpr::hash_value), the same identity the
+// CacheManager dedups on. A full-label signature would not do: it is
+// dummy-label- and batch-slice-dependent, so per-block and alpha-renamed
+// builds of one value would split across keys and mis-attribute the rollup.
 
 /// Emit one node of the IR schedule record. \p n is a FullBinaryNode whose
 /// value type exposes the batch-annotation accessors (EvalExpr / EvalExprTA).
