@@ -11,6 +11,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <compare>
 #include <set>
 #include <vector>
 
@@ -631,21 +632,24 @@ TEST_CASE("canonical child view is deterministic on node-id-equal operands",
   using sequant::canonical_operand_cmp;
   using sequant::TreeNodeEqualityComparator;
 
-  // Two occurrences of ONE tensor: the leaf node id is blind to index names,
-  // so the two operands of this outer product TIE on it -- the case the
-  // ordering key resolves to 0 (read them as emitted).
+  // Two occurrences of one tensor: the leaf node id is blind to index names,
+  // so the two operands of this outer product tie on it -- the case the
+  // ordering resolves to std::strong_ordering::equal (read them as emitted).
   auto ab = head("f{a_1;i_1} f{a_2;i_2}");
   auto ba = head("f{a_2;i_2} f{a_1;i_1}");
   REQUIRE(ab->op_type() == sequant::EvalOp::Product);
   REQUIRE(ab.left()->hash_value() == ab.right()->hash_value());
 
-  int const c = canonical_operand_cmp(ab.left(), ab.right());
+  std::strong_ordering const c = canonical_operand_cmp(ab.left(), ab.right());
+  std::strong_ordering const c_rev =
+      canonical_operand_cmp(ab.right(), ab.left());
   // total, antisymmetric, and stable across repeated evaluation
-  CHECK(c == -canonical_operand_cmp(ab.right(), ab.left()));
-  CHECK(c == canonical_operand_cmp(ab.left(), ab.right()));
-  // the two operands ARE one value, so either order is canonical and the view
+  CHECK(std::is_lt(c) == std::is_gt(c_rev));
+  CHECK(std::is_gt(c) == std::is_lt(c_rev));
+  CHECK((c == canonical_operand_cmp(ab.left(), ab.right())));
+  // the two operands are one value, so either order is canonical and the view
   // leaves the emitted order alone
-  CHECK(c == 0);
+  CHECK(std::is_eq(c));
   // and it decided that in O(1): the key reads nothing but the two nodes' own
   // data, so a self-contraction like this one cannot make the comparator
   // quadratic (see canonical_operand_cmp).
