@@ -25,7 +25,6 @@
 #include <array>
 #include <cstdlib>
 #include <fstream>
-#include <functional>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -367,13 +366,18 @@ TEST_CASE(
   // seen Κ in the subtree and reported Reduction).
   {
     // A POINTER into `forest` (a local declared above, which outlives it), not
-    // a subtree copy, found by an iterative pre-order walk: the forest reaches
-    // us as a single in-place Sum tree whose left spine is as deep as the term
-    // count, so neither the copy nor a recursive search belongs here.
+    // a subtree copy, found by an iterative walk in the SAME order the
+    // recursion this replaced used: the trees are pushed in REVERSE so tree 0
+    // pops first, and each node's RIGHT child is pushed before its LEFT, so the
+    // pop order is forest-forward, node-then-left-subtree-then-right-subtree
+    // pre-order. The forest reaches us as a single in-place Sum tree whose left
+    // spine is as deep as the term count, so neither the subtree copy nor a
+    // recursive search belongs here.
     Node const* parent = nullptr;
     {
       sequant::container::svector<Node const*> stack;
-      for (auto const& tree : forest) stack.push_back(&tree);
+      for (auto it = forest.rbegin(); it != forest.rend(); ++it)
+        stack.push_back(&*it);
       while (!parent && !stack.empty()) {
         Node const& n = *stack.back();
         stack.pop_back();
