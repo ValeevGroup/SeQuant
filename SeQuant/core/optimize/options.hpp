@@ -203,7 +203,7 @@ struct CostParams {
   /// mis-sized multi-composite tensors, e.g. a 4-PAO integral). No default
   /// (matching OptimizeOptions::inner_pow and PeakBatchedModel::inner_pow);
   /// pass an explicit no-op only for composite-free work.
-  std::function<double(Index const&, std::size_t)> inner_pow;
+  std::function<double(Index const&, std::size_t)> inner_pow = {};
   /// When true, only persistent (volatile-leaf-free) subnetworks are batched;
   /// threaded from BatchPolicy::persistent_only. Batched objectives only.
   bool batch_persistent_only = false;
@@ -246,7 +246,7 @@ struct OptimizeOptions {
   /// (which grossly mis-sized multi-composite tensors and inverted
   /// factorization choices, e.g. a 4-PAO integral) -- the sizing code throws
   /// instead. No default: pass an explicit no-op only for composite-free work.
-  std::function<double(Index const&, std::size_t)> inner_pow;
+  std::function<double(Index const&, std::size_t)> inner_pow = {};
 
   /// Batchability policy: bundles the per-index and per-leaf predicates
   /// that govern batched evaluation. All predicate fields default to empty (no
