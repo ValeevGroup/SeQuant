@@ -89,12 +89,16 @@ do not flatten them back into plain `Exception`.
 
 For internal invariants prefer `SEQUANT_ASSERT` over throwing. What a tripped
 assert does is fixed at configure time by `SEQUANT_ASSERT_BEHAVIOR`: `THROW`
-(throws `sequant::Exception`), `ABORT` (`std::abort`; the default for `Debug`
-builds) or `IGNORE` (no-op; the default otherwise). CI uses `THROW` (`IGNORE`
-under valgrind). Configure local builds with `-DSEQUANT_ASSERT_BEHAVIOR=THROW`
-as well: under `ABORT` a tripped assert kills the whole test binary, and some
-tests only run when asserts throw. A bug guarded by an assert can be invisible
-under `IGNORE`.
+(throws `sequant::Exception`), `ABORT` (`std::abort`; the default for every
+build type but `Release` and `MinSizeRel`) or `IGNORE` (no-op; the default for
+those two). CI uses `THROW` (`IGNORE` under valgrind). On the first configure of a build directory the value also seeds
+`TA_ASSERT_POLICY` of a TiledArray built from source (which seeds
+`BTAS_ASSERT_POLICY` of the BTAS it builds) or `BTAS_ASSERT_POLICY` of a BTAS
+SeQuant builds itself; as with any cached option, an explicit `-D` wins and a
+later change of `SEQUANT_ASSERT_BEHAVIOR` does not re-seed them. Configure local builds with `-DSEQUANT_ASSERT_BEHAVIOR=THROW` as well:
+under `ABORT` a tripped assert kills the whole test binary, and some tests only
+run when asserts throw. A bug guarded by an assert can be invisible under
+`IGNORE`.
 
 ## Check includes with a non-unity build
 
