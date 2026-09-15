@@ -754,7 +754,7 @@ TEST_CASE("optimize", "[optimize]") {
       container::svector<Index> targets;
       auto aux = opt::detail::batchable_mode_list(net, is_batchable);
       std::size_t const m = aux.size();
-      auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
+      auto batch_fn = [](Index const&) -> std::size_t { return batch; };
       opt::detail::PeakBatchedModel model{idxsz, batch_fn,
                                           /*is_volatile_leaf=*/{}};
       model.is_batchable_contracted_index = is_batchable;
@@ -808,7 +808,7 @@ TEST_CASE("optimize", "[optimize]") {
         container::svector<Index> targets;
         auto aux = opt::detail::batchable_mode_list(net, is_batchable);
         auto vmask = opt::detail::leaf_volatile_mask(net, {});
-        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
+        auto batch_fn = [](Index const&) -> std::size_t { return batch; };
         auto tables = opt::detail::sliced_footprints(
             net, targets, idxsz, is_batchable, batch_fn, aux);
         // open_modes[s] via the SAME detail helper the DP uses, so DP and
@@ -859,7 +859,7 @@ TEST_CASE("optimize", "[optimize]") {
         container::svector<Index> targets;
         // recompute the chosen tree's peak by simulation over the pr
         // back-pointers (independent of the DP's max/+ recurrence):
-        auto batch_fn = [batch](Index const&) -> std::size_t { return batch; };
+        auto batch_fn = [](Index const&) -> std::size_t { return batch; };
         double recon = opt::detail::reconstructed_batched_peak(
             net, targets, idxsz, is_batchable, batch_fn, {});
         double dp = opt::detail::peak_cost_batched(net, targets, idxsz,
@@ -3687,7 +3687,7 @@ TEST_CASE("fast_flops equals flops_of over all bipartitions (parity)",
   };
 
   bool composite_inner_checked = false;
-  for (std::wstring const term :
+  for (std::wstring const& term :
        {std::wstring(L"g{μ̃1;μ̃2;Κ1} C{a1<i1>;μ̃1} C{μ̃2;a2<i1,i2>} t{a1<i1>;i1}"),
         std::wstring(L"g{i1;a1;Κ1} g{i2;a2;Κ1} t{a1;i1} t{a2;i2}")}) {
     for (auto const* ip : {&ip_on, &ip_off}) {
@@ -4403,7 +4403,6 @@ TEST_CASE("loop-tree probe: resident-scan peak, nested",
   auto is_batchable = [](Index const& ix) {
     return ix.space().base_key() == L"F";
   };
-  auto batch_fn = [](Index const&) -> std::size_t { return 1; };
 
   std::vector<ExprPtr> ts;
   for (auto str : {L"g{a4;F1}", L"h{F1;F2}", L"s{F2;a2}", L"t{a2;a3}"})

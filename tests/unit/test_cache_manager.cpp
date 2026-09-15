@@ -474,7 +474,7 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   // A persistent entry is never drained: arbitrarily many accesses all return
   // the stored data (unlike an NP entry, whose data is released after its
   // max_life-th access).
-  man.store_and_access(p, eval_result(20));
+  (void)man.store_and_access(p, eval_result(20));
   for (int i = 0; i < 10; ++i) {
     auto r = man.access(p);
     REQUIRE(r);
@@ -484,7 +484,7 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
 
   // reset() clears the non-persistent entry but keeps the persistent one, so
   // the latter's data survives across evaluations (e.g. CC iterations).
-  man.store_and_access(np, eval_result(10));
+  (void)man.store_and_access(np, eval_result(10));
   man.reset();
   REQUIRE(man.access(np) == nullptr);  // NP cleared by reset
   auto rp = man.access(p);             // P survives reset

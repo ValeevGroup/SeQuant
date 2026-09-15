@@ -358,7 +358,7 @@ struct PeakModel {
   /// whenever the network has composite indices (empty => inner_aware_volume
   /// throws); pass an explicit no-op only for composite-free networks. No
   /// default: omitting it silently mis-sized composites (4-PAO-integral bug).
-  std::function<double(Index const&, std::size_t)> inner_pow;
+  std::function<double(Index const&, std::size_t)> inner_pow = {};
   /// Predicate marking a leaf tensor as volatile (amplitude-dependent). Used
   /// ONLY to weight the secondary flop tie-break: a volatile contraction is
   /// replayed every iteration, so its flops are scaled by \c volatile_weight.
@@ -585,7 +585,7 @@ struct PeakBatchedModel {
   /// whenever the network has composite indices (empty => inner_aware_volume
   /// throws); pass an explicit no-op only for composite-free networks. No
   /// default: omitting it silently mis-sized composites (4-PAO-integral bug).
-  std::function<double(Index const&, std::size_t)> inner_pow;
+  std::function<double(Index const&, std::size_t)> inner_pow = {};
   /// Replay weight applied to volatile contractions in the flop tie-break.
   double volatile_weight = 1.0;
   /// Roofline parameters for the secondary (tie-break) cost; see

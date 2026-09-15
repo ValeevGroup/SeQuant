@@ -4802,7 +4802,7 @@ TEST_CASE(
   // operand) is never touched by any sliceability probe (INV carries no aux
   // mode at all), so it isolates INV's build count the same way.
   for (std::size_t const target_batch_size : {std::size_t{4}, std::size_t{8}}) {
-    std::size_t const nblocks = target_batch_size == 4 ? 3 : 2;
+    // nblocks (e-blocks at this batch size) = 3 for batch 4, 2 for batch 8
     int h_evals = 0;
     int v_evals = 0;
     auto counting_yield = [&yield_, &h_evals,
@@ -5047,7 +5047,7 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
   };
   auto real = sequant::cache_manager(std::vector{n}, is_volatile_t);
   REQUIRE(real.persistent(P));
-  real.store_and_access(P, evaluate(P, P->annot(), yield_));
+  (void)real.store_and_access(P, evaluate(P, P->annot(), yield_));
   REQUIRE(real.alive(P));
 
   // NOW stamp x_ext External on the member root, as the optimizer would; this
