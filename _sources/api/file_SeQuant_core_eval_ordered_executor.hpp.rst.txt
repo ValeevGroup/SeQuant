@@ -1,0 +1,187 @@
+
+.. _file_SeQuant_core_eval_ordered_executor.hpp:
+
+File ordered_executor.hpp
+=========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/ordered_executor.hpp``)
+-------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_ordered_executor.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/batch_policy.hpp`` (:ref:`file_SeQuant_core_batch_policy.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/backend_array_ops.hpp`` (:ref:`file_SeQuant_core_eval_backend_array_ops.hpp`)
+
+- ``SeQuant/core/eval/cache_manager.hpp`` (:ref:`file_SeQuant_core_eval_cache_manager.hpp`)
+
+- ``SeQuant/core/eval/cell_table.hpp`` (:ref:`file_SeQuant_core_eval_cell_table.hpp`)
+
+- ``SeQuant/core/eval/cell_table_builder.hpp`` (:ref:`file_SeQuant_core_eval_cell_table_builder.hpp`)
+
+- ``SeQuant/core/eval/eval.hpp`` (:ref:`file_SeQuant_core_eval_eval.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/eval/forest_combine.hpp`` (:ref:`file_SeQuant_core_eval_forest_combine.hpp`)
+
+- ``SeQuant/core/eval/ordered_dump.hpp`` (:ref:`file_SeQuant_core_eval_ordered_dump.hpp`)
+
+- ``SeQuant/core/eval/ordered_schedule.hpp`` (:ref:`file_SeQuant_core_eval_ordered_schedule.hpp`)
+
+- ``SeQuant/core/eval/peak_profile.hpp`` (:ref:`file_SeQuant_core_eval_peak_profile.hpp`)
+
+- ``SeQuant/core/eval/result.hpp`` (:ref:`file_SeQuant_core_eval_result.hpp`)
+
+- ``SeQuant/core/eval/value_node_map.hpp`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``cstddef``
+
+- ``format``
+
+- ``functional``
+
+- ``initializer_list``
+
+- ``iomanip``
+
+- ``optional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+- ``unordered_map``
+
+- ``unordered_set``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``variant``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+- :ref:`namespace_sequant__eval__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_forgo_plan`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_registry_residency`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a0e3a17a17055bf26e022b327b8d9ccdd`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a16bd50fb2fa96deda8b62233bd8f961c`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a26ab15f1005ac9533f62dd4eacabe482`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af3948c923b04884f7a2795006d21ae7e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a18d48ea612ccd97fd2a94f6f0fb14a3a`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a82139a8b1abefcc970b4c597fdb6ffd6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a1d209df335d400fb205a1e0085a840d5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af2d414b5fd0dad7a2914d494c0ab9d1d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae72afc5cb305cf82803e297450de4ed6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac54d861468872b617b6f4f08c01259ef`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a355d3cba1341e4a1bbadb328b4884fcc`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a6ba421e9061c39d6e4d1d7276424ba84`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a279cca1b4a9b491e1826f348f51a72f1`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af7dd3895b94d03b33be244b6ef3cf5df`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1abfa0a45366f28c2f2aa272d2065f123f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a4d37168cb698146da97bec991263caf7`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac4fa5f03670f459c0c2b26013b877fce`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a391040682e3b9ddc4c3fce23456152d5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a8741aad38ecbe64247d2e68ac18427d5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aeb405becb553a6219a0ee567b5e9617f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae274d93f19fca4f3233d534e84c7c6d7`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae09bdd7f78be7fc899d6b7b4a1c3a49e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a97bb3dea9db91cd66a521e3d5368ae84`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac7bf00fbcf94b9ceaf4c0ede8d6163db`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a7779d6a38eeeaf4f5506b15963ac085b`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a12b22af39d17c666c52d163968cda2cc`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1ae51cf6e89c7886be5b0a04b7a8701009`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a39568a1f393a70de344377cb31697bbd`
+
+- :ref:`exhale_function_namespacesequant_1af3fe7a3f60d13188e443ec2939be8281`
+

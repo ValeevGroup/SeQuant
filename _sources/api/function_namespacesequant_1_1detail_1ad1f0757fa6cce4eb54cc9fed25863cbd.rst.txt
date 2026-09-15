@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ad1f0757fa6cce4eb54cc9fed25863cbd:
+
+Template Function sequant::detail::may_prune
+============================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::may_prune(const EvalNode<T>&)
+   :project: SeQuant

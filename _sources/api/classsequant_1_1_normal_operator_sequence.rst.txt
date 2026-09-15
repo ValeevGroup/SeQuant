@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_normal_operator_sequence:
+
+Template Class NormalOperatorSequence
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Types
+**********
+
+- ``public container::svector< NormalOperator< Statistics::FermiDirac > >``
+- ``public sequant::Expr`` (:ref:`exhale_class_classsequant_1_1_expr`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::NormalOperatorSequence
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

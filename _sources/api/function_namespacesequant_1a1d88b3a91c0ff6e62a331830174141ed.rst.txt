@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1d88b3a91c0ff6e62a331830174141ed:
+
+Function sequant::abort_msg
+===========================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::abort_msg(const std::string&, const std::source_location)
+   :project: SeQuant

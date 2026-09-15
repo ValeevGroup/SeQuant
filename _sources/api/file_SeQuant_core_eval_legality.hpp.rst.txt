@@ -1,0 +1,118 @@
+
+.. _file_SeQuant_core_eval_legality.hpp:
+
+File legality.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/legality.hpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_legality.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/batch_policy.hpp`` (:ref:`file_SeQuant_core_batch_policy.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/eval.hpp`` (:ref:`file_SeQuant_core_eval_eval.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/eval/peak_profile.hpp`` (:ref:`file_SeQuant_core_eval_peak_profile.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``cstddef``
+
+- ``cstdlib``
+
+- ``functional``
+
+- ``iostream``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+- ``unordered_map``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_axis_class`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_legality`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_legality_schedule`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1eval_1ab02d0018a27f0198a32685125b01c0d6`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1ad0e26bbc1cb71c18016189265c689663`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a9fa2cdfc6a04c8066f9dc4b68ab9f013`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a16f66ec7a766139be2785fbe5886a608`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a33b81ec8be205c6d1608219e7e174979`
+

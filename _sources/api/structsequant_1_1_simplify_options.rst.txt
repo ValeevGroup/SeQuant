@@ -1,0 +1,26 @@
+.. _exhale_struct_structsequant_1_1_simplify_options:
+
+Struct SimplifyOptions
+======================
+
+- Defined in :ref:`file_SeQuant_core_options.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::CanonicalizeOptions`` (:ref:`exhale_struct_structsequant_1_1_canonicalize_options`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::SimplifyOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

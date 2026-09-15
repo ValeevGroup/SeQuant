@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a39d724ab06625de380dda6122aba80c0:
+
+Function sequant::to_wstring(Symmetry)
+======================================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wstring(Symmetry)
+   :project: SeQuant

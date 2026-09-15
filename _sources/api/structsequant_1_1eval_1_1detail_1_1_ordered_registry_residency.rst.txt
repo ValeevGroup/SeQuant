@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_registry_residency:
+
+Struct OrderedRegistryResidency
+===============================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::detail::OrderedRegistryResidency
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

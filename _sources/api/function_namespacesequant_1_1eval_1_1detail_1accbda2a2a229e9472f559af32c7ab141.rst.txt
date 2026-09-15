@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1accbda2a2a229e9472f559af32c7ab141:
+
+Function sequant::eval::detail::lifetime_mask_intersect_in_place
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_lifetime_mask.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::lifetime_mask_intersect_in_place(container::svector<Index>&, container::svector<Index> const&)
+   :project: SeQuant

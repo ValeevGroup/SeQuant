@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1af2d414b5fd0dad7a2914d494c0ab9d1d:
+
+Function sequant::eval::detail::ordered_forgo_block
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_forgo_block(CellRegistry&, ForgoPlan const&, ScopeBlock const&, CellScope const&, std::size_t)
+   :project: SeQuant

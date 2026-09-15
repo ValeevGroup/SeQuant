@@ -1,0 +1,106 @@
+
+.. _file_SeQuant_domain_mbpt_bernoulli.cpp:
+
+File bernoulli.cpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/bernoulli.cpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_bernoulli.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/index_space_registry.hpp`` (:ref:`file_SeQuant_core_index_space_registry.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/expr.hpp`` (:ref:`file_SeQuant_core_utility_expr.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/wick.hpp`` (:ref:`file_SeQuant_core_wick.hpp`)
+
+- ``SeQuant/domain/mbpt/bernoulli.hpp`` (:ref:`file_SeQuant_domain_mbpt_bernoulli.hpp`)
+
+- ``SeQuant/domain/mbpt/context.hpp`` (:ref:`file_SeQuant_domain_mbpt_context.hpp`)
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``range/v3/algorithm/all_of.hpp``
+
+- ``range/v3/algorithm/any_of.hpp``
+
+- ``range/v3/algorithm/none_of.hpp``
+
+- ``range/v3/range/primitives.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__bernoulli`
+
+- :ref:`namespace_sequant__mbpt__bernoulli__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a9fa90d18b9f005e891cd13594a3b342c`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a643c6090569ae8ef7a69a08d5897f58d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a5beae2388958da5a78b10a7efd2205c1`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1a2ff1045638a99f041e140add0e29a0da`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1_1detail_1adc423782a53d6b587ff9b35f9ea3f4df`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1bernoulli_1a0ba3085654b9b72463d9f1b81ec986ac`
+

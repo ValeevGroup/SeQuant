@@ -1,0 +1,23 @@
+.. _exhale_class_classsequant_1_1_tensor_network_v2_1_1_vertex:
+
+Class TensorNetworkV2::Vertex
+=============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_v2.hpp`
+
+
+Nested Relationships
+--------------------
+
+This class is a nested type of :ref:`exhale_class_classsequant_1_1_tensor_network_v2`.
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::TensorNetworkV2::Vertex
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

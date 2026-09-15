@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1mbpt_1_1mask_3_01_l_c_a_o_q_n_s_01_4:
+
+Template Struct mask< LCAOQNS >
+===============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::mbpt::mask< LCAOQNS >
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

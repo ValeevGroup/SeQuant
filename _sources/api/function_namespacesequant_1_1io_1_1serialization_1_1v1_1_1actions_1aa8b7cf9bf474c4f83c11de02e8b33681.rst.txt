@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1actions_1aa8b7cf9bf474c4f83c11de02e8b33681:
+
+Template Function sequant::io::serialization::v1::actions::get_val
+==================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_semantic_actions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::actions::get_val(Variant&)
+   :project: SeQuant

@@ -1,0 +1,84 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_tiledarray_array_ops.hpp:
+
+Program Listing for File array_ops.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_tiledarray_array_ops.hpp>` (``SeQuant/core/eval/backends/tiledarray/array_ops.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_BACKENDS_TILEDARRAY_ARRAY_OPS_HPP
+   #define SEQUANT_EVAL_BACKENDS_TILEDARRAY_ARRAY_OPS_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/backend_array_ops.hpp>
+   #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <cstddef>
+   #include <map>
+   #include <memory>
+   #include <string>
+   #include <type_traits>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant {
+   
+   template <typename FlatArray, typename ToTArray = FlatArray>
+   [[nodiscard]] BackendArrayOps make_ta_array_ops(
+       std::map<std::wstring, TA::TiledRange1> tr1_of_base, TA::World& world) {
+     auto map = std::make_shared<std::map<std::wstring, TA::TiledRange1>>(
+         std::move(tr1_of_base));
+     BackendArrayOps aops;
+     aops.axis_batches = [map](Index const& axis, std::size_t target_batch_size) {
+       return mode_batches_of_trange1(
+           map->at(std::wstring(axis.space().base_key())), target_batch_size);
+     };
+     aops.make_zeros =
+         [map, &world](container::vector<Index> const& descriptor) -> ResultPtr {
+       using numeric_type = typename FlatArray::numeric_type;
+       std::vector<TA::TiledRange1> outer;
+       bool nested = false;
+       for (auto const& ix : descriptor) {
+         if (ix.has_proto_indices()) {
+           nested = true;  // an inner (nested) mode -- not an outer trange mode
+           continue;
+         }
+         outer.push_back(map->at(std::wstring(ix.space().base_key())));
+       }
+       TA::TiledRange otr(outer.begin(), outer.end());
+       auto make_flat = [&]() -> ResultPtr {
+         FlatArray dest(world, otr);
+         dest.fill_local(numeric_type(0));
+         world.gop.fence();
+         return eval_result<ResultTensorTA<FlatArray>>(std::move(dest));
+       };
+       if constexpr (std::is_same_v<FlatArray, ToTArray>) {
+         // Flat-only backend (default ToTArray == FlatArray): descriptors are
+         // flat.
+         SEQUANT_ASSERT(!nested &&
+                        "flat-only TA array-ops asked for a nested zero result");
+         return make_flat();
+       } else {
+         if (!nested) return make_flat();
+         // Nested: the outer trange from the non-proto indices, every outer tile
+         // an empty-inner tensor (tot_inner_rank() == 0) -- a valid zero ToT whose
+         // real inner tensors the scatter's write_into_slice fills in per batch.
+         using OuterT = typename ToTArray::value_type;
+         ToTArray dest(world, otr);
+         for (auto it = dest.begin(); it != dest.end(); ++it)
+           if (dest.is_local(it.index())) *it = OuterT{it.make_range()};
+         world.gop.fence();
+         return eval_result<ResultTensorOfTensorTA<ToTArray>>(std::move(dest));
+       }
+     };
+     return aops;
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_BACKENDS_TILEDARRAY_ARRAY_OPS_HPP

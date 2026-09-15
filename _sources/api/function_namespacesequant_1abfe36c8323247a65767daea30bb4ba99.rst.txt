@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1abfe36c8323247a65767daea30bb4ba99:
+
+Function sequant::operator==(const ExprMatcher&, const ExprPtr&)
+================================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_matcher.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator==(const ExprMatcher&, const ExprPtr&)
+   :project: SeQuant

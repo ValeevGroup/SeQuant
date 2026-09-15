@@ -1,0 +1,144 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp:
+
+Program Listing for File cost_model_object.hpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp>` (``SeQuant/core/eval/backends/dryrun/cost_model_object.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_COST_MODEL_OBJECT_HPP
+   #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_COST_MODEL_OBJECT_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+   #include <SeQuant/core/eval/schedule_dump.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/optimize/cost_model.hpp>
+   #include <SeQuant/core/optimize/options.hpp>
+   #include <SeQuant/core/optimize/single_term_detail.hpp>
+   
+   #include <atomic>
+   #include <cstddef>
+   #include <functional>
+   #include <string>
+   #include <utility>
+   
+   namespace sequant::eval::dryrun {
+   
+   struct CostSink {
+     std::atomic<double> flops{0.0};
+     std::atomic<double> exec{0.0};
+     std::atomic<std::size_t> n_ops{0};
+   };
+   
+   using ExtentOverrides = container::map<std::size_t, std::size_t>;
+   
+   class CostModel {
+    public:
+     explicit CostModel(SizeRegime regime, RooflineParams roofline = {})
+         : regime_{std::move(regime)}, roofline_{roofline} {}
+   
+     [[nodiscard]] std::size_t memsize(
+         container::svector<Index> const& idxset,
+         ExtentOverrides const& overrides = {}) const {
+       // Resolve the positional overrides against this index list: override at
+       // mode position `pos` applies to `idxset[pos]`, whatever its label. Build a
+       // per-call Index->extent map so make_extent_fn's atom lookup finds it (the
+       // counter revisits idxset[pos] by identity, incl. as a composite proto).
+       // Named local: make_extent_fn captures it by reference, so it must outlive
+       // `ext` (a temporary here would dangle).
+       auto const resolved = resolve_overrides(idxset, overrides);
+       auto const ext = make_extent_fn(resolved);
+       auto const mc =
+           sequant::opt::detail::memsize_counter(ext, regime_.inner_pow_fn());
+       double const elems =
+           mc(idxset, container::svector<Index>{}, container::svector<Index>{});
+       return static_cast<std::size_t>(elems * numeric_size_);
+     }
+   
+     [[nodiscard]] double flops(
+         container::svector<Index> const& out,
+         container::svector<Index> const& contracted,
+         container::map<Index, std::size_t> const& label_extents = {}) const {
+       auto const ext = make_extent_fn(label_extents);
+       auto const fc =
+           sequant::opt::detail::flops_counter(ext, regime_.inner_pow_fn());
+       return fc(out, contracted, container::svector<Index>{});
+     }
+   
+     [[nodiscard]] double exec_cost(double flops_count, std::size_t left_bytes,
+                                    std::size_t right_bytes,
+                                    std::size_t result_bytes) const {
+       double const traffic_elems =
+           static_cast<double>(left_bytes + right_bytes + result_bytes) /
+           numeric_size_;
+       return sequant::opt::detail::roofline_op_cost(
+           flops_count, traffic_elems, roofline_.machine_balance,
+           roofline_.fast_mem_elems, roofline_.block_tiles,
+           roofline_.block_prefactor);
+     }
+   
+     [[nodiscard]] SizeRegime const& regime() const noexcept { return regime_; }
+   
+     void set_cost_sink(CostSink* sink) const noexcept { sink_ = sink; }
+   
+     void tally_op(double flops_count, double exec) const noexcept {
+       if (!sink_) return;
+       sink_->flops.fetch_add(flops_count, std::memory_order_relaxed);
+       sink_->exec.fetch_add(exec, std::memory_order_relaxed);
+       sink_->n_ops.fetch_add(1, std::memory_order_relaxed);
+     }
+   
+    private:
+     // Index-to-extent callable consulting `overrides` first, else the
+     // regime's nominal extent. The returned std::function captures `overrides`
+     // (and `this`) by reference and is only ever used -- never stored --
+     // within the (memsize/flops) call that constructs it, so the reference
+     // stays valid for its entire lifetime. Explicit (non-deduced) return type
+     // so this can be called from memsize()/flops(), which appear earlier in
+     // the class body (a deduced `auto` return type would require the
+     // definition to precede every use, even within the same class).
+     [[nodiscard]] std::function<std::size_t(Index const&)> make_extent_fn(
+         container::map<Index, std::size_t> const& overrides) const {
+       return [this, &overrides](Index const& ix) -> std::size_t {
+         if (auto it = overrides.find(ix); it != overrides.end())
+           return it->second;
+         return regime_.extent(ix);
+       };
+     }
+   
+     // Resolve a value's positional overrides against its own index list: override
+     // at mode position `pos` binds to `idxset[pos]`. Yields an Index-keyed map so
+     // make_extent_fn's per-atom lookup finds the sliced extent wherever that
+     // Index recurs in idxset (including as a composite's outer proto). The key
+     // is derived from this list, never carried from a producer's labels.
+     [[nodiscard]] static container::map<Index, std::size_t> resolve_overrides(
+         container::svector<Index> const& idxset,
+         ExtentOverrides const& overrides) {
+       container::map<Index, std::size_t> out;
+       for (auto const& [pos, w] : overrides)
+         if (pos < idxset.size()) out.emplace(idxset[pos], w);
+       return out;
+     }
+   
+     SizeRegime regime_;
+     RooflineParams roofline_;
+     // Optional replay cost sink (see set_cost_sink/tally_op). Mutable so it can
+     // be (de)attached on a shared_ptr<CostModel const>; a raw non-owning pointer
+     // to caller-owned state. nullptr (default) => tally_op is a no-op.
+     mutable CostSink* sink_ = nullptr;
+     // sizeof(double); see the OptimizeOptions::numeric_size note in
+     // doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 9
+     // (hardcoded here, matching the C60
+     // trace's real-only CSV-CCk path; complex CSV-CCk is out of scope, see the
+     // plan's carried-minor N4).
+     double numeric_size_ = 8.0;
+   };
+   
+   }  // namespace sequant::eval::dryrun
+   
+   #endif  // SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_COST_MODEL_OBJECT_HPP

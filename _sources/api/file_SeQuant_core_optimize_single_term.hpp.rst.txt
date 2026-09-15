@@ -1,0 +1,80 @@
+
+.. _file_SeQuant_core_optimize_single_term.hpp:
+
+File single_term.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/single_term.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_single_term.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/eval/node_batch_annotation.hpp`` (:ref:`file_SeQuant_core_eval_node_batch_annotation.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/optimize/cost_model.hpp`` (:ref:`file_SeQuant_core_optimize_cost_model.hpp`)
+
+- ``SeQuant/core/optimize/options.hpp`` (:ref:`file_SeQuant_core_optimize_options.hpp`)
+
+- ``SeQuant/core/optimize/single_term_detail.hpp`` (:ref:`file_SeQuant_core_optimize_single_term_detail.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``functional``
+
+- ``range/v3/view/filter.hpp``
+
+- ``range/v3/view/reverse.hpp``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+- :ref:`namespace_sequant__opt__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1_1detail_1a1be5c7aa9b70a4510c9c0b966778d360`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1ac719998b7f9b02f8512d2f482aae8ae6`
+

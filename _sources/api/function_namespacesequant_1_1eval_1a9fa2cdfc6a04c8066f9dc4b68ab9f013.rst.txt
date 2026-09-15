@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a9fa2cdfc6a04c8066f9dc4b68ab9f013:
+
+Function sequant::eval::build_site_of
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_legality.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::build_site_of(meta::eval_node auto const&, BatchPolicy const&)
+   :project: SeQuant

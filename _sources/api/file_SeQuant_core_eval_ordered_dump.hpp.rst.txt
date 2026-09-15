@@ -1,0 +1,292 @@
+
+.. _file_SeQuant_core_eval_ordered_dump.hpp:
+
+File ordered_dump.hpp
+=====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+
+The ordered (DAG) evaluator's environment-gated diagnostic dumps, in one place. 
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/ordered_dump.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_ordered_dump.hpp.rst
+
+
+
+Detailed Description
+--------------------
+
+Every dump below is off unless its environment variable is set; when it is unset the call site is a single ``std::getenv`` test and no output is produced. Nothing here participates in evaluation  these functions only print.
+
+The dumps take their operands as template parameters rather than including the schedule/table/executor headers, so this header sits below all of them and can be included from any of them without an include cycle.
+
+Environment variables (the complete list of what SeQuant reads)
+
+Ordered-evaluator dumps (this header):
+
+
+Variable   
+Prints    
+
+
+SEQUANT_DUMP_SCHEDULE   
+``[levels]``, ``[sched]``, ``[sched-collapse]``,    
+
+
+
+``[sched-materialize]``, ``[sched-nest]`` and    
+
+
+
+``[sched-tree]``  how the ordered schedule    
+
+
+
+was built and the block tree it became    
+
+
+
+(plus ``build_ordered_schedule``'s own    
+
+
+
+``dump_reject`` rejection report, which reads    
+
+
+
+that builder's local frame and so stays    
+
+
+
+there).    
+
+
+SEQUANT_DUMP_USEINDUCED   
+``[useinduced]``  each use-induced slicing    
+
+
+
+fact (value, mode, position, loop,    
+
+
+
+consumer) recorded on an operand fetch.    
+
+
+SEQUANT_DUMP_OPENS   
+``[opens]``  the batch loops each node    
+
+
+
+opens, with its carried modes.    
+
+
+SEQUANT_DUMP_CELLS_OF   
+``[cells]`` / ``[occs]`` for the listed value    
+
+
+
+ids (``=<vid>[,<vid>...]``): every cell of    
+
+
+
+each value, and every occurrence layout and    
+
+
+
+table read of it.    
+
+
+SEQUANT_DUMP_ROOT_NORMS   
+``[build-norm]`` / ``[root-norm]``  the norm    
+
+
+
+of every root-scope build and of every    
+
+
+
+forest root at the combine, for comparing    
+
+
+
+term values across schedules.    
+
+
+SEQUANT_UT_READ_DIAG   
+``[read]``  every table-driven operand    
+
+
+
+read, with consumer, source and slices.    
+
+
+SEQUANT_UT_BLOCK_DIAG   
+``[block]`` / ``[cell-registry]``  per-batch    
+
+
+
+build and assemble steps, block skips, and    
+
+
+
+the end-of-call registry residency.    
+
+
+SEQUANT_SCHED_DUMP   
+``ORDERED_RUN_BLOCK`` / ``SCHEDULE_RUN_GROUP`` 
+
+
+
+JSON lines for the schedule visualizer    
+
+
+
+(emitted by the executors themselves).   
+
+
+
+
+Cache / runtime knobs documented with their own facility (:ref:`file_SeQuant_core_eval_cache_manager.hpp`, :ref:`file_SeQuant_core_runtime.hpp`, optimize/): SEQUANT_NUM_THREADS, SEQUANT_FACTORIZER_DEBUG, SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING, SEQUANT_UT_ACCESS_CLOCK, SEQUANT_UT_LOOKUP_METER, SEQUANT_UT_PHASE, SEQUANT_UT_EVALIMPL, SEQUANT_UT_BUILD_METER, SEQUANT_UT_BUILD_DUMP, SEQUANT_UT_DEFUSE_METER, SEQUANT_UT_DEFUSE_DUMP, SEQUANT_UT_PEAK_COMPOSE, SEQUANT_REBUILD_TRACE, SEQUANT_UT_STRICT_FILL_ONCE, SEQUANT_SYNC_STATS.
+
+SEQUANT_UT_FORCE_SYNC and SEQUANT_UT_PROD_TR name per-op diagnostics in ``apply_one_op_traced`` / ``Result::fence`` that the library never reads itself: the gate is evaluated at the call site, by the consuming backend (mpqc's dry-run and wet drivers). They are listed here because the library's own doxygen names them (``eval.hpp``, ``result.hpp``), not because SeQuant reads them.
+
+Everything else prefixed SEQUANT_UT_ is a unit-test knob read by the tests themselves, not by library code. 
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/batch_policy.hpp`` (:ref:`file_SeQuant_core_batch_policy.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``cstddef``
+
+- ``cstdlib``
+
+- ``iomanip``
+
+- ``iostream``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``set`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``sstream``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``variant``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_cell_registry.hpp`
+
+- :ref:`file_SeQuant_core_eval_cell_table_builder.hpp`
+
+- :ref:`file_SeQuant_core_eval_eval.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+- :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+- :ref:`namespace_sequant__eval__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a69ee08a4c47c03b7ffd5335a434a7555`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a3bf194e4efdf09398aafc90e88e10067`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a553728e67ddaa3517eee8f9dc6608f33`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a516a46a5f9051f925595d2dc8a5db3de`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aefaf7243b3ae75210f6026be76917cdc`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae4e85d8312531ce6c389101417d59087`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a94996856a62a3bd447a1c4e363346fa5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a93e0345109707440e2e1fdce901a918f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae7681ae7e66d39c9ebb128d4d88ff012`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aafe6d1aa5a3204aa2ec9a26e5e055027`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af7af45cdd7947217db1a8c2f86e947f5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a6334bdc327c72f1b805bcea600875f14`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a76c7f46f927131ea700212954422d010`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aa6bd884057d3cd53bda1b176679e3e30`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aede505ea7fbed23bf435ac3d5f6ce789`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a09dffb55d6c98556013e18646d2b77ff`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a08684d78286a161e8c5b8ebb6dab81d1`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aeec72bbe7037856f1dd29a62ad3f785d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ab0e1603de7deedc1c8917245787d5c35`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a085c22bdcae4e4d77e395e16020e75d9`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a176a3ecdf6a482babd1b6e0ee7921054`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac4aa81ecd2f08081b3271c1f962b640a`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a96774a2759855f24583a32e2f824eec7`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a17fabae2fe08acbf67aa95fdfde40f3f`
+

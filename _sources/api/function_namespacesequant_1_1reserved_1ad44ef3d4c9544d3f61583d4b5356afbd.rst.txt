@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1reserved_1ad44ef3d4c9544d3f61583d4b5356afbd:
+
+Function sequant::reserved::kronecker_label
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_reserved.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::reserved::kronecker_label()
+   :project: SeQuant

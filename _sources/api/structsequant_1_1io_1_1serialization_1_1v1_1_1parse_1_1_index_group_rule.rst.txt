@@ -1,0 +1,27 @@
+.. _exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1_index_group_rule:
+
+Struct IndexGroupRule
+=====================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Types
+**********
+
+- ``public sequant::io::serialization::v1::parse::helpers::annotate_position`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1helpers_1_1annotate__position`)
+- ``public sequant::io::serialization::v1::parse::helpers::error_handler`` (:ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1parse_1_1helpers_1_1error__handler`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::io::serialization::v1::parse::IndexGroupRule
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

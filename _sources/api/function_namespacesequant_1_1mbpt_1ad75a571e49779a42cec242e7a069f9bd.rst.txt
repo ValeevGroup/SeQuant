@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1ad75a571e49779a42cec242e7a069f9bd:
+
+Function sequant::mbpt::permutational_overlap_matrix
+====================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::permutational_overlap_matrix(std::size_t)
+   :project: SeQuant

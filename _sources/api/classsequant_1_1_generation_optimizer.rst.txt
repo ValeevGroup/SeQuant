@@ -1,0 +1,44 @@
+.. _exhale_class_classsequant_1_1_generation_optimizer:
+
+Template Class GenerationOptimizer
+==================================
+
+- Defined in :ref:`file_SeQuant_core_export_generation_optimizer.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_abstract_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_compute_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_create_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_destroy_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_load_and_zero_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_load_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_persist_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_unload_operation`
+- :ref:`exhale_class_classsequant_1_1_generation_optimizer_1_1_zero_operation`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Generator< MainGenerator::Context >`` (:ref:`exhale_class_classsequant_1_1_generator`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::GenerationOptimizer
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

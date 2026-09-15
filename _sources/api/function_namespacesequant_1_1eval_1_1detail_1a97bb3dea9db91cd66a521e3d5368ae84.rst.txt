@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a97bb3dea9db91cd66a521e3d5368ae84:
+
+Template Function sequant::eval::detail::run_ordered_contracted_block
+=====================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::run_ordered_contracted_block(ScopeBlock const&, ValueNodeMap<node_t> const&, RichSchedule const&, OrderedSchedule const&, F const&, CacheManager<N, FHC>&, std::function<std::size_t(Index const&)> const&, typename CacheManager<N, FHC>::BatchContext const&, container::vector<char>&, std::function<bool(node_t const&)> const&, CellTable const *, CellRegistry&, CellReadResolver&, container::vector<char> const&, ForgoPlan const&, ScopeGuardFactory const&)
+   :project: SeQuant
