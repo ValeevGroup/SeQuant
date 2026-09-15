@@ -87,9 +87,9 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
   // equation's residual/energy is a single in-place Sum tree with one node per
   // summand, so its left spine is as deep as the number of terms -- thousands
   // for a large equation -- and a recursive descent would overflow the call
-  // stack. Pushing the right child before the left one makes the pop order the
-  // same pre-order the recursion visited in (node, left subtree, right
-  // subtree), so `occ` and the meet are built exactly as before.
+  // stack. Pushing the right child before the left one makes the pop order
+  // pre-order (node, left subtree, right subtree), which is the order `occ`
+  // and the meet are built in.
   struct Frame {
     Node const* n;
     container::svector<Index> acc;

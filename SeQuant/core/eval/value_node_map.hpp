@@ -75,9 +75,9 @@ template <meta::eval_node_range R>
   // Iterative pre-order (an explicit stack, not recursion): the residual's
   // in-place Sum tree has a left spine as deep as the number of terms, and a
   // recursive descent would overflow the call stack. Pushing the right child
-  // before the left one keeps the pop order the recursion's pre-order, so the
-  // first node visited for a given key -- the one `emplace` keeps -- is the
-  // same one as before.
+  // before the left one makes the pop order pre-order, so the first node
+  // visited for a given key -- the one `emplace` keeps -- is the leftmost
+  // occurrence.
   std::vector<node_t const*> stack;
   auto visit = [&](node_t const& root, bool keys) {
     stack.push_back(&root);

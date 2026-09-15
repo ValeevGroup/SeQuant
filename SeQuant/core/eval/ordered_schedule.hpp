@@ -452,9 +452,8 @@ struct OrderedScheduleStepMeta {
 /// the whole-forest DAG's edges, restricted to one block's own siblings, so
 /// they inherit its acyclicity), then re-derives the local edges a second
 /// time against the final order and \c SEQUANT_ASSERT's every one is
-/// actually satisfied (a loud tripwire against any future violation of this
-/// invariant, per the design review that requested it, rather than a silent
-/// mis-order).
+/// actually satisfied (a loud tripwire against any violation of this
+/// invariant rather than a silent mis-order).
 ///
 inline container::vector<Step> ordered_schedule_topo_sort_steps(
     container::vector<Step> items,

@@ -728,11 +728,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// \brief \c apply_one_op plus the per-build bookkeeping every freshly
 ///        computed node carries.
 ///
-/// \details The compute half of a node's evaluation, factored out of \c
-/// evaluate_impl's own Phase-B so the table-driven ordered executor (\c
-/// detail::compute_cell, ordered_executor.hpp) performs it identically
-/// without re-entering the tree-walking engine: the shaped-product hook, the
-/// \c SEQUANT_UT_FORCE_SYNC / \c SEQUANT_UT_PROD_TR diagnostics, the
+/// \details The compute half of a node's evaluation, shared by \c
+/// evaluate_impl's Phase-B and by the table-driven ordered executor (\c
+/// detail::compute_cell, ordered_executor.hpp), so both perform it the same
+/// way without re-entering the tree-walking engine: the shaped-product hook,
+/// the \c SEQUANT_UT_FORCE_SYNC / \c SEQUANT_UT_PROD_TR diagnostics, the
 /// recompute tally (at the (value, slice) granularity), the
 /// \c EvalImplTimeline node-eval accounting, the per-op trace event (which is
 /// what notes the working set on the peak monitor) and the trace's
@@ -959,9 +959,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// \details The subtree-pruning seam (see \c
 /// CacheManager::custom_evaluator_type): a non-null return replaces the whole
 /// production -- the node's own operands are never evaluated -- and a null
-/// return declines to the standard scheme. Factored out of \c evaluate_impl's
-/// Enter stage so the ordered executor's \c detail::compute_cell consults it
-/// at the same point in a production it always has (after the operand reads
+/// return declines to the standard scheme. Shared by \c evaluate_impl's
+/// Enter stage and by the ordered executor's \c detail::compute_cell, which
+/// consult it at the same point in a production (after the operand reads
 /// have been resolved for this consumer, before any of them is performed),
 /// with the same trace event.
 ///
@@ -999,10 +999,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 ///
 /// \details A leaf is accessed, not computed (the evaluator hands back a
 /// precomputed input), but it still enters the working set, so the event is
-/// emitted exactly as for an op. Factored out of \c evaluate_impl's leaf
-/// branch so the ordered executor's \c detail::compute_cell -- which runs
-/// the evaluator itself on a leaf operand's first touch, before recording it
-/// as that leaf's cell -- accounts for it identically.
+/// emitted exactly as for an op. Shared by \c evaluate_impl's leaf branch
+/// and by the ordered executor's \c detail::compute_cell -- which runs the
+/// evaluator itself on a leaf operand's first touch, before recording it as
+/// that leaf's cell -- so both account for it the same way.
 ///
 /// \return the leaf's own oriented result, whole (never sliced: the declared
 ///         slice of a read is applied by \c CellReadResolver::fetch).
@@ -1036,9 +1036,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
 /// \details The single choke point every freshly computed node passes
 /// through -- leaves, custom-eval subtrees and ordinary contractions alike --
 /// so the per-node build coverage the visualizer joins onto the IR DAG is
-/// complete. Factored out of \c evaluate_impl's \c finish_phase_b so the
-/// ordered executor's own \c detail::compute_cell (ordered_executor.hpp)
-/// reports its builds identically without re-entering that engine.
+/// complete. Shared by \c evaluate_impl's \c finish_phase_b and by the
+/// ordered executor's \c detail::compute_cell (ordered_executor.hpp), so
+/// both report their builds the same way without re-entering that engine.
 template <meta::can_evaluate Node, typename N, bool FHC>
 void note_fresh_build(Node const& node, CacheManager<N, FHC>& cache) {
   // Diagnostic (SEQUANT_UT_BUILD_METER): count actual builds at this single

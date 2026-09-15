@@ -502,7 +502,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   // this evaluation will read it again. \c operand_drained answers "yes" for
   // a value the table holds no cell for (nothing could be sharing it), which
   // is what keeps a transient Sum inside a production tree accumulating in
-  // place exactly as it did when this ran through evaluate_impl. Shared by
+  // place, as it does in evaluate_impl. Shared by
   // the production's own node and by every transient of its tree, so the two
   // cannot answer the provenance question differently.
   auto const apply_op = [&](node_t const& nd, ResultPtr l,
@@ -1217,16 +1217,14 @@ CellTableInputs make_cell_table_inputs(OrderedSchedule const& ordered,
 /// \brief The shared core every ordered
 /// whole-forest entry point (\c evaluate_ordered_schedule's forest-wide sum
 /// and \c evaluate_ordered_multiroot's per-root map alike) delegates to --
-/// walks \p ordered.root.steps exactly as \c evaluate_ordered_schedule always
-/// has (a root-level \c BuildStep built directly, a root-level \c ScopeBlock
-/// realized via \c run_ordered_contracted_block) and returns each
+/// walks \p ordered.root.steps (a root-level \c BuildStep built directly, a
+/// root-level \c ScopeBlock realized via \c run_ordered_contracted_block)
+/// and returns each
 /// forest root's own unpermuted, already-built \c value_result, aligned
 /// index-for-index with \p forest -- i.e. exactly the \c pre_results
-/// \c combine_forest_roots expects, computed but not yet consumed by it. Pure
-/// extraction of \c evaluate_ordered_schedule's original body, down to and
-/// including its own \c pre_results loop: no upstream logic (schedule walk,
-/// cell table derivation, the run-completeness refusal) is
-/// touched -- see this file's own \note on why a
+/// \c combine_forest_roots expects, computed but not yet consumed by it. The
+/// upstream logic (schedule walk, cell table derivation, the run-completeness
+/// refusal) lives in the callers; see this file's own \note on why a
 /// concatenated multi-root forest gets cross-root CSE for free from
 /// \c compute_dag_boulevard's hash-keyed \c ValueCell bucketing (built
 /// upstream of this function, in \p rich) with no new dedup logic needed
