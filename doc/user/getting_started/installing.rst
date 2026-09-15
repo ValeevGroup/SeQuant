@@ -107,9 +107,14 @@ Useful CMake Variables
      - ON
      - If set to `OFF` the default context must be initialized and manipulated from single thread only (most users will want to do this).
    * - SEQUANT_ASSERT_BEHAVIOR
-     - ``ABORT`` in ``Debug`` mode, ``IGNORE`` otherwise
+     - ``IGNORE`` in ``Release`` and ``MinSizeRel`` mode, ``ABORT`` otherwise
      - Controls how assertions within SeQuant's code are handled. Valid options are ``ABORT``, ``THROW`` and ``IGNORE``. The latter disables
        assertions, whereas the former keep them active and either abort the program or throw an exception on violation respectively.
+       On the first configure of a build directory this also seeds the corresponding option of the dependencies SeQuant builds
+       from source: ``TA_ASSERT_POLICY`` of TiledArray (which in turn seeds ``BTAS_ASSERT_POLICY`` of the BTAS it builds), or
+       ``BTAS_ASSERT_POLICY`` of BTAS when SeQuant builds BTAS itself (``SEQUANT_TILEDARRAY=OFF``). As with any cached option,
+       an explicit ``-DTA_ASSERT_POLICY=...``/``-DBTAS_ASSERT_POLICY=...`` wins, and a later change of ``SEQUANT_ASSERT_BEHAVIOR``
+       does not re-seed them: set them explicitly, or use a fresh build directory.
    * - SEQUANT_LTO
      - empty (decide per target type): `ON` for static libraries if the compiler supports "fat" LTO objects, `OFF` otherwise. `ON` for
        other target types (shared libs, executables, etc.). `OFF` for all targets when SeQuant is consumed as a subproject.

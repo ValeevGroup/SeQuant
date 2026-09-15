@@ -141,12 +141,17 @@ option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OF
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 # SEQUANT_ASSERT
-if (CMAKE_BUILD_TYPE STREQUAL Debug)
-    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
-else ()
+# N.B. the build-type partition matches TiledArray's TA_ASSERT_POLICY default
+#      (asserts are only disabled in the optimized-and-not-debuggable build
+#      types) so that SeQuant and the dependencies it builds from source agree
+#      out of the box; see FindOrFetch{TiledArray,BTAS}.cmake for the forwarding
+if (CMAKE_BUILD_TYPE STREQUAL Release OR
+    CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
     set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
+else ()
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
 endif()
-set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op")
+set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op; the default is IGNORE for Release and MinSizeRel builds, ABORT otherwise")
 set_property(
         CACHE SEQUANT_ASSERT_BEHAVIOR PROPERTY
         STRINGS THROW ABORT IGNORE)
