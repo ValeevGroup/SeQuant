@@ -278,3 +278,12 @@ the play-by-play.
 - **Test-fixture contract**: yield keys and stored arrays are
   canonical-spelling shaped; literal spellings are served through the
   leaf's transform (the fixture caches the transformed variant).
+
+## Status note (2026-09-02): MPQC integration
+
+The exact fold + Re/Im eval nodes are exercised end-to-end on MPQC's
+Kramers CC path. Non-CSV (flat TA) wrapper evaluation is certified; the
+Kramers-CSV energy fold is gated opt-in in MPQC pending one known eval
+defect (wrapped summand's inner root evaluates as a materializing DeNest
+einsum instead of the scalar-trace reduction -- see the plan's 2026-09-02
+deviations section for the measurement and fix direction).

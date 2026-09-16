@@ -708,6 +708,34 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 
 ---
 
+## Execution deviations (recorded 2026-09-01, tasks 13-15)
+
+- The default flip (T14) needed hardening well beyond the one-line change:
+  - simplify() gates the fold on `expr->is_cnumber()` -- operator-carrying
+    intermediates head back into Wick, which does not ingest Re/Im wrappers
+    (unfolded, a worker-thread TN ctor threw and terminated the process).
+  - Wrapped summands from DIFFERENT simplify passes hold conjugate-related
+    inners (for a closed c-number network the adjoint IS the conjugate);
+    the fold now merges Re/Im-wrapped summands at entry AND exit over
+    canonical representatives (Re(x*) = Re(x), Im(x*) = -Im(x)), so
+    e.g. +c Re(X) - c Re(X^+) cancels exactly.
+  - RealPart/ImagPart canonicalize their inner in place (+ REAL-scalar
+    hoist via the byproduct contract); Product::canonicalize_impl resets
+    its memoized hash when a subfactor mutates in place (first mutating
+    non-tensor factor canonicalization ever -- the stale-hash self-check
+    fired).
+  - has_tensor sees through the wrappers (top level and product factors).
+  - Folding before the canonicalize stage was tried and REVERTED: it
+    preempts the Symm-braket collapse (a real-field a - a^T pair became
+    2i Im instead of 0).
+  - Diagnosis was repeatedly misled by (a) a file-local has_tensor lambda
+    in test_mbpt_cc shadowing the core function, and (b) wide fwprintf
+    probes silently no-opping on a byte-oriented stderr. Test fallout:
+    fold-shape assertions compare canonically; UCC energy term counts
+    halve per folded pair (46->23, 20->14, 74->41); re_im_evaluation pins
+    canonicalizer + context (order-independent).
+- T15 landed as staged: [[deprecated]] + pragma-wrapped self-test.
+
 ## Execution deviations (recorded 2026-09-01, tasks 4/6/7)
 
 - Tasks 4, 6, and the product half of 7 landed as ONE green unit: the leaf
@@ -726,3 +754,66 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 - Uniform-conj hoisting is implemented at product roots (marker stripping on
   the collected TN copies + {conj} on the node); sum-level hoisting and the
   cache-reuse tests remain in T7/T11.
+
+## Execution deviations (recorded 2026-09-02, T16 MPQC smoke)
+
+- The MPQC CC-path fold (process_equations) needed THREE upstream repairs
+  before pairing worked on the Kramers-CSV energy:
+  (1) expand + flatten ALL CSV flavor sums before the korbit rebase
+  (residuals included; 48 flat terms/block replace 12 nested);
+  (2) rebase the fully contracted energy too, so a member's TRS partner is
+  its plain elementwise conjugate -- conjugate_op = sequant::conjugate on
+  the CSV path, mbpt::swap_spin on the non-CSV path (unrebased members
+  pair by all-flipped relabeling);
+  (3) round2-side kr_flavor guard: a spin-bit-free IndexSpace (the DF aux)
+  was misread as flavored under IGNOREd asserts (to_spin(qns) on zero spin
+  bits) and the rebase minted spurious flavored aux dummies, defeating
+  every pairing op. Measured after repairs: dch 24/36 paired -> 12 Re
+  (eq0 36 -> 24 terms), h2o 8/10.
+- optimize_impl was OPAQUE to Re/Im wrappers (returned untouched -> naive
+  inner contraction order). Fixed with a see-through case + regression
+  test (test_optimize.cpp "optimize sees through Re/Im wrappers").
+- OPEN: a Re-wrapped ToT/CSV scalar summand's inner root evaluates through
+  a MATERIALIZING DeNest einsum instead of the plain summand's scalar
+  reduction (binarize_re_im's inner binarize lacks the ResultExpr root
+  treatment): ~14 GB peak / OOM on dch vs 1.7 GB unfolded. Flat-TA wrapper
+  eval is certified (h2o). The MPQC CSV-energy fold therefore ships opt-in
+  (MPQC_CCK_TRS_FOLD=1) until the wrapper's inner root is routed through
+  the same result-expression treatment as an unwrapped scalar term.
+- Certified after all changes: h2o CCk -0.13510773505222942 (fold on),
+  dch PNS-MP2 -1.04169026886 (default, fold auto-off; within the known
+  X2C thread scatter of the old reference).
+
+## Follow-up roadmap (2026-09-02)
+
+- **T18 -- Kramers-canonical configs only (symbolic layer): RESOLVED on the
+  Kramers round-2 branch** by a time-reversal-aware canonicalizer
+  (`KramersSymmetry` tensor attribute, registry partner spaces, network
+  fold under `CanonicalizeOptions::fold_kramers`; design and plan under
+  `doc/dev/{specs,plans}/2026-09-02-kramers-trs-canonicalizer-*.md`).
+  Measured on dch: energy conjugate-pair fold 36 -> 20 terms (floor);
+  residual blocks are externally anchored and unchanged.
+- **T19 -- MPQC serving-level aliasing.** Layer 1 DONE here (597beb1fa):
+  `ResultTensorTA` records `apply_transform`/`permute`/`mult_by_phase` as
+  a lazy {phase, conj, perm} view consumed by the first contraction
+  (TA's `.conj()` and scaling are lazy expressions); ToT results still
+  materialize. Layer 2 (eval-leaf Kramers fold keeping the up-row
+  spelling in `expr()`) and the MPQC wiring live on the Kramers round-2
+  branch; layer 3 (2 C blocks per rank) is blocked on a per-tensor
+  tie-break for `BraKetSymmetry::Conjugate` mixed tensors.
+- **Options-equality landmine (2d733b25b).** `CanonicalizeOptions::
+  operator==` compared only `method`; `set_scoped_default_context` skips
+  contexts that compare equal, so a scoped context differing only in
+  `ignore_named_index_labels`/`named_indices` (or `SimplifyOptions::
+  fold_conjugate_pairs`) was a silent no-op whenever the default context
+  already carried options (MPQC's `load_convention` does). Every field
+  now participates; test `canonicalize_options_equality`.
+- **T20 -- wrapped-summand CSV eval: RESOLVED (2026-09-02).** Root cause was
+  not the ResultExpr head but the optimizer: `RealPart::is_scalar()` made
+  the fold's `2 Re[A]` an opaque scalar factor (A unoptimized, and on the
+  batching branch unbatched). Fix: Re/Im wrapper factors are transparent to
+  `optimize_impl` (PR-2 commit) and, on round 2, the wrapper's inner batch
+  axes are re-keyed under the summand and binarize shares its node counter
+  with root/scalar-sibling wrappers. dch: the 20-term folded energy
+  evaluates at 1.70 GB peak (was 14 GB), -1.04169026922 in band; MPQC's
+  CSV energy fold is default-on (MPQC_CCK_NO_TRS_FOLD opts out).
