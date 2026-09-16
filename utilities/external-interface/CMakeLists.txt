@@ -41,6 +41,7 @@ target_link_libraries(external_interface
 )
 
 target_set_compiler_flags(external_interface)
+target_set_optimization_flags(external_interface)
 
 
 # CCSD

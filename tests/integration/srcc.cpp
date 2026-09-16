@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/expr.hpp>
@@ -26,7 +27,7 @@ namespace {
     std::ostringstream oss;                                        \
     oss << "failed assert at line " << __LINE__ << " in function " \
         << __func__;                                               \
-    throw std::runtime_error(oss.str().c_str());                   \
+    throw sequant::Exception(oss.str());                           \
   }
 
 TimerPool<32> tpool;

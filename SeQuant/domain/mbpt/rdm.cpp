@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
 
@@ -358,7 +359,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
     }
     simplify(ex_);
   } else {
-    throw "rank not supported!";
+    throw Exception("rank not supported!");
   }
   return {ex_, initial_pairing};
 }
@@ -424,7 +425,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
                                           initial_pairing.first, factor);
               non_canon_simplify(factor);
             } else {
-              throw " wrong spin basis";
+              throw Exception("wrong spin basis");
             }
           }
         }
@@ -460,7 +461,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
       non_canon_simplify(input);
     }
   } else {
-    throw "cannot handle this type";
+    throw Exception("cannot handle this type");
   }
 
   return input;

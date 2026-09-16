@@ -45,6 +45,13 @@ foreach(current IN LISTS EXAMPLE_CODES)
     )
 
     target_set_compiler_flags("${current_name}")
+    # The examples are deliberately left out of the automatic LTO defaults (there is no point in
+    # paying LTO link time for them), but an explicit SEQUANT_LTO=ON has to reach them as well:
+    # without "fat" objects the SeQuant archives are then bitcode-only and can only be linked
+    # with LTO enabled on the consumer too
+    if (SEQUANT_LTO)
+        target_set_optimization_flags("${current_name}")
+    endif()
 
     math(EXPR counter "${counter} + 1")
 endforeach()

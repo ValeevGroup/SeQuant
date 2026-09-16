@@ -6,19 +6,16 @@
 #define SEQUANT_TAG_HPP
 
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <any>
 
 namespace sequant {
 
-class bad_any_comparable_cast : public std::bad_any_cast {
+class bad_any_comparable_cast : public Exception {
  public:
-  bad_any_comparable_cast() = default;
-  virtual ~bad_any_comparable_cast() {}
-  virtual const char *what() const noexcept {
-    return "Bad any_comparable_cast";
-  }
+  bad_any_comparable_cast() : Exception("Bad any_comparable_cast") {}
 };
 
 namespace detail {

@@ -95,6 +95,7 @@ macro(sequant_add_library _module)
     get_target_property(_type SeQuant-${_module} TYPE)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
         target_set_compiler_flags(SeQuant-${_module})
+        target_set_optimization_flags(SeQuant-${_module})
     endif()
 endmacro()
 
@@ -124,6 +125,9 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 # Additional build variables
 ############################
 option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
+# N.B. declared here rather than in benchmarks/ so that setting it is not reported as an
+# unused variable in builds that have SEQUANT_BENCHMARKS=OFF
+option(SEQUANT_QUICK_BENCHMARKS "Whether to exclude computationally expensive benchmarks" OFF)
 option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
 option(SEQUANT_EVAL_TESTS "OBSOLETE: use SEQUANT_TILEDARRAY and SEQUANT_BTAS" OFF)
 option(SEQUANT_BTAS "Enable BTAS eval backend" ${SEQUANT_EVAL_TESTS})
@@ -137,12 +141,17 @@ option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OF
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 # SEQUANT_ASSERT
-if (CMAKE_BUILD_TYPE STREQUAL Debug)
-    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
-else ()
+# N.B. the build-type partition matches TiledArray's TA_ASSERT_POLICY default
+#      (asserts are only disabled in the optimized-and-not-debuggable build
+#      types) so that SeQuant and the dependencies it builds from source agree
+#      out of the box; see FindOrFetch{TiledArray,BTAS}.cmake for the forwarding
+if (CMAKE_BUILD_TYPE STREQUAL Release OR
+    CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
     set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
+else ()
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
 endif()
-set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op")
+set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op; the default is IGNORE for Release and MinSizeRel builds, ABORT otherwise")
 set_property(
         CACHE SEQUANT_ASSERT_BEHAVIOR PROPERTY
         STRINGS THROW ABORT IGNORE)
@@ -270,6 +279,7 @@ add_library(SeQuant-bliss
 set_target_properties(SeQuant-bliss PROPERTIES EXPORT_NAME bliss)
 set_target_properties(SeQuant-bliss PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 add_library(SeQuant::bliss ALIAS SeQuant-bliss)
+target_set_optimization_flags(SeQuant-bliss)
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
 if (SEQUANT_USE_SYSTEM_BOOST_HASH)
     target_compile_definitions(SeQuant-bliss PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
@@ -449,15 +459,33 @@ set(SeQuant_mbpt_src
 
 # Eval framework sources (backend-agnostic)
 set(SeQuant_eval_src
+        SeQuant/core/eval/backend_array_ops.hpp
         SeQuant/core/eval/cache_manager.cpp
         SeQuant/core/eval/cache_manager.hpp
+        SeQuant/core/eval/cell_registry.hpp
+        SeQuant/core/eval/cell_table.hpp
+        SeQuant/core/eval/cell_table_builder.hpp
+        SeQuant/core/eval/dag_scope.hpp
         SeQuant/core/eval/eval.hpp
         SeQuant/core/eval/eval_expr.cpp
         SeQuant/core/eval/eval_expr.hpp
         SeQuant/core/eval/eval_node.hpp
         SeQuant/core/eval/eval_node_compare.hpp
+        SeQuant/core/eval/forest_combine.hpp
+        SeQuant/core/eval/legality.hpp
+        SeQuant/core/eval/lifetime_mask.hpp
+        SeQuant/core/eval/node_batch_annotation.hpp
+        SeQuant/core/eval/ordered_dump.hpp
+        SeQuant/core/eval/ordered_executor.hpp
+        SeQuant/core/eval/ordered_schedule.hpp
+        SeQuant/core/eval/peak_monitor.hpp
+        SeQuant/core/eval/peak_profile.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
+        SeQuant/core/eval/schedule_dump.hpp
+        SeQuant/core/eval/slicing_signature.hpp
+        SeQuant/core/eval/value_id.hpp
+        SeQuant/core/eval/value_node_map.hpp
         SeQuant/core/eval/fwd.hpp
 )
 
@@ -638,6 +666,8 @@ if (SEQUANT_HAS_TILEDARRAY)
     add_library(SeQuant::eval::ta ALIAS SeQuant-eval-ta)
     target_link_libraries(SeQuant-eval-ta PUBLIC SeQuant-eval SeQuant-symb tiledarray)
     target_compile_definitions(SeQuant-eval-ta PUBLIC SEQUANT_HAS_TILEDARRAY=1)
+    target_set_warning_flags(SeQuant-eval-ta)
+    target_set_optimization_flags(SeQuant-eval-ta)
 endif()
 
 ##########################

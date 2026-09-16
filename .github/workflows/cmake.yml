@@ -10,7 +10,14 @@ concurrency:
 
 jobs:
   build:
-    timeout-minutes: 60
+    # The sanitizer configuration is the long pole and it has outgrown 60
+    # minutes: its last green run spent 28.2 min building and 28.9 min in
+    # ctest, finishing at 59.9 min. 25 of those 28.9 test minutes are eight
+    # long-standing cases (sequant/unit/mbpt_cc alone is 10 min under ASan)
+    # plus the integration suite, so the cap is not a symptom of any one
+    # change and trimming tests further buys almost nothing. Give every
+    # configuration headroom instead of losing runs to a 6-second margin.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -67,14 +74,14 @@ jobs:
         -DSEQUANT_PYTHON=${{ !matrix.valgrind && !matrix.sanitize }}
         -DSEQUANT_ASSERT_BEHAVIOR=${{ matrix.valgrind && 'IGNORE' || 'THROW' }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: free up disk space on Ubuntu runner
       if: ${{ startswith(matrix.os, 'ubuntu') }}
       uses: jlumbroso/free-disk-space@main
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: '3.x'
 
@@ -123,7 +130,7 @@ jobs:
       run: echo "timestamp=$(date -u +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
 
     - name: Setup ccache cache files
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ${{github.workspace}}/build/.ccache
         key: ${{ matrix.config.name }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
@@ -132,7 +139,7 @@ jobs:
 
     - name: Configure CMake
       shell: bash
-      run: cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG -B $GITHUB_WORKSPACE/build -S $GITHUB_WORKSPACE
+      run: cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG -B $GITHUB_WORKSPACE/build -S $GITHUB_WORKSPACE -DSEQUANT_QUICK_BENCHMARKS=ON
 
 
     - name: Build
@@ -146,6 +153,12 @@ jobs:
       working-directory: ${{github.workspace}}/build
       shell: bash
       run: ctest --output-on-failure -R "^sequant"
+
+    - name: Ensure benchmarks not broken
+      if: ${{ !matrix.valgrind && !matrix.sanitize }}
+      working-directory: ${{github.workspace}}/build
+      shell: bash
+      run: ./benchmarks/sequant_benchmarks --benchmark_dry_run=true
 
     - name: Test (+ Valgrind)
       if: ${{ matrix.valgrind }}

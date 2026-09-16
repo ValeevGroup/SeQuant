@@ -9,6 +9,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -21,7 +22,7 @@
   if (!(tf)) {                                                              \
     std::ostringstream oss;                                                 \
     oss << "failed assert at line " << __LINE__ << " in eval_tapp example"; \
-    throw std::runtime_error(oss.str().c_str());                            \
+    throw sequant::Exception(oss.str());                                    \
   }
 
 ///

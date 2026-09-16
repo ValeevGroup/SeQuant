@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/math.hpp>
@@ -22,7 +23,7 @@ using namespace sequant;
     std::ostringstream oss;                                        \
     oss << "failed assert at line " << __LINE__                    \
         << " in closed-shell spin-traced coupled cluster example"; \
-    throw std::runtime_error(oss.str().c_str());                   \
+    throw sequant::Exception(oss.str());                           \
   }
 
 int main(int argc, char* argv[]) {
