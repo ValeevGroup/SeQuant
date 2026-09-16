@@ -21,7 +21,7 @@ namespace sequant::eval::dryrun {
 ///        evaluated.
 ///
 /// Unlike \c EvalExprTAPP (opaque \c int64_t hashes of index labels -- see
-/// \c backends/tapp/eval_expr.hpp), DryRun's annotation IS the plain literal
+/// \c backends/tapp/eval_expr.hpp), DryRun's annotation is the plain literal
 /// (canon-order) index list itself: \c Result::prod/sum/permute need each
 /// index's actual space/extent (via \c CostModel), not just its identity, to
 /// compute a modeled size.
@@ -60,10 +60,10 @@ static_assert(meta::can_evaluate<EvalNodeDryRun>);
 /// A tensor leaf's literal (canon-order) index list decides flat vs nested:
 /// \c make_dryrun_result builds a flat \c ResultDryRun if none of the leaf's
 /// indices are proto-indexed, or a nested \c ResultDryRunNested (a CSV/PNO
-/// amplitude or coefficient) if any are -- and threads that SAME literal list
+/// amplitude or coefficient) if any are -- and threads that same literal list
 /// through as the nested result's canon-order position map, so a later
 /// \c slice_mode()/\c mode_batches() call (which the batched runtime only
-/// ever issues against a LEAF's result) resolves its positional `mode`
+/// ever issues against a leaf's result) resolves its positional `mode`
 /// argument correctly regardless of the leaf's flat/nested-ness.
 ///
 struct DryRunLeafEvaluator {

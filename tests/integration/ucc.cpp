@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/context.hpp>
@@ -15,7 +16,6 @@
 #include <array>
 #include <cstddef>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -41,7 +41,7 @@ namespace {
     std::ostringstream oss;                                        \
     oss << "failed assert at line " << __LINE__ << " in function " \
         << __func__;                                               \
-    throw std::runtime_error(oss.str().c_str());                   \
+    throw sequant::Exception(oss.str());                           \
   }
 
 TimerPool<32> tpool;
@@ -51,7 +51,7 @@ using Hbar = CC::HbarExpansion;
 constexpr Hbar to_expansion(std::string_view s) {
   if (s == "bch") return Hbar::BCH;
   if (s == "bernoulli") return Hbar::Bernoulli;
-  throw std::runtime_error("ucc: expansion must be bch or bernoulli");
+  throw sequant::Exception("ucc: expansion must be bch or bernoulli");
 }
 
 /// pinned term count of one equation

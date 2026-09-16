@@ -426,16 +426,17 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     // exclusions live in braket_foldable()
     if (!braket_foldable(tensor)) continue;
 
-    // A half-tensor (empty bra or ket bundle) has no vertex for the empty
-    // bundle, so its recorded canonical bundle position is a value-initialized
-    // sentinel: the graph carries no orientation verdict for it. For Symm
-    // braket symmetry that is harmless -- both orientations denote the SAME
-    // value, so acting on the sentinel merely picks a spelling that the
-    // deterministic per-tensor refold below re-canonicalizes anyway. For
-    // Conjugate braket symmetry the two orientations denote CONJUGATE values
-    // (a swap must toggle the elementwise-conjugation marker), so acting on a
-    // sentinel would corrupt the value; defer to the content-based refold
-    // after the lexicographic relabel, which decides deterministically.
+    // A half-tensor (empty bra or ket bundle) IS reoriented like any other
+    // Conjugate tensor (T{a1;} <-> T^*{;a1}) -- but not from the graph: the
+    // empty bundle has no vertex, so its recorded canonical bundle position is
+    // a value-initialized sentinel that carries no orientation verdict. For
+    // Symm braket symmetry acting on the sentinel is harmless (both
+    // orientations denote the SAME value; the per-tensor refold below picks
+    // the spelling anyway). For Conjugate braket symmetry the two orientations
+    // denote CONJUGATE values (a swap must toggle the elementwise-conjugation
+    // marker), so acting on a sentinel would corrupt the value: the
+    // content-based refold after the lexicographic relabel decides the
+    // orientation of a half-tensor, deterministically.
     if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate &&
         (bra_rank(tensor) == 0 || ket_rank(tensor) == 0))
       continue;
@@ -714,11 +715,13 @@ TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
     const NamedIndexSet *named_indices,
     TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
-        named_index_compare) {
+        named_index_compare,
+    const tensor_network::NamedIndexColorMap *named_index_colors) {
   return canonicalize_slots(CanonicalizeSlotsOptions{
       .cardinal_tensor_labels = cardinal_tensor_labels,
       .named_indices = named_indices,
-      .named_index_compare = std::move(named_index_compare)});
+      .named_index_compare = std::move(named_index_compare),
+      .named_index_colors = named_index_colors});
 }
 
 TensorNetworkV3::SlotCanonicalizationMetadata
@@ -726,6 +729,8 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   const auto &cardinal_tensor_labels = options.cardinal_tensor_labels;
   const NamedIndexSet *named_indices_ptr = options.named_indices;
   auto named_index_compare = std::move(options.named_index_compare);
+  const tensor_network::NamedIndexColorMap *named_index_colors =
+      options.named_index_colors;
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
                              const auto &idxptr_slottype_2) -> bool {
@@ -790,6 +795,7 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   // one hash and one graph.
   Graph graph = create_graph(
       {.named_indices = &named_indices,
+       .named_index_colors = named_index_colors,
        .distinct_named_indices = false,
        .color_conjugation = true,
        .fold_conjugate_braket = options.fold_conjugate_braket,
@@ -1234,7 +1240,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            : *(options.named_indices);
 
   VertexPainter<TensorNetworkV3> colorizer(
-      named_indices, options.distinct_named_indices, options.color_conjugation);
+      named_indices, options.distinct_named_indices, options.named_index_colors,
+      options.color_conjugation);
 
   // results
   Graph graph;

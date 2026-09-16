@@ -2,6 +2,9 @@ cmake-build-debug
 cmake-build-release
 .idea
 
+# macOS Finder metadata
+.DS_Store
+
 # Created by https://www.gitignore.io/api/c++
 # Edit at https://www.gitignore.io/?templates=c++
 

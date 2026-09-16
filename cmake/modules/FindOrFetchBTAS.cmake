@@ -17,6 +17,20 @@ if (NOT TARGET BTAS::BTAS)
     set(_linalgpp_use_standard_linalg_kits TRUE)
   endif(DEFINED BLA_VENDOR)
 
+  # Seed BTAS's assertion policy from SeQuant's, so that the two agree by
+  # default (else BTAS_ASSERT throws whenever BUILD_TESTING=ON, regardless of
+  # NDEBUG); the THROW/ABORT/IGNORE values map one-to-one. Like any cached
+  # option this applies on the first configure of a build directory only: an
+  # explicit -DBTAS_ASSERT_POLICY=... is already in the cache and wins, and a
+  # later change of SEQUANT_ASSERT_BEHAVIOR does not re-seed it (set
+  # BTAS_ASSERT_POLICY explicitly, or use a fresh build directory).
+  # N.B. a BTAS older than BTAS_ASSERT_POLICY (ValeevGroup/BTAS#188; the tag
+  #      tracked above is newer) ignores this and only knows the boolean
+  #      BTAS_ASSERT_THROWS, which SeQuant does not touch
+  if (NOT DEFINED CACHE{BTAS_ASSERT_POLICY})
+    set(BTAS_ASSERT_POLICY BTAS_ASSERT_${SEQUANT_ASSERT_BEHAVIOR} CACHE STRING "Controls the behavior of BTAS_ASSERT (seeded from SEQUANT_ASSERT_BEHAVIOR)")
+  endif()
+
   include(FetchContent)
   FetchContent_Declare(
       BTAS
@@ -26,6 +40,7 @@ if (NOT TARGET BTAS::BTAS)
       SYSTEM
   )
   FetchContent_MakeAvailable(BTAS)
+
   FetchContent_GetProperties(BTAS
       SOURCE_DIR BTAS_SOURCE_DIR
       BINARY_DIR BTAS_BINARY_DIR

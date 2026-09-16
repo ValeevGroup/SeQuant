@@ -57,9 +57,11 @@ TEST_CASE("kramers_trace", "[spinor]") {
     // E = 1/4 g-bar^{a1 a2}_{i1 i2} t-bar^{i1 i2}_{a1 a2}  (Kramers-free)
     const auto E = ex<Constant>(rational{1, 4}) *
                    ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                              Symmetry::Antisymm) *
+                              Symmetry::Antisymm, Hermiticity::Hermitian,
+                              ColumnSymmetry::Symm) *
                    ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                              Symmetry::Antisymm);
+                              Symmetry::Antisymm, Hermiticity::NonHermitian,
+                              ColumnSymmetry::Symm);
 
     ExprPtr result;
     REQUIRE_NOTHROW(result = closed_shell_kramers_trace(E));
@@ -154,7 +156,8 @@ TEST_CASE("kramers_trace", "[spinor]") {
     auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
                         ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
     auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                        Symmetry::Antisymm);
+                        Symmetry::Antisymm, Hermiticity::Hermitian,
+                        ColumnSymmetry::Symm);
     auto driver = A * g;
 
     container::svector<ExprPtr> blocks;
@@ -195,9 +198,11 @@ TEST_CASE("kramers_trace", "[spinor]") {
     auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
                         ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
     auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"},
-                        Symmetry::Antisymm);
+                        Symmetry::Antisymm, Hermiticity::Hermitian,
+                        ColumnSymmetry::Symm);
     auto t = ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
-                        Symmetry::Antisymm);
+                        Symmetry::Antisymm, Hermiticity::NonHermitian,
+                        ColumnSymmetry::Symm);
     auto ppladder = ex<Constant>(rational{1, 2}) * A * g * t;
 
     container::svector<ExprPtr> blocks;
@@ -242,9 +247,11 @@ TEST_CASE("kramers_trace", "[spinor]") {
     auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
                         ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
     auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"i_3"},
-                        Symmetry::Nonsymm);
+                        Symmetry::Nonsymm, Hermiticity::Hermitian,
+                        ColumnSymmetry::Symm);
     auto t = ex<Tensor>(L"t", bra{L"a_3", L"i_3"}, ket{L"i_1", L"i_2"},
-                        Symmetry::Nonsymm);
+                        Symmetry::Nonsymm, Hermiticity::NonHermitian,
+                        ColumnSymmetry::Symm);
     auto ring = A * g * t;
 
     container::svector<ExprPtr> blocks;
@@ -275,11 +282,14 @@ TEST_CASE("kramers_trace", "[spinor]") {
     auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
                         ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
     auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
-                        Symmetry::Antisymm);
+                        Symmetry::Antisymm, Hermiticity::Hermitian,
+                        ColumnSymmetry::Symm);
     auto t1 = ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
-                         Symmetry::Antisymm);
+                         Symmetry::Antisymm, Hermiticity::NonHermitian,
+                         ColumnSymmetry::Symm);
     auto t2 = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_4"},
-                         Symmetry::Antisymm);
+                         Symmetry::Antisymm, Hermiticity::NonHermitian,
+                         ColumnSymmetry::Symm);
     auto quad = ex<Constant>(rational{1, 4}) * A * g * t1 * t2;
 
     container::svector<ExprPtr> blocks;
@@ -683,9 +693,11 @@ TEST_CASE("kramers_trace_internal_union", "[spinor][kramers][union]") {
     auto A = ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"},
                         ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
     auto g = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"},
-                        Symmetry::Antisymm);
+                        Symmetry::Antisymm, Hermiticity::Hermitian,
+                        ColumnSymmetry::Symm);
     auto t = ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
-                        Symmetry::Antisymm);
+                        Symmetry::Antisymm, Hermiticity::NonHermitian,
+                        ColumnSymmetry::Symm);
     auto ppladder = ex<Constant>(rational{1, 2}) * A * g * t;
 
     auto split = closed_shell_kramers_CC_trace(ppladder, /*expand_g=*/true);
@@ -720,9 +732,11 @@ TEST_CASE("kramers_trace_internal_union", "[spinor][kramers][union]") {
     // E = 1/4 g-bar^{a1 a2}_{i1 i2} t-bar^{i1 i2}_{a1 a2}
     const auto E = ex<Constant>(rational{1, 4}) *
                    ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                              Symmetry::Antisymm) *
+                              Symmetry::Antisymm, Hermiticity::Hermitian,
+                              ColumnSymmetry::Symm) *
                    ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                              Symmetry::Antisymm);
+                              Symmetry::Antisymm, Hermiticity::NonHermitian,
+                              ColumnSymmetry::Symm);
     auto r = closed_shell_kramers_trace(E, {}, /*fold_T=*/false,
                                         /*expand_g=*/true,
                                         /*drop_mixed_kramers_fock=*/false,
@@ -754,11 +768,14 @@ TEST_CASE("drop_mixed_kramers_fock_terms", "[spinor]") {
   };
   auto fock = [&kr](std::wstring_view b, Spin sb, std::wstring_view k,
                     Spin sk) {
-    return ex<Tensor>(L"f", sequant::bra{kr(b, sb)}, sequant::ket{kr(k, sk)});
+    return ex<Tensor>(L"f", sequant::bra{kr(b, sb)}, sequant::ket{kr(k, sk)},
+                      Symmetry::Nonsymm, Hermiticity::Hermitian,
+                      ColumnSymmetry::Symm);
   };
   auto g_pure = [&kr](std::wstring_view i, std::wstring_view a) {
     return ex<Tensor>(L"g", sequant::bra{kr(i, Spin::alpha)},
-                      sequant::ket{kr(a, Spin::alpha)});
+                      sequant::ket{kr(a, Spin::alpha)}, Symmetry::Nonsymm,
+                      Hermiticity::Hermitian, ColumnSymmetry::Symm);
   };
 
   SECTION("a mixed-Kramers f kills its term, a pure one survives") {
@@ -875,9 +892,12 @@ TEST_CASE("kramers_trace_csv_no_slot_duplication", "[spinor]") {
   }
 
   ExprPtr folded;
+  // the deprecated fold is exercised on purpose (the spin-flip pairing map)
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   REQUIRE_NOTHROW(folded = fold_conjugate_pairs_of_real_sum(
                       E_kr, CanonicalizeOptions::default_options(),
                       [](ExprPtr const& s) { return mbpt::swap_spin(s); }));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 }
 
 TEST_CASE("csv_df_commute", "[spinor][kramers]") {

@@ -378,6 +378,30 @@ TEST_CASE("expr", "[elements]") {
     REQUIRE_NOTHROW(ex->value<bool>());
     REQUIRE_THROWS_AS(std::make_shared<Constant>(-2)->value<unsigned int>(),
                       std::range_error);
+
+    {  // ordering is by value (real part, then imaginary part), not by hash
+       // (https://github.com/ValeevGroup/SeQuant/issues/614)
+      const std::vector<Constant> ascending{Constant(-3),
+                                            Constant(rational{-1, 2}),
+                                            Constant(0),
+                                            Constant(rational{1, 3}),
+                                            Constant(rational{1, 2}),
+                                            Constant(1),
+                                            Constant(2),
+                                            Constant(10),
+                                            Constant(Complex<rational>{10, 1})};
+      for (std::size_t i = 0; i < ascending.size(); ++i) {
+        REQUIRE(!(ascending[i] < ascending[i]));
+        for (std::size_t j = i + 1; j < ascending.size(); ++j) {
+          REQUIRE(ascending[i] < ascending[j]);
+          REQUIRE(!(ascending[j] < ascending[i]));
+        }
+      }
+      // the imaginary part breaks ties in the real part
+      REQUIRE(Constant(Complex<rational>{1, -1}) < Constant(1));
+      REQUIRE(Constant(1) < Constant(Complex<rational>{1, 1}));
+      REQUIRE(!(Constant(1) < Constant(Complex<rational>{1, 0})));
+    }
   }
 
   SECTION("power") {

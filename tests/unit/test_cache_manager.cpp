@@ -2,10 +2,13 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <range/v3/view/zip.hpp>
+#include <string>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -17,8 +20,7 @@ using manager_type = sequant::CacheManager<node_type>;
 
 // Helper to create distinct EvalNode keys from expressions
 node_type make_node(std::wstring_view expr_str) {
-  return sequant::binarize(sequant::deserialize<sequant::ResultExpr>(
-      expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
+  return sequant::binarize(sequant::deserialize<sequant::ResultExpr>(expr_str));
 }
 
 }  // namespace
@@ -77,10 +79,10 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     auto man = man_const;
     // filling data
     for (auto&& [k, v] : zip(decaying_keys, decaying_vals)) {
-      // NOTE: man.store() calls man.access() implicitly and
+      // NOTE: man.store_and_access() calls man.access() implicitly and
       // returns a ResultPtr
       // hence, a count of lifetime is lost right here
-      REQUIRE(man.store(k, v));
+      REQUIRE(man.store_and_access(k, v));
     }
 
     // now accessing decaying entries' data from the cache (c - 1) times
@@ -130,15 +132,15 @@ TEST_CASE("cache_manager", "[cache_manager]") {
       REQUIRE(man.entry_size_in_bytes(k) == 0);
     }
 
-    // After store(): alive, size matches the stored data.
+    // After store_and_access(): alive, size matches the stored data.
     for (auto&& [k, v] : zip(decaying_keys, decaying_vals)) {
-      REQUIRE(man.store(k, v));
+      REQUIRE(man.store_and_access(k, v));
       REQUIRE(man.alive(k));
       REQUIRE(man.entry_size_in_bytes(k) == v->size_in_bytes());
     }
 
-    // Drain each entry's remaining life. store() consumed one access already,
-    // so r - 1 accesses remain before data_p is moved out.
+    // Drain each entry's remaining life. store_and_access() consumed one access
+    // already, so r - 1 accesses remain before data_p is moved out.
     for (auto&& [k, r] : zip(decaying_keys, decaying_repeats)) {
       for (auto i = r - 1; i > 0; --i) {
         REQUIRE(man.alive(k));  // still holds data before this access
@@ -153,7 +155,7 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     // and confirm entries are not-alive again.
     man.reset();
     for (auto&& [k, v] : zip(decaying_keys, decaying_vals))
-      REQUIRE(man.store(k, v));
+      REQUIRE(man.store_and_access(k, v));
     for (auto&& k : decaying_keys) REQUIRE(man.alive(k));
     man.reset();
     for (auto&& k : decaying_keys) {
@@ -205,8 +207,8 @@ TEST_CASE("cache_manager", "[cache_manager]") {
     // Store different data for each
     auto val1 = eval_result(42);
     auto val2 = eval_result(99);
-    auto stored1 = cm.store(n1, val1);
-    auto stored2 = cm.store(n2, val2);
+    auto stored1 = cm.store_and_access(n1, val1);
+    auto stored2 = cm.store_and_access(n2, val2);
 
     REQUIRE(stored1);
     REQUIRE(stored2);
@@ -233,17 +235,17 @@ TEST_CASE("cache manager scope chain fall-through", "[cache_manager]") {
   auto const unregistered = make_node(L"R{a1;i1} = g{a1;i1}");
 
   // parent registers node X with use-count 3 (NP); child is empty with parent
-  // set. (Use-count 3, not 2: store() itself performs an implicit access --
-  // see the NOTE in the "Data Access" section above -- consuming one life
-  // before the fall-through access under test consumes a second, landing the
-  // post-fall-through life count at 1 for a clean assertion.)
+  // set. (Use-count 3, not 2: store_and_access() itself performs an implicit
+  // access -- see the NOTE in the "Data Access" section above -- consuming one
+  // life before the fall-through access under test consumes a second, landing
+  // the post-fall-through life count at 1 for a clean assertion.)
   std::unordered_map<node_type, size_t, hasher_t, comp_t> counts;
   counts.emplace(X, 3);
   auto parent = manager_type(std::move(counts));
   auto child = manager_type::empty();
   child.set_parent(&parent);
 
-  (void)parent.store(X, eval_result(42));
+  (void)parent.store_and_access(X, eval_result(42));
   REQUIRE(parent.alive(X));
 
   // child has no local entry for X, but access() falls through to the
@@ -252,7 +254,8 @@ TEST_CASE("cache manager scope chain fall-through", "[cache_manager]") {
   REQUIRE(found != nullptr);
   REQUIRE(found->get<int>() == 42);
   // ...and that fall-through read decayed the parent's NP entry (3 -> 2 from
-  // store()'s own implicit access, then 2 -> 1 from the fall-through read).
+  // store_and_access()'s own implicit access, then 2 -> 1 from the fall-through
+  // read).
   REQUIRE(parent.life(X) == 1);
 
   // absent-everywhere returns null; a null parent (default) is a no-op.
@@ -285,28 +288,28 @@ TEST_CASE("cache manager scope chain read-through survives local registration",
   // outer registers and stores X (the hoisted, loop-invariant node).
   std::unordered_map<node_type, size_t, hasher_t, comp_t> outer_counts;
   outer_counts.emplace(X, 3);  // 3, not 2: see the NOTE in the prior test --
-                               // store()'s implicit access (3 -> 2), the
-                               // walk-up access under test (2 -> 1), and the
-                               // post-reset ancestor-untouched check (1 -> 0)
-                               // each consume one life.
+                               // store_and_access()'s implicit access (3 -> 2),
+                               // the walk-up access under test (2 -> 1), and
+                               // the post-reset ancestor-untouched check (1 ->
+                               // 0) each consume one life.
   auto outer = manager_type(std::move(outer_counts));
 
   // inner ALSO registers X locally (e.g. its own per-iteration scan sees it
-  // recur too) but never calls inner.store(X, ...) -- the value is meant to
-  // come from the ancestor. inner separately registers and stores Y, a node
-  // local to this scope only, to confirm reset() clears local data.
+  // recur too) but never calls inner.store_and_access(X, ...) -- the value is
+  // meant to come from the ancestor. inner separately registers and stores Y, a
+  // node local to this scope only, to confirm reset() clears local data.
   std::unordered_map<node_type, size_t, hasher_t, comp_t> inner_counts;
   inner_counts.emplace(X, 5);
   inner_counts.emplace(Y, 2);
   auto inner = manager_type(std::move(inner_counts));
   inner.set_parent(&outer);
 
-  (void)outer.store(X, eval_result(42));
+  (void)outer.store_and_access(X, eval_result(42));
   REQUIRE(outer.alive(X));
   REQUIRE(inner.exists(X));       // registered locally...
   REQUIRE_FALSE(inner.alive(X));  // ...but never stored locally.
 
-  (void)inner.store(Y, eval_result(7));
+  (void)inner.store_and_access(Y, eval_result(7));
   REQUIRE(inner.alive(Y));
 
   // Local miss on X (registered but no local data) must still walk up to the
@@ -353,9 +356,9 @@ TEST_CASE("cache manager scope chain per-loop storage survives inner resets",
   outer_counts.emplace(X, 3);
   auto outer = manager_type(std::move(outer_counts));
 
-  // 3, not 2: store()'s own implicit access (3 -> 2) and inner's fall-through
-  // walk-up access under test (2 -> 1) each consume one life, landing at 1
-  // for a clean post-walk-up alive() check.
+  // 3, not 2: store_and_access()'s own implicit access (3 -> 2) and inner's
+  // fall-through walk-up access under test (2 -> 1) each consume one life,
+  // landing at 1 for a clean post-walk-up alive() check.
   std::unordered_map<node_type, size_t, hasher_t, comp_t> mid_counts;
   mid_counts.emplace(X, 3);
   auto mid = manager_type(std::move(mid_counts));
@@ -367,7 +370,7 @@ TEST_CASE("cache manager scope chain per-loop storage survives inner resets",
   auto inner = manager_type(std::move(inner_counts));
   inner.set_parent(&mid);
 
-  (void)mid.store(X, eval_result(42));
+  (void)mid.store_and_access(X, eval_result(42));
   REQUIRE(mid.alive(X));
 
   // inner has no local data for X (only a local registration); access()
@@ -379,7 +382,7 @@ TEST_CASE("cache manager scope chain per-loop storage survives inner resets",
 
   // a distinct key Y, local to inner only, to confirm inner.reset() clears
   // its own data while leaving ancestor levels untouched.
-  (void)inner.store(Y, eval_result(7));
+  (void)inner.store_and_access(Y, eval_result(7));
   REQUIRE(inner.alive(Y));
 
   // inner.reset() (the innermost loop's per-iteration reset) must clear only
@@ -424,7 +427,7 @@ TEST_CASE("cache manager access_at surfaces the lifetime scope hop distance",
   auto inner = manager_type::empty();
   inner.set_parent(&mid);
 
-  (void)outer.store(X, eval_result(42));
+  (void)outer.store_and_access(X, eval_result(42));
   REQUIRE(outer.alive(X));
 
   // outer: local hit, zero hops.
@@ -471,7 +474,7 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
   // A persistent entry is never drained: arbitrarily many accesses all return
   // the stored data (unlike an NP entry, whose data is released after its
   // max_life-th access).
-  man.store(p, eval_result(20));
+  (void)man.store_and_access(p, eval_result(20));
   for (int i = 0; i < 10; ++i) {
     auto r = man.access(p);
     REQUIRE(r);
@@ -481,13 +484,95 @@ TEST_CASE("cache_manager_persistent", "[cache_manager]") {
 
   // reset() clears the non-persistent entry but keeps the persistent one, so
   // the latter's data survives across evaluations (e.g. CC iterations).
-  man.store(np, eval_result(10));
+  (void)man.store_and_access(np, eval_result(10));
   man.reset();
   REQUIRE(man.access(np) == nullptr);  // NP cleared by reset
   auto rp = man.access(p);             // P survives reset
   REQUIRE(rp);
   REQUIRE(rp->get<int>() == 20);
   REQUIRE(man.alive(p));
+}
+
+// Task 9 regression tripwire: after the combined single-DAG evaluation
+// (every value built exactly once per evaluation), a NON-persistent cache
+// entry re-store_and_access()'d with no intervening reset() means a duplicate
+// producer survived -- a bug (see entry::store() / stored_this_eval_ in
+// cache_manager.hpp).
+//
+// Exercised here as BEHAVIOR through store_and_access()/reset(), with
+// strictness set directly on the CacheManager instance via
+// set_strict_fill_once() -- the per-instance knob cache_manager.hpp added to
+// mirror CellRegistryHooks::strict_fill_once (see cell_registry.hpp). This is
+// deterministic and order-independent: unlike the process-wide env gate
+// eval::strict_fill_once() (which latches its getenv lookup on the first
+// call anywhere in the process -- see the caveat in test_cell_registry.cpp),
+// a per-instance setter has no cross-test or cross-instance effect. Under
+// strict mode a duplicate store_and_access() with no intervening reset() throws
+// sequant::Exception unconditionally, regardless of SEQUANT_ASSERT_BEHAVIOR
+// (the SEQUANT_ASSERT alone is a no-op unless SEQUANT_ASSERT_ENABLED is
+// #defined, so it alone is not observable in this project's default
+// Release/Debug configs).
+TEST_CASE("cache_manager restore tripwire", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const np = make_node(L"R{a1;i1} = f{a1;i1}");  // non-persistent
+  auto const p = make_node(L"R{a1;i1} = g{a1;i1}");   // persistent
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> counts;
+  counts.emplace(np, 3);  // enough life to survive several stores/accesses
+  counts.emplace(p, 1);
+
+  comp_t eq;
+  auto is_persistent = [&p, &eq](node_type const& k) { return eq(k, p); };
+  auto man = manager_type(std::move(counts), is_persistent);
+  man.set_strict_fill_once(true);
+
+  SECTION("non-persistent: a re-store with an intervening reset() is fine") {
+    REQUIRE_NOTHROW(man.store_and_access(np, eval_result(1)));
+    // reset() clears the tripwire -- a subsequent store_and_access() is the
+    // legitimate (non-duplicate) case, even under strict fill-once.
+    man.reset();
+    REQUIRE_NOTHROW(man.store_and_access(np, eval_result(2)));
+  }
+
+  SECTION(
+      "non-persistent: a re-store with NO intervening reset() throws under "
+      "strict fill-once") {
+    REQUIRE_NOTHROW(man.store_and_access(np, eval_result(1)));
+    REQUIRE_THROWS(
+        man.store_and_access(np, eval_result(2)));  // 2nd, no reset(): flagged
+  }
+
+  SECTION(
+      "persistent entries legitimately re-store with no reset(), even under "
+      "strict fill-once") {
+    // A persistent entry legitimately re-stores across batch replays with no
+    // intervening reset() -- this must never throw (the tripwire is not even
+    // consulted for persistent entries).
+    REQUIRE_NOTHROW(man.store_and_access(p, eval_result(10)));
+    REQUIRE_NOTHROW(
+        man.store_and_access(p, eval_result(20)));  // re-store, no reset()
+    REQUIRE_NOTHROW(man.store_and_access(p, eval_result(30)));
+  }
+
+  SECTION("assert-enabled + THROW: re-store without reset() throws") {
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Throw) {
+      // Default build config (Release: IGNORE: no-op; Debug: ABORT: not
+      // catchable) -- nothing to observe via REQUIRE_THROWS here. The
+      // strict-fill-once sections above already exercise the guard's logic
+      // deterministically across build configs.
+      return;
+    }
+    (void)man.store_and_access(
+        np,
+        eval_result(1));  // 1st store since construction/reset: OK
+    REQUIRE_THROWS(
+        man.store_and_access(np, eval_result(2)));  // 2nd, no reset(): flagged
+  }
 }
 
 TEST_CASE("cache_manager_volatility_frontier", "[cache_manager]") {
@@ -559,16 +644,24 @@ TEST_CASE("cache_manager_footprint_gate", "[cache_manager]") {
 TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
   // R = f * g * t : the NV product (f*g) = I{a1;a3} feeds the volatile root, so
   // by default it is cached as a persistent (cross-iteration) entry. a3 is free
-  // in the frontier's own result but contracted away at the root. The veto now
-  // reads the frontier's *own* batched_here annotation, not merely whether some
-  // is_batchable_index is free on its result: only a Contracted entry that is
-  // batchable and free on the node's result means the runtime slices the
-  // frontier over it (the optimizer prices it sliced), so caching it whole
-  // would be wrong -- veto it. An External entry on the same mode marks the
-  // frontier an external -- like gC, invariant to a batch mode actually sliced
-  // elsewhere -- and must NOT veto: it stays cached and persistent so it can
-  // become a hoist target (Task 3). No annotation at all (never_batchable's
-  // default) must also leave it cached and persistent.
+  // in the frontier's own result but contracted away at the root. The
+  // batch-variant veto (cache_manager.hpp) refuses a node from the run-scope
+  // cache iff its cross-occurrence lifetime mask (stamp_lifetime_masks) is
+  // non-empty -- some External batch mode slices it in every occurrence, so its
+  // value is batch-variant.
+  //
+  // An External entry on a mode that is FREE on the node's OWN result is folded
+  // into that node's own sliced_modes by stamp_lifetime_masks (a node's own
+  // External stamp on its own slot IS part of its mask; see lifetime_mask.hpp),
+  // so the mask is non-empty and the veto fires: the frontier is a
+  // *consistently-sliced* external node (its value differs per external block),
+  // which eval.hpp places/slices at its external loop as a hoist target -- NOT
+  // a whole run-scope cache entry. Only a genuinely block-agnostic gC -- whose
+  // External mode is DEMOTED to empty by the cross-occurrence meet across
+  // proto-incompatible occurrences -- stays all-full and cacheable at run
+  // scope; a single-occurrence node cannot reproduce that demotion. No
+  // annotation at all leaves the frontier all-full, hence cached and
+  // persistent.
   using sequant::BatchModeType;
 
   auto is_volatile = [](node_type const& n) {
@@ -588,49 +681,168 @@ TEST_CASE("cache_manager_batch_axis_veto", "[cache_manager]") {
     return a3;
   };
 
-  // baseline: no batched_here annotation -> the veto is inert (matches the
-  // never_batchable default); the NV/V frontier is cached and persistent.
+  // baseline: no node_slice_mask annotation -> all-full mask, veto inert; the
+  // NV/V frontier is cached and persistent.
   {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
-    auto man = sequant::cache_manager(
-        std::array{node}, is_volatile, /*min_repeats=*/2,
-        sequant::zero_footprint{}, /*max_footprint=*/0.,
-        [&](sequant::Index const& ix) { return ix == *a3; });
+    auto man = sequant::cache_manager(std::array{node}, is_volatile,
+                                      /*min_repeats=*/2);
     REQUIRE(man.exists(node.left()));
     REQUIRE(man.persistent(node.left()));
   }
 
-  // Contracted + batchable + free on the frontier's own result -> vetoed: the
-  // frontier is not registered in the cache map at all, and reports not
-  // persistent.
+  // External + free on the frontier's own result, single occurrence -> the mode
+  // survives the cross-occurrence meet and lands in the frontier's own
+  // sliced_modes, so mask_all_full() is false and the veto fires: this is a
+  // consistently-sliced external node (a hoist target sliced at its external
+  // loop, not a whole run-scope entry), so it is VETOED from the run-scope
+  // cache
+  // -- not registered in the cache map, not persistent.
   {
     auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
     auto const a3 = find_a3(node);
     REQUIRE(a3);
-    node.left()->set_batched_here({{*a3, BatchModeType::Contracted}});
-    auto man = sequant::cache_manager(
-        std::array{node}, is_volatile, /*min_repeats=*/2,
-        sequant::zero_footprint{}, /*max_footprint=*/0.,
-        [&](sequant::Index const& ix) { return ix == *a3; });
+    node.left()->set_node_slice_mask({{*a3, BatchModeType::External}});
+    node.left()->set_batch_loops_opened_here({{*a3, BatchModeType::External}});
+    auto man = sequant::cache_manager(std::array{node}, is_volatile,
+                                      /*min_repeats=*/2);
     REQUIRE_FALSE(man.exists(node.left()));
     REQUIRE_FALSE(man.persistent(node.left()));
   }
+}
 
-  // External + batchable + free on the frontier's own result (gC-like: a
-  // external index the node is invariant under, not the mode actually
-  // sliced) -> NOT vetoed: stays cached and persistent.
-  {
-    auto node = make_node(L"R{a1;i1} = f{a1;a2} * g{a2;a3} * t{a3;i1}");
-    auto const a3 = find_a3(node);
-    REQUIRE(a3);
-    node.left()->set_batched_here({{*a3, BatchModeType::External}});
-    auto man = sequant::cache_manager(
-        std::array{node}, is_volatile, /*min_repeats=*/2,
-        sequant::zero_footprint{}, /*max_footprint=*/0.,
-        [&](sequant::Index const& ix) { return ix == *a3; });
-    REQUIRE(man.exists(node.left()));
-    REQUIRE(man.persistent(node.left()));
-  }
+TEST_CASE("cache_manager residency", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const k0 = make_node(L"R{a1;i1} = f{a1;i1}");
+  auto const k1 = make_node(L"R{a1;i1} = g{a1;i1}");
+
+  // Build a manager with two keys
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> key_count_pairs;
+  key_count_pairs.emplace(k0, 2);
+  key_count_pairs.emplace(k1, 2);
+  auto man = manager_type(std::move(key_count_pairs));
+
+  // 1. Before any store_and_access(), current_residency() == 0
+  REQUIRE(man.current_residency() == 0);
+
+  // 2. After storing data into two alive keys k0, k1,
+  //    current_residency() == entry_size_in_bytes(k0) + entry_size_in_bytes(k1)
+  auto val0 = eval_result(42);
+  auto val1 = eval_result(99);
+  (void)man.store_and_access(k0, val0);
+  (void)man.store_and_access(k1, val1);
+
+  size_t expected_size =
+      man.entry_size_in_bytes(k0) + man.entry_size_in_bytes(k1);
+  REQUIRE(man.current_residency() == expected_size);
+
+  // 3. current_residency() drops to 0 once both entries are drained
+  //    (their life reaches 0 and data is released).
+  // store_and_access() itself performs one implicit access, so one access
+  // remains.
+  REQUIRE(man.access(k0));
+  REQUIRE(man.access(k1));
+  // Both should now be drained
+  REQUIRE_FALSE(man.alive(k0));
+  REQUIRE_FALSE(man.alive(k1));
+  REQUIRE(man.current_residency() == 0);
+
+  // 4. For a standalone manager (no parent),
+  //    chain_residency() == current_residency()
+  // First, populate the cache again
+  man.reset();
+  auto val0_2 = eval_result(111);
+  auto val1_2 = eval_result(222);
+  (void)man.store_and_access(k0, val0_2);
+  (void)man.store_and_access(k1, val1_2);
+
+  REQUIRE(man.chain_residency() == man.current_residency());
+
+  // Drain and confirm chain_residency() also drops to 0
+  REQUIRE(man.access(k0));
+  REQUIRE(man.access(k1));
+  REQUIRE(man.chain_residency() == 0);
+}
+
+// chain_holds(): the peak trace's de-alias check. It reports, by POINTER
+// IDENTITY across the whole scope chain, whether a buffer is already held by
+// some cache -- so the per-op hwmark counts that buffer once (via the cache
+// residency) instead of also adding it as an operand. A DISTINCT buffer, which
+// is what a sliced / permuted / phase-shifted read of a cached value produces,
+// is not held and must be counted. This is the I1 fix: alive() alone is
+// local-only and would miss an ancestor-resident operand read full.
+TEST_CASE("cache_manager chain_holds pointer identity", "[cache_manager]") {
+  using hasher_t = sequant::TreeNodeHasher<node_type>;
+  using comp_t = sequant::TreeNodeEqualityComparator<node_type>;
+  auto eval_result = [](int x) {
+    return sequant::eval_result<sequant::ResultScalar<int>>(x);
+  };
+
+  auto const X = make_node(L"R{a1;i1} = f{a1;i1}");  // buffer lives at parent
+  auto const Y = make_node(L"R{a1;i1} = g{a1;i1}");  // buffer lives at child
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> parent_counts;
+  parent_counts.emplace(
+      X, 2);  // store_and_access()'s implicit access -> life 1, alive
+  auto parent = manager_type(std::move(parent_counts));
+
+  std::unordered_map<node_type, size_t, hasher_t, comp_t> child_counts;
+  child_counts.emplace(Y, 2);
+  auto child = manager_type(std::move(child_counts));
+  child.set_parent(&parent);
+
+  auto vX = eval_result(42);     // the buffer the parent will hold
+  auto vY = eval_result(7);      // the buffer the child will hold
+  auto other = eval_result(99);  // a distinct buffer held by nobody
+  (void)parent.store_and_access(X, vX);
+  (void)child.store_and_access(Y, vY);
+
+  // Held up the chain (parent) and locally (child): pointer identity hits, so
+  // an operand aliasing either is skipped (already in chain_residency()).
+  REQUIRE(child.chain_holds(vX));
+  REQUIRE(child.chain_holds(vY));
+  // A distinct buffer is NOT held -- the sliced/permuted-read case that must be
+  // counted, not skipped. (Same integer VALUE, different buffer.)
+  REQUIRE_FALSE(child.chain_holds(other));
+  REQUIRE_FALSE(child.chain_holds(eval_result(42)));
+  // The chain only looks UP: the parent does not see the child's entry.
+  REQUIRE_FALSE(parent.chain_holds(vY));
+  // Null is never held.
+  REQUIRE_FALSE(child.chain_holds(nullptr));
+
+  // Once the parent's entry is drained, its buffer is no longer held anywhere
+  // on the chain.
+  REQUIRE(parent.access(X) != nullptr);  // life 1 -> 0, released
+  REQUIRE_FALSE(parent.alive(X));
+  REQUIRE_FALSE(child.chain_holds(vX));
+}
+
+TEST_CASE("persistent value store survives reset and is local to the handle",
+          "[cache_manager][persistent_store]") {
+  auto cache = manager_type::empty();
+  auto& store = cache.persistent_values();
+  CHECK(store.size() == 0);
+  CHECK_FALSE(store.holds(42));
+  auto r = sequant::eval_result<sequant::ResultScalar<double>>(3.0);
+  store.put(42, r);
+  CHECK(store.holds(42));
+  CHECK(store.get(42) == r);
+  CHECK(store.bytes() == r->size_in_bytes());
+  cache.reset();
+  CHECK(store.holds(42));
+  auto child = manager_type::empty();
+  child.set_parent(&cache);
+  CHECK_FALSE(child.persistent_values().holds(42));  // not chained
+  store.erase(42);
+  CHECK_FALSE(store.holds(42));
+  cache.clear_persistent_values();
+  CHECK(store.size() == 0);
 }

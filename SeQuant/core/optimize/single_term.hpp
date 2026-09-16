@@ -24,7 +24,7 @@ namespace detail {
 
 ///
 /// \tparam Metric Objective function (ObjectiveFunction::DenseFLOPs or
-///         ObjectiveFunction::DenseSize or ObjectiveFunction::DensePeakSize).
+///         ObjectiveFunction::DenseSize or ObjectiveFunction::DenseSpaceTime).
 /// \tparam IdxToSz Invocable type mapping an Index to its extent.
 /// \param network A TensorNetwork object.
 /// \param idxsz An invocable on Index, that maps Index to its dimension.
@@ -39,21 +39,21 @@ namespace detail {
 ///        deemed equivalent by the subnet-CSE canonicalization also agree on
 ///        volatility (the CSE path stores one cost per canonical subnet).
 ///        footprint_weight applies to DenseFLOPs only; volatile_weight applies
-///        to DenseFLOPs AND the peak objectives (primary mode for the
+///        to DenseFLOPs and the peak objectives (primary mode for the
 ///        time-first ones, tie-break for the space-first ones); roofline
 ///        applies to the peak objectives only; peak_flops_tolerance applies to
-///        DensePeakSize only (DensePeakSizeBatched's final selection is instead
-///        threshold-gated by peak_threshold, which under the TIME-first batched
-///        objective gates only external-mode emission, not root selection).
-///        All batching config lives on \p cost (\ref CostParams):
+///        DenseSpaceTime only (DenseSpaceTimeBatched's final selection is
+///        instead threshold-gated by peak_threshold, which under the time-first
+///        batched objective gates only external-mode emission, not root
+///        selection). All batching config lives on \p cost (\ref CostParams):
 ///        is_batchable_contracted_index / is_batchable_external_index mark an
 ///        index as batchable (sliced) in the contracted / external role,
 ///        batch_target_size is the per-index per-batch slice-size upper bound,
 ///        inner_pow is the optional k-aware CSV/PNO composite extent, and
 ///        batch_persistent_only restricts batching to persistent subnetworks --
-///        all ObjectiveFunction::DensePeakSizeBatched only.
-/// \param out_axes When non-null AND \p Metric ==
-///        ObjectiveFunction::DensePeakSizeBatched, filled with the per-node
+///        all ObjectiveFunction::DenseSpaceTimeBatched only.
+/// \param out_axes When non-null and \p Metric ==
+///        ObjectiveFunction::DenseSpaceTimeBatched, filled with the per-node
 ///        sliced-sets of the returned sequence's contraction (\c -1) nodes, in
 ///        the same left-first post-order the sequence itself was built in
 ///        (see \ref opt::detail::run_single_term_opt_axes). Cleared (left
@@ -79,7 +79,7 @@ EvalSequence single_term_opt(
   double const accumulation_factor = cost.accumulation_factor;
   RooflineParams const& roofline = cost.roofline;
   bool const prune_outer_products = cost.prune_outer_products;
-  // Batching config now lives on CostParams (was loose positional args).
+  // Batching config travels on CostParams.
   auto const& is_batchable_contracted_index =
       cost.is_batchable_contracted_index;
   auto const& batch_target_size = cost.batch_target_size;
@@ -100,8 +100,9 @@ EvalSequence single_term_opt(
   double nr = 1.0;
   if constexpr (Metric == ObjectiveFunction::DenseSpaceTime ||
                 Metric == ObjectiveFunction::DenseTimeSpace) {
-    SEQUANT_ASSERT(!subnet_cse &&
-                   "subnet_cse not supported with DenseSpaceTime (Phase 1)");
+    SEQUANT_ASSERT(
+        !subnet_cse &&
+        "subnet_cse not supported with DenseSpaceTime / DenseTimeSpace");
     SEQUANT_ASSERT(!out_axes &&
                    "out_axes only supported with the batched peak objectives");
     (void)is_batchable_contracted_index;
@@ -124,9 +125,8 @@ EvalSequence single_term_opt(
     return run_single_term_opt(model, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseSpaceTimeBatched ||
                        Metric == ObjectiveFunction::DenseTimeSpaceBatched) {
-    SEQUANT_ASSERT(
-        !subnet_cse &&
-        "subnet_cse not supported with DensePeakSizeBatched (Phase 2)");
+    SEQUANT_ASSERT(!subnet_cse &&
+                   "subnet_cse not supported with the batched objectives");
     (void)footprint_weight;  // peak objectives use the roofline tie-break
     // is_volatile_leaf gates batching; volatile_weight / roofline feed the
     // secondary tie-break among equal-peak schedules.
@@ -146,7 +146,6 @@ EvalSequence single_term_opt(
     model.perf_first = (Metric == ObjectiveFunction::DenseTimeSpaceBatched);
     model.prune_outer_products = prune_outer_products;
     model.batch_spectator_indices = cost.batch_spectator_indices;
-    model.order_aware_recompute = cost.order_aware_recompute;
     // Building blocks: the contracted-role predicate feeds the DP's contracted
     // filter; the external-role predicate feeds the external filter. Each
     // defaults to decline (returns false); there is no cross-role fallback, so
@@ -163,7 +162,7 @@ EvalSequence single_term_opt(
     return run_single_term_opt(model, network, tidxs);
   } else if constexpr (Metric == ObjectiveFunction::DenseFLOPs) {
     SEQUANT_ASSERT(!out_axes &&
-                   "out_axes only supported with DensePeakSizeBatched");
+                   "out_axes only supported with DenseSpaceTimeBatched");
     if (is_volatile_leaf && volatile_weight > 1.0) {
       size_t i = 0;
       for (auto&& t : network.tensors()) {
@@ -191,7 +190,7 @@ EvalSequence single_term_opt(
                   "DenseSpaceTimeBatched, DenseTimeSpace, and "
                   "DenseTimeSpaceBatched ObjectiveFunction supported.");
     SEQUANT_ASSERT(!out_axes &&
-                   "out_axes only supported with DensePeakSizeBatched");
+                   "out_axes only supported with DenseSpaceTimeBatched");
     (void)is_batchable_contracted_index;
     (void)batch_target_size;
     (void)batch_persistent_only;
@@ -211,7 +210,7 @@ EvalSequence single_term_opt(
 
 ///
 /// \tparam Metric Objective function (DenseFLOPs by default; DenseSize
-///         minimizes total operand storage rather than flops; DensePeakSize
+///         minimizes total operand storage rather than flops; DenseSpaceTime
 ///         minimizes peak memory over the evaluation schedule -- see
 ///         ObjectiveFunction).
 /// \param prod  Product to be optimized.
@@ -223,16 +222,15 @@ EvalSequence single_term_opt(
 ///       verbatim to the detail \ref single_term_opt overload; see it for
 ///       their semantics. All batching config (contracted/external role
 ///       predicates, \c batch_target_size, \c inner_pow, \c
-///       batch_persistent_only) now lives on \ref CostParams.
-/// \param out_axes When non-null AND \p Metric ==
-///        ObjectiveFunction::DensePeakSizeBatched, filled with the per-node
+///       batch_persistent_only) lives on \ref CostParams.
+/// \param out_axes When non-null and \p Metric ==
+///        ObjectiveFunction::DenseSpaceTimeBatched, filled with the per-node
 ///        sliced-sets of the returned Product tree's contraction nodes, in
 ///        the same left-first post-order the nested Product below is built
 ///        in (so \c (*out_axes)[j] annotates the j-th Product node formed by
 ///        the \c -1-handling arm of the loop below). Left empty if \p prod
-///        has fewer than 2 tensor factors (no contraction) or if \p Metric
-///        is not a batched objective; a two-tensor product IS priced and
-///        annotated (its single contraction may need to batch).
+///        has fewer than 3 factors (no factorization is performed) or if
+///        \p Metric != DenseSpaceTimeBatched.
 ///
 template <ObjectiveFunction Metric = ObjectiveFunction::DenseFLOPs,
           has_index_extent IdxToSz>
@@ -244,22 +242,25 @@ ExprPtr single_term_opt(
   using ranges::views::reverse;
 
   if (out_axes) out_axes->clear();
-  auto const tensors =
-      prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  // Fewer than 3 factors: nothing to factorize -- except that a two-tensor
-  // product still has ONE contraction to price and annotate when per-node
-  // batch axes are requested (batched metric + out_axes). Without this a
-  // two-factor product contracting a batchable index (e.g. the DF driver
-  // (Σ g·C)·(Σ g·C) over the aux index, whose Sum factors the mixed-product
-  // path stands placeholders in for) would never batch, however far over the
-  // peak budget it is.
-  constexpr bool batched_metric =
-      Metric == ObjectiveFunction::DenseSpaceTimeBatched ||
-      Metric == ObjectiveFunction::DenseTimeSpaceBatched;
-  bool const annotate_pair = batched_metric && out_axes && tensors.size() == 2;
-  if (prod.factors().size() < 3 && !annotate_pair)
+  if (prod.factors().size() < 3) {
+    // No DP needed for < 3 factors, but out_axes must still carry one entry per
+    // contraction node (= #tensor factors - 1), or the caller's concatenated
+    // node_batch_axes ends up one short of what binarize emits (binarize folds
+    // the tensor factors into #tensors-1 contraction nodes) and trips its
+    // node_counter == node_batch_axes.size() assertion. This mirrors
+    // run_single_term_opt_axes's nt==1 (empty) / nt==2 (one empty entry) cases;
+    // a scalar*tensor product has one tensor -> zero contraction nodes.
+    if (out_axes) {
+      auto const nt = static_cast<std::size_t>(ranges::count_if(
+          prod.factors(),
+          [](ExprPtr const& e) { return e->template is<Tensor>(); }));
+      if (nt >= 2) out_axes->assign(nt - 1, NodeBatchAnnotation{});
+    }
     return ex<Product>(Product{prod.scalar(), prod.factors().begin(),
                                prod.factors().end(), Product::Flatten::No});
+  }
+  auto const tensors =
+      prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
   auto seq = detail::single_term_opt<Metric>(TensorNetwork{tensors},
                                              std::forward<IdxToSz>(idxsz),
                                              subnet_cse, cost, out_axes);

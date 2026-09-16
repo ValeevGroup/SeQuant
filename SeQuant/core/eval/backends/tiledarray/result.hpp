@@ -3,6 +3,9 @@
 
 #ifdef SEQUANT_HAS_TILEDARRAY
 
+#include <sstream>
+
+#include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -13,6 +16,9 @@
 #include <range/v3/view/iota.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
@@ -32,6 +38,56 @@ inline bool warn_tot_sum_inner() {
       std::getenv("SEQUANT_EVAL_WARN_TOT_SUM_INNER") != nullptr;
   return on;
 }
+
+// Instrumentation (SEQUANT_SYNC_STATS, analysis-only): count gop.fence() calls
+// so the ordered-executor's synchronization overhead can be localized.
+inline std::atomic<std::size_t>& fence_counter() {
+  static std::atomic<std::size_t> c{0};
+  return c;
+}
+inline void note_fence() {
+  fence_counter().fetch_add(1, std::memory_order_relaxed);
+}
+inline std::atomic<std::size_t>& wait_counter() {
+  static std::atomic<std::size_t> c{0};
+  return c;
+}
+inline void note_wait() {
+  wait_counter().fetch_add(1, std::memory_order_relaxed);
+}
+inline std::atomic<std::size_t>& slice_counter() {
+  static std::atomic<std::size_t> c{0};
+  return c;
+}
+inline void note_slice() {
+  slice_counter().fetch_add(1, std::memory_order_relaxed);
+}
+inline std::atomic<long long>& slice_ns() {
+  static std::atomic<long long> c{0};
+  return c;
+}
+struct FenceReporter {
+  ~FenceReporter() {
+    if (std::getenv("SEQUANT_SYNC_STATS"))
+      std::cerr << "TOTAL gop.fence() calls = " << fence_counter().load()
+                << " ; wait_for_lazy_cleanup calls = " << wait_counter().load()
+                << " ; slice_mode calls = " << slice_counter().load()
+                << " ; slice_mode total = " << (slice_ns().load() / 1e9) << " s"
+                << "\n";
+  }
+};
+inline FenceReporter fence_reporter_{};
+
+// Wire PhaseTimer's boundary barrier to a TA world fence so per-region phase
+// timers cannot misattribute async (deferred) work across regions. Runs only
+// under SEQUANT_UT_PHASE (PhaseTimer::Scope calls barrier() only when enabled).
+inline const bool phase_fence_installed_ = [] {
+  ::sequant::eval::PhaseTimer::fence_hook() = [] {
+    TA::get_default_world().gop.fence();
+    ::sequant::detail::note_fence();
+  };
+  return true;
+}();
 
 /// Inner-tensor mode count of a tensor-of-tensor DistArray (0 for a regular,
 /// non-nested array). The outer trange carries no inner information, so the
@@ -145,6 +201,7 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   result(lannot) = nf * result(lannot);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  ::sequant::detail::note_wait();
 
   return result;
 }
@@ -216,12 +273,40 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
   result(lannot) = nf * result(lannot);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  ::sequant::detail::note_wait();
   return result;
 }
 
 template <typename... Args>
 inline void log_ta(Args const&... args) noexcept {
   log_result("[TA] ", args...);
+}
+
+/// Batch-step data-movement record, emitted at eval log level > 0 (the same
+/// gate as the executor's `Eval | ...` records):
+///
+///   Batch | <Slice|Scatter|Accumulate> | <time>ns | bytes=<B> | <annot>
+///
+/// Slice: an operand block gathered out of a mode for one batch step;
+/// Scatter: a per-batch block written into its pre-sized destination;
+/// Accumulate: a per-batch block added into its accumulator. `bytes` is the
+/// host size of the moved block, summed over ranks (collective, so every rank
+/// must reach this call whenever the level is nonzero -- the level is
+/// identical across ranks). These movements are not eval-tree ops, so the
+/// `Eval` records never see them; this is the only accounting of their cost.
+template <typename... Args>
+inline void log_batch_op([[maybe_unused]] char const* kind,
+                         [[maybe_unused]] std::chrono::nanoseconds elapsed,
+                         [[maybe_unused]] TA::DistArray<Args...> const& moved,
+                         [[maybe_unused]] std::string const& annot) noexcept {
+#ifdef SEQUANT_EVAL_TRACE
+  auto& l = Logger::instance();
+  if (l.eval.level == 0) return;
+  auto bytes = TA::size_of<TA::MemorySpace::Host>(moved);
+  moved.world().gop.sum(bytes);
+  write_log(l, "Batch | ", kind, " | ", elapsed.count(), "ns | bytes=", bytes,
+            "B | ", annot, '\n');
+#endif
 }
 
 /// Convert sequant::DeNest to TA::DeNest
@@ -345,8 +430,8 @@ template <typename LArrayT, typename RArrayT>
 /// to the tile range `[tile_lo, tile_hi)` it must coincide with. A tiled
 /// backend can only cut or scatter whole tiles, so the element bounds must be
 /// in-range and fall on tile boundaries; this asserts both (mode_batches()
-/// yields exactly such tile-aligned ranges). Shared by slice_mode() (GATHER a
-/// block out) and write_into_slice() (SCATTER a block in) so both agree on the
+/// yields exactly such tile-aligned ranges). Shared by slice_mode() (gather a
+/// block out) and write_into_slice() (scatter a block in) so both agree on the
 /// element-to-tile contract and its alignment preconditions.
 [[nodiscard]] inline std::pair<std::size_t, std::size_t> slice_bounds_to_tiles(
     TA::TiledRange1 const& tr1, std::size_t elem_lo, std::size_t elem_hi) {
@@ -482,6 +567,12 @@ class ResultTensorTA final : public Result {
   ///         produced, including one whose pending transform composed away
   [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
 
+  [[nodiscard]] std::string trange_annot() const override {
+    std::ostringstream oss;
+    oss << get<ArrayT>().trange();
+    return oss.str();
+  }
+
  private:
   using this_type = ResultTensorTA<ArrayT>;
   using annot_wrap = Annot<std::string>;
@@ -612,6 +703,14 @@ class ResultTensorTA final : public Result {
     return true;
   }
 
+  // Diagnostic (see Result::fence): force all pending async work in this
+  // array's world to complete so a lazily-executed op's timer captures
+  // execution, not just dispatch.
+  void fence() const noexcept override {
+    get<ArrayT>().world().gop.fence();
+    ::sequant::detail::note_fence();
+  }
+
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
@@ -626,6 +725,7 @@ class ResultTensorTA final : public Result {
       o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
     });
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    ::sequant::detail::note_wait();
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -633,10 +733,80 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
     ensure_materialized();
+    ::sequant::detail::note_slice();
+    auto const t0 = std::chrono::steady_clock::now();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         get<ArrayT>().trange().dim(mode), elem_lo, elem_hi);
-    return eval_result<this_type>(
+    auto r = eval_result<this_type>(
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
+    ::sequant::detail::slice_ns().fetch_add(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - t0)
+            .count(),
+        std::memory_order_relaxed);
+    return r;
+  }
+
+  [[nodiscard]] double norm2() const override {
+    if constexpr (requires(ArrayT const& a) {
+                    { TA::squared_norm(a) } -> std::convertible_to<double>;
+                  })
+      return std::sqrt(static_cast<double>(TA::squared_norm(get<ArrayT>())));
+    else
+      return -1.0;
+  }
+  [[nodiscard]] std::string layout_desc() const override {
+    std::ostringstream os;
+    os << get<ArrayT>().trange();
+    return os.str();
+  }
+  [[nodiscard]] std::string tile_diff(Result const& other) const override {
+    if (!other.is<this_type>()) return "(kind mismatch)";
+    auto const& a = get<ArrayT>();
+    auto const& b = other.get<ArrayT>();
+    if (a.trange() != b.trange()) return "(trange mismatch)";
+    std::size_t only_a = 0, only_b = 0, both = 0, none = 0;
+    double n_only_a = 0.0, n_only_b = 0.0, n_both_diff = 0.0;
+    for (auto const& ord : a.tiles_range()) {
+      bool const za = a.is_zero(ord), zb = b.is_zero(ord);
+      if (za && zb) {
+        ++none;
+        continue;
+      }
+      if (!za && zb) {
+        ++only_a;
+        if (a.is_local(ord)) {
+          auto const t = a.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_a += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      if (za && !zb) {
+        ++only_b;
+        if (b.is_local(ord)) {
+          auto const t = b.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_b += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      ++both;
+      if (a.is_local(ord) && b.is_local(ord)) {
+        auto const ta = a.find_local(ord).get();
+        auto const tb = b.find_local(ord).get();
+        if constexpr (requires { TA::norm(ta.subt(tb)); })
+          n_both_diff +=
+              std::pow(static_cast<double>(TA::norm(ta.subt(tb))), 2);
+      }
+    }
+    std::ostringstream os;
+    os << "tiles: both=" << both << " only_this=" << only_a
+       << " only_other=" << only_b << " none=" << none
+       << " |only_this|=" << std::sqrt(n_only_a)
+       << " |only_other|=" << std::sqrt(n_only_b)
+       << " |diff on both|=" << std::sqrt(n_both_diff);
+    return os.str();
   }
 
   void write_into_slice(Result const& block, std::size_t mode,
@@ -647,36 +817,6 @@ class ResultTensorTA final : public Result {
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
     write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
-  }
-
-  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
-      std::size_t mode, Result const& axis_src,
-      std::size_t axis_src_mode) const override {
-    SEQUANT_ASSERT(axis_src.is<this_type>());
-    auto const& self = get<ArrayT>();
-    auto const& src = axis_src.get<ArrayT>();
-    auto const rank = self.trange().rank();
-    SEQUANT_ASSERT(mode < rank);
-    SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
-    // Take *this's outer trange but swap in the external axis's FULL tiling
-    // (from axis_src's mode axis_src_mode). Every other mode of a block partial
-    // is already full extent, so only the sliced axis needs widening.
-    std::vector<TA::TiledRange1> dims;
-    dims.reserve(rank);
-    for (std::size_t d = 0; d < rank; ++d) dims.push_back(self.trange().dim(d));
-    dims[mode] = src.trange().dim(axis_src_mode);
-    ArrayT dest(self.world(), TA::TiledRange(dims.begin(), dims.end()));
-    dest.fill_local(numeric_type(0));
-    dest.world().gop.fence();
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(dest));
-  }
-
-  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
-  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
-    ensure_materialized();
-    return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
-                                   target_batch_size);
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -693,6 +833,7 @@ class ResultTensorTA final : public Result {
       with_expr(a.lannot,
                 [&](auto&& le) { result(a.this_annot) = scalar * le; });
       decltype(result)::wait_for_lazy_cleanup(result.world());
+      ::sequant::detail::note_wait();
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     }
@@ -705,7 +846,9 @@ class ResultTensorTA final : public Result {
         o.with_expr(a.rannot, [&](auto&& re) { d = le.dot(re).get(); });
       });
       ArrayT::wait_for_lazy_cleanup(raw<ArrayT>().world());
+      ::sequant::detail::note_wait();
       ArrayT::wait_for_lazy_cleanup(o.template raw<ArrayT>().world());
+      ::sequant::detail::note_wait();
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -736,6 +879,7 @@ class ResultTensorTA final : public Result {
       result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
     }
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    ::sequant::detail::note_wait();
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -744,6 +888,14 @@ class ResultTensorTA final : public Result {
     View v = view_.value_or(View{});
     v.phase = static_cast<std::int8_t>(v.phase * factor);
     return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
+  }
+
+  /// Deep copy: \c TA::DistArray's own copy is a shallow (reference-counted)
+  /// handle onto the same tiles, so an in-place accumulation into the copy
+  /// would be seen by every other holder -- \c TA::clone allocates and copies
+  /// the tiles.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<this_type>(TA::clone(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -769,11 +921,6 @@ class ResultTensorTA final : public Result {
     return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
-  [[nodiscard]] ResultPtr clone() const override {
-    ensure_materialized();
-    return std::make_shared<this_type>(raw<ArrayT>().clone());  // deep copy
-  }
-
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<this_type>());
     auto const& o = static_cast<this_type const&>(other);
@@ -790,8 +937,12 @@ class ResultTensorTA final : public Result {
 
     detail::log_ta(ann, " += ", ann, "\n");
 
+    auto const t0 = std::chrono::steady_clock::now();
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
     ArrayT::wait_for_lazy_cleanup(t.world());
+    ::sequant::detail::note_wait();
+    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
+                         oarr, ann);
     log_ta_tensor_host_memory_use();
   }
 
@@ -808,6 +959,8 @@ class ResultTensorTA final : public Result {
 
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
+    if (Logger::instance().eval.level == 0)
+      return 0;  // size_of disabled untraced
     auto& v = raw<ArrayT>();
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
@@ -866,6 +1019,12 @@ class ResultTensorOfTensorTA final : public Result {
   ///         Result::is_buffer_alias): true for every value a transform
   ///         produced, including one whose pending transform composed away
   [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
+
+  [[nodiscard]] std::string trange_annot() const override {
+    std::ostringstream oss;
+    oss << get<ArrayT>().trange();
+    return oss.str();
+  }
 
  private:
   using this_type = ResultTensorOfTensorTA<ArrayT>;
@@ -1030,7 +1189,6 @@ class ResultTensorOfTensorTA final : public Result {
 
   void ensure_materialized() const override {
     if (!view_) return;
-    auto const& arr = raw<ArrayT>();
     auto const ann = dummy_annotation();
     ArrayT r;
     with_expr(ann, [&](auto&& e) { r(ann) = e; });
@@ -1109,6 +1267,21 @@ class ResultTensorOfTensorTA final : public Result {
     return {translate(annot), phase()};
   }
 
+  // Diagnostic (see Result::fence): force all pending async work in this
+  // array's world to complete so a lazily-executed op's timer captures
+  // execution, not just dispatch.
+  void fence() const noexcept override {
+    get<ArrayT>().world().gop.fence();
+    ::sequant::detail::note_fence();
+  }
+
+  /// Allocating addition. For nested arrays an addend whose inner tiles are
+  /// all empty acts as the additive identity, which relies on the arena
+  /// nested-tensor addition the pinned TiledArray provides (an addition that
+  /// dropped populated cells against a null-cell operand would annihilate the
+  /// other addend and surface as a not-a-number norm in an iterative
+  /// nested-array evaluation). No guard is needed here; \c add_inplace() keeps
+  /// its explicit empty-accumulator branch for the in-place path.
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
@@ -1145,6 +1318,7 @@ class ResultTensorOfTensorTA final : public Result {
       o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
     });
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    ::sequant::detail::note_wait();
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -1158,11 +1332,66 @@ class ResultTensorOfTensorTA final : public Result {
         slice_array_over_mode(get<ArrayT>(), mode, tile_lo, tile_hi));
   }
 
-  [[nodiscard]] container::svector<std::pair<std::size_t, std::size_t>>
-  mode_batches(std::size_t mode, std::size_t target_batch_size) const override {
-    ensure_materialized();
-    return mode_batches_of_trange1(get<ArrayT>().trange().dim(mode),
-                                   target_batch_size);
+  [[nodiscard]] double norm2() const override {
+    if constexpr (requires(ArrayT const& a) {
+                    { TA::squared_norm(a) } -> std::convertible_to<double>;
+                  })
+      return std::sqrt(static_cast<double>(TA::squared_norm(get<ArrayT>())));
+    else
+      return -1.0;
+  }
+  [[nodiscard]] std::string layout_desc() const override {
+    std::ostringstream os;
+    os << get<ArrayT>().trange();
+    return os.str();
+  }
+  [[nodiscard]] std::string tile_diff(Result const& other) const override {
+    if (!other.is<this_type>()) return "(kind mismatch)";
+    auto const& a = get<ArrayT>();
+    auto const& b = other.get<ArrayT>();
+    if (a.trange() != b.trange()) return "(trange mismatch)";
+    std::size_t only_a = 0, only_b = 0, both = 0, none = 0;
+    double n_only_a = 0.0, n_only_b = 0.0, n_both_diff = 0.0;
+    for (auto const& ord : a.tiles_range()) {
+      bool const za = a.is_zero(ord), zb = b.is_zero(ord);
+      if (za && zb) {
+        ++none;
+        continue;
+      }
+      if (!za && zb) {
+        ++only_a;
+        if (a.is_local(ord)) {
+          auto const t = a.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_a += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      if (za && !zb) {
+        ++only_b;
+        if (b.is_local(ord)) {
+          auto const t = b.find_local(ord).get();
+          if constexpr (requires { TA::norm(t); })
+            n_only_b += std::pow(static_cast<double>(TA::norm(t)), 2);
+        }
+        continue;
+      }
+      ++both;
+      if (a.is_local(ord) && b.is_local(ord)) {
+        auto const ta = a.find_local(ord).get();
+        auto const tb = b.find_local(ord).get();
+        if constexpr (requires { TA::norm(ta.subt(tb)); })
+          n_both_diff +=
+              std::pow(static_cast<double>(TA::norm(ta.subt(tb))), 2);
+      }
+    }
+    std::ostringstream os;
+    os << "tiles: both=" << both << " only_this=" << only_a
+       << " only_other=" << only_b << " none=" << none
+       << " |only_this|=" << std::sqrt(n_only_a)
+       << " |only_other|=" << std::sqrt(n_only_b)
+       << " |diff on both|=" << std::sqrt(n_both_diff);
+    return os.str();
   }
 
   void write_into_slice(Result const& block, std::size_t mode,
@@ -1231,6 +1460,7 @@ class ResultTensorOfTensorTA final : public Result {
       with_expr(a.lannot,
                 [&](auto&& le) { result(a.this_annot) = scalar * le; });
       decltype(result)::wait_for_lazy_cleanup(result.world());
+      ::sequant::detail::note_wait();
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
@@ -1240,7 +1470,9 @@ class ResultTensorOfTensorTA final : public Result {
       numeric_type d =
           TA::dot(logical_array()(a.lannot), o.logical_array()(a.rannot));
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
+      ::sequant::detail::note_wait();
       ArrayT::wait_for_lazy_cleanup(o.template get<ArrayT>().world());
+      ::sequant::detail::note_wait();
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -1316,6 +1548,12 @@ class ResultTensorOfTensorTA final : public Result {
     return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
+  /// Deep copy; see \c ResultTensorTA::clone. \c TA::clone deep-copies the
+  /// (nested) tiles too, so the copy shares no inner tensor with this one.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+  }
+
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
@@ -1337,11 +1575,6 @@ class ResultTensorOfTensorTA final : public Result {
     if constexpr (TA::detail::is_complex_v<numeric_type>)
       if (t.conj) v.conj = !v.conj;
     return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
-  }
-
-  [[nodiscard]] ResultPtr clone() const override {
-    ensure_materialized();
-    return std::make_shared<this_type>(get<ArrayT>().clone());  // deep copy
   }
 
   void add_inplace(Result const& other) override {
@@ -1368,8 +1601,12 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(ann, " += ", ann, "\n");
 
+    auto const t0 = std::chrono::steady_clock::now();
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
     ArrayT::wait_for_lazy_cleanup(t.world());
+    ::sequant::detail::note_wait();
+    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
+                         oarr, ann);
     log_ta_tensor_host_memory_use();
   }
 
@@ -1385,6 +1622,8 @@ class ResultTensorOfTensorTA final : public Result {
 
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
+    if (Logger::instance().eval.level == 0)
+      return 0;  // size_of disabled untraced
     // the shared array's size (a view is not materialized to be measured;
     // same convention as ResultTensorTA)
     auto& v = raw<ArrayT>();
@@ -1452,6 +1691,7 @@ template <typename... Args>
       for (auto it = out.begin(); it != out.end(); ++it)
         if (out.is_local(it.index())) *it = value_type{it.make_range()};
       out.world().gop.fence();
+      ::sequant::detail::note_fence();
       return out;
     }
     annot = TA::detail::dummy_annotation(static_cast<unsigned int>(rank),
@@ -1469,8 +1709,14 @@ template <typename... Args>
   // combined by einsum's general product (Einsum::index::operator| asserts that
   // a shared index has the same TiledRange1 in both operands). The batch mode
   // keeps its real element offset too, consistently across all sliced operands.
+  auto const t0 = std::chrono::steady_clock::now();
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
+  ::sequant::detail::note_wait();
+  detail::log_batch_op("Slice", std::chrono::steady_clock::now() - t0, out,
+                       annot + " mode=" + std::to_string(mode) + " tiles=[" +
+                           std::to_string(tile_lo) + "," +
+                           std::to_string(tile_hi) + ")");
   return out;
 }
 
@@ -1486,7 +1732,7 @@ template <typename... Args>
 /// Implemented with TA's block() on the assignment LHS, so only the addressed
 /// sub-block is written and block-sparse shape is preserved. Every mode's
 /// element lobound is preserved (via TA's `preserve_lobound`), exactly as the
-/// lobound-preserving GATHER in slice_array_over_mode(): the destination
+/// lobound-preserving gather in slice_array_over_mode(): the destination
 /// sub-block and the source share element coordinates, so a spectator index
 /// carrying a nonzero lobound (e.g. a frozen-core offset) lands at its true
 /// offset rather than being rebased to 0. Reconstructs a whole result from a
@@ -1531,8 +1777,14 @@ void write_array_into_mode(TA::DistArray<Args...>& dest,
   // coordinates (keeping every mode's lobound) so it matches the source block,
   // which slice_array_over_mode() also gathered with preserve_lobound. Plain
   // block() would rebase the sub-block to 0 and mismatch the source trange.
+  auto const t0 = std::chrono::steady_clock::now();
   dest(annot).block(lo, hi, TA::preserve_lobound) = block(annot);
   TA::DistArray<Args...>::wait_for_lazy_cleanup(dest.world());
+  ::sequant::detail::note_wait();
+  detail::log_batch_op("Scatter", std::chrono::steady_clock::now() - t0, block,
+                       annot + " mode=" + std::to_string(mode) + " tiles=[" +
+                           std::to_string(tile_lo) + "," +
+                           std::to_string(tile_hi) + ")");
 }
 
 /// \brief Compute the result's OUTER TiledRange for a binary product from the
@@ -1582,7 +1834,7 @@ template <typename NumericT, typename PolicyT,
 /// emits the product as `out(ca) = (lhs(la) * rhs(ra)).set_shape(s)` (general
 /// product) or `out(ca) = lhs(la).dot_inner(rhs(ra)).set_shape(s)` (the
 /// DeNest::True ToT*ToT->flat path), so the result is computed/stored only over
-/// the kept region. The two forms are the ones de-risked in Task 0.
+/// the kept region.
 ///
 /// Operand/result nesting determines which `ResultTensor*TA` wraps the output:
 ///   - both operands flat (T * T)           -> flat result
@@ -1618,9 +1870,11 @@ template <typename NumericT, typename PolicyT,
   bool const l_flat = left.is<FlatResult>();
   bool const r_flat = right.is<FlatResult>();
 
-  // Every branch fences the world after the assignment so the imposed shape
-  // (held by pointer by the expression) is no longer referenced before this
-  // function returns and the caller's shape object goes out of scope.
+  // No world fence after the assignments: the expression engine folds the
+  // imposed shape into its own shape (a mask) when the expression is
+  // initialized, inside the assignment, so the caller's shape object need not
+  // outlive it; a per-product fence would only serialize the asynchronous
+  // tile work against the executor's bookkeeping.
 
   // T * T -> T
   if (l_flat && r_flat) {
@@ -1628,8 +1882,8 @@ template <typename NumericT, typename PolicyT,
     out(a.this_annot) =
         (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
             .set_shape(shape);
-    out.world().gop.fence();
     FlatArray::wait_for_lazy_cleanup(out.world());
+    ::sequant::detail::note_wait();
     return eval_result<FlatResult>(std::move(out));
   }
 
@@ -1650,8 +1904,8 @@ template <typename NumericT, typename PolicyT,
           (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
               .set_shape(shape);
     }
-    out.world().gop.fence();
     ToTArray::wait_for_lazy_cleanup(out.world());
+    ::sequant::detail::note_wait();
     return eval_result<ToTResult>(std::move(out));
   }
 
@@ -1663,8 +1917,8 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) = left.get<ToTArray>()(a.lannot)
                               .dot_inner(right.get<ToTArray>()(a.rannot))
                               .set_shape(shape);
-      out.world().gop.fence();
       FlatArray::wait_for_lazy_cleanup(out.world());
+      ::sequant::detail::note_wait();
       return eval_result<FlatResult>(std::move(out));
     } else {
       // ToT * ToT -> ToT (general product). TiledArray's expression-layer
@@ -1680,8 +1934,8 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) =
           (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
               .set_shape(shape);
-      out.world().gop.fence();
       ToTArray::wait_for_lazy_cleanup(out.world());
+      ::sequant::detail::note_wait();
       return eval_result<ToTResult>(std::move(out));
     }
   }

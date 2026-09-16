@@ -195,9 +195,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     res = deserialize<ResultExpr>(L"Amplitude{i1;a1} = t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
-    REQUIRE(root_expr.as<Tensor>() == Tensor(L"Amplitude",
-                                             bra(IndexList{L"i_1"}),
-                                             ket(IndexList{L"a_1"})));
+    // the deserialized ResultExpr's Amplitude picks up the Context's column
+    // symmetry (Symm), so the programmatic reference must request it too --
+    // programmatic ctors are Context-independent (see Tensor::Defaults)
+    REQUIRE(root_expr.as<Tensor>() ==
+            Tensor(L"Amplitude", bra(IndexList{L"i_1"}), ket(IndexList{L"a_1"}),
+                   TensorSymmetries{.column = ColumnSymmetry::Symm}));
   }
 
   SECTION(
@@ -677,7 +680,7 @@ TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
   }
 }
 
-TEST_CASE("eval_expr_batched_here_typed", "[EvalExpr][batched-here]") {
+TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
   using namespace sequant;
   auto const tnsr =
       parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
@@ -685,12 +688,16 @@ TEST_CASE("eval_expr_batched_here_typed", "[EvalExpr][batched-here]") {
   container::svector<std::pair<Index, BatchModeType>> modes{
       {Index{L"a_1"}, BatchModeType::Contracted},
       {Index{L"i_1"}, BatchModeType::External}};
-  node.set_batched_here(modes);
-  REQUIRE(node.batched_here().size() == 2);
-  REQUIRE(node.batched_here()[0].second == BatchModeType::Contracted);
-  REQUIRE(node.batched_here()[1].second == BatchModeType::External);
+  node.set_node_slice_mask(modes);
+  REQUIRE(node.node_slice_mask().size() == 2);
+  REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
+  REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
 }
 
+// The cases below build eval trees straight from expressions: the head layout
+// is irrelevant to what they check (slot identity, transforms, phases), so
+// the deprecated binarize(ExprPtr) is used on purpose.
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
 TEST_CASE("eval_expr_conjugation_marker_identity",
           "[EvalExpr][conjugate-fold]") {
   // C(a_1;p) C*(a_2;p) and C*(a_1;p) C(a_2;p) are one tensor S up to the
@@ -1144,8 +1151,9 @@ TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
 }
 
 TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
-  // a sum's slot depends on ALL its summands, in order: A + B and A + C are
-  // different values; A + B and B + A hand up different layouts
+  // a sum's slot depends on ALL its summands: A + B and A + C are different
+  // values; A + B and B + A are one value (the summand hash multiset is
+  // order-blind) unless the leading summand's LAYOUT differs
   using namespace sequant;
   auto sum_of = [](std::wstring_view a, std::wstring_view b) {
     return binarize(ex<Sum>(ExprPtrList{deserialize(a), deserialize(b)}));
@@ -1155,9 +1163,9 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   auto const ba = sum_of(L"g{i_1;a_1}", L"f{i_1;a_1}");
   auto const ab2 = sum_of(L"f{i_2;a_2}", L"g{i_2;a_2}");
   REQUIRE(ab->hash_value() != ac->hash_value());
-  // order-sensitive: a sum's layout is its first summand's, so B + A is a
-  // different slot; a relabeled copy of the same ordered sum shares it
-  REQUIRE(ab->hash_value() != ba->hash_value());
+  // same summands, same layout, another order: one slot; a relabeled copy of
+  // the same sum shares it too
+  REQUIRE(ab->hash_value() == ba->hash_value());
   REQUIRE(ab->hash_value() == ab2->hash_value());
   // the result layout is the FIRST summand's: the same summands in another
   // order with a different leading layout are a different slot (the cached
@@ -1264,7 +1272,8 @@ TEST_CASE("twins_whose_composites_carry_the_swapped_externals_are_two_slots",
   // lay the pair out as (i_1,i_2) and (i_2,i_1) are NOT value-compatible --
   // served for each other, one gets the pair-(q,p) blocks. The layout
   // fingerprint (ids of the externals AND of every composite's protos, in
-  // layout order) tells them apart and the comparator refuses the slot.
+  // layout order) tells them apart: binarize folds it into the node id, so
+  // the twins are two slots outright, and the comparator refuses them too.
   // Measured 2026-09-05 (HSeOH PNS-MP1, residual block 3 after the brackets
   // were optimized): C†.(g.C) laid out (i↑_1,i↑_2;..) was served to its twin
   // laid out (i↑_2,i↑_1;..): |R| 0.579 instead of 0.293, E 7 % off.
@@ -1282,9 +1291,9 @@ TEST_CASE("twins_whose_composites_carry_the_swapped_externals_are_two_slots",
   };
   INFO("X layout " << labels(X->canon_indices()));
   INFO("Y layout " << labels(Y->canon_indices()));
-  REQUIRE(X->hash_value() == Y->hash_value());  // relabeled twins
   REQUIRE(X->canon_indices() != Y->canon_indices());
   REQUIRE(X->layout_fingerprint() != Y->layout_fingerprint());
+  REQUIRE(X->hash_value() != Y->hash_value());  // two slots
   using node_t = std::remove_cvref_t<decltype(X)>;
   TreeNodeEqualityComparator<node_t> same;
   REQUIRE(same(X, X));
@@ -1405,4 +1414,36 @@ TEST_CASE("tot_leaf_annotation_is_slot_faithful", "[eval_expr][tot]") {
   REQUIRE(labels(EvalExpr{c_ket}) == L{L"i_1", L"i_2", L"a_1", L"a_2"});
   REQUIRE(labels(EvalExpr{c_bra}) == L{L"i_1", L"i_2", L"a_1", L"a_2"});
   REQUIRE(EvalExpr{c_ket}.indices_annot() == "i_1,i_2,a_1;a_2i_1i_2");
+}
+
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+// Task 5 (multiroot-single-dag-eval): binarize(Sum const&, ...)'s make_sum
+// lambda used to capture its prefix-hash range (imed_hashes(hvals)) as a
+// LAZY, stateful view; ranges::at(hs, ++i) re-begin()s that view on every
+// access, which re-drives inits' internal mutable `++n` counter and
+// silently drops the LAST summand from the running hash -- so two Sums
+// differing only in their last summand collided on hash_value(). The
+// Product path in this same file already materializes its prefix-hash
+// range eagerly (`auto const hs = imed_hashes(hvals) | ranges::to_vector;`)
+// and was unaffected.
+TEST_CASE("Sum-node hash is sensitive to every summand",
+          "[eval][binarize][hash]") {
+  using namespace sequant;
+
+  auto const root = [](std::wstring_view s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize(deserialize(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+
+  auto const last_a = root(L"(a * b) + c");  // differ in LAST summand
+  auto const last_b = root(L"(a * b) - c");
+  auto const first_a = root(L"c + (a * b)");  // differ in FIRST summand
+  auto const first_b = root(L"d + (a * b)");  // (already worked pre-fix)
+
+  CHECK(last_a->hash_value() != last_b->hash_value());
+  CHECK(first_a->hash_value() != first_b->hash_value());
+  // (a*b)+c and c+(a*b) are the same multiset of summands -> same hash.
+  CHECK(last_a->hash_value() == first_a->hash_value());
 }

@@ -46,7 +46,7 @@ index_to_extent_t default_idx_to_size() {
 /// Diagnostic (env SEQUANT_FACTORIZER_DEBUG): for the chosen factorization
 /// \p result of a single term, log each intermediate's result footprint AS THE
 /// COST MODEL SIZES IT (idx_to_extent + inner_pow), plus the peak (the value
-/// the DensePeakSize objective minimizes), so one can see why the factorizer
+/// the DenseSpaceTime objective minimizes), so one can see why the factorizer
 /// accepted a given intermediate -- e.g. an under-sized multi-composite tensor.
 /// Footprints in mega-elements; outer{...} lists each free outer index extent,
 /// inner{Np:e,...} lists each CSV/PNO composite's proto-index count N and the
@@ -97,7 +97,7 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
   // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
   // Batching config (both role predicates, batch_target_size, inner_pow,
-  // batch_persistent_only) now travels on CostParams rather than as loose args.
+  // batch_persistent_only) travels on CostParams.
   CostParams cost;
   cost.is_volatile_leaf = opts.batch_policy.is_volatile_leaf;
   cost.volatile_weight = opts.volatile_weight;
@@ -108,7 +108,6 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   cost.peak_threshold = opts.batch_policy.peak_threshold;
   cost.prune_outer_products = opts.prune_outer_products;
   cost.batch_spectator_indices = opts.batch_policy.batch_spectator_indices;
-  cost.order_aware_recompute = opts.batch_policy.order_aware_recompute;
   cost.is_batchable_contracted_index =
       opts.batch_policy.is_batchable_contracted_index;
   cost.is_batchable_external_index =
@@ -116,10 +115,11 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   cost.batch_target_size = opts.batch_policy.batch_target_size;
   cost.inner_pow = opts.inner_pow;
   cost.batch_persistent_only = opts.batch_policy.persistent_only;
-  // Filled only by the DensePeakSizeBatched arm below (via out_axes); every
-  // other objective leaves it empty, so the term_batch_axes insertion at the
-  // end is then a no-op-shaped empty-vector entry (harmless: Task 3.3 only
-  // consumes entries for summands the batched objective actually annotated).
+  // Filled by either batched arm below (both pass &node_axes as out_axes when
+  // term_batch_axes is set); every other objective leaves it empty, so the
+  // term_batch_axes insertion at the end is then a no-op-shaped empty-vector
+  // entry (harmless: the binarizer only consumes entries for summands a
+  // batched objective annotated).
   container::vector<NodeBatchAnnotation> node_axes;
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
@@ -154,8 +154,8 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
     // heavy DP above stays parallel. Without this the map is corrupted and the
     // downstream whole-Sum re-key reads a wrong-sized node_batch_axes, tripping
     // binarize's node_counter == size assertion (a nondeterministic, thread-
-    // count-dependent SIGABRT -- e.g. water-20 PNO-CCSD on Owl, absent under a
-    // sequential par_unseq fallback such as libc++).
+    // count-dependent SIGABRT, absent under a sequential par_unseq fallback
+    // such as libc++).
     static std::mutex term_batch_axes_mutex;
     std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
     (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
@@ -236,7 +236,7 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
       // A non-tensor factor (a Sum of products, e.g. the flavor bracket a
       // CSV transform wraps around a projected leaf, sum_flavors g.C.C; or a
       // nested product) is opaque to the outer contraction order, but its
-      // OWN contraction order matters just as much: put back as written it
+      // own contraction order matters just as much: put back as written it
       // evaluates in its authored left-to-right order. Measured on DCH
       // cc-pVDZ PNS-CCD (2026-09-05): a projection bracket whose external-
       // pair C came first materialized an n_occ^4 n_v n_csv intermediate
@@ -255,10 +255,10 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
       Product{prod.scalar(), new_factors, Product::Flatten::No}, opts);
 
   // Per-node batch annotations (opts.term_batch_axes): opt_pure_product keyed
-  // the OUTER network's entries -- one per DP node over the placeholders, in
+  // the outer network's entries -- one per DP node over the placeholders, in
   // binarize's left-first post-order -- on `result`, and each nested Product
-  // factor's own optimization above keyed ITS entries on non_tensors[i].
-  // binarize consumes ONE shared counter in post-order over the WHOLE tree,
+  // factor's own optimization above keyed its entries on non_tensors[i].
+  // binarize consumes one shared counter in post-order over the whole tree,
   // a nested Product factor's contraction nodes included (only a Sum factor
   // gets a private counter and no entries), so splice each nested product's
   // entries in at its placeholder's position and re-key the merged list on
@@ -292,7 +292,7 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
       if (!label.starts_with(placeholder_label_prefix)) return;
       auto const& inner = non_tensors[placeholder_index(label)];
       SEQUANT_ASSERT(inner);
-      // the nested product's own entries, in ITS post-order; a Sum bracket
+      // the nested product's own entries, in its post-order; a Sum bracket
       // contributes none (private counter in binarize). A count mismatch
       // (an inner optimization path that did not record) degrades to
       // unannotated inner nodes rather than misaligning the outer ones.
@@ -330,7 +330,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
   // and its inner product evaluates in naive left-to-right order (measured:
   // 14.4 GB vs 1.7 GB peak RSS on a Kramers-CSV MP2 energy whose TRS fold
   // wrapped three terms).
-  // A wrapper at the summand root: its inner contraction nodes ARE the
+  // A wrapper at the summand root: its inner contraction nodes are the
   // summand's DP nodes (binarize shares the node counter with it), so its
   // batch axes are re-keyed under the wrapper the caller keys on.
   auto rekey_axes = [&opts](ExprPtr const& inner, ExprPtr const& wrapper) {
@@ -355,7 +355,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
   }
   if (expr->is<Product>()) {
     auto const& prod_in = expr->as<Product>();
-    // Re/Im wrapper FACTORS are transparent too (the conjugate-pair fold
+    // Re/Im wrapper factors are transparent too (the conjugate-pair fold
     // emits `2 Re[A]`): RealPart::is_scalar() would otherwise let the
     // wrapper pass through opt_pure_product as an opaque scalar with A left
     // in its naive left-to-right order. Optimize each wrapper's inner first.
@@ -412,7 +412,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     auto const& in_sum = expr->as<Sum>();
     Sum::summands_type new_smands(in_sum.size());
 
-    // Every summand is optimized on a PRIVATE clone, taken here, sequentially,
+    // Every summand is optimized on a private clone, taken here, sequentially,
     // before the (possibly parallel) loop below. Summands routinely share
     // subexpression objects -- tensors reused by expand(), or a whole nested
     // Sum factor (the flavor bracket a CSV transform wraps around a projected
@@ -461,7 +461,55 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     }
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
-    if (!reorder) return ex<Sum>(std::move(new_sum));
+
+    // Re-key the per-summand batch annotations onto the final reassembled Sum.
+    // opt_pure_product keyed each summand's node_batch_axes (one entry per
+    // contraction node, left-first post-order) by that optimized summand's
+    // Product pointer. But the caller binarizes the whole reassembled Sum in
+    // one call and looks the annotation up by the final Sum pointer -- and
+    // under reorder, opt::reorder's clone-on-append (Sum::append clones) gives
+    // the final summands new pointers while new_sum (which still holds the
+    // keyed pointers) is destroyed on return. So gather the per-summand vectors
+    // in the final summand order into one whole-tree vector -- binarize walks
+    // the Sum-tree in that same order, one entry per contraction node, so the
+    // flat node_batch_axes stays aligned with its node counter -- and store it
+    // under the final Sum pointer, dropping the now-unreachable per-summand
+    // entries. Without this, every batch annotation is silently lost and
+    // over-budget intermediates materialize whole. `order` is a list of
+    // clusters, each a list of positions into new_sum, flattened in emission
+    // order (identity for the no-reorder path); it must match how the final Sum
+    // orders its summands.
+    // The keys are the optimized summands' addresses, taken here, before the
+    // no-reorder path below moves new_sum into its result (the ExprPtrs keep
+    // their pointees, so the keys stay valid; new_sum's summand list does not).
+    container::vector<Expr const*> smand_keys;
+    smand_keys.reserve(new_sum.size());
+    for (auto const& s : new_sum.summands()) smand_keys.push_back(s.get());
+    auto rekey_onto =
+        [&](ExprPtr const& result,
+            container::vector<container::vector<std::size_t>> const& order) {
+          if (!opts.term_batch_axes) return;
+          container::vector<NodeBatchAnnotation> combined;
+          for (auto const& clstr : order)
+            for (auto p : clstr) {
+              auto it = opts.term_batch_axes->find(smand_keys.at(p));
+              if (it == opts.term_batch_axes->end()) continue;
+              combined.insert(combined.end(),
+                              std::make_move_iterator(it->second.begin()),
+                              std::make_move_iterator(it->second.end()));
+              opts.term_batch_axes->erase(it);
+            }
+          (*opts.term_batch_axes)[result.get()] = std::move(combined);
+        };
+
+    if (!reorder) {
+      container::vector<container::vector<std::size_t>> identity;
+      identity.reserve(new_sum.size());
+      for (std::size_t i = 0; i < new_sum.size(); ++i) identity.push_back({i});
+      auto result = ex<Sum>(std::move(new_sum));
+      rekey_onto(result, identity);
+      return result;
+    }
 
     // Binarize once per optimized summand and hand the nodes to reorder()
     // so they aren't re-built inside clusters(). NOTE: this runs sequentially
@@ -472,7 +520,12 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    return ex<Sum>(opt::reorder(new_sum, nodes));
+    // Same (new_sum, nodes) opt::reorder consumes, so the flattened cluster
+    // order equals the final summand order the reordered Sum emits.
+    auto const order = opt::clusters(new_sum, nodes);
+    auto result = ex<Sum>(opt::reorder(new_sum, nodes));
+    rekey_onto(result, order);
+    return result;
   }
 
   return expr->clone();
@@ -507,8 +560,9 @@ ResultExpr& optimize(ResultExpr&& expr, OptimizeOptions opts) {
 
 namespace {
 inline OptimizeOptions compatibility_opts(bool reorder_sum) {
-  return OptimizeOptions{.reorder = reorder_sum ? ReorderSum::Reorder
-                                                : ReorderSum::NoReorder};
+  return OptimizeOptions{
+      .reorder = reorder_sum ? ReorderSum::Reorder : ReorderSum::NoReorder,
+      .inner_pow = {}};
 }
 }  // namespace
 

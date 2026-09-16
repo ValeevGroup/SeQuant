@@ -15,12 +15,12 @@
 #include <SeQuant/core/optimize/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/algorithm/contains.hpp>
-#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/view/concat.hpp>
 
@@ -95,14 +95,14 @@ double inner_aware_volume(Tot const& tot_idxs, Ixex const& ixex,
       mem *= inner_pow(c, k);
     }
   } else {
-    // No inner_pow, but this tensor HAS composite (CSV/PNO tensor-of-tensor)
+    // No inner_pow, but this tensor has composite (CSV/PNO tensor-of-tensor)
     // indices: sizing them by the base extent silently mis-sizes the tensor
     // (each composite counted at its full base-space extent instead of its
     // per-proto domain), which has repeatedly inverted factorization choices
     // (e.g. picking a 4-PAO integral). An empty inner_pow is only valid for a
-    // network with NO composites; refuse to guess here.
+    // network with no composites; refuse to guess here.
     if (!ranges::empty(tot_idxs.inner))
-      throw std::invalid_argument(
+      throw Exception(
           "inner_aware_volume: composite (CSV/PNO) indices present but no "
           "inner_pow provided -- sizing composites by base extent is a bug. "
           "Pass a real inner_pow (e.g. SizeRegime::inner_pow_fn()).");
@@ -131,82 +131,6 @@ auto flops_counter(has_index_extent auto&& ixex, InnerPow inner_pow = {}) {
              meta::range_of<Index> auto const& rhs,
              meta::range_of<Index> auto const& result) -> double {
     using ranges::views::concat;
-    // ToT contractibility guard. A contracted index -- shared by lhs & rhs but
-    // absent from result -- that carries NO proto-indices is an outer/batch
-    // axis in the tensor-of-tensor layout, which a ToT x ToT einsum cannot SUM
-    // (it batches a shared outer axis). It is contractible only when at least
-    // one operand is flat (proto-free) and thus supplies the index as an
-    // ordinary (summable) mode. If BOTH operands are proto-bearing (ToT) and
-    // such a contracted non-proto index exists -- the bare C.C overlap over the
-    // CSV expansion index mu -- the binary contraction is unevaluable; cost it
-    // +inf so the DP routes around it (contract C.t first, de-nesting the
-    // amplitude to a flat carrier of mu, then contract mu flat x ToT, exactly
-    // how the non-relativistic g.C path handles it). Self-gating: never fires
-    // for flat-only networks (no proto) or when either operand is flat (g.C,
-    // C.t).
-    {
-      auto const has_proto = [](Index const& i) {
-        return i.has_proto_indices();
-      };
-      if (ranges::any_of(lhs, has_proto) && ranges::any_of(rhs, has_proto)) {
-        // Both operands ToT. Summing a bare shared index is fine as long as
-        // every proto-bearing index of BOTH operands carries the same proto
-        // bundle (one CSV/PNO pair): the operands then share their outer
-        // (proto-value) axes, the bare index is an ordinary mode on both, and
-        // the einsum batches the pair axes and contracts the bare one (the
-        // re-nesting Z(ij,nu;a<ij>) . C(ij,nu;b<ij>) of a flat carrier into
-        // the pair's CSV basis -- exactly how the driver g.C.C is evaluated).
-        // With DIFFERENT bundles the bare index is contracted while the two
-        // pair axes must be kept as an outer product (the inter-pair overlap
-        // C(ij,mu;a<ij>) . C(kl,mu;a'<kl>)), which the ToT einsum cannot
-        // express: cost +inf so the DP routes around it (de-nest against the
-        // amplitude first).
-        auto const bundles_differ = [&]() {
-          const Index* ref = nullptr;
-          for (auto const& operand : {std::cref(lhs), std::cref(rhs)})
-            for (auto const& j : operand.get()) {
-              if (!j.has_proto_indices()) continue;
-              if (!ref)
-                ref = &j;
-              else if (!ranges::equal(ref->proto_indices(), j.proto_indices()))
-                return true;
-            }
-          return false;
-        };
-        for (auto const& k : lhs)
-          if (!k.has_proto_indices() && ranges::contains(rhs, k) &&
-              !ranges::contains(result, k) && bundles_differ())
-            return std::numeric_limits<double>::max();
-      }
-      // Proto-value contraction guard (the occ analogue of the C.C case above,
-      // and the flat x ToT case the both-ToT test does not reach). A contracted
-      // index k -- shared by lhs & rhs, absent from result -- that appears as a
-      // PROTO-INDEX of some index in either operand PARAMETRIZES that operand's
-      // per-proto inner (PNS/PNO) basis: summing k would mix distinct inner
-      // bases. The off-diagonal occ Fock f^i_k t̄^{kj} sums the occ k that is
-      // the amplitude's proto-parent, so the pair-(k,j) PNS basis of t̄'s
-      // virtuals a<k,j> depends on k; TA's ToT einsum cannot express that. Cost
-      // +inf so the DP first de-nests the amplitude against its coefficients
-      // (t̄.C.C -> flat carrier of k), after which k is an ordinary mode the
-      // flat Fock can contract. NB: this fires for a flat operand too (f is
-      // flat), but NOT for f.C / g.C (their contracted mu is a fresh CSV mode,
-      // never a proto-value) nor for the intra-pair vv-Fock t̄.f (contracts the
-      // shared virtual, an inner carrier -- itself proto-BEARING, hence
-      // excluded below).
-      {
-        auto const proto_value_in = [](auto const& operand, Index const& k) {
-          for (auto const& j : operand)
-            if (j.has_proto_indices() && ranges::contains(j.proto_indices(), k))
-              return true;
-          return false;
-        };
-        for (auto const& k : lhs)
-          if (!k.has_proto_indices() && ranges::contains(rhs, k) &&
-              !ranges::contains(result, k) &&
-              (proto_value_in(lhs, k) || proto_value_in(rhs, k)))
-            return std::numeric_limits<double>::max();
-      }
-    }
     // <IndexSet> is required here: concatenating the three operands repeats
     // every contracted/shared index, so it must be deduplicated before taking
     // the extent product (cf. memsize_counter, which processes each operand
@@ -344,14 +268,14 @@ container::vector<double> subset_footprints(
 ///
 ///  - the pure-occupied protoindices of composite (CSV/PNO/OSV
 ///    tensor-of-tensor) legs. A composite leg carries its external occupied
-///    indices ONLY as protoindices -- they never appear as a top-level
+///    indices only as protoindices -- they never appear as a top-level
 ///    bra/ket/aux slot -- so the slot scan alone drops them.
 ///  - an explicit pure-occupied index that is open (external) on the network
 ///    root, i.e. a member of \c network.ext_indices(). Such an index is a
 ///    genuine top-level slot, but \p is_batchable is typically scoped to a
 ///    non-occupied space (e.g. DF/RI aux), so it would otherwise never be
 ///    admitted as a batching candidate. Contracted (internal) occupied
-///    indices -- those that connect two or more tensors -- are NOT open on
+///    indices -- those that connect two or more tensors -- are not open on
 ///    the root and so are never admitted by this pass.
 ///
 /// Admitting either lets the batched DP slice that external-occ external
@@ -364,16 +288,16 @@ container::vector<double> subset_footprints(
 ///        space (e.g. a DF/RI auxiliary space).
 /// \return Ordered, deduplicated list of batchable indices.
 /// \brief Candidate batchable modes: every index (and protoindex) whose space
-/// is batchable in EITHER role.
+/// is batchable in either role.
 ///
 /// Batchability is role-based and caller-defined, keeping this layer
 /// domain-generic (no index-space kind is named here):
-/// - \p is_batchable admits a space batchable when the mode is CONTRACTED
+/// - \p is_batchable admits a space batchable when the mode is contracted
 ///   (summed at some node);
 /// - \p is_batchable_external admits a space batchable when the mode is
-///   EXTERNAL (open on the term root -- a spectator carried to the result).
+///   external (open on the term root -- a spectator carried to the result).
 ///
-/// This returns the UNION of both roles. Each mode's actual role is resolved by
+/// This returns the union of both roles. Each mode's actual role is resolved by
 /// \ref PeakBatchedModel::build_context from the root open set, which then
 /// drops any mode its role's predicate rejects -- e.g. a mode admitted only as
 /// external but appearing contracted is not batchable, which keeps the 2^m
@@ -444,10 +368,10 @@ container::vector<container::vector<double>> sliced_footprints(
   for (std::size_t B = 0; B < tables.size(); ++B) {
     auto extent = [&, B](Index const& ix) -> std::size_t {
       std::size_t e = idxsz(ix);
-      // Membership in aux_list IS the authoritative "this is a batchable mode"
-      // test: that list spans ALL batchability roles (contracted and external).
+      // Membership in aux_list is the authoritative "this is a batchable mode"
+      // test: that list spans all batchability roles (contracted and external).
       // Gating additionally on the contracted-role predicate silently makes a
-      // slice of any mode admitted outside it a NO-OP -- the mode sits in the
+      // slice of any mode admitted outside it a no-op -- the mode sits in the
       // sliced set B yet keeps its full extent, so the DP sees no benefit and
       // never batches it.
       auto it = ranges::find(aux_list, ix);
@@ -673,9 +597,7 @@ inline SubnetMetadata build_subnet_metadata(
 
     auto tn = TensorNetwork{ts_expr};
     auto meta = tn.canonicalize_slots(
-        {.cardinal_tensor_labels =
-             TensorCanonicalizer::cardinal_tensor_labels(),
-         .named_indices = &results[n].indices});
+        TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices);
 
     auto [it, inserted] = meta_to_id.try_emplace(std::move(meta), 0);
     if (inserted) it->second = meta_to_id.size() - 1;
@@ -706,11 +628,11 @@ container::vector<std::size_t> subset_open_aux(
     container::vector<Index> const& aux_list) {
   container::vector<OptRes> results(
       (std::size_t{1} << network.tensors().size()));
-  // NOT pruned: is_external_mode consumes open_modes over the full subset
+  // Not pruned: is_external_mode consumes open_modes over the full subset
   // lattice (including disconnected subsets), so every entry must be real.
   init_results(network, tidxs, results);
-  // A batchable mode may be open either DIRECTLY (a top-level open index) or as
-  // a PROTOINDEX of an open index: protoindices become plain outer modes in the
+  // A batchable mode may be open either directly (a top-level open index) or as
+  // a protoindex of an open index: protoindices become plain outer modes in the
   // array view, so a mode carried as a proto of an open index is open too. Both
   // are checked structurally -- no index-space kind is consulted, keeping this
   // layer domain-generic.

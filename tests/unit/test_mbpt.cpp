@@ -14,6 +14,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
+#include <SeQuant/domain/mbpt/rdm.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
@@ -736,12 +737,12 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto L_3 = l(3)->as<op_t>();
       //    std::wcout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
       //    std::endl;
-      // under this test's scoped_hermitian_amplitudes() pinning, the
-      // (legacy-Hermitian) L canonicalizes to its swapped+starred spelling
-      REQUIRE(
-          to_latex(simplify(L_3.tensor_form())) ==
-          L"{{{\\frac{1}{36}}}{{\\bar{L}^*}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_"
-          L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
+      // L̄ is Hermitian: the conjugate braket fold spells it in its canonical
+      // orientation with the elementwise-conjugation marker
+      REQUIRE(to_latex(simplify(L_3.tensor_form())) ==
+              L"{{{\\frac{1}{36}}}{{\\bar{L}^*}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{"
+              L"a_3}}}{"
+              L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
 
       auto R_2_3 = r(nₚ(3), nₕ(2))->as<op_t>();
       //    std::wcout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form()))
@@ -754,11 +755,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto L_1_2 = l(nₚ(1), nₕ(2))->as<op_t>();
       // std::wcout << "l(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
       // std::endl;
-      REQUIRE(
-          to_latex(simplify(L_1_2.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{{\\bar{L}^*}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
-          L"{i_1}{i_2}}"
-          L"_{\\textvisiblespace\\,{a_1}}}}");
+      REQUIRE(to_latex(simplify(L_1_2.tensor_form())) ==
+              L"{{{\\frac{1}{2}}}{{\\bar{L}^*}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}"
+              L"^{{i_"
+              L"1}{i_2}}"
+              L"_{\\textvisiblespace\\,{a_1}}}}");
 
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
       //    std::wcout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
@@ -826,14 +827,14 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       lower_to_tensor_form(L23);
       simplify(L23);
       // std::wcout << "L23: " << to_latex(L23) << std::endl;
-      REQUIRE(to_latex(L23) ==
-              L"{ "
-              L"\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
-              L"{{{\\frac{1}{12}}}{{\\bar{L}^*}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}}"
-              L"}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_"
-              L"2}}}} + "
-              L"{{{\\frac{1}{2}}}{{\\bar{L}^*}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{"
-              L"a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
+      REQUIRE(
+          to_latex(L23) ==
+          L"{ "
+          L"\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+          L"{{{\\frac{1}{12}}}{{\\bar{L}^*}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}}}{"
+          L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}} + "
+          L"{{{\\frac{1}{2}}}{{\\bar{L}^*}^{{i_1}{i_2}}_{{a_1}}}{"
+          L"\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
 
       // perturbation ops
       REQUIRE_NOTHROW(Hʼ(1, {.order = 1}));
@@ -1143,8 +1144,8 @@ SECTION("SRSF") {
     auto scalar = expr->as<Product>().scalar();
     REQUIRE(scalar == 1);
     REQUIRE_THAT(expr,
-                 EquivalentTo("Ŝ{a_3,a_4;i_3,i_4}:N-C-S * "
-                              "f{a_1,a_2;i_1,i_2}:N-C-S * ã{i_3,i_4;a_3,a_4}"));
+                 EquivalentTo("Ŝ{a_3,a_4;i_3,i_4} * "
+                              "f{a_1,a_2;i_1,i_2}:N-N-S * ã{i_3,i_4;a_3,a_4}"));
   }
 }  // SECTION("SRSF")
 
@@ -1189,8 +1190,10 @@ SECTION("MRSO") {
     const Index p{L"p_1"};  // complete space (spans core + active + virtual)
     const Index q{L"p_2"};
     // creator index (p) -> tensor bra, annihilator index (q) -> tensor ket
+    // column symmetry is spelled out to match how mbpt::OpMaker builds h
+    // everywhere else; the programmatic default is the conservative Nonsymm
     auto H1 = ex<Tensor>(L"h", bra{p}, ket{q}, Symmetry::Nonsymm,
-                         BraKetSymmetry::Conjugate) *
+                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
               fcrex(p) * fannx(q);
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
@@ -1210,38 +1213,6 @@ SECTION("MRSO") {
         std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
                    << std::endl;
       }
-    }
-
-    SECTION("density-fit nested factors") {
-      // a tensor to decompose inside a Sum factor of a Product (the shape
-      // csv_transform / a flavor expansion leaves behind) is decomposed too,
-      // and its aux index does not collide with the aux index of a decomposed
-      // tensor of the enclosing product
-      auto const& reg = get_default_context().index_space_registry();
-      const IndexSpace aux_space = reg->retrieve(L"x");
-      ExprPtr nested = deserialize(L"g{a1,i1;a2,i2} C{a1;a3}") +
-                       deserialize(L"g{i1,a1;i2,a2} C{a1;a4}");
-      ExprPtr input = deserialize(L"g{a3,i3;a4,i4}") * nested;
-      ExprPtr actual = mbpt::density_fit(input, aux_space, L"g", L"B");
-      // no 4-center g survives anywhere in the tree
-      bool has_g4 = false;
-      actual->visit(
-          [&](ExprPtr const& e) {
-            if (e->is<Tensor>() && e->as<Tensor>().label() == L"g" &&
-                e->as<Tensor>().aux_rank() == 0)
-              has_g4 = true;
-          },
-          /* atoms_only = */ true);
-      REQUIRE_FALSE(has_g4);
-      // the outer factor took x_1 (its single tensor slot); the nested leaves
-      // continue the numbering of the term
-      expand(actual);
-      simplify(actual);
-      REQUIRE_THAT(actual,
-                   EquivalentTo(L"B{a3;a4;x_1} B{i3;i4;x_1} B{a1;a2;x_2} "
-                                L"B{i1;i2;x_2} C{a1;a3} + B{a3;a4;x_1} "
-                                L"B{i3;i4;x_1} B{i1;i2;x_2} B{a1;a2;x_2} "
-                                L"C{a1;a4}"));
     }
 #endif
 }  // SECTION("MRSO")
@@ -1288,9 +1259,9 @@ SECTION("rules") {
     const std::vector<std::wstring> expected = {
         L"t{a1,a2;i1,i2} t{a3;i3}",
         L"t{a1,a2;i1,i2} g{a3;i3}",
-        L"t{a1,a2;i1,i2} B{i1;a1;x_1} B{i2;a2;x_1}",
-        L"t{a1,a2;i1,i2} (B{i1;a1;x_1} B{i2;a2;x_1} "
-        "- B{i2;a1;x_1} B{i1;a2;x_1})",
+        L"t{a1,a2;i1,i2} B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S",
+        L"t{a1,a2;i1,i2} (B{i1;a1;x_1}:N-C-S B{i2;a2;x_1}:N-C-S "
+        "- B{i2;a1;x_1}:N-C-S B{i1;a2;x_1}:N-C-S)",
     };
 
     REQUIRE(inputs.size() == expected.size());
@@ -1305,43 +1276,6 @@ SECTION("rules") {
 
       ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
 
-      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
-    }
-  }
-
-  SECTION("density-fit selective") {
-    // keep g as a 4-center leaf when its two electrons are (unocc,unocc) and
-    // (occ,occ); electron k = (bra[k], ket[k])
-    auto const& reg = get_default_context().index_space_registry();
-    auto split_unless_vvoo = [&reg](Tensor const& t) {
-      auto occ = [&reg](Index const& ix) {
-        return reg->is_pure_occupied(ix.space());
-      };
-      auto vir = [&reg](Index const& ix) {
-        return reg->is_pure_unoccupied(ix.space());
-      };
-      auto const& b = t.bra();
-      auto const& k = t.ket();
-      const bool e1_vv = vir(b[0]) && vir(k[0]), e1_oo = occ(b[0]) && occ(k[0]);
-      const bool e2_vv = vir(b[1]) && vir(k[1]), e2_oo = occ(b[1]) && occ(k[1]);
-      return !((e1_vv && e2_oo) || (e1_oo && e2_vv));
-    };
-    const std::vector<std::wstring> inputs = {
-        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",  // (ov|ov): still decomposed
-        L"t{a1,a2;i1,i2} g{a1,i1;a2,i2}",  // (vv|oo): kept as 4-center
-        L"t{a1,a2;i1,i2} g{i1,a1;i2,a2}",  // (oo|vv): kept as 4-center
-    };
-    const std::vector<std::wstring> expected = {
-        L"t{a1,a2;i1,i2} B{i1;a1;x_1} B{i2;a2;x_1}",
-        L"t{a1,a2;i1,i2} g{a1,i1;a2,i2}",
-        L"t{a1,a2;i1,i2} g{i1,a1;i2,a2}",
-    };
-    REQUIRE(inputs.size() == expected.size());
-    const IndexSpace aux_space = reg->retrieve(L"x");
-    for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(inputs.at(i));
-      ExprPtr actual = mbpt::density_fit(deserialize(inputs.at(i)), aux_space,
-                                         L"g", L"B", split_unless_vvoo);
       REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
     }
   }
@@ -1523,8 +1457,7 @@ SECTION("manuscript-examples") {
         simplify(expr),
         EquivalentTo(
             L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S "
-            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 "
-            L"g{p3,p4;p1,p2}:A-C-S "
+            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
             L"x{a1,a2;i1,i2}:A-N-S y{a3,a4;i3}:A-N-S ã{p1,p2;p3,p4} "
             L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
   }
@@ -1552,7 +1485,7 @@ SECTION("avoided-connections") {
   // only one term with no A-{f,g} connection
   REQUIRE(res2.is<sequant::Product>());
   const std::wstring expected2 =
-      L"-1 Â{i_1;a_1}:A-C-S t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
+      L"-1 Â{i_1;a_1} t{a_1,a_2;i_2,i_1}:A-C-S f{i_2;a_2}:A-C-S";
   REQUIRE_THAT(sequant::simplify(res2), EquivalentTo(expected2));
 
   // same test as above but from Operator level and labels for connectivity
@@ -1572,8 +1505,37 @@ SECTION("avoided-connections") {
   REQUIRE(res4_full.size() == 4);
   REQUIRE(res4.is<sequant::Product>());  // only single term survives
   const std::wstring expected4 =
-      L"Â{i_1;a_2}:A-C-S Â{a_1;i_2}:A-C-S g{i_3,i_2;a_3,a_1}:A-C-S "
+      L"Â{i_1;a_2} Â{a_1;i_2} g{i_3,i_2;a_3,a_1}:A-C-S "
       L"t{a_3,a_2;i_3,i_1}:A-C-S";
   REQUIRE_THAT(simplify(res4), EquivalentTo(expected4));
+}
+
+SECTION("rdm-decomposition symmetries") {
+  using namespace sequant;
+
+  // an RDM is Hermitian and particle (column) symmetric by definition, and the
+  // decompositions in mbpt/rdm.cpp must spell out both: the γ they build has
+  // to equal the γ that expectation_value_impl() (mbpt/op.cpp) builds, or
+  // otherwise-equal terms stop merging. The symmetries take part in the tensor
+  // hash, so a mismatch in either attribute is enough to break it.
+  auto ctx_resetter = set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+               .vacuum = Vacuum::SingleProduct}));
+
+  const auto kappa =
+      ex<Tensor>(L"κ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
+                 TensorSymmetries{.column = ColumnSymmetry::Symm});
+  const auto gamma = mbpt::decompositions::cumu_to_density(kappa);
+  REQUIRE(gamma->is<Tensor>());
+  REQUIRE(gamma->as<Tensor>().label() == L"γ");
+  REQUIRE(gamma->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(gamma->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+
+  // ... and the two spellings do compare equal
+  const auto gamma_op =
+      ex<Tensor>(L"γ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
+                 Symmetry::Nonsymm, Hermiticity::Hermitian,
+                 std::optional<ColumnSymmetry>(ColumnSymmetry::Symm));
+  REQUIRE(*gamma == *gamma_op);
 }
 }

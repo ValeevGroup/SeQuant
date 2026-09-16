@@ -3,6 +3,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -13,7 +14,11 @@
 using namespace sequant;
 using namespace sequant::mbpt;
 
+#ifdef SEQUANT_BENCH_MAX_WICK_INPUTS
+static constexpr std::size_t nInputs = SEQUANT_BENCH_MAX_WICK_INPUTS;
+#else
 static constexpr std::size_t nInputs = 5;
+#endif
 
 template <Statistics stats>
 ExprPtr get_op_sequence(std::size_t i) {
@@ -52,7 +57,7 @@ ExprPtr get_op_sequence(std::size_t i) {
              ex<Op>(cre({L"p_13", L"p_14"}), ann({L"p_15", L"p_16"}));
   }
 
-  throw "Invalid index";
+  throw sequant::Exception("Invalid index");
 };
 
 template <Statistics stats>
@@ -143,12 +148,13 @@ VacAvPair get_mbpt_expr(std::size_t i) {
       return {t::l(nₚ(2), nₕ(1)) * t::h(2) * t::r(nₚ(1), nₕ(0)), std::nullopt};
   }
 
-  throw "Invalid index";
+  throw sequant::Exception("Invalid index");
 }
 
 static void mbpt_vac_av(benchmark::State &state, bool csv) {
-  auto ctx = sequant::mbpt::set_scoped_default_mbpt_context(
-      mbpt::Context({.csv = csv ? CSV::Yes : CSV::No}));
+  auto base = mbpt::get_default_mbpt_context();
+  base.set(csv ? CSV::Yes : CSV::No);
+  auto ctx = sequant::mbpt::set_scoped_default_mbpt_context(base);
 
   VacAvPair input = get_mbpt_expr(state.range(0));
 
