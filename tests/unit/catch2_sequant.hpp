@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
@@ -22,6 +23,17 @@
 #include <string_view>
 #include <type_traits>
 #include <variant>
+
+namespace sequant::tests {
+/// Shared particle-symmetric symmetry pack for the MBPT test TUs, which must
+/// spell out MBPT particle symmetry explicitly since programmatic Tensor
+/// construction is Context-independent (see Tensor::Defaults). Defined `inline`
+/// here rather than once per TU so that unity test builds see one definition,
+/// and in a test-only namespace rather than in `sequant` itself so that it
+/// cannot collide with a library symbol.
+inline constexpr TensorSymmetries particle_symmetric{.column =
+                                                         ColumnSymmetry::Symm};
+}  // namespace sequant::tests
 
 namespace Catch {
 
@@ -185,41 +197,28 @@ ExprVar to_expression(T &&expression) {
 
   using BaseT = std::remove_cvref_t<T>;
 
-  // Braket fallback: Hermitian resolved over the ambient field — chosen to
-  // be IDENTICAL to today's programmatic ex<Tensor>(label, bra, ket)
-  // default, so string fixtures and ctor-built tensors always resolve to the
-  // same braket symmetry (the helper's whole job is that the two routes
-  // compare equal). Under a complex field this is Conjugate (the
-  // deserializer's own hard-coded fallback); under a real field it yields
-  // Symm. TODO(PR #596): the default-tensor-symmetry rework makes the
-  // programmatic ctor defaults fixed conservative (Tensor::Defaults,
-  // NonHermitian) and moves the deserializer defaults into the Context
-  // (Context::hermiticity); when it lands, change this fallback in lockstep
-  // (drop it in favor of the Context default, or pin NonHermitian and adjust
-  // the string fixtures) -- it mirrors the ctor default, it does not define
-  // one.
-  const sequant::io::serialization::DeserializationOptions opts{
-      .def_perm_symm = sequant::Symmetry::Nonsymm,
-      .def_braket_symm = sequant::Hermiticity::Hermitian};
-
   if constexpr (std::is_convertible_v<BaseT, std::string>) {
     std::wstring string = sequant::toUtf16(std::forward<T>(expression));
 
     if (std::find(begin(string), end(string), L'=') != end(string)) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::string(std::forward<T>(expression)), opts);
+          std::string(std::forward<T>(expression)),
+          {.def_perm_symm = sequant::Symmetry::Nonsymm});
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::string(std::forward<T>(expression)), opts);
+          std::string(std::forward<T>(expression)),
+          {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
   } else if constexpr (std::is_convertible_v<BaseT, std::wstring>) {
     if (std::find(begin(expression), end(expression), L'=') !=
         end(expression)) {
       return sequant::deserialize<sequant::ResultExpr>(
-          std::wstring(std::forward<T>(expression)), opts);
+          std::wstring(std::forward<T>(expression)),
+          {.def_perm_symm = sequant::Symmetry::Nonsymm});
     } else {
       return sequant::deserialize<sequant::ExprPtr>(
-          std::wstring(std::forward<T>(expression)), opts);
+          std::wstring(std::forward<T>(expression)),
+          {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
   } else if constexpr (std::same_as<BaseT, sequant::ResultExpr>) {
     return expression;

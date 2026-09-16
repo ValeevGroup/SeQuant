@@ -2,6 +2,7 @@
 // Created by Eduard Valeyev on 9/22/24.
 //
 
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 
@@ -38,7 +39,9 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
         sorted_ket_indices.push_back(factor.creators()[i].index());
       }
     } else {
-      throw " unknown type of product, factor is not tensor, constant, or NormalOperator with FermiDirac statistics";
+      throw Exception(
+          "unknown type of product, factor is not tensor, constant, or "
+          "NormalOperator with FermiDirac statistics");
     }
   }
 
@@ -85,8 +88,10 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
             new_kets.push_back(unique_kets_list[j].second[index_label_pos]);
             index_label_pos++;
           }
-          auto new_tensor = ex<Tensor>(label, bra(std::move(new_bras)),
-                                       ket(std::move(new_kets)));
+          // mbpt tensors are particle (column) symmetric
+          auto new_tensor = ex<Tensor>(
+              label, bra(std::move(new_bras)), ket(std::move(new_kets)),
+              Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Symm);
           new_product = new_tensor * new_product;
           new_product->canonicalize();
         }
@@ -107,7 +112,9 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
         }
 
         else {
-          throw " unknown type of product, factor is not tensor, constant, or NormalOperator with FermiDirac statistics";
+          throw Exception(
+              "unknown type of product, factor is not tensor, constant, or "
+              "NormalOperator with FermiDirac statistics");
         }
       }
       if (!summand_exists(
@@ -344,9 +351,11 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
           }
         }
         if (new_pairs > og_pairs) {
-          factor = ex<Constant>(-1) * ex<Tensor>(factor->as<Tensor>().label(),
-                                                 bra(std::move(current_lower)),
-                                                 ket(std::move(current_upper)));
+          factor = ex<Constant>(-1) *
+                   ex<Tensor>(factor->as<Tensor>().label(),
+                              bra(std::move(current_lower)),
+                              ket(std::move(current_upper)), Symmetry::Nonsymm,
+                              std::nullopt, ColumnSymmetry::Symm);
         }
       } else if (factor->is<FNOperator>()) {
         std::vector<Index> current_upper;
@@ -422,7 +431,8 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
             new_lower.push_back(factor->as<Tensor>().bra()[i]);
           }
           factor = ex<Tensor>(L"Γ", factor->as<Tensor>().bra(),
-                              factor->as<Tensor>().ket());
+                              factor->as<Tensor>().ket(), Symmetry::Nonsymm,
+                              std::nullopt, ColumnSymmetry::Symm);
         } else if (factor->is<FNOperator>()) {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;
@@ -446,7 +456,7 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
     return_val->canonicalize();
     return return_val;
   } else {
-    throw " non-singlet states not yet supported";
+    throw Exception("non-singlet states not yet supported");
   }
 }
 

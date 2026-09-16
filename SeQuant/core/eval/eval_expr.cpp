@@ -9,6 +9,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -47,6 +48,10 @@ bool is_tot(Tensor const& t) noexcept {
   return ranges::any_of(t.const_indices(), &Index::has_proto_indices);
 }
 
+// Slot-derived metadata -- an intermediate's bra/ket partition, which fixes
+// its result-column grouping -- must be computed on the unfolded spelling;
+// see sequant::value_oriented (core/expressions/tensor.hpp).
+
 }  // namespace
 
 namespace detail {
@@ -57,11 +62,15 @@ template <std::ranges::range Bra, std::ranges::range Ket,
           std::ranges::range Aux>
 ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
                     aux<Aux> a, Symmetry symm, BraKetSymmetry bksymm,
-                    ColumnSymmetry csymm) {
+                    ColumnSymmetry csymm, bool keep_order = false) {
   // This function is creating intermediate tensors, which don't come with
   // an externally provided "correct"/canonical order of its indices.
   // Hence, we are free to define our own canonical order, which we
-  // conveniently set to the indices being sorted in each group.
+  // conveniently set to the indices being sorted in each group -- EXCEPT
+  // when the caller passes an order that must be kept (keep_order): the
+  // placeholder of an opaque node (a Sum) is what an enclosing tensor network
+  // sees, so its slots must be spelled in the order the value is laid out in
+  // (see binarize(Sum)).
   if (opts.merge_indices) {
     using std::ranges::begin;
     using std::ranges::end;
@@ -71,13 +80,15 @@ ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
     indices.insert(indices.end(), begin(k), end(k));
     indices.insert(indices.end(), begin(a), end(a));
 
-    std::ranges::sort(indices);
+    if (!keep_order) std::ranges::sort(indices);
     return ex<Tensor>(label_tensor, bra(), ket(), aux(std::move(indices)), symm,
                       bksymm, csymm);
   } else {
-    std::ranges::sort(b);
-    std::ranges::sort(k);
-    std::ranges::sort(a);
+    if (!keep_order) {
+      std::ranges::sort(b);
+      std::ranges::sort(k);
+      std::ranges::sort(a);
+    }
 
     return ex<Tensor>(label_tensor, std::move(b), std::move(k), std::move(a),
                       symm, bksymm, csymm);
@@ -87,10 +98,11 @@ ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
 template <std::ranges::range Bra, std::ranges::range Ket,
           std::ranges::range Aux>
 ExprPtr make_tensor_wo_symmetries(const BinarizationOptions& opts, bra<Bra>&& b,
-                                  ket<Ket>&& k, aux<Aux>&& a) {
+                                  ket<Ket>&& k, aux<Aux>&& a,
+                                  bool keep_order = false) {
   return make_tensor<Bra, Ket, Aux>(opts, b, k, a, Symmetry::Nonsymm,
                                     BraKetSymmetry::Nonsymm,
-                                    ColumnSymmetry::Nonsymm);
+                                    ColumnSymmetry::Nonsymm, keep_order);
 }
 
 ExprPtr make_tensor(Tensor const& t, bool with_symm,
@@ -134,6 +146,38 @@ std::string EvalExpr::indices_annot() const noexcept {
   return outer + (inner.empty() ? "" : (";" + inner));
 }
 
+std::size_t EvalExpr::layout_fingerprint() const noexcept {
+  if (layout_fingerprint_) return *layout_fingerprint_;
+  layout_fingerprint_ = layout_fingerprint_of(canon_indices_);
+  return *layout_fingerprint_;
+}
+
+std::size_t EvalExpr::layout_fingerprint_of(
+    index_vector const& modes) noexcept {
+  container::map<Index, std::size_t> ids;
+  auto id_of = [&ids](Index const& ix) {
+    return ids.try_emplace(ix, ids.size()).first->second;
+  };
+  std::size_t fp = 0;
+  // Walk the modes in the order the RESULT carries them, which is the order
+  // indices_annot() builds: the proto-free (outer) indices in canonical order,
+  // then the proto-carrying (inner) ones. Using the raw canon_indices() order
+  // instead would separate nodes whose two groups interleave differently while
+  // laying their modes out identically, and needlessly cost cache sharing.
+  auto walk = [&](bool proto) {
+    for (auto const& ix : modes) {
+      if (ix.has_proto_indices() != proto) continue;
+      hash::combine(fp, static_cast<std::int64_t>(ix.space().attr()));
+      hash::combine(fp, id_of(ix));
+      hash::combine(fp, ix.proto_indices().size());
+      for (auto const& p : ix.proto_indices()) hash::combine(fp, id_of(p));
+    }
+  };
+  walk(false);
+  walk(true);
+  return fp;
+}
+
 EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
@@ -167,10 +211,11 @@ CanonTransform normalize_leaf_spelling(Tensor& t) {
 ///      reorder phase multiplies in; a braket-fold marker (the fold swapped
 ///      a Conjugate tensor INTO its canonical orientation) becomes
 ///      {conj, swap}, the canonical slots are kept.
-/// The stored spelling is unmarked and block-canonical: what a leaf
-/// provider serves.
+/// The stored spelling is unmarked and block-canonical: what a leaf provider
+/// serves.
 CanonTransform normalize_leaf(Tensor& t) {
-  auto tr = normalize_leaf_spelling(t);
+  CanonTransform tr;
+  tr = compose(tr, normalize_leaf_spelling(t));
   const auto block_byproduct = TensorBlockCanonicalizer{}.apply(t);
   tr = compose(tr,
                {.phase = static_cast<std::int8_t>(block_byproduct ? -1 : 1)});
@@ -187,8 +232,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
-  // the stored spelling is canonical (unmarked, block-canonical); every
-  // spelling channel becomes a CanonTransform byproduct applied on
+  // the stored spelling is canonical (unmarked, up-row, block-canonical);
+  // every spelling channel becomes a CanonTransform byproduct applied on
   // retrieval, so every route to one canonical spelling lands on one slot
   canon_transform_ = normalize_leaf(expr_->as<Tensor>());
   if (is_tot(tnsr)) {
@@ -243,6 +288,21 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
+  fold_layout_into_hash();
+}
+
+void EvalExpr::fold_layout_into_hash() noexcept {
+  // The slot identity (hash) is label-blind and orientation-blind by design,
+  // so two nodes that lay their result modes out differently -- same-space
+  // externals of an isomorphic network ordered either way (bliss breaks an
+  // automorphic orbit by input vertex order), or a Sum handing up another
+  // summand's layout -- would share it, and a cached buffer served under the
+  // other layout is a transposed value. Fold the (renaming-invariant) layout
+  // fingerprint in, so hash equality implies layout equality: the hash-keyed
+  // value maps of the ordered (DAG) executor and the equality comparator then
+  // agree on what is one value.
+  if (result_type_ == ResultType::Tensor)
+    hash::combine(hash_value_, layout_fingerprint());
 }
 
 EvalExpr::EvalExpr(Constant const& c)
@@ -381,16 +441,18 @@ ExprPtr EvalExpr::denoted_expr() const {
   SEQUANT_ASSERT(is_tensor());
   auto t = expr_->as<Tensor>();
   auto const tr = canon_transform_;
-  // Re-materialize the transform syntactically: the slot swap, and the conj
+  // Re-materialize the transform syntactically: the slot swap, then the conj
   // bit spelled as the marker WHETHER OR NOT it came with the swap: a
   // Hermitian leaf written in its non-canonical orientation denotes as
   // C^*{swapped} -- value-equivalent to the as-written spelling only up to
   // the Hermiticity the parent network does not see -- because the marker
   // COLORS the parent's graph, which is what keeps mixed products such as
   // C.C^* and C.C identity-distinct and their canonical layouts right.
-  // (Spelling the swapped Hermitian leaf unmarked was tried on 2026-09-03:
-  // it broke a PNS-CCD residual in iteration 2 -- a cached intermediate
-  // served in the wrong layout -- while the unit suites stayed green.)
+  // (Spelling the swapped Hermitian leaf unmarked, i.e. taking the marker
+  // out for every channel that came with a conj, was tried on 2026-09-03:
+  // it broke the HSeOH PNS-CCD residual in iteration 2 -- a cached
+  // intermediate served in the wrong layout -- while the unit suites stayed
+  // green.)
   if (tr.braket_swap) static_cast<AbstractTensor&>(t)._swap_bra_ket();
   if (tr.conj) t.conjugate();
   return ex<Tensor>(std::move(t));
@@ -460,11 +522,16 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
 /// BEFORE the last one, so A + B and A + C shared a slot (fixed 2026-09-03).
 template <typename Rng>
 container::svector<size_t> imed_hashes(Rng const& rng) {
+  // prefix hashes over the summands as a MULTISET (order-independent): a Sum
+  // of the same summands in another order is the same value. The layout a
+  // Sum hands up (its first summand's, see binarize(Sum)) is separated by the
+  // layout fingerprint every tensor-valued node folds into its hash, so two
+  // orders that lay their result out differently still get distinct slots.
   container::svector<size_t> result;
   container::svector<size_t> prefix;
   for (auto&& h : rng) {
     prefix.push_back(h);
-    result.push_back(hash::range(prefix.begin(), prefix.end()));
+    result.push_back(hash::range_unordered(prefix.begin(), prefix.end()));
   }
   return result;
 }
@@ -472,6 +539,10 @@ container::svector<size_t> imed_hashes(Rng const& rng) {
 struct ExprWithHash {
   ExprPtr expr;
   size_t hash;
+  /// the factor's own canonical phase: the part of its orientation that its
+  /// spelling in the network cannot carry (an index reorder), see
+  /// collect_tensor_factors
+  std::int8_t phase = 1;
 };
 
 void all_indices(IndexSet& result, ExprPtr const& expr) {
@@ -514,13 +585,24 @@ void collect_tensor_factors(EvalExprNode const& node,  //
     // syntactically); a Sum-rooted subtree contributes its result tensor.
     auto e = (!op && node->expr()->is<Tensor>()) ? node->denoted_expr()
                                                  : node->expr();
+    // The spelling carries the factor's conj / bra-ket swap but not its
+    // reorder phase (a sign is not a spelling), and a Sum root enters in its
+    // slot spelling outright: the phase rides along for the product fold.
     collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
-                                      .hash = salted_hash(node)});
+                                      .hash = salted_hash(node),
+                                      .phase = node->canon_phase()});
   } else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
     collect_tensor_factors(node.right(), collect);
   }
 }
+
+namespace {
+EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
+                            IndexSet const& uncontract,
+                            const BinarizationOptions& opts,
+                            std::size_t& node_counter, bool shared_counter);
+}  // namespace
 
 EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
 
@@ -533,18 +615,22 @@ EvalExprNode binarize(Tensor const& t) {
   // marker, Conjugate-braket orientation) is normalized by the EvalExpr leaf
   // ctor into the canonical unmarked spelling plus a CanonTransform served
   // on retrieval -- a tensor leaf is always just a leaf.
-  return EvalExprNode{EvalExpr{t}};
+  EvalExpr leaf{t};
+  // whose spelling normalization produced a non-trivial retrieval transform.
+  return EvalExprNode{std::move(leaf)};
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
-                      const BinarizationOptions& opts) {
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
   using ranges::views::move;
   using ranges::views::transform;
-  auto summands = sum.summands()  //
-                  | transform([&uncontract, &opts](ExprPtr const& x) {
-                      return impl::binarize(x, uncontract, opts);
-                    })  //
-                  | ranges::to_vector;
+  auto summands =
+      sum.summands()  //
+      | transform([&uncontract, &opts, &node_counter](ExprPtr const& x) {
+          return impl::binarize(x, uncontract, opts, node_counter);
+        })  //
+      | ranges::to_vector;
 
   bool const all_tensors =
       ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
@@ -581,8 +667,13 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   CanonTransform const sum_transform{
       .phase = static_cast<std::int8_t>(hoist_phase ? -1 : 1),
       .conj = hoist_conj};
-  auto make_sum = [i = 0, sum_transform,     //
-                   hs = imed_hashes(hvals),  //
+  // Every binary Sum produced by fold_left_to_node below folds the running
+  // accumulator (the chain seed, or a prior chain Sum) in as the left
+  // operand (see fold_left_to_node in binary_node.hpp: the accumulator is
+  // always `l`), so every chain Sum node accumulates its left operand in
+  // place -- see EvalExpr::accumulate_in_place.
+  auto make_sum = [i = 0, sum_transform,                         //
+                   hs = imed_hashes(hvals) | ranges::to_vector,  //
                    all_tensors, &opts](EvalExpr const& left,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
@@ -590,23 +681,51 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       // partition from the DENOTED orientation (stored canonical slots,
       // re-swapped per the child transform)
       auto const t = left.denoted_expr()->as<Tensor>();
-      return {
+      // The placeholder is what an enclosing tensor network sees for this
+      // (opaque) node, so spell its slots -- within each bra/ket/aux group --
+      // in the node's canonical index order, i.e. the order the value is laid
+      // out in. Sorted by label instead, two relabeled spellings of one sum
+      // (values: transposes of each other, e.g. the bra slots of a
+      // column-symmetric g projected by C's onto a_1,a_2 vs a_2,a_1) spelled
+      // one identical placeholder, and an enclosing product got one hash AND
+      // one canonical layout for both: the cache served one value for the
+      // other untransposed (HSeOH PNS-CCD, (vv|vv) kept 4-center; test
+      // sum_placeholder_is_spelled_in_its_layout).
+      auto const& frame = left.canon_indices();
+      auto in_canon_order = [&frame](auto const& group) {
+        Index::index_vector ordered;
+        for (auto const& ix : frame)
+          if (std::find(group.begin(), group.end(), ix) != group.end())
+            ordered.emplace_back(ix);
+        SEQUANT_ASSERT(ordered.size() == ranges::size(group));
+        return ordered;
+      };
+      // the layout is part of the value's identity (see layout_fingerprint):
+      // the same summands led by a differently laid-out summand are another
+      // slot, or a cached array would be served in the wrong mode order
+      hash::combine(h, EvalExpr::layout_fingerprint_of(left.canon_indices()));
+      EvalExpr result{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
-          detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
-                                            aux(t.aux())),  //
-          left.canon_indices(),                             //
-          sum_transform,                                    //
-          h,                                                //
+          detail::make_tensor_wo_symmetries(
+              opts, bra(in_canon_order(t.bra())), ket(in_canon_order(t.ket())),
+              aux(in_canon_order(t.aux())), /*keep_order=*/true),  //
+          left.canon_indices(),                                    //
+          sum_transform,                                           //
+          h,                                                       //
           nullptr};
+      result.set_accumulate_in_place(true);
+      return result;
     } else {
-      return {EvalOp::Sum,              //
-              ResultType::Scalar,       //
-              detail::make_variable(),  //
-              {},                       //
-              sum_transform,            //
-              h,                        //
-              nullptr};
+      EvalExpr result{EvalOp::Sum,              //
+                      ResultType::Scalar,       //
+                      detail::make_variable(),  //
+                      {},                       //
+                      sum_transform,            //
+                      h,                        //
+                      nullptr};
+      result.set_accumulate_in_place(true);
+      return result;
     }
   };
 
@@ -614,7 +733,8 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 }
 
 EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
-                      const BinarizationOptions& opts) {
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
   using ranges::views::filter;
   using ranges::views::move;
   using ranges::views::transform;
@@ -631,10 +751,42 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                                                                uncontract);
   }();
 
+  // a Re/Im wrapper factor shares the node counter iff every factor is a
+  // scalar (wrappers, constants, variables): then the product has no
+  // contraction nodes of its own and the wrappers' inner nodes are the
+  // summand's DP nodes (mirrors optimize_impl's re-keying)
+  const bool wrapper_shares_counter = ranges::all_of(
+      prod.factors(), [](ExprPtr const& f) { return f->is_scalar(); });
   auto factors =
       prod.factors()  //
-      | transform([i = 0, &ltr_uncontr_idxs, &opts](ExprPtr const& x) mutable {
-          return impl::binarize(x, ltr_uncontr_idxs.children[i++], opts);
+      | transform([i = 0, &ltr_uncontr_idxs, &opts, &node_counter,
+                   wrapper_shares_counter](ExprPtr const& x) mutable {
+          auto const& uncontr = ltr_uncontr_idxs.children[i++];
+          if (x->is<RealPart>())
+            return binarize_re_im(x->as<RealPart>().inner(), EvalOp::RealPart,
+                                  uncontr, opts, node_counter,
+                                  wrapper_shares_counter);
+          if (x->is<ImagPart>())
+            return binarize_re_im(x->as<ImagPart>().inner(), EvalOp::ImagPart,
+                                  uncontr, opts, node_counter,
+                                  wrapper_shares_counter);
+          if (x->is<Sum>()) {
+            // A Sum factor is opaque to the single-term optimizer
+            // (opt_mixed_product stands a placeholder tensor in
+            // for it, and puts the Sum back untouched), so the
+            // contraction nodes INSIDE it are not DP nodes and have
+            // no entry in opts.node_batch_axes: binarize them with
+            // a private counter and no axes. Consuming the shared
+            // counter here shifted every outer node's annotation
+            // onto the wrong (inner) node -- e.g. a contracted-axis
+            // batch mark onto a node whose result still carries
+            // that axis.
+            BinarizationOptions inner_opts = opts;
+            inner_opts.node_batch_axes.clear();
+            std::size_t inner_counter = 0;
+            return impl::binarize(x, uncontr, inner_opts, inner_counter);
+          }
+          return impl::binarize(x, uncontr, opts, node_counter);
         })  //
       | ranges::to_vector;
 
@@ -681,7 +833,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     }
   }
 
-  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, &prefix_conj](
+  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs, &opts, &prefix_conj,
+                    &node_counter](
                        EvalExprNode const& left,
                        EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
@@ -701,6 +854,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const t = tl->denoted_expr()->as<Tensor>();  // denoted orientation
+      hash::combine(h, EvalExpr::layout_fingerprint_of(tl->canon_indices()));
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
@@ -758,34 +912,65 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
            .named_indices = &named_indices});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
-      // the children hand up their DENOTED values (transforms applied) while
-      // the network above is spelled with their canonical slots: their
-      // phases hoist multiplicatively onto this node (A * (-B) = -(A * B)),
-      // so the slot -- phase-blind, shared by the spellings that differ by
-      // a child's antisymmetric reorder -- holds one canonical value
+      // The network above is the FLATTENED one: every leaf (and Sum root)
+      // under this product enters in its slot spelling
+      // (collect_tensor_factors), so canon.phase already relates the value this
+      // node computes -- the contraction of those spellings, phases aside -- to
+      // the canonical network's. The one thing a spelling cannot carry is a
+      // factor's own reorder phase, so those hoist multiplicatively onto this
+      // node (A * (-B) = -(A * B)). A Product child's own phase is NOT
+      // re-applied: its sub-network is part of the flattened one, so its
+      // reorder sign is inside canon.phase already; multiplying it again made
+      // two spellings of one slot disagree by a sign whenever the child's
+      // canonical phase was -1 (cache-only symptom: the slot served -R to one
+      // of them).
+      std::int8_t factor_phase = 1;
+      for (auto const& f : subfacs)
+        factor_phase = static_cast<std::int8_t>(factor_phase * f.phase);
       CanonTransform const transform{
-          .phase = static_cast<std::int8_t>(canon.phase * left->canon_phase() *
-                                            right->canon_phase()),
+          .phase = static_cast<std::int8_t>(canon.phase * factor_phase),
           .conj = hoist_conj};
-      if (scalar_result) {
-        return {EvalOp::Product,          //
-                ResultType::Scalar,       //
-                detail::make_variable(),  //
-                {},                       //
-                transform,                //
-                h,
-                std::move(canon.graph)};
-      } else {
-        return {EvalOp::Product,     //
-                ResultType::Tensor,  //
-                detail::make_tensor_wo_symmetries(opts, bra(target_indices.bra),
-                                                  ket(target_indices.ket),
-                                                  aux(target_indices.aux)),
-                canon.get_indices<Index::index_vector>(),  //
-                transform,                                 //
-                h,
-                std::move(canon.graph)};
+      auto result_indices = canon.get_indices<Index::index_vector>();
+      // the result layout is part of a tensor-valued node's identity (see
+      // layout_fingerprint)
+      if (!scalar_result)
+        hash::combine(h, EvalExpr::layout_fingerprint_of(result_indices));
+      EvalExpr result =
+          scalar_result
+              ? EvalExpr{EvalOp::Product,          //
+                         ResultType::Scalar,       //
+                         detail::make_variable(),  //
+                         {},                       //
+                         transform,                //
+                         h,
+                         std::move(canon.graph)}
+              : EvalExpr{EvalOp::Product,     //
+                         ResultType::Tensor,  //
+                         detail::make_tensor_wo_symmetries(
+                             opts, bra(target_indices.bra),
+                             ket(target_indices.ket), aux(target_indices.aux)),
+                         std::move(result_indices),  //
+                         transform,                  //
+                         h,
+                         std::move(canon.graph)};
+      // This is a genuine contraction (DP) node: the optimizer's
+      // node_batch_axes carries one entry per such node, in the same
+      // left-first post-order (children -- built by the recursive
+      // impl::binarize calls above, which all run before this lambda is
+      // invoked -- fully processed before this node). Stamp it if the caller
+      // supplied per-node modes; always advance node_counter regardless, so
+      // the top-level SEQUANT_ASSERT(node_counter ==
+      // opts.node_batch_axes.size()) in binarize(ExprPtr, ...) can catch a
+      // misaligned optimizer/binarize post-order.
+      if (node_counter < opts.node_batch_axes.size()) {
+        auto const& ann = opts.node_batch_axes[node_counter];
+        result.set_node_slice_mask(ann.axes);
+        result.set_batch_loops_opened_here(ann.opened_here);
+        result.set_batch_order_aware(ann.order_aware);
+        result.set_batch_effective_count(ann.effective_count);
       }
+      ++node_counter;
+      return result;
     }
   };
 
@@ -836,8 +1021,21 @@ namespace {
 // while the inner subtree itself stays on its own shared slot.
 EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
                             IndexSet const& uncontract,
-                            const BinarizationOptions& opts) {
-  auto inner_node = impl::binarize(inner, uncontract, opts);
+                            const BinarizationOptions& opts,
+                            std::size_t& node_counter, bool shared_counter) {
+  // A wrapper at the summand root, or whose product siblings are all
+  // scalars, has its inner contraction nodes as the summand's DP nodes
+  // (the optimizer optimizes the inner and records its batch axes under the
+  // summand): share the node counter. Otherwise the inner is opaque to the
+  // single-term optimizer (like a Sum factor) -- private counter, no axes.
+  EvalExprNode inner_node = [&]() {
+    if (shared_counter)
+      return impl::binarize(inner, uncontract, opts, node_counter);
+    BinarizationOptions inner_opts = opts;
+    inner_opts.node_batch_axes.clear();
+    std::size_t inner_counter = 0;
+    return impl::binarize(inner, uncontract, inner_opts, inner_counter);
+  }();
   auto h = inner_node->hash_value();
   if (auto salt = inner_node->canon_transform().structural_salt(); salt != 0)
     hash::combine(h, salt);
@@ -860,14 +1058,17 @@ EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
 namespace impl {
 
 EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
-                      const BinarizationOptions& opts) {
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
   if (expr->is<RealPart>())
     return binarize_re_im(expr->as<RealPart>().inner(), EvalOp::RealPart,
-                          uncontract, opts);
+                          uncontract, opts, node_counter,
+                          /*shared_counter=*/true);
 
   if (expr->is<ImagPart>())
     return binarize_re_im(expr->as<ImagPart>().inner(), EvalOp::ImagPart,
-                          uncontract, opts);
+                          uncontract, opts, node_counter,
+                          /*shared_counter=*/true);
 
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
@@ -879,10 +1080,10 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Tensor>());
 
   if (expr->is<Sum>())  //
-    return binarize(expr->as<Sum>(), uncontract, opts);
+    return binarize(expr->as<Sum>(), uncontract, opts, node_counter);
 
   if (expr->is<Product>())  //
-    return binarize(expr->as<Product>(), uncontract, opts);
+    return binarize(expr->as<Product>(), uncontract, opts, node_counter);
 
   if (expr->is<Power>())  //
     return binarize(expr->as<Power>());

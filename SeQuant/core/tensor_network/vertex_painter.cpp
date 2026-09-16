@@ -9,10 +9,13 @@ namespace sequant {
 
 VertexPainterImpl::VertexPainterImpl(
     const VertexPainterImpl::NamedIndexSet &named_indices,
-    bool distinct_named_indices, bool color_conjugation)
+    bool distinct_named_indices,
+    const VertexPainterImpl::NamedIndexColorMap *named_index_colors,
+    bool color_conjugation)
     : used_colors_(),
       named_indices_(named_indices),
       distinct_named_indices_(distinct_named_indices),
+      named_index_colors_(named_index_colors),
       color_conjugation_(color_conjugation) {}
 
 std::size_t VertexPainterImpl::to_hash_value(
@@ -47,12 +50,15 @@ std::size_t VertexPainterImpl::to_hash_value(
   //   would not be a fixed point; opt in (canonicalize_slots) once every
   //   tensor's orientation is final.
   // - conditional on the marker, NOT an unconditional
-  //   hash::combine(color_conjugation_ && _conjugated()): colors feed bliss,
-  //   whose canonical labeling depends on the color VALUES, and hash::combine
-  //   is not order-preserving -- combining a constant into every color would
-  //   reshuffle the canonical form of every marker-FREE network as well.
-  //   Perturbing only marked tensors keeps all marker-free networks
-  //   bit-identical to their pre-conjugation-aware canonical forms.
+  //   hash::combine(result, hash::value(color_conjugation_ && _conjugated())):
+  //   colors are not merely compared for equality -- bliss's canonical
+  //   labeling depends on their VALUES, and hash::combine is not
+  //   order-preserving, so folding even a `false` into every color permutes
+  //   the canonical form of every marker-FREE network (measured: the uniform
+  //   combine reoriented Conjugate tensors in 8 canonical-form fixtures,
+  //   θ/γ/F/P/I2, and changed an optimize() factorization). Perturbing only
+  //   marked tensors keeps all marker-free networks bit-identical to their
+  //   pre-conjugation-aware canonical forms.
   if (color_conjugation_ && tensor._conjugated())
     hash::combine(result, hash::value(true));
   return result;
@@ -115,6 +121,12 @@ VertexPainterImpl::Color VertexPainterImpl::operator()(const Index &idx) {
     } else {  // base colors on Index::color(), but shift to keep distinct from
               // unnamed indices
       pre_color = idx.color() + 0xabcd;
+      // If this named (sliced) index carries a DAG-scope loop color, fold it
+      // in so that same-space named indices bound to different loops receive
+      // different colors. Absent color map / absent entry => no-op, i.e.
+      // byte-identical to the space-only named coloring above.
+      if (auto loop_color = loop_color_of(idx))
+        hash::combine(pre_color, *loop_color);
     }
   }
   // shift
@@ -220,6 +232,18 @@ bool VertexPainterImpl::may_have_same_color(const VertexData &data,
     // Either one index is named and the other is not or both are named, but
     // are different indices
     return false;
+  }
+
+  // Two named (sliced) indices bound to different DAG-scope loops are not
+  // interchangeable, even if same-space. Guards against an accidental
+  // color-hash collision folding them back together in ensure_uniqueness.
+  // No color map (or both entries absent) => both nullopt => no effect, i.e.
+  // byte-identical to the space-only comparison below.
+  if (named_index_colors_) {
+    const bool lhs_named = it1 != named_indices_.end();
+    const bool rhs_named = it2 != named_indices_.end();
+    if (lhs_named && rhs_named && loop_color_of(lhs) != loop_color_of(idx))
+      return false;
   }
 
   return lhs.color() == idx.color();

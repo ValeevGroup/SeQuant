@@ -1,15 +1,19 @@
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/optimize/cost_model.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -19,10 +23,13 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -39,7 +46,7 @@ index_to_extent_t default_idx_to_size() {
 /// Diagnostic (env SEQUANT_FACTORIZER_DEBUG): for the chosen factorization
 /// \p result of a single term, log each intermediate's result footprint AS THE
 /// COST MODEL SIZES IT (idx_to_extent + inner_pow), plus the peak (the value
-/// the DensePeakSize objective minimizes), so one can see why the factorizer
+/// the DenseSpaceTime objective minimizes), so one can see why the factorizer
 /// accepted a given intermediate -- e.g. an under-sized multi-composite tensor.
 /// Footprints in mega-elements; outer{...} lists each free outer index extent,
 /// inner{Np:e,...} lists each CSV/PNO composite's proto-index count N and the
@@ -88,39 +95,71 @@ void log_chosen_factorization(ExprPtr const& result,
 /// Optimize a Product that contains only Tensor and scalar factors.
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
-  CostParams const cost{
-      .is_volatile_leaf = opts.batch_policy.is_volatile_leaf,
-      .volatile_weight = opts.volatile_weight,
-      .footprint_weight = opts.footprint_weight,
-      .peak_flops_tolerance = opts.peak_flops_tolerance,
-      .roofline = opts.roofline,
-      .accumulation_factor = opts.batch_policy.accumulation_factor,
-      .prune_outer_products = opts.prune_outer_products};
+  // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
+  // Batching config (both role predicates, batch_target_size, inner_pow,
+  // batch_persistent_only) travels on CostParams.
+  CostParams cost;
+  cost.is_volatile_leaf = opts.batch_policy.is_volatile_leaf;
+  cost.volatile_weight = opts.volatile_weight;
+  cost.footprint_weight = opts.footprint_weight;
+  cost.peak_flops_tolerance = opts.peak_flops_tolerance;
+  cost.roofline = opts.roofline;
+  cost.accumulation_factor = opts.batch_policy.accumulation_factor;
+  cost.peak_threshold = opts.batch_policy.peak_threshold;
+  cost.prune_outer_products = opts.prune_outer_products;
+  cost.batch_spectator_indices = opts.batch_policy.batch_spectator_indices;
+  cost.is_batchable_contracted_index =
+      opts.batch_policy.is_batchable_contracted_index;
+  cost.is_batchable_external_index =
+      opts.batch_policy.is_batchable_external_index;
+  cost.batch_target_size = opts.batch_policy.batch_target_size;
+  cost.inner_pow = opts.inner_pow;
+  cost.batch_persistent_only = opts.batch_policy.persistent_only;
+  // Filled by either batched arm below (both pass &node_axes as out_axes when
+  // term_batch_axes is set); every other objective leaves it empty, so the
+  // term_batch_axes insertion at the end is then a no-op-shaped empty-vector
+  // entry (harmless: the binarizer only consumes entries for summands a
+  // batched objective annotated).
+  container::vector<NodeBatchAnnotation> node_axes;
   auto run = [&]() -> ExprPtr {
     if (opts.objective_function == ObjectiveFunction::DenseFLOPs)
       return opt::single_term_opt<ObjectiveFunction::DenseFLOPs>(
-          prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
+          prod, opts.idx_to_extent, subnet_cse, cost);
     if (opts.objective_function == ObjectiveFunction::DenseSize)
       return opt::single_term_opt<ObjectiveFunction::DenseSize>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTime)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTime>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseTimeSpace)
+      return opt::single_term_opt<ObjectiveFunction::DenseTimeSpace>(
+          prod, opts.idx_to_extent, subnet_cse, cost);
+    if (opts.objective_function == ObjectiveFunction::DenseSpaceTimeBatched)
+      return opt::single_term_opt<ObjectiveFunction::DenseSpaceTimeBatched>(
           prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
-    if (opts.objective_function == ObjectiveFunction::DensePeakSize)
-      return opt::single_term_opt<ObjectiveFunction::DensePeakSize>(
-          prod, opts.idx_to_extent, subnet_cse, cost,
-          opts.batch_policy.is_batchable_index,
-          opts.batch_policy.batch_target_size, opts.inner_pow);
+          opts.term_batch_axes ? &node_axes : nullptr);
     SEQUANT_ASSERT(opts.objective_function ==
-                   ObjectiveFunction::DensePeakSizeBatched);
-    return opt::single_term_opt<ObjectiveFunction::DensePeakSizeBatched>(
+                   ObjectiveFunction::DenseTimeSpaceBatched);
+    return opt::single_term_opt<ObjectiveFunction::DenseTimeSpaceBatched>(
         prod, opts.idx_to_extent, subnet_cse, cost,
-        opts.batch_policy.is_batchable_index,
-        opts.batch_policy.batch_target_size, opts.inner_pow,
-        opts.batch_policy.persistent_only);
+        opts.term_batch_axes ? &node_axes : nullptr);
   };
   ExprPtr result = run();
+  if (opts.term_batch_axes) {
+    // optimize_impl optimizes a Sum's summands with sequant::for_each
+    // (std::execution::par_unseq), so opt_pure_product runs concurrently across
+    // summands -- and this insert into the shared term_batch_axes map is not
+    // thread-safe (std::unordered_map: concurrent inserts race even on distinct
+    // keys -- a rehash tears the structure). Serialize just the insert; the
+    // heavy DP above stays parallel. Without this the map is corrupted and the
+    // downstream whole-Sum re-key reads a wrong-sized node_batch_axes, tripping
+    // binarize's node_counter == size assertion (a nondeterministic, thread-
+    // count-dependent SIGABRT, absent under a sequential par_unseq fallback
+    // such as libc++).
+    static std::mutex term_batch_axes_mutex;
+    std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
+    (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
+  }
   if (std::getenv("SEQUANT_FACTORIZER_DEBUG"))
     log_chosen_factorization(result, opts);
   return result;
@@ -262,7 +301,49 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     }
 
     Sum new_sum(std::move(new_smands), Sum::move_only_tag{});
-    if (!reorder) return ex<Sum>(std::move(new_sum));
+
+    // Re-key the per-summand batch annotations onto the final reassembled Sum.
+    // opt_pure_product keyed each summand's node_batch_axes (one entry per
+    // contraction node, left-first post-order) by that optimized summand's
+    // Product pointer. But the caller binarizes the whole reassembled Sum in
+    // one call and looks the annotation up by the final Sum pointer -- and
+    // under reorder, opt::reorder's clone-on-append (Sum::append clones) gives
+    // the final summands new pointers while new_sum (which still holds the
+    // keyed pointers) is destroyed on return. So gather the per-summand vectors
+    // in the final summand order into one whole-tree vector -- binarize walks
+    // the Sum-tree in that same order, one entry per contraction node, so the
+    // flat node_batch_axes stays aligned with its node counter -- and store it
+    // under the final Sum pointer, dropping the now-unreachable per-summand
+    // entries. Without this, every batch annotation is silently lost and
+    // over-budget intermediates materialize whole. `order` is a list of
+    // clusters, each a list of positions into new_sum, flattened in emission
+    // order (identity for the no-reorder path); it must match how the final Sum
+    // orders its summands.
+    auto rekey_onto =
+        [&](ExprPtr const& result,
+            container::vector<container::vector<std::size_t>> const& order) {
+          if (!opts.term_batch_axes) return;
+          container::vector<NodeBatchAnnotation> combined;
+          for (auto const& clstr : order)
+            for (auto p : clstr) {
+              auto it = opts.term_batch_axes->find(new_sum.summand(p).get());
+              if (it == opts.term_batch_axes->end()) continue;
+              combined.insert(combined.end(),
+                              std::make_move_iterator(it->second.begin()),
+                              std::make_move_iterator(it->second.end()));
+              opts.term_batch_axes->erase(it);
+            }
+          (*opts.term_batch_axes)[result.get()] = std::move(combined);
+        };
+
+    if (!reorder) {
+      container::vector<container::vector<std::size_t>> identity;
+      identity.reserve(new_sum.size());
+      for (std::size_t i = 0; i < new_sum.size(); ++i) identity.push_back({i});
+      auto result = ex<Sum>(std::move(new_sum));
+      rekey_onto(result, identity);
+      return result;
+    }
 
     // Binarize once per optimized summand and hand the nodes to reorder()
     // so they aren't re-built inside clusters(). NOTE: this runs sequentially
@@ -273,7 +354,12 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     for (auto const& s : new_sum.summands()) nodes.push_back(binarize(s));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    return ex<Sum>(opt::reorder(new_sum, nodes));
+    // Same (new_sum, nodes) opt::reorder consumes, so the flattened cluster
+    // order equals the final summand order the reordered Sum emits.
+    auto const order = opt::clusters(new_sum, nodes);
+    auto result = ex<Sum>(opt::reorder(new_sum, nodes));
+    rekey_onto(result, order);
+    return result;
   }
 
   return expr->clone();
@@ -285,6 +371,14 @@ ExprPtr optimize(ExprPtr const& expr, OptimizeOptions opts) {
   if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
   return optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
                        /*parallel_outer=*/true);
+}
+
+OptimizeResult optimize_result(ExprPtr const& expr, OptimizeOptions opts) {
+  if (!opts.idx_to_extent) opts.idx_to_extent = default_idx_to_size();
+  OptimizeResult res;
+  res.expr = optimize_impl(expr, opts, opts.reorder == ReorderSum::Reorder,
+                           /*parallel_outer=*/true);
+  return res;
 }
 
 ResultExpr& optimize(ResultExpr& expr, OptimizeOptions opts) {
@@ -300,8 +394,9 @@ ResultExpr& optimize(ResultExpr&& expr, OptimizeOptions opts) {
 
 namespace {
 inline OptimizeOptions compatibility_opts(bool reorder_sum) {
-  return OptimizeOptions{.reorder = reorder_sum ? ReorderSum::Reorder
-                                                : ReorderSum::NoReorder};
+  return OptimizeOptions{
+      .reorder = reorder_sum ? ReorderSum::Reorder : ReorderSum::NoReorder,
+      .inner_pow = {}};
 }
 }  // namespace
 

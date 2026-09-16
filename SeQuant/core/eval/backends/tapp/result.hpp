@@ -163,6 +163,10 @@ class ResultTensorTAPP final : public Result {
 
   explicit ResultTensorTAPP(T arr) : Result{std::move(arr)} {}
 
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultTensorTAPP<T>>(get<T>());  // T copies deeply
+  }
+
  private:
   using annot_t = container::svector<int64_t>;
   using annot_wrap = Annot<annot_t>;
@@ -233,6 +237,12 @@ class ResultTensorTAPP final : public Result {
     auto pre = get<T>();
     tapp_ops::scal(numeric_type(factor), pre);
     return eval_result<ResultTensorTAPP<T>>(std::move(pre));
+  }
+
+  /// Deep copy: the backing tensor type owns its elements, so its copy
+  /// constructor already produces an independently owned buffer.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<ResultTensorTAPP<T>>(get<T>());
   }
 
   [[nodiscard]] ResultPtr permute(

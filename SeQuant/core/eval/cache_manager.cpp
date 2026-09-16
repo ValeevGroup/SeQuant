@@ -31,7 +31,7 @@ void max_cache(Node const& node,        //
       curr += Memory{}(node);
       max = std::max(curr, max);
       // simulate cache store
-      auto s = cm.store(node, nullptr);
+      auto s = cm.store_and_access(node, nullptr);
     }
   }
 }

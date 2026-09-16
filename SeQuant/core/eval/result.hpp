@@ -9,6 +9,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/conversion.hpp>
@@ -30,16 +31,15 @@ namespace sequant {
 // namespaces in headers ... no" guidance)
 namespace detail {
 
-[[maybe_unused]] inline std::logic_error invalid_operand(
+[[maybe_unused]] inline Exception invalid_operand(
     std::string_view msg = "Invalid operand for binary op") noexcept {
-  return std::logic_error{msg.data()};
+  return Exception{std::string{msg}};
 }
 
-[[maybe_unused]] inline std::logic_error unimplemented_method(
+[[maybe_unused]] inline Exception unimplemented_method(
     std::string_view msg) noexcept {
-  using namespace std::string_literals;
-  return std::logic_error{"Not implemented in this derived class: "s +
-                          msg.data()};
+  return Exception{
+      std::string{"Not implemented in this derived class: "}.append(msg)};
 }
 
 // It is an iterator type
@@ -232,6 +232,13 @@ class Result {
 
   virtual ~Result() noexcept = default;
 
+  /// \return a compact, human-readable rendering of the backing tensor's
+  ///         tiled range (for eval traces -- lets a reader spot a
+  ///         sliced-vs-unsliced mode mismatch that a release build's elided
+  ///         TA_ASSERT would otherwise let deadlock). Default empty for
+  ///         backends with no tiled range (e.g. DryRun).
+  [[nodiscard]] virtual std::string trange_annot() const { return {}; }
+
   ///
   /// \return Returns true if the concrete type of the object is T.
   ///
@@ -280,16 +287,6 @@ class Result {
   [[nodiscard]] virtual ResultPtr permute(
       std::array<std::any, 2> const&) const = 0;
 
-  ///
-  /// \brief Take the adjoint (complex-conjugate transpose) of this result.
-  ///
-  /// Used to evaluate the EvalOp::Adjoint IR node — the unary op that holds a
-  /// bare-label operand and emits T† = conj(T) permuted into the adjoint slot
-  /// order. \p ann is [operand_annot, result_annot] (bra/ket swapped relative
-  /// to the operand); backends with a real numeric type implement this as a
-  /// pure permutation (conj is a no-op) and complex backends apply conj as
-  /// well. Not a pure virtual: only tensor-backed results need it; the
-  /// default throws. Mirrors the slice_mode precedent.
   ///
   /// \brief Applies a canonicalization transform to this result on
   /// retrieval: the returned result equals `phase * (conj? elementwise-conj)`
@@ -341,28 +338,86 @@ class Result {
   }
 
   ///
-  /// \brief Partition mode \p mode into contiguous element-range batches, each
-  /// covering about \p target_batch_size elements.
+  /// \brief Scatter \p block into the `[block_lo, block_hi)` element slice of
+  ///        this result's mode \p mode.
   ///
-  /// \return a list of `[elem_lo, elem_hi)` element ranges that tile the mode's
-  ///         full extent without overlap or gap. The partition is chosen by the
-  ///         backend at its storage granularity: a tiled backend snaps batch
-  ///         boundaries to tile boundaries (so batches are uneven and each
-  ///         covers at least \p target_batch_size elements where possible), a
-  ///         dense backend may split evenly. A single returned batch means the
-  ///         mode is not worth (or cannot be) split. Backend-neutral: the
-  ///         target is expressed in elements, not tiles. Default: not
-  ///         supported.
+  /// The inverse of slice_mode(): where slice_mode() gathers one contiguous
+  /// element block out of a mode, write_into_slice() scatters a per-block
+  /// result into a pre-sized destination's `[block_lo, block_hi)` slice along
+  /// outer \p mode, leaving every other mode untouched. Used to assemble a
+  /// result that is evaluated one block at a time over a partitioned
+  /// (Hadamard/spectator) mode: partitioning the mode into disjoint blocks,
+  /// evaluating each, and write_into_slice()-ing each block into its slice
+  /// reconstructs the whole result. Unlike add_inplace() (which accumulates,
+  /// correct only for a contracted mode), the blocks are disjoint slices of
+  /// one pre-sized result. Element semantics keep this backend-neutral (no
+  /// notion of tiles); a tiled backend may require `[block_lo, block_hi)` to
+  /// fall on tile boundaries and preserves each mode's element lobound. Not a
+  /// pure virtual: only tensor-backed results need it; the default throws.
+  /// Mirrors the slice_mode() precedent.
   ///
-  [[nodiscard]] virtual container::svector<std::pair<std::size_t, std::size_t>>
-  mode_batches(std::size_t /*mode*/, std::size_t /*target_batch_size*/) const {
-    throw detail::unimplemented_method("mode_batches");
+  virtual void write_into_slice(Result const& /*block*/, std::size_t /*mode*/,
+                                std::size_t /*block_lo*/,
+                                std::size_t /*block_hi*/) {
+    throw detail::unimplemented_method("write_into_slice");
+  }
+
+  ///
+  /// \brief Build a zero-filled result shaped like \c *this but with mode
+  ///        \p mode carrying the FULL extent of an external (spectator) axis.
+  ///
+  /// Used to PRE-SIZE the destination of an external-axis scatter (see
+  /// make_batched_custom_evaluator's External branch): \c *this is one block
+  /// partial (the node's result with the external axis sliced to a single
+  /// block, but full on every other mode), and \p axis_src is the unsliced
+  /// axis-carrying leaf whose mode \p axis_src_mode holds the external axis at
+  /// its FULL extent/tiling. The returned result has \c *this's TiledRange with
+  /// dim \p mode replaced by \c axis_src's dim \p axis_src_mode, zero-filled,
+  /// so the per-block partials can be write_into_slice()d into their disjoint
+  /// slices. \p axis_src's tiling on \p axis_src_mode must be the tiling the
+  /// block partials slice from (guaranteed when both derive from the same
+  /// leaf). Not a pure virtual: only tensor-backed results need it; the default
+  /// throws. Mirrors the slice_mode()/write_into_slice() precedent.
+  ///
+  [[nodiscard]] virtual ResultPtr pre_sized_zeros_over_mode(
+      std::size_t /*mode*/, Result const& /*axis_src*/,
+      std::size_t /*axis_src_mode*/) const {
+    throw detail::unimplemented_method("pre_sized_zeros_over_mode");
   }
 
   ///
   /// \brief Add other Result object into this object.
   ///
   virtual void add_inplace(Result const&) = 0;
+
+  /// Diagnostic: the Frobenius norm of the held value (0 for scalars and
+  /// backends without a numeric norm). Default throws.
+  [[nodiscard]] virtual double norm2() const {
+    throw detail::unimplemented_method("norm2");
+  }
+  /// Diagnostic: a short description of the held value's layout (e.g. the
+  /// tiled range of an array). Default: empty.
+  [[nodiscard]] virtual std::string layout_desc() const { return {}; }
+  /// Diagnostic: tile-by-tile comparison with another value of the same
+  /// kind: counts of tiles present (non-zero) only here / only there, and the
+  /// norm of the difference restricted to those one-sided tiles. Default:
+  /// empty.
+  [[nodiscard]] virtual std::string tile_diff(Result const& /*other*/) const {
+    return {};
+  }
+
+  ///
+  /// \brief An independently owned deep copy of this result.
+  ///
+  /// The copy shares no mutable state with this object: \c add_inplace() or
+  /// \c write_into_slice() on either one leaves the other unchanged. Needed
+  /// wherever an accumulation takes ownership of a buffer it does not own --
+  /// the ordered executor's Assemble step seeds its running sum from the
+  /// first batch's partial, which may still be read again (the producing cell
+  /// has life left, or is persistent across evaluations) and so must not be
+  /// mutated in place.
+  ///
+  [[nodiscard]] virtual ResultPtr clone() const = 0;
 
   ///
   /// \brief Particle symmetrize the eval result
@@ -399,8 +454,28 @@ class Result {
     return *std::any_cast<const T>(&value_);
   }
 
-  /// @return the size of the object in bytes
+  /// @return the size of the object in bytes. For a lazy view (see
+  ///         is_buffer_alias()) this is the LOGICAL size of the value it
+  ///         represents, which is the size of the buffer it shares -- not a
+  ///         buffer of its own.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
+
+  /// @return whether this result's buffer is OWNED BY ANOTHER result -- the
+  ///         value is an alias, produced by a transform (phase, conjugation,
+  ///         relabel) that was recorded instead of performed, whether or not
+  ///         anything is still pending (a transform composing to the identity
+  ///         leaves an alias with nothing to apply). Producing one allocates
+  ///         nothing, so a tracer must charge it 0 allocated bytes
+  ///         (size_in_bytes() still reports the value's logical size) and must
+  ///         not count its buffer twice in a working set.
+  [[nodiscard]] virtual bool is_buffer_alias() const { return false; }
+
+  /// Diagnostic (analysis-only): force any deferred/asynchronous computation
+  /// backing this result to complete. Default no-op (scalars are always ready);
+  /// distributed-array backends override to fence their world. Used to make an
+  /// otherwise lazily-executed op's wall-clock timer capture execution rather
+  /// than just dispatch, when SEQUANT_UT_FORCE_SYNC is set at the call site.
+  virtual void fence() const noexcept {}
 
  protected:
   template <typename T,
@@ -424,7 +499,8 @@ class Result {
     return *std::any_cast<const T>(&value_);
   }
 
-  /// replaces the stored value (used by ensure_materialized overrides)
+  /// replaces the stored value in place (an ensure_materialized override
+  /// swaps its materialized copy in for the shared source)
   template <typename T>
   void reset_value(T&& arg) const {
     value_ = std::make_any<std::decay_t<T>>(std::forward<T>(arg));
@@ -459,6 +535,10 @@ class ResultScalar final : public Result {
   explicit ResultScalar(T v) noexcept : Result{std::move(v)} {}
 
   [[nodiscard]] T value() const noexcept { return get<T>(); }
+
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultScalar<T>>(value());
+  }
 
   [[nodiscard]] ResultPtr sum(Result const& other,
                               std::array<std::any, 3> const&) const override {

@@ -297,6 +297,10 @@ class ResultTensorBTAS final : public Result {
 
   explicit ResultTensorBTAS(T arr) : Result{std::move(arr)} {}
 
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultTensorBTAS<T>>(get<T>());  // T copies deeply
+  }
+
  private:
   // TODO make it same as that used by EvalExprBTAS class from eval.hpp file
   using annot_t = container::svector<long>;
@@ -377,6 +381,12 @@ class ResultTensorBTAS final : public Result {
     auto pre = get<T>();
     btas::scal(numeric_type(factor), pre);
     return eval_result<ResultTensorBTAS<T>>(std::move(pre));
+  }
+
+  /// Deep copy: the backing tensor type owns its elements, so its copy
+  /// constructor already produces an independently owned buffer.
+  [[nodiscard]] ResultPtr clone() const override {
+    return eval_result<ResultTensorBTAS<T>>(get<T>());
   }
 
   [[nodiscard]] ResultPtr permute(

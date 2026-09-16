@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
@@ -16,6 +17,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace sequant {
 
@@ -75,6 +77,15 @@ class EvalExpr {
 
   ///
   /// \brief Construct an EvalExpr object from a tensor.
+  ///
+  /// \param tnsr The tensor to wrap as a leaf. The two bra<->ket
+  ///        orientations of a BraKetSymmetry::Conjugate tensor fold onto one
+  ///        canonical spelling: expr() carries the canonical orientation with
+  ///        the elementwise-conjugation marker (Tensor::conjugated()) set when
+  ///        the input was the swapped orientation. The leaf hash is always
+  ///        that of the unconjugated spelling, so the two orientations share
+  ///        a cache slot; binarize(Tensor) serves a conjugated leaf via an
+  ///        EvalOp::Adjoint wrapper over the shared operand.
   ///
   explicit EvalExpr(Tensor const& tnsr);
 
@@ -248,6 +259,39 @@ class EvalExpr {
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
   ///
+  /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
+  ///        canonical slot each result mode holds, and how the proto bundles
+  ///        of the (nested / CSV) modes refer back to those slots.
+  ///
+  /// \details Two nodes may share an evaluation-cache slot only if the value
+  ///          stored for one is, mode for mode, the value the other denotes.
+  ///          The node hash and the graph comparison deliberately identify
+  ///          nodes across index RENAMINGS (that is what makes common
+  ///          subexpressions shareable) and across bra<->ket orientation, and
+  ///          CanonTransform carries the leftover phase / conjugation /
+  ///          bra-ket swap. What none of them carries is a PERMUTATION of the
+  ///          result modes, so a shared slot whose two users order their modes
+  ///          differently hands one of them transposed data -- silently, since
+  ///          annotations are just labels (measured on h2o tpns=0 PNS-CCD,
+  ///          2026-09-03: a nested CSV intermediate whose two pair-basis inner
+  ///          modes were transposed shifted the correlation energy by 2.2e-6).
+  ///
+  ///          The fingerprint numbers the indices by first occurrence in
+  ///          canon_indices() order and hashes (space, id, proto ids) per
+  ///          mode, so it is invariant under a consistent renaming but changes
+  ///          under any reordering of the modes or of a proto bundle.
+  ///
+  /// \return the layout fingerprint (computed once, then memoized)
+  ///
+  [[nodiscard]] std::size_t layout_fingerprint() const noexcept;
+
+  /// the layout fingerprint of a result carrying @p modes (see
+  /// layout_fingerprint()); binarize folds it into the node id of every
+  /// tensor-valued internal node it builds
+  [[nodiscard]] static std::size_t layout_fingerprint_of(
+      index_vector const& modes) noexcept;
+
+  ///
   /// \return The canonicalization phase (+1 or -1).
   ///
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
@@ -260,13 +304,13 @@ class EvalExpr {
 
   /// \return For a tensor-valued node: its DENOTED spelling -- the stored
   /// canonical spelling with the transform re-materialized syntactically:
-  /// bra<->ket swapped back when braket_swap is set and the conj bit spelled
+  /// bra<->ket swapped back when braket_swap is set, and the conj bit spelled
   /// as the conjugation marker. This is the spelling the PARENT network is
-  /// built from (the marker colors its graph); for a Hermitian leaf written
-  /// in the non-canonical orientation it is C^*{swapped}, which equals the
-  /// as-written value only through the Hermiticity the network does not use
-  /// -- an identity convention, not a value statement. The phase, a scalar,
-  /// is not spelled. \pre is_tensor()
+  /// built from (the marker colors its graph); for a Hermitian leaf written in
+  /// the non-canonical orientation it is C^*{swapped}, which equals the
+  /// as-written value only through the Hermiticity the network does not
+  /// use -- so it is an identity convention, not a value statement. The
+  /// phase, a scalar, is not spelled. \pre is_tensor()
   [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///
@@ -289,6 +333,162 @@ class EvalExpr {
   [[nodiscard]] std::shared_ptr<bliss::Graph> copy_connectivity_graph()
       const noexcept;
 
+  ///
+  /// \brief Batchable indices the single-term optimizer chose to slice at
+  /// this node (its DP `aprime`), each tagged with its \c BatchModeType. Empty
+  /// unless set by \c binarize from \c BinarizationOptions::node_batch_axes
+  /// (itself populated from \c OptimizeOptions::term_batch_axes by the
+  /// optimizer). The runtime batched evaluator slices exactly these indices
+  /// at this node.
+  ///
+  [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
+  node_slice_mask() const noexcept {
+    return node_slice_mask_;
+  }
+
+  ///
+  /// \brief Sets the batch modes for this node; see \c node_slice_mask.
+  ///
+  void set_node_slice_mask(
+      container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
+    node_slice_mask_ = std::move(modes);
+  }
+
+  ///
+  /// \brief Batch loops opened at this node: the subset of \c node_slice_mask()
+  /// for which this node is the loop-open site (the outermost node introducing
+  /// the physical batch loop), as opposed to a deeper node that only carries
+  /// the sliced mode. Empty unless set by \c binarize from
+  /// \c NodeBatchAnnotation::opened_here. Unlike \c node_slice_mask() -- which
+  /// the runtime consults per node to slice that node's operands, and which the
+  /// DP stamps on every carrying node -- this names each physical loop exactly
+  /// once, so a consumer reconstructing the enclosing-loop nest (e.g.
+  /// \c peak_profile's \c OccurrenceRec::ectx) does not multi-count one loop as
+  /// one-per-carrying-node.
+  ///
+  [[nodiscard]] container::svector<std::pair<Index, BatchModeType>> const&
+  batch_loops_opened_here() const noexcept {
+    return batch_loops_opened_here_;
+  }
+
+  ///
+  /// \brief Sets the loop-open modes for this node; see
+  /// \c batch_loops_opened_here.
+  ///
+  void set_batch_loops_opened_here(
+      container::svector<std::pair<Index, BatchModeType>> modes) noexcept {
+    batch_loops_opened_here_ = std::move(modes);
+  }
+
+  ///
+  /// \brief Canonical batch modes that slice this node in every occurrence
+  /// (the cross-occurrence meet; see \c stamp_lifetime_masks). Empty =>
+  /// all-full (block-agnostic, run-scope). Proto-aware: a composite slot
+  /// contributes its proto indices. Set by \c stamp_lifetime_masks; empty by
+  /// default (off path).
+  ///
+  [[nodiscard]] container::svector<Index> const& sliced_modes() const noexcept {
+    return sliced_modes_;
+  }
+
+  ///
+  /// \brief Sets the cross-occurrence sliced-mode mask; see \c sliced_modes.
+  ///
+  void set_sliced_modes(container::svector<Index> m) noexcept {
+    sliced_modes_ = std::move(m);
+  }
+
+  ///
+  /// \brief Whether this node's sliced-mode mask is empty (all modes full /
+  /// block-agnostic). Equivalent to \c sliced_modes().empty().
+  ///
+  [[nodiscard]] bool mask_all_full() const noexcept {
+    return sliced_modes_.empty();
+  }
+
+  ///
+  /// \brief The batch modes that slice this occurrence of the node: the loops
+  /// opened at or above it that live on its own result slots. The value's
+  /// home in the table-driven engine (explicit-cells design section 11,
+  /// \c home_scope / \c value_key_of), stamped per occurrence by \c
+  /// stamp_occurrence_homes -- not the cross-occurrence meet (\c
+  /// sliced_modes), which folds occurrences by node identity and by label and
+  /// serves the forest-descent path's residency. Empty = whole.
+  ///
+  [[nodiscard]] container::svector<Index> const& occurrence_home()
+      const noexcept {
+    return occurrence_home_;
+  }
+
+  /// \brief Sets this occurrence's home; see \c occurrence_home.
+  void set_occurrence_home(container::svector<Index> m) noexcept {
+    occurrence_home_ = std::move(m);
+  }
+
+  ///
+  /// \brief This occurrence's value key (explicit-cells design section 11):
+  /// node id + (position, loop slot) of every home-sliced position + the
+  /// operands' keys, stamped by \c compute_dag_boulevard once loop instances
+  /// are numbered; 0 = not stamped (\c value_key_of then falls back to the
+  /// structural key).
+  ///
+  [[nodiscard]] std::size_t value_key() const noexcept { return value_key_; }
+
+  /// \brief Sets this occurrence's value key; see \c value_key.
+  void set_value_key(std::size_t k) noexcept { value_key_ = k; }
+
+  ///
+  /// \brief Whether this \c Sum node's result should be accumulated in place
+  /// into its left operand rather than materialized as a fresh value. Set by
+  /// \c binarize on the accumulation-chain \c Sum nodes produced when an
+  /// N-ary \c Sum is folded into binary \c Sum nodes: for a chain
+  /// `(((t1+t2)+t3)+t4)`, every binary \c Sum's left operand is the running
+  /// accumulator (the chain seed or a prior chain \c Sum), so every chain
+  /// \c Sum is marked \c true. Never set based on the right operand.
+  /// Default \c false (off path, behavior-neutral).
+  ///
+  [[nodiscard]] bool accumulate_in_place() const noexcept {
+    return accumulate_in_place_;
+  }
+
+  ///
+  /// \brief Sets the in-place accumulation flag; see \c accumulate_in_place.
+  ///
+  void set_accumulate_in_place(bool v) noexcept { accumulate_in_place_ = v; }
+
+  ///
+  /// \brief Emitted effective use count of this contraction node: the number of
+  /// times its value is (re)referenced across the enclosing batch loops it does
+  /// not carry. \c 1 (the default and the order-blind / off-path value) means
+  /// the node is used once (no across-loop reuse). See
+  /// \c NodeBatchAnnotation::effective_count.
+  ///
+  [[nodiscard]] std::size_t batch_effective_count() const noexcept {
+    return batch_effective_count_;
+  }
+
+  ///
+  /// \brief Whether the order-aware cost model emitted this node -- the
+  /// per-level placement order-aware gate. \c false (default, off path) means
+  /// the node is never hoisted. See
+  /// \c NodeBatchAnnotation::order_aware.
+  ///
+  [[nodiscard]] bool batch_order_aware() const noexcept {
+    return batch_order_aware_;
+  }
+
+  ///
+  /// \brief Sets the order-aware placement gate; see \c batch_order_aware.
+  ///
+  void set_batch_order_aware(bool v) noexcept { batch_order_aware_ = v; }
+
+  ///
+  /// \brief Sets the effective use count; see \c batch_effective_count.
+  ///
+  void set_batch_effective_count(std::size_t count) noexcept {
+    batch_effective_count_ = count;
+  }
+
  protected:
   std::optional<EvalOp> op_type_ = std::nullopt;
 
@@ -297,12 +497,38 @@ class EvalExpr {
   ExprPtr expr_;
 
   index_vector canon_indices_;
+  mutable std::optional<std::size_t> layout_fingerprint_;
+
+  /// folds layout_fingerprint() into hash_value_ for a tensor-valued leaf;
+  /// called once canon_indices_ is final (see the definition)
+  void fold_layout_into_hash() noexcept;
 
   CanonTransform canon_transform_{};
 
   size_t hash_value_;
 
   std::shared_ptr<bliss::Graph> connectivity_;
+
+  /// See \c node_slice_mask.
+  container::svector<std::pair<Index, BatchModeType>> node_slice_mask_{};
+
+  /// See \c batch_loops_opened_here.
+  container::svector<std::pair<Index, BatchModeType>>
+      batch_loops_opened_here_{};
+
+  /// See \c sliced_modes.
+  container::svector<Index> sliced_modes_{};
+  container::svector<Index> occurrence_home_{};
+  std::size_t value_key_ = 0;
+
+  /// See \c batch_order_aware.
+  bool batch_order_aware_ = false;
+
+  /// See \c batch_effective_count.
+  std::size_t batch_effective_count_ = 1;
+
+  /// See \c accumulate_in_place.
+  bool accumulate_in_place_ = false;
 };
 
 struct EvalOpSetter {
@@ -316,6 +542,13 @@ struct BinarizationOptions {
   /// (stored as aux indices) instead of retaining the bra, ket and aux
   /// separation
   bool merge_indices = false;
+
+  /// Per-contraction-node sliced-sets (RPN / post-order, left-first) to stamp
+  /// onto the produced tree's Product (contraction) nodes; typically set from
+  /// the corresponding entry of \c OptimizeOptions::term_batch_axes for the
+  /// summand being binarized. Empty (default) => no stamping, no behavior
+  /// change. See \c EvalExpr::node_slice_mask.
+  container::vector<NodeBatchAnnotation> node_batch_axes = {};
 };
 
 namespace meta {
@@ -404,8 +637,15 @@ concept leaf_node_evaluator =
 
 namespace impl {
 
+/// \param node_counter Running left-first-post-order count of contraction
+///        (Product) nodes constructed so far, threaded by reference through
+///        the whole recursive descent for one top-level \c binarize call, so
+///        it can be checked against \c opts.node_batch_axes.size() by the
+///        caller. Must be the same counter object across the entire call
+///        tree of a single top-level invocation; do not reset per subtree.
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
-                                  const BinarizationOptions& opts);
+                                  const BinarizationOptions& opts,
+                                  std::size_t& node_counter);
 }  // namespace impl
 
 ///
@@ -447,7 +687,17 @@ binarize(ExprPtr const& expr, IndexSet const& external = {},
          const BinarizationOptions& opts = {}) {
   SEQUANT_ASSERT(
       ranges::all_of(external, [](const auto& idx) { return idx.nonnull(); }));
-  auto tree = impl::binarize(expr, external, opts);
+  std::size_t node_counter = 0;
+  auto tree = impl::binarize(expr, external, opts, node_counter);
+  // A non-empty opts.node_batch_axes means the caller expects every entry to
+  // be consumed by exactly one contraction node, in the same left-first
+  // post-order the optimizer emitted them in (see PeakBatchedModel::
+  // reconstruct_batched_modes and single_term_opt's Product-building loop). A
+  // count mismatch means the optimizer's and binarize's post-orders diverged --
+  // fail loudly rather than silently stamp the wrong nodes.
+  if (!opts.node_batch_axes.empty()) {
+    SEQUANT_ASSERT(node_counter == opts.node_batch_axes.size());
+  }
   if constexpr (std::is_same_v<ExprT, EvalExpr>)
     return tree;
   else

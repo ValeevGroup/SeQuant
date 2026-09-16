@@ -8,6 +8,7 @@
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/scope.hpp>
 
 #include "catch2_sequant.hpp"
@@ -37,7 +38,7 @@ void write_eigen_tensor_to_numpy(
     const Eigen::Tensor<Scalar, NumDims, Options, IndexType> &tensor) {
   std::ofstream file(filename, std::ios::binary);
   if (!file) {
-    throw std::runtime_error("Cannot open file for writing: " + filename);
+    throw sequant::Exception("Cannot open file for writing: " + filename);
   }
 
   // Magic number
@@ -61,7 +62,7 @@ void write_eigen_tensor_to_numpy(
   } else if (std::is_same<Scalar, std::complex<double>>::value) {
     header << "<c16";
   } else {
-    throw std::runtime_error("Unsupported data type");
+    throw sequant::Exception("Unsupported data type");
   }
 
   // Determine layout from Options template parameter
@@ -115,14 +116,14 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
     const std::string &filename) {
   std::ifstream file(filename, std::ios::binary);
   if (!file) {
-    throw std::runtime_error("Cannot open file for reading: " + filename);
+    throw sequant::Exception("Cannot open file for reading: " + filename);
   }
 
   // Read and verify magic number
   char magic[6];
   file.read(magic, 6);
   if (std::string(magic, 6) != "\x93NUMPY") {
-    throw std::runtime_error("Invalid numpy file format");
+    throw sequant::Exception("Invalid numpy file format");
   }
 
   // Read version
@@ -165,7 +166,7 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
   if (Options != 0 && fortran_order != expected_fortran_order) {
     // Only enforce strict layout matching when non-default Options were
     // explicitly specified
-    throw std::runtime_error(
+    throw sequant::Exception(
         std::string("Layout mismatch: numpy file has fortran_order=") +
         (fortran_order ? "True" : "False") +
         ", but tensor expects fortran_order=" +
@@ -176,7 +177,7 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
   auto shape_start = header.find("'shape': (");
   auto shape_end = header.find(")", shape_start);
   if (shape_start == std::string::npos || shape_end == std::string::npos) {
-    throw std::runtime_error("Cannot parse shape from header");
+    throw sequant::Exception("Cannot parse shape from header");
   }
 
   std::string shape_str =
@@ -193,7 +194,7 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
   }
 
   if (shape_vec.size() != NumDims) {
-    throw std::runtime_error("Shape mismatch: expected " +
+    throw sequant::Exception("Shape mismatch: expected " +
                              std::to_string(NumDims) + " dimensions, got " +
                              std::to_string(shape_vec.size()));
   }
