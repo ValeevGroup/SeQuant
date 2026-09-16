@@ -152,6 +152,54 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
     REQUIRE(tree.left().left().leaf());
     REQUIRE(tree.left().right().leaf());
     REQUIRE(tree.right().leaf());
+
+    // The node count follows the replacement: {13,{3,2,1},5} is 5 nodes, down
+    // from 7. size() is CACHED, so the assignment above has to have refreshed
+    // the whole enclosing chain, not just the node assigned to.
+    CHECK(tree.size() == 5);
+    CHECK(tree.left().size() == 3);
+    CHECK(tree.right().size() == 1);
+  }
+
+  SECTION("size() tracks in-place replacement and child steals") {
+    // size() is read off a CACHED per-node count, so every path that changes a
+    // node's children has to refresh it -- on BOTH sides of a move.
+    auto tree =
+        FullBinaryNode<int>{13,
+                            FullBinaryNode<int>{7, FullBinaryNode<int>{3, 2, 1},
+                                                FullBinaryNode<int>(4)},
+                            FullBinaryNode<int>(5)};
+    REQUIRE(tree.size() == 7);
+    REQUIRE(tree.left().size() == 5);
+
+    // Move-construct FROM A CHILD -- the live shape (export.hpp's
+    // prune_scalar_factor does `std::move(node.parent().right())`). The source
+    // stays attached to `tree` and is left a leaf, so `tree` loses the two
+    // nodes that went with the steal; an unrefreshed SOURCE chain would keep
+    // reporting 7.
+    auto hoisted = FullBinaryNode<int>{std::move(tree.left().left())};
+    CHECK(hoisted.size() == 3);
+    CHECK(tree.left().left().leaf());
+    CHECK(tree.left().size() == 3);
+    CHECK(tree.size() == 7 - 2);
+
+    // Assigning it back in place restores the count through `this`'s chain.
+    tree.left().left() = std::move(hoisted);
+    CHECK(tree.left().left().size() == 3);
+    CHECK(tree.size() == 7);
+
+    // Self-move-assignment is a NO-OP, not an amputation: the target's children
+    // are the source's, so a move that parked them in temporaries and then read
+    // the (same, already moved-from) members would leave a childless leaf and
+    // destroy both subtrees. Aliased through a reference so this is a real
+    // runtime self-assignment rather than a -Wself-move diagnostic.
+    FullBinaryNode<int>& alias = tree;
+    tree = std::move(alias);
+    CHECK(*tree == 13);
+    CHECK(tree.size() == 7);
+    CHECK(tree.left().size() == 5);
+    CHECK(tree.left().left().size() == 3);
+    CHECK(tree.right().leaf());
   }
 
   SECTION("digraph generation") {
@@ -354,7 +402,8 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
 // ~thousands (default ~8 MB stack) -- is handled by the heap instead. Built
 // iteratively (O(N) moves) with int data so the test stays cheap. visit() is
 // used to read the tree because it is an iterative (parent-pointer) walk;
-// size()/operator== are still recursive and would themselves overflow here.
+// operator== is still recursive and would itself overflow here (size() is not:
+// it is O(1), read off the cached per-node count).
 TEST_CASE("FullBinaryNode deep-tree ops are stack-safe",
           "[FullBinaryNode][stack-safety]") {
   using sequant::FullBinaryNode;

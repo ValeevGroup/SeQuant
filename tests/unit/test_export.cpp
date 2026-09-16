@@ -19,6 +19,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -70,7 +71,7 @@ std::vector<std::filesystem::path> enumerate_export_tests() {
   base_dir /= "export_tests";
 
   if (!std::filesystem::is_directory(base_dir)) {
-    throw std::runtime_error("Invalid base dir for export tests");
+    throw sequant::Exception("Invalid base dir for export tests");
   }
 
   std::vector<std::filesystem::path> files;
@@ -218,7 +219,7 @@ void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
   auto parse_space_map = [](std::string_view spec) {
     auto pos = spec.find("->");
     if (pos == std::string_view::npos) {
-      throw std::runtime_error("Malformed space map");
+      throw sequant::Exception("Malformed space map");
     }
 
     std::string space(spec.substr(0, pos));
@@ -239,7 +240,7 @@ void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
     auto [space, dim] = parse_space_map(value);
     ctx.set_dim(space, dim);
   } else {
-    throw std::runtime_error(
+    throw sequant::Exception(
         "Unsupported key in Julia context specification '" + std::string(key) +
         "'");
   }
@@ -249,7 +250,7 @@ template <typename Context>
 void add_to_context(Context &ctx, const std::string &line) {
   auto pos = line.find(":");
   if (pos == std::string::npos) {
-    throw std::runtime_error(
+    throw sequant::Exception(
         "Malformed context specification: missing ':' in '" + line + "'");
   }
 
@@ -259,10 +260,10 @@ void add_to_context(Context &ctx, const std::string &line) {
   boost::trim(value);
 
   if (key.empty()) {
-    throw std::runtime_error("Malformed context specification: Empty key");
+    throw sequant::Exception("Malformed context specification: Empty key");
   }
   if (value.empty()) {
-    throw std::runtime_error("Malformed context specification: Empty value");
+    throw sequant::Exception("Malformed context specification: Empty value");
   }
 
   add_to_context(ctx, key, value);

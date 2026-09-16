@@ -12,8 +12,10 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <algorithm>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -156,14 +158,18 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // The binarized tree shall respect the label of the ResultExpr
     ResultExpr res =
         deserialize<ResultExpr>(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"E");
 
     // The binarized tree shall respect the indexing of the ResultExpr
     res = deserialize<ResultExpr>(
         L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
@@ -174,7 +180,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // tree
     res = deserialize<ResultExpr>(
         L"Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
@@ -183,16 +191,23 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // The name-respecting property shall also hold for terminals
     res = deserialize<ResultExpr>(L"Other = Var");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"Other");
 
     res = deserialize<ResultExpr>(L"Amplitude{i1;a1} = t{a1;i1}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
-    REQUIRE(root_expr.as<Tensor>() == Tensor(L"Amplitude",
-                                             bra(IndexList{L"i_1"}),
-                                             ket(IndexList{L"a_1"})));
+    // the deserialized ResultExpr's Amplitude picks up the Context's column
+    // symmetry (Symm), so the programmatic reference must request it too --
+    // programmatic ctors are Context-independent (see Tensor::Defaults)
+    REQUIRE(root_expr.as<Tensor>() ==
+            Tensor(L"Amplitude", bra(IndexList{L"i_1"}), ket(IndexList{L"a_1"}),
+                   TensorSymmetries{.column = ColumnSymmetry::Symm}));
   }
 
   SECTION(
@@ -205,7 +220,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       auto res = deserialize<ResultExpr>(
           std::wstring{L"Result{a3;i1,i2} = "} + std::wstring{expr_str},
           {.def_perm_symm = Symmetry::Antisymm});
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto root = binarize(res);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
       auto const& tensor_operand =
           root.left()->is_tensor() ? root.left() : root.right();
       // Sanity: this contraction must exercise phase=-1, else the CHECK
@@ -300,7 +317,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(g_tree.leaf());
     REQUIRE_FALSE(g_tree->as_tensor().conjugated());
     REQUIRE(g_tree->as_tensor().bra().at(0).label() == L"p_3");  // as written
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto g_tree2 = binarize(ex<Tensor>(g));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(g_tree2.leaf());
     REQUIRE_FALSE(g_tree2->as_tensor().conjugated());
     // a starred spelling is served via Adjoint over the value orientation
@@ -696,6 +715,10 @@ TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
   }
 }
 
+// The cases below build eval trees straight from expressions: the head layout
+// is irrelevant to what they check (slot identity, transforms, phases), so
+// the deprecated binarize(ExprPtr) is used on purpose.
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
 TEST_CASE("eval_expr_conjugation_marker_identity",
           "[EvalExpr][conjugate-fold]") {
   // C(a_1;p) C*(a_2;p) and C*(a_1;p) C(a_2;p) are one tensor S up to the
@@ -753,4 +776,50 @@ TEST_CASE("eval_expr_conjugation_marker_identity",
   auto D = binarize(C(L"a_1") * C(L"a_2"));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(D->hash_value() != A->hash_value());
+}
+
+TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
+  using namespace sequant;
+  auto const tnsr =
+      parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
+  EvalExpr node{tnsr};
+  container::svector<std::pair<Index, BatchModeType>> modes{
+      {Index{L"a_1"}, BatchModeType::Contracted},
+      {Index{L"i_1"}, BatchModeType::External}};
+  node.set_node_slice_mask(modes);
+  REQUIRE(node.node_slice_mask().size() == 2);
+  REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
+  REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
+}
+
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+// Task 5 (multiroot-single-dag-eval): binarize(Sum const&, ...)'s make_sum
+// lambda used to capture its prefix-hash range (imed_hashes(hvals)) as a
+// LAZY, stateful view; ranges::at(hs, ++i) re-begin()s that view on every
+// access, which re-drives inits' internal mutable `++n` counter and
+// silently drops the LAST summand from the running hash -- so two Sums
+// differing only in their last summand collided on hash_value(). The
+// Product path in this same file already materializes its prefix-hash
+// range eagerly (`auto const hs = imed_hashes(hvals) | ranges::to_vector;`)
+// and was unaffected.
+TEST_CASE("Sum-node hash is sensitive to every summand",
+          "[eval][binarize][hash]") {
+  using namespace sequant;
+
+  auto const root = [](std::wstring_view s) {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    return binarize(deserialize(s));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  };
+
+  auto const last_a = root(L"(a * b) + c");  // differ in LAST summand
+  auto const last_b = root(L"(a * b) - c");
+  auto const first_a = root(L"c + (a * b)");  // differ in FIRST summand
+  auto const first_b = root(L"d + (a * b)");  // (already worked pre-fix)
+
+  CHECK(last_a->hash_value() != last_b->hash_value());
+  CHECK(first_a->hash_value() != first_b->hash_value());
+  // (a*b)+c and c+(a*b) are the same multiset of summands -> same hash.
+  CHECK(last_a->hash_value() == first_a->hash_value());
 }

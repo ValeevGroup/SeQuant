@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 using namespace sequant;
@@ -16,6 +17,9 @@ int main(int argc, char *argv[]) {
   Context fermi_ctx = Context({.index_space_registry_shared_ptr = idxreg,
                                .vacuum = Vacuum::SingleProduct});
   set_default_context(fermi_ctx);
+
+  mbpt::Context mbpt_ctx({.op_registry_ptr = mbpt::make_minimal_registry()});
+  mbpt::set_default_mbpt_context(std::move(mbpt_ctx));
 
   Context bose_einstein_ctx = Context(
       {.index_space_registry_shared_ptr = idxreg, .vacuum = Vacuum::Physical});

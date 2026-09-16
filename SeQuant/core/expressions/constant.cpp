@@ -75,4 +75,11 @@ bool Constant::static_equal(const Expr &that) const {
   return value() == static_cast<const Constant &>(that).value();
 }
 
+bool Constant::static_less_than(const Expr &that) const {
+  const auto &that_value = static_cast<const Constant &>(that).value_;
+  if (value_.real() != that_value.real())
+    return value_.real() < that_value.real();
+  return value_.imag() < that_value.imag();
+}
+
 }  // namespace sequant

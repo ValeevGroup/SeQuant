@@ -463,8 +463,10 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(m1 != c2);
         REQUIRE((m1 < var) == !var_is_less);
         REQUIRE((m1 > var) == var_is_less);
-        REQUIRE((var < m1) <= !var_is_less);
-        REQUIRE((var > m1) >= var_is_less);
+        // the cross comparison mirrors the Expr ordering, whichever way the
+        // type ids happen to order Variable and Constant in this run
+        REQUIRE((var < m1) == var_is_less);
+        REQUIRE((var > m1) == !var_is_less);
 
         REQUIRE(m2 != var);
         REQUIRE_FALSE(m2 == var);
