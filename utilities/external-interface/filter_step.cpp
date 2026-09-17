@@ -5,12 +5,14 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sequant::util::extint {
 
@@ -152,24 +154,26 @@ void FilterStep::set_options(const nlohmann::json &options) {
   }
 }
 
-std::size_t FilterStep::process(std::string_view id_prefix,
-                                std::size_t id_start, ExecutionContext &ctx,
-                                const ExpressionData &data) {
-  std::vector<ExpressionData> grouped(groups_.size());
+/// Filters a single input item's expressions into per-group accumulators,
+/// indexed the same way as @p group_names.
+std::vector<ExpressionData> filter_into_groups(
+    const ExpressionData &data,
+    const std::map<std::string, ExpressionFilter, std::less<>> &groups) {
+  std::vector<ExpressionData> grouped(groups.size());
 
   for (const ResultExpr &expr : data.expressions) {
-    auto apply_filter = [&](const Expr &current) {
+    auto apply_filter = [&](const Expr &term) {
       std::size_t idx = 0;
-      for (const auto &[name, filter] : groups_) {
-        if (filter.matches(current)) {
+      for (const auto &[name, filter] : groups) {
+        if (filter.matches(term)) {
           ExpressionData &group = grouped.at(idx);
 
           if (group.expressions.empty()) {
             ResultExpr filtered = expr;
-            filtered.expression() = current.clone();
+            filtered.expression() = term.clone();
             group.expressions.push_back(std::move(filtered));
           } else {
-            group.expressions.back().expression() += current.clone();
+            group.expressions.back().expression() += term.clone();
           }
         }
 
@@ -178,27 +182,84 @@ std::size_t FilterStep::process(std::string_view id_prefix,
     };
 
     if (expr.expression().is<Sum>()) {
-      for (const ExprPtr &current : expr.expression().as<Sum>().summands()) {
-        apply_filter(*current);
+      for (const ExprPtr &term : expr.expression().as<Sum>().summands()) {
+        apply_filter(*term);
       }
     } else {
       apply_filter(*expr.expression());
     }
   }
 
-  std::size_t produced = 0;
-  for (std::size_t idx = 0; idx < grouped.size(); ++idx) {
-    ExpressionData &data = grouped.at(idx);
+  return grouped;
+}
 
-    if (!keep_empty_ && data.expressions.empty()) {
+std::size_t FilterStep::run(std::string_view step_id, ExecutionContext &ctx,
+                            const std::vector<std::string_view> &inputs) {
+  std::vector<std::string> group_names;
+  group_names.reserve(groups_.size());
+  for (const auto &[name, filter] : groups_) {
+    group_names.push_back(name);
+  }
+
+  // Ids of the outputs each group ended up with, across all inputs, for the
+  // group's own name alias (e.g. "step_id.res_with_xy") added at the end.
+  std::vector<std::vector<std::string>> group_members(groups_.size());
+  std::size_t next_slot = 0;
+
+  for (std::string_view current_input : inputs) {
+    for (const ExecutionContext::Data<ProcessingData> &current :
+         ctx.get_data(current_input)) {
+      const ExpressionData &data =
+          convert_data<ExpressionData>(current.data.get());
+
+      SEQUANT_ASSERT(!current.associated_ids.empty());
+
+      try {
+        std::vector<ExpressionData> grouped = filter_into_groups(data, groups_);
+
+        const std::size_t item_slot_start = next_slot;
+
+        for (std::size_t idx = 0; idx < grouped.size(); ++idx) {
+          ExpressionData &group = grouped.at(idx);
+
+          if (!keep_empty_ && group.expressions.empty()) {
+            continue;
+          }
+
+          ctx.set_data(step_id, next_slot, std::move(group));
+          group_members.at(idx).push_back(std::string(step_id) + "." +
+                                          std::to_string(next_slot));
+          ++next_slot;
+        }
+
+        if (next_slot > item_slot_start) {
+          // Preserve this input's own alias (e.g. "res2_p2") on whichever
+          // group(s) it contributed to, mirroring how
+          // OneByOneProcessingStep::run() preserves individual aliases for
+          // steps with a single, unambiguous output per input.
+          detail::alias_individual_ids(
+              ctx, step_id, current.associated_ids,
+              detail::make_output_range_id(step_id, item_slot_start,
+                                           next_slot - item_slot_start));
+        }
+      } catch (const std::exception &e) {
+        throw Exception("Error in " + kind() + " on input " +
+                        std::string(current.associated_ids.front()) + ": " +
+                        e.what());
+      }
+    }
+  }
+
+  for (std::size_t idx = 0; idx < group_members.size(); ++idx) {
+    if (group_members[idx].empty()) {
       continue;
     }
 
-    ctx.set_data(id_prefix, id_start + produced, std::move(data));
-    ++produced;
+    ctx.add_data_alias(group_members[idx],
+                       std::string(step_id) + "." + group_names[idx]);
   }
 
-  return produced;
+  return next_slot;
 }
 
 }  // namespace sequant::util::extint

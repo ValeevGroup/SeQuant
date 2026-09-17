@@ -2,7 +2,6 @@
 #define SEQUANT_EXTERNAL_INTERFACE_FILTERSTEP_HPP
 
 #include "execution_context.hpp"
-#include "processing_data.hpp"
 #include "processing_step.hpp"
 
 #include <SeQuant/core/expr_fwd.hpp>
@@ -38,7 +37,7 @@ class ExpressionFilter {
   std::vector<std::unique_ptr<Rule>> rules_;
 };
 
-class FilterStep : public OneByOneProcessingStep<ExpressionData, false> {
+class FilterStep : public ProcessingStep {
  public:
   std::string kind() const override;
 
@@ -46,10 +45,8 @@ class FilterStep : public OneByOneProcessingStep<ExpressionData, false> {
   bool requires_options() const override;
   void set_options(const nlohmann::json &options) override;
 
- protected:
-  std::size_t process(std::string_view id_prefix, std::size_t id_start,
-                      ExecutionContext &ctx,
-                      const ExpressionData &data) override;
+  std::size_t run(std::string_view step_id, ExecutionContext &ctx,
+                  const std::vector<std::string_view> &inputs = {}) override;
 
  private:
   std::map<std::string, ExpressionFilter, std::less<>> groups_;
