@@ -154,6 +154,13 @@ void FilterStep::set_options(const nlohmann::json &options) {
       for (const auto &[group_name, group_filter] : value.items()) {
         groups_.emplace(group_name, parse_filter(group_filter));
       }
+    } else if (key == "keep_empty") {
+      if (!value.is_boolean()) {
+        throw Exception("Option '" + key + "' for " + kind() +
+                        " requires boolean argument");
+      }
+
+      keep_empty_ = value.get<bool>();
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
