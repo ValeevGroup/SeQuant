@@ -155,25 +155,22 @@ void FilterStep::set_options(const nlohmann::json &options) {
 std::size_t FilterStep::process(std::string_view id_prefix,
                                 std::size_t id_start, ExecutionContext &ctx,
                                 const ExpressionData &data) {
-  std::vector<ExpressionData> grouped;
-  grouped.reserve(groups_.size());
+  std::vector<ExpressionData> grouped(groups_.size());
 
   for (const ResultExpr &expr : data.expressions) {
     auto apply_filter = [&](const Expr &current) {
       std::size_t idx = 0;
       for (const auto &[name, filter] : groups_) {
-        if (!filter.matches(current)) {
-          ++idx;
-          continue;
-        }
+        if (filter.matches(current)) {
+          ExpressionData &group = grouped.at(idx);
 
-        if (grouped.size() <= idx) {
-          ResultExpr filtered = expr;
-          filtered.expression() = current.clone();
-          grouped.emplace_back(
-              ExpressionData{.expressions = {std::move(filtered)}});
-        } else {
-          grouped.at(idx).expressions.back().expression() += current.clone();
+          if (group.expressions.empty()) {
+            ResultExpr filtered = expr;
+            filtered.expression() = current.clone();
+            group.expressions.push_back(std::move(filtered));
+          } else {
+            group.expressions.back().expression() += current.clone();
+          }
         }
 
         ++idx;
