@@ -119,7 +119,17 @@ ExpressionFilter parse_filter(const nlohmann::json &filter) {
 
       ExprMatcher matcher(std::move(*expr), match_opts);
 
-      res.add_rule(std::make_unique<ContainsRule>(std::move(matcher)));
+      auto rule = std::make_unique<ContainsRule>(std::move(matcher));
+
+      if (current.contains("negate")) {
+        if (!current.at("negate").is_boolean()) {
+          throw Exception("\"negate\" requires a boolean argument");
+        }
+
+        rule->negate = current.at("negate").get<bool>();
+      }
+
+      res.add_rule(std::move(rule));
     } else {
       throw Exception("Unknown filter rule type \"" +
                       current.at("type").get<std::string>() + "\"");
