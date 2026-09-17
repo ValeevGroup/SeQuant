@@ -140,10 +140,16 @@ void FilterStep::set_options(const nlohmann::json &options) {
                         " requires object argument");
       }
 
-      groups_.emplace(key, parse_filter(value));
+      for (const auto &[group_name, group_filter] : value.items()) {
+        groups_.emplace(group_name, parse_filter(group_filter));
+      }
     } else {
       throw Exception("Unknown option key for " + kind() + ": '" + key + "'");
     }
+  }
+
+  if (groups_.empty()) {
+    throw Exception("Option 'groups' for " + kind() + " is mandatory");
   }
 }
 
