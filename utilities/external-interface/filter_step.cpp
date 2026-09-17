@@ -9,7 +9,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -36,13 +35,29 @@ void ExpressionFilter::add_rule(std::unique_ptr<Rule> rule) {
   rules_.emplace_back(std::move(rule));
 }
 
+/// Checks @p expr and, recursively, every descendant subexpression against
+/// @p predicate, stopping at the first match.
+template <typename Predicate>
+bool matches_recursively(const Expr &expr, Predicate &&predicate) {
+  if (predicate(expr)) {
+    return true;
+  }
+
+  for (const ExprPtr &sub : expr) {
+    if (matches_recursively(*sub, predicate)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 struct ContainsRule : ExpressionFilter::Rule {
   ContainsRule(ExprMatcher matcher) : matcher_(std::move(matcher)) {}
 
   bool matches(const Expr &expr) const override {
-    return matcher_ == expr || std::ranges::find_if(expr, [&](const auto &e) {
-                                 return e == matcher_;
-                               }) != expr.end();
+    return matches_recursively(
+        expr, [&](const Expr &sub) { return sub == matcher_; });
   }
 
   ExprMatcher matcher_;
@@ -171,6 +186,40 @@ void FilterStep::set_options(const nlohmann::json &options) {
   }
 }
 
+/// Recursively rebuilds @p expr, keeping only the parts relevant to
+/// @p filter: for a Sum, keeps (and further prunes) only those summands
+/// that (recursively) contain a match, dropping the rest; for a Product,
+/// keeps every factor (dropping one would change what the product
+/// computes), pruning each factor in turn; leaves are returned unchanged.
+ExprPtr prune_to_matches(const Expr &expr, const ExpressionFilter &filter) {
+  if (expr.is<Sum>()) {
+    Sum::summands_type kept;
+
+    for (const ExprPtr &summand : expr.as<Sum>().summands()) {
+      if (filter.matches(*summand)) {
+        kept.push_back(prune_to_matches(*summand, filter));
+      }
+    }
+
+    return ex<Sum>(std::move(kept));
+  }
+
+  if (expr.is<Product>()) {
+    const Product &prod = expr.as<Product>();
+    Product::factors_type pruned_factors;
+    pruned_factors.reserve(prod.factors().size());
+
+    for (const ExprPtr &factor : prod.factors()) {
+      pruned_factors.push_back(prune_to_matches(*factor, filter));
+    }
+
+    return ex<Product>(prod.scalar(), std::move(pruned_factors),
+                       Product::Flatten::No);
+  }
+
+  return expr.clone();
+}
+
 /// Filters a single input item's expressions into per-group accumulators,
 /// indexed the same way as @p group_names.
 std::vector<ExpressionData> filter_into_groups(
@@ -187,10 +236,11 @@ std::vector<ExpressionData> filter_into_groups(
 
           if (group.expressions.empty()) {
             ResultExpr filtered = expr;
-            filtered.expression() = term.clone();
+            filtered.expression() = prune_to_matches(term, filter);
             group.expressions.push_back(std::move(filtered));
           } else {
-            group.expressions.back().expression() += term.clone();
+            group.expressions.back().expression() +=
+                prune_to_matches(term, filter);
           }
         }
 
