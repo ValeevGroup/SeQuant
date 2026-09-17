@@ -62,7 +62,7 @@ ExpressionFilter parse_filter(const nlohmann::json &filter) {
       require_all = false;
     } else if (filter.at("mode") != "all") {
       throw Exception("Unknown filter mode '" +
-                      filter.at("mode").get<std::string>());
+                      filter.at("mode").get<std::string>() + "'");
     }
   }
 
