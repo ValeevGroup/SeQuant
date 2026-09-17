@@ -73,7 +73,7 @@ ExpressionFilter parse_filter(const nlohmann::json &filter) {
     throw Exception("Filter is required to have rules");
   }
 
-  if (filter.at("rules").is_array()) {
+  if (!filter.at("rules").is_array()) {
     throw Exception("rules is required to be an array");
   }
 
