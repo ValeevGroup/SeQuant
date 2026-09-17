@@ -133,11 +133,23 @@ class CostModel {
         sequant::opt::detail::memsize_counter(ext, regime_.inner_pow_fn());
     double const elems =
         mc(idxset, container::svector<Index>{}, container::svector<Index>{});
-    return static_cast<std::size_t>(elems * numeric_size_);
+    return static_cast<std::size_t>(elems * bytes_per_element(idxset));
+  }
+
+  /// \brief Bytes per element of a tensor with these indices: \c
+  ///        numeric_size() per real scalar, twice that when any index is over
+  ///        a complex space (see \c sequant::base_field and
+  ///        \c opt::detail::field_cost_factors).
+  [[nodiscard]] double bytes_per_element(
+      container::svector<Index> const& idxset) const {
+    return numeric_size_ *
+           sequant::opt::detail::field_cost_factors(
+               sequant::base_field(idxset, container::svector<Index>{}))
+               .elem_mult;
   }
 
   ///
-  /// \brief Multiply-add count for a contraction whose free (result) indices
+  /// \brief Real flop count for a contraction whose free (result) indices
   ///        are \p out and whose contracted (summed-over) indices are
   ///        \p contracted.
   ///
@@ -160,17 +172,27 @@ class CostModel {
     auto const ext = make_extent_fn(label_extents);
     auto const fc =
         sequant::opt::detail::flops_counter(ext, regime_.inner_pow_fn());
-    return fc(out, contracted, container::svector<Index>{});
+    // flops_counter counts multiply-adds; a complex one (any index over a
+    // complex space) is four real flops.
+    return fc(out, contracted, container::svector<Index>{}) *
+           sequant::opt::detail::field_cost_factors(
+               sequant::base_field(out, contracted))
+               .flop_factor;
   }
 
   ///
   /// \brief Roofline-projected execution cost of one contraction (see
   ///        \c sequant::opt::detail::roofline_op_cost).
   ///
+  /// \p flops_count is the contraction's real flop count (as returned by
+  /// \c flops()) and \p field its field (\c sequant::base_field over its
+  /// result and contracted indices), which sets the width of its elements
+  /// and the real flops per multiply-add (\c opt::detail::field_cost_factors).
   /// \p left_bytes / \p right_bytes / \p result_bytes are the both-operands-
   /// and-result footprints in bytes (as reported by \c
   /// Result::size_in_bytes()); converted to elements (the counter's native
-  /// unit) via \c numeric_size before delegating. All three are charged,
+  /// unit) via the field's element width before delegating. All three are
+  /// charged,
   /// because \c roofline_op_cost's \c traffic is the compulsory single-pass
   /// data movement of one contraction: read both operands, write the result.
   /// This is exactly what the optimizer's DP charges (\c S[lp] + S[rp] +
@@ -183,19 +205,24 @@ class CostModel {
   /// not this term -- it is the separate Hong-Kung bound inside
   /// \c roofline_op_cost.
   ///
-  [[nodiscard]] double exec_cost(double flops_count, std::size_t left_bytes,
+  [[nodiscard]] double exec_cost(double flops_count, Field field,
+                                 std::size_t left_bytes,
                                  std::size_t right_bytes,
                                  std::size_t result_bytes) const {
+    auto const f = sequant::opt::detail::field_cost_factors(field);
+    double const bytes_per_elem = numeric_size_ * f.elem_mult;
     double const traffic_elems =
         static_cast<double>(left_bytes + right_bytes + result_bytes) /
-        numeric_size_;
+        bytes_per_elem;
     return sequant::opt::detail::roofline_op_cost(
-        flops_count, traffic_elems, roofline_.machine_balance,
+        flops_count / f.flop_factor, traffic_elems, roofline_.machine_balance,
         roofline_.fast_mem_elems, roofline_.block_tiles,
-        roofline_.block_prefactor);
+        roofline_.block_prefactor, f.flop_factor, bytes_per_elem / 8.0);
   }
 
   [[nodiscard]] SizeRegime const& regime() const noexcept { return regime_; }
+  /// \return bytes per real scalar (8: double)
+  [[nodiscard]] double numeric_size() const noexcept { return numeric_size_; }
 
   ///
   /// \brief Attach (or detach with nullptr) the optional replay cost sink.
@@ -262,11 +289,9 @@ class CostModel {
   // be (de)attached on a shared_ptr<CostModel const>; a raw non-owning pointer
   // to caller-owned state. nullptr (default) => tally_op is a no-op.
   mutable CostSink* sink_ = nullptr;
-  // sizeof(double); see the OptimizeOptions::numeric_size note in
-  // doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 9
-  // (hardcoded here, matching the C60
-  // trace's real-only CSV-CCk path; complex CSV-CCk is out of scope, see the
-  // plan's carried-minor N4).
+  // Bytes per real scalar (sizeof(double)); complex elements are priced at
+  // twice this through the field of their indices (bytes_per_element), the
+  // same way the optimizer's PeakBatchedModel sizes them.
   double numeric_size_ = 8.0;
 };
 

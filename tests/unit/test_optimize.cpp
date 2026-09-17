@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
@@ -2712,6 +2713,7 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
            {L"i", 20}, {L"a", 20}, {L"μ̃", 200}, {L"Κ", 300}}) {
     reg->retrieve_ptr(k)->approximate_size(v);
   }
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto aux = reg->retrieve(L"Κ");
   auto pao = reg->retrieve(L"μ̃");
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2769,6 +2771,7 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
   ctx_clone.mutable_index_space_registry()->add(L"F", IndexSpace::Type{0b10000},
                                                 4ul);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
   auto is_batchable = [](Index const& ix) {
     return ix.space().base_key() == L"F";
@@ -2866,6 +2869,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
       ->retrieve_ptr(L"a")
       ->approximate_size(3ul);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
   auto is_batchable = [](Index const& ix) {
     return ix.space().base_key() == L"F";
@@ -3204,6 +3208,7 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
     reg->retrieve_ptr(k)->approximate_size(v);
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto aux_space = reg->retrieve(L"Κ");
   auto occ_space = reg->retrieve(L"i");
 
@@ -3382,6 +3387,7 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}})
     reg->retrieve_ptr(k)->approximate_size(v);
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto aux_space = reg->retrieve(L"Κ");
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
@@ -4864,5 +4870,56 @@ TEST_CASE("Re-wrapped summand batch-annotates its inner product",
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     REQUIRE_NOTHROW(binarize(optimized, {}, bopts));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+}
+
+TEST_CASE("field cost factors", "[optimize][roofline]") {
+  using namespace sequant;
+  using sequant::opt::detail::field_cost_factors;
+  using sequant::opt::detail::roofline_op_cost;
+  using sequant::opt::detail::tensors_field;
+
+  // A real element is the unit: one real per element and one real
+  // multiply-add per counted multiply-add. A complex element stores two reals
+  // and a complex multiply-add is four real ones (what zgemm executes).
+  CHECK(field_cost_factors(Field::Real).elem_mult == 1.0);
+  CHECK(field_cost_factors(Field::Real).flop_factor == 1.0);
+  CHECK(field_cost_factors(Field::Complex).elem_mult == 2.0);
+  CHECK(field_cost_factors(Field::Complex).flop_factor == 4.0);
+
+  SECTION("roofline_op_cost scales flops and traffic by the field") {
+    // machine_balance == 0: pure flops, scaled by the flop factor only.
+    CHECK(roofline_op_cost(100, 10, 0, 0, 3, 1) == 100);
+    CHECK(roofline_op_cost(100, 10, 0, 0, 3, 1, 4.0, 2.0) == 400);
+    // machine_balance is calibrated per 8-byte element: complex traffic is
+    // twice as wide (elem_scale 2) while its flops count four times.
+    CHECK(roofline_op_cost(100, 10, 200, 0, 3, 1) == 2000);  // 200 * 10
+    CHECK(roofline_op_cost(100, 10, 200, 0, 3, 1, 4.0, 2.0) ==
+          4000);  // max(400, 200 * 20)
+    // Finite-cache re-read bound: the fast memory holds half as many complex
+    // elements and each element it moves is twice as wide.
+    // real: Q = max(1, 100 / sqrt(100 / 1)) = 10 -> 1000 * 10
+    CHECK(roofline_op_cost(100, 1, 1000, 100, 1, 1) == Catch::Approx(1e4));
+    // complex: Q = max(2, 2 * 100 / sqrt(50 / 1)) -> 1000 * 200 / sqrt(50)
+    CHECK(roofline_op_cost(100, 1, 1000, 100, 1, 1, 4.0, 2.0) ==
+          Catch::Approx(1000.0 * 200.0 / std::sqrt(50.0)));
+  }
+
+  SECTION("tensors_field is the OR of the tensors' base fields") {
+    // The default registry is complex.
+    auto const prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    CHECK(tensors_field(prod->as<Product>().factors()) == Field::Complex);
+    CHECK(tensors_field(std::vector<ExprPtr>{}) == Field::Real);
+
+    // A real-orbital computation marks every space real.
+    auto ctx = get_default_context().clone();
+    auto reg = ctx.mutable_index_space_registry();
+    std::vector<std::wstring> keys;
+    for (auto const& space : *reg) keys.push_back(space.base_key());
+    for (auto const& key : keys)
+      if (auto* sp = reg->retrieve_ptr(key)) sp->field(Field::Real);
+    auto resetter = set_scoped_default_context(std::move(ctx));
+    auto const real_prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    CHECK(tensors_field(real_prod->as<Product>().factors()) == Field::Real);
   }
 }

@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_templated.hpp>
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -23,6 +24,7 @@
 #include <string_view>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 namespace sequant::tests {
 /// Shared particle-symmetric symmetry pack for the MBPT test TUs, which must
@@ -346,6 +348,22 @@ SimplifiesToMatcher SimplifiesTo(T &&expression) {
 template <typename String>
 StringDiffMatcher DiffedStringEquals(String &&str) {
   return StringDiffMatcher(std::forward<String>(str));
+}
+
+/// Pushes a scoped default context in which every index space of the current
+/// registry is real, for tests whose byte and flop numbers assume 8-byte real
+/// elements and one real flop per multiply-add. The registry default is
+/// complex, which the cost models price at 16 bytes and four real flops per
+/// element (sequant::opt::detail::field_cost_factors). Call it after the
+/// test's own registry edits (spaces added later default to complex again).
+inline auto scoped_real_field_context() {
+  auto ctx = sequant::get_default_context().clone();
+  auto reg = ctx.mutable_index_space_registry();
+  std::vector<std::wstring> keys;
+  for (auto const &space : *reg) keys.push_back(space.base_key());
+  for (auto const &key : keys)
+    if (auto *sp = reg->retrieve_ptr(key)) sp->field(sequant::Field::Real);
+  return sequant::set_scoped_default_context(std::move(ctx));
 }
 
 #endif

@@ -1,7 +1,9 @@
 #ifndef SEQUANT_CORE_OPTIMIZE_COST_MODEL_HPP
 #define SEQUANT_CORE_OPTIMIZE_COST_MODEL_HPP
 
+#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/optimize/single_term_detail.hpp>  // helpers + EvalSequence + OptRes
 
 #include <range/v3/view/concat.hpp>
@@ -16,6 +18,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace sequant::opt::detail {
@@ -321,25 +324,76 @@ int pareto_best(container::vector<FP> const& f) {
   return best;
 }
 
+/// \brief Cost factors of a scalar field relative to a real element.
+///
+/// The counters in this file count elements and multiply-adds. A complex
+/// element stores two reals (\c elem_mult) and a complex multiply-add is four
+/// real ones (\c flop_factor: what zgemm executes; the three-multiplication
+/// trick is not what BLAS runs). These factors convert the counts to bytes
+/// and real flops, so a complex network is priced against the same byte
+/// budget (\ref PeakBatchedModel::numeric_size, peak_threshold) and the same
+/// machine balance as a real one. The field of a network is the OR of its
+/// tensors' base fields (\ref tensors_field); the field of an index set is
+/// \c sequant::base_field over its spaces.
+struct FieldCostFactors {
+  double elem_mult = 1.0;
+  double flop_factor = 1.0;
+};
+
+constexpr FieldCostFactors field_cost_factors(Field field) noexcept {
+  return field == Field::Complex ? FieldCostFactors{2.0, 4.0}
+                                 : FieldCostFactors{};
+}
+
+/// \brief The field of a set of tensors: Complex if any of them is over a
+/// complex space, else Real.
+/// \param tensors a range of pointers to AbstractTensor (e.g.
+/// TensorNetwork::tensors()) or to Expr (Product::factors(); non-tensor
+/// factors are real scalars).
+template <typename TensorRange>
+Field tensors_field(TensorRange const& tensors) {
+  for (auto const& t : tensors) {
+    using T = std::remove_cvref_t<decltype(*t)>;
+    Field f = Field::Real;
+    if constexpr (std::is_base_of_v<AbstractTensor, T>)
+      f = base_field(*t);
+    else if constexpr (std::is_base_of_v<Expr, T>) {
+      if (t->template is<Tensor>()) f = t->template as<Tensor>().base_field();
+    } else
+      static_assert(std::is_base_of_v<AbstractTensor, T>,
+                    "tensors_field: elements must point to tensors");
+    if (f == Field::Complex) return Field::Complex;
+  }
+  return Field::Real;
+}
+
 /// \brief Per-contraction roofline secondary cost (tie-break wall-time proxy).
 ///
-/// Returns \c max(flops, beta * Q), with data movement
-/// \c Q = max(traffic, kappa * flops / sqrt(M / c0)) combining compulsory
-/// single-pass traffic with the finite-cache (Hong-Kung) re-read bound. With
-/// \c beta (machine_balance) <= 0 this is exactly \c flops (pure-flop
-/// tie-break, no behavior change). \c traffic is the operand+result footprint
-/// (elements), \c M is fast_mem_elems, \c c0 is block_tiles, \c kappa is
-/// block_prefactor. See doc/dev/specs/2026-06-23-roofline-tiebreak-cost.md.
+/// Returns \c max(flop_factor * flops, beta * Q), with data movement
+/// \c Q = elem_scale * max(traffic, kappa * flops / sqrt(M / (elem_scale *
+/// c0))) combining compulsory single-pass traffic with the finite-cache
+/// (Hong-Kung) re-read bound. With \c beta (machine_balance) <= 0 this is
+/// exactly \c flop_factor * flops (pure-flop tie-break, no behavior change).
+/// \c flops counts multiply-adds and \c traffic is the operand+result
+/// footprint (elements); \c M is fast_mem_elems, \c c0 is block_tiles,
+/// \c kappa is block_prefactor. \c beta and \c M are calibrated in 8-byte
+/// (real double) elements: \c elem_scale is the width of one element of the
+/// priced field in those units (2 for complex double), so complex traffic
+/// moves twice the bytes and the fast memory holds half as many elements,
+/// while \c flop_factor (4 for complex) converts multiply-adds to real flops
+/// (see \ref FieldCostFactors). See
+/// doc/dev/specs/2026-06-23-roofline-tiebreak-cost.md.
 inline double roofline_op_cost(double flops, double traffic,
                                double machine_balance, double fast_mem_elems,
-                               double block_tiles,
-                               double block_prefactor) noexcept {
-  if (machine_balance <= 0.0) return flops;
-  double Q = traffic;
+                               double block_tiles, double block_prefactor,
+                               double flop_factor = 1.0,
+                               double elem_scale = 1.0) noexcept {
+  if (machine_balance <= 0.0) return flop_factor * flops;
+  double Q = elem_scale * traffic;
   if (fast_mem_elems > 0.0 && block_tiles > 0.0)
-    Q = std::max(
-        Q, block_prefactor * flops / std::sqrt(fast_mem_elems / block_tiles));
-  return std::max(flops, machine_balance * Q);
+    Q = std::max(Q, elem_scale * block_prefactor * flops /
+                        std::sqrt(fast_mem_elems / (elem_scale * block_tiles)));
+  return std::max(flop_factor * flops, machine_balance * Q);
 }
 
 /// \brief Peak-memory single-term cost model (DenseSpaceTime objective).
@@ -426,6 +480,8 @@ struct PeakModel {
         flops_of;
     /// Bitmask of volatile leaf tensors (for the flop tie-break weight).
     std::size_t volatile_mask = 0;
+    /// Byte and flop factors of the network's field (see FieldCostFactors).
+    FieldCostFactors field = {};
   };
 
   template <typename TIdxs>
@@ -433,6 +489,7 @@ struct PeakModel {
                         TIdxs const& tidxs) const {
     // CSE is not supported for DenseSpaceTime.
     Context ctx;
+    ctx.field = field_cost_factors(tensors_field(network.tensors()));
     auto const nt = network.tensors().size();
     auto const sz = size_t{1} << nt;
     container::vector<OptRes> results(sz);
@@ -481,7 +538,8 @@ struct PeakModel {
     double const cflops =
         w * roofline_op_cost(ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
                              ctx.S[lp] + ctx.S[rp] + ctx.S[n], machine_balance,
-                             fast_mem_elems, block_tiles, block_prefactor);
+                             fast_mem_elems, block_tiles, block_prefactor,
+                             ctx.field.flop_factor, ctx.field.elem_mult);
     // Cross every (peak,flops) trade-off of the two children.
     for (int li = 0; li < static_cast<int>(lp_st.size()); ++li)
       for (int ri = 0; ri < static_cast<int>(rp_st.size()); ++ri) {
@@ -615,8 +673,11 @@ struct PeakBatchedModel {
   /// BatchPolicy::peak_threshold. +infinity (default) => min-flops (no
   /// batching).
   double peak_threshold = std::numeric_limits<double>::infinity();
-  /// Bytes per stored element, to compare the model's element-count peak to
-  /// peak_threshold (bytes). Default 8 (double / TensorD).
+  /// Bytes per stored real scalar, to compare the model's element-count peak
+  /// to peak_threshold (bytes). Default 8 (double / TensorD). A complex
+  /// network's elements are two of these wide (Context::field, from the
+  /// tensors' base field), so the byte peak is field-aware without changing
+  /// this.
   double numeric_size = 8.0;
   /// Perf-first / peak-second selection: when true, `select_root` selects the
   /// root-frontier point by (flops, then peak) and does not consult
@@ -767,6 +828,8 @@ struct PeakBatchedModel {
     container::vector<std::size_t> open_modes;
     /// Bitmask of volatile leaf tensors.
     std::size_t volatile_mask = 0;
+    /// Byte and flop factors of the network's field (see FieldCostFactors).
+    FieldCostFactors field = {};
     /// idx[n] = subset n's open (result) indices, for the flop tie-break.
     container::vector<IndexSet> idx;
     /// flops_of(lhs, rhs, result) = flop count of one binary contraction.
@@ -1029,6 +1092,7 @@ struct PeakBatchedModel {
                         TIdxs const& tidxs) const {
     // CSE is not supported for DenseSpaceTimeBatched.
     Context ctx;
+    ctx.field = field_cost_factors(tensors_field(network.tensors()));
     ctx.nt = network.tensors().size();
     // Candidates from both batchability roles (contracted / external); the role
     // filter below keeps each mode only if its actual role admits it.
@@ -1226,7 +1290,9 @@ struct PeakBatchedModel {
                     ? ctx.fast_flops(lp, rp)
                     : ctx.flops_of(ctx.idx[lp], ctx.idx[rp], ctx.idx[n]),
                 ctx.sz(lp, 0) + ctx.sz(rp, 0) + ctx.sz(n, 0), machine_balance,
-                fast_mem_elems, block_tiles, block_prefactor);
+                fast_mem_elems, block_tiles, block_prefactor,
+                ctx.field.flop_factor,
+                numeric_size * ctx.field.elem_mult / 8.0);
     // Perf-first ceiling gate: under a finite budget, peak below the budget is
     // free, so flops-neutral contracted slicing must not be applied merely to
     // lower a sub-budget peak. Enabling nsl as a third Pareto objective keeps
@@ -1420,8 +1486,8 @@ struct PeakBatchedModel {
                   container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
     auto const& rootf = st[root][0];
-    auto peak_bytes = [this](double peak_elems) {
-      return peak_elems * numeric_size;
+    auto peak_bytes = [this, &ctx](double peak_elems) {
+      return peak_elems * numeric_size * ctx.field.elem_mult;
     };
     if (perf_first) {
       // Perf-first / peak-second: min flops, ties by lower peak. The frontier
@@ -1583,7 +1649,8 @@ struct PeakBatchedModel {
     // every external loop the schedule uses was opened by the DP inside that
     // cost (BFrontPoint::eopen), so there is nothing to re-size afterwards.
     if (out_root_peak_bytes)
-      *out_root_peak_bytes = st[root][0][best].peak * numeric_size;
+      *out_root_peak_bytes =
+          st[root][0][best].peak * numeric_size * ctx.field.elem_mult;
     // Shared child-extraction for the back-pointer walk below: given a node
     // subset `n`, its enclosing cell `B`, and the chosen frontier index `idx`,
     // fetch the frontier point, descend to the children's cell `C`, and return

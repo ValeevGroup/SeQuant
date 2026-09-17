@@ -65,6 +65,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -1355,7 +1357,47 @@ TEST_CASE("dryrun cost model memsize matches memsize_counter",
   auto direct = sequant::opt::detail::memsize_counter(
       r.idx_to_extent(), r.inner_pow_fn())(idx, container::svector<Index>{},
                                            container::svector<Index>{});
-  CHECK(cm.memsize(idx) == static_cast<std::size_t>(direct * 8.0));
+  // Bytes: the default registry is complex, so an element is two reals.
+  CHECK(cm.memsize(idx) == static_cast<std::size_t>(direct * 16.0));
+  CHECK(cm.numeric_size() == 8.0);
+}
+
+TEST_CASE("dryrun cost model sizes elements and flops by the field",
+          "[dryrun-costmodel]") {
+  auto r = backend_test_regime();
+  CostModel cm{r};
+  container::svector<Index> out{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> contracted{Index{L"i_2"}};
+  auto const madds =
+      sequant::opt::detail::flops_counter(r.idx_to_extent(), r.inner_pow_fn())(
+          out, contracted, container::svector<Index>{});
+  auto const elems = sequant::opt::detail::memsize_counter(
+      r.idx_to_extent(), r.inner_pow_fn())(out, container::svector<Index>{},
+                                           container::svector<Index>{});
+  // Complex (the default registry): two reals per element, four real
+  // multiply-adds per complex one.
+  CHECK(cm.memsize(out) == static_cast<std::size_t>(elems * 16.0));
+  CHECK(cm.flops(out, contracted) == Catch::Approx(madds * 4.0));
+
+  // Real spaces: one real per element, one multiply-add each.
+  auto ctx = get_default_context().clone();
+  auto reg = ctx.mutable_index_space_registry();
+  std::vector<std::wstring> keys;
+  for (auto const& space : *reg) keys.push_back(space.base_key());
+  for (auto const& key : keys)
+    if (auto* sp = reg->retrieve_ptr(key)) sp->field(Field::Real);
+  auto resetter = set_scoped_default_context(std::move(ctx));
+  container::svector<Index> rout{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> rcontracted{Index{L"i_2"}};
+  CHECK(cm.memsize(rout) == static_cast<std::size_t>(elems * 8.0));
+  CHECK(cm.flops(rout, rcontracted) == Catch::Approx(madds));
+  // exec_cost takes real flops and bytes; with no roofline it is the flops.
+  CHECK(cm.exec_cost(cm.flops(rout, rcontracted), Field::Real, cm.memsize(rout),
+                     cm.memsize(rcontracted),
+                     cm.memsize(rout)) == Catch::Approx(madds));
+  CHECK(cm.exec_cost(cm.flops(out, contracted), Field::Complex, cm.memsize(out),
+                     cm.memsize(contracted),
+                     cm.memsize(out)) == Catch::Approx(madds * 4.0));
 }
 
 TEST_CASE("dryrun cost model memsize honors an extent override",
@@ -1381,7 +1423,7 @@ TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
   CHECK(f > 0.0);
   // exec_cost takes the op's FULL compulsory traffic: both operand footprints
   // plus the result's (see the roofline note on CostModel::exec_cost).
-  CHECK(cm.exec_cost(f, cm.memsize(out), cm.memsize(contracted),
+  CHECK(cm.exec_cost(f, Field::Complex, cm.memsize(out), cm.memsize(contracted),
                      cm.memsize(out)) > 0.0);
 }
 
@@ -1406,6 +1448,7 @@ TEST_CASE(
                              .fast_mem_elems = 1000000.0};
   auto const regime = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(regime, rp);
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
 
   Index const i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"}, a4{L"a_4"};
   // Deliberately lopsided operands: big = 20*20*10 = 4000 elements,

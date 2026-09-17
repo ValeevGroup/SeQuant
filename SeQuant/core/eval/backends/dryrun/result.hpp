@@ -327,8 +327,8 @@ struct DryRunOps {
       // finite-cache re-read effect is the separate Hong-Kung term inside
       // roofline_op_cost, not this one.
       double const exec = cm->exec_cost(
-          flops, cm->memsize(idx, ov), cm->memsize(indices_of(other), other_ov),
-          cm->memsize(out, merged));
+          flops, sequant::base_field(out, contracted), cm->memsize(idx, ov),
+          cm->memsize(indices_of(other), other_ov), cm->memsize(out, merged));
       sequant::eval::detail::last_op_exec() = exec;  // for the Build event
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
                 std::format(" | {}", exec), '\n');
