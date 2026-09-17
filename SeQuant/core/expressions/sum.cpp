@@ -1,8 +1,10 @@
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <algorithm>
 #include <cstdlib>
@@ -165,10 +167,42 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
+namespace {
+
+/// Whether the subexpression tree of @p e contains an object already in
+/// @p seen (an object reachable from an earlier summand, or twice from this
+/// one); every object of @p e is added to @p seen as it is met.
+bool shares_seen_object(const ExprPtr &e, container::set<const Expr *> &seen) {
+  if (!seen.insert(e.get()).second) return true;
+  if (e->is_atom()) return false;
+  bool shared = false;
+  for (const auto &child : e->expr())
+    if (shares_seen_object(child, seen)) shared = true;
+  return shared;
+}
+
+}  // namespace
+
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
+
+  // The summands are canonicalized on parallel threads (sequant::for_each
+  // below) and routinely share subexpression objects: tensors reused by
+  // expand(), a nested Sum factor reused across the terms it appears in, a
+  // factor appearing twice in one product. Canonicalization mutates those
+  // objects in place -- index tags, memoized labels and hashes -- from
+  // several threads at once, which is a data race (under
+  // SEQUANT_ASSERT_BEHAVIOR=THROW it surfaces as Taggable::assign on an
+  // already tagged slot). So every summand that reaches an object already
+  // reached by an earlier summand (or twice by itself) is canonicalized on a
+  // PRIVATE clone instead, as optimize_impl does for the same reason.
+  if (num_threads() > 1 && summands_.size() > 1) {
+    container::set<const Expr *> seen;
+    for (auto &summand : summands_)
+      if (shares_seen_object(summand, seen)) summand = summand->clone();
+  }
 
   const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
