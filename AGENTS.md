@@ -66,6 +66,40 @@ trailer — that default is overridden here, and the override is not negotiable
 per-session. If you have already committed with one, amend it out before
 pushing.
 
+## Keep commits to one logical change
+
+When a change is implemented as a sequence of commits, give each commit
+exactly one logical change — even within the same task, and even when a
+later change builds directly on an earlier one. A logical change may touch
+multiple files, but distinct bug fixes go in separate commits from each
+other, a refactor that enables a later change is its own commit separate
+from that change, and a new feature is its own commit separate from the
+fix/refactor it depends on. Do not fold "fix A", "fix B", and "add feature C
+that uses the fixed code" into one commit just because they happened in the
+same session.
+
+## Prefer the smallest diff that achieves the change
+
+Make the smallest change that gets the job done. Don't fold in unrelated
+refactoring, cleanup, or new abstractions the change doesn't strictly
+require, even if the surrounding code looks like it could use it while
+you're in the area — propose that separately and let it be its own change.
+
+## Comments explain the present code; commit messages explain the change
+
+Keep comments brief, and only write one where the *why* isn't obvious from
+the code — a hidden constraint, a subtle invariant, a workaround. Don't use
+a comment to narrate what the code used to do before this change, and don't
+use a comment to justify why this change was made or why this approach was
+chosen over an alternative. That reasoning belongs in the commit message.
+
+## Reuse logic across similar call sites instead of duplicating it
+
+Before adding a second implementation of behavior that already exists
+elsewhere in the tree — even in a different file or class than the one
+being added — factor the shared part out into a function or utility both
+call, rather than copying it.
+
 ## Throw `sequant::Exception`, nothing else
 
 Everything thrown in this tree — library, `utilities/`, `tests/`,
