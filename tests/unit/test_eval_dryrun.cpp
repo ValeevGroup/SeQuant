@@ -388,6 +388,23 @@ bool is_df_batchable(Index const& ix) {
 // aborted every CSV-CCk run at MPQC_ASSERT(is_valid(e)); the proto-aware
 // external-index comparison fixes it. This reuses the real C60 doubles residual
 // data file (a genuine proto-indexed CSV Sum).
+TEST_CASE("is_valid accepts Re/Im/Power nodes", "[utilities][is_valid]") {
+  using namespace sequant;
+  // The time-reversal fold of a complex network emits Re(...) summands; the
+  // production path validates every summand before binarization, so these
+  // node types must be accepted (they are valid iff their inner is).
+  auto prod = deserialize(L"t{a_1;i_1} g{i_1;a_1}");
+  std::string msg;
+  REQUIRE(is_valid(ex<RealPart>(prod), &msg));
+  REQUIRE(is_valid(ex<ImagPart>(prod), &msg));
+  REQUIRE(is_valid(ex<Power>(ex<Variable>(L"x"), 2), &msg));
+  auto sum = deserialize(L"t{a_1;i_1} g{i_1;a_1} + f{a_1;i_1} h{i_1;a_1}");
+  REQUIRE(is_valid(ex<RealPart>(sum), &msg));
+  // an invalid inner is still reported
+  auto bad = deserialize(L"t{a_1;i_1} g{i_1;a_1} f{a_1;i_2}");
+  REQUIRE(!is_valid(ex<RealPart>(bad), &msg));
+}
+
 TEST_CASE("is_valid accepts a CSV proto-indexed residual",
           "[utilities][is_valid][csv]") {
   using namespace sequant;
@@ -1398,6 +1415,26 @@ TEST_CASE("dryrun cost model sizes elements and flops by the field",
   CHECK(cm.exec_cost(cm.flops(out, contracted), Field::Complex, cm.memsize(out),
                      cm.memsize(contracted),
                      cm.memsize(out)) == Catch::Approx(madds * 4.0));
+}
+
+TEST_CASE("dryrun result applies a canon transform as a relabel",
+          "[dryrun-costmodel]") {
+  // Every leaf fetch applies its CanonTransform (phase, conj, relabel) to
+  // the yielded result; the dry run must honor that hook (it used to throw
+  // "Not implemented: apply_transform" and abort the whole prediction). In
+  // the size model phase and conj are free, the relabel reorders modes.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  container::svector<Index> pre{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> post{Index{L"i_1"}, Index{L"a_3"}};
+  ResultDryRun res{pre, cm};
+  Result const& base = res;  // the hooks are the Result interface's
+  auto out = base.apply_transform(
+      CanonTransform{}, std::array<std::any, 2>{std::any{pre}, std::any{post}});
+  REQUIRE(out);
+  REQUIRE(out->size_in_bytes() == base.size_in_bytes());
+  REQUIRE(out->is<ResultDryRun>());
+  REQUIRE(out->as<ResultDryRun>().indices() == post);
 }
 
 TEST_CASE("dryrun cost model memsize honors an extent override",

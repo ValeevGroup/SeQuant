@@ -611,6 +611,12 @@ class ResultDryRun final : public Result {
                                    lobounds_);
   }
 
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& ann) const override {
+    // The phase and the elementwise conjugation move no data in the size
+    // model; only the relabeling can reorder modes, exactly as permute does.
+    return permute(ann);
+  }
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
@@ -761,6 +767,12 @@ class ResultDryRunNested final : public Result {
                                    lobounds_);
   }
 
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& ann) const override {
+    // The phase and the elementwise conjugation move no data in the size
+    // model; only the relabeling can reorder modes, exactly as permute does.
+    return permute(ann);
+  }
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
