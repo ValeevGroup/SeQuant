@@ -110,6 +110,82 @@ void apply_negate(ExpressionFilter::Rule &rule,
   rule.negate = rule_json.at("negate").get<bool>();
 }
 
+std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
+    const nlohmann::json &spec) {
+  const io::serialization::DeserializationOptions options{
+      .def_perm_symm = Symmetry::Nonsymm,
+      .def_braket_symm = BraKetSymmetry::Nonsymm,
+      .def_col_symm = ColumnSymmetry::Nonsymm};
+
+  ExprPtr expr = io::serialization::from_string<ExprPtr>(
+      spec.at("expr").get<std::string>(), options);
+
+  ExprMatcherOptions match_opts;
+  if (spec.contains("tensor_equality_mode")) {
+    const nlohmann::json &mode = spec.at("tensor_equality_mode");
+
+    if (!mode.is_string()) {
+      throw Exception("\"tensor_equality_mode\" requires a string argument");
+    }
+
+    if (mode == "identity") {
+      match_opts.tensor_cmp = TensorComparison::Identity;
+    } else if (mode == "block") {
+      match_opts.tensor_cmp = TensorComparison::Block;
+    } else if (mode == "shape") {
+      match_opts.tensor_cmp = TensorComparison::Shape;
+    } else {
+      throw Exception("Unknown tensor equality mode \"" +
+                      mode.get<std::string>() + "\"");
+    }
+  }
+
+  ExprMatcher matcher(std::move(*expr), match_opts);
+
+  auto rule = std::make_unique<ContainsRule>(std::move(matcher));
+  apply_negate(*rule, spec);
+
+  return rule;
+}
+
+std::unique_ptr<ExpressionFilter::Rule> parse_contains_label(
+    const nlohmann::json &spec) {
+  std::vector<std::wregex> patterns;
+
+  auto add_pattern = [&](const nlohmann::json &value) {
+    if (!value.is_string()) {
+      throw Exception("Entries in \"label\" must be strings");
+    }
+
+    try {
+      patterns.emplace_back(toUtf16(value.get<std::string>()));
+    } catch (const std::regex_error &e) {
+      throw Exception("Invalid label regex '" + value.get<std::string>() +
+                      "': " + e.what());
+    }
+  };
+
+  const nlohmann::json &labels = spec.at("label");
+  if (labels.is_string()) {
+    add_pattern(labels);
+  } else if (labels.is_array()) {
+    for (const nlohmann::json &entry : labels) {
+      add_pattern(entry);
+    }
+  } else {
+    throw Exception("\"label\" must be either a string or an array of strings");
+  }
+
+  if (patterns.empty()) {
+    throw Exception("\"label\" filter rule requires at least one label");
+  }
+
+  auto rule = std::make_unique<LabelRule>(std::move(patterns));
+  apply_negate(*rule, spec);
+
+  return rule;
+}
+
 ExpressionFilter parse_filter(const nlohmann::json &filter) {
   bool require_all = true;
   if (filter.contains("mode")) {
@@ -138,85 +214,14 @@ ExpressionFilter parse_filter(const nlohmann::json &filter) {
     }
 
     if (current.at("type") == "contains") {
-      if (!current.contains("expr")) {
-        throw Exception("\"contains\" filter rule requires \"expr\" attribute");
-      }
-
-      const io::serialization::DeserializationOptions options{
-          .def_perm_symm = Symmetry::Nonsymm,
-          .def_braket_symm = BraKetSymmetry::Nonsymm,
-          .def_col_symm = ColumnSymmetry::Nonsymm};
-
-      ExprPtr expr = io::serialization::from_string<ExprPtr>(
-          current.at("expr").get<std::string>(), options);
-
-      ExprMatcherOptions match_opts;
-      if (current.contains("tensor_equality_mode")) {
-        const nlohmann::json &mode = current.at("tensor_equality_mode");
-
-        if (!mode.is_string()) {
-          throw Exception(
-              "\"tensor_equality_mode\" requires a string argument");
-        }
-
-        if (mode == "identity") {
-          match_opts.tensor_cmp = TensorComparison::Identity;
-        } else if (mode == "block") {
-          match_opts.tensor_cmp = TensorComparison::Block;
-        } else if (mode == "shape") {
-          match_opts.tensor_cmp = TensorComparison::Shape;
-        } else {
-          throw Exception("Unknown tensor equality mode \"" +
-                          mode.get<std::string>() + "\"");
-        }
-      }
-
-      ExprMatcher matcher(std::move(*expr), match_opts);
-
-      auto rule = std::make_unique<ContainsRule>(std::move(matcher));
-      apply_negate(*rule, current);
-
-      res.add_rule(std::move(rule));
-    } else if (current.at("type") == "label") {
-      if (!current.contains("labels")) {
-        throw Exception("\"label\" filter rule requires \"labels\" attribute");
-      }
-
-      std::vector<std::wregex> patterns;
-
-      auto add_pattern = [&](const nlohmann::json &value) {
-        if (!value.is_string()) {
-          throw Exception("Entries in \"labels\" must be strings");
-        }
-
-        try {
-          patterns.emplace_back(toUtf16(value.get<std::string>()));
-        } catch (const std::regex_error &e) {
-          throw Exception("Invalid label regex '" + value.get<std::string>() +
-                          "': " + e.what());
-        }
-      };
-
-      const nlohmann::json &labels = current.at("labels");
-      if (labels.is_string()) {
-        add_pattern(labels);
-      } else if (labels.is_array()) {
-        for (const nlohmann::json &entry : labels) {
-          add_pattern(entry);
-        }
+      if (current.contains("expr")) {
+        res.add_rule(parse_contains_expr(current));
+      } else if (current.contains("label")) {
+        res.add_rule(parse_contains_label(current));
       } else {
         throw Exception(
-            "\"labels\" must be either a string or an array of strings");
+            "contains filter must only contain either 'expr' or 'label'");
       }
-
-      if (patterns.empty()) {
-        throw Exception("\"label\" filter rule requires at least one label");
-      }
-
-      auto rule = std::make_unique<LabelRule>(std::move(patterns));
-      apply_negate(*rule, current);
-
-      res.add_rule(std::move(rule));
     } else {
       throw Exception("Unknown filter rule type \"" +
                       current.at("type").get<std::string>() + "\"");
