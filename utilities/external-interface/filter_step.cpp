@@ -6,9 +6,12 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -63,6 +66,27 @@ struct ContainsRule : ExpressionFilter::Rule {
   ExprMatcher matcher_;
 };
 
+struct LabelRule : ExpressionFilter::Rule {
+  LabelRule(std::vector<std::wregex> patterns)
+      : patterns_(std::move(patterns)) {}
+
+  bool matches(const Expr &expr) const override {
+    return matches_recursively(expr, [&](const Expr &sub) {
+      if (!sub.is<Labeled>()) {
+        return false;
+      }
+
+      std::wstring_view label = sub.as<Labeled>().label();
+
+      return std::ranges::any_of(patterns_, [&](const std::wregex &pattern) {
+        return std::regex_match(label.begin(), label.end(), pattern);
+      });
+    });
+  }
+
+  std::vector<std::wregex> patterns_;
+};
+
 SEQUANT_EXTINT_REGISTER_STEP_TYPE(FilterStep);
 
 std::string FilterStep::kind() const { return "filter"; }
@@ -70,6 +94,21 @@ std::string FilterStep::kind() const { return "filter"; }
 bool FilterStep::accepts_options() const { return true; }
 
 bool FilterStep::requires_options() const { return true; }
+
+/// Reads an optional "negate" boolean from @p rule_json and applies it to
+/// @p rule.
+void apply_negate(ExpressionFilter::Rule &rule,
+                  const nlohmann::json &rule_json) {
+  if (!rule_json.contains("negate")) {
+    return;
+  }
+
+  if (!rule_json.at("negate").is_boolean()) {
+    throw Exception("\"negate\" requires a boolean argument");
+  }
+
+  rule.negate = rule_json.at("negate").get<bool>();
+}
 
 ExpressionFilter parse_filter(const nlohmann::json &filter) {
   bool require_all = true;
@@ -135,14 +174,47 @@ ExpressionFilter parse_filter(const nlohmann::json &filter) {
       ExprMatcher matcher(std::move(*expr), match_opts);
 
       auto rule = std::make_unique<ContainsRule>(std::move(matcher));
+      apply_negate(*rule, current);
 
-      if (current.contains("negate")) {
-        if (!current.at("negate").is_boolean()) {
-          throw Exception("\"negate\" requires a boolean argument");
+      res.add_rule(std::move(rule));
+    } else if (current.at("type") == "label") {
+      if (!current.contains("labels")) {
+        throw Exception("\"label\" filter rule requires \"labels\" attribute");
+      }
+
+      std::vector<std::wregex> patterns;
+
+      auto add_pattern = [&](const nlohmann::json &value) {
+        if (!value.is_string()) {
+          throw Exception("Entries in \"labels\" must be strings");
         }
 
-        rule->negate = current.at("negate").get<bool>();
+        try {
+          patterns.emplace_back(toUtf16(value.get<std::string>()));
+        } catch (const std::regex_error &e) {
+          throw Exception("Invalid label regex '" + value.get<std::string>() +
+                          "': " + e.what());
+        }
+      };
+
+      const nlohmann::json &labels = current.at("labels");
+      if (labels.is_string()) {
+        add_pattern(labels);
+      } else if (labels.is_array()) {
+        for (const nlohmann::json &entry : labels) {
+          add_pattern(entry);
+        }
+      } else {
+        throw Exception(
+            "\"labels\" must be either a string or an array of strings");
       }
+
+      if (patterns.empty()) {
+        throw Exception("\"label\" filter rule requires at least one label");
+      }
+
+      auto rule = std::make_unique<LabelRule>(std::move(patterns));
+      apply_negate(*rule, current);
 
       res.add_rule(std::move(rule));
     } else {
