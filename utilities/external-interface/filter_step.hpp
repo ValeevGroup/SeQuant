@@ -22,6 +22,8 @@ class ExpressionFilter {
   struct Rule {
     bool negate = false;
 
+    virtual ~Rule() = default;
+
     virtual bool matches(const Expr &expr) const = 0;
   };
 
