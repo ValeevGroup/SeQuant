@@ -9,7 +9,6 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -190,21 +189,19 @@ std::size_t FilterStep::process(std::string_view id_prefix,
     }
   }
 
-  std::size_t idx = 0;
-  std::size_t skipped = 0;
-  for (const std::string &name : std::views::keys(groups_)) {
+  std::size_t produced = 0;
+  for (std::size_t idx = 0; idx < grouped.size(); ++idx) {
     ExpressionData &data = grouped.at(idx);
-    ++idx;
 
     if (!keep_empty_ && data.expressions.empty()) {
-      ++skipped;
       continue;
     }
 
-    ctx.set_data(name, 0, std::move(data));
+    ctx.set_data(id_prefix, id_start + produced, std::move(data));
+    ++produced;
   }
 
-  return grouped.size() - skipped;
+  return produced;
 }
 
 }  // namespace sequant::util::extint
