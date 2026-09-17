@@ -93,6 +93,12 @@ void log_chosen_factorization(ExprPtr const& result,
 }
 
 /// Optimize a Product that contains only Tensor and scalar factors.
+/// Guards every access to OptimizeOptions::term_batch_axes: optimize_impl
+/// optimizes a Sum's summands in parallel (sequant::for_each) and each summand
+/// inserts into, re-keys and reads that one shared unordered_map; an unlocked
+/// insert racing a rehash is a segfault (seen on a rank of an 8-rank run).
+static std::mutex term_batch_axes_mutex;
+
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
   // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
@@ -156,7 +162,6 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
     // binarize's node_counter == size assertion (a nondeterministic, thread-
     // count-dependent SIGABRT, absent under a sequential par_unseq fallback
     // such as libc++).
-    static std::mutex term_batch_axes_mutex;
     std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
     (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
   }
@@ -269,6 +274,7 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   // still carries K -- the batched runtime then accumulated per-batch
   // partials of unequal K extent (Kramers-union PNS-CCD, 2026-09-09).
   if (opts.term_batch_axes) {
+    std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
     container::vector<NodeBatchAnnotation> outer;
     if (auto it = opts.term_batch_axes->find(result.get());
         it != opts.term_batch_axes->end())
@@ -335,6 +341,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
   // batch axes are re-keyed under the wrapper the caller keys on.
   auto rekey_axes = [&opts](ExprPtr const& inner, ExprPtr const& wrapper) {
     if (!opts.term_batch_axes) return;
+    std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
     auto it = opts.term_batch_axes->find(inner.get());
     if (it != opts.term_batch_axes->end())
       (*opts.term_batch_axes)[wrapper.get()] = it->second;
@@ -396,6 +403,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
       const bool scalar_siblings =
           ranges::all_of(prod_in, [](auto&& x) { return x->is_scalar(); });
       if (scalar_siblings) {
+        std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
         container::vector<NodeBatchAnnotation> axes;
         for (auto const& inner : inners) {
           auto it = opts.term_batch_axes->find(inner.get());
