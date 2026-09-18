@@ -6,3 +6,4 @@ Developer documentation
 
    documentation
    cost_model
+   batched_evaluation
