@@ -88,7 +88,12 @@ class EvalExpr {
   ///        a cache slot; binarize(Tensor) serves a conjugated leaf via an
   ///        EvalOp::Adjoint wrapper over the shared operand.
   ///
-  explicit EvalExpr(Tensor const& tnsr);
+  /// \param blindness optional Kramers blindness (kramers_blind.hpp): the
+  ///        leaf's identity (hash, connectivity graph, layout fingerprint,
+  ///        block comparison) is then read from its flavour-erased spelling;
+  ///        null or inactive => identity exactly as without the hook
+  explicit EvalExpr(Tensor const& tnsr,
+                    eval::KramersBlindness const* blindness = nullptr);
 
   ///
   /// \brief Construct an EvalExpr object from a Constant.
@@ -258,6 +263,26 @@ class EvalExpr {
   /// a tensor result.
   ///
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
+
+  /// \return the canonical indices the IDENTITY (layout fingerprint) is read
+  ///         from: canon_indices() with Kramers-blind erasure applied, or
+  ///         canon_indices() itself when nothing was erased
+  [[nodiscard]] index_vector const& identity_indices() const noexcept {
+    return identity_indices_.empty() ? canon_indices_ : identity_indices_;
+  }
+
+  /// \return for a tensor leaf whose identity was Kramers-blind erased, the
+  ///         erased spelling the block comparator reads; null otherwise
+  [[nodiscard]] Tensor const* identity_tensor() const noexcept {
+    return identity_tensor_ ? &*identity_tensor_ : nullptr;
+  }
+
+  /// sets identity_indices() (product / sum node construction under Kramers
+  /// blindness); an empty vector means "same as canon_indices()"
+  void set_identity_indices(index_vector ixs) noexcept {
+    identity_indices_ = std::move(ixs);
+    layout_fingerprint_.reset();
+  }
 
   ///
   /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
@@ -506,6 +531,10 @@ class EvalExpr {
   ExprPtr expr_;
 
   index_vector canon_indices_;
+  /// see identity_indices(): empty unless Kramers blindness erased something
+  index_vector identity_indices_;
+  /// see identity_tensor(): leaves only, set iff erasure changed the spelling
+  std::optional<Tensor> identity_tensor_;
   mutable std::optional<std::size_t> layout_fingerprint_;
 
   /// folds layout_fingerprint() into hash_value_ for a tensor-valued leaf;

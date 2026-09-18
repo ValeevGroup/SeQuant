@@ -245,8 +245,12 @@ struct TreeNodeEqualityComparator {
         // its ket leg. Hence only graph-less tensor nodes -- protoindex-free
         // leaves (block-canonicalized in place at construction) and
         // scalar*tensor results -- are compared here by block.
-        const Tensor &lhs_tensor = lhs->as_tensor();
-        const Tensor &rhs_tensor = rhs->as_tensor();
+        // a Kramers-blind erased leaf is compared by its erased spelling
+        // (eval_expr.hpp identity_tensor)
+        const Tensor &lhs_tensor =
+            lhs->identity_tensor() ? *lhs->identity_tensor() : lhs->as_tensor();
+        const Tensor &rhs_tensor =
+            rhs->identity_tensor() ? *rhs->identity_tensor() : rhs->as_tensor();
 
         if (!block_comparator_(lhs_tensor, rhs_tensor)) {
           return false;

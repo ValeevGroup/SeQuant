@@ -15,6 +15,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
 
+#include <algorithm>
 #include <functional>
 #include <ranges>
 
@@ -70,38 +71,66 @@ container::set<Index> erasable_indices(Rng const& tensors,
   return candidates;
 }
 
-/// \return the flavour-erased image of a plain erasable index: same ordinal,
-///         erased space
-inline Index erased_image(Index const& ix, KramersBlindness const& kb) {
-  SEQUANT_ASSERT(!ix.has_proto_indices());
-  return Index{kb.erase_space(ix.space()), ix.ordinal()};
+/// \brief The erasure map of a network: every erasable plain index (see
+///        erasable_indices) mapped to its flavour-erased placeholder.
+///
+/// \details Placeholders are numbered by FIRST OCCURRENCE among the plain
+/// slots of \p tensors (in tensor order, slot order), starting past the
+/// largest ordinal any index of the network carries, so that (a) two
+/// networks that differ only in the flavours of erasable indices get the
+/// same erased spelling -- the same spelling up to a renaming that keeps the
+/// occurrence order, which is what the layout fingerprint keys on -- and (b)
+/// a placeholder can never collide with a spin-free index already present
+/// (e.g. a union-contracted dummy). A composite's proto list is rewritten
+/// through the same map (Index::transform).
+using ErasureMap = container::map<Index, Index>;
+
+template <std::ranges::input_range Rng>
+  requires std::convertible_to<std::ranges::range_value_t<Rng>, ExprPtr>
+ErasureMap erasure_map(Rng const& tensors, KramersBlindness const& kb) {
+  ErasureMap result;
+  auto const erasable = erasable_indices(tensors, kb);
+  if (erasable.empty()) return result;
+  // largest ordinal in the network (plain slots and protos)
+  std::size_t max_ord = 0;
+  auto note_ord = [&max_ord](Index const& ix) {
+    if (ix.ordinal()) max_ord = std::max<std::size_t>(max_ord, *ix.ordinal());
+  };
+  for (ExprPtr const& e : tensors) {
+    if (!e->is<Tensor>()) continue;
+    for (auto const& ix : e->as<Tensor>().const_slots()) {
+      note_ord(ix);
+      for (auto const& p : ix.proto_indices()) note_ord(p);
+    }
+  }
+  std::size_t next = max_ord + 1;
+  for (ExprPtr const& e : tensors) {
+    if (!e->is<Tensor>()) continue;
+    for (auto const& ix : e->as<Tensor>().const_slots()) {
+      if (ix.has_proto_indices() || !erasable.contains(ix)) continue;
+      if (result.contains(ix)) continue;
+      result.emplace(ix, Index{kb.erase_space(ix.space()), next++});
+    }
+  }
+  return result;
 }
 
-/// \return a clone of \p t in which every index of \p erasable -- as a slot
-///         or inside a composite's proto list -- is replaced by its erased
-///         image; labels' ordinals, slot order and proto order are kept
-inline Tensor erase_indices(Tensor const& t,
-                            container::set<Index> const& erasable,
-                            KramersBlindness const& kb) {
-  if (erasable.empty()) return t;
-  container::map<Index, Index> repl;
-  for (auto const& ix : erasable) repl.emplace(ix, erased_image(ix, kb));
+/// \return a clone of \p t with the erasure map applied to every slot (a
+///         composite's protos included); slot order and labels' occurrence
+///         order are kept
+inline Tensor erase_indices(Tensor const& t, ErasureMap const& m) {
+  if (m.empty()) return t;
   Tensor result = t;
-  // Index::transform rewrites a composite's protos through the map
-  result.transform_indices(repl);
+  result.transform_indices(m);
   result.reset_tags();
   return result;
 }
 
-/// \return \p ix with erase_indices' replacement applied (plain index or
-///         composite whose protos are rewritten)
-inline Index erase_index(Index const& ix, container::set<Index> const& erasable,
-                         KramersBlindness const& kb) {
-  if (erasable.empty()) return ix;
-  container::map<Index, Index> repl;
-  for (auto const& e : erasable) repl.emplace(e, erased_image(e, kb));
+/// \return \p ix with the erasure map applied (itself, or its protos)
+inline Index erase_index(Index const& ix, ErasureMap const& m) {
+  if (m.empty()) return ix;
   Index result = ix;
-  result.transform(repl);
+  result.transform(m);
   result.reset_tag();
   return result;
 }

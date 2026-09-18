@@ -19,6 +19,7 @@
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/functional/not_fn.hpp>
 #include <range/v3/range/operations.hpp>
@@ -155,12 +156,12 @@ std::size_t EvalExpr::layout_fingerprint() const noexcept {
   // fingerprint the layout the slot carries, so the down-first leaf shares
   // its up-first partner's slot (the flavor difference rides the transform).
   if (kramers_folded_) {
-    index_vector folded = canon_indices_;
+    index_vector folded = identity_indices();
     if (const auto isr = get_default_context().index_space_registry())
       kramers_flip(folded, *isr);
     layout_fingerprint_ = layout_fingerprint_of(folded);
   } else {
-    layout_fingerprint_ = layout_fingerprint_of(canon_indices_);
+    layout_fingerprint_ = layout_fingerprint_of(identity_indices());
   }
   return *layout_fingerprint_;
 }
@@ -274,7 +275,7 @@ LeafNormalization normalize_leaf(Tensor& t) {
 }
 }  // namespace
 
-EvalExpr::EvalExpr(Tensor const& tnsr)
+EvalExpr::EvalExpr(Tensor const& tnsr, eval::KramersBlindness const* blindness)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
@@ -284,6 +285,12 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   // retrieval, so every route to one canonical spelling lands on one slot
   auto const [transform, kramers_fired] = normalize_leaf(expr_->as<Tensor>());
   canon_transform_ = transform;
+  // Kramers-blind identity (kramers_blind.hpp): the indices of the normalized
+  // spelling whose flavour the served value does not depend on. Empty (the
+  // default, and whenever the hook is inactive) => identity exactly as below.
+  eval::ErasureMap erasure;
+  if (blindness && blindness->active())
+    erasure = eval::erasure_map(std::array{expr_}, *blindness);
   if (is_tot(tnsr)) {
     // slot identity: the canonical labeling of the block-canonical spelling.
     // The block canonicalizer is label-blind (same-space slots keep their
@@ -331,10 +338,48 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     for (auto const& ix : slot_ixs)
       if (ix.has_proto_indices()) canon_indices_.emplace_back(ix);
     connectivity_ = std::move(md.graph);
+    if (!erasure.empty()) {
+      // hash and graph from the erased spelling of the STORED (canonical)
+      // tensor; expr_ and canon_indices_ keep the as-written flavours. The
+      // erased network must canonicalize to the same slot order as the real
+      // one (the slot holds the real layout): if it does not, keep the
+      // unerased identity -- a missed fold, never a transposed one.
+      auto erased =
+          ex<Tensor>(eval::erase_indices(expr_->as<Tensor>(), erasure));
+      ExprPtrList elist{erased};
+      auto etn = TensorNetwork(elist);
+      auto emd = etn.canonicalize_slots(
+          {.cardinal_tensor_labels =
+               TensorCanonicalizer::cardinal_tensor_labels(),
+           .apply_slot_order = true});
+      auto const ecanon_e =
+          std::dynamic_pointer_cast<Expr>(etn.tensors().front());
+      SEQUANT_ASSERT(ecanon_e && ecanon_e->is<Tensor>());
+      auto const& ecanon = ecanon_e->as<Tensor>();
+      bool const same_order = ranges::equal(
+          ecanon.const_slots(), erased->as<Tensor>().const_slots(),
+          [](Index const& a, Index const& b) {
+            return a.full_label() == b.full_label();
+          });
+      if (same_order) {
+        hash_value_ = emd.hash_value();
+        connectivity_ = std::move(emd.graph);
+        identity_tensor_ = erased->as<Tensor>();
+        identity_indices_ = canon_indices_;
+        for (auto& ix : identity_indices_) ix = eval::erase_index(ix, erasure);
+      }
+    }
   } else {
     auto const& t = expr_->as<Tensor>();
-    hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
+    if (!erasure.empty()) {
+      identity_tensor_ = eval::erase_indices(t, erasure);
+      hash_value_ = hash_terminal_tensor(*identity_tensor_);
+      identity_indices_ =
+          identity_tensor_->const_indices() | ranges::to<index_vector>;
+    } else {
+      hash_value_ = hash_terminal_tensor(t);
+    }
   }
   // T19 layer 2 contract: expr() keeps the FOLDED (up-row) spelling -- what
   // a leaf provider fetches -- while canon_indices() (the parent's
@@ -668,12 +713,12 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
-EvalExprNode binarize(Tensor const& t) {
+EvalExprNode binarize(Tensor const& t, const BinarizationOptions& opts) {
   // Every conjugation channel ('⁺' adjoint label, elementwise-conjugation
   // marker, Conjugate-braket orientation) is normalized by the EvalExpr leaf
   // ctor into the canonical unmarked spelling plus a CanonTransform served
   // on retrieval -- a tensor leaf is always just a leaf.
-  EvalExpr leaf{t};
+  EvalExpr leaf{t, &opts.kramers_blindness};
   // whose spelling normalization produced a non-trivial retrieval transform.
   return EvalExprNode{std::move(leaf)};
 }
@@ -1152,7 +1197,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Variable>());
 
   if (expr->is<Tensor>())  //
-    return binarize(expr->as<Tensor>());
+    return binarize(expr->as<Tensor>(), opts);
 
   if (expr->is<Sum>())  //
     return binarize(expr->as<Sum>(), uncontract, opts, node_counter);

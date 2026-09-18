@@ -1487,11 +1487,14 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
     REQUIRE(er.count(Index(L"i↑_2")) == 1);
   }
   SECTION("erased clone: spaces spin-free, protos rewritten, inner kept") {
-    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, kb);
-    auto Ce = erase_indices(C, er, kb);
+    auto m = erasure_map(std::array{ExprPtr(ex<Tensor>(C))}, kb);
+    REQUIRE(m.size() == 2);
+    auto Ce = erase_indices(C, m);
     auto slots = Ce.const_slots() | ranges::to_vector;
     REQUIRE(slots[0].space() == kb.erase_space(Index(L"i↑_1").space()));
-    REQUIRE(slots[0].ordinal() == Index(L"i↑_1").ordinal());
+    // placeholders numbered by first occurrence past the largest ordinal (2)
+    REQUIRE(slots[0].ordinal() == 3);
+    REQUIRE(slots[1].ordinal() == 4);
     REQUIRE(slots[2].space() == Index(L"a_1").space());
     auto const& inner = slots[3];
     REQUIRE(inner.space() == Index(L"a↑_1").space());  // component kept
@@ -1507,4 +1510,67 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
                                KramersBlindness{});
     REQUIRE(er.empty());
   }
+}
+
+TEST_CASE("kramers_blind_leaf_identity", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  KramersBlindness kb{.blind_slot =
+                          [](Tensor const& t, std::size_t slot) {
+                            return t.label() == L"C" && slot < 2;
+                          },
+                      .erase_space =
+                          [](IndexSpace const& s) {
+                            return mbpt::make_spinfree(Index(s, 1)).space();
+                          }};
+  auto leaf = [&](std::wstring_view s, KramersBlindness const* k) {
+    return EvalExpr(parse(s)->as<Tensor>(), k);
+  };
+  auto Cuu = leaf(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", &kb);
+  auto Cud = leaf(L"C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", &kb);
+  auto Cdd = leaf(L"C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}", &kb);
+  auto Cuu_dn = leaf(L"C{i↑_1,i↑_2,a_1;a↓_1<i↑_1,i↑_2>}", &kb);
+  using Node = FullBinaryNode<EvalExpr>;
+  TreeNodeEqualityComparator<Node> eq;
+  // pair flavours are one identity
+  REQUIRE(Cuu.hash_value() == Cud.hash_value());
+  REQUIRE(Cuu.hash_value() == Cdd.hash_value());
+  REQUIRE(eq(Node{Cuu}, Node{Cud}));
+  REQUIRE(eq(Node{Cuu}, Node{Cdd}));
+  // the PNS component stays value-distinctive
+  REQUIRE(Cuu.hash_value() != Cuu_dn.hash_value());
+  REQUIRE(!eq(Node{Cuu}, Node{Cuu_dn}));
+  // labels / spelling untouched: the as-written flavours survive
+  auto has_label = [](EvalExpr const& e, std::wstring_view lbl) {
+    return ranges::any_of(
+               e.canon_indices(),
+               [&](Index const& i) { return i.full_label() == lbl; }) &&
+           ranges::any_of(
+               e.expr()->as<Tensor>().const_slots(),
+               [&](Index const& i) { return i.full_label() == lbl; });
+  };
+  REQUIRE(has_label(Cud, L"i↓_1"));
+  REQUIRE(has_label(Cud, L"i↑_2"));
+  // without the hook nothing changes, and identities equal the hook-less ctor
+  auto Cuu0 = leaf(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", nullptr);
+  auto Cud0 = leaf(L"C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", nullptr);
+  REQUIRE(Cuu0.hash_value() != Cud0.hash_value());
+  REQUIRE(Cuu0.hash_value() ==
+          EvalExpr(parse(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>())
+              .hash_value());
+  // an inert hook (no blind slot) is the hook-less identity
+  KramersBlindness inert{
+      .blind_slot = [](Tensor const&, std::size_t) { return false; },
+      .erase_space = kb.erase_space};
+  REQUIRE(leaf(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", &inert).hash_value() ==
+          Cuu0.hash_value());
 }
