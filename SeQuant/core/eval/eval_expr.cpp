@@ -196,6 +196,26 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
+void EvalExpr::set_identity_indices(index_vector ixs) {
+  identity_indices_ = std::move(ixs);
+  layout_fingerprint_.reset();
+  identity_tensor_.reset();
+  if (identity_indices_.empty() || !expr_ || !expr_->is<Tensor>()) return;
+  SEQUANT_ASSERT(identity_indices_.size() == canon_indices_.size());
+  // the erased spelling of the result tensor (graph-less nodes -- Sum roots,
+  // scalar * tensor -- are compared by block on it, see
+  // TreeNodeEqualityComparator)
+  container::map<Index, Index> repl;
+  for (std::size_t k = 0; k < canon_indices_.size(); ++k)
+    if (canon_indices_[k] != identity_indices_[k])
+      repl.emplace(canon_indices_[k], identity_indices_[k]);
+  if (repl.empty()) return;
+  Tensor t = expr_->as<Tensor>();
+  t.transform_indices(repl);
+  t.reset_tags();
+  identity_tensor_ = std::move(t);
+}
+
 namespace {
 /// maps a folded leaf's canonical indices back to the as-written flavors
 /// (the Kramers flip is an involution; ordinals and order are kept)
@@ -823,7 +843,9 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       // the layout is part of the value's identity (see layout_fingerprint):
       // the same summands led by a differently laid-out summand are another
       // slot, or a cached array would be served in the wrong mode order
-      hash::combine(h, EvalExpr::layout_fingerprint_of(left.canon_indices()));
+      // the sum hands up its first summand's layout, identity layout included
+      hash::combine(h,
+                    EvalExpr::layout_fingerprint_of(left.identity_indices()));
       EvalExpr result{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
@@ -834,6 +856,8 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           sum_transform,                                           //
           h,                                                       //
           nullptr};
+      if (left.has_identity_erasure())
+        result.set_identity_indices(left.identity_indices());
       result.set_accumulate_in_place(true);
       return result;
     } else {
@@ -974,8 +998,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const t = tl->denoted_expr()->as<Tensor>();  // denoted orientation
-      hash::combine(h, EvalExpr::layout_fingerprint_of(tl->canon_indices()));
-      return {
+      // the identity layout follows the tensor operand's (Kramers-blind
+      // erased where it was)
+      hash::combine(h, EvalExpr::layout_fingerprint_of(tl->identity_indices()));
+      EvalExpr result{
           EvalOp::Product,     //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
@@ -984,6 +1010,9 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           tl->canon_transform(),                            //
           h,
           nullptr};
+      if (tl->has_identity_erasure())
+        result.set_identity_indices(tl->identity_indices());
+      return result;
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
@@ -1022,9 +1051,23 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         return result;
       }();
 
-      auto tn = TensorNetwork(ts);
+      // Kramers-blind identity (kramers_blind.hpp): the hash, the
+      // connectivity graph, the canonical result layout and the phase all
+      // come from the ERASED flattened network; only the result labels are
+      // mapped back to the as-written indices (the erasure is a renaming, so
+      // the map is a bijection). target_indices above keep the real slots.
+      eval::ErasureMap erasure;
+      if (opts.kramers_blindness.active())
+        erasure = eval::erasure_map(ts, opts.kramers_blindness);
+      container::svector<ExprPtr> ts_id;
+      for (ExprPtr const& e : ts)
+        ts_id.push_back(erasure.empty() ? e
+                                        : ex<Tensor>(eval::erase_indices(
+                                              e->as<Tensor>(), erasure)));
+      auto tn = TensorNetwork(ts_id);
       auto named_indices = tn.ext_indices();
-      for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
+      for (auto&& ix : uncontracted_idxs)
+        named_indices.emplace(eval::erase_index(ix, erasure));
 
       auto canon = tn.canonicalize_slots(
           {.cardinal_tensor_labels =
@@ -1052,9 +1095,20 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           .conj = hoist_conj};
       auto result_indices = canon.get_indices<Index::index_vector>();
       // the result layout is part of a tensor-valued node's identity (see
-      // layout_fingerprint)
+      // layout_fingerprint); under erasure the identity layout is the erased
+      // one and the node's own labels are the as-written ones
+      Index::index_vector identity_indices;
+      if (!erasure.empty()) {
+        identity_indices = result_indices;
+        eval::ErasureMap unerase;
+        for (auto const& [real, placeholder] : erasure)
+          unerase.emplace(placeholder, real);
+        for (auto& ix : result_indices) ix = eval::erase_index(ix, unerase);
+      }
       if (!scalar_result)
-        hash::combine(h, EvalExpr::layout_fingerprint_of(result_indices));
+        hash::combine(h,
+                      EvalExpr::layout_fingerprint_of(
+                          erasure.empty() ? result_indices : identity_indices));
       EvalExpr result =
           scalar_result
               ? EvalExpr{EvalOp::Product,          //
@@ -1073,6 +1127,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                          transform,                  //
                          h,
                          std::move(canon.graph)};
+      if (!scalar_result && !erasure.empty())
+        result.set_identity_indices(std::move(identity_indices));
       // This is a genuine contraction (DP) node: the optimizer's
       // node_batch_axes carries one entry per such node, in the same
       // left-first post-order (children -- built by the recursive

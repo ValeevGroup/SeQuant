@@ -277,12 +277,17 @@ class EvalExpr {
     return identity_tensor_ ? &*identity_tensor_ : nullptr;
   }
 
-  /// sets identity_indices() (product / sum node construction under Kramers
-  /// blindness); an empty vector means "same as canon_indices()"
-  void set_identity_indices(index_vector ixs) noexcept {
-    identity_indices_ = std::move(ixs);
-    layout_fingerprint_.reset();
+  /// \return whether Kramers blindness erased something in this node's
+  ///         identity (identity_indices() then differs from canon_indices())
+  [[nodiscard]] bool has_identity_erasure() const noexcept {
+    return !identity_indices_.empty();
   }
+
+  /// sets identity_indices() (product / sum node construction under Kramers
+  /// blindness) and, for a tensor-valued node, derives identity_tensor() from
+  /// expr() by the positional canon->identity index correspondence; an empty
+  /// vector means "same as canon_indices()"
+  void set_identity_indices(index_vector ixs);
 
   ///
   /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which

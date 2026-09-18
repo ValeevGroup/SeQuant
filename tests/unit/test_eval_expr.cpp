@@ -1574,3 +1574,85 @@ TEST_CASE("kramers_blind_leaf_identity", "[eval_expr][kramers-blind]") {
   REQUIRE(leaf(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", &inert).hash_value() ==
           Cuu0.hash_value());
 }
+
+TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  BinarizationOptions opts{
+      .kramers_blindness = {
+          .blind_slot =
+              [](Tensor const& t, std::size_t slot) {
+                return t.label() == L"C" && slot < 2;
+              },
+          .erase_space =
+              [](IndexSpace const& s) {
+                return mbpt::make_spinfree(Index(s, 1)).space();
+              }}};
+  auto tree = [&](std::wstring_view head, std::wstring_view rhs,
+                  BinarizationOptions const& o) {
+    return binarize(ResultExpr{parse(head)->as<Tensor>(), parse(rhs)}, o);
+  };
+  using Node = FullBinaryNode<EvalExpr>;
+  TreeNodeEqualityComparator<Node> eq;
+  // PPL-like half projection (a_3 plays the aux index): one identity across
+  // the pair flavours, spelled as the union residual blocks spell them
+  auto Puu = tree(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", opts);
+  auto Pud = tree(L"I{i↑_2,i↓_1,a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", opts);
+  auto Pdd = tree(L"I{i↓_2,i↓_1,a_2,a_3;a↑_1<i↓_1,i↓_2>}",
+                  L"g{a_1,a_2,a_3} * C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}", opts);
+  REQUIRE(Puu->hash_value() == Pud->hash_value());
+  REQUIRE(Puu->hash_value() == Pdd->hash_value());
+  REQUIRE(eq(Puu, Pud));
+  REQUIRE(eq(Puu, Pdd));
+  // the result keeps its as-written labels
+  REQUIRE(ranges::any_of(Pud->canon_indices(), [](Index const& i) {
+    return i.full_label() == L"i↓_1";
+  }));
+  // a flavoured non-blind leaf pins the index: g(i↑,..) vs g(i↓,..) differ
+  auto Quu = tree(L"I{i↑_2,i↑_1,a_3;a↑_1<i↑_1,i↑_2>}",
+                  L"g{a_1,i↑_1,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", opts);
+  auto Qdd = tree(L"I{i↓_2,i↓_1,a_3;a↑_1<i↓_1,i↓_2>}",
+                  L"g{a_1,i↓_1,a_3} * C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}", opts);
+  REQUIRE(Quu->hash_value() != Qdd->hash_value());
+  REQUIRE(!eq(Quu, Qdd));
+  // the PNS component stays distinctive
+  auto Puu_dn =
+      tree(L"I{i↑_2,i↑_1,a_2,a_3;a↓_1<i↑_1,i↑_2>}",
+           L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↓_1<i↑_1,i↑_2>}", opts);
+  REQUIRE(Puu->hash_value() != Puu_dn->hash_value());
+  // hook off: nothing shared, identical to a hook-less binarize
+  auto Puu0 = tree(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                   L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", {});
+  auto Pud0 = tree(L"I{i↑_2,i↓_1,a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                   L"g{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", {});
+  REQUIRE(Puu0->hash_value() != Pud0->hash_value());
+  REQUIRE(
+      Puu0->hash_value() ==
+      binarize(ResultExpr{
+                   parse(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}")->as<Tensor>(),
+                   parse(L"g{a_1,a_2,a_3} * "
+                         L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}")})
+          ->hash_value());
+  // a sum of two blind products is one identity across the pair flavours
+  auto Suu = tree(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>} + "
+                  L"f{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}",
+                  opts);
+  auto Sud = tree(L"I{i↑_2,i↓_1,a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>} + "
+                  L"f{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}",
+                  opts);
+  REQUIRE(Suu->hash_value() == Sud->hash_value());
+  REQUIRE(eq(Suu, Sud));
+}
