@@ -5,3 +5,4 @@ Developer documentation
    :maxdepth: 2
 
    documentation
+   cost_model
