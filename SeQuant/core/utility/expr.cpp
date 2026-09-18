@@ -300,7 +300,12 @@ namespace {
 /// Counts every index occurrence in @p expr, treating a proto-index of a
 /// composite (CSV) index as an occurrence of that (bare) index in addition to
 /// counting the composite index itself. The recursion descends through
-/// Products/Sums down to the Tensor leaves.
+/// Products down to the Tensor leaves; a nested Sum contributes the counts of
+/// ONE summand (its first): a Sum's summands all carry the same external
+/// indices (is_valid checks every nested Sum before its parent) and its value
+/// occupies the slots of one summand, whereas adding up all summands counts a
+/// two- or four-flavor CSV projection bracket's externals an even number of
+/// times and drops them from the parity-based external set.
 container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
   container::map<Index, std::size_t> counts;
   auto visit = [&counts](const Expr &e, auto &self) -> void {
@@ -309,6 +314,8 @@ container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
         ++counts[ix];
         for (const Index &p : ix.proto_indices()) ++counts[p];
       }
+    } else if (e.is<Sum>()) {
+      if (e.size() > 0) self(*e.as<Sum>().summand(0), self);
     } else if (!e.is_atom()) {
       for (const ExprPtr &sub : e) self(*sub, self);
     }

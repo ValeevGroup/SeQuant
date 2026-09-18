@@ -707,6 +707,29 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(actual == expected);
       }
     }
+    SECTION("nested sum bracket") {
+      // A CSV projection bracket expanded over two flavors of its expansion
+      // dummy is a nested Sum inside a Product; its externals count ONCE
+      // (the bracket's value fills one summand's slots), so the term matches
+      // its proto-indexed sibling. Summing the occurrences over both flavor
+      // summands made every external even, i.e. absent, and flagged the
+      // residual block "Inconsistent external indices in sum".
+      auto bracket = ex<Sum>(ExprPtrList{
+          deserialize(L"g{i1,i2;a1,a2} C{a1;a3<i1,i2>} C{a2;a4<i1,i2>}"),
+          deserialize(L"g{i1,i2;a5,a2} C{a5;a3<i1,i2>} C{a2;a4<i1,i2>}")});
+      auto term1 = ex<Product>(2, ExprPtrList{bracket}, Product::Flatten::No);
+      auto term2 = deserialize(L"f{i3;i1} t{a3<i1,i2>,a4<i1,i2>;i3,i2}");
+      auto block = ex<Sum>(ExprPtrList{term1, term2});
+      REQUIRE(term1->as<Product>().factor(0)->is<Sum>());
+      std::string actual_msg;
+      REQUIRE(is_valid(block, &actual_msg));
+      REQUIRE(actual_msg.empty());
+      // a genuinely inconsistent sibling is still caught
+      auto bad = ex<Sum>(ExprPtrList{
+          term1, deserialize(L"f{i3;i1} t{a3<i1,i2>,a4<i1,i2>;i3,i1}")});
+      REQUIRE_FALSE(is_valid(bad, &actual_msg));
+      REQUIRE(actual_msg == "Inconsistent external indices in sum");
+    }
     SECTION("ResultExpr") {
       for (const auto& [expr_str, msg] :
            std::vector<std::pair<std::wstring, std::string>>{
