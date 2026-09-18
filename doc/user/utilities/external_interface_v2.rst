@@ -58,11 +58,13 @@ canonicalize
 
 Canonicalizes the input expressions.
 
-+-------------------+----------------+
-| Input            | Expression     |
-+-------------------+----------------+
-| Output           | Expression     |
-+-------------------+----------------+
+.. list-table::
+   :header-rows: 1
+
+   * - Input
+     - Output
+   * - Expression
+     - Expression
 
 
 This step does not accept any options.
@@ -73,18 +75,30 @@ cse
 
 Performs common-subexpression elimination (CSE).
 
-+-------------------+----------------+
-| Input            | ExportTree     |
-+-------------------+----------------+
-| Output           | ExportTree     |
-+-------------------+----------------+
+.. list-table::
+   :header-rows: 1
 
-+-------------------+----------------+------------------|------------|
-| Option            | Description   | Default          | Required    |
-+===================+================+==================|=============|
-| :code:`min_usage` | Minimum number of times a given subexpression has to be used in order to be eligible for subexpression elimination | 2 | No |
-| :code:`merge_inputs` | Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE. | false | No |
-+-------------------+----------------+------------------|------------|
+   * - Input
+     - Output
+   * - ExportTree
+     - ExportTree
+
+     
+.. list-table:: Options
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`min_usage`
+     - Minimum number of times a given subexpression has to be used in order to be eligible for subexpression elimination.
+     - 2
+     - No
+   * - :code:`merge_inputs`
+     - Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE.
+     - false
+     - No
 
 
 
@@ -136,11 +150,13 @@ read_input
 
 Reads and parses expressions from files.
 
-+-------------------+----------------+
-| Input            | None           |
-+-------------------+----------------+
-| Output           | Expression     |
-+-------------------+----------------+
+.. list-table::
+   :header-rows: 1
+
+   * - Input
+     - Output
+   * - None
+     - Expression
 
 
 simplify
