@@ -9,5 +9,6 @@ User Guide
    operator
    cc
    canonicalization
+   spin_tracing
    io
    evaluation
