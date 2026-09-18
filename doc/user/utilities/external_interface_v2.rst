@@ -58,11 +58,34 @@ canonicalize
 
 Canonicalizes the input expressions.
 
++-------------------+----------------+
+| Input            | Expression     |
++-------------------+----------------+
+| Output           | Expression     |
++-------------------+----------------+
+
+
+This step does not accept any options.
+
 
 cse
 ^^^
 
 Performs common-subexpression elimination (CSE).
+
++-------------------+----------------+
+| Input            | ExportTree     |
++-------------------+----------------+
+| Output           | ExportTree     |
++-------------------+----------------+
+
++-------------------+----------------+------------------|------------|
+| Option            | Description   | Default          | Required    |
++===================+================+==================|=============|
+| :code:`min_usage` | Minimum number of times a given subexpression has to be used in order to be eligible for subexpression elimination | 2 | No |
+| :code:`merge_inputs` | Whether multiple inputs shall be merged together in order to undergo combined rather than individual CSE. | false | No |
++-------------------+----------------+------------------|------------|
+
 
 
 density_fitting
@@ -75,6 +98,12 @@ export
 ^^^^^^
 
 Exports the given expressions as code.
+
+
+filter
+^^^^^^
+
+Filters the input expressions and assigns them into different groups based on provided filter rules.
 
 
 index_batching
@@ -106,6 +135,12 @@ read_input
 ^^^^^^^^^^
 
 Reads and parses expressions from files.
+
++-------------------+----------------+
+| Input            | None           |
++-------------------+----------------+
+| Output           | Expression     |
++-------------------+----------------+
 
 
 simplify
