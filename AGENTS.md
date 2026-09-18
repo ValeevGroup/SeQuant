@@ -234,3 +234,61 @@ an include from a row further down is a back-edge.
 `utilities/` holds standalone tools (`external_interface`, `cost_analysis`, …)
 whose fixtures are covered above; `SEQUANT_UTILITIES` is `ON` by default for
 top-level builds.
+
+## Documentation
+
+`doc/` holds the Sphinx sources (`user/`, `developer/`, `maintainer/`) plus the
+Doxygen setup behind the API reference; see `doc/developer/documentation.rst`
+for how it's built. Conventions that hold across the existing pages:
+
+- **Scope a page relative to its companion, and don't repeat it.** A
+  `user/guide/` page covers the public API; a `developer/` page (if any)
+  covers the implementation for contributors, opens by naming its companion,
+  and states what it assumes rather than re-explaining it. Keep that split —
+  don't inline implementation detail into a user-facing page, and don't
+  re-teach usage in a developer one.
+- **Every new page goes into a `toctree`.** A page that exists on disk but
+  isn't linked from the relevant `index.rst` is orphaned; check `doc/*/index.rst`
+  whenever a file is added. Order entries to mirror the conceptual order a
+  reader encounters the topics in (the pipeline order for guide pages), not
+  alphabetically or by when they were added.
+- **Code samples are real, compiled files, never hand-typed blocks.** Every
+  `.. literalinclude::` must point at a file under `doc/examples/{user,synopsis}/`,
+  delimited by `start-snippet-N`/`end-snippet-N` comments — see
+  `doc/examples/CMakeLists.txt`: "Make sure all example snippets are compiled
+  to avoid documented examples becoming out of date." A snippet file with
+  `main()` is additionally run as a ctest (`sequant/doc-examples/<name>`); it
+  must succeed, not merely compile.
+- **Defer exhaustive or volatile detail to the API reference** (`:class:`,
+  `:func:`, `:concept:`, `:doc:` roles) instead of hand-copying a struct's
+  full field list or an enum's full value set into prose. Describe the
+  members that matter conceptually and link the rest, so prose doesn't drift
+  out of sync as the struct grows.
+- **No tangents.** Stay scoped to the point being made; background that isn't
+  load-bearing belongs behind a link, not inlined.
+- Match formatting already in place: a heading's underline runs a few
+  characters longer than its title (not exactly equal length), prose is
+  hard-wrapped near 120 columns, and a `.. note::` is reserved for a genuine
+  caveat, not a dumping ground for secondary information.
+- Quote a source `///` comment verbatim when its precise wording carries the
+  meaning (a subtlety, a documented limitation); paraphrase everything else.
+
+### Keep documentation in sync with source changes
+
+Before finishing a change, check whether anything in `doc/` describes what
+you just touched — a public function/class signature, a default value, an
+enum's members, a documented algorithm, a file/directory layout — and whether
+that description is now wrong. Compiling is not sufficient evidence that the
+docs are still correct.
+
+```
+grep -rn '<symbol or concept>' doc/
+```
+
+for whatever you changed. If a page's prose, a `literalinclude`d example, or
+a quoted rationale no longer matches the new behavior, update it as part of
+the same change rather than leaving it for later — an outdated doc is worse
+than no doc, since it actively misleads the next reader. If you're unsure
+whether a description is still accurate but don't have the domain judgement
+to fix the prose correctly, say so explicitly instead of leaving it silently
+stale.
