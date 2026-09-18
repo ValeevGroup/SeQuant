@@ -10,5 +10,6 @@ User Guide
    cc
    canonicalization
    spin_tracing
+   optimize
    io
    evaluation
