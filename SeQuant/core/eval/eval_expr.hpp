@@ -289,6 +289,11 @@ class EvalExpr {
   /// vector means "same as canon_indices()"
   void set_identity_indices(index_vector ixs);
 
+  /// re-derives identity_tensor() from the current expr() (call after expr()
+  /// was respelled in place, e.g. the head overwrite in binarize(ResultExpr));
+  /// no-op without identity erasure
+  void refresh_identity_tensor();
+
   ///
   /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
   ///        canonical slot each result mode holds, and how the proto bundles
@@ -802,6 +807,8 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
     Tensor& tensor = tree->expr().template as<Tensor>();
 
     tensor = res.result_as_tensor();
+    // the erased identity spelling follows the respelled head
+    tree->refresh_identity_tensor();
   }
 
   return tree;

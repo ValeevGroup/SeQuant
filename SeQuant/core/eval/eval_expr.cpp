@@ -199,6 +199,10 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
 void EvalExpr::set_identity_indices(index_vector ixs) {
   identity_indices_ = std::move(ixs);
   layout_fingerprint_.reset();
+  refresh_identity_tensor();
+}
+
+void EvalExpr::refresh_identity_tensor() {
   identity_tensor_.reset();
   if (identity_indices_.empty() || !expr_ || !expr_->is<Tensor>()) return;
   SEQUANT_ASSERT(identity_indices_.size() == canon_indices_.size());

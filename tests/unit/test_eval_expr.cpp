@@ -1463,35 +1463,38 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
     return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
                            .def_braket_symm = Hermiticity::NonHermitian});
   };
-  // C(i↑_1,i↑_2,a_1; a↑_1<i↑_1 i↑_2>): outer pair slots blind, inner not
-  auto C = parse(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
-  auto g = parse(L"g{i↑_1,a_2;a_1}")->as<Tensor>();
+  // C(i↓_1,i↓_2,a_1; a↑_1<i↓_1 i↓_2>): outer pair slots blind, inner not
+  // (↑ is the representative flavour, so ↓ labels are what gets erased)
+  auto C = parse(L"C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}")->as<Tensor>();
+  auto g = parse(L"g{i↓_1,a_2;a_1}")->as<Tensor>();
   KramersBlindness kb{.blind_slot =
                           [](Tensor const& t, std::size_t slot) {
                             return t.label() == L"C" && slot < 2;
                           },
                       .erase_space =
                           [](IndexSpace const& s) {
-                            return mbpt::make_spinfree(Index(s, 1)).space();
+                            if (mbpt::to_spin(s.qns()) == mbpt::Spin::any)
+                              return s;
+                            return mbpt::make_spinalpha(Index(s, 1)).space();
                           }};
   SECTION("erasable set of a blind leaf") {
     auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, kb);
     REQUIRE(er.size() == 2);
-    REQUIRE(er.count(Index(L"i↑_1")) == 1);
-    REQUIRE(er.count(Index(L"i↑_2")) == 1);
+    REQUIRE(er.count(Index(L"i↓_1")) == 1);
+    REQUIRE(er.count(Index(L"i↓_2")) == 1);
   }
   SECTION("a non-blind occurrence pins the index") {
     auto er = erasable_indices(
         std::array{ExprPtr(ex<Tensor>(C)), ExprPtr(ex<Tensor>(g))}, kb);
     REQUIRE(er.size() == 1);
-    REQUIRE(er.count(Index(L"i↑_2")) == 1);
+    REQUIRE(er.count(Index(L"i↓_2")) == 1);
   }
   SECTION("erased clone: spaces spin-free, protos rewritten, inner kept") {
     auto m = erasure_map(std::array{ExprPtr(ex<Tensor>(C))}, kb);
     REQUIRE(m.size() == 2);
     auto Ce = erase_indices(C, m);
     auto slots = Ce.const_slots() | ranges::to_vector;
-    REQUIRE(slots[0].space() == kb.erase_space(Index(L"i↑_1").space()));
+    REQUIRE(slots[0].space() == Index(L"i↑_1").space());
     // placeholders are fresh temporaries minted in first-occurrence order
     REQUIRE(*slots[0].ordinal() >= Index::min_tmp_index());
     REQUIRE(*slots[1].ordinal() > *slots[0].ordinal());
@@ -1499,11 +1502,10 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
     auto const& inner = slots[3];
     REQUIRE(inner.space() == Index(L"a↑_1").space());  // component kept
     REQUIRE(inner.proto_indices().size() == 2);
-    REQUIRE(inner.proto_indices()[0].space() ==
-            kb.erase_space(Index(L"i↑_1").space()));
+    REQUIRE(inner.proto_indices()[0].space() == Index(L"i↑_1").space());
     // the original is untouched
     REQUIRE((C.const_slots() | ranges::to_vector)[0].space() ==
-            Index(L"i↑_1").space());
+            Index(L"i↓_1").space());
   }
   SECTION("empty hook erases nothing") {
     auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))},
@@ -1513,7 +1515,7 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
   SECTION("a blind composite slot nominates its protos (CSV spelling)") {
     // the CSV transform spells the projector C{a~; a<ij>}: the pair labels
     // occur only as protos of the PNS composite
-    auto Cp = parse(L"C{a_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
+    auto Cp = parse(L"C{a_1;a↑_1<i↓_1,i↓_2>}")->as<Tensor>();
     KramersBlindness kbp{
         .blind_slot =
             [](Tensor const& t, std::size_t slot) {
@@ -1527,13 +1529,12 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
     REQUIRE(m.size() == 2);
     auto Ce = erase_indices(Cp, m);
     auto slots = Ce.const_slots() | ranges::to_vector;
-    REQUIRE(slots[1].proto_indices()[0].space() ==
-            kb.erase_space(Index(L"i↑_1").space()));
+    REQUIRE(slots[1].proto_indices()[0].space() == Index(L"i↑_1").space());
     REQUIRE(*slots[1].proto_indices()[0].ordinal() >= Index::min_tmp_index());
     REQUIRE(*slots[1].proto_indices()[1].ordinal() >
             *slots[1].proto_indices()[0].ordinal());
     // a non-blind composite (an amplitude) pins the protos
-    auto t = parse(L"t{a↑_1<i↑_1,i↑_2>;a_2}")->as<Tensor>();
+    auto t = parse(L"t{a↑_1<i↓_1,i↓_2>;a_2}")->as<Tensor>();
     auto er2 = erasable_indices(
         std::array{ExprPtr(ex<Tensor>(Cp)), ExprPtr(ex<Tensor>(t))}, kbp);
     REQUIRE(er2.empty());
@@ -1563,7 +1564,9 @@ TEST_CASE("kramers_blind_leaf_identity", "[eval_expr][kramers-blind]") {
                           },
                       .erase_space =
                           [](IndexSpace const& s) {
-                            return mbpt::make_spinfree(Index(s, 1)).space();
+                            if (mbpt::to_spin(s.qns()) == mbpt::Spin::any)
+                              return s;
+                            return mbpt::make_spinalpha(Index(s, 1)).space();
                           }};
   auto leaf = [&](std::wstring_view s, KramersBlindness const* k) {
     return EvalExpr(parse(s)->as<Tensor>(), k);
@@ -1628,7 +1631,8 @@ TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
               },
           .erase_space =
               [](IndexSpace const& s) {
-                return mbpt::make_spinfree(Index(s, 1)).space();
+                if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+                return mbpt::make_spinalpha(Index(s, 1)).space();
               }}};
   auto tree = [&](std::wstring_view head, std::wstring_view rhs,
                   BinarizationOptions const& o) {
@@ -1688,7 +1692,8 @@ TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
               },
           .erase_space =
               [](IndexSpace const& s) {
-                return mbpt::make_spinfree(Index(s, 1)).space();
+                if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+                return mbpt::make_spinalpha(Index(s, 1)).space();
               }}};
   auto Cuu_p = tree(L"I{a_2,a_3;a↑_1<i↑_1,i↑_2>}",
                     L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↑_1,i↑_2>}", optsp);
@@ -1732,9 +1737,10 @@ TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
                            .def_braket_symm = Hermiticity::NonHermitian});
   };
   auto erase = [](IndexSpace const& s) {
-    return mbpt::make_spinfree(Index(s, 1)).space();
+    if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+    return mbpt::make_spinalpha(Index(s, 1)).space();
   };
-  auto C = parse(L"C{i↑_1,i↑_2,a↑_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
+  auto C = parse(L"C{i↓_1,i↓_2,a↓_1;a↑_1<i↓_1,i↓_2>}")->as<Tensor>();
   SECTION("a blind slot must be pure occupied") {
     KramersBlindness bad{
         .blind_slot = [](Tensor const&, std::size_t s) { return s == 2; },
@@ -1743,7 +1749,7 @@ TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
                       std::invalid_argument);
   }
   SECTION("a blind composite slot must be indexed by pure-occupied protos") {
-    auto D = parse(L"D{a_1;a↑_1<a↑_2>}")->as<Tensor>();
+    auto D = parse(L"D{a_1;a↑_1<a↓_2>}")->as<Tensor>();
     KramersBlindness bad{
         .blind_slot = [](Tensor const&, std::size_t s) { return s == 1; },
         .erase_space = erase};
@@ -1758,7 +1764,7 @@ TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
     REQUIRE(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, ok).empty());
   }
   SECTION("an index blind in one slot and not in another of one leaf") {
-    auto D = parse(L"D{i↑_1,i↑_2;i↑_1}")->as<Tensor>();
+    auto D = parse(L"D{i↓_1,i↓_2;i↓_1}")->as<Tensor>();
     KramersBlindness bad{
         .blind_slot = [](Tensor const&, std::size_t s) { return s < 2; },
         .erase_space = erase};

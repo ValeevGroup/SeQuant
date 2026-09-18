@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 namespace sequant {
@@ -866,17 +867,35 @@ class ResultTensorTA final : public Result {
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-    if (plain_contraction(a.lannot, a.rannot, a.this_annot)) {
-      // TA's expression engine takes the pending transforms lazily
-      with_expr(a.lannot, [&](auto&& le) {
-        o.with_expr(a.rannot,
-                    [&](auto&& re) { result(a.this_annot) = le * re; });
-      });
-    } else {
-      // einsum takes plain tensor expressions only: materialize views
-      auto const A = logical_array();
-      auto const B = o.logical_array();
-      result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
+    // on failure, name the contraction: annotations and outer extents
+    auto const describe = [&](std::string const& what) {
+      auto extents = [](ArrayT const& arr) {
+        std::string s = "[";
+        if (arr.is_initialized())
+          for (auto const& e : arr.trange().elements_range().extent())
+            s += std::to_string(e) + ",";
+        return s + "]";
+      };
+      return "TA product failed: " + what + " | " + a.lannot + " * " +
+             a.rannot + " -> " + a.this_annot + " | A extents " +
+             extents(logical_array()) + " B extents " +
+             extents(o.logical_array());
+    };
+    try {
+      if (plain_contraction(a.lannot, a.rannot, a.this_annot)) {
+        // TA's expression engine takes the pending transforms lazily
+        with_expr(a.lannot, [&](auto&& le) {
+          o.with_expr(a.rannot,
+                      [&](auto&& re) { result(a.this_annot) = le * re; });
+        });
+      } else {
+        // einsum takes plain tensor expressions only: materialize views
+        auto const A = logical_array();
+        auto const B = o.logical_array();
+        result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
+      }
+    } catch (std::exception const& ex) {
+      throw std::runtime_error(describe(ex.what()));
     }
     decltype(result)::wait_for_lazy_cleanup(result.world());
     ::sequant::detail::note_wait();
@@ -1482,16 +1501,34 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
+    // on failure, name the contraction: annotations and this operand's outer
+    // extents (the other operand's type varies below)
+    auto const describe_tot = [&](std::string const& what) {
+      std::string ext = "[";
+      if (raw<ArrayT>().is_initialized())
+        for (auto const& e : raw<ArrayT>().trange().elements_range().extent())
+          ext += std::to_string(e) + ",";
+      return "TA ToT product failed: " + what + " | " + a.lannot + " * " +
+             a.rannot + " -> " + a.this_annot + " | left outer extents " + ext +
+             "]";
+    };
+
     if (other.is<that_type>()) {
       // ToT * T -> ToT. The flat operand is read materialized (its own view
       // is memoized on first read); ours rides on the einsum annotation
       // (relabel) and the result's view (phase); a pending conj is
       // materialized (einsum takes plain tensor expressions only).
       auto const l = einsum_operand(a.lannot, /*keep_conj=*/false);
-      auto result = TA::einsum(
-          raw<ArrayT>()(l.annot),
-          other.template get<compatible_regular_distarray_type>()(a.rannot),
-          a.this_annot);
+      auto result = [&] {
+        try {
+          return TA::einsum(
+              raw<ArrayT>()(l.annot),
+              other.template get<compatible_regular_distarray_type>()(a.rannot),
+              a.this_annot);
+        } catch (std::exception const& ex) {
+          throw std::runtime_error(describe_tot(ex.what()));
+        }
+      }();
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result), View{.phase = l.phase});
 
@@ -1501,9 +1538,15 @@ class ResultTensorOfTensorTA final : public Result {
       bool const both_conj = conjugated() && o.conjugated();
       auto const l = einsum_operand(a.lannot, both_conj);
       auto const r = o.einsum_operand(a.rannot, both_conj);
-      auto result = TA::einsum<TA::DeNest::True>(
-          raw<ArrayT>()(l.annot), o.template raw<ArrayT>()(r.annot),
-          a.this_annot);
+      auto result = [&] {
+        try {
+          return TA::einsum<TA::DeNest::True>(raw<ArrayT>()(l.annot),
+                                              o.template raw<ArrayT>()(r.annot),
+                                              a.this_annot);
+        } catch (std::exception const& ex) {
+          throw std::runtime_error(describe_tot(ex.what()));
+        }
+      }();
       log_ta_tensor_host_memory_use();
       // conj(A) . conj(B) = conj(A . B): both conjugations ride on the result
       typename that_type::View rv;
@@ -1530,8 +1573,14 @@ class ResultTensorOfTensorTA final : public Result {
       bool const both_conj = conjugated() && o.conjugated();
       auto const l = einsum_operand(a.lannot, both_conj);
       auto const r = o.einsum_operand(a.rannot, both_conj);
-      auto result = TA::einsum(raw<ArrayT>()(l.annot),
-                               o.template raw<ArrayT>()(r.annot), a.this_annot);
+      auto result = [&] {
+        try {
+          return TA::einsum(raw<ArrayT>()(l.annot),
+                            o.template raw<ArrayT>()(r.annot), a.this_annot);
+        } catch (std::exception const& ex) {
+          throw std::runtime_error(describe_tot(ex.what()));
+        }
+      }();
       log_ta_tensor_host_memory_use();
       View rv;
       rv.phase = static_cast<std::int8_t>(l.phase * r.phase);

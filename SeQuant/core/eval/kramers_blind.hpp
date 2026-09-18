@@ -37,8 +37,13 @@ struct KramersBlindness {
   /// true if slot \p slot (position in Tensor::const_slots()) of the LEAF
   /// \p t is blind
   std::function<bool(Tensor const&, std::size_t slot)> blind_slot;
-  /// the flavour-erased (spin-free) image of a flavoured index space; must
-  /// return the space itself for a space that carries no flavour
+  /// the flavour-erased image of a flavoured index space: a canonical
+  /// representative such as the ↑ partner. It must return the space itself
+  /// for a space that carries no flavour, and it must NOT map onto a space
+  /// whose leaves are served differently (e.g. the spin-free union space, an
+  /// index of which selects both Kramers halves: a genuine union-dummy leaf
+  /// and a flavour-erased pair leaf would then share one identity but denote
+  /// different arrays)
   std::function<IndexSpace(IndexSpace const&)> erase_space;
   [[nodiscard]] bool active() const noexcept {
     return static_cast<bool>(blind_slot) && static_cast<bool>(erase_space);
