@@ -11,5 +11,6 @@ User Guide
    canonicalization
    spin_tracing
    optimize
+   export
    io
    evaluation
