@@ -497,10 +497,37 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
         [&](ExprPtr const& result,
             container::vector<container::vector<std::size_t>> const& order) {
           if (!opts.term_batch_axes) return;
+          // This re-key runs for every Sum, including a nested one (a
+          // flavor-sum bracket of a Kramers-split residual) whose enclosing
+          // summand is being optimized in parallel with its siblings, which
+          // insert into the same map: the find/erase/insert below must hold
+          // the map's mutex like every other access, or a concurrent insert
+          // (rehash) tears the map and entries go missing -- binarize's
+          // node_counter == node_batch_axes.size() then fails at random.
+          std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
           container::vector<NodeBatchAnnotation> combined;
+          // SEQUANT_BATCH_AXES_DEBUG=1: one line per summand (entries found
+          // or missing), to align with binarize's per-summand node counts
+          static const bool debug = std::getenv("SEQUANT_BATCH_AXES_DEBUG");
           for (auto const& clstr : order)
             for (auto p : clstr) {
               auto it = opts.term_batch_axes->find(smand_keys.at(p));
+              if (debug) {
+                // new_sum may already be moved-from here; the keyed pointees
+                // stay alive (see above)
+                Expr const& s = *smand_keys.at(p);
+                std::string spelling = toUtf8(s.to_latex());
+                std::cerr << "[batch-axes] optimizer summand " << p << ": "
+                          << (it == opts.term_batch_axes->end()
+                                  ? std::string("NO ENTRY")
+                                  : std::to_string(it->second.size()) +
+                                        " entries")
+                          << " type="
+                          << (s.is<Product>() ? "Product"
+                              : s.is<Sum>()   ? "Sum"
+                                              : "other")
+                          << " | " << spelling.substr(0, 160) << "\n";
+              }
               if (it == opts.term_batch_axes->end()) continue;
               combined.insert(combined.end(),
                               std::make_move_iterator(it->second.begin()),

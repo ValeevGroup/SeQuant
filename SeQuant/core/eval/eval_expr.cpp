@@ -30,6 +30,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <iostream>
 #include <ranges>
 #include <stdexcept>
 #include <string_view>
@@ -681,10 +683,27 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                       std::size_t& node_counter) {
   using ranges::views::move;
   using ranges::views::transform;
+  // SEQUANT_BATCH_AXES_DEBUG=1: one line per summand with the contraction
+  // nodes it consumed from opts.node_batch_axes, to align with the
+  // optimizer's per-summand entry counts (optimize.cpp rekey_onto)
+  static const bool debug = std::getenv("SEQUANT_BATCH_AXES_DEBUG");
+  std::size_t smand_idx = 0;
   auto summands =
       sum.summands()  //
-      | transform([&uncontract, &opts, &node_counter](ExprPtr const& x) {
-          return impl::binarize(x, uncontract, opts, node_counter);
+      | transform([&uncontract, &opts, &node_counter,
+                   &smand_idx](ExprPtr const& x) {
+          std::size_t const before = node_counter;
+          auto node = impl::binarize(x, uncontract, opts, node_counter);
+          if (debug && !opts.node_batch_axes.empty())
+            std::cerr << "[batch-axes] binarize summand " << smand_idx << ": "
+                      << (node_counter - before) << " nodes"
+                      << " type="
+                      << (x->is<Product>() ? "Product"
+                          : x->is<Sum>()   ? "Sum"
+                                           : "other")
+                      << " | " << toUtf8(x->to_latex()).substr(0, 160) << "\n";
+          ++smand_idx;
+          return node;
         })  //
       | ranges::to_vector;
 

@@ -1658,8 +1658,24 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
             // an orientation-free incident tensor permits any bra/ket mix of
             // up to 2 slots; rigid orientations allow at most 1 bra and 1 ket
-            SEQUANT_ASSERT(orientation_free ? (nbra + nket <= 2)
-                                            : (nbra <= 1 && nket <= 1));
+            if (!(orientation_free ? (nbra + nket <= 2)
+                                   : (nbra <= 1 && nket <= 1))) {
+              std::string slots;
+              for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
+                const Vertex &vertex = current_edge.vertex(v);
+                slots += (vertex.getOrigin() == Origin::Bra   ? " bra of "
+                          : vertex.getOrigin() == Origin::Ket ? " ket of "
+                                                              : " aux of ") +
+                         toUtf8(tensors_[vertex.getTerminalIndex()]->_label());
+              }
+              sequant::assert_failed(
+                  "SEQUANT_ASSERT(strict bra-ket check) failed: dummy index " +
+                  toUtf8(current_edge.idx().full_label()) + " meets " +
+                  std::to_string(nbra) + " bra, " + std::to_string(nket) +
+                  " ket, " + std::to_string(naux) + " aux slots (" +
+                  (orientation_free ? "orientation-free" : "rigid") +
+                  "):" + slots);
+            }
           }
         }
       }

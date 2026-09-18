@@ -11,6 +11,8 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/equal.hpp>
@@ -140,7 +142,18 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
       return std::pair{std::move(tn), canon_factor};
     };
     using TN = TensorNetwork;
-    auto [tn, canon_factor] = make_canonical_tn(static_cast<TN *>(nullptr));
+    auto [tn, canon_factor] = [&] {
+      try {
+        return make_canonical_tn(static_cast<TN *>(nullptr));
+      } catch (Exception const &ex) {
+        // name the product: a tensor-network assertion (e.g. a dummy meeting
+        // two bra or two ket slots of rigid tensors) says nothing about which
+        // term produced it
+        throw Exception(std::string(ex.what()) +
+                        " -- while canonicalizing the product " +
+                        toUtf8(this->to_latex()));
+      }
+    }();
 
     const auto &tensors = tn.tensors();
     using std::size;
