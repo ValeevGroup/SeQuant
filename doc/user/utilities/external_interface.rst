@@ -1,6 +1,12 @@
 External Interface
 ==================
 
+.. toctree::
+   :hidden:
+
+   external_interface_v1
+   external_interface_v2
+
 The external interface is supposed to allow interfacing with SeQuant from the outside, without having to write a C++ program that links to the SeQuant
 library. The idea is to specify equations in text form and then submit them to SeQuant for processing. This works by using a JSON driver file that
 contains instructions for what you want SeQuant to do.
@@ -17,6 +23,27 @@ See :ref:`io-Serialization` for the format in which the input equations are expe
    It is assumed that the input always specifies a result. That is, it is of the format :code:`lhs = rhs`. Furthermore, every input file may only
    contain a single result.
 
+
+Running the Tool
+-----------------
+
+The external interface is built as the :code:`external_interface` executable and is invoked as
+
+.. code-block:: bash
+
+   external_interface --driver <path-to-driver.json> [--verbose]
+
+:code:`--driver` (required) is the path to the JSON driver file to execute. :code:`--verbose` raises the log level to include debug output; without
+it, only a short progress line per processing step plus any errors are printed.
+
+Before doing anything else, the tool changes its working directory to the driver file's own directory. This is why all paths specified *within* the
+driver file are resolved relative to the driver file's location rather than to the shell's working directory (see the note below).
+
+The driver JSON file may contain :code:`//` and :code:`/* */` comments, which are stripped before parsing - a small but handy authoring convenience
+that plain JSON doesn't otherwise allow.
+
+Any error encountered anywhere - be it a malformed driver file, an invalid option, or a failure while processing a step - aborts the run immediately
+(reported on stderr, non-zero exit code). There is no partial or best-effort processing.
 
 
 Driver File
