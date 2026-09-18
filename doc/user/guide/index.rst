@@ -8,5 +8,6 @@ User Guide
    context
    operator
    cc
+   canonicalization
    io
    evaluation

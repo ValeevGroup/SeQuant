@@ -37,7 +37,7 @@ The commutator of the Hamiltonian and cluster operators is trivially composed:
    :end-before: end-snippet-3
    :dedent: 2
 
-Note the use of :code:`simplify` to rewrite an expression in a simpler form. Its role will be emphasized later.
+Note the use of :code:`simplify` to rewrite an expression in a simpler form; see the User Guide's :doc:`../guide/canonicalization` for why this is needed and how it works.
 Unfortunately, we immediately run into the limitation of the "pedestrian" approach. Namely, the double commutator cannot be correctly obtained as
 
 .. literalinclude:: /examples/user/getting_started/ccd_pedestrian.cpp
