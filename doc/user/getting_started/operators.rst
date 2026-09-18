@@ -12,7 +12,7 @@ are determined by solving the CCD equations:
 .. math::
     \forall i_1, i_2, a_1, a_2: \quad 0 = \langle0\vert a^{i_1 i_2}_ {a_1 a_2} \exp(-\hat{t}_ 2) \hat{H} \exp(\hat{t}_ 2) \vert 0 \rangle = \langle0\vert a^{i_1 i_2}_ {a_1 a_2} \bigl( \hat{H} + [\hat{H}, \hat{t}_ 2] + \frac{1}{2} [[\hat{H}, \hat{t}_ 2], \hat{t}_ 2] \bigr) \vert 0 \rangle.
 
-A pedestrian way to compose such expression is to define a cluster operator object using SeQuant tensors and normal-ordered operators:
+A pedestrian way to compose such expression is to define a cluster operator object using SeQuant tensors and normal-ordered operators. See the User Guide's :doc:`../guide/expressions` for the full vocabulary of expression nodes (tensors, products, sums, and more) used below.
 
 .. literalinclude:: /examples/user/getting_started/ccd_pedestrian.cpp
    :language: cpp
