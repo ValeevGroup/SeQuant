@@ -1631,6 +1631,8 @@ TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
               },
           .erase_space =
               [](IndexSpace const& s) {
+                if ((s.qns().to_int32() & mbpt::mask_v<mbpt::Spin>) == 0)
+                  return s;
                 if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
                 return mbpt::make_spinalpha(Index(s, 1)).space();
               }}};
@@ -1692,6 +1694,8 @@ TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
               },
           .erase_space =
               [](IndexSpace const& s) {
+                if ((s.qns().to_int32() & mbpt::mask_v<mbpt::Spin>) == 0)
+                  return s;
                 if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
                 return mbpt::make_spinalpha(Index(s, 1)).space();
               }}};
@@ -1737,6 +1741,7 @@ TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
                            .def_braket_symm = Hermiticity::NonHermitian});
   };
   auto erase = [](IndexSpace const& s) {
+    if ((s.qns().to_int32() & mbpt::mask_v<mbpt::Spin>) == 0) return s;
     if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
     return mbpt::make_spinalpha(Index(s, 1)).space();
   };
