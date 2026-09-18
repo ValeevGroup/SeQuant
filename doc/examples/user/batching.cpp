@@ -60,7 +60,7 @@ int main() {
   // end-snippet-2
 
   assert(batched_kappa);
-  (void) batched_kappa;
+  (void)batched_kappa;
 
   return 0;
 }
