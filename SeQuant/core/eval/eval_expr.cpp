@@ -666,6 +666,9 @@ struct ExprWithHash {
   /// spelling in the network cannot carry (an index reorder), see
   /// collect_tensor_factors
   std::int8_t phase = 1;
+  /// whether the factor is a leaf (false: a Sum-rooted intermediate); see
+  /// eval::erasable_indices
+  bool leaf = true;
 };
 
 void all_indices(IndexSet& result, ExprPtr const& expr) {
@@ -713,7 +716,8 @@ void collect_tensor_factors(EvalExprNode const& node,  //
     // slot spelling outright: the phase rides along for the product fold.
     collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
                                       .hash = salted_hash(node),
-                                      .phase = node->canon_phase()});
+                                      .phase = node->canon_phase(),
+                                      .leaf = !op});
   } else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
     collect_tensor_factors(node.right(), collect);
@@ -1057,8 +1061,11 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // mapped back to the as-written indices (the erasure is a renaming, so
       // the map is a bijection). target_indices above keep the real slots.
       eval::ErasureMap erasure;
-      if (opts.kramers_blindness.active())
-        erasure = eval::erasure_map(ts, opts.kramers_blindness);
+      if (opts.kramers_blindness.active()) {
+        container::svector<bool> leaf_flags;
+        for (auto const& f : subfacs) leaf_flags.push_back(f.leaf);
+        erasure = eval::erasure_map(ts, opts.kramers_blindness, leaf_flags);
+      }
       container::svector<ExprPtr> ts_id;
       for (ExprPtr const& e : ts)
         ts_id.push_back(erasure.empty() ? e

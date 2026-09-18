@@ -1510,6 +1510,38 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
                                KramersBlindness{});
     REQUIRE(er.empty());
   }
+  SECTION("a blind composite slot nominates its protos (CSV spelling)") {
+    // the CSV transform spells the projector C{a~; a<ij>}: the pair labels
+    // occur only as protos of the PNS composite
+    auto Cp = parse(L"C{a_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
+    KramersBlindness kbp{
+        .blind_slot =
+            [](Tensor const& t, std::size_t slot) {
+              auto const& ix = *(t.const_slots().begin() + slot);
+              return t.label() == L"C" && ix.has_proto_indices();
+            },
+        .erase_space = kb.erase_space};
+    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(Cp))}, kbp);
+    REQUIRE(er.size() == 2);
+    auto m = erasure_map(std::array{ExprPtr(ex<Tensor>(Cp))}, kbp);
+    REQUIRE(m.size() == 2);
+    auto Ce = erase_indices(Cp, m);
+    auto slots = Ce.const_slots() | ranges::to_vector;
+    REQUIRE(slots[1].proto_indices()[0].space() ==
+            kb.erase_space(Index(L"i↑_1").space()));
+    REQUIRE(slots[1].proto_indices()[0].ordinal() == 3);
+    REQUIRE(slots[1].proto_indices()[1].ordinal() == 4);
+    // a non-blind composite (an amplitude) pins the protos
+    auto t = parse(L"t{a↑_1<i↑_1,i↑_2>;a_2}")->as<Tensor>();
+    auto er2 = erasable_indices(
+        std::array{ExprPtr(ex<Tensor>(Cp)), ExprPtr(ex<Tensor>(t))}, kbp);
+    REQUIRE(er2.empty());
+    // a non-leaf factor is neutral
+    auto er3 = erasable_indices(
+        std::array{ExprPtr(ex<Tensor>(Cp)), ExprPtr(ex<Tensor>(t))}, kbp,
+        container::svector<bool>{true, false});
+    REQUIRE(er3.size() == 2);
+  }
 }
 
 TEST_CASE("kramers_blind_leaf_identity", "[eval_expr][kramers-blind]") {
@@ -1644,6 +1676,35 @@ TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
                    parse(L"g{a_1,a_2,a_3} * "
                          L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}")})
           ->hash_value());
+  // the CSV spelling C{a~; a<ij>} (pair labels only as protos): blind on
+  // the composite slot; f pins one pair label through a plain slot
+  BinarizationOptions optsp{
+      .kramers_blindness = {
+          .blind_slot =
+              [](Tensor const& t, std::size_t slot) {
+                auto const& ix = *(t.const_slots().begin() + slot);
+                return t.label() == L"C" && ix.has_proto_indices();
+              },
+          .erase_space =
+              [](IndexSpace const& s) {
+                return mbpt::make_spinfree(Index(s, 1)).space();
+              }}};
+  auto Cuu_p = tree(L"I{a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                    L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↑_1,i↑_2>}", optsp);
+  auto Cud_p = tree(L"I{a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                    L"g{a_1,a_2,a_3} * C{a_1;a↑_2<i↑_2,i↓_1>}", optsp);
+  auto Cdd_p = tree(L"I{a_2,a_3;a↑_1<i↓_1,i↓_2>}",
+                    L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↓_1,i↓_2>}", optsp);
+  REQUIRE(Cuu_p->hash_value() == Cud_p->hash_value());
+  REQUIRE(Cuu_p->hash_value() == Cdd_p->hash_value());
+  REQUIRE(eq(Cuu_p, Cud_p));
+  auto Fuu_p =
+      tree(L"I{i↑_1,a_3;a↑_1<i↑_1,i↑_2>}",
+           L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↑_1,i↑_2>} * f{a_2;i↑_1}", optsp);
+  auto Fdd_p =
+      tree(L"I{i↓_1,a_3;a↑_1<i↓_1,i↓_2>}",
+           L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↓_1,i↓_2>} * f{a_2;i↓_1}", optsp);
+  REQUIRE(Fuu_p->hash_value() != Fdd_p->hash_value());
   // a sum of two blind products is one identity across the pair flavours
   auto Suu = tree(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}",
                   L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>} + "
@@ -1680,12 +1741,20 @@ TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
     REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, bad),
                       std::invalid_argument);
   }
-  SECTION("a blind composite slot is a design violation") {
+  SECTION("a blind composite slot must be indexed by pure-occupied protos") {
+    auto D = parse(L"D{a_1;a↑_1<a↑_2>}")->as<Tensor>();
     KramersBlindness bad{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s == 1; },
+        .erase_space = erase};
+    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(D))}, bad),
+                      std::invalid_argument);
+    // with the pair labels also in plain slots, the plain slots govern: a
+    // blind composite alone erases nothing here (its protos follow the
+    // non-blind plain slots), and it is not a violation
+    KramersBlindness ok{
         .blind_slot = [](Tensor const&, std::size_t s) { return s == 3; },
         .erase_space = erase};
-    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, bad),
-                      std::invalid_argument);
+    REQUIRE(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, ok).empty());
   }
   SECTION("an index blind in one slot and not in another of one leaf") {
     auto D = parse(L"D{i↑_1,i↑_2;i↑_1}")->as<Tensor>();

@@ -27,12 +27,15 @@ namespace sequant::eval {
 /// \brief Caller-declared Kramers blindness of leaf slots.
 ///
 /// \details A slot is blind if the value served for the leaf does not depend
-/// on the Kramers flavour of the index occupying it (e.g. the outer pair slots
-/// of a Kramers-union CSV projector, served from one array for every pair
-/// flavour). Empty functions mean no erasure: identities are bit-identical to
-/// a hook-less binarization.
+/// on the Kramers flavour of the index occupying it (a plain slot) or of the
+/// proto indices of the composite occupying it (a composite slot): e.g. the
+/// PNS composite slot of a Kramers-union CSV projector C{a~; a<ij>}, served
+/// from one array for every flavour of the pair labels i, j. Empty functions
+/// mean no erasure: identities are bit-identical to a hook-less
+/// binarization.
 struct KramersBlindness {
-  /// true if slot \p slot (position in Tensor::const_slots()) of \p t is blind
+  /// true if slot \p slot (position in Tensor::const_slots()) of the LEAF
+  /// \p t is blind
   std::function<bool(Tensor const&, std::size_t slot)> blind_slot;
   /// the flavour-erased (spin-free) image of a flavoured index space; must
   /// return the space itself for a space that carries no flavour
@@ -42,82 +45,104 @@ struct KramersBlindness {
   }
 };
 
-/// \brief The indices erasable over a set of tensors: every flavoured plain
-///        index all of whose plain-slot occurrences among \p tensors are
-///        blind slots.
+/// \brief The indices erasable over a network of factors: every flavoured
+///        plain index all of whose occurrences in LEAF factors are blind.
 ///
-/// \details Only plain-slot occurrences decide: an index that occupies any
-/// non-blind slot is pinned everywhere; one with no plain occurrence at all is
-/// never erased. Proto occurrences neither nominate nor pin (a composite's
-/// own flavour is value-distinctive and is never erased; its proto list is
-/// rewritten to follow whatever the plain slots decided).
+/// \details Occurrences in a leaf decide: a plain slot nominates (blind) or
+/// pins (non-blind) its index; a composite slot nominates (blind) or pins
+/// (non-blind) its flavoured proto indices, except a proto that also occupies
+/// a plain slot of the SAME leaf, which is a reference to that slot and
+/// follows it. A composite index itself is never erased (its own flavour is
+/// value-distinctive). Non-leaf factors (Sum-rooted
+/// intermediates entering a product) are neutral: whether their value depends
+/// on a flavour is already encoded in their own identity hash, which the
+/// product combines. An index that occurs in no leaf is never erased.
+///
+/// \param tensors the factors (Tensor expressions; others are skipped)
+/// \param leaf_flags parallel to \p tensors: whether each is a leaf; empty
+///        means every factor is a leaf
 template <std::ranges::input_range Rng>
   requires std::convertible_to<std::ranges::range_value_t<Rng>, ExprPtr>
-container::set<Index> erasable_indices(Rng const& tensors,
-                                       KramersBlindness const& kb) {
+container::set<Index> erasable_indices(
+    Rng const& tensors, KramersBlindness const& kb,
+    container::svector<bool> const& leaf_flags = {}) {
   container::set<Index> candidates, pinned;
   if (!kb.active()) return candidates;
   auto const flavoured = [&kb](Index const& ix) {
     return ix.space() != kb.erase_space(ix.space());
   };
-  auto note = [&](Index const& ix, bool blind) {
-    if (ix.has_proto_indices()) return;  // protos follow the plain slots
-    if (flavoured(ix)) (blind ? candidates : pinned).emplace(ix);
-  };
   // design guards (a violation is a caller bug, never a runtime condition):
-  // a blind slot holds a plain pure-occupied index, and one tensor never
-  // reports the same index blind in one slot and non-blind in another
+  // a blind slot holds a pure-occupied plain index or a composite whose
+  // protos are pure occupied, and one leaf never reports an index blind in
+  // one slot and non-blind in another
   auto const isr = get_default_context().index_space_registry();
+  auto const pure_occ = [&isr](Index const& ix) {
+    return isr && isr->is_pure_occupied(ix.space());
+  };
+  std::size_t k = 0;
   for (ExprPtr const& e : tensors) {
+    std::size_t const pos = k++;
     if (!e->is<Tensor>()) continue;
+    if (!leaf_flags.empty() && !leaf_flags[pos]) continue;  // neutral
     auto const& t = e->as<Tensor>();
-    container::set<Index> blind_here, plain_here;
+    container::set<Index> blind_here, pinned_here, plain_slots;
+    for (auto const& ix : t.const_slots())
+      if (!ix.has_proto_indices()) plain_slots.emplace(ix);
     std::size_t slot = 0;
     for (auto const& ix : t.const_slots()) {
       bool const blind = kb.blind_slot(t, slot++);
-      if (blind) {
-        if (ix.has_proto_indices())
-          throw std::invalid_argument(
-              "KramersBlindness: a blind slot must hold a plain (proto-free) "
-              "index");
-        if (!isr || !isr->is_pure_occupied(ix.space()))
-          throw std::invalid_argument(
-              "KramersBlindness: a blind slot must be pure occupied");
-        blind_here.emplace(ix);
-      } else if (!ix.has_proto_indices()) {
-        plain_here.emplace(ix);
+      auto note = [&](Index const& p) {
+        if (!flavoured(p)) return;
+        if (blind) {
+          if (!pure_occ(p))
+            throw std::invalid_argument(
+                "KramersBlindness: a blind slot must hold (or, for a "
+                "composite, be indexed by) pure-occupied indices");
+          blind_here.emplace(p);
+          candidates.emplace(p);
+        } else {
+          pinned_here.emplace(p);
+          pinned.emplace(p);
+        }
+      };
+      if (ix.has_proto_indices()) {
+        for (auto const& p : ix.proto_indices())
+          if (!plain_slots.contains(p)) note(p);  // else: follows its slot
+      } else {
+        note(ix);
       }
-      note(ix, blind);
     }
     for (auto const& ix : blind_here)
-      if (plain_here.contains(ix))
+      if (pinned_here.contains(ix))
         throw std::invalid_argument(
             "KramersBlindness: an index is blind in one slot and not in "
-            "another slot of the same tensor");
+            "another slot of the same leaf");
   }
   for (auto const& p : pinned) candidates.erase(p);
   return candidates;
 }
 
-/// \brief The erasure map of a network: every erasable plain index (see
+/// \brief The erasure map of a network: every erasable index (see
 ///        erasable_indices) mapped to its flavour-erased placeholder.
 ///
-/// \details Placeholders are numbered by FIRST OCCURRENCE among the plain
-/// slots of \p tensors (in tensor order, slot order), starting past the
-/// largest ordinal any index of the network carries, so that (a) two
-/// networks that differ only in the flavours of erasable indices get the
-/// same erased spelling -- the same spelling up to a renaming that keeps the
-/// occurrence order, which is what the layout fingerprint keys on -- and (b)
-/// a placeholder can never collide with a spin-free index already present
-/// (e.g. a union-contracted dummy). A composite's proto list is rewritten
-/// through the same map (Index::transform).
+/// \details Placeholders are numbered by FIRST OCCURRENCE among the slots
+/// of \p tensors (tensor order, slot order, a composite's protos in proto
+/// order), starting past the largest ordinal any index of the network
+/// carries, so that (a) two networks that differ only in the flavours of
+/// erasable indices get the same erased spelling -- the same spelling up to
+/// a renaming that keeps the occurrence order, which is what the layout
+/// fingerprint keys on -- and (b) a placeholder can never collide with a
+/// spin-free index already present (e.g. a union-contracted dummy). A
+/// composite's proto list is rewritten through the same map
+/// (Index::transform).
 using ErasureMap = container::map<Index, Index>;
 
 template <std::ranges::input_range Rng>
   requires std::convertible_to<std::ranges::range_value_t<Rng>, ExprPtr>
-ErasureMap erasure_map(Rng const& tensors, KramersBlindness const& kb) {
+ErasureMap erasure_map(Rng const& tensors, KramersBlindness const& kb,
+                       container::svector<bool> const& leaf_flags = {}) {
   ErasureMap result;
-  auto const erasable = erasable_indices(tensors, kb);
+  auto const erasable = erasable_indices(tensors, kb, leaf_flags);
   if (erasable.empty()) return result;
   // largest ordinal in the network (plain slots and protos)
   std::size_t max_ord = 0;
@@ -132,12 +157,17 @@ ErasureMap erasure_map(Rng const& tensors, KramersBlindness const& kb) {
     }
   }
   std::size_t next = max_ord + 1;
+  auto place = [&](Index const& ix) {
+    if (!erasable.contains(ix) || result.contains(ix)) return;
+    result.emplace(ix, Index{kb.erase_space(ix.space()), next++});
+  };
   for (ExprPtr const& e : tensors) {
     if (!e->is<Tensor>()) continue;
     for (auto const& ix : e->as<Tensor>().const_slots()) {
-      if (ix.has_proto_indices() || !erasable.contains(ix)) continue;
-      if (result.contains(ix)) continue;
-      result.emplace(ix, Index{kb.erase_space(ix.space()), next++});
+      if (ix.has_proto_indices())
+        for (auto const& p : ix.proto_indices()) place(p);
+      else
+        place(ix);
     }
   }
   return result;
