@@ -36,7 +36,7 @@ Notice that the set-theoretic operations are only partially automated. It is the
 Quasiparticles
 ~~~~~~~~~~~~~~~
 
-In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. The choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling :code:`get_default_context()`, changed via :code:`set_default_context()`, and reset to the default via :code:`reset_default_context()`:
+In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. The choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling :code:`get_default_context()`, changed via :code:`set_default_context()`, and reset to the default via :code:`reset_default_context()` (see the User Guide's :doc:`../guide/context` for the full picture, including the one-line :code:`mbpt::load()` shortcut for standard quantum-chemistry conventions):
 
 .. literalinclude:: /examples/user/getting_started/index_spaces.cpp
    :language: cpp

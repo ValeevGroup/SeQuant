@@ -5,6 +5,7 @@ User Guide
    :maxdepth: 2
 
    expressions
+   context
    operator
    cc
    io
