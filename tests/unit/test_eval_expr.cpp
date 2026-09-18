@@ -1492,9 +1492,9 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
     auto Ce = erase_indices(C, m);
     auto slots = Ce.const_slots() | ranges::to_vector;
     REQUIRE(slots[0].space() == kb.erase_space(Index(L"i↑_1").space()));
-    // placeholders numbered by first occurrence past the largest ordinal (2)
-    REQUIRE(slots[0].ordinal() == 3);
-    REQUIRE(slots[1].ordinal() == 4);
+    // placeholders are fresh temporaries minted in first-occurrence order
+    REQUIRE(*slots[0].ordinal() >= Index::min_tmp_index());
+    REQUIRE(*slots[1].ordinal() > *slots[0].ordinal());
     REQUIRE(slots[2].space() == Index(L"a_1").space());
     auto const& inner = slots[3];
     REQUIRE(inner.space() == Index(L"a↑_1").space());  // component kept
@@ -1529,8 +1529,9 @@ TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
     auto slots = Ce.const_slots() | ranges::to_vector;
     REQUIRE(slots[1].proto_indices()[0].space() ==
             kb.erase_space(Index(L"i↑_1").space()));
-    REQUIRE(slots[1].proto_indices()[0].ordinal() == 3);
-    REQUIRE(slots[1].proto_indices()[1].ordinal() == 4);
+    REQUIRE(*slots[1].proto_indices()[0].ordinal() >= Index::min_tmp_index());
+    REQUIRE(*slots[1].proto_indices()[1].ordinal() >
+            *slots[1].proto_indices()[0].ordinal());
     // a non-blind composite (an amplitude) pins the protos
     auto t = parse(L"t{a↑_1<i↑_1,i↑_2>;a_2}")->as<Tensor>();
     auto er2 = erasable_indices(

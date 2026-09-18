@@ -125,16 +125,17 @@ container::set<Index> erasable_indices(
 /// \brief The erasure map of a network: every erasable index (see
 ///        erasable_indices) mapped to its flavour-erased placeholder.
 ///
-/// \details Placeholders are numbered by FIRST OCCURRENCE among the slots
-/// of \p tensors (tensor order, slot order, a composite's protos in proto
-/// order), starting past the largest ordinal any index of the network
-/// carries, so that (a) two networks that differ only in the flavours of
-/// erasable indices get the same erased spelling -- the same spelling up to
-/// a renaming that keeps the occurrence order, which is what the layout
-/// fingerprint keys on -- and (b) a placeholder can never collide with a
-/// spin-free index already present (e.g. a union-contracted dummy). A
-/// composite's proto list is rewritten through the same map
-/// (Index::transform).
+/// \details Placeholders are fresh temporary indices (Index::make_tmp_index)
+/// of the erased space, minted in FIRST-OCCURRENCE order among the slots of
+/// \p tensors (tensor order, slot order, a composite's protos in proto
+/// order). Identity is label-blind, so only their relative order matters:
+/// being the newest temporaries they sort after every index already in the
+/// network and among themselves in occurrence order, hence two networks that
+/// differ only in the flavours of erasable indices get the same erased
+/// spelling up to a renaming that keeps the occurrence order (what the layout
+/// fingerprint keys on), and a placeholder never collides with an index
+/// already present. A composite's proto list is rewritten through the same
+/// map (Index::transform).
 using ErasureMap = container::map<Index, Index>;
 
 template <std::ranges::input_range Rng>
@@ -144,22 +145,9 @@ ErasureMap erasure_map(Rng const& tensors, KramersBlindness const& kb,
   ErasureMap result;
   auto const erasable = erasable_indices(tensors, kb, leaf_flags);
   if (erasable.empty()) return result;
-  // largest ordinal in the network (plain slots and protos)
-  std::size_t max_ord = 0;
-  auto note_ord = [&max_ord](Index const& ix) {
-    if (ix.ordinal()) max_ord = std::max<std::size_t>(max_ord, *ix.ordinal());
-  };
-  for (ExprPtr const& e : tensors) {
-    if (!e->is<Tensor>()) continue;
-    for (auto const& ix : e->as<Tensor>().const_slots()) {
-      note_ord(ix);
-      for (auto const& p : ix.proto_indices()) note_ord(p);
-    }
-  }
-  std::size_t next = max_ord + 1;
   auto place = [&](Index const& ix) {
     if (!erasable.contains(ix) || result.contains(ix)) return;
-    result.emplace(ix, Index{kb.erase_space(ix.space()), next++});
+    result.emplace(ix, Index::make_tmp_index(kb.erase_space(ix.space())));
   };
   for (ExprPtr const& e : tensors) {
     if (!e->is<Tensor>()) continue;
