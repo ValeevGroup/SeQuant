@@ -13,7 +13,8 @@ A backend is a subclass of :class:`sequant::Generator`: a set of `callbacks <htt
 (``create``, ``load``, ``compute``, ``unload``, ``declare``, ...) that get invoked, in the right order, while
 :func:`sequant::export_expression` traverses a :doc:`ResultExpr <expressions>`'s
 evaluation tree. Writing a new backend means implementing this callback interface; the tree-walking, scalar-factor bookkeeping, and
-intermediate-reuse logic are handled once, centrally, for every backend. :class:`sequant::TextGenerator` is a minimal,
+intermediate-reuse logic are handled once, centrally, for every backend — documented for contributors in :doc:`the developer guide
+</developer/export>`. :class:`sequant::TextGenerator` is a minimal,
 dependency-free backend that renders these callbacks as human-readable pseudocode — useful both as documentation of the callback
 sequence and as a debugging aid for a real backend under development:
 
