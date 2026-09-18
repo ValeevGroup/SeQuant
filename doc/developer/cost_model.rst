@@ -2,7 +2,8 @@ Cost Model and Single-Term Optimization
 ==========================================
 
 :doc:`sequant::optimize() </user/guide/optimize>` picks a contraction order for every product it sees by solving, for each term
-independently, a subset dynamic program (DP) over its tensors: which pairwise contraction to form first, second, and so on, so as to
+independently, a subset `dynamic program <https://en.wikipedia.org/wiki/Dynamic_programming>`_ (DP) over its tensors: which pairwise
+contraction to form first, second, and so on, so as to
 minimize some notion of cost. This page documents the architecture behind that DP — the extension point for anyone implementing a new
 cost objective — and two self-contained refinements shipped on top of it. It complements the :doc:`user-facing optimize() guide
 </user/guide/optimize>` and the :doc:`batched-evaluation architecture page <batched_evaluation>`, neither of which go into this level of
@@ -30,7 +31,8 @@ Four built-in models satisfy the concept, corresponding to :class:`sequant::Obje
   DP over flop count or intermediate storage, with no notion of memory residency.
 - ``PeakModel`` implements ``DenseSpaceTime``: an "all-co-resident" pebble-game DP that tracks, at each step, the total size of every
   tensor simultaneously resident (the currently-forming result plus whatever its sibling subtree's inputs still occupy), maintaining a
-  Pareto frontier of ``(peak, flops)`` points per subset so the lexicographic optimum can be read off at the end.
+  `Pareto frontier <https://en.wikipedia.org/wiki/Pareto_front>`_ of ``(peak, flops)`` points per subset so the lexicographic optimum can be
+  read off at the end.
 - ``PeakBatchedModel`` implements ``DenseSpaceTimeBatched``/``DenseTimeSpaceBatched``: the same pebble-game idea, extended with a second
   dimension — for each subset, a DP cell per *sliced-set context* over the batchable indices (see :doc:`the user-facing batching guide
   </user/guide/batching>` for what "batchable," "contracted," and "peak" mean) — so slicing a mode is just one more move the DP can make
@@ -47,7 +49,7 @@ The roofline tie-break
 
 The peak-first objectives (``DenseSpaceTime``, ``DenseSpaceTimeBatched``) rank schedules primarily by peak memory; among schedules tied
 on peak, a secondary cost breaks the tie. By default that secondary cost is just flop count, but :class:`sequant::RooflineParams` (an
-``OptimizeOptions::roofline`` field) switches it to a wall-time *roofline* proxy that correctly distinguishes compute-bound from
+``OptimizeOptions::roofline`` field) switches it to a wall-time `roofline <https://en.wikipedia.org/wiki/Roofline_model>`_ proxy that correctly distinguishes compute-bound from
 bandwidth-bound contractions, which raw flop count cannot do on its own:
 
 .. math::
@@ -72,7 +74,8 @@ Outer-product DP pruning
 
 The subset DP as described above considers every bipartition of every subset of tensors, including ones that would form a disconnected
 subnetwork — an *outer product* of two pieces that share no summed index. For expressions that never contain a genuine outer product as
-a top-level term (true of every coupled-cluster residual summand, by the linked-cluster theorem), this wastes a large fraction of the
+a top-level term (true of every coupled-cluster residual summand, by the `linked-cluster theorem
+<https://en.wikipedia.org/wiki/Linked-cluster_theorem>`_), this wastes a large fraction of the
 search: :func:`sequant::opt::detail::outer_product_connectivity` restricts the DP's subset lattice to only the subsets whose induced
 subgraph — under "tensors A and B are adjacent iff they share a contracted (non-target) index" — is connected, collapsing the search
 from exponential-in-tensor-count down to roughly the number of connected sub-networks.

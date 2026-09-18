@@ -31,7 +31,7 @@ Canonicalizing a single :class:`sequant::Tensor` — putting its own bra/ket ind
 permutational symmetry — is handled by a :class:`sequant::TensorCanonicalizer`. Canonicalizing a whole product of tensors (or of
 normal-ordered operators) additionally requires choosing a consistent relabeling of the *dummy* indices shared between factors; SeQuant
 does this by building a colored graph representation of the product (a *tensor network*) and computing its canonical form using the
-bundled `bliss <https://users.aalto.fi/~tjunttil/bliss/>`_ graph-automorphism library. This machinery is what
+bundled `bliss <https://users.aalto.fi/~tjunttil/bliss/>`_ `graph-automorphism <https://en.wikipedia.org/wiki/Graph_automorphism>`_ library. This machinery is what
 ``Expr::canonicalize()`` invokes internally, and what :func:`sequant::simplify` combines with cheap algebraic clean-up (flattening,
 dropping zeros, ...) to fully reduce an expression:
 

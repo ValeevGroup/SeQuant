@@ -1,13 +1,15 @@
 Coupled-Cluster Class
 ======================
 
-Coupled-cluster (CC) theory is one of the most accurate and widely used quantum chemistry methods for describing electron correlation in molecular systems. It represents the many-electron wavefunction using an exponential ansatz:
+Coupled-cluster (CC) theory is one of the most accurate and widely used quantum chemistry methods for describing `electron correlation
+<https://en.wikipedia.org/wiki/Electron_correlation>`_ in molecular systems. It represents the many-electron wavefunction using an exponential
+`ansatz <https://en.wikipedia.org/wiki/Ansatz>`_:
 
 .. math::
 
    |\Psi_{\text{CC}}\rangle = e^{\hat{T}}|\Phi_0\rangle
 
-where :math:`|\Phi_0\rangle` is a reference determinant (typically Hartree-Fock), and :math:`\hat{T}` is a cluster operator that generates excited determinants. The cluster operator is typically expanded as:
+where :math:`|\Phi_0\rangle` is a reference determinant (typically `Hartree-Fock <https://en.wikipedia.org/wiki/Hartree%E2%80%93Fock_method>`_), and :math:`\hat{T}` is a cluster operator that generates excited determinants. The cluster operator is typically expanded as:
 
 .. math::
 
@@ -23,9 +25,10 @@ Overview
 The :class:`CC <sequant::mbpt::CC>` class can be used to derive:
 
 - Ground state amplitude equations
-- λ (de-excitation) amplitude equations
+- λ (de-excitation) amplitude equations — Lagrange multipliers conjugate to the ground-state amplitudes, needed for properties and analytic
+  gradients
 - Equation-of-motion (EOM) CC equations for excited states
-- Response equations for properties and perturbations
+- Response equations for properties and `perturbations <https://en.wikipedia.org/wiki/Perturbation_theory_(quantum_mechanics)>`_
 
 Expressions are generated in spin-orbital basis and can be post-processed using SeQuant's spin-tracing capabilities. See :ref:`cc-spin-tracing` for more details.
 
@@ -162,7 +165,7 @@ Using :math:`\bar{H}` outside the CC class
 
 Note that ``op::ref_av(expr)`` and ``op::ref_av(expr, {})`` are *not* the same call: the connectivity defaults to ``default_op_connections()`` only when the argument is omitted entirely, since ``EVOptions::connect`` is itself empty by default.
 
-The two ``ref_av`` calls above swap roles for a unitary ansatz, so it is not simply "unaffected". There :func:`CC::hbar() <sequant::mbpt::CC::hbar>` already returns explicit commutators, and imposing connectivity on top of them would drop terms that must survive; a caller must therefore pass empty connections explicitly, as the class does internally:
+For a unitary ansatz, the roles of the two ``ref_av`` calls above swap: :func:`CC::hbar() <sequant::mbpt::CC::hbar>` already returns explicit commutators, and imposing connectivity on top of them would drop terms that must survive; a caller must therefore pass empty connections explicitly, as the class does internally:
 
 .. code-block:: cpp
 

@@ -8,8 +8,8 @@ External Interface
    external_interface_v2
 
 The external interface is supposed to allow interfacing with SeQuant from the outside, without having to write a C++ program that links to the SeQuant
-library. The idea is to specify equations in text form and then submit them to SeQuant for processing. This works by using a JSON driver file that
-contains instructions for what you want SeQuant to do.
+library. The idea is to specify equations in text form and then submit them to SeQuant for processing. This works by using a `JSON
+<https://en.wikipedia.org/wiki/JSON>`_ driver file that contains instructions for what you want SeQuant to do.
 
 
 .. _extint-input:

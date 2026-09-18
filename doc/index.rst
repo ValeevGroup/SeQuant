@@ -35,13 +35,14 @@
 SeQuant: Symbolic Tensor Algebra in C++
 =======================================
 
-SeQuant is a computer algebra system for performing symbolic algebra of tensors over scalar fields (regular tensors) and over operator fields (tensor
-operators in, e.g., quantum chemistry and many-body physics). In addition to symbolic manipulation it can numerically evaluate (with an appropriate
-external tensor backend) general tensor algebra expressions.
+SeQuant is a `computer algebra system <https://en.wikipedia.org/wiki/Computer_algebra_system>`_ for performing symbolic algebra of tensors over
+scalar fields (regular tensors) and over operator fields (tensor operators, e.g., in quantum chemistry and many-body physics). In addition to
+symbolic manipulation it can numerically evaluate (with an appropriate external tensor backend) general tensor algebra expressions.
 
-Computer algebra systems (CAS) like SeQuant are typically implemented within generic CAS like Mathematica or Maple, or using high-level languages like
-Python. In fact, version 1 of SeQuant was written in Mathematica. However, the performance of high-level languages is not sufficient for practical use
-cases. SeQuant is written in C++ and is designed to be as efficient as possible without loss of generality.
+Computer algebra systems (CAS) like SeQuant are typically implemented within generic CAS like `Mathematica <https://en.wikipedia.org/wiki/Wolfram_Mathematica>`_
+or `Maple <https://en.wikipedia.org/wiki/Maple_(software)>`_, or using high-level languages like Python. In fact, version 1 of SeQuant was written in
+Mathematica. However, the performance of high-level languages is not sufficient for practical use cases. SeQuant is written in C++ and is designed
+to be as efficient as possible without loss of generality.
 
 .. grid:: 1 1 2 2
    :gutter: 2

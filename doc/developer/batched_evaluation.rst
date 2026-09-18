@@ -17,7 +17,7 @@ Numeric evaluation is reached through :func:`sequant::evaluate`, dispatched by `
   ``BatchPolicy``-driven adapter :func:`sequant::make_evaluator`) installed on the node cache: when the walk reaches a node whose
   contracted or external mode is batchable, the custom evaluator re-enters the subtree once per slice and accumulates/scatters the
   partial results, instead of letting a single one-shot contraction run.
-- **``ordered``**: the entire forest is fused into one DAG and driven by a single, explicitly-scheduled, table-driven walk
+- **``ordered``**: the entire forest is fused into one `DAG <https://en.wikipedia.org/wiki/Directed_acyclic_graph>`_ and driven by a single, explicitly-scheduled, table-driven walk
   (``SeQuant/core/eval/ordered_executor.hpp``). Its advantage over per-tree ``forest_descent`` is cross-equation sharing: a value that
   is structurally identical across several equations in the forest — a common intermediate contraction, or a batch loop over the same
   index — is identified once and built once, rather than rebuilt independently inside every tree that needs it.
@@ -56,10 +56,11 @@ Evaluating a forest under ``BatchScheduler::ordered`` proceeds through four stag
 A correctness caveat for sparse backends
 ---------------------------------------------
 
-Some numeric backends (TiledArray in particular) screen individual result tiles against a norm bound computed for the *full*
-contraction. Evaluating only a fraction of a batched reduction and comparing each partial result against that same full-contraction
-bound can wrongly discard tiles that would have survived the complete sum — silently dropping a real contribution. The executor
-therefore accepts a *scope guard* factory (instantiated once per batch loop, released via RAII as nested loops close) whose job is to
+Some numeric backends (TiledArray in particular) screen individual result tiles against a norm bound (typically a `Cauchy–Schwarz
+<https://en.wikipedia.org/wiki/Cauchy%E2%80%93Schwarz_inequality>`_ bound) computed for the *full* contraction. Evaluating only a fraction of a
+batched reduction and comparing each partial result against that same full-contraction bound can wrongly discard tiles that would have
+survived the complete sum — silently dropping a real contribution. The executor therefore accepts a *scope guard* factory (instantiated once
+per batch loop, released via `RAII <https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization>`_ as nested loops close) whose job is to
 scale such a screening threshold down for the duration of each batched block, so a partial sum is screened against a bound appropriate
 to its own, smaller size rather than the full one. Any backend/executor integration that batches over a screened or otherwise
 sparsity-aware backend must supply a correct scope-guard factory; omitting it does not fail loudly — it silently returns a

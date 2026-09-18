@@ -9,8 +9,9 @@ adding support for a new target language means implementing one small interface 
 The ``Generator`` interface
 ------------------------------
 
-A backend is a subclass of :class:`sequant::Generator`: a set of callbacks (``create``, ``load``, ``compute``, ``unload``, ``declare``,
-...) that get invoked, in the right order, while :func:`sequant::export_expression` traverses a :doc:`ResultExpr <expressions>`'s
+A backend is a subclass of :class:`sequant::Generator`: a set of `callbacks <https://en.wikipedia.org/wiki/Callback_(computer_programming)>`_
+(``create``, ``load``, ``compute``, ``unload``, ``declare``, ...) that get invoked, in the right order, while
+:func:`sequant::export_expression` traverses a :doc:`ResultExpr <expressions>`'s
 evaluation tree. Writing a new backend means implementing this callback interface; the tree-walking, scalar-factor bookkeeping, and
 intermediate-reuse logic are handled once, centrally, for every backend. :class:`sequant::TextGenerator` is a minimal,
 dependency-free backend that renders these callbacks as human-readable pseudocode — useful both as documentation of the callback

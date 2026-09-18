@@ -1,7 +1,8 @@
 Batched (Memory-Bounded) Evaluation
 ======================================
 
-A tensor contraction such as a density-fitted 2-electron integral, :math:`g_{ij}^{ab} \approx \sum_K B^a_{iK} B^b_{jK}`,
+A tensor contraction such as a `density-fitted <https://en.wikipedia.org/wiki/Resolution_of_the_identity>`_ 2-electron integral,
+:math:`g_{ij}^{ab} \approx \sum_K B^a_{iK} B^b_{jK}`,
 can involve one mode (here :math:`K`, an auxiliary fitting-basis index — SeQuant's convention labels it :code:`Κ`, see
 :func:`sequant::mbpt::add_df_spaces`) that is far larger than the others. Materializing the full,
 unsliced intermediate for such a contraction can dominate peak memory even though the final result is comparatively small. **Batching**

@@ -10,7 +10,8 @@ equations produced by :doc:`the coupled-cluster machinery <cc>`.
 ------------------------
 
 :class:`sequant::Expr` is the abstract base of every expression node; concrete node types (described below) derive from it. Expressions
-are always managed through :class:`sequant::ExprPtr`, a smart pointer (interchangeable with ``std::shared_ptr<Expr>``) that adds the
+are always managed through :class:`sequant::ExprPtr`, a `smart pointer <https://en.wikipedia.org/wiki/Smart_pointer>`_ (interchangeable with
+``std::shared_ptr<Expr>``) that adds the
 arithmetic operators (``+``, ``-``, ``*``) used to build up expressions programmatically. An ``ExprPtr`` is itself iterable over its
 immediate subexpressions, so an expression tree can be walked, matched, or rewritten generically without knowing the concrete type of
 every node.

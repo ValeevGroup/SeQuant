@@ -32,7 +32,7 @@ Tuning
 --------
 
 :func:`sequant::optimize` takes an ``OptimizeOptions`` struct exposing further, more advanced controls: alternative cost metrics
-(e.g. minimizing intermediate storage or peak memory instead of raw flop count) and common-subexpression elimination across the whole
-sum. One such alternative cost metric — minimizing *peak memory* by slicing a large mode into blocks — is substantial enough to have
+(e.g. minimizing intermediate storage or peak memory instead of raw flop count) and `common-subexpression elimination
+<https://en.wikipedia.org/wiki/Common_subexpression_elimination>`_ across the whole sum. One such alternative cost metric — minimizing *peak memory* by slicing a large mode into blocks — is substantial enough to have
 its own page: see :doc:`batching`. For everything else, see the API reference for :class:`sequant::OptimizeOptions` for the full,
 current set of options.
