@@ -80,10 +80,11 @@ same session.
 
 ## Prefer the smallest diff that achieves the change
 
-Make the smallest change that gets the job done. Don't fold in unrelated
-refactoring, cleanup, or new abstractions the change doesn't strictly
-require, even if the surrounding code looks like it could use it while
-you're in the area — propose that separately and let it be its own change.
+Make the smallest change that gets the job done, without compromising on
+correctness or code readability. Don't fold in unrelated refactoring, cleanup,
+or new abstractions the change doesn't strictly require, even if the
+surrounding code looks like it could use it while you're in the area
+— propose that separately and let it be its own change.
 
 ## Comments explain the present code; commit messages explain the change
 
