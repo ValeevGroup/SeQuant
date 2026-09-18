@@ -41,5 +41,7 @@ int main() {
   assert(get_default_context().spbasis() == SPBasis::Spinor);
   // end-snippet-3
 
+  (void) ctx;
+
   return 0;
 }
