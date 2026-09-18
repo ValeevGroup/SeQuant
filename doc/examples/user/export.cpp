@@ -11,10 +11,9 @@ int main() {
 
   // start-snippet-1
   // a small tensor equation: R^{a_1}_{i_1} = f^{a_1}_{i_1} + t^{a_1}_{i_1}
-  auto result =
-      ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}),
-                 ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) +
-                     ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
+  auto result = ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}),
+                           ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) +
+                               ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}));
 
   // export_expression() walks a binarized evaluation tree and invokes the
   // matching Generator callback (create/load/compute/unload/...) for every
