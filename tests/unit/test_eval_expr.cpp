@@ -1,5 +1,6 @@
 #include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -9,6 +10,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node_compare.hpp>
+#include <SeQuant/core/eval/kramers_blind.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -17,6 +19,7 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <set>
@@ -1446,4 +1449,62 @@ TEST_CASE("Sum-node hash is sensitive to every summand",
   CHECK(first_a->hash_value() != first_b->hash_value());
   // (a*b)+c and c+(a*b) are the same multiset of summands -> same hash.
   CHECK(last_a->hash_value() == first_a->hash_value());
+}
+
+TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  // C(i↑_1,i↑_2,a_1; a↑_1<i↑_1 i↑_2>): outer pair slots blind, inner not
+  auto C = parse(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
+  auto g = parse(L"g{i↑_1,a_2;a_1}")->as<Tensor>();
+  KramersBlindness kb{.blind_slot =
+                          [](Tensor const& t, std::size_t slot) {
+                            return t.label() == L"C" && slot < 2;
+                          },
+                      .erase_space =
+                          [](IndexSpace const& s) {
+                            return mbpt::make_spinfree(Index(s, 1)).space();
+                          }};
+  SECTION("erasable set of a blind leaf") {
+    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, kb);
+    REQUIRE(er.size() == 2);
+    REQUIRE(er.count(Index(L"i↑_1")) == 1);
+    REQUIRE(er.count(Index(L"i↑_2")) == 1);
+  }
+  SECTION("a non-blind occurrence pins the index") {
+    auto er = erasable_indices(
+        std::array{ExprPtr(ex<Tensor>(C)), ExprPtr(ex<Tensor>(g))}, kb);
+    REQUIRE(er.size() == 1);
+    REQUIRE(er.count(Index(L"i↑_2")) == 1);
+  }
+  SECTION("erased clone: spaces spin-free, protos rewritten, inner kept") {
+    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, kb);
+    auto Ce = erase_indices(C, er, kb);
+    auto slots = Ce.const_slots() | ranges::to_vector;
+    REQUIRE(slots[0].space() == kb.erase_space(Index(L"i↑_1").space()));
+    REQUIRE(slots[0].ordinal() == Index(L"i↑_1").ordinal());
+    REQUIRE(slots[2].space() == Index(L"a_1").space());
+    auto const& inner = slots[3];
+    REQUIRE(inner.space() == Index(L"a↑_1").space());  // component kept
+    REQUIRE(inner.proto_indices().size() == 2);
+    REQUIRE(inner.proto_indices()[0].space() ==
+            kb.erase_space(Index(L"i↑_1").space()));
+    // the original is untouched
+    REQUIRE((C.const_slots() | ranges::to_vector)[0].space() ==
+            Index(L"i↑_1").space());
+  }
+  SECTION("empty hook erases nothing") {
+    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))},
+                               KramersBlindness{});
+    REQUIRE(er.empty());
+  }
 }

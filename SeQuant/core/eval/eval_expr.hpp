@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/eval/kramers_blind.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -558,6 +559,11 @@ struct BinarizationOptions {
   /// summand being binarized. Empty (default) => no stamping, no behavior
   /// change. See \c EvalExpr::node_slice_mask.
   container::vector<NodeBatchAnnotation> node_batch_axes = {};
+
+  /// Kramers-blind node identity (see kramers_blind.hpp): inactive by default,
+  /// in which case node identities are exactly those of a hook-less
+  /// binarization.
+  eval::KramersBlindness kramers_blindness = {};
 };
 
 namespace meta {
