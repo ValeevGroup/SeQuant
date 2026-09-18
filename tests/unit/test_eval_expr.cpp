@@ -1656,3 +1656,58 @@ TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
   REQUIRE(Suu->hash_value() == Sud->hash_value());
   REQUIRE(eq(Suu, Sud));
 }
+
+TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  auto erase = [](IndexSpace const& s) {
+    return mbpt::make_spinfree(Index(s, 1)).space();
+  };
+  auto C = parse(L"C{i↑_1,i↑_2,a↑_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
+  SECTION("a blind slot must be pure occupied") {
+    KramersBlindness bad{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s == 2; },
+        .erase_space = erase};
+    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, bad),
+                      std::invalid_argument);
+  }
+  SECTION("a blind composite slot is a design violation") {
+    KramersBlindness bad{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s == 3; },
+        .erase_space = erase};
+    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, bad),
+                      std::invalid_argument);
+  }
+  SECTION("an index blind in one slot and not in another of one leaf") {
+    auto D = parse(L"D{i↑_1,i↑_2;i↑_1}")->as<Tensor>();
+    KramersBlindness bad{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s < 2; },
+        .erase_space = erase};
+    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(D))}, bad),
+                      std::invalid_argument);
+  }
+  SECTION("inert hook == hook-less identity, leaf and tree") {
+    BinarizationOptions inert{
+        .kramers_blindness = {
+            .blind_slot = [](Tensor const&, std::size_t) { return false; },
+            .erase_space = erase}};
+    auto e = parse(L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}");
+    auto head = parse(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
+    auto t0 = binarize(ResultExpr{head, e}, {});
+    auto t1 = binarize(ResultExpr{head, e}, inert);
+    REQUIRE(t0->hash_value() == t1->hash_value());
+    REQUIRE(!t1->has_identity_erasure());
+    REQUIRE(t1->identity_tensor() == nullptr);
+    using Node = FullBinaryNode<EvalExpr>;
+    REQUIRE(TreeNodeEqualityComparator<Node>{}(t0, t1));
+  }
+}

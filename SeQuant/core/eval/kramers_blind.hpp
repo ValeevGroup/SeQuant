@@ -11,13 +11,16 @@
 #define SEQUANT_CORE_EVAL_KRAMERS_BLIND_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/space.hpp>
 
 #include <algorithm>
 #include <functional>
 #include <ranges>
+#include <stdexcept>
 
 namespace sequant::eval {
 
@@ -61,11 +64,36 @@ container::set<Index> erasable_indices(Rng const& tensors,
     if (ix.has_proto_indices()) return;  // protos follow the plain slots
     if (flavoured(ix)) (blind ? candidates : pinned).emplace(ix);
   };
+  // design guards (a violation is a caller bug, never a runtime condition):
+  // a blind slot holds a plain pure-occupied index, and one tensor never
+  // reports the same index blind in one slot and non-blind in another
+  auto const isr = get_default_context().index_space_registry();
   for (ExprPtr const& e : tensors) {
     if (!e->is<Tensor>()) continue;
     auto const& t = e->as<Tensor>();
+    container::set<Index> blind_here, plain_here;
     std::size_t slot = 0;
-    for (auto const& ix : t.const_slots()) note(ix, kb.blind_slot(t, slot++));
+    for (auto const& ix : t.const_slots()) {
+      bool const blind = kb.blind_slot(t, slot++);
+      if (blind) {
+        if (ix.has_proto_indices())
+          throw std::invalid_argument(
+              "KramersBlindness: a blind slot must hold a plain (proto-free) "
+              "index");
+        if (!isr || !isr->is_pure_occupied(ix.space()))
+          throw std::invalid_argument(
+              "KramersBlindness: a blind slot must be pure occupied");
+        blind_here.emplace(ix);
+      } else if (!ix.has_proto_indices()) {
+        plain_here.emplace(ix);
+      }
+      note(ix, blind);
+    }
+    for (auto const& ix : blind_here)
+      if (plain_here.contains(ix))
+        throw std::invalid_argument(
+            "KramersBlindness: an index is blind in one slot and not in "
+            "another slot of the same tensor");
   }
   for (auto const& p : pinned) candidates.erase(p);
   return candidates;
