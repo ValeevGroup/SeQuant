@@ -2,6 +2,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 int main() {
@@ -27,7 +28,7 @@ int main() {
   std::wcout << to_latex(optimized) << std::endl;
   // end-snippet-1
 
-  assert(optimized.is<Product>());
+  SEQUANT_ASSERT(optimized.is<Product>());
 
   return 0;
 }

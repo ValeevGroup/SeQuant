@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -18,8 +19,8 @@ void test0() {
   isr.add_union(L"p", {L"i", L"a"});  // union of i and a
 
   // can access unions and intersections of base and composite spaces
-  assert(isr.unIon(L"i", L"a") == isr.retrieve(L"p"));
-  assert(isr.intersection(L"p", L"i") == isr.retrieve(L"i"));
+  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve(L"p"));
+  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve(L"i"));
 
   // to use the vocabulary defined by isr use it to make a Context object and
   // make it the default
@@ -32,8 +33,8 @@ void test0() {
   Index p1(L"p_1");
 
   // set theoretic operations on spaces
-  assert(i1.space().attr().intersection(a1.space().attr()) ==
-         IndexSpace::Attr::null);
+  SEQUANT_ASSERT(i1.space().attr().intersection(a1.space().attr()) ==
+                 IndexSpace::Attr::null);
 }
 
 void test1() {
@@ -47,8 +48,8 @@ void test1() {
       .add_union(L"yz", {L"y", L"z"})      // union of y and z, explicit
       .add_union(L"xyz", {L"xy", L"yz"});  // union of x, y, and z
 
-  assert(isr.unIon(L"x", L"y") == isr.retrieve(L"xy"));
-  assert(isr.intersection(L"xyz", L"y") == isr.retrieve(L"y"));
+  SEQUANT_ASSERT(isr.unIon(L"x", L"y") == isr.retrieve(L"xy"));
+  SEQUANT_ASSERT(isr.intersection(L"xyz", L"y") == isr.retrieve(L"y"));
 
   // use the registry in global context to streamline composition
   set_default_context({.index_space_registry = std::move(isr)});
@@ -65,9 +66,10 @@ void test2() {
   // set theoretic operations on spaces
   auto i1 = Index(L"i_1");
   auto a1 = Index(L"a_1");
-  assert(i1.space().attr().intersection(a1.space().attr()).type() ==
-         IndexSpace::Type::null);
-  assert(i1.space().attr().intersection(a1.space().attr()).qns() == Spin::any);
+  SEQUANT_ASSERT(i1.space().attr().intersection(a1.space().attr()).type() ==
+                 IndexSpace::Type::null);
+  SEQUANT_ASSERT(i1.space().attr().intersection(a1.space().attr()).qns() ==
+                 Spin::any);
 }
 
 int main() {

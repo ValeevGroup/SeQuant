@@ -1,6 +1,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 int main() {
   using namespace sequant;
@@ -14,14 +15,14 @@ int main() {
                 ex<Tensor>(L"t", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
 
   // before canonicalization the two Products are not recognized as equal ...
-  assert(!(term_a == term_b));
+  SEQUANT_ASSERT(!(term_a == term_b));
 
   // ... but canonicalize() puts both into the same normal form, using the
   // tensor network machinery (which relies on the bundled bliss graph
   // automorphism library) to consistently relabel dummy indices
   term_a->canonicalize();
   term_b->canonicalize();
-  assert(term_a == term_b);
+  SEQUANT_ASSERT(term_a == term_b);
   // end-snippet-1
 
   // start-snippet-2
@@ -33,7 +34,7 @@ int main() {
                  ex<Tensor>(L"t", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"});
   simplify(sum);
 
-  assert(sum.is<Product>());
+  SEQUANT_ASSERT(sum.is<Product>());
   std::wcout << to_latex(sum) << std::endl;
   // end-snippet-2
 

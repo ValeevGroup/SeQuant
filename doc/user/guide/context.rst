@@ -48,6 +48,17 @@ separately from the core ``Context``, via :func:`sequant::mbpt::set_default_mbpt
 Most MBPT functions assert that this has been configured; forgetting this step is a common source of "OpRegistry is null"-type errors
 when SeQuant code is first ported into a new program.
 
+The other configurable field is ``CSV`` (default ``CSV::No``): when set to ``CSV::Yes``, operator tensors built by
+:class:`sequant::mbpt::OpMaker` (e.g. cluster amplitudes ``t``) use cluster-specific virtuals — virtual-space indices that carry the
+operator's occupied indices as proto-indices — instead of plain, independent virtual indices. :func:`sequant::mbpt::csv_transform`
+expands such CSV-dependent tensors into an explicit basis (standard unoccupieds, PAOs, or AOs) when needed downstream.
+
+.. literalinclude:: /examples/user/context.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
+   :dedent: 2
+
 Scoped context changes
 ------------------------
 

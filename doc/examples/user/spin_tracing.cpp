@@ -2,6 +2,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -31,15 +32,15 @@ int main() {
   std::wcout << to_latex(expr_st) << std::endl;
   // end-snippet-1
 
-  assert(expr_st.is<Product>());
-  assert(expr_st.as<Product>().scalar() == 2);
+  SEQUANT_ASSERT(expr_st.is<Product>());
+  SEQUANT_ASSERT(expr_st.as<Product>().scalar() == 2);
 
   // start-snippet-2
   // Spin quantum numbers can also be inspected/attached to individual
   // indices directly, e.g. when interpreting an already spin-orbital
   // expression by hand
   Index i1_up = make_spinalpha(i1);
-  assert(to_spin(i1_up.space().qns()) == Spin::alpha);
+  SEQUANT_ASSERT(to_spin(i1_up.space().qns()) == Spin::alpha);
   // end-snippet-2
 
   return 0;

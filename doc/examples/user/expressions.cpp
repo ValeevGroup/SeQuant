@@ -1,6 +1,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 int main() {
   using namespace sequant;
@@ -15,10 +16,10 @@ int main() {
   auto product = f * g;      // a Product of 2 factors
   auto sum = f * g + g + f;  // a Sum of 3 summands, not a Sum of a Sum and f
 
-  assert(product.is<Product>());
-  assert(product.as<Product>().factors().size() == 2);
-  assert(sum.is<Sum>());
-  assert(sum.as<Sum>().summands().size() == 3);
+  SEQUANT_ASSERT(product.is<Product>());
+  SEQUANT_ASSERT(product.as<Product>().factors().size() == 2);
+  SEQUANT_ASSERT(sum.is<Sum>());
+  SEQUANT_ASSERT(sum.as<Sum>().summands().size() == 3);
 
   std::wcout << to_latex(sum) << std::endl;
   // end-snippet-1
@@ -31,8 +32,8 @@ int main() {
   auto lambda = ex<Variable>(L"\\lambda");
   auto lambda_sq = ex<Power>(lambda, 2);
 
-  assert(lambda_sq.as<Power>().base() == lambda);
-  assert(lambda_sq.as<Power>().exponent() == 2);
+  SEQUANT_ASSERT(lambda_sq.as<Power>().base() == lambda);
+  SEQUANT_ASSERT(lambda_sq.as<Power>().exponent() == 2);
 
   auto scaled = half * g;  // Constant and Tensor combine into one Product
   std::wcout << to_latex(scaled) << std::endl;
@@ -44,7 +45,7 @@ int main() {
   // and to the code generators in SeQuant/core/export
   auto result = ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}), f);
 
-  assert(result.produces_tensor());
+  SEQUANT_ASSERT(result.produces_tensor());
   std::wcout << to_latex(result.expression()) << std::endl;
   // end-snippet-3
 

@@ -4,6 +4,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <unordered_map>
@@ -59,7 +60,7 @@ int main() {
                          mode_type == BatchModeType::Contracted;
   // end-snippet-2
 
-  assert(batched_kappa);
+  SEQUANT_ASSERT(batched_kappa);
   (void)batched_kappa;
 
   return 0;
