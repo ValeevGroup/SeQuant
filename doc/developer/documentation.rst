@@ -78,9 +78,12 @@ The documentation setup works through a chain of tools that transform code comme
 Adding New Documentation
 ------------------------
 
-All user-facing documentation should be added to the ``.sphinx/user/`` directory. Internal documentation can be added to the ``.sphinx/developer/`` directory.
+All user-facing documentation should be added to the ``.sphinx/user/`` directory. Internal documentation can be added to the ``.sphinx/developer/``
+directory.
 
-New documentation files should be written in `reStructuredText <https://en.wikipedia.org/wiki/ReStructuredText>`_ format and included in the appropriate ``toctree`` section of ``index.rst`` files. For a quick reference on reStructuredText syntax, see `this sheet <https://github.com/ralsina/rst-cheatsheet/blob/master/rst-cheatsheet.rst>`_.
+New documentation files should be written in `reStructuredText <https://en.wikipedia.org/wiki/ReStructuredText>`_ format and included in the
+appropriate ``toctree`` section of ``index.rst`` files. For a quick reference on reStructuredText syntax, see
+`this sheet <https://github.com/ralsina/rst-cheatsheet/blob/master/rst-cheatsheet.rst>`_.
 
 Examples of reStructuredText Syntax
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -194,7 +197,8 @@ For inline code snippets, use backticks:
 API Documentation
 -----------------
 
-API documentation is automatically generated from the source code using Doxygen and Exhale. Below is a minimal example of how to document a function using Doxygen-style comments:
+API documentation is automatically generated from the source code using Doxygen and Exhale. Below is a minimal example of how to document a function
+using Doxygen-style comments:
 
 .. code-block:: cpp
 
