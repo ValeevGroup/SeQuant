@@ -30,14 +30,19 @@ else()
         "srcc.cpp ->  |2 t csv sf"
         # Equation-of-motion Coupled-Cluster (reduced test set)
         "eomcc.cpp -> 2 2h1p R"
-        # Unitary Coupled-Cluster (reduced test set: one variant per expansion)
-        "ucc.cpp -> 2 bch 2|2 bernoulli 2"
+        # Unitary Coupled-Cluster (reduced test set: one variant, cheapest
+        # expansion -- the dropped "2 bernoulli 2" variant alone runs over a
+        # minute under a plain MSVC Debug build)
+        "ucc.cpp -> 2 bch 2"
     )
     if (TARGET Eigen3::Eigen)
         # these examples require Eigen for full functionality
         list(APPEND TEST_CASES
-                # Single-Reference closed-shell Coupled-Cluster equation generation
-                "stcc.cpp -> |2 v1 naive|3 v1|3 v2"
+                # Single-Reference closed-shell Coupled-Cluster equation
+                # generation (reduced test set: one variant, matching srcc/
+                # eomcc/ucc above -- the other three variants here are each
+                # 40-60s under a plain MSVC Debug build)
+                "stcc.cpp -> 2 v1 naive"
         )
     endif()
 endif()
