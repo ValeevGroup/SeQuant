@@ -289,6 +289,18 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
   // Execute Python directly with properly escaped script path
   std::string cmd =
       shell_escape(python_exe) + " " + shell_escape(script_path.string());
+#ifdef _WIN32
+  // std::system() on Windows runs the command through `cmd.exe /c`, which
+  // strips exactly the first and last character of the command line whenever
+  // it starts with a quote -- fine for a single quoted token, but here the
+  // command is two quoted tokens (executable, then script path) separated by
+  // a space, so that stripping corrupts the quoting of the first token
+  // instead: cmd.exe ends up trying to run the executable path's prefix up to
+  // its first space (e.g. "C:/Program") as the command. Wrapping the whole
+  // command in one more, redundant pair of quotes gives cmd.exe's stripping
+  // something harmless to remove instead.
+  cmd = "\"" + cmd + "\"";
+#endif
   int exit_code = std::system(cmd.data());
   if (exit_code < 0) return false;
 
