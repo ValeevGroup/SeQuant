@@ -1975,4 +1975,33 @@ TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
   REQUIRE(s_dn->op_type() == EvalOp::KramersFlip);
   REQUIRE(s_dn.left()->hash_value() == s_up->hash_value());
   REQUIRE(s_dn.left()->op_type() == EvalOp::Sum);
+
+  // the flip is DEEP: the flavoured pair labels inside an unflavoured
+  // (Kramers-union) composite follow their plain-slot occurrences, so every
+  // leaf of the canonical partner is spelled consistently (an amplitude leaf
+  // t{a_2<i↓_1,i_2>; i↓_1, i_2} becomes t{a_2<i↑_1,i_2>; i↑_1, i_2})
+  // (X, not the blind projector C: its bra composite would carry the pair
+  // labels in a non-blind slot, which the blindness guard rejects)
+  const Index i1d(L"i↓_1"), iu2(L"i_2");
+  const Index au3(L"a_3", {i1d, iu2}), cd(L"a↓_1", {i1d, iu2});
+  auto deep = binarize(
+      ResultExpr{Tensor(L"I", bra{i1d, iu2}, ket{cd}),
+                 ex<Product>(ExprPtrList{mk(L"X", {au3}, {cd}),
+                                         mk(L"t", {au3}, {i1d, iu2})})},
+      opts);
+  REQUIRE(deep->op_type() == EvalOp::KramersFlip);
+  REQUIRE(deep->kramers_flip_phase() == 1);  // two down externals
+  auto no_down = [&](auto const& node, auto& self) -> bool {
+    if (node.leaf()) {
+      if (!node->is_tensor()) return true;
+      for (auto const& ix : node->as_tensor().const_indices()) {
+        if (ix.space() == i1d.space()) return false;
+        for (auto const& p : ix.proto_indices())
+          if (p.space() == i1d.space()) return false;
+      }
+      return true;
+    }
+    return self(node.left(), self) && self(node.right(), self);
+  };
+  REQUIRE(no_down(deep.left(), no_down));
 }

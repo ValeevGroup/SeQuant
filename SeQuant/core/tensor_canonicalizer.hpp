@@ -204,6 +204,14 @@ int canonicalize_kramers(AbstractTensor& t);
 /// @return whether any slot was flipped
 bool kramers_flip_slots(AbstractTensor& t);
 
+/// @brief the DEEP variant of kramers_flip_slots: every slot index is replaced
+/// by its kramers_flipped_deep image, so the flavoured proto indices of an
+/// unflavoured (e.g. Kramers-union) composite are flipped too -- the
+/// whole-expression time-reversal flip the KramersFlip fold builds its
+/// canonical partner with (eval_expr.cpp); no marker or phase bookkeeping
+/// @return whether any slot changed
+bool kramers_flip_slots_deep(AbstractTensor& t);
+
 /// @brief whether @p idx is a Kramers-UNION index: a spin-free index (its
 /// space has no Kramers partner) of a space whose flavoured subspaces ARE
 /// registered Kramers partners in @p isr, i.e. the union of the ↑ and ↓

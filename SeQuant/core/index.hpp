@@ -1267,6 +1267,31 @@ inline std::optional<Index> kramers_flipped(const Index& idx,
   return idx.with_space(*partner, std::move(protos));
 }
 
+/// @brief the DEEP Kramers image of @p idx: kramers_flipped when @p idx's
+/// space has a partner; otherwise @p idx itself with its proto indices
+/// flipped recursively (kramers_flipped leaves a composite of an unflavoured
+/// space untouched even when its protos are flavoured -- e.g. a Kramers-union
+/// CSV composite a<i↓,j> carrying flavoured pair labels; the deep image is
+/// what a whole-expression time-reversal flip needs, so the pair labels inside
+/// such a composite follow their plain-slot occurrences)
+inline Index kramers_flipped_deep(const Index& idx,
+                                  const IndexSpaceRegistry& isr) {
+  auto partner = isr.kramers_partner(idx.space());
+  if (!idx.has_proto_indices())
+    return partner ? idx.with_space(*partner) : idx;
+  Index::index_vector protos;
+  for (const auto& p : idx.proto_indices())
+    protos.push_back(kramers_flipped_deep(p, isr));
+  return idx.with_space(partner ? *partner : idx.space(), std::move(protos));
+}
+
+/// @brief replaces every index of @p ixs by its deep Kramers image (see
+/// kramers_flipped_deep) in place; ordinals and order are kept
+inline void kramers_flip_deep(Index::index_vector& ixs,
+                              const IndexSpaceRegistry& isr) {
+  for (auto& ix : ixs) ix = kramers_flipped_deep(ix, isr);
+}
+
 /// @brief flips every index of @p ixs that has a Kramers partner to its
 /// image (see kramers_flipped) in place; ordinals and order are kept
 /// @return whether any index was flipped

@@ -360,6 +360,26 @@ bool kramers_foldable(const AbstractTensor& t) {
          !braket_orientation_pinned(t);
 }
 
+bool kramers_flip_slots_deep(AbstractTensor& t) {
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return false;
+  bool flipped = false;
+  auto flip = [&](auto&& slots) {
+    for (auto& idx : slots) {
+      auto f = kramers_flipped_deep(idx, *isr);
+      if (f == idx) continue;
+      const bool tagged = idx.tag().has_value();
+      idx = std::move(f);
+      if (tagged) idx.tag().assign(0);
+      flipped = true;
+    }
+  };
+  flip(t._bra_mutable());
+  flip(t._ket_mutable());
+  flip(t._aux_mutable());
+  return flipped;
+}
+
 bool kramers_flip_slots(AbstractTensor& t) {
   const auto isr = get_default_context().index_space_registry();
   if (!isr) return false;

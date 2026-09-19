@@ -1333,21 +1333,20 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
   }
   if (!noncanonical) return std::nullopt;
 
-  // the canonical partner: every flavoured slot (protos included) flipped
+  // the canonical partner: every flavoured index occurrence flipped, the
+  // pair labels inside unflavoured (union) composites included
   auto flipped_expr = expr->clone();
   flipped_expr->visit(
       [](ExprPtr& x) {
         if (!x->is<Tensor>()) return;
         auto& t = x->as<Tensor>();
-        kramers_flip_slots(t);
+        kramers_flip_slots_deep(t);
         t.reset_tags();
       },
       /*atoms_only=*/true);
   IndexSet flipped_uncontract;
-  for (auto const& ix : uncontract) {
-    auto f = kramers_flipped(ix, *isr);
-    flipped_uncontract.emplace(f ? *f : ix);
-  }
+  for (auto const& ix : uncontract)
+    flipped_uncontract.emplace(kramers_flipped_deep(ix, *isr));
   auto inner =
       impl::binarize(flipped_expr, flipped_uncontract, opts, node_counter);
   SEQUANT_ASSERT(inner->is_tensor());
@@ -1362,7 +1361,7 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
   }
   auto const phase = static_cast<std::int8_t>((n_down % 2) ? -1 : 1);
   Tensor denoted = inner->as_tensor();
-  kramers_flip_slots(denoted);
+  kramers_flip_slots_deep(denoted);
   denoted.reset_tags();
   return make_kramers_flip_node(std::move(inner), std::move(modes), phase,
                                 std::move(denoted));
@@ -1384,7 +1383,7 @@ EvalExprNode make_kramers_flip_node(EvalExprNode inner,
   // the wrapper's labels: the child's layout with every flavoured index
   // flipped (the denoted spelling)
   auto ixs = inner->canon_indices();
-  if (isr) kramers_flip(ixs, *isr);
+  if (isr) kramers_flip_deep(ixs, *isr);
   hash::combine(h, EvalExpr::layout_fingerprint_of(ixs));
   // the child's phase / conj hoist through F (linear, commutes with conj), as
   // the inner phase hoists through Re/Im in binarize_re_im
@@ -1399,7 +1398,7 @@ EvalExprNode make_kramers_flip_node(EvalExprNode inner,
   wrap.set_kramers_flip(std::move(modes), phase);
   if (inner->has_identity_erasure()) {
     auto id = inner->identity_indices();
-    if (isr) kramers_flip(id, *isr);
+    if (isr) kramers_flip_deep(id, *isr);
     wrap.set_identity_indices(std::move(id));
   }
   EvalExprNode sentinel{EvalExpr{Constant{1}}};

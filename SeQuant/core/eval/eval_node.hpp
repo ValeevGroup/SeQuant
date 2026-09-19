@@ -40,7 +40,7 @@ ExprPtr linearize_eval_node(Node const& node) {
         [](ExprPtr& x) {
           if (!x->is<Tensor>()) return;
           auto& t = x->as<Tensor>();
-          kramers_flip_slots(t);
+          kramers_flip_slots_deep(t);
           t.reset_tags();
         },
         /*atoms_only=*/true);
