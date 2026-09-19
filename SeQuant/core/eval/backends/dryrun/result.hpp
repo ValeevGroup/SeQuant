@@ -327,8 +327,8 @@ struct DryRunOps {
       // finite-cache re-read effect is the separate Hong-Kung term inside
       // roofline_op_cost, not this one.
       double const exec = cm->exec_cost(
-          flops, cm->memsize(idx, ov), cm->memsize(indices_of(other), other_ov),
-          cm->memsize(out, merged));
+          flops, sequant::base_field(out, contracted), cm->memsize(idx, ov),
+          cm->memsize(indices_of(other), other_ov), cm->memsize(out, merged));
       sequant::eval::detail::last_op_exec() = exec;  // for the Build event
       write_log(Logger::instance(), "OpCost", std::format(" | {}", flops),
                 std::format(" | {}", exec), '\n');
@@ -611,13 +611,13 @@ class ResultDryRun final : public Result {
                                    lobounds_);
   }
 
-  [[nodiscard]] ResultPtr permute(
-      std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& ann) const override {
+    // The phase and the elementwise conjugation move no data in the size
+    // model; only the relabeling can reorder modes, exactly as permute does.
+    return permute(ann);
   }
-
-  [[nodiscard]] ResultPtr adjoint(
+  [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
                                       lobounds_);
@@ -767,13 +767,13 @@ class ResultDryRunNested final : public Result {
                                    lobounds_);
   }
 
-  [[nodiscard]] ResultPtr permute(
-      std::array<std::any, 2> const& ann) const override {
-    return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
-                                      lobounds_);
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform /*t*/, std::array<std::any, 2> const& ann) const override {
+    // The phase and the elementwise conjugation move no data in the size
+    // model; only the relabeling can reorder modes, exactly as permute does.
+    return permute(ann);
   }
-
-  [[nodiscard]] ResultPtr adjoint(
+  [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     return detail::DryRunOps::permute(indices_, overrides_, cm_, ann,
                                       lobounds_);

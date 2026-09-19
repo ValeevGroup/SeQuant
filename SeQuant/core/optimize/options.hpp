@@ -120,6 +120,10 @@ struct CSEOptions {
 struct RooflineParams {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// Machine balance beta = 8*F/B in FLOPs per element of traffic. 0 = off.
+  /// Calibrated in 8-byte (real double) elements, as is \c fast_mem_elems: a
+  /// complex network is priced with twice the traffic width and four real
+  /// flops per multiply-add (see opt::detail::FieldCostFactors), so one
+  /// calibration serves both fields.
   double machine_balance = 0.0;
   /// Capacity M of the binding fast memory level, in elements (e.g. LLC/8).
   double fast_mem_elems = 0.0;

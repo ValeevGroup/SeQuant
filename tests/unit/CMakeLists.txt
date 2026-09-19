@@ -10,6 +10,7 @@ set(symb_test_sources
     "test_binary_node.cpp"
     "test_bliss.cpp"
     "test_canonicalize.cpp"
+    "test_conjugation.cpp"
     "test_expr.cpp"
     "test_index.cpp"
     "test_iterator.cpp"
@@ -99,6 +100,7 @@ set(mbpt_test_sources
     "test_mbpt.cpp"
     "test_mbpt_cc.cpp"
     "test_spin.cpp"
+    "test_spinor.cpp"
 )
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})

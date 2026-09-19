@@ -35,8 +35,10 @@
 #include <optional>
 #include <ostream>
 #include <ranges>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -1604,6 +1606,17 @@ class CacheManager {
   /// \brief Check if the key exists in the database: does not check if cache
   ///        exists
   ///
+  /// Diagnostic accessor (SEQUANT_EVAL_WARN_CACHE_IDENTITY): the local entry
+  /// for \p key as {persistent, max_life, life_c}, or nullopt if none.
+  [[nodiscard]] std::optional<std::tuple<bool, size_t, size_t>> entry_state(
+      key_type const& key) const noexcept {
+    auto found = cache_map_.find(key);
+    if (found == cache_map_.end()) return std::nullopt;
+    return std::tuple{found->second.persistent(),
+                      found->second.max_life_count(),
+                      found->second.life_count()};
+  }
+
   [[nodiscard]] bool exists(key_type const& key) const noexcept {
     return cache_map_.find(key) != cache_map_.end();
   }
@@ -1959,6 +1972,23 @@ auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
       volatile_of.emplace(&n, v);
       last_v = v;
       stack.pop_back();
+    }
+  }
+  // Diagnostic (SEQUANT_CACHE_EXCLUDE_HASHES="h1,h2,..."): never cache the
+  // listed node hashes, so a suspected slot can be bisected out at runtime.
+  if (char const* ex = std::getenv("SEQUANT_CACHE_EXCLUDE_HASHES")) {
+    std::vector<std::size_t> excluded;
+    std::string tok;
+    for (std::istringstream in{std::string{ex}}; std::getline(in, tok, ',');)
+      if (!tok.empty()) excluded.push_back(std::stoull(tok));
+    for (auto it = counts.begin(); it != counts.end();) {
+      if (std::find(excluded.begin(), excluded.end(),
+                    (*it->first)->hash_value()) != excluded.end()) {
+        persistent.erase(it->first);
+        it = counts.erase(it);
+      } else {
+        ++it;
+      }
     }
   }
 

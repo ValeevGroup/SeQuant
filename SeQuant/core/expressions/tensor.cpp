@@ -5,10 +5,12 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <stdexcept>
 
 #include <range/v3/algorithm/contains.hpp>
 
@@ -42,6 +44,21 @@ void Tensor::adjoint() {
 
 ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   return TensorCanonicalizer::instance()->apply(*this);
+}
+
+Tensor value_oriented(Tensor const &t) {
+  if (!t.conjugated()) return t;
+  if (t.braket_symmetry() == BraKetSymmetry::Nonsymm)
+    throw std::logic_error(
+        "sequant::value_oriented: an elementwise-conjugated "
+        "BraKetSymmetry::Nonsymm tensor has no value-oriented slot spelling "
+        "(the conjugation cannot be consumed into slots)");
+  Tensor bare{t};
+  bare.conjugate();
+  if (t.braket_symmetry() == BraKetSymmetry::Conjugate)
+    bare.adjoint();  // pure bra<->ket swap: undoes the fold
+  // Symm: conj is the identity in value -- clearing the marker suffices
+  return bare;
 }
 
 }  // namespace sequant

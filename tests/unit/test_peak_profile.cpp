@@ -92,9 +92,12 @@ EvalExpr eval_tensor_hashed(std::string_view result, std::size_t hash,
   EvalExpr const base{expr->as<sequant::Tensor>()};
   EvalExpr::index_vector ixs{base.canon_indices().begin(),
                              base.canon_indices().end()};
-  return EvalExpr{op,          sequant::ResultType::Tensor,
-                  expr,        std::move(ixs),
-                  /*phase=*/1, hash,
+  return EvalExpr{op,
+                  sequant::ResultType::Tensor,
+                  expr,
+                  std::move(ixs),
+                  sequant::CanonTransform{},
+                  hash,
                   nullptr};
 }
 
@@ -188,9 +191,10 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
     ExtentOverrides ov;
     ov[0] = 2;  // mode 0 (p) at block extent
     CHECK(got == cm.memsize(carried, ov));
-    // memsize() reports BYTES (elems * CostModel's numeric_size_ = 8.0), not
-    // a raw element count: 2 (block p) * 10 (full q) * 8 bytes/elem.
-    CHECK(got == 160);
+    // memsize() reports BYTES (elems * numeric_size 8 * 2 reals per complex
+    // element -- the default registry is complex), not a raw element count:
+    // 2 (block p) * 10 (full q) * 16 bytes/elem.
+    CHECK(got == 320);
   }
 
   // Same cell homed ABOVE p's loop (home_modes = {}) -> neither mode is in
@@ -199,8 +203,8 @@ TEST_CASE("cell_footprint sizes enclosing-home modes at BLOCK, others FULL",
     svector<Index> const home_modes{};
     auto const got = cell_footprint(carried, home_modes, cm, block_of);
     CHECK(got == cm.memsize(carried));
-    // 10 (full p) * 10 (full q) * 8 bytes/elem.
-    CHECK(got == 800);
+    // 10 (full p) * 10 (full q) * 16 bytes/elem.
+    CHECK(got == 1600);
   }
 }
 
@@ -226,7 +230,7 @@ TEST_CASE(
   svector<Index> const home_modes{p};
 
   auto const shared = cell_footprint(carried, home_modes, cm, block_of, {});
-  CHECK(shared == 160);  // one sliced copy: block(p)=2 * full(q)=10 * 8
+  CHECK(shared == 320);  // one sliced copy: block(p)=2 * full(q)=10 * 16
   // A divergent mode that IS sliced (in the home) no longer doubles.
   CHECK(cell_footprint(carried, home_modes, cm, block_of, svector<Index>{p}) ==
         shared);
@@ -432,12 +436,13 @@ TEST_CASE(
   auto const s = dag_path(forest, cm, block_of);
 
   // V (carried {i_1,i_2}) must be the demoted cell: home_depth == -1 and sized
-  // FULL (10*10*8 = 800), NOT block-narrowed to i_1=2 despite tree 1's loop.
+  // FULL (10*10*16 = 1600), NOT block-narrowed to i_1=2 despite tree 1's
+  // loop.
   Cell const* v = nullptr;
   for (auto const& c : s.cells)
-    if (c.footprint == 800 && c.home_depth == -1) v = &c;
+    if (c.footprint == 1600 && c.home_depth == -1) v = &c;
   REQUIRE(v != nullptr);  // the demotion actually happened
-  CHECK(v->footprint == 800);
+  CHECK(v->footprint == 1600);
   CHECK(v->home_depth == -1);
 
   // THE Step-B equality on the demoted forest.

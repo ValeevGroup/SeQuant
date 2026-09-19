@@ -13,8 +13,11 @@
 #include <algorithm>
 #include <any>
 #include <cstddef>
+#include <cstdlib>
 #include <functional>
+#include <iostream>
 #include <optional>
+#include <string>
 
 namespace sequant {
 
@@ -85,54 +88,80 @@ struct TAEvalContext {
     // Capture the provider BY VALUE so the hook owns its copy and does not
     // dangle on ctx.
     auto provider = ctx.result_shape_provider;
-    return
-        [provider = std::move(provider)](
-            std::any const& node_any, Result const& left, Result const& right,
-            std::array<std::any, 3> const& annot) -> ResultPtr {
-          if (!provider) return nullptr;
+    return [provider = std::move(provider)](
+               std::any const& node_any, Result const& left,
+               Result const& right,
+               std::array<std::any, 3> const& annot) -> ResultPtr {
+      if (!provider) return nullptr;
 
-          auto const& node =
-              std::any_cast<
-                  std::reference_wrapper<FullBinaryNode<EvalExprTA> const>>(
-                  node_any)
-                  .get();
+      auto const& node =
+          std::any_cast<
+              std::reference_wrapper<FullBinaryNode<EvalExprTA> const>>(
+              node_any)
+              .get();
 
-          // The result's outer TiledRange computation (below) reads each
-          // operand's array via a kind-dispatched get<>(); it handles only the
-          // flat (ResultTensorTA) and nested (ResultTensorOfTensorTA) kinds.  A
-          // product may legitimately have a SCALAR operand (ResultScalar),
-          // which carries no TiledRange and would mis-cast.  Such a product has
-          // no outer tensor result to shape, so decline early before computing
-          // the trange.
-          using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
-          using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
-          using FlatResult = ResultTensorTA<FlatArray>;
-          using ToTResult = ResultTensorOfTensorTA<ToTArray>;
-          auto is_tensor_like = [](Result const& r) {
-            return r.is<FlatResult>() || r.is<ToTResult>();
+      // The result's outer TiledRange computation (below) reads each
+      // operand's array via a kind-dispatched get<>(); it handles only the
+      // flat (ResultTensorTA) and nested (ResultTensorOfTensorTA) kinds.  A
+      // product may legitimately have a SCALAR operand (ResultScalar),
+      // which carries no TiledRange and would mis-cast.  Such a product has
+      // no outer tensor result to shape, so decline early before computing
+      // the trange.
+      using FlatArray = TA::DistArray<TA::Tensor<NumericT>, PolicyT>;
+      using ToTArray = TA::DistArray<TA::Tensor<InnerTileT>, PolicyT>;
+      using FlatResult = ResultTensorTA<FlatArray>;
+      using ToTResult = ResultTensorOfTensorTA<ToTArray>;
+      auto is_tensor_like = [](Result const& r) {
+        return r.is<FlatResult>() || r.is<ToTResult>();
+      };
+      if (!is_tensor_like(left) || !is_tensor_like(right)) return nullptr;
+
+      // The result's outer TiledRange, over which the provider builds a
+      // shape.
+      auto const trange =
+          result_outer_trange_from_results<NumericT, PolicyT, InnerTileT>(
+              left, right, annot);
+
+      // A zero-volume result (an outer mode with no tiles) has nothing to
+      // shape: decline so the unshaped prod() emits the empty result.
+      // This also keeps the expression-layer general product, which lays
+      // its process grid over the result's tile counts, out of that corner
+      // case. SEQUANT_EVAL_WARN_SHAPED_DECLINE=1 reports each such
+      // decline (annotations and operand outer tile counts) on stderr.
+      if (trange.tiles_range().volume() == 0) {
+        if (std::getenv("SEQUANT_EVAL_WARN_SHAPED_DECLINE")) {
+          auto const a = Annot<std::string>{annot};
+          auto outer_tiles = [&](Result const& r) {
+            auto const& tr = r.is<ToTResult>() ? r.get<ToTArray>().trange()
+                                               : r.get<FlatArray>().trange();
+            std::string out;
+            for (auto e : tr.tiles_range().extent())
+              out += (out.empty() ? "" : "x") + std::to_string(e);
+            return out;
           };
-          if (!is_tensor_like(left) || !is_tensor_like(right)) return nullptr;
+          std::cerr << "[sequant] shaped product declined (zero-volume "
+                       "result): "
+                    << a.this_annot << " = " << a.lannot << " ["
+                    << outer_tiles(left) << " tiles] * " << a.rannot << " ["
+                    << outer_tiles(right) << " tiles]" << std::endl;
+        }
+        return nullptr;
+      }
 
-          // The result's outer TiledRange, over which the provider builds a
-          // shape.
-          auto const trange =
-              result_outer_trange_from_results<NumericT, PolicyT, InnerTileT>(
-                  left, right, annot);
+      auto shape = provider(node, trange);
+      if (!shape) return nullptr;  // decline => unshaped prod()
 
-          auto shape = provider(node, trange);
-          if (!shape) return nullptr;  // decline => unshaped prod()
+      // de_nest: ToT * ToT -> flat (both operands nested, result is not).
+      // Read from the IR node, matching the eval site's computation.
+      bool const de_nest =
+          node.left()->tot() && node.right()->tot() && !node->tot();
 
-          // de_nest: ToT * ToT -> flat (both operands nested, result is not).
-          // Read from the IR node, matching the eval site's computation.
-          bool const de_nest =
-              node.left()->tot() && node.right()->tot() && !node->tot();
-
-          // shape must outlive the assignment inside apply_shaped_product (TA
-          // holds it by pointer); it does (local here, passed by const&, used
-          // fully within the call which fences before returning).
-          return apply_shaped_product<NumericT, PolicyT, InnerTileT>(
-              left, right, annot, *shape, de_nest);
-        };
+      // shape must outlive the assignment inside apply_shaped_product (TA
+      // holds it by pointer); it does (local here, passed by const&, used
+      // fully within the call which fences before returning).
+      return apply_shaped_product<NumericT, PolicyT, InnerTileT>(
+          left, right, annot, *shape, de_nest);
+    };
   }
 };
 

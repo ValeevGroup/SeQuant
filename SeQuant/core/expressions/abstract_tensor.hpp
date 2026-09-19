@@ -227,6 +227,11 @@ class AbstractTensor {
   virtual ColumnSymmetry _column_symmetry() const {
     throw missing_instantiation_for("_column_symmetry");
   }
+  /// @return the time-reversal (Kramers) symmetry of the tensor; the default
+  ///         (no override, e.g. operator-valued tensors) is Nonsymm
+  virtual KramersSymmetry _kramers_symmetry() const {
+    return KramersSymmetry::Nonsymm;
+  }
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");
   }
@@ -289,6 +294,11 @@ class AbstractTensor {
   virtual void _swap_bra_ket() {
     throw missing_instantiation_for("_swap_bra_ket");
   }
+  /// complex-conjugates the tensor elementwise (no slot reordering); see
+  /// Tensor::conjugate()
+  virtual void _conjugate() { throw missing_instantiation_for("_conjugate"); }
+  /// @return whether the tensor is elementwise complex-conjugated
+  virtual bool _conjugated() const { return false; }
 
   /// @return mutable view of bra
   /// @warning this is used for mutable access, flush memoized state before
@@ -410,6 +420,9 @@ inline auto hermiticity(const AbstractTensor& t) { return t._hermiticity(); }
 inline auto base_field(const AbstractTensor& t) { return t._base_field(); }
 inline auto column_symmetry(const AbstractTensor& t) {
   return t._column_symmetry();
+}
+inline auto kramers_symmetry(const AbstractTensor& t) {
+  return t._kramers_symmetry();
 }
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
