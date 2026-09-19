@@ -864,7 +864,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       }
       if (!node) continue;
       std::size_t const r = find(*node);
-      auto const it = comp_kind.find(r);
+      [[maybe_unused]] auto const it = comp_kind.find(r);
       SEQUANT_ASSERT((it == comp_kind.end() || it->second == kind) &&
                      "compute_dag_boulevard: one loop instance opened with "
                      "two kinds within a tree");
@@ -1329,7 +1329,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
         for (auto const& [ix, kind] : occ.opens) {
           auto const key = instance_slot(occ, ix, kind);
           if (!key) continue;
-          auto const [kit, inserted] = out.loop_kind.emplace(*key, kind);
+          [[maybe_unused]] auto const [kit, inserted] =
+              out.loop_kind.emplace(*key, kind);
           SEQUANT_ASSERT(kit->second == kind &&
                          "compute_dag_boulevard: one loop instance opened "
                          "with two kinds (contracted and external)");
