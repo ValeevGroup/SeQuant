@@ -47,6 +47,7 @@ Specialized variants exist for the more demanding cases that arise in practice:
   result, one expression per distinct spin case, appropriate for an unrestricted (open-shell) reference.
 
 All of these expect their input to already be in a specific normal form (a leading antisymmetrizer, produced by "complete"
-canonicalization — see :doc:`canonicalization`); consult their reference documentation for the exact preconditions and options before
-using them on a new class of equations. For a worked example applying ``closed_shell_CC_spintrace``/``open_shell_CC_spintrace`` to
-actual coupled-cluster amplitude equations, see :ref:`cc-spin-tracing` in the :doc:`cc` page.
+canonicalization — see :doc:`canonicalization`, unless the expression doesn't have any external indices (e.g. energy expressions)); consult their
+reference documentation for the exact preconditions and options before using them on a new class of equations. For a worked example applying
+``closed_shell_CC_spintrace``/``open_shell_CC_spintrace`` to actual coupled-cluster amplitude equations, see :ref:`cc-spin-tracing` in the :doc:`cc`
+page.
