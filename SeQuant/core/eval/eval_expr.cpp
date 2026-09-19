@@ -710,9 +710,12 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() && (!op || *op == EvalOp::Sum)) {
+      node->is_tensor() &&
+      (!op || *op == EvalOp::Sum || *op == EvalOp::KramersFlip)) {
     // Leaf tensors enter in their DENOTED spelling (transform re-materialized
-    // syntactically); a Sum-rooted subtree contributes its result tensor.
+    // syntactically); a Sum-rooted subtree contributes its result tensor, and
+    // so does a KramersFlip wrapper (its expr() is the flipped-flavour
+    // spelling the parent contracts through).
     auto e = (!op && node->expr()->is<Tensor>()) ? node->denoted_expr()
                                                  : node->expr();
     // The spelling carries the factor's conj / bra-ket swap but not its
@@ -761,12 +764,16 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
   // optimizer's per-summand entry counts (optimize.cpp rekey_onto)
   static const bool debug = std::getenv("SEQUANT_BATCH_AXES_DEBUG");
   std::size_t smand_idx = 0;
+  // a summand is added elementwise into the Sum's layout, so it must keep
+  // the Sum's labels: never a KramersFlip as a whole (the Sum folds as one)
+  BinarizationOptions sopts = opts;
+  sopts.kramers_fold_this = false;
   auto summands =
       sum.summands()  //
-      | transform([&uncontract, &opts, &node_counter,
+      | transform([&uncontract, &opts, &sopts, &node_counter,
                    &smand_idx](ExprPtr const& x) {
           std::size_t const before = node_counter;
-          auto node = impl::binarize(x, uncontract, opts, node_counter);
+          auto node = impl::binarize(x, uncontract, sopts, node_counter);
           if (debug && !opts.node_batch_axes.empty())
             std::cerr << "[batch-axes] binarize summand " << smand_idx << ": "
                       << (node_counter - before) << " nodes"
@@ -909,9 +916,13 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
   // summand's DP nodes (mirrors optimize_impl's re-keying)
   const bool wrapper_shares_counter = ranges::all_of(
       prod.factors(), [](ExprPtr const& f) { return f->is_scalar(); });
+  // a factor is contracted through its own denoted labels, so it may fold
+  // as a whole even inside a summand that may not
+  BinarizationOptions fopts = opts;
+  fopts.kramers_fold_this = true;
   auto factors =
       prod.factors()  //
-      | transform([i = 0, &ltr_uncontr_idxs, &opts, &node_counter,
+      | transform([i = 0, &ltr_uncontr_idxs, &opts = fopts, &node_counter,
                    wrapper_shares_counter](ExprPtr const& x) mutable {
           auto const& uncontr = ltr_uncontr_idxs.children[i++];
           if (x->is<RealPart>())
@@ -1296,16 +1307,17 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
 
   container::map<Index, int> cnt;
   count_slot_occurrences(expr, cnt);
-  auto const erasable =
-      opts.kramers_blindness.active()
-          ? eval::erasable_indices(leaves, opts.kramers_blindness)
-          : container::set<Index>{};
+  // the blind pair labels (kramers_blind.hpp): the node's value does not
+  // depend on their flavour, so they are not flavoured externals here
+  auto const blind = opts.kramers_blindness.active()
+                         ? eval::blind_indices(leaves, opts.kramers_blindness)
+                         : container::set<Index>{};
   auto const down = [&isr](Index const& ix) {
     return !isr->kramers_canonical(ix.space());
   };
   // the flavoured externals: used once across the leaves or kept
-  // uncontracted; the union legs, spin-free indices and the blind pair labels
-  // do not count
+  // uncontracted; the union legs, the spin-free indices and the blind pair
+  // labels do not count
   container::svector<Index> flav;
   for (auto const& [ix, n] : cnt) {
     if (n != 1 && !uncontract.contains(ix)) continue;
@@ -1313,7 +1325,7 @@ std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
     // Result::kramers_flip, which acts on the outer modes
     if (ix.has_proto_indices() && kramers_union_index(ix, *isr))
       return std::nullopt;
-    if (erasable.contains(ix) || !isr->kramers_partner(ix.space())) continue;
+    if (blind.contains(ix) || !isr->kramers_partner(ix.space())) continue;
     flav.push_back(ix);
   }
   if (flav.empty()) return std::nullopt;
@@ -1420,7 +1432,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                           uncontract, opts, node_counter,
                           /*shared_counter=*/true);
 
-  if (opts.kramers_fold_intermediates &&
+  if (opts.kramers_fold_intermediates && opts.kramers_fold_this &&
       (expr->is<Sum>() || expr->is<Product>()))
     if (auto folded = maybe_kramers_fold(expr, uncontract, opts, node_counter))
       return std::move(*folded);

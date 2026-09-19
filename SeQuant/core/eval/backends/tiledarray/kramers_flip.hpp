@@ -94,8 +94,10 @@ template <typename ArrayT>
   auto const annot = detail::kramers_flip_annotation(arr);
   if (annot.empty()) return TA::clone(arr);  // identically zero
   if (modes.empty()) {
-    auto out = TA::clone(arr);
-    if (phase != 1) out(annot) = numeric_type(phase) * out(annot);
+    // no union axis to swap: F is the conjugation alone (a flipped spelling
+    // without union legs is phase * conj of its partner)
+    ArrayT out;
+    out(annot) = numeric_type(phase) * arr(annot).conj();
     return out;
   }
   ArrayT src = arr;

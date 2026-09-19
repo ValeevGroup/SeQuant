@@ -7866,10 +7866,12 @@ TEST_CASE("kramers_flip_array", "[kramers-flip-ta]") {
                   1e-12);
     }
 
-    SECTION("no modes: identity copy") {
-      auto f = kramers_flip_array(a, container::svector<std::size_t>{}, 1);
+    SECTION(
+        "no modes: the conjugate (a flipped spelling without union legs "
+        "is phase * conj of its partner)") {
+      auto f = kramers_flip_array(a, container::svector<std::size_t>{}, -1);
       auto const F = TA::array_to_eigen(f);
-      REQUIRE((F - A).norm() < 1e-12);
+      REQUIRE((F + A.conjugate()).norm() < 1e-12);
     }
   }
 

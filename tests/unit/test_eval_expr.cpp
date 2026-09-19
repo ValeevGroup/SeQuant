@@ -1921,8 +1921,18 @@ TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
     return ex<Product>(
         ExprPtrList{mk(L"g", {a1}, {a2, a3}, ks), mk(L"C", {a1}, {comp}, ks)});
   };
-  auto up = binarize(ResultExpr{I(au), rhs(au)}, opts);
-  auto dn = binarize(ResultExpr{I(ad), rhs(ad)}, opts);
+  // a ResultExpr root keeps the head's spelling: it never folds as a whole
+  // (its factors may); the fold decision is exercised through the internal
+  // entry a root Product's factors and a Sum's summands' factors go through
+  REQUIRE(binarize(ResultExpr{I(ad), rhs(ad)}, opts)->op_type() ==
+          EvalOp::Product);
+  auto bin = [](ExprPtr const& e, IndexSet const& ext,
+                BinarizationOptions const& o) {
+    std::size_t counter = 0;
+    return impl::binarize(e, ext, o, counter);
+  };
+  auto up = bin(rhs(au), IndexSet{au, a2, a3}, opts);
+  auto dn = bin(rhs(ad), IndexSet{ad, a2, a3}, opts);
   REQUIRE(up->op_type() == EvalOp::Product);
   REQUIRE(dn->op_type() == EvalOp::KramersFlip);
   REQUIRE(dn.left()->hash_value() == up->hash_value());  // one shared family
@@ -1939,23 +1949,20 @@ TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
   // symmetric
   auto nofold = opts;
   nofold.kramers_fold_intermediates = false;
-  REQUIRE(binarize(ResultExpr{I(ad), rhs(ad)}, nofold)->op_type() ==
+  REQUIRE(bin(rhs(ad), IndexSet{ad, a2, a3}, nofold)->op_type() ==
           EvalOp::Product);
-  REQUIRE(binarize(ResultExpr{I(ad), rhs(ad, KramersSymmetry::Nonsymm)}, opts)
+  REQUIRE(bin(rhs(ad, KramersSymmetry::Nonsymm), IndexSet{ad, a2, a3}, opts)
               ->op_type() == EvalOp::Product);
 
   // a tie (one up, one down composite) resolves by the flavour string in the
   // flavour-blind canonical order of the externals: (down_1, up_2) folds onto
   // (up_1, down_2), never both ways
-  auto I2 = [&](Index const& x, Index const& y) {
-    return Tensor(L"I", bra{a3}, ket{x, y});
-  };
   auto rhs2 = [&](Index const& x, Index const& y) {
     return ex<Product>(ExprPtrList{mk(L"g", {a1, a2}, {a3}),
                                    mk(L"C", {a1}, {x}), mk(L"C", {a2}, {y})});
   };
-  auto t_ud = binarize(ResultExpr{I2(au, bd), rhs2(au, bd)}, opts);
-  auto t_du = binarize(ResultExpr{I2(ad, bu), rhs2(ad, bu)}, opts);
+  auto t_ud = bin(rhs2(au, bd), IndexSet{au, bd, a3}, opts);
+  auto t_du = bin(rhs2(ad, bu), IndexSet{ad, bu, a3}, opts);
   REQUIRE(t_ud->op_type() == EvalOp::Product);
   REQUIRE(t_du->op_type() == EvalOp::KramersFlip);
   REQUIRE(t_du.left()->hash_value() == t_ud->hash_value());
@@ -1969,8 +1976,8 @@ TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
         rhs(comp), ex<Product>(ExprPtrList{mk(L"h", {a1}, {a2, a3}),
                                            mk(L"C", {a1}, {comp})})});
   };
-  auto s_up = binarize(ResultExpr{I(au), sum_of(au)}, opts);
-  auto s_dn = binarize(ResultExpr{I(ad), sum_of(ad)}, opts);
+  auto s_up = bin(sum_of(au), IndexSet{au, a2, a3}, opts);
+  auto s_dn = bin(sum_of(ad), IndexSet{ad, a2, a3}, opts);
   REQUIRE(s_up->op_type() == EvalOp::Sum);
   REQUIRE(s_dn->op_type() == EvalOp::KramersFlip);
   REQUIRE(s_dn.left()->hash_value() == s_up->hash_value());
@@ -1984,11 +1991,9 @@ TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
   // labels in a non-blind slot, which the blindness guard rejects)
   const Index i1d(L"i↓_1"), iu2(L"i_2");
   const Index au3(L"a_3", {i1d, iu2}), cd(L"a↓_1", {i1d, iu2});
-  auto deep = binarize(
-      ResultExpr{Tensor(L"I", bra{i1d, iu2}, ket{cd}),
-                 ex<Product>(ExprPtrList{mk(L"X", {au3}, {cd}),
-                                         mk(L"t", {au3}, {i1d, iu2})})},
-      opts);
+  auto deep = bin(ex<Product>(ExprPtrList{mk(L"X", {au3}, {cd}),
+                                          mk(L"t", {au3}, {i1d, iu2})}),
+                  IndexSet{i1d, iu2, cd}, opts);
   REQUIRE(deep->op_type() == EvalOp::KramersFlip);
   REQUIRE(deep->kramers_flip_phase() == 1);  // two down externals
   auto no_down = [&](auto const& node, auto& self) -> bool {
@@ -2004,4 +2009,81 @@ TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
     return self(node.left(), self) && self(node.right(), self);
   };
   REQUIRE(no_down(deep.left(), no_down));
+
+  // a Sum's direct summands keep the Sum's labels: a summand that would fold
+  // on its own (its pair labels are blind inside it) does not when another
+  // summand pins them and the Sum as a whole is canonical; nested factors
+  // still may
+  auto blind_occ = opts;
+  blind_occ.kramers_blindness.blind_slot = [isr](Tensor const& t,
+                                                 std::size_t slot) {
+    if (t.label() != L"C") return false;
+    auto const& ix = *(t.const_slots().begin() + slot);
+    return ix.has_proto_indices() || isr->is_pure_occupied(ix.space());
+  };
+  const Index cdu(L"a↓_1", {i1, i2});  // down column, up pair labels
+  auto p_pinned =
+      ex<Product>(ExprPtrList{mk(L"g", {a3}, {i1, i2}), mk(L"C", {a3}, {cdu})});
+  auto p_blind = ex<Product>(
+      ExprPtrList{mk(L"h", {a3}, {}), mk(L"C", {i1, i2, a3}, {cdu})});
+  auto head = Tensor(L"I", bra{i1, i2}, ket{cdu});
+  // alone, the blind summand is down-majority (its pair labels do not count)
+  REQUIRE(bin(p_blind, IndexSet{i1, i2, cdu}, blind_occ)->op_type() ==
+          EvalOp::KramersFlip);
+  // in the Sum the pinned pair labels make the whole canonical (1 down, 2 up)
+  auto s_mixed = binarize(
+      ResultExpr{head, ex<Sum>(ExprPtrList{p_pinned, p_blind})}, blind_occ);
+  REQUIRE(s_mixed->op_type() == EvalOp::Sum);
+  auto no_flip = [&](auto const& node, auto& self) -> bool {
+    if (node->op_type() == EvalOp::KramersFlip) return false;
+    if (node.leaf()) return true;
+    return self(node.left(), self) && self(node.right(), self);
+  };
+  REQUIRE(no_flip(s_mixed, no_flip));
+
+  // a product whose factor folds contracts THROUGH the factor's denoted
+  // (flipped-flavour) tensor: the parent's network holds the wrapper's
+  // tensor, its annotations are consistent with the wrapper's labels, and
+  // the parent's result is the head
+  auto bracket = ex<Product>(ExprPtrList{mk(L"g", {a1}, {a2, a3}),
+                                         mk(L"C", {a1}, {ad})});  // I{a2,a3;a↓}
+  const Index a4(L"a_4");
+  auto outer = ex<Product>(ExprPtrList{
+      bracket, mk(L"Y", {a2, a3}, {a4})});  // J{a4;a↓<i1,i2>} = I * Y
+  auto pj = bin(outer, IndexSet{a4, ad}, opts);
+  REQUIRE(pj->op_type() == EvalOp::KramersFlip);  // the whole (1 down) folds
+  // ... but not as a ResultExpr root
+  REQUIRE(binarize(ResultExpr{Tensor(L"J", bra{a4}, ket{ad}), outer}, opts)
+              ->op_type() == EvalOp::Product);
+  // the same product where the head is up: the bracket alone folds, the
+  // outer product stays a Product whose left child is the wrapper
+  auto bracket_u =
+      ex<Product>(ExprPtrList{mk(L"g", {a1}, {a2, a3}), mk(L"C", {a1}, {ad})});
+  auto outer_u = ex<Product>(
+      Product{1, ExprPtrList{bracket_u, mk(L"X", {i1, i2, ad}, {a2, a3, au})},
+              Product::Flatten::No});  // K{i1,i2;a↑}, the bracket kept
+  auto pk =
+      binarize(ResultExpr{Tensor(L"K", bra{i1, i2}, ket{au}), outer_u}, opts);
+  REQUIRE(pk->op_type() == EvalOp::Product);
+  bool saw_wrapper = false;
+  for (auto const& ch : {pk.left(), pk.right()}) {
+    if (ch->op_type() == EvalOp::KramersFlip) {
+      saw_wrapper = true;
+      // the wrapper's labels are the bracket's as written (a↓ column)
+      REQUIRE(std::any_of(
+          ch->canon_indices().begin(), ch->canon_indices().end(),
+          [&](Index const& ix) { return ix.space() == ad.space(); }));
+    }
+  }
+  REQUIRE(saw_wrapper);
+  // every index of the product's children is either shared or in the result
+  auto labels = [](auto const& n) {
+    container::set<std::wstring> out;
+    for (auto const& ix : n->canon_indices())
+      out.insert(std::wstring(ix.full_label()));
+    return out;
+  };
+  auto const L = labels(pk.left()), R = labels(pk.right()), T = labels(pk);
+  for (auto const& l : R) REQUIRE((L.contains(l) || T.contains(l)));
+  for (auto const& l : L) REQUIRE((R.contains(l) || T.contains(l)));
 }

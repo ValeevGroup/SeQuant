@@ -66,15 +66,21 @@ struct KramersBlindness {
 /// \param tensors the factors (Tensor expressions; others are skipped)
 /// \param leaf_flags parallel to \p tensors: whether each is a leaf; empty
 ///        means every factor is a leaf
+namespace detail {
+
+/// the walk behind erasable_indices / blind_indices: the indices every leaf
+/// occurrence of which sits in a blind slot; with \p erased_only, only those
+/// the erasure actually rewrites (the representative flavour is blind but
+/// unchanged by it)
 template <std::ranges::input_range Rng>
   requires std::convertible_to<std::ranges::range_value_t<Rng>, ExprPtr>
-container::set<Index> erasable_indices(
-    Rng const& tensors, KramersBlindness const& kb,
-    container::svector<bool> const& leaf_flags = {}) {
+container::set<Index> blind_walk(Rng const& tensors, KramersBlindness const& kb,
+                                 container::svector<bool> const& leaf_flags,
+                                 bool erased_only) {
   container::set<Index> candidates, pinned;
   if (!kb.active()) return candidates;
-  auto const flavoured = [&kb](Index const& ix) {
-    return ix.space() != kb.erase_space(ix.space());
+  auto const flavoured = [&kb, erased_only](Index const& ix) {
+    return !erased_only || ix.space() != kb.erase_space(ix.space());
   };
   // design guards (a violation is a caller bug, never a runtime condition):
   // a blind slot holds a pure-occupied plain index or a composite whose
@@ -125,6 +131,31 @@ container::set<Index> erasable_indices(
   }
   for (auto const& p : pinned) candidates.erase(p);
   return candidates;
+}
+
+}  // namespace detail
+
+template <std::ranges::input_range Rng>
+  requires std::convertible_to<std::ranges::range_value_t<Rng>, ExprPtr>
+container::set<Index> erasable_indices(
+    Rng const& tensors, KramersBlindness const& kb,
+    container::svector<bool> const& leaf_flags = {}) {
+  return detail::blind_walk(tensors, kb, leaf_flags, /*erased_only=*/true);
+}
+
+/// \brief Every index whose leaf occurrences are ALL in blind slots, whether
+///        or not the erasure rewrites it (the representative flavour, e.g.
+///        an ↑ pair label under an erase-to-↑ image, is blind but not
+///        erasable). The value of a node does not depend on these indices'
+///        flavour, so the time-reversal fold (eval_expr.cpp) does not count
+///        them among the node's flavoured externals.
+/// \param tensors, kb, leaf_flags as for erasable_indices
+template <std::ranges::input_range Rng>
+  requires std::convertible_to<std::ranges::range_value_t<Rng>, ExprPtr>
+container::set<Index> blind_indices(
+    Rng const& tensors, KramersBlindness const& kb,
+    container::svector<bool> const& leaf_flags = {}) {
+  return detail::blind_walk(tensors, kb, leaf_flags, /*erased_only=*/false);
 }
 
 /// \brief The erasure map of a network: every erasable index (see

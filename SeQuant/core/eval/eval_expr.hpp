@@ -642,6 +642,16 @@ struct BinarizationOptions {
   /// so the two Kramers-partner families share one contraction and differ by
   /// an O(size) flip. Off by default.
   bool kramers_fold_intermediates = false;
+  /// Internal to the fold: whether the expression handed to binarize may
+  /// itself be folded as a whole. A Sum's direct summands are added
+  /// elementwise and must keep the Sum's index labels, so binarize(Sum)
+  /// clears it for them (the Sum folds as one, or not at all); binarize(
+  /// Product) restores it for the factors, which are contracted through
+  /// their own denoted labels; binarize(ResultExpr) clears it for the root,
+  /// whose spelling is the head's (a folded root would respell a residual
+  /// block's terms and lose their t-dependent intermediates' sharing with
+  /// the other blocks of the same pair). Callers leave it at its default.
+  bool kramers_fold_this = true;
 };
 
 namespace meta {
@@ -827,8 +837,11 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
   // we overwrite it below with res.result_as_tensor() so the layout is
   // caller-determined and the deprecation does not apply.
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  // the root keeps the head's spelling (see kramers_fold_this)
+  BinarizationOptions root_opts = opts;
+  root_opts.kramers_fold_this = false;
   FullBinaryNode<ExprT> tree =
-      binarize<ExprT>(res.expression(), uncontract, opts);
+      binarize<ExprT>(res.expression(), uncontract, root_opts);
 
   const bool is_scalar =
       res.bra().empty() && res.ket().empty() && res.aux().empty();
@@ -875,6 +888,10 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
   auto const& evxpr = *node;
 
   if (node.leaf()) return evxpr.expr();
+
+  // a KramersFlip wrapper denotes its own (flipped-flavour) tensor; the
+  // flip it applies to its child is not an expression
+  if (op == EvalOp::KramersFlip) return evxpr.expr();
 
   if (op == EvalOp::Product) {
     auto prod = Product{};
