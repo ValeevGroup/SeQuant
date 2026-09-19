@@ -1240,6 +1240,134 @@ EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
                       std::move(sentinel)};
 }
 
+/// slot occurrences (bra / ket / aux, not protos) of every index across the
+/// leaves of \p e; a Sum contributes its first summand (every summand has the
+/// same externals), a Re/Im wrapper nothing (scalar-valued: its indices are
+/// all contracted inside it)
+void count_slot_occurrences(ExprPtr const& e, container::map<Index, int>& cnt) {
+  if (e->is<Tensor>()) {
+    auto const& t = e->as<Tensor>();
+    for (auto const& ix : t.bra()) ++cnt[ix];
+    for (auto const& ix : t.ket()) ++cnt[ix];
+    for (auto const& ix : t.aux()) ++cnt[ix];
+  } else if (e->is<Sum>()) {
+    auto const& s = e->as<Sum>().summands();
+    if (!s.empty()) count_slot_occurrences(s.front(), cnt);
+  } else if (e->is<Product>()) {
+    for (auto const& f : e->as<Product>().factors())
+      count_slot_occurrences(f, cnt);
+  }
+}
+
+/// the flavour-blind key of an index: its full label (protos included) with
+/// the Kramers flavour marks removed, shared by the two partners of a pair
+std::wstring flavour_blind_label(Index const& ix) {
+  std::wstring s(ix.full_label());
+  std::erase_if(s, [](wchar_t c) { return c == L'↑' || c == L'↓'; });
+  return s;
+}
+
+/// Phase 2a (mpqc doc/dev/specs/2026-09-18-union-axis-time-reversal-fold.md):
+/// a Product / Sum whose flavoured externals (after the Kramers-blind erasure
+/// of the pair labels) are down-majority -- a tie resolved by the flavour
+/// string in the flavour-blind canonical order of the externals, so exactly
+/// one of two partners folds -- and whose leaves are all time-reversal
+/// symmetric is the time-reversal image of its flipped spelling: the flipped
+/// expression (the canonical partner, shared with the partner family) is
+/// binarized and wrapped in a KramersFlip over the union free legs with phase
+/// (-1)^{n_down}. Null when the fold does not apply.
+std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
+                                               IndexSet const& uncontract,
+                                               BinarizationOptions const& opts,
+                                               std::size_t& node_counter) {
+  auto const isr = get_default_context().index_space_registry();
+  if (!isr) return std::nullopt;
+  container::svector<ExprPtr> leaves;
+  bool all_tr = true;
+  expr->visit(
+      [&](ExprPtr const& x) {
+        if (!x->is<Tensor>()) return;
+        leaves.push_back(x);
+        all_tr = all_tr && x->as<Tensor>().kramers_symmetry() ==
+                               KramersSymmetry::TimeReversal;
+      },
+      /*atoms_only=*/true);
+  if (!all_tr || leaves.empty()) return std::nullopt;
+
+  container::map<Index, int> cnt;
+  count_slot_occurrences(expr, cnt);
+  auto const erasable =
+      opts.kramers_blindness.active()
+          ? eval::erasable_indices(leaves, opts.kramers_blindness)
+          : container::set<Index>{};
+  auto const down = [&isr](Index const& ix) {
+    return !isr->kramers_canonical(ix.space());
+  };
+  // the flavoured externals: used once across the leaves or kept
+  // uncontracted; the union legs, spin-free indices and the blind pair labels
+  // do not count
+  container::svector<Index> flav;
+  for (auto const& [ix, n] : cnt) {
+    if (n != 1 && !uncontract.contains(ix)) continue;
+    // a nested (proto-carrying) union axis cannot be flipped by
+    // Result::kramers_flip, which acts on the outer modes
+    if (ix.has_proto_indices() && kramers_union_index(ix, *isr))
+      return std::nullopt;
+    if (erasable.contains(ix) || !isr->kramers_partner(ix.space())) continue;
+    flav.push_back(ix);
+  }
+  if (flav.empty()) return std::nullopt;
+  auto const n_down = std::count_if(flav.begin(), flav.end(), down);
+  auto const n_up = static_cast<std::ptrdiff_t>(flav.size()) - n_down;
+  bool noncanonical = n_down > n_up;
+  if (n_down == n_up) {
+    std::sort(flav.begin(), flav.end(), [](Index const& x, Index const& y) {
+      return flavour_blind_label(x) < flavour_blind_label(y);
+    });
+    std::wstring own, flipped;
+    for (auto const& ix : flav) {
+      own += down(ix) ? L'b' : L'a';
+      flipped += down(ix) ? L'a' : L'b';
+    }
+    noncanonical = flipped < own;
+  }
+  if (!noncanonical) return std::nullopt;
+
+  // the canonical partner: every flavoured slot (protos included) flipped
+  auto flipped_expr = expr->clone();
+  flipped_expr->visit(
+      [](ExprPtr& x) {
+        if (!x->is<Tensor>()) return;
+        auto& t = x->as<Tensor>();
+        kramers_flip_slots(t);
+        t.reset_tags();
+      },
+      /*atoms_only=*/true);
+  IndexSet flipped_uncontract;
+  for (auto const& ix : uncontract) {
+    auto f = kramers_flipped(ix, *isr);
+    flipped_uncontract.emplace(f ? *f : ix);
+  }
+  auto inner =
+      impl::binarize(flipped_expr, flipped_uncontract, opts, node_counter);
+  SEQUANT_ASSERT(inner->is_tensor());
+  // the union free legs as OUTER mode positions (the proto-free indices in
+  // canonical order, see EvalExpr::indices_annot)
+  container::svector<std::size_t> modes;
+  std::size_t k = 0;
+  for (auto const& ix : inner->canon_indices()) {
+    if (ix.has_proto_indices()) continue;
+    if (kramers_union_index(ix, *isr)) modes.push_back(k);
+    ++k;
+  }
+  auto const phase = static_cast<std::int8_t>((n_down % 2) ? -1 : 1);
+  Tensor denoted = inner->as_tensor();
+  kramers_flip_slots(denoted);
+  denoted.reset_tags();
+  return make_kramers_flip_node(std::move(inner), std::move(modes), phase,
+                                std::move(denoted));
+}
+
 }  // namespace
 
 EvalExprNode make_kramers_flip_node(EvalExprNode inner,
@@ -1292,6 +1420,11 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize_re_im(expr->as<ImagPart>().inner(), EvalOp::ImagPart,
                           uncontract, opts, node_counter,
                           /*shared_counter=*/true);
+
+  if (opts.kramers_fold_intermediates &&
+      (expr->is<Sum>() || expr->is<Product>()))
+    if (auto folded = maybe_kramers_fold(expr, uncontract, opts, node_counter))
+      return std::move(*folded);
 
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());

@@ -1873,3 +1873,106 @@ TEST_CASE("kramers_flip_node", "[eval_expr][kramers-flip]") {
       /*atoms_only=*/true);
   REQUIRE(has_down);
 }
+
+TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
+  // BinarizationOptions::kramers_fold_intermediates: a down-majority
+  // intermediate (all leaves time-reversal symmetric; the Kramers-blind pair
+  // labels do not count) binarizes as a KramersFlip over its canonical (up)
+  // partner's node, which the partner family builds: one contraction, one
+  // O(size) flip
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↑_2");
+  const Index au(L"a↑_1", {i1, i2}), ad(L"a↓_1", {i1, i2});
+  const Index bu(L"a↑_2", {i1, i2}), bd(L"a↓_2", {i1, i2});
+  const Index a1(L"a_1"), a2(L"a_2"), a3(L"a_3");
+  auto mk = [](std::wstring_view lbl, std::initializer_list<Index> b,
+               std::initializer_list<Index> k,
+               KramersSymmetry ks = KramersSymmetry::TimeReversal) {
+    return ex<Tensor>(lbl, bra(b), ket(k), Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, ks);
+  };
+  // the pair labels are blind on the projector's composite slot (Phase 1)
+  BinarizationOptions opts{
+      .kramers_blindness = {
+          .blind_slot =
+              [](Tensor const& t, std::size_t slot) {
+                return t.label() == L"C" && slot == 1;
+              },
+          .erase_space =
+              [](IndexSpace const& s) {
+                if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+                return mbpt::make_spinalpha(Index(s, 1)).space();
+              }},
+      .kramers_fold_intermediates = true};
+  using modes_t = container::svector<std::size_t>;
+
+  // I{a_2,a_3;a<i↑_1,i↑_2>} = g{a_1;a_2,a_3} * C{a_1;a<i↑_1,i↑_2>}
+  auto I = [&](Index const& comp) {
+    return Tensor(L"I", bra{a2, a3}, ket{comp});
+  };
+  auto rhs = [&](Index const& comp,
+                 KramersSymmetry ks = KramersSymmetry::TimeReversal) {
+    return ex<Product>(
+        ExprPtrList{mk(L"g", {a1}, {a2, a3}, ks), mk(L"C", {a1}, {comp}, ks)});
+  };
+  auto up = binarize(ResultExpr{I(au), rhs(au)}, opts);
+  auto dn = binarize(ResultExpr{I(ad), rhs(ad)}, opts);
+  REQUIRE(up->op_type() == EvalOp::Product);
+  REQUIRE(dn->op_type() == EvalOp::KramersFlip);
+  REQUIRE(dn.left()->hash_value() == up->hash_value());  // one shared family
+  REQUIRE(dn->kramers_flip_phase() == -1);               // one down composite
+  // the union legs a_2, a_3 as OUTER mode positions: the pair labels
+  // i↑_1, i↑_2 are outer (CSV pair) modes too, the composite is inner
+  REQUIRE(dn->kramers_flip_modes() == modes_t{2, 3});
+  REQUIRE(dn->as_tensor().label() == L"I");
+  REQUIRE(
+      std::any_of(dn->canon_indices().begin(), dn->canon_indices().end(),
+                  [&](Index const& ix) { return ix.space() == ad.space(); }));
+
+  // no fold without the option, or with a leaf that is not time-reversal
+  // symmetric
+  auto nofold = opts;
+  nofold.kramers_fold_intermediates = false;
+  REQUIRE(binarize(ResultExpr{I(ad), rhs(ad)}, nofold)->op_type() ==
+          EvalOp::Product);
+  REQUIRE(binarize(ResultExpr{I(ad), rhs(ad, KramersSymmetry::Nonsymm)}, opts)
+              ->op_type() == EvalOp::Product);
+
+  // a tie (one up, one down composite) resolves by the flavour string in the
+  // flavour-blind canonical order of the externals: (down_1, up_2) folds onto
+  // (up_1, down_2), never both ways
+  auto I2 = [&](Index const& x, Index const& y) {
+    return Tensor(L"I", bra{a3}, ket{x, y});
+  };
+  auto rhs2 = [&](Index const& x, Index const& y) {
+    return ex<Product>(ExprPtrList{mk(L"g", {a1, a2}, {a3}),
+                                   mk(L"C", {a1}, {x}), mk(L"C", {a2}, {y})});
+  };
+  auto t_ud = binarize(ResultExpr{I2(au, bd), rhs2(au, bd)}, opts);
+  auto t_du = binarize(ResultExpr{I2(ad, bu), rhs2(ad, bu)}, opts);
+  REQUIRE(t_ud->op_type() == EvalOp::Product);
+  REQUIRE(t_du->op_type() == EvalOp::KramersFlip);
+  REQUIRE(t_du.left()->hash_value() == t_ud->hash_value());
+  REQUIRE(t_du->kramers_flip_phase() == -1);
+  REQUIRE(t_du->kramers_flip_modes() ==
+          modes_t{2});  // a_3 after the pair modes
+
+  // a sum of down-majority terms folds as one node onto the up sum
+  auto sum_of = [&](Index const& comp) {
+    return ex<Sum>(ExprPtrList{
+        rhs(comp), ex<Product>(ExprPtrList{mk(L"h", {a1}, {a2, a3}),
+                                           mk(L"C", {a1}, {comp})})});
+  };
+  auto s_up = binarize(ResultExpr{I(au), sum_of(au)}, opts);
+  auto s_dn = binarize(ResultExpr{I(ad), sum_of(ad)}, opts);
+  REQUIRE(s_up->op_type() == EvalOp::Sum);
+  REQUIRE(s_dn->op_type() == EvalOp::KramersFlip);
+  REQUIRE(s_dn.left()->hash_value() == s_up->hash_value());
+  REQUIRE(s_dn.left()->op_type() == EvalOp::Sum);
+}

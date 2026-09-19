@@ -634,6 +634,14 @@ struct BinarizationOptions {
   /// in which case node identities are exactly those of a hook-less
   /// binarization.
   eval::KramersBlindness kramers_blindness = {};
+  /// Phase 2a of the union-axis time-reversal fold (mpqc
+  /// doc/dev/specs/2026-09-18-union-axis-time-reversal-fold.md): a Product /
+  /// Sum whose flavoured externals (after the Kramers-blind erasure) are
+  /// down-majority and whose leaves are all time-reversal symmetric is
+  /// binarized as an EvalOp::KramersFlip over its flipped (canonical) spelling,
+  /// so the two Kramers-partner families share one contraction and differ by
+  /// an O(size) flip. Off by default.
+  bool kramers_fold_intermediates = false;
 };
 
 namespace meta {
