@@ -620,11 +620,15 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (stage == 1) {
         if (!n.leaf()) {
           stack[top].child_recs.push_back(last_rec);
-          enter(n.right(), stack[top].child_ectx, stack[top].child_opener);
+          // a unary op's right child is the Constant(1) sentinel: not an
+          // operand, never entered
+          if (!n->is_unary_op())
+            enter(n.right(), stack[top].child_ectx, stack[top].child_opener);
         }
         continue;
       }
-      if (!n.leaf()) stack[top].child_recs.push_back(last_rec);
+      if (!n.leaf() && !n->is_unary_op())
+        stack[top].child_recs.push_back(last_rec);
       last_rec = finalize(stack[top]);
       stack.pop_back();
     }

@@ -527,6 +527,12 @@ bool EvalExpr::is_primary() const noexcept { return !op_type(); }
 
 bool EvalExpr::is_sum() const noexcept { return op_type() == EvalOp::Sum; }
 
+bool EvalExpr::is_unary_op() const noexcept {
+  auto const op = op_type();
+  return op == EvalOp::RealPart || op == EvalOp::ImagPart ||
+         op == EvalOp::KramersFlip;
+}
+
 bool EvalExpr::is_product() const noexcept {
   return op_type() == EvalOp::Product;
 }

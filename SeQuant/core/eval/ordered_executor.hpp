@@ -1206,10 +1206,14 @@ CellTableInputs make_cell_table_inputs(OrderedSchedule const& ordered,
     container::svector<std::size_t> out;
     auto const& nd = resolve(vid);
     if (nd.leaf()) return out;
-    for (auto const* child : {&nd.left(), &nd.right()})
-      if (auto it = vid_of_key.find(value_key_of(*child));
+    auto const add = [&](auto const& child) {
+      if (auto it = vid_of_key.find(value_key_of(child));
           it != vid_of_key.end())
         out.push_back(it->second);
+    };
+    add(nd.left());
+    // a unary op's right child is the Constant(1) sentinel, not an operand
+    if (!nd->is_unary_op()) add(nd.right());
     return out;
   };
   in.n_batches_of = [](LoopKey const&) { return std::size_t{1}; };

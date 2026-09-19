@@ -225,6 +225,15 @@ class EvalExpr {
   [[nodiscard]] bool is_sum() const noexcept;
 
   ///
+  /// \return whether this is a unary IR op (RealPart / ImagPart /
+  ///         KramersFlip): only the left child is an operand; the right child
+  ///         is the Constant(1) sentinel that keeps FullBinaryNode's
+  ///         two-children invariant and is never evaluated, scheduled or
+  ///         counted as an operand
+  ///
+  [[nodiscard]] bool is_unary_op() const noexcept;
+
+  ///
   /// \return True if this expression is an adjoint (unary) node.
   ///
 

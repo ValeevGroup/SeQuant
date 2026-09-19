@@ -467,7 +467,7 @@ template <meta::eval_node_range R>
         stack.pop_back();
         node_of.emplace(value_key_of(n), &n);
         if (!n.leaf()) {
-          stack.push_back(&n.right());
+          if (!n->is_unary_op()) stack.push_back(&n.right());  // no sentinel
           stack.push_back(&n.left());
         }
       }

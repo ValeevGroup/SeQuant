@@ -656,13 +656,6 @@ class ResultDryRun final : public Result {
     return eval_result<ResultDryRun>(indices_, cm_, overrides_, lobounds_);
   }
 
-  /// the flip is a same-shape copy: no flops, a fresh cell of the same size
-  [[nodiscard]] ResultPtr kramers_flip(
-      container::svector<std::size_t> const& /*modes*/,
-      std::int8_t /*phase*/) const override {
-    return eval_result<ResultDryRun>(indices_, cm_, overrides_, lobounds_);
-  }
-
   /// A dry-run token owns only bookkeeping (indices, extent overrides,
   /// lobounds, assembled coverage), so its copy is the deep copy.
   [[nodiscard]] ResultPtr clone() const override {
@@ -822,14 +815,6 @@ class ResultDryRunNested final : public Result {
                                            indices_, lobounds_);
   }
 
-  /// the flip is a same-shape copy: no flops, a fresh cell of the same size
-  [[nodiscard]] ResultPtr kramers_flip(
-      container::svector<std::size_t> const& /*modes*/,
-      std::int8_t /*phase*/) const override {
-    return eval_result<ResultDryRunNested>(outer_, inner_, cm_, overrides_,
-                                           indices_, lobounds_);
-  }
-
   /// See \c ResultDryRun::clone: bookkeeping only, so the copy is deep.
   [[nodiscard]] ResultPtr clone() const override {
     return std::make_shared<ResultDryRunNested>(*this);
@@ -905,6 +890,12 @@ namespace detail {
       [cm](container::vector<Index> const& descriptor) -> ResultPtr {
     return make_dryrun_result(
         container::svector<Index>(descriptor.begin(), descriptor.end()), cm);
+  };
+  // a same-shape unary op with no flops: the token is the operand's copy
+  aops.kramers_flip = [](Result const& operand,
+                         container::svector<std::size_t> const& /*modes*/,
+                         std::int8_t /*phase*/) -> ResultPtr {
+    return operand.clone();
   };
   return aops;
 }

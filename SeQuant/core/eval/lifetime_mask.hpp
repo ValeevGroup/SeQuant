@@ -121,7 +121,7 @@ void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
       lifetime_mask_intersect_in_place(it->second, node_modes);
       occ.push_back({&n, &it->second});
     }
-    stack.push_back({&n.right(), acc});
+    if (!n->is_unary_op()) stack.push_back({&n.right(), acc});  // no sentinel
     stack.push_back({&n.left(), std::move(acc)});
   };
   for (auto const& tree : forest) {
@@ -258,7 +258,7 @@ void stamp_occurrence_homes(R const& forest) {
       if (std::find(slots.begin(), slots.end(), m) != slots.end())
         home.push_back(m);
     const_cast<Data&>(*n).set_occurrence_home(std::move(home));
-    stack.push_back({&n.right(), acc});
+    if (!n->is_unary_op()) stack.push_back({&n.right(), acc});  // no sentinel
     stack.push_back({&n.left(), std::move(acc)});
   };
   for (auto const& tree : forest) {
@@ -325,7 +325,9 @@ std::pair<std::size_t, bool> value_key_impl(Node const& n) {
     std::size_t h = value_key(nd->hash_value(), std::move(pos));
     if (!nd.leaf()) {
       auto [lk, ls] = below;  // the left child, already folded by this loop
-      auto [rk, rs] = value_key_impl(nd.right());
+      // a unary op's right child is the Constant(1) sentinel, not an operand
+      auto [rk, rs] = nd->is_unary_op() ? std::pair<std::size_t, bool>{}
+                                        : value_key_impl(nd.right());
       if (ls || rs) {
         sliced = true;
         // A Product (contraction) is commutative and the binarizer may emit the

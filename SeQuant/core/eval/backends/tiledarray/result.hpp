@@ -5,7 +5,6 @@
 
 #include <sstream>
 
-#include <SeQuant/core/eval/backends/tiledarray/kramers_flip.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
@@ -927,16 +926,6 @@ class ResultTensorTA final : public Result {
     return eval_result<this_type>(TA::clone(get<ArrayT>()));
   }
 
-  /// See Result::kramers_flip: the pending view (relabel / phase / conj) is
-  /// materialized first, then the halves of every union mode are swapped.
-  [[nodiscard]] ResultPtr kramers_flip(
-      container::svector<std::size_t> const& modes,
-      std::int8_t phase) const override {
-    auto out = eval::kramers_flip_array(logical_array(), modes, phase);
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(out));
-  }
-
   [[nodiscard]] ResultPtr permute(
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
@@ -1633,16 +1622,6 @@ class ResultTensorOfTensorTA final : public Result {
   /// (nested) tiles too, so the copy shares no inner tensor with this one.
   [[nodiscard]] ResultPtr clone() const override {
     return eval_result<this_type>(TA::clone(get<ArrayT>()));
-  }
-
-  /// See Result::kramers_flip: the pending view (relabel / phase / conj) is
-  /// materialized first, then the halves of every union mode are swapped.
-  [[nodiscard]] ResultPtr kramers_flip(
-      container::svector<std::size_t> const& modes,
-      std::int8_t phase) const override {
-    auto out = eval::kramers_flip_array(logical_array(), modes, phase);
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(out));
   }
 
   [[nodiscard]] ResultPtr permute(

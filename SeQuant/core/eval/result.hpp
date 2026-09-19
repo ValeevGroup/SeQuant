@@ -319,18 +319,6 @@ class Result {
     throw detail::unimplemented_method("imag_part");
   }
 
-  /// \brief \p phase · F(this) with F the time-reversal flip over the OUTER
-  ///        modes \p modes (Kramers-union axes): per mode out[⇑] = +conj
-  ///        in[⇓], out[⇓] = −conj in[⇑] (the sign is that of the target
-  ///        half; conj applied once). Served by EvalOp::KramersFlip; F∘F = −1,
-  ///        so unlike the conjugation channels it is an IR node, not a
-  ///        CanonTransform. Default throws.
-  [[nodiscard]] virtual ResultPtr kramers_flip(
-      container::svector<std::size_t> const& /*modes*/,
-      std::int8_t /*phase*/) const {
-    throw detail::unimplemented_method("kramers_flip");
-  }
-
   ///
   /// \brief Restrict this result to a contiguous *element* range of one mode.
   ///

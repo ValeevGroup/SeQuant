@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/cell_registry.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
@@ -680,14 +681,17 @@ template <typename Node>
 ///        invariant.
 template <meta::can_evaluate Node>
 [[nodiscard]] bool unary_op(Node const& node) noexcept {
-  auto const op = node->op_type();
-  return op == EvalOp::RealPart || op == EvalOp::ImagPart ||
-         op == EvalOp::KramersFlip;
+  return node->is_unary_op();
 }
 
+/// \param aops the backend array ops installed on the cache (may be null):
+///        an EvalOp::KramersFlip node is realized through
+///        \c BackendArrayOps::kramers_flip, the backend's ("user's") own
+///        operation on its arrays
 template <meta::can_evaluate Node>
 [[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
-                                     ResultPtr const& right) {
+                                     ResultPtr const& right,
+                                     BackendArrayOps const* aops = nullptr) {
   if (unary_op(node)) {
     // Unary Re/Im/KramersFlip over the left operand; the right child is the
     // Constant(1) sentinel.
@@ -697,7 +701,11 @@ template <meta::can_evaluate Node>
       case EvalOp::ImagPart:
         return left->imag_part();
       case EvalOp::KramersFlip:
-        return left->kramers_flip(node->kramers_flip_modes(),
+        if (!aops || !aops->kramers_flip)
+          throw std::runtime_error(
+              "EvalOp::KramersFlip: no BackendArrayOps::kramers_flip "
+              "installed on the eval cache (CacheManager::set_array_ops)");
+        return aops->kramers_flip(*left, node->kramers_flip_modes(),
                                   node->kramers_flip_phase());
       default:
         SEQUANT_ABORT("apply_one_op: unhandled unary op");
@@ -821,7 +829,7 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
   log::Duration time{};
   if (node->op_type() != EvalOp::Product) {
     time = detail::timed_eval_inplace(
-        [&]() { result = apply_one_op(node, left, right); });
+        [&]() { result = apply_one_op(node, left, right, cache.array_ops()); });
   } else {
     // Consult the shaped-product hook (if set) before evaluating the
     // product. The hook receives the node (wrapped in a std::any as a
@@ -1409,8 +1417,9 @@ ResultPtr evaluate_impl(Node const& node,         //
         f.left = std::move(ret);
         SEQUANT_ASSERT(f.left);
         ResultPtr result;
-        auto time = detail::timed_eval_inplace(
-            [&]() { result = apply_one_op(f.nd(), f.left, f.right); });
+        auto time = detail::timed_eval_inplace([&]() {
+          result = apply_one_op(f.nd(), f.left, f.right, cache.array_ops());
+        });
 
         if constexpr (detail::trace(EvalTrace)) {
           // `right` is null here (see log::bytes() null tolerance).
