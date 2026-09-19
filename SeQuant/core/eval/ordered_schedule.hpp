@@ -1158,17 +1158,14 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           "batched realization are contradictory (a cycle among loop "
           "instances): the loop identity fused two physical loops that nest "
           "in opposite orders; unplaced constraints:";
-      auto const narrow = [](std::wstring const& w) {
-        return std::string(w.begin(), w.end());
-      };
       for (auto const& [pair, witness] : rich.loop_order) {
         auto const a = item_of.find(pair.first);
         auto const b = item_of.find(pair.second);
         if (a == item_of.end() || b == item_of.end()) continue;
         if (indeg[a->second] == 0 && indeg[b->second] == 0) continue;
-        msg += " [" + narrow(pair.first.first) + "#" +
+        msg += " [" + toUtf8(pair.first.first) + "#" +
                std::to_string(pair.first.second) + " > " +
-               narrow(pair.second.first) + "#" +
+               toUtf8(pair.second.first) + "#" +
                std::to_string(pair.second.second) + " by v" +
                std::to_string(witness) + "]";
       }

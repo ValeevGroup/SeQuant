@@ -16,6 +16,8 @@
 // factored out, per that file's own precedent for the DryRun witness
 // fixtures.
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
@@ -1545,7 +1547,7 @@ TEST_CASE(
     REQUIRE(table.unresolved.empty());
   }
 
-  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", "1");
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
@@ -4338,14 +4340,14 @@ TEST_CASE(
   // case does not own the process environment).
   char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
   std::string const prev_strict_val = prev_strict ? prev_strict : "";
-  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", "1");
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
   if (prev_strict)
-    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str());
   else
-    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
+    sequant::tests::unset_env("SEQUANT_UT_STRICT_FILL_ONCE");
 
   logger.eval.level = prev_level;
 }
@@ -4628,14 +4630,14 @@ TEST_CASE(
   ordered_cache.set_array_ops(&aops);
   char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
   std::string const prev_strict_val = prev_strict ? prev_strict : "";
-  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", "1");
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
   if (prev_strict)
-    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str());
   else
-    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
+    sequant::tests::unset_env("SEQUANT_UT_STRICT_FILL_ONCE");
   logger.eval.level = prev_level;
 
   REQUIRE(!zeros.empty());  // the run really did assemble by scattering
@@ -5040,14 +5042,14 @@ TEST_CASE(
   logger.eval.stream = &sink;
   char const* const prev_strict = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE");
   std::string const prev_strict_val = prev_strict ? prev_strict : "";
-  setenv("SEQUANT_UT_STRICT_FILL_ONCE", "1", 1);
+  sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", "1");
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
   if (prev_strict)
-    setenv("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str(), 1);
+    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str());
   else
-    unsetenv("SEQUANT_UT_STRICT_FILL_ONCE");
+    sequant::tests::unset_env("SEQUANT_UT_STRICT_FILL_ONCE");
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
 

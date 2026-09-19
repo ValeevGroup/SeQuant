@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <bit>
 #include <cstddef>
-#include <cstdlib>
 #include <functional>
 #include <initializer_list>
 #include <limits>
@@ -31,18 +30,10 @@
 #include <vector>
 
 void disable_outer_product_pruning() {
-#ifdef _WIN32
-  _putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1");
-#else
-  setenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1", 1);
-#endif
+  sequant::tests::set_env("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1");
 }
 void reenable_outer_product_pruning() {
-#ifdef _WIN32
-  _putenv_s("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "");
-#else
-  unsetenv("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
-#endif
+  sequant::tests::unset_env("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
 }
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
