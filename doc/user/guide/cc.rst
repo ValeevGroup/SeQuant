@@ -25,8 +25,8 @@ Overview
 The :class:`CC <sequant::mbpt::CC>` class can be used to derive:
 
 - Ground state amplitude equations
-- λ (de-excitation) amplitude equations — Lagrange multipliers conjugate to the ground-state amplitudes, needed for properties and analytic
-  gradients
+- λ (de-excitation) amplitude equations — Lagrange multipliers conjugate to the ground-state amplitudes, needed for properties, analytic gradients and
+  perturbative corrections
 - Equation-of-motion (EOM) CC equations for excited states
 - Response equations for properties and `perturbations <https://en.wikipedia.org/wiki/Perturbation_theory_(quantum_mechanics)>`_
 
