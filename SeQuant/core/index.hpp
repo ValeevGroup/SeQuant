@@ -538,9 +538,9 @@ class Index : public Taggable {
 
     it = std::ranges::find_if(label, [](CharT c) {
       if constexpr (std::same_as<CharT, char>) {
-        return std::isdigit(c);
+        return c >= 0 && std::isdigit(static_cast<unsigned char>(c));
       }
-      return std::iswdigit(c);
+      return std::iswdigit(c) != 0;
     });
 
     if (it != end(label) && it != begin(label)) {

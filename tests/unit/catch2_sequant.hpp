@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cassert>
 #include <concepts>
+#include <cstdlib>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -33,6 +34,26 @@ namespace sequant::tests {
 /// cannot collide with a library symbol.
 inline constexpr TensorSymmetries particle_symmetric{.column =
                                                          ColumnSymmetry::Symm};
+
+/// Portable wrappers around the environment-mutation functions the test
+/// suite uses to steer runtime behavior via env vars: POSIX has
+/// setenv/unsetenv, MSVC has neither and provides _putenv_s instead (whose
+/// "" value happens to remove the variable, matching unsetenv).
+inline void set_env(const char* name, const char* value) {
+#ifdef _WIN32
+  _putenv_s(name, value);
+#else
+  setenv(name, value, 1);
+#endif
+}
+
+inline void unset_env(const char* name) {
+#ifdef _WIN32
+  _putenv_s(name, "");
+#else
+  unsetenv(name);
+#endif
+}
 }  // namespace sequant::tests
 
 namespace Catch {

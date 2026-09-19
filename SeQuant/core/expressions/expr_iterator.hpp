@@ -26,7 +26,8 @@ class ExprIteratorImpl {
       std::conditional_t<is_const, std::add_const_t<value_type>, value_type>>;
   using difference_type = std::ptrdiff_t;
 
-  explicit ExprIteratorImpl(pointer ptr = nullptr) : ptr_(ptr) {}
+  ExprIteratorImpl() = default;
+  explicit ExprIteratorImpl(pointer ptr) : ptr_(ptr) {}
 
   /// converting constructor: a mutable iterator converts to a const iterator
   /// (but not the other way around)

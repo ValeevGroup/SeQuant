@@ -30,14 +30,19 @@ else()
         "srcc.cpp ->  |2 t csv sf"
         # Equation-of-motion Coupled-Cluster (reduced test set)
         "eomcc.cpp -> 2 2h1p R"
-        # Unitary Coupled-Cluster (reduced test set: one variant per expansion)
-        "ucc.cpp -> 2 bch 2|2 bernoulli 2"
+        # Unitary Coupled-Cluster (reduced test set: one variant, cheapest
+        # expansion -- the dropped "2 bernoulli 2" variant alone runs over a
+        # minute under a plain MSVC Debug build)
+        "ucc.cpp -> 2 bch 2"
     )
     if (TARGET Eigen3::Eigen)
         # these examples require Eigen for full functionality
         list(APPEND TEST_CASES
-                # Single-Reference closed-shell Coupled-Cluster equation generation
-                "stcc.cpp -> |2 v1 naive|3 v1|3 v2"
+                # Single-Reference closed-shell Coupled-Cluster equation
+                # generation (reduced test set: one variant, matching srcc/
+                # eomcc/ucc above -- the other three variants here are each
+                # 40-60s under a plain MSVC Debug build)
+                "stcc.cpp -> 2 v1 naive"
         )
     endif()
 endif()
@@ -54,12 +59,13 @@ foreach(current IN LISTS TEST_CASES)
     add_executable(${test_name} ${BUILD_BY_DEFAULT} ${test_source})
     set_target_properties(${test_name} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(${test_name} PRIVATE SeQuant)
+	target_set_compiler_flags(${test_name})
 
     if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         target_compile_definitions(${test_name} PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     endif()
 
-    target_set_warning_flags("${test_name}")
+    target_set_compiler_flags("${test_name}")
     target_set_optimization_flags("${test_name}")
 
     set(variant_names "")

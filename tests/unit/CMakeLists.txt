@@ -28,7 +28,7 @@ set(symb_test_sources
 )
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
-target_set_warning_flags(unit_tests-sequant-symb-obj)
+target_set_compiler_flags(unit_tests-sequant-symb-obj)
 target_set_optimization_flags(unit_tests-sequant-symb-obj)
 set_target_properties(unit_tests-sequant-symb-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-symb-obj
@@ -46,7 +46,7 @@ set(eval_test_sources
     "test_lifetime_mask.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
-target_set_warning_flags(unit_tests-sequant-eval-obj)
+target_set_compiler_flags(unit_tests-sequant-eval-obj)
 target_set_optimization_flags(unit_tests-sequant-eval-obj)
 set_target_properties(unit_tests-sequant-eval-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-obj
@@ -64,7 +64,7 @@ set(optimize_test_sources
     "test_optimize.cpp"
 )
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
-target_set_warning_flags(unit_tests-sequant-optimize-obj)
+target_set_compiler_flags(unit_tests-sequant-optimize-obj)
 target_set_optimization_flags(unit_tests-sequant-optimize-obj)
 set_target_properties(unit_tests-sequant-optimize-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-optimize-obj
@@ -82,7 +82,7 @@ set(export_test_sources
     "test_export_python.cpp"
 )
 add_library(unit_tests-sequant-export-obj OBJECT ${export_test_sources})
-target_set_warning_flags(unit_tests-sequant-export-obj)
+target_set_compiler_flags(unit_tests-sequant-export-obj)
 target_set_optimization_flags(unit_tests-sequant-export-obj)
 set_target_properties(unit_tests-sequant-export-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-export-obj
@@ -102,7 +102,7 @@ set(mbpt_test_sources
 )
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})
-target_set_warning_flags(unit_tests-sequant-mbpt-obj)
+target_set_compiler_flags(unit_tests-sequant-mbpt-obj)
 target_set_optimization_flags(unit_tests-sequant-mbpt-obj)
 set_target_properties(unit_tests-sequant-mbpt-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-mbpt-obj
@@ -120,7 +120,7 @@ if (SEQUANT_HAS_TILEDARRAY)
         "test_cache_manager.cpp"
     )
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
-    target_set_warning_flags(unit_tests-sequant-eval-ta-obj)
+    target_set_compiler_flags(unit_tests-sequant-eval-ta-obj)
     target_set_optimization_flags(unit_tests-sequant-eval-ta-obj)
     set_target_properties(unit_tests-sequant-eval-ta-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-ta-obj
@@ -142,7 +142,7 @@ if (SEQUANT_HAS_BTAS)
         list(APPEND eval_btas_test_sources "test_cache_manager.cpp")
     endif()
     add_library(unit_tests-sequant-eval-btas-obj OBJECT ${eval_btas_test_sources})
-    target_set_warning_flags(unit_tests-sequant-eval-btas-obj)
+    target_set_compiler_flags(unit_tests-sequant-eval-btas-obj)
     target_set_optimization_flags(unit_tests-sequant-eval-btas-obj)
     set_target_properties(unit_tests-sequant-eval-btas-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-btas-obj
@@ -160,7 +160,7 @@ endif()
 if (SEQUANT_HAS_TAPP)
     set(eval_tapp_test_sources "test_eval_tapp.cpp")
     add_library(unit_tests-sequant-eval-tapp-obj OBJECT ${eval_tapp_test_sources})
-    target_set_warning_flags(unit_tests-sequant-eval-tapp-obj)
+    target_set_compiler_flags(unit_tests-sequant-eval-tapp-obj)
     target_set_optimization_flags(unit_tests-sequant-eval-tapp-obj)
     set_target_properties(unit_tests-sequant-eval-tapp-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(unit_tests-sequant-eval-tapp-obj
@@ -189,6 +189,8 @@ set(eval_dryrun_test_sources
     "test_slicing_signature.cpp"
 )
 add_library(unit_tests-sequant-eval-dryrun-obj OBJECT ${eval_dryrun_test_sources})
+target_set_compiler_flags(unit_tests-sequant-eval-dryrun-obj)
+target_set_optimization_flags(unit_tests-sequant-eval-dryrun-obj)
 set_target_properties(unit_tests-sequant-eval-dryrun-obj PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 target_link_libraries(unit_tests-sequant-eval-dryrun-obj
     PUBLIC SeQuant::eval SeQuant::optimize SeQuant::bliss SeQuant::mbpt
@@ -317,18 +319,23 @@ endif()
 
 # The water-20-sized eval fixtures (the ordered-executor / dry-run cases that
 # build a schedule out of tests/unit/data/csv_ccsd_doubles_residual_df.txt) run
-# in a second or two natively but take >2 minutes EACH under ASan/UBSan and
-# far longer under valgrind, which by itself blows the CI job budget. Gate them
-# on the SEQUANT_SKIP_LONG_TESTS option ONLY -- deliberately NOT on
-# SEQUANT_INTERNAL_SKIP_LONG_TESTS, which also fires for every Debug build:
-# these cases are the ones that exercise the assertion-heavy Debug paths, so a
-# plain Debug build must keep running them. The CI sanitizer and valgrind jobs
-# are exactly the configurations that set the option.
-if (SEQUANT_SKIP_LONG_TESTS)
+# in a second or two under GCC/Clang at -O0 but take >2 minutes EACH under
+# ASan/UBSan, far longer under valgrind, and -- it turns out -- comparably
+# long under a plain MSVC Debug build too: checked iterators and /RTC make
+# MSVC's Debug STL an order of magnitude slower than GCC/Clang's for
+# container-heavy code like this, so "a plain Debug build" is not uniformly
+# cheap across toolchains the way it was when this was gated on
+# SEQUANT_SKIP_LONG_TESTS alone (deliberately not on
+# SEQUANT_INTERNAL_SKIP_LONG_TESTS, to keep exercising these assertion-heavy
+# Debug paths by default). Fold it into SEQUANT_INTERNAL_SKIP_LONG_TESTS like
+# every other object library here, so it's covered by the same Debug default;
+# CI's sanitizer/valgrind jobs and an explicit -DSEQUANT_SKIP_LONG_TESTS=OFF
+# Debug build still exercise the real thing.
+if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
 
-target_set_warning_flags(unit_tests-sequant)
+target_set_compiler_flags(unit_tests-sequant)
 target_set_optimization_flags(unit_tests-sequant)
 
 if (SEQUANT_TESTS)

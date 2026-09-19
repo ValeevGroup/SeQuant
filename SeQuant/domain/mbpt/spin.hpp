@@ -350,14 +350,14 @@ std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<SlottedIndex>>&
         ext_index_groups,
-    const std::optional<int>& target_spin_case = std::nullopt);
+    const std::optional<std::size_t>& target_spin_case = std::nullopt);
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr, EmptyInitializerList,
-    const std::optional<int>& target_spin_case = std::nullopt);
+    const std::optional<std::size_t>& target_spin_case = std::nullopt);
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    const std::optional<int>& target_spin_case = std::nullopt);
+    const std::optional<std::size_t>& target_spin_case = std::nullopt);
 
 // clang-format off
 /// @brief Like open_shell_spintrace but uses minimal expansion of the antisymmetrizer

@@ -94,7 +94,7 @@ macro(sequant_add_library _module)
     add_library(SeQuant::${_module} ALIAS SeQuant-${_module})
     get_target_property(_type SeQuant-${_module} TYPE)
     if (NOT _type STREQUAL "INTERFACE_LIBRARY")
-        target_set_warning_flags(SeQuant-${_module})
+        target_set_compiler_flags(SeQuant-${_module})
         target_set_optimization_flags(SeQuant-${_module})
     endif()
 endmacro()
@@ -145,6 +145,21 @@ option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors"
 #      (asserts are only disabled in the optimized-and-not-debuggable build
 #      types) so that SeQuant and the dependencies it builds from source agree
 #      out of the box; see FindOrFetch{TiledArray,BTAS}.cmake for the forwarding
+# N.B. CMAKE_BUILD_TYPE only reflects the active configuration for a
+#      single-config generator (Ninja, Makefiles); for a multi-config
+#      generator (Visual Studio, Ninja Multi-Config) it is always empty at
+#      configure time; the actual configuration is chosen later, per build
+#      invocation, via --config. Unlike the test-skipping logic elsewhere in
+#      this tree, this cannot be worked around with a generator expression:
+#      SEQUANT_ASSERT_BEHAVIOR is a single cache string forwarded verbatim
+#      into TA_ASSERT_POLICY/BTAS_ASSERT_POLICY (see FindOrFetchTiledArray/
+#      BTAS.cmake), and those in turn are baked into TiledArray's/BTAS's own
+#      (non-per-config) compile definitions -- a real per-config default
+#      would need upstream changes there too. Falling through to the ABORT
+#      (assertions enabled) branch below is the safe direction to be wrong
+#      in: a multi-config Release build pays for assertion checks it may not
+#      have wanted, rather than a Debug build silently losing them; pass an
+#      explicit -DSEQUANT_ASSERT_BEHAVIOR=IGNORE to opt out per build tree.
 if (CMAKE_BUILD_TYPE STREQUAL Release OR
     CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
     set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
@@ -271,8 +286,6 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/uintseqhash.hh
         SeQuant/external/bliss/heap.cc
         SeQuant/external/bliss/heap.hh
-        SeQuant/external/bliss/timer.cc
-        SeQuant/external/bliss/timer.hh
         SeQuant/external/bliss/utils.cc
         SeQuant/external/bliss/utils.hh
         SeQuant/external/bliss/bliss_C.cc
@@ -623,7 +636,7 @@ target_link_libraries(SeQuant-symb
         SeQuant-bliss
         Threads::Threads
         libperm::libperm
-        $<BUILD_LOCAL_INTERFACE:utfcpp>
+        $<BUILD_LOCAL_INTERFACE:utf8cpp::utf8cpp>
         Eigen3::Eigen)
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant-symb PUBLIC
