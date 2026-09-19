@@ -1242,6 +1242,42 @@ EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
 
 }  // namespace
 
+EvalExprNode make_kramers_flip_node(EvalExprNode inner,
+                                    container::svector<std::size_t> modes,
+                                    std::int8_t phase, Tensor denoted) {
+  SEQUANT_ASSERT(inner->result_type() == ResultType::Tensor);
+  auto const isr = get_default_context().index_space_registry();
+  auto h = inner->hash_value();
+  if (auto salt = inner->canon_transform().structural_salt(); salt != 0)
+    hash::combine(h, salt);
+  hash::combine(h, static_cast<size_t>(EvalOp::KramersFlip));
+  for (auto m : modes) hash::combine(h, m);
+  hash::combine(h, static_cast<std::int64_t>(phase));
+  // the wrapper's labels: the child's layout with every flavoured index
+  // flipped (the denoted spelling)
+  auto ixs = inner->canon_indices();
+  if (isr) kramers_flip(ixs, *isr);
+  hash::combine(h, EvalExpr::layout_fingerprint_of(ixs));
+  // the child's phase / conj hoist through F (linear, commutes with conj), as
+  // the inner phase hoists through Re/Im in binarize_re_im
+  auto const& itr = inner->canon_transform();
+  EvalExpr wrap{EvalOp::KramersFlip,
+                ResultType::Tensor,
+                ex<Tensor>(std::move(denoted)),
+                std::move(ixs),
+                CanonTransform{.phase = itr.phase, .conj = itr.conj},
+                h,
+                nullptr};
+  wrap.set_kramers_flip(std::move(modes), phase);
+  if (inner->has_identity_erasure()) {
+    auto id = inner->identity_indices();
+    if (isr) kramers_flip(id, *isr);
+    wrap.set_identity_indices(std::move(id));
+  }
+  EvalExprNode sentinel{EvalExpr{Constant{1}}};
+  return EvalExprNode{std::move(wrap), std::move(inner), std::move(sentinel)};
+}
+
 namespace impl {
 
 EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,

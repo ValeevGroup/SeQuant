@@ -1792,3 +1792,84 @@ TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
     REQUIRE(TreeNodeEqualityComparator<Node>{}(t0, t1));
   }
 }
+
+#include <SeQuant/core/eval/eval_node.hpp>
+
+TEST_CASE("kramers_flip_node", "[eval_expr][kramers-flip]") {
+  // EvalOp::KramersFlip: a unary wrapper (RealPart pattern: left = the
+  // canonical ↑ node, right = the Constant(1) sentinel) denoting
+  // phase · F(inner) with F the time-reversal flip over the given union modes
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↑_2");
+  const Index au(L"a↑_1", {i1, i2}), ad(L"a↓_1", {i1, i2});
+  const Index a1(L"a_1"), a2(L"a_2"), a3(L"a_3");
+  auto mk = [](std::wstring_view lbl, std::initializer_list<Index> b,
+               std::initializer_list<Index> k) {
+    return Tensor(lbl, bra(b), ket(k), Symmetry::Nonsymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm,
+                  KramersSymmetry::TimeReversal);
+  };
+  // I{a_2,a_3;a↑_1<i↑_1,i↑_2>} = g{a_1;a_2,a_3} * C{a_1;a↑_1<i↑_1,i↑_2>}
+  auto inner_expr = [&] {
+    return ResultExpr{
+        mk(L"I", {a2, a3}, {au}),
+        ex<Product>(ExprPtrList{ex<Tensor>(mk(L"g", {a1}, {a2, a3})),
+                                ex<Tensor>(mk(L"C", {a1}, {au}))})};
+  };
+  auto inner = binarize(inner_expr());
+  Tensor const denoted = mk(L"I", {a2, a3}, {ad});
+  using modes_t = container::svector<std::size_t>;
+
+  auto wrap = make_kramers_flip_node(inner, modes_t{0, 1}, -1, denoted);
+  REQUIRE(wrap->op_type() == EvalOp::KramersFlip);
+  REQUIRE(wrap->result_type() == ResultType::Tensor);
+  REQUIRE(wrap->kramers_flip_modes() == modes_t{0, 1});
+  REQUIRE(wrap->kramers_flip_phase() == -1);
+  REQUIRE(wrap.left()->hash_value() == inner->hash_value());
+  REQUIRE(wrap.right()->is_constant());
+  REQUIRE(wrap->hash_value() != inner->hash_value());
+  // the wrapper denotes the flipped spelling with the child's layout
+  REQUIRE(wrap->is_tensor());
+  REQUIRE(wrap->as_tensor().label() == L"I");
+  REQUIRE(wrap->canon_indices().size() == inner->canon_indices().size());
+  REQUIRE(
+      std::any_of(wrap->canon_indices().begin(), wrap->canon_indices().end(),
+                  [&](Index const& ix) { return ix.space() == ad.space(); }));
+  REQUIRE(
+      std::none_of(wrap->canon_indices().begin(), wrap->canon_indices().end(),
+                   [&](Index const& ix) { return ix.space() == au.space(); }));
+
+  // same child, modes and phase => the same slot
+  auto wrap2 = make_kramers_flip_node(binarize(inner_expr()), modes_t{0, 1}, -1,
+                                      denoted);
+  REQUIRE(wrap->hash_value() == wrap2->hash_value());
+  using node_t = std::remove_cvref_t<decltype(wrap)>;
+  TreeNodeEqualityComparator<node_t> same;
+  REQUIRE(same(wrap, wrap2));
+
+  // a different phase or mode set is a different value
+  REQUIRE(
+      make_kramers_flip_node(inner, modes_t{0, 1}, 1, denoted)->hash_value() !=
+      wrap->hash_value());
+  REQUIRE(
+      make_kramers_flip_node(inner, modes_t{0}, -1, denoted)->hash_value() !=
+      wrap->hash_value());
+
+  // the linearized form spells the denoted (flipped) contraction
+  auto lin = linearize_eval_node(wrap);
+  REQUIRE(lin->is<Product>());
+  bool has_down = false;
+  lin->visit(
+      [&](ExprPtr const& x) {
+        if (!x->is<Tensor>()) return;
+        for (auto const& ix : x->as<Tensor>().const_indices())
+          if (ix.space() == ad.space()) has_down = true;
+      },
+      /*atoms_only=*/true);
+  REQUIRE(has_down);
+}

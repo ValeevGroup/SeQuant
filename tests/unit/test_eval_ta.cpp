@@ -7802,3 +7802,117 @@ TEST_CASE("result_transform_view_tot_ta", "[eval][conj-transform][view][tot]") {
     REQUIRE(norm_diff(sla, refsl, "j,i;a,b") < 1e-12);
   }
 }
+
+#include <SeQuant/core/eval/backends/tiledarray/kramers_flip.hpp>
+
+TEST_CASE("kramers_flip_array", "[kramers-flip-ta]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  using Cplx = std::complex<double>;
+  auto& world = TA::get_default_world();
+  // a Kramers-union axis [⇑ | ⇓]: two congruently tiled halves of extent 6
+  TA::TiledRange1 const half{0, 3, 6};
+  TA::TiledRange1 const uni = TA::concat(half, half);  // {0,3,6,9,12}
+  TA::TiledRange1 const other{0, 4, 7};
+  int const n_h = 6;
+  // F: out[⇑] = +conj in[⇓], out[⇓] = −conj in[⇑]; the sign is that of the
+  // TARGET half
+  auto const flip = [n_h](int k) { return k >= n_h ? k - n_h : k + n_h; };
+  auto const sgn = [n_h](int k) { return k >= n_h ? -1.0 : 1.0; };
+
+  SECTION("flat") {
+    using Arr = TA::DistArray<TA::Tensor<Cplx>, TA::DensePolicy>;
+    Arr a(world, TA::TiledRange{other, uni});
+    a.fill_random();
+    world.gop.fence();
+    auto const A = TA::array_to_eigen(a);
+
+    SECTION("one union mode") {
+      auto f = kramers_flip_array(a, container::svector<std::size_t>{1}, 1);
+      REQUIRE(f.trange() == a.trange());
+      auto const F = TA::array_to_eigen(f);
+      for (int p = 0; p < A.rows(); ++p)
+        for (int m = 0; m < 2 * n_h; ++m)
+          REQUIRE(std::abs(F(p, m) - sgn(m) * std::conj(A(p, flip(m)))) <
+                  1e-12);
+    }
+
+    SECTION("F∘F = −1") {
+      auto f = kramers_flip_array(a, container::svector<std::size_t>{1}, 1);
+      auto ff = kramers_flip_array(f, container::svector<std::size_t>{1}, 1);
+      auto const FF = TA::array_to_eigen(ff);
+      REQUIRE((FF + A).norm() < 1e-12);
+    }
+
+    SECTION("phase scales the result") {
+      auto f = kramers_flip_array(a, container::svector<std::size_t>{1}, 1);
+      auto g = kramers_flip_array(a, container::svector<std::size_t>{1}, -1);
+      auto const F = TA::array_to_eigen(f);
+      auto const G = TA::array_to_eigen(g);
+      REQUIRE((F + G).norm() < 1e-12);
+    }
+
+    SECTION("two union modes: signs multiply, conj applied once") {
+      Arr b(world, TA::TiledRange{uni, uni});
+      b.fill_random();
+      world.gop.fence();
+      auto const B = TA::array_to_eigen(b);
+      auto f = kramers_flip_array(b, container::svector<std::size_t>{0, 1}, 1);
+      auto const F = TA::array_to_eigen(f);
+      for (int m = 0; m < 2 * n_h; ++m)
+        for (int n = 0; n < 2 * n_h; ++n)
+          REQUIRE(std::abs(F(m, n) -
+                           sgn(m) * sgn(n) * std::conj(B(flip(m), flip(n)))) <
+                  1e-12);
+    }
+
+    SECTION("no modes: identity copy") {
+      auto f = kramers_flip_array(a, container::svector<std::size_t>{}, 1);
+      auto const F = TA::array_to_eigen(f);
+      REQUIRE((F - A).norm() < 1e-12);
+    }
+  }
+
+  SECTION("tensor of tensors") {
+    using Arr = TA::DistArray<TA::Tensor<TA::Tensor<Cplx>>, TA::DensePolicy>;
+    // outer {other, uni}, every inner tile a 2x3 block with deterministic
+    // values that encode the outer element ordinal
+    Arr a(world, TA::TiledRange{other, uni});
+    for (auto it = a.begin(); it != a.end(); ++it) {
+      TA::Tensor<TA::Tensor<Cplx>> t(it.make_range());
+      auto const& rng = t.range();
+      for (auto const& idx : rng) {
+        auto const ord = rng.ordinal(idx);
+        TA::Tensor<Cplx> inner(TA::Range{2, 3});
+        for (std::size_t j = 0; j < inner.size(); ++j)
+          inner.data()[j] = Cplx(1.0 * ord + 0.1 * j, 0.5 * idx[1] + 0.01 * j);
+        t[ord] = std::move(inner);
+      }
+      *it = std::move(t);
+    }
+    world.gop.fence();
+    auto f = kramers_flip_array(a, container::svector<std::size_t>{1}, 1);
+    REQUIRE(f.trange() == a.trange());
+    auto const h = static_cast<int>(half.tile_extent());
+    for (auto it = f.begin(); it != f.end(); ++it) {
+      auto const tidx = it.index();
+      auto const ftile = it->get();
+      auto sidx = tidx;
+      sidx[1] = tidx[1] >= h ? tidx[1] - h : tidx[1] + h;
+      auto const stile = a.find(sidx).get();
+      // the flipped tile lives at the target position ...
+      REQUIRE(ftile.range() == f.trange().make_tile_range(tidx));
+      // ... and holds sgn(target half) * conj of the source tile, element by
+      // element (congruent halves => same ordinal layout)
+      double const s = tidx[1] >= h ? -1.0 : 1.0;
+      REQUIRE(ftile.size() == stile.size());
+      for (std::size_t o = 0; o < ftile.size(); ++o) {
+        auto const& fi = ftile.data()[o];
+        auto const& si = stile.data()[o];
+        REQUIRE(fi.size() == si.size());
+        for (std::size_t j = 0; j < fi.size(); ++j)
+          REQUIRE(std::abs(fi.data()[j] - s * std::conj(si.data()[j])) < 1e-12);
+      }
+    }
+  }
+}

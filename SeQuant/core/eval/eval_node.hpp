@@ -12,6 +12,7 @@
 #include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/count_if.hpp>
@@ -31,6 +32,20 @@ ExprPtr linearize_eval_node(Node const& node) {
   if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
   if (node->op_type() == EvalOp::RealPart) return ex<RealPart>(lres);
   if (node->op_type() == EvalOp::ImagPart) return ex<ImagPart>(lres);
+  if (node->op_type() == EvalOp::KramersFlip) {
+    // diagnostics only: the denoted (flipped-flavour) contraction, without
+    // the conjugation and phase F applies
+    auto flipped = lres->clone();
+    flipped->visit(
+        [](ExprPtr& x) {
+          if (!x->is<Tensor>()) return;
+          auto& t = x->as<Tensor>();
+          kramers_flip_slots(t);
+          t.reset_tags();
+        },
+        /*atoms_only=*/true);
+    return flipped;
+  }
   SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
   return ex<Product>(
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});

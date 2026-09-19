@@ -52,6 +52,15 @@ enum class EvalOp {
   /// \brief The imaginary part of a scalar-valued EvalExpr; see RealPart.
   ImagPart,
 
+  ///
+  /// \brief The time-reversal flip of a tensor-valued EvalExpr over its
+  ///        Kramers-union modes: a unary node over the canonical ↑ partner
+  ///        (the right child is a Constant{1} sentinel) denoting
+  ///        kramers_flip_phase() · F(left), with F per union mode
+  ///        out[⇑] = +conj in[⇓], out[⇓] = −conj in[⇑]. F∘F = −1, so like
+  ///        Re/Im it is an IR node and not a CanonTransform channel.
+  KramersFlip,
+
 };
 
 ///
@@ -293,6 +302,25 @@ class EvalExpr {
   /// was respelled in place, e.g. the head overwrite in binarize(ResultExpr));
   /// no-op without identity erasure
   void refresh_identity_tensor();
+
+  /// \return for an EvalOp::KramersFlip node, the positions (in the left
+  ///         child's canon_indices()) of the Kramers-union modes F acts on
+  [[nodiscard]] container::svector<std::size_t> const& kramers_flip_modes()
+      const noexcept {
+    return kramers_flip_modes_;
+  }
+
+  /// \return for an EvalOp::KramersFlip node, the phase multiplying F(left)
+  [[nodiscard]] std::int8_t kramers_flip_phase() const noexcept {
+    return kramers_flip_phase_;
+  }
+
+  /// sets the flip modes and phase (EvalOp::KramersFlip node construction)
+  void set_kramers_flip(container::svector<std::size_t> modes,
+                        std::int8_t phase) {
+    kramers_flip_modes_ = std::move(modes);
+    kramers_flip_phase_ = phase;
+  }
 
   ///
   /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
@@ -546,6 +574,9 @@ class EvalExpr {
   /// see identity_tensor(): leaves only, set iff erasure changed the spelling
   std::optional<Tensor> identity_tensor_;
   mutable std::optional<std::size_t> layout_fingerprint_;
+  /// see kramers_flip_modes() / kramers_flip_phase(): EvalOp::KramersFlip only
+  container::svector<std::size_t> kramers_flip_modes_;
+  std::int8_t kramers_flip_phase_ = 1;
 
   /// folds layout_fingerprint() into hash_value_ for a tensor-valued leaf;
   /// called once canon_indices_ is final (see the definition)
@@ -701,6 +732,20 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
                                   const BinarizationOptions& opts,
                                   std::size_t& node_counter);
 }  // namespace impl
+
+///
+/// \brief An EvalOp::KramersFlip wrapper over \p inner: denotes
+///        \p phase · F(inner) with F the time-reversal flip over the
+///        Kramers-union modes \p modes (positions in inner->canon_indices());
+///        \p denoted is the wrapper's own result tensor (the flipped-flavour
+///        spelling). Identity = the child's salted hash, the op, the modes,
+///        the phase and the flipped layout; the child's phase / conj channels
+///        hoist into the wrapper's transform (F is linear and commutes with
+///        conjugation), as for Re/Im.
+///
+FullBinaryNode<EvalExpr> make_kramers_flip_node(
+    FullBinaryNode<EvalExpr> inner, container::svector<std::size_t> modes,
+    std::int8_t phase, Tensor denoted);
 
 ///
 /// \brief A type alias for the types that satisfy the eval_node concept.

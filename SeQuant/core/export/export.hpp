@@ -243,8 +243,9 @@ class GenerationVisitor {
         break;
       case EvalOp::RealPart:
       case EvalOp::ImagPart:
+      case EvalOp::KramersFlip:
         throw std::runtime_error(
-            "export of Re/Im eval nodes is not implemented yet");
+            "export of Re/Im/KramersFlip eval nodes is not implemented yet");
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:

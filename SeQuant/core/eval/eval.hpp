@@ -160,6 +160,7 @@ enum struct EvalMode {
   SumInplace,
   RealPart,
   ImagPart,
+  KramersFlip,
   Symmetrize,
   Antisymmetrize,
   Unknown
@@ -173,11 +174,12 @@ enum struct EvalMode {
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
-    return node->is_product()                    ? EvalMode::Product
-           : node->is_sum()                      ? EvalMode::Sum
-           : node->op_type() == EvalOp::RealPart ? EvalMode::RealPart
-           : node->op_type() == EvalOp::ImagPart ? EvalMode::ImagPart
-                                                 : EvalMode::Unknown;
+    return node->is_product()                       ? EvalMode::Product
+           : node->is_sum()                         ? EvalMode::Sum
+           : node->op_type() == EvalOp::RealPart    ? EvalMode::RealPart
+           : node->op_type() == EvalOp::ImagPart    ? EvalMode::ImagPart
+           : node->op_type() == EvalOp::KramersFlip ? EvalMode::KramersFlip
+                                                    : EvalMode::Unknown;
   }
 }
 
@@ -193,6 +195,7 @@ enum struct EvalMode {
          : (mode == EvalMode::SumInplace)     ? "SumInplace"
          : (mode == EvalMode::RealPart)       ? "RealPart"
          : (mode == EvalMode::ImagPart)       ? "ImagPart"
+         : (mode == EvalMode::KramersFlip)    ? "KramersFlip"
          : (mode == EvalMode::Symmetrize)     ? "Symmetrize"
          : (mode == EvalMode::Antisymmetrize) ? "Antisymmetrize"
                                               : "??";
@@ -671,23 +674,34 @@ template <typename Node>
 /// shaped-product hook (the caller calls this only when the hook declines), \c
 /// apply_phase + store, the in-place-Sum fast path, and all tally / trace /
 /// timing / \c last_op_flops sentinel.
-/// \brief Whether \p node is a unary IR op (EvalOp::RealPart / ImagPart):
-///        only its left operand is evaluated; the right child is the
-///        Constant(1) sentinel kept to preserve FullBinaryNode's invariant.
+/// \brief Whether \p node is a unary IR op (EvalOp::RealPart / ImagPart /
+///        KramersFlip): only its left operand is evaluated; the right child
+///        is the Constant(1) sentinel kept to preserve FullBinaryNode's
+///        invariant.
 template <meta::can_evaluate Node>
 [[nodiscard]] bool unary_op(Node const& node) noexcept {
   auto const op = node->op_type();
-  return op == EvalOp::RealPart || op == EvalOp::ImagPart;
+  return op == EvalOp::RealPart || op == EvalOp::ImagPart ||
+         op == EvalOp::KramersFlip;
 }
 
 template <meta::can_evaluate Node>
 [[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
                                      ResultPtr const& right) {
   if (unary_op(node)) {
-    // Unary Re/Im over the left operand; the right child is the Constant(1)
-    // sentinel.
-    return node->op_type() == EvalOp::RealPart ? left->real_part()
-                                               : left->imag_part();
+    // Unary Re/Im/KramersFlip over the left operand; the right child is the
+    // Constant(1) sentinel.
+    switch (*node->op_type()) {
+      case EvalOp::RealPart:
+        return left->real_part();
+      case EvalOp::ImagPart:
+        return left->imag_part();
+      case EvalOp::KramersFlip:
+        return left->kramers_flip(node->kramers_flip_modes(),
+                                  node->kramers_flip_phase());
+      default:
+        SEQUANT_ABORT("apply_one_op: unhandled unary op");
+    }
   }
   std::array<std::any, 3> const ann{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
