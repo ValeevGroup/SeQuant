@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1ae5f3f3d823d2807e0967773351b8939a:
+
+Define SEQUANT_CXX_COMPILER_ID_GNU
+==================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_CXX_COMPILER_ID_GNU
+   :project: SeQuant

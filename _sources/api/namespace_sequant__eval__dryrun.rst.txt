@@ -1,0 +1,81 @@
+
+.. _namespace_sequant__eval__dryrun:
+
+Namespace sequant::eval::dryrun
+===============================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__eval__dryrun__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_cache_config`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_cost_sink`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_dry_run_leaf_evaluator`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_home_fidelity`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_meter_report`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_1_1_payload`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested_1_1_payload`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_size_regime`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_cost_model`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_eval_expr_dry_run`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a2244d02eab00bcfb8e0121810c259992`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a27f6d3d523d64d15ac4eb833e4edd517`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a9935445cb9811c990ff064edc8e56905`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a88eb58ac0d9a061b679135285affdaa5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a09b68cc7e308cc28694531440c3a94bf`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a465c4dbe8d5c099e5278c4e8150e49f0`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a90935ca07acabe837c35455cd26527c1`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a450bf24b51b7c05ddb3a855f4e67c387`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a7ca944e2459dae5187cc2b3bf61465a5`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1aff69a4a6087c8ef52033ece0c56d3574`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a82a5dcee4a0bc83358616d42e6a4c5e5`

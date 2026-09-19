@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac73dac2d8b1a71104373331d0873951b:
+
+Template Function sequant::try_custom_eval
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::try_custom_eval(Node const&, CacheManager<N, FHC>&)
+   :project: SeQuant

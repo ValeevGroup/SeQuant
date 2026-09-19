@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a598a76ca01be09261d23687fcbe90de0:
+
+Function sequant::operator|(PrunableScalars, PrunableScalars)
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_export_generator.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator|(PrunableScalars, PrunableScalars)
+   :project: SeQuant

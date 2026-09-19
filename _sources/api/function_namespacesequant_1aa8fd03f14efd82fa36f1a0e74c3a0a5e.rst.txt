@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa8fd03f14efd82fa36f1a0e74c3a0a5e:
+
+Function sequant::operator!=(UsageSet, Usage)
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_export_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator!=(UsageSet, Usage)
+   :project: SeQuant

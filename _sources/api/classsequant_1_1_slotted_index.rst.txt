@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_slotted_index:
+
+Class SlottedIndex
+==================
+
+- Defined in :ref:`file_SeQuant_core_slotted_index.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::SlottedIndex
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a001984d7c3a0dc473be644d4c2a95c68:
+
+Function sequant::to_wstring(meta::integral auto)
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wstring(meta::integral auto)
+   :project: SeQuant

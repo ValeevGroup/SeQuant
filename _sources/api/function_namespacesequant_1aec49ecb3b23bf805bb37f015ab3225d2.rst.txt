@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aec49ecb3b23bf805bb37f015ab3225d2:
+
+Function sequant::to_string(IndexSpace::Type)
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_space.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_string(IndexSpace::Type)
+   :project: SeQuant

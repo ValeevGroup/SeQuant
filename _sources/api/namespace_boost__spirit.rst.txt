@@ -1,0 +1,20 @@
+
+.. _namespace_boost__spirit:
+
+Namespace boost::spirit
+=======================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_boost__spirit__x3`

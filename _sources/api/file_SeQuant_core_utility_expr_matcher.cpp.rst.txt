@@ -1,0 +1,74 @@
+
+.. _file_SeQuant_core_utility_expr_matcher.cpp:
+
+File expr_matcher.cpp
+=====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/expr_matcher.cpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_expr_matcher.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/expr_matcher.hpp`` (:ref:`file_SeQuant_core_utility_expr_matcher.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``compare`` (:ref:`file_SeQuant_core_eval_eval_node_compare.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a941ab676e5bd262c57e08168a771fb67`
+
+- :ref:`exhale_function_namespacesequant_1aa89503bc796fec0870edc38cd62d994f`
+
+- :ref:`exhale_function_namespacesequant_1a86af69353e0fcac42b4df65261aa9dd4`
+
+- :ref:`exhale_function_namespacesequant_1acf94fb1608331a9659ddaf1bcd869101`
+
+- :ref:`exhale_function_namespacesequant_1aef0f3e92704c71237e02c2baad28f97e`
+
+- :ref:`exhale_function_namespacesequant_1abfe36c8323247a65767daea30bb4ba99`
+
+- :ref:`exhale_function_namespacesequant_1a87a9001116c48f333418f605713ad48f`
+
+- :ref:`exhale_function_namespacesequant_1a5d9da83b5d9c4067646bb0ef4a094863`
+

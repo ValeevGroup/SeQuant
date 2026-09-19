@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a06f757a048bfa4e4a49137e75a8e3eb1:
+
+Template Function sequant::select_impl
+======================================
+
+- Defined in :ref:`file_SeQuant_core_tree_index.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::select_impl(ExprType&, const container::svector<std::size_t>&)
+   :project: SeQuant

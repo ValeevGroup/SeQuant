@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae61ee85fb3f62e70b70734fc8dd4bea1:
+
+Template Function sequant::batch_axis(meta::eval_node auto const&, IndexPredicate const&)
+=========================================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::batch_axis(meta::eval_node auto const&, IndexPredicate const&)
+   :project: SeQuant

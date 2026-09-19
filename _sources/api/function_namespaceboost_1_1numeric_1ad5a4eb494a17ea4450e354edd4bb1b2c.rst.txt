@@ -1,0 +1,14 @@
+.. _exhale_function_namespaceboost_1_1numeric_1ad5a4eb494a17ea4450e354edd4bb1b2c:
+
+Template Function boost::numeric::is_definite
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_interval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: boost::numeric::is_definite(const boost::numeric::interval<T>&)
+   :project: SeQuant

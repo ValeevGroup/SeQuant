@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1afaf36e29c08df83949893832f3979dad:
+
+Enum BraKetTypesetting
+======================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::BraKetTypesetting
+   :project: SeQuant

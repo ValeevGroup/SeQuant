@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1mbpt_1_1_closed_shell_c_c_spintrace_options:
+
+Struct ClosedShellCCSpintraceOptions
+====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::mbpt::ClosedShellCCSpintraceOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

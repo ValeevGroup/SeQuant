@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1f2111e048cde79c5edaf1371d65bf50:
+
+Template Function sequant::next_permutation_parity
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::next_permutation_parity(int&, BidirIt, BidirIt, Comp const&)
+   :project: SeQuant

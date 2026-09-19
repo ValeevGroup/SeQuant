@@ -1,0 +1,14 @@
+.. _exhale_define_aggregate_8hpp_1a7ee16addab865a129a5a613d53179997:
+
+Define SEQUANT_DESIGNATED_INIT_ONLY
+===================================
+
+- Defined in :ref:`file_SeQuant_core_utility_aggregate.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_DESIGNATED_INIT_ONLY
+   :project: SeQuant

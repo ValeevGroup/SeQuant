@@ -1,0 +1,87 @@
+
+.. _file_SeQuant_core_eval_backends_dryrun_size_regime.hpp:
+
+File size_regime.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval_backends_dryrun>` (``SeQuant/core/eval/backends/dryrun``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/backends/dryrun/size_regime.hpp``)
+------------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_backends_dryrun_size_regime.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_tiledarray_array_ops.hpp`)
+
+- ``cmath``
+
+- ``cstddef``
+
+- ``functional``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp`
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+- :ref:`namespace_sequant__eval__dryrun`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_size_regime`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a27f6d3d523d64d15ac4eb833e4edd517`
+

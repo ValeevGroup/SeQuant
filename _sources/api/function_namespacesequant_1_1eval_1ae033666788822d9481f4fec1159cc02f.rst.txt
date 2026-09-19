@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1ae033666788822d9481f4fec1159cc02f:
+
+Function sequant::eval::table_read
+==================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_registry.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::table_read(CellRegistry&, CellId)
+   :project: SeQuant

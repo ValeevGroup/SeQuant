@@ -1,0 +1,58 @@
+
+.. _file_SeQuant_core_tensor_network_vertex.hpp:
+
+File vertex.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_tensor_network>` (``SeQuant/core/tensor_network``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/tensor_network/vertex.hpp``)
+-------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_network_vertex.hpp.rst
+
+
+
+
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_tensor_network_v1.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.hpp`
+
+- :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1abc1f577f3e668a1f2fe7cc88e9f01104`
+

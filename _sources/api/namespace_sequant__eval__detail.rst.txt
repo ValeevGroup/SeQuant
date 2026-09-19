@@ -1,0 +1,273 @@
+
+.. _namespace_sequant__eval__detail:
+
+Namespace sequant::eval::detail
+===============================
+
+
+The deterministic sequencer  lowers the ``LegalitySchedule`` (per-value ``home_floor`` / ``per_axis`` roles) plus the ``RichSchedule`` (per-value ``first_use`` / ``last_use`` over the forest's single post-order static-point timeline) into an ``OrderedSchedule``. 
+
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+Detailed Description
+--------------------
+
+Static peak-profile analysis over an eval forest (see ``doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md``, section 5).
+
+The realized chain is per loop instance, not per axis type: one block per distinct fusion ``loop_slot`` appearing on a space across all cells, so a value carrying two same-space modes on different slots gets two nested loops, not one. A nest holding members of more than one pass additionally emits one sibling block per pass (latitude = pass), run in schedule order (see step 2b and ``forced_split_levels``). See the as-built design section 6.1, ``doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md``.
+
+Four-part algorithm, pure scheduling (no cost choice):
+
+1. The canonical chain
+For each batch axis space (``IndexSpace::base_key()``) appearing in any cell's ``CellLegality::per_axis`` (not just ``home_floor``  a ``None`` must still get a block to host its escape output, even though no cell is homed inside it in that role), one realized depth per distinct fusion ``loop_slot`` on it (``slots_of_space`` / ``type_slot``, resolved through ``fusion_slot``). Spaces are ordered by ``mode_order`` (most-significant/outermost first), ties/ unlisted spaces alphabetical, slot-ascending within a space  but that is only a stable tie-break: the nesting actually satisfies every ``RichSchedule::loop_order`` pair, and a cycle among those is a builder error. Loop members that never co-occur (no value is home-sliced on both) are then cut into disjoint nests by a union-find (``type_cluster`` / ``cluster_min``) and concatenated at root, rather than realized as one over-deep chain.
+
+2. Per-value placement: home ``BuildStep`` vs. escape output
+A value's ``CellLegality::per_axis`` has, by construction (see ``None`` own doc comment), only ``LoopLocal``, ``Reduction``, or ``LoopCarried`` entries (never the implicit ``LoopInvariant``). Two cases:
+
+- every ``per_axis`` entry is ``LoopLocal`` (this includes the empty case: no batch-axis dependence at all, e.g. water-20's ``I``(i,i;a,a))  the value is a plain ``BuildStep``. Its home block is the depth whose accumulated (root-to-depth) type set equals ``home_floor's`` type set (root if ``home_floor`` is empty), by set equality (an unmatched/non-prefix ``home_floor`` falls back to root). This value gets no ``outputs`` entry anywhere (see ``well_formed's`` single- producer invariant): "Transient" (design point 4) is realized as "produced by a \c BuildStep and nothing else", not as an explicit ``OutputKind::Transient`` ``outputs`` record, since ``well_formed::detail::collect_production_ids`` counts every ``outputs`` entry (regardless of ``OutputKind``) as an independent production site  a ``Transient`` ``outputs`` entry alongside the ``BuildStep`` would be flagged as double-production.
+
+- at least one ``per_axis`` entry is ``Reduction`` or ``LoopCarried`` ("escapes" that axis, per design point 4: ``Reduction`` -> accumulate-summed out, ``LoopCarried`` -> accumulate-scattered out)  the value has no ``BuildStep`` anywhere; instead it is recorded as an ``outputs`` entry (kind ``AccumulateSum`` / ``AccumulateScatter``) of each escaped instance's block. With more than one escape this is a multi-level escape chain: raw production at the deepest escape site, pure forwarding at every shallower one. The innermost escaped loop is where the accumulation the value's own node performs actually happens, so that block is its true production site; an outer escape on a shallower axis needs this value already complete before the outer loop can close  exactly consistent with an outer accumulator reading an inner one. A chain may legitimately skip a level the value is invariant on; that crossing is carried by residency plus ``produce_if_absent``, not by an escape (as-built section 6.2).
+
+
+
+3. Topological order within a block  a real topological sort
+Each block's own ``steps`` interleave its ``None`` (one per value homed there) with, if the chain continues, one nested child ``ScopeBlock`` ``Step`` for the next-deeper axis. These are ordered by ``detail::ordered_schedule_topo_sort_steps`` against a per-step dependency graph, not a scalar key alone (see below for why a scalar key cannot suffice), reconstructed from ``rich`` alone  no forest access needed:
+
+- global direct-dependency edges: for every ``OccurrenceRec`` of every value, its ``consumer_point`` names the static point of its structural parent node; resolving that point back to the value_id whose own occurrence starts there (``point_owner``, built once up front) recovers "this parent value directly reads that child value"  the exact same edges the forest itself encodes, without needing the forest.
+
+- Per level (one ``None`` own ``steps`` list, including root), each candidate step gets a ``None`` 
+
+   - a ``None`` ``produced`` = ``{v}``; its ``requires_`` = every value_id ``v`` directly reads (raw, unfiltered  irrelevant/ external entries are dropped by the topo-sort itself, since they simply never match a local ``produced`` set).
+
+   - a nested child block's ``produced`` = that block's own top-level ``outputs`` value_id's (what it makes visible to its own parent's siblings  its internal ``None`` and any further-nested child's content are never directly readable from outside it: by construction, a value crossing a block boundary as an operand must first have been resolved out of that axis, which is exactly the escape/``outputs`` case). Its ``requires_`` is the full, recursively bubbled external need of its whole subtree (built bottom-up alongside the block itself: ``requires_all(level)`` = (this level's own direct needs union its child's already-bubbled ``requires_all``) minus ``produced_all(level)``, where ``produced_all`` is everything ever produced anywhere in the subtree, recursively)  so a need that is only satisfiable several levels further out (e.g. a root-homed common factor consumed by a value nested two axes deep) still surfaces at whichever level can actually satisfy it.
+
+
+
+- Ties (two ready steps with no dependency relation to each other) are broken by ``tie_key`` ascending: a ``None`` is its value's own ``ValueCell::first_use``; a child block's is the min ``first_use`` over its own ``produced_all`` (deterministic, and  though correctness rests on the real edges, which enforce both directions  it places a block as early as its own true dependency slack allows).
+
+
+
+A single scalar key alone cannot express both directions of this at once. Taking the min ``first_use`` as the sort key itself is sound for "the block
+sorts before every true consumer", but carries no corresponding guarantee for "the block sorts after every true input it reads": a value produced by a same-level sibling ``BuildStep`` (e.g. a root-homed operand consumed by content nested inside a child block) can land, by raw point value, after the block's min-derived key, mis-ordering the schedule with no structural check to catch it. The topological sort above satisfies both directions by construction and is checked twice (no-cycle placement count, then a second pass confirming every edge survived the final order)  see ``ordered_schedule_topo_sort_steps's`` own doc comment.
+
+``policy`` is accepted for interface symmetry with the rest of the pipeline (every stage from ``analyze_legality`` onward threads it) and as a hook for a split threshold; the logic here only consults ``rich`` and ``legality``; the batchable-axis filtering ``policy`` would otherwise provide is already baked into ``CellLegality::per_axis`` by ``analyze_legality``.
+
+Two sizing primitives (``detail::home_depth_of``, ``detail::cell_footprint``), the forest linearization plus loop-identity pass (``compute_dag_boulevard``) and the interval-event sweep (``peak_profile_sweep``) that turns an eval forest into a ``PeakProfile``. ``compute_dag_boulevard`` is on the ordered runtime path: it produces the ``RichSchedule`` the schedule builder, the cell table and the executor all consume; ``peak_profile_sweep`` is the analysis-only half. 
+
+
+
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_cell_build_state`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_forced_split_levels`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_forgo_plan`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_forked_subchain`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_op_counts`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_registry_residency`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_schedule_dep_graph`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_schedule_depth_bucket`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_ordered_schedule_step_meta`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_output_site`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1detail_1_1_scope_block_axis_level`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a24999f9efdb7d5eddcc57faa18348b82`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a9e34f3be60d5b0ca9326990717d3bda7`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ad85e6428d56f451bf65eaf5274a80157`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a50f770c176ebe4734fd719f19fb88ab0`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1abc269e5fd581a8dc35556f0ea8caf4a5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a60c24d6c01aa66e50eadfbab6136b782`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a3c898732dfc098c82629e32525911d0e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a0e3a17a17055bf26e022b327b8d9ccdd`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a26ab15f1005ac9533f62dd4eacabe482`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a16bd50fb2fa96deda8b62233bd8f961c`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac3feb866fa67bfbe19247297a1ae9e13`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a69ee08a4c47c03b7ffd5335a434a7555`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a3bf194e4efdf09398aafc90e88e10067`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a553728e67ddaa3517eee8f9dc6608f33`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a516a46a5f9051f925595d2dc8a5db3de`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aefaf7243b3ae75210f6026be76917cdc`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae4e85d8312531ce6c389101417d59087`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a94996856a62a3bd447a1c4e363346fa5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a93e0345109707440e2e1fdce901a918f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae7681ae7e66d39c9ebb128d4d88ff012`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aafe6d1aa5a3204aa2ec9a26e5e055027`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af7af45cdd7947217db1a8c2f86e947f5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a6334bdc327c72f1b805bcea600875f14`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a76c7f46f927131ea700212954422d010`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aa6bd884057d3cd53bda1b176679e3e30`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aede505ea7fbed23bf435ac3d5f6ce789`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a09dffb55d6c98556013e18646d2b77ff`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a08684d78286a161e8c5b8ebb6dab81d1`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aeec72bbe7037856f1dd29a62ad3f785d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ab0e1603de7deedc1c8917245787d5c35`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a085c22bdcae4e4d77e395e16020e75d9`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a176a3ecdf6a482babd1b6e0ee7921054`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac4aa81ecd2f08081b3271c1f962b640a`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a96774a2759855f24583a32e2f824eec7`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a17fabae2fe08acbf67aa95fdfde40f3f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aa5d27162714f32ae8fe01c409286c21a`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aae1ff433eb226a757fad6594b061d194`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a9ab6b66f07ef2886111bec030fd9b332`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a426ce1089c2cc41fa029a5edec757d63`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a329ba4198c8f57657cfecf9da62c8903`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a9c57473ad3e183a2ba2ea5b7f10eb64d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac50e6ba316e2a60772e5c7bc4428c598`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a5481aaa2653012a47ab2dbd1b339517d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a02837a144ef0cf49159d15881e76529d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a2289bd77bbb0d7abdce8f0360458ee8e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1accbda2a2a229e9472f559af32c7ab141`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af3948c923b04884f7a2795006d21ae7e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a4d3a422e9770a8a916d3b8021130a7b2`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a18d48ea612ccd97fd2a94f6f0fb14a3a`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a82139a8b1abefcc970b4c597fdb6ffd6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a1d209df335d400fb205a1e0085a840d5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af2d414b5fd0dad7a2914d494c0ab9d1d`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae72afc5cb305cf82803e297450de4ed6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac54d861468872b617b6f4f08c01259ef`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a355d3cba1341e4a1bbadb328b4884fcc`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a6ba421e9061c39d6e4d1d7276424ba84`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a279cca1b4a9b491e1826f348f51a72f1`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1af7dd3895b94d03b33be244b6ef3cf5df`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1abfa0a45366f28c2f2aa272d2065f123f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a4d37168cb698146da97bec991263caf7`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac4fa5f03670f459c0c2b26013b877fce`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a391040682e3b9ddc4c3fce23456152d5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a0f6d6212808b15e4ad4574fbedd4f092`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a3bfd3fd62951dd34caf4c267fee29151`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a8741aad38ecbe64247d2e68ac18427d5`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a7aa723b2b55d4874be3743f77c071d4c`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ab968fb85c932efb0292043a4343934f8`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a2c331dbf92cd646bdd532f7da05051bd`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aeb405becb553a6219a0ee567b5e9617f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae274d93f19fca4f3233d534e84c7c6d7`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae09bdd7f78be7fc899d6b7b4a1c3a49e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ae9345a4d558348f9770e4ffd994ba99b`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a27576b94395ecb8919b7326e0514a557`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a3e47d9419925d8ee945b9926c6e2afb3`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a97bb3dea9db91cd66a521e3d5368ae84`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac7bf00fbcf94b9ceaf4c0ede8d6163db`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a325c83e8c23ef9425172bcad6ed7c356`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a99dd8a9be8eeb1fb48bda55cfacaed72`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ab6f49c5af49651817385eaf4ff727100`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a89efd189c49bdc4cfddf20372bd1bad6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1aa27236760eb1750907942c44b5a127eb`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a932608aad489196d8d8f71903e6e6d7e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1afbe23f4e7ee010257c61a5a1428ebf0e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a61841b282b8e0a92a11d31df37e4037e`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1detail_1ad4459d1336cdc3c5672eeaa6220744f4`

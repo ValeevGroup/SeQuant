@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a2683bd9a87c9fedba1b73b48675d5123:
+
+Function sequant::to_braket_symmetry
+====================================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_braket_symmetry(Hermiticity, Field)
+   :project: SeQuant

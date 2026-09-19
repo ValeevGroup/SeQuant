@@ -1,0 +1,73 @@
+
+.. _program_listing_file_SeQuant_core_eval_slicing_signature.hpp:
+
+Program Listing for File slicing_signature.hpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_slicing_signature.hpp>` (``SeQuant/core/eval/slicing_signature.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_SLICING_SIGNATURE_HPP
+   #define SEQUANT_EVAL_SLICING_SIGNATURE_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/dag_scope.hpp>
+   #include <SeQuant/core/eval/eval_node.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/meta.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <cstddef>
+   #include <optional>
+   #include <utility>
+   
+   namespace sequant {
+   
+   [[nodiscard]] inline std::optional<std::size_t> index_position(
+       meta::eval_node auto const& node, Index const& ix) {
+     auto const& idxs = node->canon_indices();
+     for (std::size_t p = 0; p < idxs.size(); ++p)
+       if (idxs[p] == ix) return p;
+     return std::nullopt;
+   }
+   
+   template <meta::eval_node Node>
+   [[nodiscard]] container::svector<std::optional<std::size_t>> slicing_signature(
+       Node const& node, container::svector<Index> const& modes) {
+     container::svector<std::optional<std::size_t>> sig;
+     sig.reserve(modes.size());
+     for (auto const& m : modes) sig.push_back(index_position(node, m));
+     return sig;
+   }
+   
+   template <typename Range>
+   [[nodiscard]] bool signatures_consistent(
+       Range const& occurrences, container::svector<Index> const& modes) {
+     std::optional<container::svector<std::optional<std::size_t>>> first;
+     for (auto const& n : occurrences) {
+       auto sig = slicing_signature(n, modes);
+       if (!first)
+         first = std::move(sig);
+       else if (*first != sig)
+         return false;
+     }
+     return true;
+   }
+   
+   [[nodiscard]] inline ModeToLevel mode_to_level_from_signature(
+       std::size_t rank, container::svector<std::optional<std::size_t>> const& sig,
+       container::svector<DagScopeLevel> const& levels) {
+     SEQUANT_ASSERT(sig.size() == levels.size());
+     ModeToLevel m2l;
+     m2l.by_mode.resize(rank);
+     for (std::size_t i = 0; i < sig.size(); ++i)
+       if (sig[i]) m2l.by_mode[*sig[i]] = levels[i];
+     return m2l;
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_SLICING_SIGNATURE_HPP

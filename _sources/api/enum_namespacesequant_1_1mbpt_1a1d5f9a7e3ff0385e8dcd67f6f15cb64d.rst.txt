@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1a1d5f9a7e3ff0385e8dcd67f6f15cb64d:
+
+Enum SpinConvention
+===================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::SpinConvention
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1dryrun_1a88eb58ac0d9a061b679135285affdaa5:
+
+Template Function sequant::eval::dryrun::compute_volatility
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::dryrun::compute_volatility(Forest const&, IsVolatile const&)
+   :project: SeQuant

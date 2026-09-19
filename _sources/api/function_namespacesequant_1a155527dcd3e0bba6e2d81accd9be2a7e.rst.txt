@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a155527dcd3e0bba6e2d81accd9be2a7e:
+
+Function sequant::non_canon_simplify(ResultExpr&&)
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::non_canon_simplify(ResultExpr&&)
+   :project: SeQuant

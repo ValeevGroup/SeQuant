@@ -1,0 +1,7 @@
+.. _page_sequant-symbolic-tensor-algebra-in-c:
+
+SeQuant: Symbolic Tensor Algebra in C++
+=======================================
+
+.. doxygenpage:: sequant-symbolic-tensor-algebra-in-c
+   :project: SeQuant

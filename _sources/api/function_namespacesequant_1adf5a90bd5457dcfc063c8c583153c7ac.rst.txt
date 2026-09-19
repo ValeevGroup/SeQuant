@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1adf5a90bd5457dcfc063c8c583153c7ac:
+
+Template Function sequant::home_scope
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_lifetime_mask.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::home_scope(Node const&)
+   :project: SeQuant

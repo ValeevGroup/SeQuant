@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1_cell_scope:
+
+Struct CellScope
+================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::CellScope
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

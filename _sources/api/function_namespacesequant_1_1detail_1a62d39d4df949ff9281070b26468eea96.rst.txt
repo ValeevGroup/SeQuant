@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a62d39d4df949ff9281070b26468eea96:
+
+Function sequant::detail::unimplemented_method
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_eval_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::unimplemented_method(std::string_view)
+   :project: SeQuant

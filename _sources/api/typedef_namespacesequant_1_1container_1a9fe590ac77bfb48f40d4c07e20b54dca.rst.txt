@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1container_1a9fe590ac77bfb48f40d4c07e20b54dca:
+
+Typedef sequant::container::multimap
+====================================
+
+- Defined in :ref:`file_SeQuant_core_container.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::container::multimap
+   :project: SeQuant

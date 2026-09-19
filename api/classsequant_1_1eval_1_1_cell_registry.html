@@ -1,0 +1,519 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Class CellRegistry - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/utilities/index.html">Utilities</a><input aria-label="Toggle navigation of Utilities" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../user/utilities/external_interface.html">External Interface</a><input aria-label="Toggle navigation of External Interface" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user/utilities/external_interface_v1.html">Driver File v1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user/utilities/external_interface_v2.html">Driver File v2</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1eval_1_1_cell_registry.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="class-cellregistry">
+<span id="exhale-class-classsequant-1-1eval-1-1-cell-registry"></span><h1>Class CellRegistry<a class="headerlink" href="#class-cellregistry" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_eval_cell_registry.hpp.html#file-sequant-core-eval-cell-registry-hpp"><span class="std std-ref">File cell_registry.hpp</span></a></p></li>
+</ul>
+<section id="nested-relationships">
+<h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1_cell_registry_1_1_slot.html#exhale-struct-structsequant-1-1eval-1-1-cell-registry-1-1-slot"><span class="std std-ref">Struct CellRegistry::Slot</span></a></p></li>
+</ul>
+</section>
+</section>
+<section id="class-documentation">
+<h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp class">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistryE">
+<span id="_CPPv3N7sequant4eval12CellRegistryE"></span><span id="_CPPv2N7sequant4eval12CellRegistryE"></span><span id="sequant::eval::CellRegistry"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">CellRegistry</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistryE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Runtime side of the cell table: the current result of each cell and its remaining life. This is the owner of those results (the explicit-value-cells design): it tracks the live byte total across held slots, enforces fill-once (a non-persistent cell produced twice without an intervening clear is a duplicate producer &amp;#8212; a bug, not a legitimate replay), and seeds/publishes persistent cells through a <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1eval_1_1_persistent_value_store.html#classsequant_1_1eval_1_1_persistent_value_store"><span class="std std-ref"><span class="pre">PersistentValueStore</span></span></a></code> so they survive across top-level evaluation calls without depending on the scope caches’ own persistence. Bound cells are cleared at the start of every batch of a loop instance they are bound to (the per-batch scratch reset, expressed on cells).</p>
+<p>Orientation convention, shared with the <code class="docutils literal notranslate"><span class="pre">CacheManager</span></code> scope caches: a cell holds the value in its node’s canonical orientation, and every reader applies that node’s own <code class="docutils literal notranslate"><span class="pre">canon_phase</span></code> once. A producer therefore stores <code class="docutils literal notranslate"><span class="pre">apply_phase(node,</span> <span class="pre">result)</span></code> &amp;#8212; <code class="docutils literal notranslate"><span class="pre">evaluate_impl</span></code> hands back the oriented result, and the phase is an involution &amp;#8212; matching <code class="docutils literal notranslate"><span class="pre">CacheManager::store_and_access</span></code> (<code class="docutils literal notranslate"><p><span class="pre">cache.store_and_access(node,</span></p>
+<p><span class="pre">apply_phase(node,</span> <span class="pre">rb))</span></p>
+</code>, readers <code class="docutils literal notranslate"><span class="pre">apply_phase</span></code> again, roots <code class="docutils literal notranslate"><span class="pre">mult_by_phase</span></code>). Storing the oriented value here instead would double-apply the phase at every read and flip the sign of every value whose canonicalization needed an odd permutation. </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistry12CellRegistryERK9CellTable17CellRegistryHooks">
+<span id="_CPPv3N7sequant4eval12CellRegistry12CellRegistryERK9CellTable17CellRegistryHooks"></span><span id="_CPPv2N7sequant4eval12CellRegistry12CellRegistryERK9CellTable17CellRegistryHooks"></span><span id="sequant::eval::CellRegistry::CellRegistry__CellTableCR.CellRegistryHooks"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1ad0ca7a47a062706294b4b987065001a5"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">CellRegistry</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structsequant_1_1eval_1_1_cell_table.html#_CPPv4N7sequant4eval9CellTableE" title="sequant::eval::CellTable"><span class="n"><span class="pre">CellTable</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">table</span></span>, <a class="reference internal" href="structsequant_1_1eval_1_1_cell_registry_hooks.html#_CPPv4N7sequant4eval17CellRegistryHooksE" title="sequant::eval::CellRegistryHooks"><span class="n"><span class="pre">CellRegistryHooks</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">hooks</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistry12CellRegistryERK9CellTable17CellRegistryHooks" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistry15seed_persistentEv">
+<span id="_CPPv3N7sequant4eval12CellRegistry15seed_persistentEv"></span><span id="_CPPv2N7sequant4eval12CellRegistry15seed_persistentEv"></span><span id="sequant::eval::CellRegistry::seed_persistent"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a4c961c67a12164c1b74016d4725d2284"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">seed_persistent</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistry15seed_persistentEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Seeds every persistent cell whose canonical hash is currently held by <code class="docutils literal notranslate"><span class="pre">hooks_.persistent</span></code> with the store’s value, without spending life (the value just arrived from a prior top-level call; nothing has read it yet this call). A no-op for a cell the store does not (yet) hold, and entirely a no-op when <code class="docutils literal notranslate"><span class="pre">hooks_.persistent</span></code> or <code class="docutils literal notranslate"><span class="pre">hooks_.hash_of</span></code> is unset. Intended to run once, right after construction, before the first read of this evaluation call (see <code class="docutils literal notranslate"><span class="pre">run_ordered_schedule_pre_results</span></code>). </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistry3setE6CellId9ResultPtr">
+<span id="_CPPv3N7sequant4eval12CellRegistry3setE6CellId9ResultPtr"></span><span id="_CPPv2N7sequant4eval12CellRegistry3setE6CellId9ResultPtr"></span><span id="sequant::eval::CellRegistry::set__CellId.ResultPtr"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a2025e27f33d1e52b2c2c24be7dc0617e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">set</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">c</span></span>, <a class="reference internal" href="typedef_namespacesequant_1a5e37715ae5f00b945abe669fd7ccde7b.html#_CPPv4N7sequant9ResultPtrE" title="sequant::ResultPtr"><span class="n"><span class="pre">ResultPtr</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">v</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistry3setE6CellId9ResultPtr" title="Link to this definition">¶</a><br /></dt>
+<dd><p><a class="reference internal" href="structsequant_1_1eval_1_1_production.html#structsequant_1_1eval_1_1_production"><span class="std std-ref">Production</span></a>: overwrites the cell’s current result and restores its life from the table (a new batch’s/iteration’s production of a cell whose prior life was drained starts fresh). Fill-once: a non-persistent cell already holding a value it was not read past nor cleared since (<code class="docutils literal notranslate"><span class="pre">filled_since_clear</span></code>) is a duplicate producer &amp;#8212; see <code class="docutils literal notranslate"><a class="reference internal" href="structsequant_1_1eval_1_1_cell_registry_hooks.html#structsequant_1_1eval_1_1_cell_registry_hooks_1a0bbaf9ba436e5e57f9f6c8777d3dff28"><span class="std std-ref"><span class="pre">CellRegistryHooks::strict_fill_once</span></span></a></code> (throws a named <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_exception.html#classsequant_1_1_exception"><span class="std std-ref"><span class="pre">Exception</span></span></a></code>, defaulting to the <code class="docutils literal notranslate"><span class="pre">SEQUANT_UT_STRICT_FILL_ONCE</span></code> env gate; a plain <code class="docutils literal notranslate"><span class="pre">SEQUANT_ASSERT</span></code> otherwise). Persistent cells are excluded from this check, exactly as <code class="docutils literal notranslate"><span class="pre">CacheManager::entry::store</span></code> excludes its own persistent entries: they legitimately re-store across batch replays and repeated top-level evaluation calls (e.g. successive CC iterations), often with no table-declared clear between productions. A persistent cell is published to <code class="docutils literal notranslate"><span class="pre">hooks_.persistent</span></code> (when set) on every production, mirroring what it now holds. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry4peekE6CellId">
+<span id="_CPPv3NK7sequant4eval12CellRegistry4peekE6CellId"></span><span id="_CPPv2NK7sequant4eval12CellRegistry4peekE6CellId"></span><span id="sequant::eval::CellRegistry::peek__CellIdC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1ac3302690ba380662e3b9205a5d54d409"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1a5e37715ae5f00b945abe669fd7ccde7b.html#_CPPv4N7sequant9ResultPtrE" title="sequant::ResultPtr"><span class="n"><span class="pre">ResultPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">peek</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">c</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry4peekE6CellId" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Non-decrementing peek: the cell’s current result, or null if unset. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistry4readE6CellId">
+<span id="_CPPv3N7sequant4eval12CellRegistry4readE6CellId"></span><span id="_CPPv2N7sequant4eval12CellRegistry4readE6CellId"></span><span id="sequant::eval::CellRegistry::read__CellId"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1ac6f3ca5565a0e8e809e32e4aa46416fa"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1a5e37715ae5f00b945abe669fd7ccde7b.html#_CPPv4N7sequant9ResultPtrE" title="sequant::ResultPtr"><span class="n"><span class="pre">ResultPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">read</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">c</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistry4readE6CellId" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Decrementing read: throws if the cell has no current result, or (for a non-persistent cell) its life is already exhausted. The read that spends a non-persistent cell’s last life also drops the registry’s own reference (the cell has no reader left this evaluation, and holding on would both pin the memory and make the buffer look shared to the reader that just took it &amp;#8212; the same thing <code class="docutils literal notranslate"><span class="pre">CacheManager::entry::access()</span></code> does at the same point for the scope cache). A later production of the cell restores both value and life via <code class="docutils literal notranslate"><span class="pre">set</span></code>.</p>
+<p>This is an overloaded member function, provided for convenience. It differs from the above function only in what argument(s) it accepts.</p>
+<p>non-null) whether this read spent the cell’s last life.</p>
+<p>In-place eligibility is re-derived from this table’s own <code class="docutils literal notranslate"><span class="pre">life</span></code> / <code class="docutils literal notranslate"><span class="pre">persistent</span></code> directly (see <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1eval_1_1_cell_read_resolver.html#classsequant_1_1eval_1_1_cell_read_resolver_1ae22a076c8f2021f6e4e9c902ed436a54"><span class="std std-ref"><span class="pre">CellReadResolver::operand_drained</span></span></a></code>, which queries <code class="docutils literal notranslate"><a class="reference internal" href="#classsequant_1_1eval_1_1_cell_registry_1afcd3c561513f6950289595f1a07c902d"><span class="std std-ref"><span class="pre">drained()</span></span></a></code> rather than this flag). The <code class="docutils literal notranslate"><span class="pre">exhausted</span></code> output tells a reader whether it took ownership of the buffer: the ordered executor’s Assemble step seeds its running sum with the first batch’s partial when this read exhausted the source, and with a <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_result.html#classsequant_1_1_result_1aabcf71514a299298d2152648e5bece12"><span class="std std-ref"><span class="pre">Result::clone</span></span></a></code> of it otherwise (a source with life left, or a persistent one, is still going to be read again from that very buffer, so accumulating into it would corrupt every later read). </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistry4readE6CellIdPb">
+<span id="_CPPv3N7sequant4eval12CellRegistry4readE6CellIdPb"></span><span id="_CPPv2N7sequant4eval12CellRegistry4readE6CellIdPb"></span><span id="sequant::eval::CellRegistry::read__CellId.bP"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a37da7b3be427c9d90578ec49e3adff42"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="typedef_namespacesequant_1a5e37715ae5f00b945abe669fd7ccde7b.html#_CPPv4N7sequant9ResultPtrE" title="sequant::ResultPtr"><span class="n"><span class="pre">ResultPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">read</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">c</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">exhausted</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistry4readE6CellIdPb" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistry14clear_bound_toERK7LoopKey">
+<span id="_CPPv3N7sequant4eval12CellRegistry14clear_bound_toERK7LoopKey"></span><span id="_CPPv2N7sequant4eval12CellRegistry14clear_bound_toERK7LoopKey"></span><span id="sequant::eval::CellRegistry::clear_bound_to__LoopKeyCR"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1ab49b00d1a3be4a6442ad8153fb56eac2"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">clear_bound_to</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1ab47a28027ee0e555c7488be74d376f5a.html#_CPPv4N7sequant4eval7LoopKeyE" title="sequant::eval::LoopKey"><span class="n"><span class="pre">LoopKey</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">k</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistry14clear_bound_toERK7LoopKey" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Batch start: drops every cell bound to loop instance <code class="docutils literal notranslate"><span class="pre">k</span></code> &amp;#8212; the per-batch scratch reset, expressed on cells instead of on a whole scope’s storage. A cell is bound to <code class="docutils literal notranslate"><span class="pre">k</span></code> either explicitly (<code class="docutils literal notranslate"><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ad85e6428d56f451bf65eaf5274a80157.html#namespacesequant_1_1eval_1_1detail_1ad85e6428d56f451bf65eaf5274a80157"><span class="std std-ref"><span class="pre">detail::bound_instances</span></span></a><span class="pre">:</span></code> a carried <code class="docutils literal notranslate"><span class="pre">sliced</span></code> position or a <code class="docutils literal notranslate"><span class="pre">partial_over</span></code> reduction on <code class="docutils literal notranslate"><span class="pre">k</span></code>) or implicitly, for a non-persistent cell whose own declared home scope’s deepest loop instance is <code class="docutils literal notranslate"><span class="pre">k:</span></code> the executor re-runs whatever this cell’s tree position computes fresh every batch of that position’s innermost enclosing loop (a step’s own block for a Build; a block-close aggregation for an Assemble), independent of whether the value it holds happens to carry <code class="docutils literal notranslate"><span class="pre">k</span></code> as a mode or a reduced axis &amp;#8212; a “whole” cell unsliced and unsummed on its own home loop is still re-run every batch of it, only its declared life/persistence say how long the result is then read for. A persistent cell is never cleared here (by definition it is bound to no loop instance &amp;#8212; see <code class="docutils literal notranslate"><a class="reference internal" href="structsequant_1_1eval_1_1_table_cell.html#structsequant_1_1eval_1_1_table_cell_1aa1750c17c2e7aa7922f00b742b260c73"><span class="std std-ref"><span class="pre">TableCell::persistent</span></span></a></code> &amp;#8212; so neither check ever matches it; the explicit <code class="docutils literal notranslate"><span class="pre">continue</span></code> is a defensive redundant guard). A <code class="docutils literal notranslate"><span class="pre">produce_if_absent</span></code><p>cell is the one exception to the implicit rule: it is precisely a cell whose home scope sits inside a loop it is not bound to, and the table says it is produced on first visit and reused on every later batch of that loop (the executor’s Build step skips its production while it is resident), so the implicit “its scope’s innermost</p>
+<p>loop is \p k” clear would defeat the flag by dropping it at every batch boundary. Such a cell is cleared only on an instance it is genuinely bound to. Also resets the fill-once mark of every cell it clears: the boundary this crosses is exactly the one</p>
+<code class="docutils literal notranslate"><span class="pre">set's</span></code> fill-once check must not treat as a duplicate producer across. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4eval12CellRegistry5forgoE6CellIdNSt6size_tE">
+<span id="_CPPv3N7sequant4eval12CellRegistry5forgoE6CellIdNSt6size_tE"></span><span id="_CPPv2N7sequant4eval12CellRegistry5forgoE6CellIdNSt6size_tE"></span><span id="sequant::eval::CellRegistry::forgo__CellId.std::s"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a4f9dab7ad192a843186fb525aeaa473d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">forgo</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">c</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">count</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4eval12CellRegistry5forgoE6CellIdNSt6size_tE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Spends <code class="docutils literal notranslate"><span class="pre">count</span></code> of cell <code class="docutils literal notranslate"><span class="pre">c's</span></code> declared reads without taking the value: the accounting half of a read the executor decided not to perform. A consumer the runtime cache-halt skipped (nothing left this evaluation reads its result, or a <code class="docutils literal notranslate"><span class="pre">produce_if_absent</span></code> cell that is resident and so is not re-produced) never calls <code class="docutils literal notranslate"><span class="pre">read</span></code>, so without this its source’s life would never reach zero &amp;#8212; the source would stay resident to the end of the evaluation (pinning the memory) and keep looking shared to every later reader, which is exactly what disables in-place accumulation.</p>
+<p>Releases the value when the life reaches zero, exactly as the draining <code class="docutils literal notranslate"><span class="pre">read</span></code> does (bytes accounted, fill-once mark cleared so a later production of the cell is a fresh one). A no-op for a persistent cell, which never drains, and for <code class="docutils literal notranslate"><span class="pre">count</span></code> == 0. Throws when <code class="docutils literal notranslate"><span class="pre">count</span></code> exceeds the remaining life: forgoing more reads than the table declared is an accounting bug in the caller, and silently saturating would release a value another consumer is still owed (see <code class="docutils literal notranslate"><span class="pre">remaining_life</span></code>, which the ordered executor consults for the one case where a skipped consumer’s visits legitimately outnumber one production’s budget). </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry14remaining_lifeE6CellId">
+<span id="_CPPv3NK7sequant4eval12CellRegistry14remaining_lifeE6CellId"></span><span id="_CPPv2NK7sequant4eval12CellRegistry14remaining_lifeE6CellId"></span><span id="sequant::eval::CellRegistry::remaining_life__CellIdC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a40e744ea3df96819555208a5b2257774"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">remaining_life</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">c</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry14remaining_lifeE6CellId" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>cell <code class="docutils literal notranslate"><span class="pre">c's</span></code> remaining declared life (0 for a spent cell; a persistent cell’s life is never spent, so this is informational there). </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry10live_bytesEv">
+<span id="_CPPv3NK7sequant4eval12CellRegistry10live_bytesEv"></span><span id="_CPPv2NK7sequant4eval12CellRegistry10live_bytesEv"></span><span id="sequant::eval::CellRegistry::live_bytesC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a101974ed028bbf1b29abf14993880a0f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">live_bytes</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry10live_bytesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the sum of <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_result.html#classsequant_1_1_result_1a67d784b304df0386e82bbb1af2363b2f"><span class="std std-ref"><span class="pre">Result::size_in_bytes()</span></span></a></code> over every slot currently holding a value (persistent and non-persistent alike). </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0ENK7sequant4eval12CellRegistry13for_each_liveEvRR1F">
+<span id="_CPPv3I0ENK7sequant4eval12CellRegistry13for_each_liveERR1F"></span><span id="_CPPv2I0ENK7sequant4eval12CellRegistry13for_each_liveERR1F"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">F</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a8d0ac7315c4681b2a01bb5e877d60581"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">for_each_live</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I0ENK7sequant4eval12CellRegistry13for_each_liveEvRR1F" title="sequant::eval::CellRegistry::for_each_live::F"><span class="n"><span class="pre">F</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">f</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I0ENK7sequant4eval12CellRegistry13for_each_liveEvRR1F" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Invokes <code class="docutils literal notranslate"><span class="pre">f(CellId,</span> <span class="pre">ResultPtr</span> <span class="pre">const&amp;)</span></code> for every slot currently holding a value &amp;#8212; the registry-side source <code class="docutils literal notranslate"><span class="pre">on_peak_liveset</span></code> walks once storage moves fully onto the table. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry7drainedE6CellId">
+<span id="_CPPv3NK7sequant4eval12CellRegistry7drainedE6CellId"></span><span id="_CPPv2NK7sequant4eval12CellRegistry7drainedE6CellId"></span><span id="sequant::eval::CellRegistry::drained__CellIdC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1afcd3c561513f6950289595f1a07c902d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">drained</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">c</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry7drainedE6CellId" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>whether cell <code class="docutils literal notranslate"><span class="pre">c</span></code> is a spent non-persistent cell: no value held and no life left to spend. A persistent cell is never drained, so it is never reported as drained even when it happens to hold no value yet (e.g. before its first production this evaluation). </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry5tableEv">
+<span id="_CPPv3NK7sequant4eval12CellRegistry5tableEv"></span><span id="_CPPv2NK7sequant4eval12CellRegistry5tableEv"></span><span id="sequant::eval::CellRegistry::tableC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a61c4452d9dddabbc67cdb6ade180e296"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="structsequant_1_1eval_1_1_cell_table.html#_CPPv4N7sequant4eval9CellTableE" title="sequant::eval::CellTable"><span class="n"><span class="pre">CellTable</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">table</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry5tableEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry13build_cell_atENSt6size_tERK9CellScope">
+<span id="_CPPv3NK7sequant4eval12CellRegistry13build_cell_atENSt6size_tERK9CellScope"></span><span id="_CPPv2NK7sequant4eval12CellRegistry13build_cell_atENSt6size_tERK9CellScope"></span><span id="sequant::eval::CellRegistry::build_cell_at__std::s.CellScopeCRC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a6b08a48d4c8f592d059345bb36f5143d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">build_cell_at</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">vid</span></span>, <a class="reference internal" href="structsequant_1_1eval_1_1_cell_scope.html#_CPPv4N7sequant4eval9CellScopeE" title="sequant::eval::CellScope"><span class="n"><span class="pre">CellScope</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">scope</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry13build_cell_atENSt6size_tERK9CellScope" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry16assemble_cell_atENSt6size_tERK9CellScope">
+<span id="_CPPv3NK7sequant4eval12CellRegistry16assemble_cell_atENSt6size_tERK9CellScope"></span><span id="_CPPv2NK7sequant4eval12CellRegistry16assemble_cell_atENSt6size_tERK9CellScope"></span><span id="sequant::eval::CellRegistry::assemble_cell_at__std::s.CellScopeCRC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1ae5d172442a6653a79f24605b52f4323f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">assemble_cell_at</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">vid</span></span>, <a class="reference internal" href="structsequant_1_1eval_1_1_cell_scope.html#_CPPv4N7sequant4eval9CellScopeE" title="sequant::eval::CellScope"><span class="n"><span class="pre">CellScope</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">scope</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry16assemble_cell_atENSt6size_tERK9CellScope" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry9leaf_cellENSt6size_tE">
+<span id="_CPPv3NK7sequant4eval12CellRegistry9leaf_cellENSt6size_tE"></span><span id="_CPPv2NK7sequant4eval12CellRegistry9leaf_cellENSt6size_tE"></span><span id="sequant::eval::CellRegistry::leaf_cell__std::sC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1ac56dc9f7a8902ced0177dbd98a101a95"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">leaf_cell</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">vid</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry9leaf_cellENSt6size_tE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant4eval12CellRegistry7cell_ofENSt6size_tERK9CellScope">
+<span id="_CPPv3NK7sequant4eval12CellRegistry7cell_ofENSt6size_tERK9CellScope"></span><span id="_CPPv2NK7sequant4eval12CellRegistry7cell_ofENSt6size_tERK9CellScope"></span><span id="sequant::eval::CellRegistry::cell_of__std::s.CellScopeCRC"></span><span class="target" id="classsequant_1_1eval_1_1_cell_registry_1a2b65c6d4c9ce3179aea7140cb4586d91"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">optional</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="typedef_namespacesequant_1_1eval_1a520edd083aecef67d3a7f9dd2a81a18f.html#_CPPv4N7sequant4eval6CellIdE" title="sequant::eval::CellId"><span class="n"><span class="pre">CellId</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">cell_of</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">vid</span></span>, <a class="reference internal" href="structsequant_1_1eval_1_1_cell_scope.html#_CPPv4N7sequant4eval9CellScopeE" title="sequant::eval::CellScope"><span class="n"><span class="pre">CellScope</span></span></a><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">scope</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4eval12CellRegistry7cell_ofENSt6size_tERK9CellScope" title="Link to this definition">¶</a><br /></dt>
+<dd><p>The value’s form visible at <code class="docutils literal notranslate"><span class="pre">scope</span></code>, by residency (not exact scope equality) &amp;#8212; the table’s own visibility contract, decided by the one shared rule <code class="docutils literal notranslate"><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ac3feb866fa67bfbe19247297a1ae9e13.html#namespacesequant_1_1eval_1_1detail_1ac3feb866fa67bfbe19247297a1ae9e13"><span class="std std-ref"><span class="pre">detail::deepest_visible_form</span></span></a></code> states (deepest resident form wins; at equal depth the earlier candidate does), which the table builder’s read-source selection uses too. Build cells are offered first, which is how a tie prefers a Build. Leaf cells are not candidates here (see <code class="docutils literal notranslate"><span class="pre">leaf_cell</span></code>): a leaf has no scope in this sense. </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Sep 19, 2026 6:57:57 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Class CellRegistry</a><ul>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistryE"><code class="docutils literal notranslate"><span class="pre">sequant::eval::CellRegistry</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistry12CellRegistryERK9CellTable17CellRegistryHooks"><code class="docutils literal notranslate"><span class="pre">CellRegistry()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistry15seed_persistentEv"><code class="docutils literal notranslate"><span class="pre">seed_persistent()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistry3setE6CellId9ResultPtr"><code class="docutils literal notranslate"><span class="pre">set()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry4peekE6CellId"><code class="docutils literal notranslate"><span class="pre">peek()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistry4readE6CellId"><code class="docutils literal notranslate"><span class="pre">read()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistry4readE6CellIdPb"><code class="docutils literal notranslate"><span class="pre">read()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistry14clear_bound_toERK7LoopKey"><code class="docutils literal notranslate"><span class="pre">clear_bound_to()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4eval12CellRegistry5forgoE6CellIdNSt6size_tE"><code class="docutils literal notranslate"><span class="pre">forgo()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry14remaining_lifeE6CellId"><code class="docutils literal notranslate"><span class="pre">remaining_life()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry10live_bytesEv"><code class="docutils literal notranslate"><span class="pre">live_bytes()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0ENK7sequant4eval12CellRegistry13for_each_liveEvRR1F"><code class="docutils literal notranslate"><span class="pre">for_each_live()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry7drainedE6CellId"><code class="docutils literal notranslate"><span class="pre">drained()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry5tableEv"><code class="docutils literal notranslate"><span class="pre">table()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry13build_cell_atENSt6size_tERK9CellScope"><code class="docutils literal notranslate"><span class="pre">build_cell_at()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry16assemble_cell_atENSt6size_tERK9CellScope"><code class="docutils literal notranslate"><span class="pre">assemble_cell_at()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry9leaf_cellENSt6size_tE"><code class="docutils literal notranslate"><span class="pre">leaf_cell()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant4eval12CellRegistry7cell_ofENSt6size_tERK9CellScope"><code class="docutils literal notranslate"><span class="pre">cell_of()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

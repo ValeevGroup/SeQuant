@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1aeaf2e93e83bfd583129c9703125e3491:
+
+Function sequant::log::rss
+==========================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::rss()
+   :project: SeQuant

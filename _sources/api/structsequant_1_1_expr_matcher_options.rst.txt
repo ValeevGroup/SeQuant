@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_expr_matcher_options:
+
+Struct ExprMatcherOptions
+=========================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr_matcher.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::ExprMatcherOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

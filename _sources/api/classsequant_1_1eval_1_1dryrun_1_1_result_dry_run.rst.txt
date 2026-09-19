@@ -1,0 +1,36 @@
+.. _exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run:
+
+Class ResultDryRun
+==================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_1_1_payload`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Result`` (:ref:`exhale_class_classsequant_1_1_result`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::eval::dryrun::ResultDryRun
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

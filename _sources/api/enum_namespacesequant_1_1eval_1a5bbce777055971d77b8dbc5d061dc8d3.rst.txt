@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1eval_1a5bbce777055971d77b8dbc5d061dc8d3:
+
+Enum OutputKind
+===============
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::eval::OutputKind
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1a3225ecc2a6b315dd1736d6817086b975:
+
+Template Function sequant::log::slice_home_annot
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::slice_home_annot(Node const&, BatchContext const&)
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_implicit_context_resetter:
+
+Template Struct ImplicitContextResetter
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_utility_context.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::ImplicitContextResetter
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

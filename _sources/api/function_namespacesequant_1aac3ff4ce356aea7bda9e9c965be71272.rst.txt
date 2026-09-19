@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aac3ff4ce356aea7bda9e9c965be71272:
+
+Template Function sequant::max_space_size_idx
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_export_reordering_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::max_space_size_idx(Range&&)
+   :project: SeQuant
