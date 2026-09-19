@@ -145,6 +145,21 @@ option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors"
 #      (asserts are only disabled in the optimized-and-not-debuggable build
 #      types) so that SeQuant and the dependencies it builds from source agree
 #      out of the box; see FindOrFetch{TiledArray,BTAS}.cmake for the forwarding
+# N.B. CMAKE_BUILD_TYPE only reflects the active configuration for a
+#      single-config generator (Ninja, Makefiles); for a multi-config
+#      generator (Visual Studio, Ninja Multi-Config) it is always empty at
+#      configure time; the actual configuration is chosen later, per build
+#      invocation, via --config. Unlike the test-skipping logic elsewhere in
+#      this tree, this cannot be worked around with a generator expression:
+#      SEQUANT_ASSERT_BEHAVIOR is a single cache string forwarded verbatim
+#      into TA_ASSERT_POLICY/BTAS_ASSERT_POLICY (see FindOrFetchTiledArray/
+#      BTAS.cmake), and those in turn are baked into TiledArray's/BTAS's own
+#      (non-per-config) compile definitions -- a real per-config default
+#      would need upstream changes there too. Falling through to the ABORT
+#      (assertions enabled) branch below is the safe direction to be wrong
+#      in: a multi-config Release build pays for assertion checks it may not
+#      have wanted, rather than a Debug build silently losing them; pass an
+#      explicit -DSEQUANT_ASSERT_BEHAVIOR=IGNORE to opt out per build tree.
 if (CMAKE_BUILD_TYPE STREQUAL Release OR
     CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
     set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
