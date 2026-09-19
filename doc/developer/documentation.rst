@@ -9,7 +9,7 @@ The API documentation can be generated in two modes:
 1. **Standalone Doxygen (default)**: Fast generation using modern `Doxygen Awesome CSS <https://github.com/jothepro/doxygen-awesome-css>`_ theme
 2. **Breathe/Exhale integration**: Slower but integrates API docs directly into Sphinx (enable with ``-DSEQUANT_BUILD_DOCS_API_BREATHEEXHALE=ON``)
 
-For building the documentation locally, configure CMake with ``-DSEQUANT_BUILD_DOCS=ON``.
+For building the documentation locally, configure `CMake <https://en.wikipedia.org/wiki/CMake>`_ with ``-DSEQUANT_BUILD_DOCS=ON``.
 
 The ``doc`` directory contains the documentation for SeQuant, including user guides, API references, and advanced internal documentation.
 
@@ -78,9 +78,12 @@ The documentation setup works through a chain of tools that transform code comme
 Adding New Documentation
 ------------------------
 
-All user-facing documentation should be added to the ``.sphinx/user/`` directory. Internal documentation can be added to the ``.sphinx/developer/`` directory.
+All user-facing documentation should be added to the ``.sphinx/user/`` directory. Internal documentation can be added to the ``.sphinx/developer/``
+directory.
 
-New documentation files should be written in reStructuredText format and included in the appropriate ``toctree`` section of ``index.rst`` files. For a quick reference on reStructuredText syntax, see `this sheet <https://github.com/ralsina/rst-cheatsheet/blob/master/rst-cheatsheet.rst>`_.
+New documentation files should be written in `reStructuredText <https://en.wikipedia.org/wiki/ReStructuredText>`_ format and included in the
+appropriate ``toctree`` section of ``index.rst`` files. For a quick reference on reStructuredText syntax, see
+`this sheet <https://github.com/ralsina/rst-cheatsheet/blob/master/rst-cheatsheet.rst>`_.
 
 Examples of reStructuredText Syntax
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -110,7 +113,7 @@ You can also use other characters for different levels:
     ^^^^^^^^^^^^^^^
 
     Heading Level 5
-    ^^^^^^^^^^^^^^^
+    """""""""""""""
 
 Lists
 ^^^^^
@@ -194,7 +197,8 @@ For inline code snippets, use backticks:
 API Documentation
 -----------------
 
-API documentation is automatically generated from the source code using Doxygen and Exhale. Below is a minimal example of how to document a function using Doxygen-style comments:
+API documentation is automatically generated from the source code using Doxygen and Exhale. Below is a minimal example of how to document a function
+using Doxygen-style comments:
 
 .. code-block:: cpp
 

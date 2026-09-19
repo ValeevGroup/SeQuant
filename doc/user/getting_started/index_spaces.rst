@@ -28,15 +28,15 @@ This and other vocabularies commonly used in quantum many-body context are suppo
    :end-before: end-snippet-2
    :dedent: 2
 
-Bitset representation of index spaces allows to define set-theoretic operations naturally. Bitset-based representation is used not only for index space *type* attribute (:code:`IndexSpace::Type`) but also for the *quantum numbers* attribute (:code:`IndexSpace::QuantumNumbers`). The latter can be used to represent spin quantum numbers, particle types, etc.
+Bitset representation of index spaces allows to define set-theoretic operations naturally. Bitset-based representation is used not only for index space *type* attribute (:code:`IndexSpace::Type`) but also for the *quantum numbers* attribute (:code:`IndexSpace::QuantumNumbers`). The latter can be used to represent spin `quantum numbers <https://en.wikipedia.org/wiki/Quantum_number>`_, particle types, etc.
 The main difference of the last example with the original example is that the :code:`make_min_sr_spaces()` factory changes the quantum numbers used by default (:code:`mbpt::Spin::any`) to make spin algebraic manipulations (like tracing out spin degrees of freedom) easier. Users can create their own definitions to suit their needs, but the vast majority of users will not need to venture outside of the predefined vocabularies.
 
-Notice that the set-theoretic operations are only partially automated. It is the user's responsibility to define any and all unions and intersections of base spaces that they may encounter in their context. For this reason :class:`sequant::IndexSpaceRegistry` has its own :code:`unIon()` and :code:`intersection()` methods that perform error checking to ensure that only registered spaces are defined.
+Notice that the set-theoretic operations are only partially automated. It is the user's responsibility to define any and all unions and intersections of base spaces that they may encounter in their context. For this reason :class:`sequant::IndexSpaceRegistry` has its own :code:`add_unIon()` and :code:`add_intersection()` methods that perform error checking to ensure that only registered spaces are defined.
 
 Quasiparticles
 ~~~~~~~~~~~~~~~
 
-In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. The choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling :code:`get_default_context()`, changed via :code:`set_default_context()`, and reset to the default via :code:`reset_default_context()`:
+Index spaces interact with another important piece of context: the choice of reference `vacuum state <https://en.wikipedia.org/wiki/Vacuum_state>`_. In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles — whose excitations are called `quasiparticles <https://en.wikipedia.org/wiki/Quasiparticle>`_ — rather than with respect to the genuine vacuum with zero particles. The choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling :code:`get_default_context()`, changed via :code:`set_default_context()`, and reset to the default via :code:`reset_default_context()` (see the User Guide's :doc:`../guide/context` for the full picture, including the one-line :code:`mbpt::load()` shortcut for standard quantum-chemistry conventions):
 
 .. literalinclude:: /examples/user/getting_started/index_spaces.cpp
    :language: cpp
@@ -52,7 +52,7 @@ However, to deal with the single-product vacuum it is necessary to register at l
    :end-before: end-snippet-2
    :dedent: 2
 
-It is also necessary to specify the *complete* space (union of all base spaces) so that the the space of unoccupied SP states can be determined:
+It is also necessary to specify the *complete* space (union of all base spaces) so that the space of unoccupied SP states can be determined:
 
 .. literalinclude:: /examples/user/getting_started/index_spaces.cpp
    :language: cpp
@@ -74,4 +74,4 @@ produces
 Note that:
 
 * the tilde in :math:`\tilde{a}` denotes normal order with respect to single-product vacuum
-* Einstein summation convention is implied, i.e., indices that appear twice in a given product (once in superscript, once in subscript) are summed over.
+* `Einstein summation convention <https://en.wikipedia.org/wiki/Einstein_notation>`_ is implied, i.e., indices that appear twice in a given product (once in superscript, once in subscript) are summed over.

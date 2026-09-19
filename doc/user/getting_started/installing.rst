@@ -41,7 +41,7 @@ Optional
 ~~~~~~~~
 * `TiledArray <https://github.com/ValeevGroup/tiledarray.git>`_ - for building coupled-cluster evaluation tests
 
-.. note:: If not found, SeQuant can download and build all dependencies other than CMake and the C++ compiler, provided `git <https://git-scm.com/>`
+.. note:: If not found, SeQuant can download and build all dependencies other than CMake and the C++ compiler, provided `git <https://git-scm.com/>`_
    is available on the system.
 
 
@@ -72,10 +72,10 @@ Useful CMake Variables
      - Skip long test cases within unit and integration tests.
    * - SEQUANT_BTAS
      - OFF
-     - SeQuant will look for (or build) `BTAS tensor library <https://github.com/ValeevGroup/BTAS>` and enable its use as an evaluation backend.
+     - SeQuant will look for (or build) `BTAS tensor library <https://github.com/ValeevGroup/BTAS>`_ and enable its use as an evaluation backend.
    * - SEQUANT_TILEDARRAY
      - OFF
-     - SeQuant will look for (or build) `TiledArray tensor framework <https://github.com/ValeevGroup/TiledArray>` and enable its use as an evaluation backend.
+     - SeQuant will look for (or build) `TiledArray tensor framework <https://github.com/ValeevGroup/TiledArray>`_ and enable its use as an evaluation backend.
    * - SEQUANT_TAPP
      - OFF
      - SeQuant will look for (or build)  `TAPP <https://github.com/TAPPorg/reference-implementation>`_ and enable its use as an evaluation backend.
@@ -102,7 +102,8 @@ Useful CMake Variables
      - If set to ON, SeQuant will download and build Boost if it is not found by ``find_package(Boost ...)``; this is not recommended.
    * - ENABLE_TBB
      - OFF
-     - Enable TBB as an optional prerequisite for C++'s parallel STL
+     - Enable `TBB <https://en.wikipedia.org/wiki/Threading_Building_Blocks>`_ as an optional prerequisite for C++'s `parallel STL
+       <https://en.cppreference.com/w/cpp/algorithm/execution_policy_tag_t>`_
    * - SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
      - ON
      - If set to `OFF` the default context must be initialized and manipulated from single thread only (most users will want to do this).
@@ -116,11 +117,12 @@ Useful CMake Variables
        an explicit ``-DTA_ASSERT_POLICY=...``/``-DBTAS_ASSERT_POLICY=...`` wins, and a later change of ``SEQUANT_ASSERT_BEHAVIOR``
        does not re-seed them: set them explicitly, or use a fresh build directory.
    * - SEQUANT_LTO
-     - empty (decide per target type): `ON` for static libraries if the compiler supports "fat" LTO objects, `OFF` otherwise. `ON` for
-       other target types (shared libs, executables, etc.). `OFF` for all targets when SeQuant is consumed as a subproject.
-     - Controls whether SeQuant will be built with link-time optimizations (LTO) in non-debug builds (`CMAKE_BUILD_TYPE` != `Debug`). Set to
-       `ON` or `OFF` to override the per-target-type default for all SeQuant targets; an explicit setting is honored regardless of whether
-       SeQuant is the top-level project.
+     - context-dependent — see Description
+     - Controls whether SeQuant will be built with `link-time optimizations (LTO) <https://en.wikipedia.org/wiki/Link-time_optimization>`_ in
+       non-debug builds (`CMAKE_BUILD_TYPE` != `Debug`). Left unset, it defaults per target type: `ON` for static libraries if the compiler
+       supports "fat" LTO objects, `OFF` otherwise; `ON` for other target types (shared libs, executables, etc.); `OFF` for all targets when
+       SeQuant is consumed as a subproject. Set to `ON` or `OFF` explicitly to override the per-target-type default for all SeQuant targets;
+       an explicit setting is honored regardless of whether SeQuant is the top-level project.
 
 
 Configuring and Building
@@ -132,10 +134,10 @@ To configure and build SeQuant, you can use various CMake variables to customize
 
     cmake -B build -S . -D<VARIABLE_NAME>=<VALUE>
 
-Now you can build SeQuant running the following command in the source directory:
+Now you can build SeQuant by running the following command in the source directory:
 
 .. code-block:: bash
 
-    cmake --build build -S .
+    cmake --build build
     cmake --build build --target check-sequant # for testing
     cmake --build build --target install
