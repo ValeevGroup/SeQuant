@@ -319,14 +319,19 @@ endif()
 
 # The water-20-sized eval fixtures (the ordered-executor / dry-run cases that
 # build a schedule out of tests/unit/data/csv_ccsd_doubles_residual_df.txt) run
-# in a second or two natively but take >2 minutes EACH under ASan/UBSan and
-# far longer under valgrind, which by itself blows the CI job budget. Gate them
-# on the SEQUANT_SKIP_LONG_TESTS option ONLY -- deliberately NOT on
-# SEQUANT_INTERNAL_SKIP_LONG_TESTS, which also fires for every Debug build:
-# these cases are the ones that exercise the assertion-heavy Debug paths, so a
-# plain Debug build must keep running them. The CI sanitizer and valgrind jobs
-# are exactly the configurations that set the option.
-if (SEQUANT_SKIP_LONG_TESTS)
+# in a second or two under GCC/Clang at -O0 but take >2 minutes EACH under
+# ASan/UBSan, far longer under valgrind, and -- it turns out -- comparably
+# long under a plain MSVC Debug build too: checked iterators and /RTC make
+# MSVC's Debug STL an order of magnitude slower than GCC/Clang's for
+# container-heavy code like this, so "a plain Debug build" is not uniformly
+# cheap across toolchains the way it was when this was gated on
+# SEQUANT_SKIP_LONG_TESTS alone (deliberately not on
+# SEQUANT_INTERNAL_SKIP_LONG_TESTS, to keep exercising these assertion-heavy
+# Debug paths by default). Fold it into SEQUANT_INTERNAL_SKIP_LONG_TESTS like
+# every other object library here, so it's covered by the same Debug default;
+# CI's sanitizer/valgrind jobs and an explicit -DSEQUANT_SKIP_LONG_TESTS=OFF
+# Debug build still exercise the real thing.
+if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
 
