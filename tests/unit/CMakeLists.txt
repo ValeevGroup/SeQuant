@@ -36,7 +36,6 @@ target_link_libraries(unit_tests-sequant-symb-obj
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_set_compiler_flags(unit_tests-sequant-symb-obj)
 
 ##########################
 # OBJECT library: Eval framework tests (SeQuant-eval)
@@ -55,7 +54,6 @@ target_link_libraries(unit_tests-sequant-eval-obj
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_set_compiler_flags(unit_tests-sequant-eval-obj)
 
 ##########################
 # OBJECT library: Optimize tests (SeQuant-optimize)
@@ -74,7 +72,6 @@ target_link_libraries(unit_tests-sequant-optimize-obj
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-optimize-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_set_compiler_flags(unit_tests-sequant-optimize-obj)
 
 ##########################
 # OBJECT library: Export tests (SeQuant-export)
@@ -93,7 +90,6 @@ target_link_libraries(unit_tests-sequant-export-obj
     PRIVATE Catch2::Catch2 dtl::dtl Eigen3::Eigen)
 target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_set_compiler_flags(unit_tests-sequant-export-obj)
 
 ##########################
 # OBJECT library: MBPT tests
@@ -114,7 +110,6 @@ target_link_libraries(unit_tests-sequant-mbpt-obj
     PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_set_compiler_flags(unit_tests-sequant-mbpt-obj)
 
 ##########################
 # OBJECT library: TiledArray backend tests (conditional)
@@ -135,7 +130,6 @@ if (SEQUANT_HAS_TILEDARRAY)
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_ta_test_sources}
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-	target_set_compiler_flags(unit_tests-sequant-eval-ta-obj)
 endif()
 
 ##########################
@@ -158,7 +152,6 @@ if (SEQUANT_HAS_BTAS)
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_btas_test_sources}
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-	target_set_compiler_flags(unit_tests-sequant-eval-btas-obj)
 endif()
 
 ##########################
@@ -177,7 +170,6 @@ if (SEQUANT_HAS_TAPP)
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_tapp_test_sources}
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-	target_set_compiler_flags(unit_tests-sequant-eval-tapp-obj)
 endif()
 
 ##########################
