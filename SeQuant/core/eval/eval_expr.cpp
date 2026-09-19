@@ -657,10 +657,21 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       auto named_indices = tn.ext_indices();
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
 
+      // The conjugate-braket fold is DISABLED at the eval boundary, here as
+      // in the leaf ctor: the operands are evaluated in their as-written
+      // orientation, so the intermediate's canonical slot order (its layout)
+      // must come from the same orientation-sensitive graph. Folding here
+      // lets a BraKetSymmetry::Conjugate operand's bra/ket bundles trade
+      // places in the graph and shifts the canonical order of the named
+      // indices away from the operands' own layout (a ToT*ToT general
+      // product then needs an inner result permutation TA cannot emit, and
+      // the shaped-product hook declines). The fold buys no identity either:
+      // the node hash already carries the orientation-sensitive leaf hashes.
       auto canon = tn.canonicalize_slots(
           {.cardinal_tensor_labels =
                TensorCanonicalizer::cardinal_tensor_labels(),
-           .named_indices = &named_indices});
+           .named_indices = &named_indices,
+           .fold_conjugate_braket = false});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       EvalExpr result =
