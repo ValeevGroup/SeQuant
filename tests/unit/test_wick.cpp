@@ -1130,7 +1130,15 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
     SECTION("wick(P2*H2*T2*T2)") {
       for (auto&& use_nop_partitions : {false}) {
+        // use_op_partitions=false reduces/canonicalizes a 544-term sum
+        // (vs. 7 for =true) and dominates this section's runtime; skip it
+        // where long tests are skipped, keeping the =true path so the
+        // partitioning and reduction pipeline are still exercised.
+#ifdef SEQUANT_SKIP_LONG_TESTS
+        for (auto&& use_op_partitions : {true}) {
+#else
         for (auto&& use_op_partitions : {true, false}) {
+#endif
           std::wostringstream oss;
           oss << "use_{nop,op}_partitions={" << use_nop_partitions << ","
               << use_op_partitions << "}: P2*H2*T2*T2(PNO) = ";
