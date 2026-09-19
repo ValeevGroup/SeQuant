@@ -3,7 +3,7 @@ Context and Configuration
 
 Many SeQuant operations — normal ordering, Wick's theorem, the meaning of index labels, even how LaTeX output is typeset — depend on
 settings that are impractical to pass explicitly to every function call. SeQuant instead keeps this configuration in an *implicit,
-thread-local context*: a global default that every function reads unless told otherwise. This page consolidates the two context
+global context*: a global default that every function reads unless told otherwise. This page consolidates the two context
 objects a user configures and the recommended way to set them up for many-body/quantum-chemistry work; the step-by-step manual setup of
 index spaces is covered separately in :doc:`Getting started </user/getting_started/index_spaces>`.
 
