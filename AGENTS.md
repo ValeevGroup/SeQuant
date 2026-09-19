@@ -190,6 +190,14 @@ cover the fence hierarchy, `MAD_NUM_THREADS` and the other environment
 variables, and the tracing switches such as `TA::exception_break()`; it in
 turn defers to the MADNESS `AGENTS.md` for the runtime.
 
+## Compiler Warnings
+
+All code should compile without emitting compiler warnings. Any emitted warnings
+should be fixed unless clearly false-positives and fixing them would cause
+unreasonable code bloat or performance/readability issues. Any non-trivially
+fixable warning must be reported for further investigation by a human instead
+of being silently ignored.
+
 ## Formatting
 
 CI pins clang-format 17 (`.github/workflows/formatting_check.yml`), and other
