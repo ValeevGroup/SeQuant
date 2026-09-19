@@ -159,8 +159,18 @@ struct TAEvalContext {
       // shape must outlive the assignment inside apply_shaped_product (TA
       // holds it by pointer); it does (local here, passed by const&, used
       // fully within the call which fences before returning).
-      return apply_shaped_product<NumericT, PolicyT, InnerTileT>(
-          left, right, annot, *shape, de_nest);
+      // a TA failure names the operands (as Result::prod's wrapper does):
+      // the raw TA message carries no annotation
+      try {
+        return apply_shaped_product<NumericT, PolicyT, InnerTileT>(
+            left, right, annot, *shape, de_nest);
+      } catch (std::exception const& ex) {
+        auto const a = Annot<std::string>{annot};
+        throw std::runtime_error(std::string("TA shaped product failed: ") +
+                                 ex.what() + " | " + a.lannot + " * " +
+                                 a.rannot + " -> " + a.this_annot + " | node " +
+                                 node->label());
+      }
     };
   }
 };

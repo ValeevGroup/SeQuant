@@ -723,9 +723,18 @@ class ResultTensorTA final : public Result {
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-    with_expr(a.lannot, [&](auto&& le) {
-      o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
-    });
+    // a TA failure names the operands (as the product's wrapper does): the
+    // raw TA message carries no annotation
+    try {
+      with_expr(a.lannot, [&](auto&& le) {
+        o.with_expr(a.rannot,
+                    [&](auto&& re) { result(a.this_annot) = le + re; });
+      });
+    } catch (std::exception const& ex) {
+      throw std::runtime_error(std::string("TA sum failed: ") + ex.what() +
+                               " | " + a.lannot + " + " + a.rannot + " -> " +
+                               a.this_annot);
+    }
     decltype(result)::wait_for_lazy_cleanup(result.world());
     ::sequant::detail::note_wait();
     log_ta_tensor_host_memory_use();
@@ -1340,13 +1349,25 @@ class ResultTensorOfTensorTA final : public Result {
     }
 
     // a relabeled INNER order cannot ride on the addition (TA permutes only
-    // the outer modes of a nested sum): materialize such an operand
-    if (view_ && !view_->iperm.empty()) ensure_materialized();
-    if (o.view_ && !o.view_->iperm.empty()) o.ensure_materialized();
+    // the outer modes of a nested sum), and neither does a conjugation (TA's
+    // nested add with a conjugate factor does not conjugate arena inner
+    // cells; see add_inplace): materialize such an operand
+    if (view_ && (!view_->iperm.empty() || view_->conj)) ensure_materialized();
+    if (o.view_ && (!o.view_->iperm.empty() || o.view_->conj))
+      o.ensure_materialized();
     ArrayT result;
-    with_expr(a.lannot, [&](auto&& le) {
-      o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
-    });
+    // a TA failure names the operands (as the product's wrapper does): the
+    // raw TA message carries no annotation
+    try {
+      with_expr(a.lannot, [&](auto&& le) {
+        o.with_expr(a.rannot,
+                    [&](auto&& re) { result(a.this_annot) = le + re; });
+      });
+    } catch (std::exception const& ex) {
+      throw std::runtime_error(std::string("TA sum failed: ") + ex.what() +
+                               " | " + a.lannot + " + " + a.rannot + " -> " +
+                               a.this_annot);
+    }
     decltype(result)::wait_for_lazy_cleanup(result.world());
     ::sequant::detail::note_wait();
     log_ta_tensor_host_memory_use();
@@ -1654,8 +1675,14 @@ class ResultTensorOfTensorTA final : public Result {
     ensure_materialized();  // the target must be a real, unshared array
     auto& t = get<ArrayT>();
     // a relabeled view has a different stored mode order: materialize it;
-    // a phase/conj-only view is consumed lazily
-    if (o.view_ && o.view_->relabeled()) o.ensure_materialized();
+    // a phase-only view is consumed lazily. A conj view is materialized too:
+    // TA's nested in-place add with a conjugate factor on the added operand
+    // (`t += ph * o.conj()`) does not conjugate arena inner cells (HSeOH
+    // PNS-CCD, 2026-09-18: a KramersFlip root served through a conj view
+    // was added unconjugated), so the conjugation is applied by the unary
+    // materialization instead.
+    if (o.view_ && (o.view_->relabeled() || o.view_->conj))
+      o.ensure_materialized();
     auto const& oarr = o.template raw<ArrayT>();
 
     SEQUANT_ASSERT(t.trange() == oarr.trange());
