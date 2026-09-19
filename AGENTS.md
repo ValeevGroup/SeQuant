@@ -198,6 +198,14 @@ unreasonable code bloat or performance/readability issues. Any non-trivially
 fixable warning must be reported for further investigation by a human instead
 of being silently ignored.
 
+## Assertions
+
+Assertions inside assert() or SEQUANT_ASSERT are only conditionally enabled.
+Hence, code in assertions must not be relied on to be executed or even compiled.
+This may take some care with regards to unused-variable warnings when the variable
+is only used inside an assertion. In such cases explicitly marking a variable as
+unused via a (void) cast or a [[maybe_unused]] attribute solves the problem.
+
 ## Formatting
 
 CI pins clang-format 17 (`.github/workflows/formatting_check.yml`), and other
