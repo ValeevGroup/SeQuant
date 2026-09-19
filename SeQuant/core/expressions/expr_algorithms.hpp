@@ -339,7 +339,11 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// parts of the folded and input expressions differ; both are discarded by
 /// the caller's reality assertion). Difference pairs {s, -s*} are NOT
 /// folded. Prefer fold_conjugate_pairs(), which needs no assertion.
-[[nodiscard]] ExprPtr fold_conjugate_pairs_of_real_sum(
+[[deprecated(
+    "fragile: asserts (unverifiably) that the sum's value is real, and "
+    "silently leaves {s, -s*} difference pairs unfolded; use "
+    "fold_conjugate_pairs()")]] [[nodiscard]] ExprPtr
+fold_conjugate_pairs_of_real_sum(
     ExprPtr const& expr,
     CanonicalizeOptions opts = CanonicalizeOptions::default_options(),
     std::function<ExprPtr(ExprPtr const&)> conjugate_op = {});

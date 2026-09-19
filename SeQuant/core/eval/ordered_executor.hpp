@@ -554,9 +554,8 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
       return intercepted;
     }
     ResultPtr tl = self(self, child.left());
-    ResultPtr const tr = child->op_type() == EvalOp::Adjoint
-                             ? ResultPtr{}
-                             : self(self, child.right());
+    ResultPtr const tr =
+        unary_op(child) ? ResultPtr{} : self(self, child.right());
     return apply_op(child, std::move(tl), tr);
   };
 
@@ -576,11 +575,10 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   }
 
   ResultPtr left = read_operand(read_operand, node.left());
-  // Unary (Adjoint): the right child is the Constant(1) sentinel, never
+  // Unary (Re/Im): the right child is the Constant(1) sentinel, never
   // evaluated -- and so never read, exactly as the tree walk never read it.
-  ResultPtr const right = node->op_type() == EvalOp::Adjoint
-                              ? ResultPtr{}
-                              : read_operand(read_operand, node.right());
+  ResultPtr const right =
+      unary_op(node) ? ResultPtr{} : read_operand(read_operand, node.right());
 
   return apply_op(node, std::move(left), right);
 }
@@ -712,16 +710,21 @@ void run_ordered_contracted_block(
   };
 
   // A cell holds the canonical orientation (see CellRegistry's own doc);
-  // compute_cell returns the node's oriented result, and the phase is an
-  // involution, so a production converts by multiplying it back in -- exactly
-  // what CacheManager::store_and_access did with apply_phase before storage
-  // moved onto the table. Every reader (the resolver's fetch, and pre_results)
-  // applies the node's phase once more and so sees the oriented value again.
+  // compute_cell returns the node's oriented result, and the canonicalization
+  // transform (phase / conjugation / bra-ket swap) is an involution, so a
+  // production converts by applying it back -- exactly what
+  // CacheManager::store_and_access did with apply_phase before storage moved
+  // onto the table. Every reader (the resolver's fetch, and pre_results)
+  // applies the node's transform once more and so sees the oriented value
+  // again.
   auto const canonical = [](node_t const& nd, ResultPtr r) -> ResultPtr {
-    auto const ph = nd->canon_phase();
+    auto const tr = nd->canon_transform();
     // Null passes through untouched (never dereferenced): a missing result is
     // diagnosed where it is read, not here.
-    return (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph);
+    if (!r || tr.trivial()) return r;
+    return r->apply_transform(
+        tr,
+        std::array<std::any, 2>{std::any{nd->annot()}, std::any{nd->annot()}});
   };
 
   CellScope const parent_scope = current_scope(ectx);
@@ -1536,14 +1539,19 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       // doc); compute_cell returns the oriented result and the phase is an
       // involution, so a production converts by multiplying it back in.
       {
-        auto const ph = (*it->second)->canon_phase();
-        ResultPtr r = compute_cell<EvalTrace>(*it->second, *root_cell, resolver,
+        auto const& nd = *it->second;
+        auto const tr = nd->canon_transform();
+        ResultPtr r = compute_cell<EvalTrace>(nd, *root_cell, resolver,
                                               leaf_evaluator, cache, root_ectx);
         // A null result is recorded as null rather than dereferenced here, so
         // the diagnostic stays the "forest root was never produced" throw at
         // the combine below instead of a crash in the phase conversion.
         registry.set(*root_cell,
-                     (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph));
+                     (!r || tr.trivial())
+                         ? std::move(r)
+                         : r->apply_transform(tr, std::array<std::any, 2>{
+                                                      std::any{nd->annot()},
+                                                      std::any{nd->annot()}}));
         // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
         // hash, for cross-schedule comparison of term values.
         if (static bool const dump_build_norms =
@@ -1668,10 +1676,15 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       detail::dump_root_norm(i, (*roots[i])->hash_value(), vid, *cell,
                              int((*roots[i])->canon_phase()),
                              detail::dump_norm2(ptr));
-    // Orient the stored value to this root's phase, matching the
+    // Orient the stored value to this root's transform, matching the
     // canonical->orientation return convention every production uses.
-    auto const ph = (*roots[i])->canon_phase();
-    pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
+    auto const tr = (*roots[i])->canon_transform();
+    pre_results[i] =
+        tr.trivial()
+            ? std::move(ptr)
+            : ptr->apply_transform(
+                  tr, std::array<std::any, 2>{std::any{(*roots[i])->annot()},
+                                              std::any{(*roots[i])->annot()}});
     if (!pre_results[i])
       throw Exception(
           "evaluate_ordered_schedule: forest root was never produced");

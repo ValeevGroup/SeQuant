@@ -4412,3 +4412,30 @@ TEST_CASE(
   CHECK(fd_report.builds_total > 0);
   CHECK(fd_report.scheduler == sequant::BatchScheduler::forest_descent);
 }
+
+TEST_CASE("range evaluate does not accumulate into a cached result",
+          "[eval][cache]") {
+  // evaluate(nodes, ...) sums the nodes' results in place into the FIRST
+  // node's result. When that node is cached (it recurs among the nodes, or
+  // elsewhere in the block) the first result IS the cache's own buffer, so the
+  // in-place adds corrupt the cache: every later use of the node reads the
+  // running block sum. Measured on HSeOH PNS-MP1 (2026-09-05): a residual
+  // block whose first term became a cache twin of a later term (after the
+  // brackets were optimized) came out with |R| 0.579 instead of 0.293 while
+  // every term evaluated individually was exact.
+  using namespace sequant;
+  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
+  auto const expr = deserialize(L"α * β");
+  node_t node = binarize<sequant::eval::dryrun::EvalExprDryRun>(expr);
+  std::vector<node_t> nodes{node, node, node};
+  auto yield = [](node_t const& n) -> ResultPtr {
+    REQUIRE(n.leaf());
+    return eval_result<ResultScalar<double>>(2.0);
+  };
+  auto cache = cache_manager(nodes);  // the product node recurs -> cached
+  auto sum = evaluate(nodes, yield, cache);
+  REQUIRE(sum->is<ResultScalar<double>>());
+  // 3 * (2 * 2); with the cache buffer used as the accumulator the third use
+  // reads the partial sum (2A) and the total comes out 4A = 16
+  REQUIRE(sum->get<double>() == Catch::Approx(12.0));
+}

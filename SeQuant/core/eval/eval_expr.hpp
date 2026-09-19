@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -40,15 +41,16 @@ enum class EvalOp {
   Product,
 
   ///
-  /// \brief Represents the adjoint (conjugate transpose) of one EvalExpr
-  ///        object. The result equals the bra/ket-swapped, complex-conjugated
-  ///        operand. The IR representation is "structurally binary, lexically
-  ///        unary": an Adjoint node holds the bare-label operand as its left
-  ///        child and a Constant(1) sentinel as its right child (so the
-  ///        FullBinaryNode invariant — every non-leaf has both children —
-  ///        is preserved). Evaluate dispatches on this op_type and only uses
-  ///        the left operand; the right is ignored.
-  Adjoint
+  /// \brief The real part of a scalar-valued EvalExpr (a unary node over the
+  ///        shared inner subtree; the right child is a Constant{1} sentinel).
+  ///        Re is a projection (not invertible), so unlike the conjugation
+  ///        channels it cannot ride in CanonTransform and remains an IR node.
+  RealPart,
+
+  ///
+  /// \brief The imaginary part of a scalar-valued EvalExpr; see RealPart.
+  ImagPart,
+
 };
 
 ///
@@ -75,6 +77,15 @@ class EvalExpr {
 
   ///
   /// \brief Construct an EvalExpr object from a tensor.
+  ///
+  /// \param tnsr The tensor to wrap as a leaf. The two bra<->ket
+  ///        orientations of a BraKetSymmetry::Conjugate tensor fold onto one
+  ///        canonical spelling: expr() carries the canonical orientation with
+  ///        the elementwise-conjugation marker (Tensor::conjugated()) set when
+  ///        the input was the swapped orientation. The leaf hash is always
+  ///        that of the unconjugated spelling, so the two orientations share
+  ///        a cache slot; binarize(Tensor) serves a conjugated leaf via an
+  ///        EvalOp::Adjoint wrapper over the shared operand.
   ///
   explicit EvalExpr(Tensor const& tnsr);
 
@@ -107,7 +118,7 @@ class EvalExpr {
   ///                     to indicate that no graph is present/necessary.
   ///
   EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
-           std::int8_t phase, size_t hash,
+           CanonTransform transform, size_t hash,
            std::shared_ptr<bliss::Graph> connectivity);
 
   ///
@@ -201,7 +212,6 @@ class EvalExpr {
   ///
   /// \return True if this expression is an adjoint (unary) node.
   ///
-  [[nodiscard]] bool is_adjoint() const noexcept;
 
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
@@ -249,9 +259,59 @@ class EvalExpr {
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
   ///
+  /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
+  ///        canonical slot each result mode holds, and how the proto bundles
+  ///        of the (nested / CSV) modes refer back to those slots.
+  ///
+  /// \details Two nodes may share an evaluation-cache slot only if the value
+  ///          stored for one is, mode for mode, the value the other denotes.
+  ///          The node hash and the graph comparison deliberately identify
+  ///          nodes across index RENAMINGS (that is what makes common
+  ///          subexpressions shareable) and across bra<->ket orientation, and
+  ///          CanonTransform carries the leftover phase / conjugation /
+  ///          bra-ket swap. What none of them carries is a PERMUTATION of the
+  ///          result modes, so a shared slot whose two users order their modes
+  ///          differently hands one of them transposed data -- silently, since
+  ///          annotations are just labels (measured on h2o tpns=0 PNS-CCD,
+  ///          2026-09-03: a nested CSV intermediate whose two pair-basis inner
+  ///          modes were transposed shifted the correlation energy by 2.2e-6).
+  ///
+  ///          The fingerprint numbers the indices by first occurrence in
+  ///          canon_indices() order and hashes (space, id, proto ids) per
+  ///          mode, so it is invariant under a consistent renaming but changes
+  ///          under any reordering of the modes or of a proto bundle.
+  ///
+  /// \return the layout fingerprint (computed once, then memoized)
+  ///
+  [[nodiscard]] std::size_t layout_fingerprint() const noexcept;
+
+  /// the layout fingerprint of a result carrying @p modes (see
+  /// layout_fingerprint()); binarize folds it into the node id of every
+  /// tensor-valued internal node it builds
+  [[nodiscard]] static std::size_t layout_fingerprint_of(
+      index_vector const& modes) noexcept;
+
+  ///
   /// \return The canonicalization phase (+1 or -1).
   ///
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
+
+  ///
+  /// \return The full canonicalization transform (phase/conj/braket_swap)
+  /// mapping this node's cached canonical result to its denoted value.
+  ///
+  [[nodiscard]] CanonTransform canon_transform() const noexcept;
+
+  /// \return For a tensor-valued node: its DENOTED spelling -- the stored
+  /// canonical spelling with the transform re-materialized syntactically:
+  /// bra<->ket swapped back when braket_swap is set, and the conj bit spelled
+  /// as the conjugation marker. This is the spelling the PARENT network is
+  /// built from (the marker colors its graph); for a Hermitian leaf written in
+  /// the non-canonical orientation it is C^*{swapped}, which equals the
+  /// as-written value only through the Hermiticity the network does not
+  /// use -- so it is an identity convention, not a value statement. The
+  /// phase, a scalar, is not spelled. \pre is_tensor()
+  [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///
   /// \return Whether this expression has a connectivity graph
@@ -437,8 +497,13 @@ class EvalExpr {
   ExprPtr expr_;
 
   index_vector canon_indices_;
+  mutable std::optional<std::size_t> layout_fingerprint_;
 
-  std::int8_t canon_phase_{1};
+  /// folds layout_fingerprint() into hash_value_ for a tensor-valued leaf;
+  /// called once canon_indices_ is final (see the definition)
+  void fold_layout_into_hash() noexcept;
+
+  CanonTransform canon_transform_{};
 
   size_t hash_value_;
 
@@ -701,11 +766,6 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
   auto const& evxpr = *node;
 
   if (node.leaf()) return evxpr.expr();
-
-  // Adjoint is unary and stores the marker-bearing tensor directly in its
-  // own ExprPtr; the bare-leaf left child and Constant(1) right child are
-  // structural plumbing for the IR, not part of the symbolic form.
-  if (op == EvalOp::Adjoint) return evxpr.expr();
 
   if (op == EvalOp::Product) {
     auto prod = Product{};
