@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -25,6 +26,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -355,6 +357,30 @@ TEST_CASE("expr", "[elements]") {
     REQUIRE_NOTHROW(ex->value<bool>());
     REQUIRE_THROWS_AS(std::make_shared<Constant>(-2)->value<unsigned int>(),
                       std::range_error);
+
+    {  // ordering is by value (real part, then imaginary part), not by hash
+       // (https://github.com/ValeevGroup/SeQuant/issues/614)
+      const std::vector<Constant> ascending{Constant(-3),
+                                            Constant(rational{-1, 2}),
+                                            Constant(0),
+                                            Constant(rational{1, 3}),
+                                            Constant(rational{1, 2}),
+                                            Constant(1),
+                                            Constant(2),
+                                            Constant(10),
+                                            Constant(Complex<rational>{10, 1})};
+      for (std::size_t i = 0; i < ascending.size(); ++i) {
+        REQUIRE(!(ascending[i] < ascending[i]));
+        for (std::size_t j = i + 1; j < ascending.size(); ++j) {
+          REQUIRE(ascending[i] < ascending[j]);
+          REQUIRE(!(ascending[j] < ascending[i]));
+        }
+      }
+      // the imaginary part breaks ties in the real part
+      REQUIRE(Constant(Complex<rational>{1, -1}) < Constant(1));
+      REQUIRE(Constant(1) < Constant(Complex<rational>{1, 1}));
+      REQUIRE(!(Constant(1) < Constant(Complex<rational>{1, 0})));
+    }
   }
 
   SECTION("power") {
@@ -1299,6 +1325,46 @@ TEST_CASE("expr", "[elements]") {
 
       REQUIRE_THAT(expr,
                    EquivalentTo("R1{a1,a2;i1,i2} = 2 t{a1,a2;i1,i2}:N-N-S"));
+    }
+  }
+
+  SECTION("TreeIndex") {
+    std::vector<std::tuple<std::string, TreeIndex, std::string>> tests = {
+        {"Var", {}, "Var"},           {"A * B", {}, "A * B"},
+        {"A + B", {0}, "A"},          {"A + B", {1}, "B"},
+        {"A + B", {}, "A + B"},       {"A + B", {0}, "A"},
+        {"A + B", {1}, "B"},          {"A + B * C", {0}, "A"},
+        {"A + B * C", {1}, "B * C"},  {"A + B * C", {1, 0}, "B"},
+        {"A + B * C", {1, 1}, "C"},   {"(A + B) * C", {0}, "A + B"},
+        {"(A + B) * C", {0, 1}, "B"}, {"(A + B) * C", {1}, "C"},
+    };
+
+    for (const auto &[expr_string, idx, expected_str] : tests) {
+      CAPTURE(expr_string);
+      CAPTURE(idx);
+      CAPTURE(expected_str);
+
+      ExprPtr expr = deserialize(expr_string);
+      ExprPtr expected = deserialize(expected_str);
+
+      REQUIRE_THAT(idx.select_from(expr), EquivalentTo(expected));
+      REQUIRE_THAT(idx.select_from(std::as_const(expr)),
+                   EquivalentTo(expected));
+      REQUIRE_THAT(idx.select_from(*expr), EquivalentTo(*expected));
+      REQUIRE_THAT(idx.select_from(std::as_const(*expr)),
+                   EquivalentTo(*expected));
+
+      REQUIRE_THAT(expr[idx], EquivalentTo(*expected));
+      REQUIRE_THAT(std::as_const(expr)[idx], EquivalentTo(*expected));
+      REQUIRE_THAT((*expr)[idx], EquivalentTo(*expected));
+      REQUIRE_THAT(std::as_const(*expr)[idx], EquivalentTo(*expected));
+    }
+
+    SECTION("Out-of-bounds exception") {
+      const ExprPtr expr = deserialize("A * B");
+
+      REQUIRE_THROWS_AS(TreeIndex({2}).select_from(expr), Exception);
+      REQUIRE_THROWS_AS(TreeIndex({0, 1}).select_from(expr), Exception);
     }
   }
 }

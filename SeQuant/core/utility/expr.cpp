@@ -2,6 +2,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -293,6 +294,45 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
   }                                   \
   return false;
 
+namespace {
+
+/// Counts every index occurrence in @p expr, treating a proto-index of a
+/// composite (CSV) index as an occurrence of that (bare) index in addition to
+/// counting the composite index itself. The recursion descends through
+/// Products/Sums down to the Tensor leaves.
+container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
+  container::map<Index, std::size_t> counts;
+  auto visit = [&counts](const Expr &e, auto &self) -> void {
+    if (e.is<Tensor>()) {
+      for (const Index &ix : e.as<Tensor>().const_braketaux()) {
+        ++counts[ix];
+        for (const Index &p : ix.proto_indices()) ++counts[p];
+      }
+    } else if (!e.is_atom()) {
+      for (const ExprPtr &sub : e) self(*sub, self);
+    }
+  };
+  visit(expr, visit);
+  return counts;
+}
+
+/// The proto-aware external-index set of a term: those indices whose total
+/// occurrence count (slot appearances + proto-index appearances, see
+/// index_occurrence_counts) is odd. Unlike the slot-only get_unique_indices,
+/// this set is invariant across the summands of a proto-indexed (CSV) residual
+/// -- where a given occ index may appear standalone in one term and only inside
+/// a composite's proto-index list in another -- so comparing it does not
+/// spuriously flag "inconsistent external indices in sum".
+container::set<Index> proto_aware_externals(
+    const container::map<Index, std::size_t> &counts) {
+  container::set<Index> ext;
+  for (const auto &[ix, n] : counts)
+    if (n % 2 == 1) ext.insert(ix);
+  return ext;
+}
+
+}  // namespace
+
 bool is_valid(const ExprPtr &expr, std::string *msg) {
   if (!expr) {
     SEQUANT_EXPR_INVALID("Expression is null");
@@ -356,23 +396,63 @@ bool is_valid(const Expr &expr, std::string *msg) {
     // Verify that all summands have the same external indices
     const Sum &sum = expr.as<Sum>();
 
-    auto extractor = [](const ExprPtr &expr) {
-      return get_unique_indices(expr);
-    };
+    // A proto-indexed (CSV) summand carries occ indices both as tensor slots
+    // and inside composite indices' proto-index lists; the slot-only
+    // get_unique_indices is then not invariant across summands and
+    // false-positives here. Detect this from the reference summand and, when
+    // present, validate with the proto-aware external-index set instead.
+    const auto ref_counts = index_occurrence_counts(*sum.summand(0));
+    const bool proto_indexed = std::ranges::any_of(
+        ref_counts,
+        [](const auto &kv) { return kv.first.has_proto_indices(); });
 
-    const IndexGroups<> ref = extractor(sum.summand(0));
+    bool consistent;
+    if (proto_indexed) {
+      const container::set<Index> ref = proto_aware_externals(ref_counts);
+      consistent =
+          std::ranges::all_of(sum.summands(), [&ref](const ExprPtr &s) {
+            return proto_aware_externals(index_occurrence_counts(*s)) == ref;
+          });
+    } else {
+      auto extractor = [](const ExprPtr &expr) {
+        return get_unique_indices(expr);
+      };
 
-    auto compare = [&ref](const IndexGroups<> &grps) {
-      return std::ranges::is_permutation(ref.bra, grps.bra) &&
-             std::ranges::is_permutation(ref.ket, grps.ket) &&
-             std::ranges::is_permutation(ref.aux, grps.aux);
-    };
+      const IndexGroups<> ref = extractor(sum.summand(0));
 
-    bool consistent = std::ranges::all_of(sum.summands(), compare, extractor);
+      auto compare = [&ref](const IndexGroups<> &grps) {
+        const bool bra_ok = std::ranges::is_permutation(ref.bra, grps.bra);
+        const bool ket_ok = std::ranges::is_permutation(ref.ket, grps.ket);
+        const bool aux_ok = std::ranges::is_permutation(ref.aux, grps.aux);
+
+        if (bra_ok && ket_ok && aux_ok) {
+          return true;
+        }
+
+        if (aux_ok && !bra_ok && !ket_ok) {
+          // Bra and ket indices might have been swapped in case of braket
+          // symmetry Let's just allow for that here without explicitly checking
+          // the summand's symmetry
+          auto combined_ref = ranges::views::concat(ref.bra, ref.ket);
+          auto combined_cmp = ranges::views::concat(grps.bra, grps.ket);
+
+          return std::ranges::is_permutation(combined_ref, combined_cmp);
+        }
+
+        return false;
+      };
+
+      consistent = std::ranges::all_of(sum.summands(), compare, extractor);
+    }
 
     if (!consistent) {
       SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
     }
+  } else if (expr.is<Power>()) {
+    // A Power (base^exponent) is valid iff its base is valid; the exponent is a
+    // rational and is always well-formed. Power is atomic (it exposes no
+    // subexpressions to the children loop above), so validate the base here.
+    if (!is_valid(expr.as<Power>().base(), msg)) return false;
   } else {
     SEQUANT_ASSERT(false, "Unsupported expression type in is_valid");
   }
@@ -393,11 +473,27 @@ bool is_valid(const ResultExpr &expr, std::string *msg) {
 
   IndexGroups<> externals = get_unique_indices(rhs);
 
-  if (!std::ranges::is_permutation(expr.bra(), externals.bra)) {
+  const bool bra_ok = std::ranges::is_permutation(expr.bra(), externals.bra);
+  const bool ket_ok = std::ranges::is_permutation(expr.ket(), externals.ket);
+  const bool braket_ok = [&]() -> bool {
+    if (!bra_ok && !ket_ok) {
+      // Allow for potential braket symmetry having changed position of
+      // bra and ket indices. For simplicity's sake, be lenient and don't
+      // try to explicitly check for expression symmetry
+      auto combined_expr = ranges::views::concat(expr.bra(), expr.ket());
+      auto combined_ext = ranges::views::concat(externals.bra, externals.ket);
+
+      return std::ranges::is_permutation(combined_expr, combined_ext);
+    }
+
+    return bra_ok && ket_ok;
+  }();
+
+  if (!braket_ok && !bra_ok) {
     SEQUANT_EXPR_INVALID(
         "Bra indices of result are inconsistent with the rhs expression");
   }
-  if (!std::ranges::is_permutation(expr.ket(), externals.ket)) {
+  if (!braket_ok && !ket_ok) {
     SEQUANT_EXPR_INVALID(
         "Ket indices of result are inconsistent with the rhs expression");
   }
@@ -417,16 +513,21 @@ bool is_valid(const ResultExpr &expr, std::string *msg) {
 ExprPtr transform_expr(const ExprPtr &expr,
                        const container::map<Index, Index> &index_replacements,
                        Constant::scalar_type scaling_factor) {
-  if (expr->is<Constant>() || expr->is<Variable>()) {
+  return transform_expr(*expr, index_replacements, scaling_factor);
+}
+
+ExprPtr transform_expr(const Expr &expr,
+                       const container::map<Index, Index> &index_replacements,
+                       Constant::scalar_type scaling_factor) {
+  if (expr.is<Constant>() || expr.is<Variable>()) {
     if (scaling_factor != 1) {
-      return ex<Constant>(scaling_factor) * expr;
+      return ex<Constant>(scaling_factor) * expr.clone();
     }
 
-    return expr;
+    return expr.clone();
   }
 
-  auto transform_tensor =
-      [&index_replacements](const ExprPtr &tensor) -> ExprPtr {
+  auto transform_tensor = [&index_replacements](const Expr &tensor) -> ExprPtr {
     ExprPtr result = tensor.clone();
     auto &result_tensor = result->as<AbstractTensor>();
     transform_indices(result_tensor, index_replacements);
@@ -440,7 +541,7 @@ ExprPtr transform_expr(const ExprPtr &expr,
     result->scale(product.scalar());
     for (auto &&term : product) {
       if (term->is<AbstractTensor>()) {
-        result->append(1, transform_tensor(term));
+        result->append(1, transform_tensor(*term));
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term->clone());
       } else {
@@ -451,18 +552,18 @@ ExprPtr transform_expr(const ExprPtr &expr,
     return result;
   };
 
-  if (expr->is<AbstractTensor>()) {
+  if (expr.is<AbstractTensor>()) {
     auto result = transform_tensor(expr);
     if (scaling_factor != 1) {
       result = result * ex<Constant>(scaling_factor);
     }
     return result;
-  } else if (expr->is<Product>()) {
-    auto result = transform_product(expr->as<Product>());
+  } else if (expr.is<Product>()) {
+    auto result = transform_product(expr.as<Product>());
     return result;
-  } else if (expr->is<Sum>()) {
+  } else if (expr.is<Sum>()) {
     auto result = std::make_shared<Sum>();
-    for (auto &term : *expr) {
+    for (auto &term : expr) {
       result->append(transform_expr(term, index_replacements, scaling_factor));
     }
     return result;
@@ -534,6 +635,105 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
   }
 
   throw Exception("Unhandled expression type in pop_tensor");
+}
+
+ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
+                 const Expr &replacement) {
+  if (!target.expr().is_atom()) {
+    throw Exception(
+        "Replacement of composite expressions is not yet implemented");
+  }
+
+  container::svector<std::size_t> index_mapping;
+  if (target.expr().is<AbstractTensor>()) {
+    // Figure out which indices are being reused between target and replacement
+    // (those are the ones we might need to perform replacements on)
+    auto target_slots = slots(target.expr().as<AbstractTensor>());
+    auto replacement_indices = get_used_indices(replacement);
+
+    for (const auto &[i, idx] : ranges::views::enumerate(target_slots)) {
+      if (!idx.nonnull()) {
+        continue;
+      }
+
+      if (std::ranges::find(replacement_indices, idx) !=
+          replacement_indices.end()) {
+        index_mapping.emplace_back(i);
+      }
+    }
+  }
+
+  if (*expr == target) {
+    expr = replacement.clone();
+  } else {
+    expr->visit(
+        [&](ExprPtr &current) {
+          if (*current == target) {
+            ExprPtr repl;
+
+            if (index_mapping.empty()) {
+              repl = replacement.clone();
+            } else {
+              // Ensure that all indices shared between target and replacement
+              // will also be shared with current and the actual replacement we
+              // want to use for it (this becomes relevant if cmp compares only
+              // equivalence instead of equality)
+              SEQUANT_ASSERT(current->is<AbstractTensor>());
+              SEQUANT_ASSERT(target.expr().is<AbstractTensor>());
+
+              const auto &current_tensor = current->as<AbstractTensor>();
+              const auto &target_tensor = target.expr().as<AbstractTensor>();
+
+              SEQUANT_ASSERT(num_slots(current_tensor) ==
+                             num_slots(target_tensor));
+
+              auto current_slots = slots(current_tensor);
+              auto target_slots = slots(target_tensor);
+
+              container::map<Index, Index> replacements;
+              for (std::size_t i : index_mapping) {
+                if (target_slots[i] != current_slots[i]) {
+                  replacements[target_slots[i]] = current_slots[i];
+                }
+              }
+
+              repl = transform_expr(replacement, replacements);
+            }
+
+            current = std::move(repl);
+          }
+        },
+        /*only_atoms*/ true);
+  }
+
+  return expr;
+}
+
+ResultExpr &replace(ResultExpr &expr, const ExprMatcher &target,
+                    const Expr &replacement) {
+  replace(expr.expression(), target, replacement);
+
+  // We have to check whether the external indices have been modified by the
+  // replacement and if they did, adapt the indices in the result
+  IndexGroups<> externals = get_unique_indices(expr.expression());
+
+  if (!std::ranges::equal(externals.bra, expr.bra()) ||
+      !std::ranges::equal(externals.ket, expr.ket()) ||
+      !std::ranges::equal(externals.aux, expr.aux())) {
+    // Externals have changed -> update result
+    // TODO: Is retaining result symmetry a reasonable thing to do? Generally
+    // speaking, replacements could also change the result symmetry so in
+    // principle we'd need a way to deduce result symmetry.
+    expr =
+        ResultExpr(bra(std::move(externals.bra)), ket(std::move(externals.ket)),
+                   aux(std::move(externals.aux)), expr.symmetry(),
+                   expr.braket_symmetry(), expr.column_symmetry(),
+                   expr.has_label() ? std::optional<std::wstring>(expr.label())
+                                    : std::nullopt,
+                   std::move(expr.expression()));
+  }
+
+  return expr;
 }
 
 }  // namespace sequant

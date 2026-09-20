@@ -182,11 +182,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     sequant::wprintf(oss.str());
   }
 
-  // canonize the graph
-  bliss::Stats stats;
-  graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-  const unsigned int *canonize_perm =
-      graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
+  const unsigned int *canonize_perm = canonicalize_graph(graph);
 
   if (Logger::instance().canonicalize_dot) {
     std::wostringstream oss;
@@ -649,7 +645,8 @@ TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
     const NamedIndexSet *named_indices_ptr,
     TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
-        named_index_compare) {
+        named_index_compare,
+    const tensor_network::NamedIndexColorMap *named_index_colors) {
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
                              const auto &idxptr_slottype_2) -> bool {
@@ -694,6 +691,7 @@ TensorNetworkV3::canonicalize_slots(
   // distinct_named_indices = false
   Graph graph = create_graph(
       {.named_indices = &named_indices,
+       .named_index_colors = named_index_colors,
        .distinct_named_indices = false,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
@@ -711,11 +709,7 @@ TensorNetworkV3::canonicalize_slots(
     sequant::wprintf(oss.str());
   }
 
-  // canonize the graph
-  bliss::Stats stats;
-  graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-  const unsigned int *canonize_perm =
-      graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
+  const unsigned int *canonize_perm = canonicalize_graph(graph);
 
   metadata.graph =
       std::shared_ptr<bliss::Graph>(graph.bliss_graph->permute(canonize_perm));
@@ -902,7 +896,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            : *(options.named_indices);
 
   VertexPainter<TensorNetworkV3> colorizer(named_indices,
-                                           options.distinct_named_indices);
+                                           options.distinct_named_indices,
+                                           options.named_index_colors);
 
   // results
   Graph graph;
@@ -1421,6 +1416,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   }
 
   return graph;
+}
+
+const unsigned int *TensorNetworkV3::canonicalize_graph(
+    const TensorNetworkV3::Graph &graph) {
+  bliss::Stats stats;
+  graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+  return graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
 }
 
 void TensorNetworkV3::init_edges() {

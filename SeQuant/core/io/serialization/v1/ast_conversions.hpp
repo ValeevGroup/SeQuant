@@ -283,14 +283,6 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    // braket_symm is a std::variant<BraKetSymmetry, Hermiticity>: a concrete
-    // BraKetSymmetry (a 'C'/'S'/'N' spec, or the default fallback) is forwarded
-    // verbatim, while a Hermiticity (an 'H'/'A' spec, or a Hermiticity-valued
-    // default) defers to the Tensor ctor, which resolves it against
-    // base_field(bra, ket) — matching the programmatic ex<Tensor>(label, bra,
-    // ket) default. The std::visit below dispatches on which alternative is
-    // held to the matching Tensor ctor overload (BraKetSymmetry- vs
-    // Hermiticity-taking).
     auto [perm_symm, braket_symm, column_symm] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
@@ -330,6 +322,66 @@ struct Transformer {
       return ex<BNOperator>(cre(std::move(ketIndices)),
                             ann(std::move(braIndices)), vac);
     }
+
+    // whether the input spelled a symmetry out, as opposed to inheriting it
+    // from the Context/DeserializationOptions defaults. Only a *spelled-out*
+    // value may contradict a symmetry that is fixed by definition -- a
+    // defaulted one is silently replaced by the correct value below, since the
+    // ambient default says nothing about this particular tensor.
+    const auto specified = [&tensor](char ast::SymmetrySpec::*field) {
+      return tensor.symmetry.has_value() &&
+             tensor.symmetry.value().*field != ast::SymmetrySpec::unspecified;
+    };
+    const bool perm_symm_specified = specified(&ast::SymmetrySpec::perm_symm);
+    const bool braket_symm_specified =
+        specified(&ast::SymmetrySpec::braket_symm);
+    const bool column_symm_specified =
+        specified(&ast::SymmetrySpec::column_symm);
+
+    // (Anti)symmetry in bra and ket implies column symmetry, and the Tensor
+    // ctor rejects an *explicit* ColumnSymmetry that contradicts it. Apply the
+    // implication here for a column symmetry that merely came from the
+    // defaults, so that only a genuinely contradicting explicit spec reaches
+    // (and is rejected by) the ctor.
+    if (!column_symm_specified &&
+        (perm_symm == Symmetry::Symm || perm_symm == Symmetry::Antisymm))
+      column_symm = ColumnSymmetry::Symm;
+
+    // Force the defining symmetries of the reserved (anti)symmetrization
+    // operators; see sequant::{anti,}symmetrizer_symmetries.
+    const bool is_reserved_symmetrizer =
+        tensor.name == reserved::antisymm_label() ||
+        tensor.name == reserved::symm_label();
+    // Â antisymmetrizes within bra and within ket, Ŝ only across the
+    // {bra,ket} particle columns (i.e. it is perm-Nonsymm). Supply the
+    // defining value only when none was spelled out, so that a contradicting
+    // explicit spec reaches the Tensor ctor and is rejected there rather than
+    // silently overwritten here.
+    if (is_reserved_symmetrizer && !perm_symm_specified)
+      perm_symm = tensor.name == reserved::antisymm_label() ? Symmetry::Antisymm
+                                                            : Symmetry::Nonsymm;
+    // (anti)symmetrization operators act on indistinguishable particles, hence
+    // are always column symmetric; supply that rather than passing the
+    // Context's column default through, which the Tensor ctor would reject as
+    // a contradicting *explicit* request
+    if (is_reserved_symmetrizer && !column_symm_specified)
+      column_symm = ColumnSymmetry::Symm;
+    // likewise, force braket-Nonsymm rather than inheriting the Context's
+    // default Hermiticity, which could derive a non-Nonsymm braket and make a
+    // plain "Ŝ{...}"/"Â{...}" fail to construct; an explicit braket spec is
+    // left untouched so that the Tensor ctor still rejects it
+    if (is_reserved_symmetrizer && !braket_symm_specified)
+      braket_symm = BraKetSymmetry::Nonsymm;
+
+    // the reserved metric and Kronecker tensors are Hermitian by definition;
+    // force that rather than inheriting the Context's default Hermiticity, so
+    // that a deserialized s/δ equals the one make_overlap()/make_kronecker()
+    // builds (they participate in the tensor hash, so a mismatch would keep
+    // otherwise-equal terms from merging)
+    if ((tensor.name == reserved::overlap_label() ||
+         tensor.name == reserved::kronecker_label()) &&
+        !braket_symm_specified)
+      braket_symm = Hermiticity::Hermitian;
 
     // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
     // Hermiticity)

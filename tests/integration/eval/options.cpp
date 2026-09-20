@@ -4,6 +4,8 @@
 
 #include "options.hpp"
 
+#include <SeQuant/core/utility/exception.hpp>
+
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/concat.hpp>
 
@@ -133,7 +135,7 @@ std::string ParseConfigFile::help() const {
 
 void ParseConfigFile::parse(std::string_view fname) {
   auto ifs = std::ifstream{fname.data()};
-  if (!ifs.good()) throw std::runtime_error{"unable to read file"};
+  if (!ifs.good()) throw sequant::Exception{"unable to read file"};
 
   auto const headers = std::vector<std::string_view>{eqs, optm, scf, log};
   std::string token{}, curr_header{};
@@ -142,7 +144,7 @@ void ParseConfigFile::parse(std::string_view fname) {
     if (ranges::contains(headers, token))
       curr_header = token;
     else if (curr_header.empty())
-      throw std::runtime_error{"Invalid line in config file"};
+      throw sequant::Exception{"Invalid line in config file"};
     else {
       std::string val{};
       ifs >> val;
@@ -156,7 +158,7 @@ void ParseConfigFile::parse(std::string_view fname) {
       else if (curr_header == log)
         parse_log.update(token, val);
       else {
-        throw std::runtime_error{"unknown token " + token};
+        throw sequant::Exception{"unknown token " + token};
       }
     }
   }

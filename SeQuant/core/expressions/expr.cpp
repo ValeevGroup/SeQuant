@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/tree_index.hpp>
 
 #include <sstream>
 
@@ -46,6 +47,14 @@ const ExprPtr &Expr::operator[](std::size_t idx) const {
   return begin()[idx];
 }
 
+ExprPtr &ExprPtr::operator[](const TreeIndex &idx) {
+  return idx.select_from(*this);
+}
+
+const ExprPtr &ExprPtr::operator[](const TreeIndex &idx) const {
+  return idx.select_from(*this);
+}
+
 void Expr::throw_out_of_range(std::size_t idx) const {
   std::ostringstream oss;
   oss << "Expr::at(" << idx << "): index out of range (size=" << size()
@@ -73,6 +82,12 @@ const ExprPtr &Expr::back() const { return at(size() - 1); }
 
 std::wstring Expr::to_latex() const {
   throw Exception("to_latex not implemented for " + type_name());
+}
+
+Expr &Expr::operator[](const TreeIndex &idx) { return idx.select_from(*this); }
+
+const Expr &Expr::operator[](const TreeIndex &idx) const {
+  return idx.select_from(*this);
 }
 
 bool proportional_to::operator()(const ExprPtr &expr1,

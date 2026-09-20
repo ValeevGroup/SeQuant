@@ -19,7 +19,8 @@
 
 namespace sequant {
 class Power;
-}
+class ResultExpr;
+}  // namespace sequant
 
 namespace sequant::io::latex {
 
@@ -104,6 +105,8 @@ std::wstring to_string(const std::complex<T>& t) {
 std::wstring to_string(const rational& num);
 
 std::wstring to_string(const Power& power);
+
+std::wstring to_string(const ResultExpr& expr);
 
 namespace detail {
 

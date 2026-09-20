@@ -651,8 +651,7 @@ ExprPtr biorthogonal_transform_pre_nnsproject_impl(
 
   auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
   auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-  ExprPtr S_tensor =
-      ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
+  ExprPtr S_tensor = make_symmetrizer(bra(kixs), ket(bixs));
 
   if (factor_out_nns_projector) {
     if (ext_idxs.size() > 1) {

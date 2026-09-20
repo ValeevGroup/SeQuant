@@ -2,6 +2,7 @@
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -580,14 +581,14 @@ ExprPtr OpMaker<S>::operator()(
   if (!dep && csv) {
     if (opclass == OpClass::Ex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : cre_spaces_) {
+        for ([[maybe_unused]] const auto& s : cre_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
       dep = UseDepIdx::Bra;
     } else if (opclass == OpClass::Deex) {
       if constexpr (assert_enabled()) {
-        for (auto&& s : ann_spaces_) {
+        for ([[maybe_unused]] const auto& s : ann_spaces_) {
           SEQUANT_ASSERT(isr->contains_unoccupied(s));
         }
       }
@@ -612,9 +613,11 @@ ExprPtr OpMaker<S>::operator()(
         [this, opsymm_opt, full_label, op_herm](
             const auto& creidxs, const auto& annidxs, const auto& batchidxs,
             Symmetry opsymm) {
+          // mbpt operators act on indistinguishable particles, hence are
+          // particle (column) symmetric
           return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
-                            op_herm);
+                            op_herm, ColumnSymmetry::Symm);
         },
         dep ? *dep : UseDepIdx::None, normalization.value());
   }
@@ -623,8 +626,11 @@ ExprPtr OpMaker<S>::operator()(
       cre_spaces_, ann_spaces_,
       [this, opsymm_opt, full_label, op_herm](
           const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
+        // mbpt operators act on indistinguishable particles, hence are
+        // particle (column) symmetric
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
-                          opsymm_opt ? *opsymm_opt : opsymm, op_herm);
+                          opsymm_opt ? *opsymm_opt : opsymm, op_herm,
+                          ColumnSymmetry::Symm);
       },
       dep ? *dep : UseDepIdx::None, normalization.value());
 }
@@ -694,8 +700,7 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
               ketidxs.push_back(m2);
               return ex<Tensor>(L"g", bra(std::move(braidxs)),
                                 ket(std::move(ketidxs)), Symmetry::Antisymm) *
-                     ex<Tensor>(kronecker_label(), bra{m2}, ket{m1},
-                                Symmetry::Nonsymm);
+                     make_kronecker(m2, m1);
             } else {  // opsymm == Symmetry::Nonsymm
               auto braidx_J = braidxs;
               braidx_J.push_back(m1);
@@ -706,13 +711,16 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
               auto ketidxs_K = ketidxs;
               using std::begin;
               ketidxs_K.emplace(begin(ketidxs_K), m2);
+              // g is an integral over indistinguishable particles, hence is
+              // particle (column) symmetric (which the Antisymm branch above
+              // gets implicitly, but Nonsymm perm does not)
               return (ex<Tensor>(L"g", bra(std::move(braidx_J)),
-                                 ket(std::move(ketidxs_J)), Symmetry::Nonsymm) -
+                                 ket(std::move(ketidxs_J)), Symmetry::Nonsymm,
+                                 std::nullopt, ColumnSymmetry::Symm) -
                       ex<Tensor>(L"g", bra(std::move(braidx_K)),
-                                 ket(std::move(ketidxs_K)),
-                                 Symmetry::Nonsymm)) *
-                     ex<Tensor>(kronecker_label(), bra{m2}, ket{m1},
-                                Symmetry::Nonsymm);
+                                 ket(std::move(ketidxs_K)), Symmetry::Nonsymm,
+                                 std::nullopt, ColumnSymmetry::Symm)) *
+                     make_kronecker(m2, m1);
             }
           });
     };
@@ -1051,7 +1059,7 @@ ExprPtr F(bool use_f_tensor, const IndexSpace& occupied_density) {
           qns = combine(op_qnc_t, qns);
         });
   } else {
-    throw "non-tensor use at operator level not yet supported";
+    throw Exception("non-tensor use at operator level not yet supported");
   }
 }
 
@@ -1416,9 +1424,13 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             braidxs.size() ==
             ketidxs.size());  // need to handle particle # violating case?
         const auto rank = braidxs.size();
+        // an RDM is Hermitian, and is particle (column) symmetric since it
+        // is over indistinguishable particles (which the Antisymm branch
+        // implies, but Nonsymm does not)
         return ex<Tensor>(
             rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
-            rank > 1 && spinor ? Symmetry::Antisymm : Symmetry::Nonsymm);
+            rank > 1 && spinor ? Symmetry::Antisymm : Symmetry::Nonsymm,
+            Hermiticity::Hermitian, ColumnSymmetry::Symm);
       };
 
       if (exptr.template is<FNOperator>()) {

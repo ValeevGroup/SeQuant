@@ -448,7 +448,9 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void begin_expression(const MainContext &ctx) override {
-    m_cmp.set_indices(ctx.batch_indices(ctx.current_expression_id()));
+    auto batch_indices = ctx.batch_indices(ctx.current_expression_id());
+    m_cmp.set_indices(
+        std::vector<Index>(batch_indices.begin(), batch_indices.end()));
 
     m_generator.begin_expression(ctx);
   }
