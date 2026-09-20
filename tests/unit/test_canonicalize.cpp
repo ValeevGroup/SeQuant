@@ -744,3 +744,30 @@ TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
       /*atoms_only=*/true);
   CHECK(!duplicate);
 }
+
+TEST_CASE("canonicalize_options_equality", "[canonicalize][context]") {
+  using namespace sequant;
+  // a scoped context that differs from the current one ONLY in a
+  // CanonicalizeOptions field must take effect (set_scoped_implicit_context
+  // skips contexts that compare equal, so equality must see every field)
+  auto base = get_default_context();
+  base.set(CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::IgnoreNamedIndexLabel::Yes));
+  auto outer = set_scoped_default_context(base);
+  REQUIRE(CanonicalizeOptions::default_options().ignore_named_index_labels ==
+          CanonicalizeOptions::IgnoreNamedIndexLabel::Yes);
+  {
+    auto ctx = Context(get_default_context());
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    auto inner = set_scoped_default_context(ctx);
+    REQUIRE(CanonicalizeOptions::default_options().ignore_named_index_labels ==
+            CanonicalizeOptions::IgnoreNamedIndexLabel::No);
+  }
+  REQUIRE(CanonicalizeOptions::default_options().ignore_named_index_labels ==
+          CanonicalizeOptions::IgnoreNamedIndexLabel::Yes);
+  auto so = SimplifyOptions::default_options();
+  auto so2 = so;
+  so2.fold_conjugate_pairs = SimplifyOptions::FoldConjugatePairs::No;
+  REQUIRE_FALSE(so == so2);
+}

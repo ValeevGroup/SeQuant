@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/complex.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -22,6 +23,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
@@ -148,10 +150,18 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
            mo[2].str();
   };
 
-  NestedTensorIndices oixs{tnsr};
+  // PR-2 contract: leaves are stored/served in their CANONICAL spelling, so
+  // normalize the orientation (and drop any fold marker) before keying --
+  // this makes literal test spellings and ctor-canonicalized leaves agree
+  auto canon = tnsr.clone();
+  {
+    auto& ct = canon->as<sequant::Tensor>();
+    sequant::TensorBlockCanonicalizer{}.apply(ct);
+    if (ct.conjugated()) ct.conjugate();
+  }
+  NestedTensorIndices oixs{canon->as<sequant::Tensor>()};
   if (oixs.inner.empty()) {
-    auto const tnsr_deparsed =
-        sequant::serialize(tnsr.clone(), {.annot_symm = false});
+    auto const tnsr_deparsed = sequant::serialize(canon, {.annot_symm = false});
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
@@ -169,16 +179,18 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
              ranges::to<std::wstring>;
     };
 
-    std::wstring result(tnsr.label());
+    std::wstring result(canon->as<sequant::Tensor>().label());
     result += L"{" + ixs_lbl(oixs.outer) + L";" + ixs_lbl(oixs.inner) + L"}";
     return result;
   }
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
-                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
-                           ->as<sequant::Tensor>());
+  return tensor_to_key(
+      sequant::deserialize<sequant::ExprPtr>(
+          spec, {.def_perm_symm = sequant::Symmetry::Nonsymm,
+                 .def_braket_symm = sequant::Hermiticity::NonHermitian})
+          ->as<sequant::Tensor>());
 }
 
 template <typename NumericT>
@@ -548,11 +560,54 @@ class rand_tensor_yield {
   ///
   sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_er_.find(label.data());
-    if (found == label_to_er_.end())
-      found = label_to_er_.find(tensor_to_key(label));
+    if (found != label_to_er_.end()) return found->second;
+    found = label_to_er_.find(tensor_to_key(label));
     if (found == label_to_er_.end())
       throw sequant::Exception{"attempted access of non-existent ResultPtr!"};
-    return found->second;
+    // stored arrays are CANONICAL-spelling shaped (PR-2 contract); if the
+    // requested literal is the other braket orientation, hand back a mode-
+    // permuted copy so manual references read as written
+    if (label.find(L'{') == std::wstring_view::npos) return found->second;
+    // stored arrays are CANONICAL-spelling shaped (PR-2 contract); serve the
+    // literal spelling by applying its full leaf transform (orientation
+    // relabel + conj/phase), exactly as evaluation would
+    auto lt = sequant::deserialize<sequant::ExprPtr>(std::wstring(label))
+                  ->as<sequant::Tensor>();
+    auto annot_of = [](sequant::Tensor const& t) -> std::string {
+      // mirror EvalExpr::indices_annot's convention: outer = proto-free,
+      // inner = proto-carrying, tokens via to_label_annotation
+      using ranges::views::filter;
+      using ranges::views::intersperse;
+      using ranges::views::join;
+      using ranges::views::transform;
+      auto lbl = [](sequant::Index const& ix) {
+        // label + proto labels concatenated (to_label_annotation convention)
+        std::string r = sequant::toUtf8(ix.label());
+        for (auto const& pix : ix.proto_indices())
+          r += sequant::toUtf8(pix.label());
+        return r;
+      };
+      NestedTensorIndices const nti{t};
+      std::string outer = nti.outer | transform(lbl) |
+                          intersperse(std::string{","}) | join |
+                          ranges::to<std::string>;
+      std::string inner = nti.inner | transform(lbl) |
+                          intersperse(std::string{","}) | join |
+                          ranges::to<std::string>;
+      return outer + (inner.empty() ? "" : (";" + inner));
+    };
+    auto const post = annot_of(lt);    // requested (as-written) mode order
+    sequant::EvalExprTA const ev{lt};  // canonicalizes; computes the map
+    // canonical (stored) mode order from the tensor's SLOTS (ev.annot() is
+    // md-ordered for ToT leaves and may include proto-only named indices)
+    auto const pre = annot_of(ev.expr()->as<sequant::Tensor>());
+    auto const tr = ev.canon_transform();
+    if (tr.trivial() && pre == post) return found->second;
+    auto r =
+        found->second->apply_transform(tr, {std::any{pre}, std::any{post}});
+    // cache under the literal key: the fixture owns the transformed variant
+    auto [it2, ok] = label_to_er_.emplace(std::wstring(label), std::move(r));
+    return it2->second;
   }
 };
 
@@ -754,14 +809,16 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // assigned by external SLOT, not by space.
     auto expr_bra_external_symm = deserialize(
         L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_bra_external_symm);
     auto [br_symm, kr_symm] =
         report(expr_bra_external_symm, "g{i_2,a_3;...}:N-S-S");
 
     auto expr_bra_external_conj = deserialize(
         L"2 g{i_2,a_3;i_3,i_4}:N-C-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_bra_external_conj);
     auto [br_conj, kr_conj] =
         report(expr_bra_external_conj, "g{i_2,a_3;...}:N-C-S");
@@ -774,7 +831,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // layout — use the ResultExpr API (C) to pin it.
     auto expr_ket_external_swap = deserialize(
         L"2 g{i_3,i_4;i_2,a_3}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     REQUIRE(expr_ket_external_swap);
     auto [br_swap, kr_swap] =
         report(expr_ket_external_swap, "g{i_3,i_4;i_2,a_3}:N-S-S (pre-swap)");
@@ -787,7 +845,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto res_explicit_layout = sequant::deserialize<sequant::ResultExpr>(
         L"R2{a_1,a_2;i_1,i_2}:N-N-S = "
         L"2 g{i_2,a_3;i_3,i_4}:N-S-S * t{a_3;i_3}:N-N-S "
-        L"* t{a_1,a_2;i_1,i_4}:N-N-S");
+        L"* t{a_1,a_2;i_1,i_4}:N-N-S",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto node_explicit = eval_node(res_explicit_layout);
     auto const& head_explicit = node_explicit->as_tensor();
     std::wstring head_explicit_str = sequant::to_latex(head_explicit);
@@ -830,7 +889,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
     auto parse_antisymm = [](auto const& xpr) {
       return sequant::deserialize<sequant::ExprPtr>(
-          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm,
+                .def_braket_symm = sequant::Hermiticity::NonHermitian});
     };
 
     auto& world = TA::get_default_world();
@@ -937,7 +997,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(prod2_rel < 1e-12);
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayD{};
       prod3_man("a1,i1,i2") =
@@ -945,7 +1006,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayD{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
@@ -974,7 +1036,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          L"f_{i2}^{a3} * t_{a2}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayD{};
@@ -1226,7 +1289,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       };
 
       auto expr1 = deserialize(
-          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+          L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
       auto man1 = [&]() {
         auto X1 = yield(L"X{a1;;x1}");
@@ -1259,7 +1323,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // (in aux of result); binarize(ResultExpr) must keep them uncontracted
       {
         auto res = deserialize<sequant::ResultExpr>(
-            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}");
+            L"GAM{a2;a1;i1,i2} = t{i1,i2;a1,a3} T2{a2,a3;i1,i2}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto node = eval_node(res);
         auto eval_rdm = evaluate(node, std::string("a_2,a_1,i_1,i_2"), yield_)
                             ->get<TA::TArrayD>();
@@ -1277,7 +1342,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                 sequant::AssertStrictBraKetSymmetry::No));
 
         // hyperindex i1 in ket slots of 3 tensors
-        auto expr2 = deserialize(L"T{a1;i1} T{a2;i1} T{a3;i1}");
+        auto expr2 = deserialize(
+            L"T{a1;i1} T{a2;i1} T{a3;i1}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto eval2 = eval(expr2, "a_1,a_2,a_3");
         auto man2 = [&]() {
           auto T1 = yield(L"T{a1;i1}");
@@ -1289,7 +1356,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
         REQUIRE(equal_tarrays(eval2, man2, "a1,a2,a3"));
 
         // hyperindex a1 in bra slots of 3 tensors
-        auto expr3 = deserialize(L"T{a1;i1} T{a1;i2} T{a1;i3}");
+        auto expr3 = deserialize(
+            L"T{a1;i1} T{a1;i2} T{a1;i3}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto eval3 = eval(expr3, "i_1,i_2,i_3");
         auto man3 = [&]() {
           auto T1 = yield(L"T{a1;i1}");
@@ -1309,7 +1378,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
          //   R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}
          //   R[x] = sum_{a1,a2} A[a1,x] B[a1,a2,x] C[a2,x]
         auto res = deserialize<sequant::ResultExpr>(
-            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}");
+            L"R{;;x1} = A{;a1;x1} B{a1;a2;x1} C{a2;;x1}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian});
         auto evalR = evaluate(eval_node(res), std::string("x_1"), yield_)
                          ->get<TA::TArrayD>();
         auto manR = [&]() {
@@ -1358,7 +1428,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using namespace std::string_literals;
 
     SECTION("summation") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"t_{a1}^{i1} + f_{i1}^{a1}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"t_{a1}^{i1} + f_{i1}^{a1}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto sum1_eval = eval(expr1, "i_1,a_1");
 
@@ -1368,8 +1440,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
-      auto expr2 =
-          deserialize<sequant::ExprPtr>(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
@@ -1383,7 +1456,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
     SECTION("product") {
       auto expr1 = deserialize<sequant::ExprPtr>(
-          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
       TArrayC prod1_man{};
@@ -1395,7 +1469,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
-          L"i4}");
+          L"i4}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
 
       auto prod2_man = TArrayC{};
@@ -1407,7 +1482,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
-          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayC{};
       prod3_man("a1,i1,i2") =
@@ -1416,7 +1492,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
-          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayC{};
       prod4_man("i1,a1,a2") = 1 / 4.0 *
@@ -1429,7 +1506,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
-          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
 
       auto man1 = TArrayC{};
@@ -1446,7 +1524,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-          L"f_{i2}^{a3} * t_{a2}^{i2}");
+          L"f_{i2}^{a3} * t_{a2}^{i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
 
       auto man2 = TArrayC{};
@@ -1459,7 +1538,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -1472,7 +1553,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1, i2, i3}^{a1, a2}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2, i3}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
 
@@ -1485,7 +1568,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval2, man2));
 
-      auto expr3 = deserialize<sequant::ExprPtr>(L"R_{a1,a2}^{}");
+      auto expr3 = deserialize<sequant::ExprPtr>(
+          L"R_{a1,a2}^{}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
@@ -1496,7 +1581,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"g_{i1, i2}^{a1, a2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -1506,7 +1593,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(equal_tarrays(eval1, man1));
 
-      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1,i2,i3}^{a1,a2,a3}");
+      auto expr2 = deserialize<sequant::ExprPtr>(
+          L"g_{i1,i2,i3}^{a1,a2,a3}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
@@ -1524,7 +1613,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
-          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}",
+          {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
       auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
                        ->get<TArrayC>();
@@ -1576,7 +1666,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"f{i3;i1}"
           L" * "
           L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
-      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(
+          expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
       std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
       ArrayToT ref;
@@ -1621,7 +1712,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
           L" * "
           L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
-      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(
+          expr_str, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
 
       auto result = evaluate(node, yield)->get<NumericT>();
 
@@ -1647,8 +1739,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // R(j,i;b,a))
       // -- outer and inner modes permute in lockstep.
       {
-        auto const Rnode = eval_node(
-            deserialize<sequant::ExprPtr>(L"R{a1<i1,i2>,a2<i1,i2>;i1,i2}"));
+        auto const Rnode = eval_node(deserialize<sequant::ExprPtr>(
+            L"R{a1<i1,i2>,a2<i1,i2>;i1,i2}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
         auto const Rres = dyield(Rnode);
         auto const& R = Rres->get<DArrayToT>();
 
@@ -1674,7 +1767,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // lockstep; each inner index keeps its proto-suffix "i_1i_2i_3".
       {
         auto const Rnode = eval_node(deserialize<sequant::ExprPtr>(
-            L"R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}"));
+            L"R{a1<i1,i2,i3>,a2<i1,i2,i3>,a3<i1,i2,i3>;i1,i2,i3}",
+            {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
         auto const Rres = dyield(Rnode);
         auto const& R = Rres->get<DArrayToT>();
 
@@ -1718,7 +1812,8 @@ TEST_CASE("eval_custom_evaluator", "[eval]") {
   // a multi-product expression: several non-leaf nodes in the eval tree.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
       L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}",
-      {.def_perm_symm = sequant::Symmetry::Antisymm});
+      {.def_perm_symm = sequant::Symmetry::Antisymm,
+       .def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "a_1,a_2,i_1,i_2";
   auto const node = eval_node(expr);
 
@@ -1764,7 +1859,8 @@ TEST_CASE("eval_batch_axis", "[eval]") {
   using sequant::contracted_indices;
 
   auto node_of = [](std::wstring_view xpr) {
-    return eval_node(sequant::deserialize<sequant::ExprPtr>(xpr));
+    return eval_node(sequant::deserialize<sequant::ExprPtr>(
+        xpr, {.def_braket_symm = sequant::Hermiticity::NonHermitian}));
   };
 
   SECTION("single contracted index") {
@@ -2038,6 +2134,132 @@ TEST_CASE("eval_write_into_slice", "[eval]") {
   }
 }
 
+// Numeric-invariance for Result::write_into_slice on the TA backend: the union
+// of disjoint, tile-aligned blocks scattered into a pre-sized destination must
+// reconstruct the whole array EXACTLY. write_into_slice() is the inverse of
+// slice_array_over_mode() (which GATHERS a block out): here we gather disjoint
+// blocks of a whole array R and scatter each back into a fresh, pre-sized
+// destination, then require the reassembled destination == R elementwise.
+TEST_CASE("eval_write_into_slice_lazy_view", "[eval]") {
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultTensorOfTensorTA;
+  using sequant::ResultTensorTA;
+  using sequant::slice_array_over_mode;
+  auto& world = TA::get_default_world();
+
+  SECTION("flat: disjoint tile-aligned blocks reassemble exactly") {
+    // mode 0 has 3 multi-element tiles (size 3 each; occ_tile_size>1 analog),
+    // mode 1 a single tile. Split mode 0 into element ranges [0,3) and [3,9)
+    // (tiles [0,1) and [1,3)): disjoint, tile-aligned, and tile-SPANNING.
+    TA::TArrayD R(world, TA::TiledRange{{0, 3, 6, 9}, {0, 5}});
+    R.fill_random();
+    world.gop.fence();
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // elements [0,3)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 3);  // elements [3,9)
+
+    // destination pre-sized to R's full shape, then filled block by block.
+    TA::TArrayD dest(world, R.trange());
+    dest.fill_local(0.0);
+    world.gop.fence();
+
+    auto rdest = eval_result<ResultTensorTA<TA::TArrayD>>(dest);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b0), 0, 0,
+                            3);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b1), 0, 3,
+                            9);
+
+    REQUIRE(equal_tarrays<Tight>(rdest->get<TA::TArrayD>(), R));
+  }
+
+  SECTION("flat: nonzero element lobound (frozen-core offset) is preserved") {
+    // mode 0 has element lobound 2 (a frozen-core-like offset) and two size-3
+    // tiles; split into [2,5) and [5,8). The block bounds honor the lobound.
+    TA::TArrayD R(world, TA::TiledRange{{2, 5, 8}, {0, 4}});
+    R.fill_random();
+    world.gop.fence();
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // elements [2,5)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // elements [5,8)
+    // the gathered blocks keep the source element lobound
+    REQUIRE(b0.trange().dim(0).elements_range().first == 2);
+
+    TA::TArrayD dest(world, R.trange());
+    dest.fill_local(0.0);
+    world.gop.fence();
+
+    auto rdest = eval_result<ResultTensorTA<TA::TArrayD>>(dest);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b0), 0, 2,
+                            5);
+    rdest->write_into_slice(*eval_result<ResultTensorTA<TA::TArrayD>>(b1), 0, 5,
+                            8);
+
+    auto const& out = rdest->get<TA::TArrayD>();
+    REQUIRE(out.trange().dim(0).elements_range().first == 2);  // lobound kept
+    REQUIRE(equal_tarrays<Tight>(out, R));
+  }
+
+  SECTION("tot: disjoint tile-aligned blocks reassemble exactly") {
+    using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
+    using ResultToT = ResultTensorOfTensorTA<ToTArray>;
+
+    // outer mode 0: two size-3 tiles (multi-element, tile-spanning split);
+    // outer mode 1: one size-2 tile. Inner tensors are 2x2. Inner values are
+    // position-dependent (derived from the outer coordinate) so a mis-scattered
+    // block -- wrong offset -- would change the reassembled norm.
+    TA::TiledRange const outer_tr{{0, 3, 6}, {0, 2}};
+    TA::Range const inner_r(std::array<std::size_t, 2>{2, 2});
+
+    auto build = [&world, inner_r](TA::TiledRange const& otr,
+                                   bool zero) -> ToTArray {
+      auto tile_fn = [inner_r, zero](TA::Range const& orng) {
+        TA::Tensor<TA::Tensor<double>> t{orng};
+        std::size_t o = 0;
+        for (auto const& coord : orng) {
+          auto& inner = t[o++];
+          inner = TA::Tensor<double>{inner_r};
+          double base = 0.0;
+          if (!zero)
+            for (auto c : coord)
+              base = base * 37.0 + static_cast<double>(c + 1);
+          std::size_t k = 0;
+          for (auto& x : inner) x = zero ? 0.0 : base * 100.0 + (++k);
+        }
+        return t;
+      };
+      ToTArray arr{world, otr};
+      for (auto it = arr.begin(); it != arr.end(); ++it)
+        if (arr.is_local(it.index()))
+          *it = world.taskq.add(tile_fn, it.make_range());
+      world.gop.fence();
+      return arr;
+    };
+
+    ToTArray R = build(outer_tr, /*zero=*/false);
+
+    auto const b0 = slice_array_over_mode(R, 0, 0, 1);  // outer elements [0,3)
+    auto const b1 = slice_array_over_mode(R, 0, 1, 2);  // outer elements [3,6)
+
+    // destination pre-sized to R's full shape with well-formed (zero) inners.
+    ToTArray dest = build(outer_tr, /*zero=*/true);
+
+    auto rdest = eval_result<ResultToT>(dest);
+    rdest->write_into_slice(*eval_result<ResultToT>(b0), 0, 0, 3);
+    rdest->write_into_slice(*eval_result<ResultToT>(b1), 0, 3, 6);
+
+    // ToT elementwise invariance: norm of the difference (dot of the diff with
+    // itself) must vanish. TA::norm2 does not support ToT tiles, so use dot.
+    auto const& out = rdest->get<ToTArray>();
+    ToTArray diff;
+    diff("i,j;a,b") = out("i,j;a,b") - R("i,j;a,b");
+    REQUIRE(Catch::Approx(diff("i,j;a,b").dot(diff("i,j;a,b"))) == 0.0);
+    // and the reassembled result is nonzero (guards against a trivial all-zero
+    // pass, e.g. if both blocks silently no-op'd).
+    REQUIRE(out("i,j;a,b").dot(out("i,j;a,b")) > 0.0);
+  }
+}
+
 TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
@@ -2053,7 +2275,8 @@ TEST_CASE("eval_batched_custom_evaluator", "[eval]") {
 
   // contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3 tiles)
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
 
@@ -2102,7 +2325,8 @@ TEST_CASE("eval_batched_custom_evaluator persistence gate", "[eval]") {
   // Contracts a1,a2 (unoccupied, 3 tiles) -> batchable over an unoccupied mode.
   // The subtree contains a "t" leaf, which we treat as volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto node = eval_node(expr);
   // The runtime batches STRICTLY on the optimizer's annotations (there is no
@@ -2245,7 +2469,9 @@ TEST_CASE("ta_tot_conj_complex", "[eval]") {
   using ArrayToT = typename decltype(yield)::array_tot_type;
 
   std::string const annot{"i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
-  auto const t = deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}");
+  auto const t = deserialize<sequant::ExprPtr>(
+      L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const& src = yield(t->as<sequant::Tensor>())->get<ArrayToT>();
 
   ArrayToT conjd;
@@ -2282,7 +2508,8 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
   // children, contracted at the root; an aux-aux edge, like the DF index K).
   // Every orbital contraction pairs a bra with a ket.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const node = eval_node(expr);
   REQUIRE_FALSE(node.leaf());
   REQUIRE_FALSE(node.left().leaf());
@@ -2314,7 +2541,8 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // mode (an index the shared subnode does not carry) gives it signature
     // 'absent' while the first gives a position -> inconsistent -> unshared
     auto const expr2 = sequant::deserialize<sequant::ExprPtr>(
-        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}");
+        L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const node2 = eval_node(expr2);
     auto const bogus_axis = Index(L"i_9");
     std::vector<std::pair<node_t const*, Index>> const members{
@@ -2333,10 +2561,12 @@ TEST_CASE("eval_batched_scratch", "[eval]") {
     // sliced value. D must end up unregistered.
     auto const expr_m1 = sequant::deserialize<sequant::ExprPtr>(
         L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * "
-        L"(g{a_3;i_2;x_1} * h{i_4;a_3})");
+        L"(g{a_3;i_2;x_1} * h{i_4;a_3})",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const m1 = eval_node(expr_m1);
     auto const expr_m2 = sequant::deserialize<sequant::ExprPtr>(
-        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}");
+        L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * u{i_5;i_3}) * p{i_6;i_7;x_1}",
+        {.def_braket_symm = sequant::Hermiticity::NonHermitian});
     auto const m2 = eval_node(expr_m2);
     // structural preconditions: m1 = X * D2, X = D * u, D2 == D == m2's X
     // child canonically
@@ -3831,7 +4061,8 @@ TEST_CASE("eval_batched_custom_evaluator dedups within-batch repeats",
   // W-analog: root contracts the aux index x_1; the two children are
   // canonically equal
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})");
+      L"(g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3})",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_3,i_2,i_4";
   auto node = eval_node(expr);
   // The runtime batches STRICTLY on the optimizer's annotations (there is no
@@ -3895,9 +4126,11 @@ TEST_CASE("eval_batched_custom_evaluator group replay",
   // contraction pairs a bra with a ket.
   auto const t1 = sequant::deserialize<sequant::ExprPtr>(
       L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * (g{a_3;i_2;x_1} * h{i_4;a_3}))"
-      L" * t{i_1,i_2;i_3,i_9}");
+      L" * t{i_1,i_2;i_3,i_9}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const t2 = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}");
+      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const tgt1 = "i_4,i_9";
   std::string const tgt2 = "i_5,i_6";
   auto n1 = eval_node(t1);
@@ -3986,9 +4219,11 @@ TEST_CASE("eval_batched_custom_evaluator group replay layers nested finals",
   // carries no x_2). Every orbital contraction pairs a bra with a ket.
   auto const t_out = sequant::deserialize<sequant::ExprPtr>(
       L"((((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * r{i_6;i_7;x_2})"
-      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}");
+      L" * q{i_7;i_8;x_2}) * t{i_1;i_3,i_9}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const t_in = sequant::deserialize<sequant::ExprPtr>(
-      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}");
+      L"((g{a_2;i_1;x_1} * h{i_3;a_2}) * p{i_5;i_6;x_1}) * t{i_1;i_3,i_7}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const tgt_out = "i_5,i_8,i_9";
   std::string const tgt_in = "i_5,i_6,i_7";
   auto n_out = eval_node(t_out);
@@ -5847,7 +6082,8 @@ TEST_CASE("make_evaluator BatchPolicy adapter", "[eval]") {
   // Contracts a1,a2 (unoccupied) -> batch mode is an unoccupied index (3
   // tiles). The subtree contains a "t" leaf, which the policy marks volatile.
   auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}");
+      L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i3,i4}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   std::string const target = "i_1,i_2,i_3,i_4";
   auto const node = eval_node(expr);
 
@@ -6393,7 +6629,8 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   // a1<i1,i2>,a2<i1,i2> that fully contract (inner), leaving bare i1,i2.
   auto const res_expr = sequant::deserialize<sequant::ResultExpr>(
       L"D{i1,i2} = "
-      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}");
+      L"R{a1<i1,i2>,a2<i1,i2>;i1,i2} * g{i1,i2;a1<i1,i2>,a2<i1,i2>}",
+      {.def_braket_symm = sequant::Hermiticity::NonHermitian});
   auto const node = eval_node(res_expr);
   // Confirm this really is the denest (DeNest::True) path.
   REQUIRE(node.left()->tot());
@@ -6443,77 +6680,6 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
         TAEvalContext::make_hook<double, TA::SparsePolicy>(ctx));
     auto const res = evaluate(node, target, yield, cache)->get<FlatArray>();
     REQUIRE(equal_tarrays(res, ref, "i,j"));
-  }
-}
-
-TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
-  // END-TO-END check of serving the conjugation marker at eval: a starred
-  // ToT spelling binarizes to an EvalOp::Adjoint node over its unmarked
-  // VALUE-orientation operand -- Result::adjoint() is private and reachable
-  // only through the Adjoint IR node, so the override was compile-checked
-  // but never driven with data. (Folding fresh leaves onto one
-  // orientation-shared cache slot is the lazy-conj eval follow-up.)
-  //
-  // Here: binarize a starred spelling, evaluate it against a yielder that
-  // only ever serves the unmarked operand's spelling, and require the result
-  // to be the elementwise conjugate of what was served.
-  using namespace sequant;
-  auto& world = TA::get_default_world();
-  size_t const nocc = 2, nvirt = 3;
-  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
-                                                                 nvirt};
-  using ArrayToT = typename decltype(yield)::array_tot_type;
-
-  // braket symmetry pinned explicitly (:C): the test's premise is a
-  // Conjugate (Hermitian) ToT leaf, independent of the ambient deserializer
-  // defaults (which become conservative NonHermitian with the
-  // default-tensor-symmetry rework, PR #596)
-  auto const swapped =
-      deserialize<sequant::ExprPtr>(L"t{i2,i3;a3<i2,i3>,a4<i2,i3>}:N-C-S");
-  auto const canonical =
-      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
-
-  // eval-boundary precondition: leaves are orientation-sensitive (no fold,
-  // no marker) -- the two orientations are distinct nodes
-  EvalExpr const swapped_leaf{swapped->as<Tensor>()};
-  EvalExpr const canon_leaf{canonical->as<Tensor>()};
-  auto const is_conj = [](EvalExpr const& leaf) {
-    return leaf.expr()->as<Tensor>().conjugated();
-  };
-  REQUIRE_FALSE(is_conj(swapped_leaf));
-  REQUIRE_FALSE(is_conj(canon_leaf));
-  REQUIRE(swapped_leaf.hash_value() != canon_leaf.hash_value());
-
-  // a STARRED spelling is served through EvalOp::Adjoint: binarize wraps it
-  // over the unmarked VALUE-orientation operand
-  auto conj_side = canonical->clone();
-  conj_side->as<Tensor>().conjugate();
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  auto const node = binarize<EvalExprTA>(conj_side);
-  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE(node->op_type().has_value());
-  CHECK(node->op_type().value() == EvalOp::Adjoint);
-  auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
-  auto const res = evaluate(node, node->annot(), yield, cache);
-  auto const& got = res->get<ArrayToT>();
-  auto const& served =
-      yield(node.left()->expr()->as<Tensor>())->get<ArrayToT>();
-
-  auto it_s = served.begin();
-  auto it_g = got.begin();
-  for (; it_s != served.end(); ++it_s, ++it_g) {
-    auto const& souter = it_s->get();
-    auto const& gouter = it_g->get();
-    REQUIRE(souter.size() == gouter.size());
-    for (std::size_t o = 0; o < souter.size(); ++o) {
-      auto const& sinner = souter[o];
-      auto const& ginner = gouter[o];
-      if (sinner.empty()) continue;
-      for (std::size_t k = 0; k < sinner.size(); ++k) {
-        CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
-        CHECK(ginner[k].imag() == Catch::Approx(-sinner[k].imag()));
-      }
-    }
   }
 }
 
@@ -6949,5 +7115,690 @@ TEST_CASE(
     INFO("relative L2 diff (second evaluation vs first, one cache handle) = "
          << rel);
     CHECK(rel < 1e-12);
+  }
+}
+
+TEST_CASE("eval_trace_charges_a_lazy_view_zero_bytes", "[eval][view][trace]") {
+  // The eval trace's `alloc` column is "what the op allocated" -- the column
+  // every memory post-mortem of a CCk iteration is read off. A leaf transform
+  // that returns a LAZY VIEW (a pending phase/conj/relabel on the cache's
+  // buffer) allocates nothing, so it must report alloc=0B while `result`
+  // still carries the value's logical size. Driven on a nested-tile (ToT)
+  // leaf, whose transform used to materialize a real copy.
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  size_t const nocc = 2, nvirt = 3;
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
+                                                                 nvirt};
+
+  auto const canonical =
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
+  auto conj_side = canonical->clone();
+  conj_side->as<Tensor>().conjugate();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const node = binarize<EvalExprTA>(conj_side);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node.leaf());
+  REQUIRE_FALSE(node->canon_transform().trivial());
+
+  auto& lg = Logger::instance();
+  struct Guard {
+    decltype(lg.eval)& eval;
+    std::size_t level;
+    std::ostream* stream;
+    ~Guard() {
+      eval.level = level;
+      eval.stream = stream;
+    }
+  } guard{lg.eval, lg.eval.level, lg.eval.stream};
+  std::ostringstream trace;
+  lg.eval.level = 1;
+  lg.eval.stream = &trace;
+
+  auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
+  auto const res = evaluate<Trace::On>(node, node->annot(), yield, cache);
+  REQUIRE(res);
+  lg.eval.stream = guard.stream;
+  lg.eval.level = guard.level;
+
+  // every transform line must be charged 0 allocated bytes -- including the
+  // second application on the cache store path, whose transform composes to
+  // the identity and so leaves an alias with nothing pending
+  std::string line;
+  std::size_t seen = 0;
+  for (std::istringstream in{trace.str()}; std::getline(in, line);) {
+    if (line.find("MultByPhase") == std::string::npos) continue;
+    ++seen;
+    INFO("transform line: " << line);
+    REQUIRE(line.find("alloc=0B") != std::string::npos);
+  }
+  REQUIRE(seen >= 1);
+  for (std::istringstream in{trace.str()}; std::getline(in, line);)
+    if (line.find("MultByPhase") != std::string::npos) break;
+  REQUIRE(line.find("MultByPhase") != std::string::npos);
+  INFO("trace line: " << line);
+  // alloc=0B -- the view allocated nothing ...
+  REQUIRE(line.find("alloc=0B") != std::string::npos);
+  // ... while result= carries the value's logical size (non-zero)
+  auto const rpos = line.find("result=");
+  REQUIRE(rpos != std::string::npos);
+  REQUIRE(line.compare(rpos, 9, "result=0B") != 0);
+}
+
+TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
+  // END-TO-END check of serving the conjugation marker at eval: a starred
+  // ToT spelling binarizes to an EvalOp::Adjoint node over its unmarked
+  // VALUE-orientation operand -- Result::adjoint() is private and reachable
+  // only through the Adjoint IR node, so the override was compile-checked
+  // but never driven with data. (Folding fresh leaves onto one
+  // orientation-shared cache slot is the lazy-conj eval follow-up.)
+  //
+  // Here: binarize a starred spelling, evaluate it against a yielder that
+  // only ever serves the unmarked operand's spelling, and require the result
+  // to be the elementwise conjugate of what was served.
+  using namespace sequant;
+  auto& world = TA::get_default_world();
+  size_t const nocc = 2, nvirt = 3;
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield{world, nocc,
+                                                                 nvirt};
+  using ArrayToT = typename decltype(yield)::array_tot_type;
+
+  // braket symmetry pinned explicitly (:C): the test's premise is a
+  // Conjugate (Hermitian) ToT leaf, independent of the ambient deserializer
+  // defaults (which become conservative NonHermitian with the
+  // default-tensor-symmetry rework, PR #596)
+  auto const swapped =
+      deserialize<sequant::ExprPtr>(L"t{i2,i3;a3<i2,i3>,a4<i2,i3>}:N-C-S");
+  auto const canonical =
+      deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
+
+  // PR-2 transform model: both orientations share ONE canonical slot; the
+  // non-canonical spelling carries the fold map in its CanonTransform
+  EvalExpr const swapped_leaf{swapped->as<Tensor>()};
+  EvalExpr const canon_leaf{canonical->as<Tensor>()};
+  auto const is_conj = [](EvalExpr const& leaf) {
+    return leaf.expr()->as<Tensor>().conjugated();
+  };
+  REQUIRE_FALSE(is_conj(swapped_leaf));
+  REQUIRE_FALSE(is_conj(canon_leaf));
+  REQUIRE(swapped_leaf.hash_value() == canon_leaf.hash_value());
+  REQUIRE(swapped_leaf.canon_transform().trivial() !=
+          canon_leaf.canon_transform().trivial());
+
+  // a STARRED spelling binarizes to a plain LEAF whose transform composes a
+  // pure {conj} on top; evaluation serves conj(cached) on retrieval
+  auto conj_side = canonical->clone();
+  conj_side->as<Tensor>().conjugate();
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const node = binarize<EvalExprTA>(conj_side);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node.leaf());
+  // orientation-robust: the starred spelling's transform differs from the
+  // unstarred same-spelling leaf's by exactly conj
+  REQUIRE(sequant::compose(node->canon_transform(),
+                           EvalExpr{canonical->as<Tensor>()}.canon_transform())
+              .conj);
+  auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
+  auto const res = evaluate(node, node->annot(), yield, cache);
+  auto const& got = res->get<ArrayToT>();
+  // the leaf IS the node: served = the canonical unstarred spelling's data
+  auto const& served = yield(node->expr()->as<Tensor>())->get<ArrayToT>();
+
+  // expected = the leaf transform applied to the served canonical data:
+  // {conj} conjugates; a bare {braket_swap} is layout-invariant for ToT
+  // (outer/inner classification ignores bra/ket), i.e. the identity here
+  bool const expect_conj = node->canon_transform().conj;
+  auto it_s = served.begin();
+  auto it_g = got.begin();
+  for (; it_s != served.end(); ++it_s, ++it_g) {
+    auto const& souter = it_s->get();
+    auto const& gouter = it_g->get();
+    REQUIRE(souter.size() == gouter.size());
+    for (std::size_t o = 0; o < souter.size(); ++o) {
+      auto const& sinner = souter[o];
+      auto const& ginner = gouter[o];
+      if (sinner.empty()) continue;
+      for (std::size_t k = 0; k < sinner.size(); ++k) {
+        CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
+        CHECK(ginner[k].imag() ==
+              Catch::Approx((expect_conj ? -1 : 1) * sinner[k].imag()));
+      }
+    }
+  }
+}
+
+TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using ZArray = TA::DistArray<TA::Tensor<std::complex<double>>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  auto& world = TA::get_default_world();
+
+  TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
+  ZArray R(world, tr);
+  R.fill_random();
+  world.gop.fence();
+
+  ResultPtr res = eval_result<ResultZ>(R);
+  std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"a,i"}};
+
+  // full transform: -conj(R^T)
+  auto got = res->apply_transform(
+      CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+  ZArray ref;
+  ref("a,i") = std::complex<double>(-1.0, 0.0) * R("i,a").conj();
+  world.gop.fence();
+  ZArray diff;
+  diff("a,i") = got->get<ZArray>()("a,i") - ref("a,i");
+  REQUIRE(diff("a,i").norm().get() < 1e-12);
+
+  // conj-only (no transposition): equal annots
+  std::array<std::any, 2> ann_c{std::string{"i,a"}, std::string{"i,a"}};
+  auto gotc = res->apply_transform(CanonTransform{.conj = true}, ann_c);
+  ZArray refc;
+  refc("i,a") = R("i,a").conj();
+  world.gop.fence();
+  ZArray diffc;
+  diffc("i,a") = gotc->get<ZArray>()("i,a") - refc("i,a");
+  REQUIRE(diffc("i,a").norm().get() < 1e-12);
+}
+
+TEST_CASE("conj_eval_cache_reuse", "[eval][conj-transform]") {
+  // The uniform-conjugate reuse contract end-to-end (the mechanism the
+  // TRS \mathcal{T} fold planned on top of this PR consumes): a conjugated
+  // network is a cache HIT on its unconjugated counterpart's slot, served
+  // as one retrieval conj -- whole terms, sum shapes, and intermediates
+  // buried in mixed terms alike.
+  using namespace sequant;
+  using node_t = FullBinaryNode<EvalExprTA>;
+  auto& world = TA::get_default_world();
+  rand_tensor_yield<std::complex<double>> yield_{world, 2, 3};
+  using ZArr = typename decltype(yield_)::array_type;
+
+  std::map<std::wstring, int> n_yield;
+  auto yield = [&yield_, &n_yield](node_t const& n) {
+    if (n->is_tensor()) ++n_yield[std::wstring(n->as_tensor().label())];
+    return yield_(n);
+  };
+
+  auto term = [](wchar_t const* spec) { return deserialize<ExprPtr>(spec); };
+  auto const eAB = term(L"A{i_1;a_1}:N-N-S B{a_1;i_2}:N-N-S");
+  auto const AB = eval_node(eAB);
+  auto const ABc = eval_node(conjugate(eAB));
+  // uniform-conj hoisting: one slot
+  REQUIRE(AB->hash_value() == ABc->hash_value());
+  REQUIRE(ABc->canon_transform().conj);
+
+  auto const eS = term(L"A{i_1;a_1}:N-N-S B{a_1;i_2}:N-N-S")->clone() +
+                  term(L"D{i_1;a_2}:N-N-S E{a_2;i_2}:N-N-S");
+  auto const S = eval_node(eS);
+  auto const Sc = eval_node(conjugate(eS));
+  REQUIRE(S->hash_value() == Sc->hash_value());
+  REQUIRE(Sc->canon_transform().conj);
+
+  auto const eMixed = ex<Product>(
+      ExprPtrList{conjugate(eAB->clone()), term(L"C{i_2;i_3}:N-N-S")});
+  auto const mixed = eval_node(eMixed);
+
+  auto not_volatile = [](node_t const&) { return false; };
+  auto cache = cache_manager(std::vector{AB, ABc, S, Sc, mixed}, not_volatile);
+
+  auto const r1 =
+      evaluate(AB, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  auto const counts1 = n_yield;
+
+  // whole-term \mathcal{T} partner: zero new yields, values conjugated
+  auto const r2 =
+      evaluate(ABc, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield == counts1);
+  {
+    ZArr ref;
+    ref("i_1,i_2") = r1("i_1,i_2").conj();
+    ZArr diff;
+    diff("i_1,i_2") = r2("i_1,i_2") - ref("i_1,i_2");
+    REQUIRE(diff("i_1,i_2").norm().get() < 1e-10);
+  }
+
+  // mixed term: the buried (A^*.B^*) intermediate hits the cached A.B slot
+  auto const a_before = counts1.count(L"A") ? counts1.at(L"A") : 0;
+  auto const r3 =
+      evaluate(mixed, std::string("i_1,i_3"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield.at(L"A") == a_before);  // not re-yielded
+  REQUIRE(n_yield.at(L"B") == counts1.at(L"B"));
+  REQUIRE(n_yield.at(L"C") == 1);  // only the new factor
+  {
+    ZArr abc;
+    abc("i_1,i_3") =
+        r2("i_1,i_2") * yield_(L"C{i_2;i_3}")->get<ZArr>()("i_2,i_3");
+    ZArr diff;
+    diff("i_1,i_3") = r3("i_1,i_3") - abc("i_1,i_3");
+    REQUIRE(diff("i_1,i_3").norm().get() < 1e-10);
+  }
+
+  // \mathcal{T}-shaped sum of products: hit + conjugated values
+  auto const s1 =
+      evaluate(S, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  auto const counts2 = n_yield;
+  auto const s2 =
+      evaluate(Sc, std::string("i_1,i_2"), yield, cache)->get<ZArr>();
+  REQUIRE(n_yield == counts2);
+  {
+    ZArr ref;
+    ref("i_1,i_2") = s1("i_1,i_2").conj();
+    ZArr diff;
+    diff("i_1,i_2") = s2("i_1,i_2") - ref("i_1,i_2");
+    REQUIRE(diff("i_1,i_2").norm().get() < 1e-10);
+  }
+}
+
+TEST_CASE("re_im_evaluation", "[eval][re-im]") {
+  using namespace sequant;
+  // pin the whole symbolic environment (canonicalizer registry is
+  // process-global, and the ambient context's field must be complex for the
+  // conj channels to be nontrivial) so this case is order-independent
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto sr_ctx = Context{get_default_context()};
+  sr_ctx.set(mbpt::make_min_sr_spaces());
+  auto ctx_resetter = set_scoped_default_context(sr_ctx);
+  using C = std::complex<double>;
+  const size_t nocc = 2, nvirt = 4;
+  auto& world = TA::get_default_world();
+  auto yield_ = rand_tensor_yield<C, TA::DensePolicy>{world, nocc, nvirt};
+
+  // s = a closed-contraction scalar network on complex data
+  auto s_expr = deserialize<sequant::ExprPtr>(L"g{i_1;a_1}:N") *
+                deserialize<sequant::ExprPtr>(L"t{a_1;i_1}:N");
+
+  auto direct = evaluate(eval_node(s_expr->clone()), yield_)->get<C>();
+  REQUIRE(std::abs(direct.imag()) > 1e-12);  // genuinely complex data
+
+  auto re = evaluate(eval_node(real_part(s_expr->clone())), yield_)->get<C>();
+  auto im =
+      evaluate(eval_node(imaginary_part(s_expr->clone())), yield_)->get<C>();
+
+  // Re/Im results are real-valued
+  REQUIRE(re.imag() == 0.0);
+  REQUIRE(im.imag() == 0.0);
+  // Re(s) + i Im(s) == s
+  REQUIRE(std::abs(re + C(0, 1) * im - direct) < 1e-12);
+  REQUIRE(re.real() == Catch::Approx(direct.real()));
+  REQUIRE(im.real() == Catch::Approx(direct.imag()));
+}
+
+// T19 layer 1: apply_transform on a TA result is LAZY -- it returns a view
+// that shares the array and carries a pending {phase, conj, relabel}; the
+// view feeds sum/prod/dot/permute without materializing, get<>() (external
+// readers) materializes on demand, and transforms compose.
+TEST_CASE("result_transform_view_ta", "[eval][conj-transform][view]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultScalar;
+  using ZArray = TA::DistArray<TA::Tensor<std::complex<double>>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  auto& world = TA::get_default_world();
+  auto norm_diff = [&](ZArray const& x, ZArray const& y, std::string const& a) {
+    ZArray d;
+    d(a) = x(a) - y(a);
+    world.gop.fence();
+    return d(a).norm().get();
+  };
+
+  TA::TiledRange tr{{0, 2, 4}, {0, 3, 6}};
+  ZArray R(world, tr), S(world, tr);
+  R.fill_random();
+  S.fill_random();
+  world.gop.fence();
+  ResultPtr res = eval_result<ResultZ>(R);
+  ResultPtr other = eval_result<ResultZ>(S);
+
+  SECTION("view: shares the array, get<> materializes on demand") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"a,i"}};
+    auto got = res->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(got->as<ResultZ>().is_view());
+    ZArray ref;
+    ref("a,i") = std::complex<double>(-1.0, 0.0) * R("i,a").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref, "a,i") < 1e-12);
+    REQUIRE(!got->as<ResultZ>().is_view());  // materialized by get<>
+  }
+  SECTION("view feeds a plain contraction lazily") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    // C(i,j) = -conj(R)(i,a) * S(j,a)
+    std::array<std::any, 3> pann{std::string{"i,a"}, std::string{"j,a"},
+                                 std::string{"i,j"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZArray ref;
+    ref("i,j") = std::complex<double>(-1.0, 0.0) * R("i,a").conj() * S("j,a");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref, "i,j") < 1e-12);
+    REQUIRE(v->as<ResultZ>().is_view());  // the operand was not materialized
+  }
+  SECTION("view as the RIGHT operand, and dot") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v = other->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,a"}, std::string{"j,a"},
+                                 std::string{"i,j"}};
+    auto got = res->prod(*v, pann, sequant::DeNest::False);
+    ZArray ref;
+    ref("i,j") = R("i,a") * S("j,a").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref, "i,j") < 1e-12);
+    std::array<std::any, 3> dann{std::string{"i,a"}, std::string{"i,a"},
+                                 std::string{}};
+    auto d = res->prod(*v, dann, sequant::DeNest::False);
+    auto dref = R("i,a").dot(S("i,a").conj()).get();
+    REQUIRE(std::abs(d->get<std::complex<double>>() - dref) < 1e-12);
+    REQUIRE(v->as<ResultZ>().is_view());
+  }
+  SECTION("sum, add_inplace, permute and phase compose on views") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> sann{std::string{"i,a"}, std::string{"i,a"},
+                                 std::string{"i,a"}};
+    auto s = v->sum(*other, sann);
+    ZArray ref;
+    ref("i,a") = R("i,a").conj() + S("i,a");
+    world.gop.fence();
+    REQUIRE(norm_diff(s->get<ZArray>(), ref, "i,a") < 1e-12);
+    // add_inplace into a view materializes the target, adds the other lazily
+    auto w = res->apply_transform(CanonTransform{.conj = true}, ann);
+    w->add_inplace(*v);
+    ZArray ref2;
+    ref2("i,a") = std::complex<double>(2.0, 0.0) * R("i,a").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(w->get<ZArray>(), ref2, "i,a") < 1e-12);
+    // permute of a view stays a view; a second transform composes
+    std::array<std::any, 2> pann{std::string{"i,a"}, std::string{"a,i"}};
+    auto pv = v->permute(pann);
+    REQUIRE(pv->as<ResultZ>().is_view());
+    auto pvm = pv->mult_by_phase(-1);
+    REQUIRE(pvm->as<ResultZ>().is_view());
+    auto pvc = pvm->apply_transform(CanonTransform{.conj = true},
+                                    {std::string{"a,i"}, std::string{"a,i"}});
+    ZArray ref3;
+    ref3("a,i") = std::complex<double>(-1.0, 0.0) * R("i,a");  // conj twice
+    world.gop.fence();
+    REQUIRE(norm_diff(pvc->get<ZArray>(), ref3, "a,i") < 1e-12);
+  }
+  SECTION("Hadamard product with a view operand is still correct") {
+    std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> hann{std::string{"i,a"}, std::string{"i,a"},
+                                 std::string{"i,a"}};
+    auto got = v->prod(*other, hann, sequant::DeNest::False);
+    // reference: conj elementwise then einsum
+    ZArray Rc;
+    Rc("i,a") = R("i,a").conj();
+    world.gop.fence();
+    ZArray ref2 = TA::einsum(Rc("i,a"), S("i,a"), "i,a");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZArray>(), ref2, "i,a") < 1e-12);
+  }
+}
+
+// The nested-tile counterpart of result_transform_view_ta: apply_transform /
+// mult_by_phase / permute on a ResultTensorOfTensorTA return a view sharing
+// the array with a pending {phase, conj, outer+inner relabel}. A consumer
+// that is a TA expression (sum, nested contraction, scale) folds the pending
+// transform into the expression -- conj(A) * B contracts without a conj
+// copy of A (TA conj on nested-tile contractions); einsum consumers fold the
+// relabel and carry the phase on the result's view, materializing only a
+// pending conj (einsum takes plain tensor expressions only).
+TEST_CASE("result_transform_view_tot_ta", "[eval][conj-transform][view][tot]") {
+  using sequant::CanonTransform;
+  using sequant::eval_result;
+  using sequant::ResultPtr;
+  using sequant::ResultScalar;
+  using Z = std::complex<double>;
+  using ZArray = TA::DistArray<TA::Tensor<Z>>;
+  using ZToT = TA::DistArray<TA::Tensor<TA::Tensor<Z>>>;
+  using ResultZ = sequant::ResultTensorTA<ZArray>;
+  using ResultZToT = sequant::ResultTensorOfTensorTA<ZToT>;
+  auto& world = TA::get_default_world();
+
+  // |<d,d>|^1/2 of the difference d = x - y (a nested-tile norm())
+  auto norm_diff = [&](auto const& x, auto const& y, std::string const& a) {
+    std::decay_t<decltype(x)> d;
+    d(a) = x(a) - y(a);
+    world.gop.fence();
+    Z const dd = d(a).dot(d(a)).get();
+    return std::sqrt(std::abs(dd));
+  };
+
+  TA::TiledRange const otr{{0, 2, 4}, {0, 2, 4}};
+  TA::Range const irng(std::array<std::size_t, 2>{3, 3});
+  auto build = [&](TA::TiledRange const& tr) {
+    ZToT arr{world, tr};
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+      if (arr.is_local(it.index()))
+        *it = random_tensor_of_tensor<Z>(it.make_range(), irng);
+    world.gop.fence();
+    return arr;
+  };
+  ZToT const R = build(otr), S = build(otr);
+  ZArray F(world, otr);
+  F.fill_random();
+  world.gop.fence();
+  ResultPtr res = eval_result<ResultZToT>(R);
+  ResultPtr other = eval_result<ResultZToT>(S);
+  ResultPtr flat = eval_result<ResultZ>(F);
+
+  SECTION("view: shares the array, get<> materializes on demand") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto got = res->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(got->as<ResultZToT>().is_view());
+    ZToT ref;
+    ref("j,i;b,a") = Z(-1.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "j,i;b,a") < 1e-12);
+    REQUIRE(!got->as<ResultZToT>().is_view());  // materialized by get<>
+  }
+  SECTION("conj view feeds a nested contraction lazily (ToT * ToT -> ToT)") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    // C(i,k;a,c) = -conj(R)(i,j;a,b) * S(k,j;c,b): outer j and inner b
+    // contracted, TA's expression engine folds the conj
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"k,j;c,b"},
+                                 std::string{"i,k;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZToT ref;
+    ref("i,k;a,c") = Z(-1.0, 0.0) * R("i,j;a,b").conj() * S("k,j;c,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,k;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());  // the operand was not copied
+  }
+  SECTION("conj view feeds an outer-Hadamard nested product lazily") {
+    // the CSV pair product: outer pair indices fused (Hadamard), inner
+    // contraction -- TA's einsum delegates this shape to the expression
+    // engine itself (pure outer Hadamard), so the conj folds there too
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v =
+        res->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;b,c"},
+                                 std::string{"i,j;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    ZToT Rc;
+    Rc("i,j;a,b") = Z(-1.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    ZToT ref = TA::einsum(Rc("i,j;a,b"), S("i,j;b,c"), "i,j;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,j;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());  // no conj copy was made
+  }
+  SECTION("relabeled + phased view feeds einsum (Hadamard outer) lazily") {
+    // a relabel and a phase ride on the einsum annotation / result view; no
+    // conj involved so nothing is materialized
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto v = res->apply_transform(CanonTransform{.phase = -1}, ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    std::array<std::any, 3> pann{std::string{"j,i;b,a"}, std::string{"j,i;b,c"},
+                                 std::string{"j,i;a,c"}};
+    auto got = v->prod(*other, pann, sequant::DeNest::False);
+    REQUIRE(got->as<ResultZToT>().is_view());  // phase pending on the result
+    ZToT ref = TA::einsum(R("i,j;a,b"), S("j,i;b,c"), "j,i;a,c");
+    ZToT nref;
+    nref("j,i;a,c") = Z(-1.0, 0.0) * ref("j,i;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), nref, "j,i;a,c") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+  }
+  SECTION("conj view into einsum's own product materializes the operand once") {
+    // outer Hadamard i mixed with a contracted j and an external k: einsum's
+    // tile-level general product, which takes plain tensor expressions only
+    TA::TiledRange const otr3{{0, 2, 4}, {0, 2, 4}, {0, 2, 4}};
+    ZToT const T3 = build(otr3);
+    ResultPtr third = eval_result<ResultZToT>(T3);
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"},
+                                 std::string{"i,j,k;b,c"},
+                                 std::string{"i,k;a,c"}};
+    auto got = v->prod(*third, pann, sequant::DeNest::False);
+    ZToT Rc;
+    Rc("i,j;a,b") = R("i,j;a,b").conj();
+    world.gop.fence();
+    ZToT ref = TA::einsum(Rc("i,j;a,b"), T3("i,j,k;b,c"), "i,k;a,c");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), ref, "i,k;a,c") < 1e-12);
+    REQUIRE(!v->as<ResultZToT>().is_view());  // materialized (memoized)
+  }
+  SECTION("both operands conj: DeNest einsum keeps conj on the flat result") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    auto w =
+        other->apply_transform(CanonTransform{.phase = -1, .conj = true}, ann);
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j"}};
+    auto got = v->prod(*w, pann, sequant::DeNest::True);
+    REQUIRE(got->as<ResultZ>().is_view());
+    REQUIRE(v->as<ResultZToT>().is_view());
+    REQUIRE(w->as<ResultZToT>().is_view());
+    ZToT Rc, Sc;
+    Rc("i,j;a,b") = R("i,j;a,b").conj();
+    Sc("i,j;a,b") = Z(-1.0, 0.0) * S("i,j;a,b").conj();
+    world.gop.fence();
+    ZArray ref =
+        TA::einsum<TA::DeNest::True>(Rc("i,j;a,b"), Sc("i,j;a,b"), "i,j");
+    world.gop.fence();
+    ZArray rd;
+    rd("i,j") = got->get<ZArray>()("i,j") - ref("i,j");
+    world.gop.fence();
+    REQUIRE(rd("i,j").norm().get() < 1e-12);
+  }
+  SECTION("ToT * T with a phased view: phase rides on the result view") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->mult_by_phase(-1);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    std::array<std::any, 3> pann{std::string{"i,j;a,b"}, std::string{"j,k"},
+                                 std::string{"i,k;a,b"}};
+    auto got = v->prod(*flat, pann, sequant::DeNest::False);
+    REQUIRE(got->as<ResultZToT>().is_view());
+    ZToT ref = TA::einsum(R("i,j;a,b"), F("j,k"), "i,k;a,b");
+    ZToT nref;
+    nref("i,k;a,b") = Z(-1.0, 0.0) * ref("i,k;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(got->get<ZToT>(), nref, "i,k;a,b") < 1e-12);
+  }
+  SECTION("dot with conj views") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = other->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> dann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{}};
+    auto d = res->prod(*v, dann, sequant::DeNest::False);
+    ZToT Sc;
+    Sc("i,j;a,b") = S("i,j;a,b").conj();
+    world.gop.fence();
+    Z const dref = TA::dot(R("i,j;a,b"), Sc("i,j;a,b"));
+    REQUIRE(std::abs(d->get<Z>() - dref) < 1e-12);
+  }
+  SECTION("sum, add_inplace, permute and phase compose on views") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"}};
+    auto v = res->apply_transform(CanonTransform{.conj = true}, ann);
+    std::array<std::any, 3> sann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j;a,b"}};
+    auto s = v->sum(*other, sann);
+    ZToT ref;
+    ref("i,j;a,b") = R("i,j;a,b").conj() + S("i,j;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(s->get<ZToT>(), ref, "i,j;a,b") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    // add_inplace into a view materializes the target, adds the other lazily
+    auto w = res->apply_transform(CanonTransform{.conj = true}, ann);
+    w->add_inplace(*v);
+    ZToT ref2;
+    ref2("i,j;a,b") = Z(2.0, 0.0) * R("i,j;a,b").conj();
+    world.gop.fence();
+    REQUIRE(norm_diff(w->get<ZToT>(), ref2, "i,j;a,b") < 1e-12);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    // permute of a view stays a view; phase and a second conj compose
+    std::array<std::any, 2> pann{std::string{"i,j;a,b"},
+                                 std::string{"j,i;a,b"}};
+    auto pv = v->permute(pann);
+    REQUIRE(pv->as<ResultZToT>().is_view());
+    auto pvm = pv->mult_by_phase(-1);
+    REQUIRE(pvm->as<ResultZToT>().is_view());
+    auto pvc =
+        pvm->apply_transform(CanonTransform{.conj = true},
+                             {std::string{"j,i;a,b"}, std::string{"j,i;b,a"}});
+    REQUIRE(pvc->as<ResultZToT>().is_view());
+    ZToT ref3;
+    ref3("j,i;b,a") = Z(-1.0, 0.0) * R("i,j;a,b");  // conj twice
+    world.gop.fence();
+    REQUIRE(norm_diff(pvc->get<ZToT>(), ref3, "j,i;b,a") < 1e-12);
+  }
+  SECTION("views of a zero ToT (all-empty inner tiles) materialize") {
+    // the initial amplitude leaf: every inner tile empty (tot_inner_rank 0)
+    ZToT zero{world, otr};
+    for (auto it = zero.begin(); it != zero.end(); ++it)
+      if (zero.is_local(it.index()))
+        *it = typename ZToT::value_type{it.make_range()};
+    world.gop.fence();
+    REQUIRE(sequant::detail::tot_inner_rank(zero) == 0);
+    ResultPtr z = eval_result<ResultZToT>(zero);
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;b,a"}};
+    auto v = z->apply_transform(
+        CanonTransform{.phase = -1, .conj = true, .braket_swap = true}, ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    REQUIRE_NOTHROW(v->get<ZToT>());
+    auto const& m = v->get<ZToT>();
+    REQUIRE(m.trange().rank() == 2);
+    REQUIRE(sequant::detail::tot_inner_rank(m) == 0);
+    // materialized into a private array: adding into it leaves the source
+    // (the cache's canonical zero) untouched
+    v->add_inplace(*other);
+    REQUIRE(sequant::detail::tot_inner_rank(zero) == 0);
+    REQUIRE(norm_diff(v->get<ZToT>(), S, "i,j;a,b") < 1e-12);
+    // a phase-only view of the zero and a sum with it
+    auto pz = z->mult_by_phase(-1);
+    std::array<std::any, 3> sann{std::string{"i,j;a,b"}, std::string{"i,j;a,b"},
+                                 std::string{"i,j;a,b"}};
+    auto sm = pz->sum(*other, sann);
+    REQUIRE(norm_diff(sm->get<ZToT>(), S, "i,j;a,b") < 1e-12);
+  }
+  SECTION("a relabeled view still slices and clones correctly") {
+    std::array<std::any, 2> ann{std::string{"i,j;a,b"}, std::string{"j,i;a,b"}};
+    auto v = res->permute(ann);
+    REQUIRE(v->as<ResultZToT>().is_view());
+    auto c = v->clone();
+    ZToT ref;
+    ref("j,i;a,b") = R("i,j;a,b");
+    world.gop.fence();
+    REQUIRE(norm_diff(c->get<ZToT>(), ref, "j,i;a,b") < 1e-12);
+    // slice_mode(0, [0,2)) of the relabeled view == tiles [0,1) of ref's j
+    auto sl = v->slice_mode(0, 0, 2);
+    auto const& sla = sl->get<ZToT>();
+    REQUIRE(sla.trange().dim(0).extent() == 2);
+    ZToT refsl;
+    refsl("j,i;a,b") = ref("j,i;a,b").block({0, 0}, {1, 2});
+    world.gop.fence();
+    REQUIRE(norm_diff(sla, refsl, "j,i;a,b") < 1e-12);
   }
 }

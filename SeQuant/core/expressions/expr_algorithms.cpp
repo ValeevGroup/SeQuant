@@ -452,6 +452,89 @@ enum class ConjPairEmission {
   DoubleReal  // {s, s*} -> 2 s (caller asserts the sum's value is real)
 };
 
+// Merge Re/Im-wrapped c-number summands related by the conjugate identity
+// (Re(x*) == Re(x), Im(x*) == -Im(x)): for a fully contracted c-number
+// network the adjoint IS the conjugate, so wrappers created by different
+// simplify passes -- or emitted by the pair fold itself -- may hold
+// conjugate-related inners. Bucket them by a canonical representative and
+// accumulate scalars; exact cancellations drop out.
+template <typename SummandRange>
+container::svector<ExprPtr> merge_wrapped_summands(
+    SummandRange const& in, CanonicalizeOptions const& opts,
+    std::function<ExprPtr(ExprPtr const&)> const& conjugate_op) {
+  struct WrapInfo {
+    int kind = 0;
+    Constant::scalar_type scalar = 1;
+    ExprPtr inner;
+  };
+  auto classify = [](ExprPtr const& sm) -> WrapInfo {
+    if (sm->is<RealPart>()) return {1, 1, sm->as<RealPart>().inner()};
+    if (sm->is<ImagPart>()) return {2, 1, sm->as<ImagPart>().inner()};
+    if (sm->is<Product>()) {
+      auto const& p = sm->as<Product>();
+      if (p.factors().size() == 1) {
+        auto const& f = p.factor(0);
+        if (f->is<RealPart>())
+          return {1, p.scalar(), f->as<RealPart>().inner()};
+        if (f->is<ImagPart>())
+          return {2, p.scalar(), f->as<ImagPart>().inner()};
+      }
+    }
+    return {};
+  };
+  container::svector<ExprPtr> out;
+  struct Bucket {
+    int kind;
+    ExprPtr rep;
+    Constant::scalar_type acc = 0;
+  };
+  container::map<std::size_t, container::svector<Bucket>> buckets;
+  container::svector<std::pair<std::size_t, std::size_t>> order;
+  for (auto const& sm : in) {
+    auto wi = classify(sm);
+    if (wi.kind == 0 || !wi.inner->is_cnumber()) {
+      out.push_back(sm->clone());
+      continue;
+    }
+    auto ci = canonicalize(wi.inner->clone(), opts);
+    ExprPtr conj_inner;
+    if (conjugate_op) {
+      conj_inner = conjugate_op(wi.inner);
+    } else {
+      conj_inner = wi.inner->clone();
+      conj_inner->adjoint();
+    }
+    auto cc = canonicalize(conj_inner->clone(), opts);
+    // deterministic representative: the smaller hash of the two spellings
+    bool use_conj = cc->hash_value() < ci->hash_value();
+    ExprPtr rep = use_conj ? cc : ci;
+    auto sc = wi.scalar;
+    if (use_conj && wi.kind == 2) sc = -sc;  // Im(x*) = -Im(x)
+    auto key = rep->hash_value();
+    hash::combine(key, static_cast<std::size_t>(wi.kind));
+    auto& vec = buckets[key];
+    bool merged = false;
+    for (std::size_t b = 0; b != vec.size(); ++b)
+      if (vec[b].kind == wi.kind && *vec[b].rep == *rep) {
+        vec[b].acc += sc;
+        merged = true;
+        break;
+      }
+    if (!merged) {
+      vec.push_back(Bucket{wi.kind, rep, sc});
+      order.emplace_back(key, vec.size() - 1);
+    }
+  }
+  for (auto const& [key, idx] : order) {
+    auto const& b = buckets[key][idx];
+    if (b.acc == Constant::scalar_type(0)) continue;
+    auto wrapped = b.kind == 1 ? real_part(b.rep->clone())
+                               : imaginary_part(b.rep->clone());
+    out.push_back(ex<Constant>(b.acc) * wrapped);
+  }
+  return out;
+}
+
 ExprPtr fold_conjugate_pairs_impl(
     ExprPtr const& expr, CanonicalizeOptions opts,
     std::function<ExprPtr(ExprPtr const&)> conjugate_op,
@@ -461,7 +544,15 @@ ExprPtr fold_conjugate_pairs_impl(
   // same reasoning as Sum::canonicalize_impl
   opts = opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);
 
-  auto const& summands = expr->as<Sum>().summands();
+  // Pre-merge Re/Im-wrapped summands related by the conjugate identity
+  // (Re(x*) == Re(x), Im(x*) == -Im(x)). Wrapped summands are
+  // self-conjugate, so the pair fold below leaves them untouched -- but
+  // wrappers created by DIFFERENT simplify passes may hold conjugate-related
+  // inners (for a fully contracted c-number network the adjoint IS the
+  // conjugate), e.g. +c Re(X) and -c Re(X^+) must cancel.
+  auto summands_v =
+      merge_wrapped_summands(expr->as<Sum>().summands(), opts, conjugate_op);
+  auto const& summands = summands_v;
   const std::size_t n = summands.size();
   // the fold applies to c-number summands only: Re/Im of operator-valued
   // content is out of scope here (the operator analogue -- anti-Hermitian
@@ -531,8 +622,13 @@ ExprPtr fold_conjugate_pairs_impl(
       result->append(summands[i]->clone());
     }
   }
-  if (result->summands().size() == 1) return result->summands().front();
-  return std::static_pointer_cast<Expr>(result);
+  auto merged_out =
+      merge_wrapped_summands(result->summands(), opts, conjugate_op);
+  auto result2 = std::make_shared<Sum>();
+  for (auto& sm : merged_out) result2->append(std::move(sm));
+  if (result2->summands().empty()) return ex<Constant>(0);
+  if (result2->summands().size() == 1) return result2->summands().front();
+  return std::static_pointer_cast<Expr>(result2);
 }
 
 }  // namespace
@@ -575,9 +671,15 @@ ExprPtr& simplify(ExprPtr& expr, SimplifyOptions opts) {
   canonicalize(expr, opts);
   // complex field: fold conjugate-related summand pairs exactly
   // (A + A* -> 2 Re(A)); in a real field conjugation is trivial and plain
-  // canonicalization already merges such pairs
+  // canonicalization already merges such pairs. The fold applies only to
+  // fully c-number content: an expression still carrying operators is an
+  // intermediate of a derivation (Wick consumes it next, and the Wick
+  // engine does not ingest RealPart/ImagPart wrappers). The fold runs after
+  // the canonicalize pass (so trivially-cancelling spellings are already
+  // merged); its own pre-pass canonicalizes existing wrappers' inners, so
+  // conjugate-related wrappers from earlier simplify passes merge exactly.
   if (opts.fold_conjugate_pairs == SimplifyOptions::FoldConjugatePairs::Yes &&
-      default_field_is_complex()) {
+      default_field_is_complex() && expr->is_cnumber()) {
     expr = fold_conjugate_pairs(expr, opts);
   }
   rapid_simplify(expr, opts);
