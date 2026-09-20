@@ -289,6 +289,11 @@ class AbstractTensor {
   virtual void _swap_bra_ket() {
     throw missing_instantiation_for("_swap_bra_ket");
   }
+  /// complex-conjugates the tensor elementwise (no slot reordering); see
+  /// Tensor::conjugate()
+  virtual void _conjugate() { throw missing_instantiation_for("_conjugate"); }
+  /// @return whether the tensor is elementwise complex-conjugated
+  virtual bool _conjugated() const { return false; }
 
   /// @return mutable view of bra
   /// @warning this is used for mutable access, flush memoized state before

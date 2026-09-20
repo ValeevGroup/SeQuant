@@ -68,9 +68,14 @@ class VertexPainterImpl {
   /// vertex color so that same-space named indices bound to different loops
   /// become distinguishable. A null (default) or empty map leaves coloring
   /// byte-identical to space-only named coloring.
+  /// @param color_conjugation if true, a tensor's elementwise-conjugation
+  /// marker (AbstractTensor::_conjugated()) enters its core-vertex color, so
+  /// `T` and `T*` are distinguishable in the graph; see
+  /// TensorNetworkV3::CreateGraphOptions::color_conjugation
   VertexPainterImpl(const NamedIndexSet &named_indices,
                     bool distinct_named_indices = true,
-                    const NamedIndexColorMap *named_index_colors = nullptr);
+                    const NamedIndexColorMap *named_index_colors = nullptr,
+                    bool color_conjugation = false);
 
   const ColorMap &used_colors() const;
 
@@ -99,6 +104,7 @@ class VertexPainterImpl {
   const NamedIndexSet &named_indices_;
   bool distinct_named_indices_ = true;
   const NamedIndexColorMap *named_index_colors_ = nullptr;
+  bool color_conjugation_ = false;
   std::optional<std::size_t> salt_;
 
   /// @return the loop-color of @p idx if a color map was supplied and contains

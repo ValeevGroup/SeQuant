@@ -291,6 +291,9 @@ struct Transformer {
     decltype(ranges::begin(FNOperator::labels())) fit;
     if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
         ranges::end(FNOperator::labels())) {
+      // operator-valued tensors cannot carry the elementwise-conjugation
+      // marker (their bra<->ket swap exchanges creators and annihilators)
+      SEQUANT_ASSERT(!tensor.conjugated);
       SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
       SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
                      ((tensor.symmetry.value().perm_symm ==
@@ -308,6 +311,7 @@ struct Transformer {
     decltype(ranges::begin(BNOperator::labels())) bit;
     if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
         ranges::end(BNOperator::labels())) {
+      SEQUANT_ASSERT(!tensor.conjugated);
       SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
       SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
                      ((tensor.symmetry.value().perm_symm ==
@@ -387,10 +391,13 @@ struct Transformer {
     // Hermiticity)
     return std::visit(
         [&](auto symm) {
-          return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
-                            ket(std::move(ketIndices)),
-                            aux(std::move(auxiliaries)), perm_symm, symm,
-                            column_symm);
+          auto t = ex<Tensor>(tensor.name, bra(std::move(braIndices)),
+                              ket(std::move(ketIndices)),
+                              aux(std::move(auxiliaries)), perm_symm, symm,
+                              column_symm);
+          // label^*{...}: the elementwise-conjugation marker
+          if (tensor.conjugated) t->template as<Tensor>().conjugate();
+          return t;
         },
         braket_symm);
   }
