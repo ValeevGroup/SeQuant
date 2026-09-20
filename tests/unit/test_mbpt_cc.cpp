@@ -15,6 +15,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
 
+#include <array>
+
 TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
@@ -139,6 +141,48 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                  EquivalentTo(ex<Constant>(0)));
   }
 
+  SECTION("bernoulli_commutator_coefficients") {
+    using PathCoefficients = bernoulli::detail::PartitionPathCoefficients;
+
+    // Verified against pdaggerq
+    const PathCoefficients order5{
+        {"ARAAAA", {1, 1440}},  {"ARARAA", {1, 288}},  {"ARARRA", {-1, 96}},
+        {"ARRARA", {-1, 96}},   {"ARRRAA", {-1, 96}},  {"ARRRRA", {1, 32}},
+        {"NAAARA", {-1, 1440}}, {"NARARA", {-1, 288}}, {"NARRAA", {-1, 288}},
+        {"NARRRA", {1, 96}},    {"RRAAAA", {1, 1440}}, {"RRARAA", {1, 288}},
+        {"RRARRA", {-1, 96}},   {"RRRARA", {-1, 96}},  {"RRRRAA", {-1, 96}},
+        {"RRRRRA", {1, 32}},
+    };
+    const PathCoefficients order6{
+        {"ARAAARA", {1, 2880}},  {"ARARARA", {1, 576}},
+        {"ARARRAA", {1, 576}},   {"ARARRRA", {-1, 192}},
+        {"ARRAAAA", {1, 2880}},  {"ARRARAA", {1, 576}},
+        {"ARRARRA", {-1, 192}},  {"ARRRARA", {-1, 192}},
+        {"ARRRRAA", {-1, 192}},  {"ARRRRRA", {1, 64}},
+        {"NAAAAAA", {1, 30240}}, {"NAAARAA", {1, 8640}},
+        {"NAAARRA", {-1, 2880}}, {"NARAAAA", {1, 8640}},
+        {"NARARAA", {1, 1728}},  {"NARARRA", {-1, 576}},
+        {"NARRARA", {-1, 576}},  {"NARRRAA", {-1, 576}},
+        {"NARRRRA", {1, 192}},   {"RRAAARA", {1, 2880}},
+        {"RRARARA", {1, 576}},   {"RRARRAA", {1, 576}},
+        {"RRARRRA", {-1, 192}},  {"RRRAAAA", {1, 2880}},
+        {"RRRARAA", {1, 576}},   {"RRRARRA", {-1, 192}},
+        {"RRRRARA", {-1, 192}},  {"RRRRRAA", {-1, 192}},
+        {"RRRRRRA", {1, 64}},
+    };
+
+    const auto coefficients =
+        bernoulli::detail::nested_commutator_coefficients(10);
+    REQUIRE(coefficients.at(5) == order5);
+    REQUIRE(coefficients.at(6) == order6);
+
+    const std::array<std::size_t, 11> term_counts{1,  2,  3,  5,   9,  16,
+                                                  29, 52, 94, 169, 305};
+    REQUIRE(coefficients.size() == term_counts.size());
+    for (std::size_t order = 0; order < term_counts.size(); ++order)
+      REQUIRE(coefficients[order].size() == term_counts[order]);
+  }
+
   SECTION("bernoulli_hbar_structure") {
     using namespace sequant;
     using namespace sequant::mbpt;
@@ -185,8 +229,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THROWS_AS(CC(2, {.hbar_comm_rank = 2,
                              .hbar_expansion = CC::HbarExpansion::Bernoulli}),
                       Exception);
-    // only ranks 0..4 are implemented.
-    REQUIRE_THROWS_AS(bernoulli::hbar(2, 5, false), Exception);
+    REQUIRE_NOTHROW(bernoulli::hbar(1, 5, false));
 
     auto resetter = set_scoped_default_mbpt_context(
         mbpt::Context::Options{.csv = CSV::Yes});
