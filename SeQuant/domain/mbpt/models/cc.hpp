@@ -126,7 +126,8 @@ class CC {
   /// @param truncation_rank maximum order of nested commutators to include in
   /// the expansion; if not specified, will use the value of member
   /// `hbar_comm_rank`. If that is also not specified, will use 4 as the default
-  /// value. If provided, will override all defaults.
+  /// value. If provided, will override all defaults. The optional singles-only
+  /// transform is applied afterward regardless of this rank.
   /// @note The returned expression depends on the ansatz and expansion:
   ///   - A non-unitary ansatz represents each commutator as a connected
   ///     product,
@@ -217,7 +218,9 @@ class CC {
   ///     | H_SS  H_SD |    e.g.  | 2  1 |
   ///     | H_DS  H_DD |          | 1  0 |
   ///     Thus `{2,1,1,0}` uses [[H,σ],σ] for H_SS, [H,σ] for H_SD and
-  ///     H_DS, and bare Hamiltonian integrals for H_DD.
+  ///     H_DS, and zeroth-order H̄ for H_DD. With a positive
+  ///     `hbar_singles_comm_rank`, even a rank-0 block includes the additional
+  ///     singles-only transform.
   ///   - The same ordering serves EE, IP, and EA: read S as 1h/1p and D as
   ///     2h1p/1h2p (10.1021/acs.jctc.5c01991, Fig. 1).
   ///   - Under `Bernoulli`, each rank is a Bernoulli order H̄^k whose
@@ -281,7 +284,7 @@ class CC {
   Options opts_;
 
   /// @brief assembles the right-hand UCC EOM equations
-  /// @param block_ranks see `eom_r`; empty uses the configured H̄ rank, or 4
+  /// @param block_ranks see `eom_r`; empty uses the configured H̄ rank
   /// @pre a unitary ansatz
   /// @note under the Bernoulli expansion each block's H̄ has its N part removed.
   ///   Where a block's rank equals `hbar_comm_rank` the removed terms vanish at

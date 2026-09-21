@@ -445,12 +445,10 @@ std::vector<ExprPtr> CC::eom_r_ucc(
   const auto manifolds = eom_manifolds(np, nh);
   const auto K = manifolds.size();
   // `block_ranks` is read at i * K + j, so the ascending order above is what
-  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty means the configured H̄ rank,
-  // or the fourth commutator when no rank is configured.
+  // makes `{2,1,1,0}` mean SS, SD, DS, DD; empty uses the configured H̄ rank.
   const std::vector<size_t> ranks =
-      block_ranks.empty()
-          ? std::vector<size_t>(K * K, hbar_comm_rank().value_or(4))
-          : block_ranks;
+      block_ranks.empty() ? std::vector<size_t>(K * K, hbar_comm_rank().value())
+                          : block_ranks;
   if (ranks.size() != K * K)
     throw Exception(
         "CC::eom_r: block_ranks must be a K x K row-major matrix, "
