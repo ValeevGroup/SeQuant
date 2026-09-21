@@ -59,7 +59,7 @@ class CC {
     /// ansatz is used
     std::optional<size_t> hbar_comm_rank = std::nullopt;
     /// maximum order of the additional singles-only similarity transform
-    /// applied after H̄ using \f$ \sigma_1 = T_1 - T_1^\dagger \f$.
+    /// applied to H̄ using \f$ \sigma_1 = T_1 - T_1^\dagger \f$.
     /// Zero disables the transform; a positive rank requires a unitary BCH
     /// ansatz with singles amplitudes enabled
     size_t hbar_singles_comm_rank = 0;
@@ -188,6 +188,7 @@ class CC {
   /// @param order order of perturbation
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @throw Exception if `hbar_singles_comm_rank` is positive
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> tʼ(
@@ -269,6 +270,7 @@ class CC {
   ///   traditional ansatz (where the expansion terminates exactly) and to
   ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
   ///   explicit value to truncate earlier.
+  /// @throw Exception if `hbar_singles_comm_rank` is positive
   /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
   /// part)
   [[nodiscard]] ExprPtr rdm(

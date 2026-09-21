@@ -248,6 +248,8 @@ std::vector<ExprPtr> CC::λ() const {
 }
 
 ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
+  if (opts_.hbar_singles_comm_rank > 0)
+    throw Exception("CC::rdm: hbar_singles_comm_rank is not supported");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::rdm: the Bernoulli expansion is not supported yet");
 
@@ -283,6 +285,8 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
 
 std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                             std::optional<size_t> nbatch) const {
+  if (opts_.hbar_singles_comm_rank > 0)
+    throw Exception("CC::tʼ: hbar_singles_comm_rank is not supported");
   SEQUANT_ASSERT(order == 1,
                  "sequant::mbpt::CC::tʼ(): only first-order perturbation is "
                  "supported now");

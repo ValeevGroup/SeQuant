@@ -372,6 +372,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                              .hbar_singles_comm_rank = 1,
                              .hbar_expansion = CC::HbarExpansion::Bernoulli}),
                       Exception);
+    const CC singles_wrapped(1, {.ansatz = CC::Ansatz::U,
+                                 .hbar_comm_rank = 0,
+                                 .hbar_singles_comm_rank = 1,
+                                 .pertbar_comm_rank = 0});
+    REQUIRE_THROWS_AS(singles_wrapped.tʼ(), Exception);
+    REQUIRE_THROWS_AS(singles_wrapped.rdm(1, 0), Exception);
     if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
       REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
     }
