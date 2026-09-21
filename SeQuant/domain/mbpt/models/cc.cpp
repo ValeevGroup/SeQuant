@@ -95,7 +95,8 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   if (opts_.hbar_singles_comm_rank > 0) {
     auto opts = lst_options();
     opts.skip_clone = true;
-    result = mbpt::lst(result, op::t(1), opts_.hbar_singles_comm_rank, opts);
+    result =
+        mbpt::lst(result, op::T(1, false), opts_.hbar_singles_comm_rank, opts);
   }
   return result;
 }
