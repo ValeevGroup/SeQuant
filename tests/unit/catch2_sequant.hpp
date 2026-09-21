@@ -39,7 +39,7 @@ inline constexpr TensorSymmetries particle_symmetric{.column =
 /// suite uses to steer runtime behavior via env vars: POSIX has
 /// setenv/unsetenv, MSVC has neither and provides _putenv_s instead (whose
 /// "" value happens to remove the variable, matching unsetenv).
-inline void set_env(const char* name, const char* value) {
+inline void set_env(const char *name, const char *value) {
 #ifdef _WIN32
   _putenv_s(name, value);
 #else
@@ -47,7 +47,7 @@ inline void set_env(const char* name, const char* value) {
 #endif
 }
 
-inline void unset_env(const char* name) {
+inline void unset_env(const char *name) {
 #ifdef _WIN32
   _putenv_s(name, "");
 #else

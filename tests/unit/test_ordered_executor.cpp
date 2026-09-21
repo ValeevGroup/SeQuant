@@ -4345,7 +4345,8 @@ TEST_CASE(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
   if (prev_strict)
-    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str());
+    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE",
+                            prev_strict_val.c_str());
   else
     sequant::tests::unset_env("SEQUANT_UT_STRICT_FILL_ONCE");
 
@@ -4635,7 +4636,8 @@ TEST_CASE(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
   if (prev_strict)
-    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str());
+    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE",
+                            prev_strict_val.c_str());
   else
     sequant::tests::unset_env("SEQUANT_UT_STRICT_FILL_ONCE");
   logger.eval.level = prev_level;
@@ -5047,7 +5049,8 @@ TEST_CASE(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
       is_volatile_node));
   if (prev_strict)
-    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE", prev_strict_val.c_str());
+    sequant::tests::set_env("SEQUANT_UT_STRICT_FILL_ONCE",
+                            prev_strict_val.c_str());
   else
     sequant::tests::unset_env("SEQUANT_UT_STRICT_FILL_ONCE");
   logger.eval.level = prev_level;
