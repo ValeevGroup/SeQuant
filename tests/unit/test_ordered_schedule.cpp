@@ -1762,7 +1762,7 @@ OrderedSchedFixture orderedsched_cross_iteration_fixture() {
 // configuration genuinely carries values on occ -- shared by the
 // [w20-auxocc] case and the forced_split_levels equivalence case below so
 // the two do not silently drift apart.
-OrderedSchedFixture orderedsched_water20_auxocc_fixture() {
+[[maybe_unused]] OrderedSchedFixture orderedsched_water20_auxocc_fixture() {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
@@ -2136,7 +2136,8 @@ namespace {
 // reproduce exactly this old two-set partition -- against the CURRENT
 // `forced_split_levels`; it has no other caller and is not a claim about
 // production behavior.
-std::pair<std::unordered_set<std::size_t>, std::unordered_set<std::size_t>>
+[[maybe_unused]] std::pair<std::unordered_set<std::size_t>,
+                           std::unordered_set<std::size_t>>
 orderedsched_old_partition(
     std::wstring const& axis_key,
     sequant::eval::LegalitySchedule const& legality,
