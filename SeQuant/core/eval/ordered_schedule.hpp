@@ -526,7 +526,7 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
   for (std::size_t pos = 0; pos < order.size(); ++pos)
     position[order[pos]] = pos;
   for (std::size_t i = 0; i < m; ++i)
-    for (std::size_t p : prerequisites[i])
+    for ([[maybe_unused]] std::size_t p : prerequisites[i])
       SEQUANT_ASSERT(position[p] < position[i]);
 
   container::vector<Step> out_steps;
@@ -2168,7 +2168,8 @@ inline void assert_global_level_axis_uniqueness(
     auto const key =
         std::make_tuple(child->level.depth, child->level.space,
                         child->level.loop_slot, child->level.latitude_ordinal);
-    auto const [it, inserted] = seen.try_emplace(key, child->axis);
+    [[maybe_unused]] auto const [it, inserted] =
+        seen.try_emplace(key, child->axis);
     SEQUANT_ASSERT(
         (inserted || it->second == child->axis) &&
         "assert_global_level_axis_uniqueness: two blocks at the same "
