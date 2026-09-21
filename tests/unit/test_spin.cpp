@@ -1395,47 +1395,6 @@ SECTION("Permutation operators") {
   REQUIRE(P5[3]->size() == 100);
   REQUIRE(P5[4]->size() == 25);
   REQUIRE(P5[5]->size() == 0);
-
-  auto A8 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
-                       ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
-  // auto Avec8 = open_shell_A_op(A8->as<Tensor>());
-  // std::wcout << "how A op works on rank 3h2p: " << to_latex_align(Avec8[0])
-  // << std::endl; std::wcout << "how A op works on rank 3h2p: " <<
-  // to_latex_align(Avec8[1]) << std::endl; std::wcout << "how A op works on
-  // rank 3h2p: " << to_latex_align(Avec8[2]) << std::endl; std::wcout << "how A
-  // op works on rank 3h2p: " << to_latex_align(Avec8[3]) << std::endl;
-
-  auto P8 = open_shell_P_op_vector(A3->as<Tensor>());
-  // std::wcout << "Print A3 : " << to_latex_align(A3) << std::endl;
-  // std::wcout << "effect of os-A-op on A2: Avec2[0] : " <<
-  // to_latex_align(Avec2[0]) << std::endl;
-  std::wcout << "effect of os-A-op on A3: Avec3[1] : "
-             << to_latex_align(Avec3[1]) << std::endl;
-  // std::wcout << "effect of os-A-op on A2: Avec2[2] : " <<
-  // to_latex_align(Avec2[2]) << std::endl; std::wcout << "how os-P-op works on
-  // rank A2[0] : " << to_latex_align(P8[0]) << std::endl; std::wcout << "how
-  // os-P-op works on rank A3[1]: " << to_latex_align(P8[1]) << std::endl;
-  // std::wcout << "how os-P-op works 0n rank A2[0]: " << to_latex_align(P8[2])
-  // << std::endl; std::wcout << "how P vec works on rank 3: " <<
-  // to_latex_align(P8[1]) << std::endl;
-
-  // auto result = open_shell_CC_spintrace(A3);
-  // for (std::size_t s = 0; s < result.size(); ++s) {
-  //     std::wcout << "spin case " << s << ": "
-  //                << to_latex_align(result[s]) << std::endl;
-  // }
-
-  auto A2h = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"}, ket{},
-                        Symmetry::Antisymm);
-
-  const auto ext_groups = external_indices(A2h);
-  std::wcout << "ext_groups size: " << ext_groups.size() << "\n";
-  for (size_t g = 0; g < ext_groups.size(); ++g) {
-    std::wcout << "  group[" << g << "] size=" << ext_groups[g].size() << ": ";
-    for (const auto& idx : ext_groups[g])
-      std::wcout << idx.index().to_latex() << " ";
-    std::wcout << "\n";
-  }
 }
 
 SECTION("Relation in spin P operators") {
@@ -1526,14 +1485,6 @@ SECTION("Relation in spin P operators") {
   expanded_A = expand_A_op(expanded_A);
   expanded_A->visit(reset_idx_tags);
   simplify(expanded_A);
-
-  std::wcout << "how A3 on gt2: " << to_latex_align(expanded_A3) << std::endl;
-  auto result = open_shell_CC_spintrace(expanded_A3);
-  for (std::size_t s = 0; s < result.size(); ++s) {
-    std::wcout << "spin case " << s << ": " << to_latex_align(result[s])
-               << std::endl;
-  }
-
   REQUIRE(p6_result == p7_result);
   REQUIRE(p6_result == expanded_A);
 }
@@ -1645,24 +1596,10 @@ SECTION("Open-shell spin-tracing") {
     auto input2 =
         ex<Constant>(rational{1, 4}) *
         ex<Tensor>(L"R", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
-    // std::wcout << "input R 2h1p" << to_latex_align(input2) << std::endl;
-    // auto result2 = open_shell_spintrace(
-    // input2, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"},{L"i_3"},{}});
-
-    //   auto result2 = open_shell_spintrace( input2, IdxGroupList{{L"i_1",
-    //   L"a_1"}, {L"i_2"}},
-    // std::nullopt,  // target_spin_case
-    //    true,          // nonparticle_conserving
-    // std::make_optional<std::size_t>(1));
 
     auto result2 =
         open_shell_spintrace(input2, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2"}});
     REQUIRE(result2.size() == 4);
-
-    // std::wcout << "first os-st-NNC 2h1p: " << to_latex_align(result2[0]) <<
-    // std::endl; std::wcout << "second os-st-NNC 2h1p: " <<
-    // to_latex_align(result2[1]) << std::endl; std::wcout << "third os-st-NNC
-    // 2h1p: " << to_latex_align(result2[2]) << std::endl;
     std::wcout << "fourth os-st-NNC 2h1p: " << to_latex_align(result2[3])
                << std::endl;
     // REQUIRE_THAT(result2[0], EquivalentTo("1/4 R{a↑1,a↑2;i↑1,i↑2,i↑3}:A"));
@@ -1713,8 +1650,6 @@ SECTION("Open-shell spin-tracing") {
   }
 
   {  // Now working here NNC
-    // std::wcout <<
-    // "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ checking
     // the ext indices of ft3:\n";
     auto input = ex<Constant>(rational{1, 12}) *
                  ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_4"}) *
@@ -1776,29 +1711,6 @@ SECTION("Open-shell spin-tracing") {
         ex<Constant>(rational{1, 1}) *
         ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) *
         ex<Tensor>(L"R", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
-    // std::wcout << "######################################### let's try f
-    // R\n"; std::wcout << "input f R 2h1p: " << to_latex_align(input); auto
-    // const ext_idxs_2 = external_indices(input_2); for (auto& group :
-    // ext_idxs_2) {
-    //     for (auto& slotted : group) {
-    //         std::wcout << "ext indices is: " << slotted.index().to_latex() <<
-    //         L" ";
-    //     }
-    // }
-    //
-    // for (size_t g = 0; g < ext_idxs_2.size(); ++g) {
-    //     std::wcout << L"group[" << g << L"]: ";
-    //     for (auto& slotted : ext_idxs_2[g]) {
-    //         std::wcout << slotted.index().to_latex() << L" ";
-    //     }
-    //     std::wcout << L"\n";
-    // }
-    // auto result_2 = open_shell_spintrace(
-    //     input_2,
-    //     IdxGroupList{{L"i_1", L"a_4"}, {L"i_2"}});
-    //
-    // std::wcout << "1st os-st-NNC f a4a1 ta1i1i2: " <<
-    // to_latex_align(result_2[2]) << std::endl;
 
     auto result_2 = open_shell_spintrace(
         input_2,
@@ -1825,14 +1737,9 @@ SECTION("Open-shell spin-tracing") {
 
     // std::wcout << "1st os-st-NNC g t 2h1p: " << to_latex_align(result_3[1])
     // << std::endl; std::wcout <<
-    // "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ end of the
-    // test\n";
   }
 
   {  // check for zero terms
-    // std::wcout <<
-    // "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@:\n";
-
     auto input_1 =
         ex<Constant>(rational{1, 12}) *
         ex<Tensor>(L"R", bra{}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
@@ -1863,9 +1770,6 @@ SECTION("Open-shell spin-tracing") {
                << std::endl;
     std::wcout << "1st os-st-NNC R 2h: " << to_latex_align(result_1[1])
                << std::endl;
-
-    // std::wcout <<
-    // "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@:\n";
   }
 
   SECTION("open-shell 2h mixed-spin: R g t from spin-orbital") {
@@ -1936,15 +1840,8 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE_THAT(result[3],
                  EquivalentTo("1/12 f{a↓1;a↓4} t{a↓2,a↓3,a↓4;i↓1,i↓2,i↓3}:A"));
   }
-  // this test worked. set the results and probably add it. You can send this to
-  // EFV
-  // I already reported this to EFV; so I should remove this during cleanup
-  {  // ft2 , 2h1p
-    // & -
-    // {{\tensor*{R}{*^{i↓_1}_{a↓_2}*^{i↑_1}_{}}}{\tensor*{g}{*^{i↑_2}_{i↑_1}*^{a↓_2}_{a↓_1}}}}
 
-    std::wcout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
-                  "&&&&&&&&&&&& test started:\n";
+  {  // ft2 , 2h1p
 
     auto input =
         ex<Constant>(rational{-2, 1}) *
@@ -1963,11 +1860,6 @@ SECTION("Open-shell spin-tracing") {
                << std::endl;
     std::wcout << "-2ARf,result[2]: " << to_latex_align(result[2]) << std::endl;
 
-    // for (std::size_t i = 0; i < result.size(); ++i) {
-    //     // std::wcout << "result[" << i << "]: " << to_latex_align(result[i])
-    //     << std::endl; canonicalize(result[i]);
-    // }
-
     // REQUIRE_THAT(result[0],
     //              EquivalentTo("1/2 f{i↑3;i↑1} t{a↑1,a↑2;i↑2,i↑3}:A"));
     // REQUIRE_THAT(result[1], EquivalentTo("-1/2 f{i↑2;i↑1}
@@ -1982,9 +1874,6 @@ SECTION("Open-shell spin-tracing") {
     //  & {{{\frac{1}{12}}}{f^{{i↓_2}}_{{i↓_1}}}{R^{{i↓_1}}_{}}}
     //  \end{align}
     //  fR1 finished
-
-    std::wcout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
-                  "&&&&&&&&&&&& test finished:\n";
   }
 
   //     // f * R (NNC: 3h2p)
@@ -1994,20 +1883,12 @@ SECTION("Open-shell spin-tracing") {
         ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) *
         ex<Tensor>(L"R", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
     // std::wcout << "input f R 2h1p: " << to_latex_align(input);
-    std::wcout << "########################################################## "
-                  "let's try f R\n";
     auto const ext_idxs = external_indices(input);
     for (auto& group : ext_idxs) {
       for (auto& slotted : group) {
         std::wcout << "ext indices is: " << slotted.index().to_latex() << L" ";
       }
     }
-    // auto result = open_shell_spintrace(
-    //     input,
-    //     container::svector<container::svector<Index>>{{Index{L"i_2"}}},
-    //     std::nullopt,
-    //     true,
-    //     std::make_optional<std::size_t>(0));
 
     auto result = open_shell_spintrace(
         input, container::svector<container::svector<Index>>{{Index{L"i_2"}}});
@@ -2018,8 +1899,6 @@ SECTION("Open-shell spin-tracing") {
       std::wcout << "I am here: result[" << i
                  << "]: " << to_latex_align(result[i]) << std::endl;
     }
-    std::wcout << "\n ####################################################### "
-                  "new fR1 finished\n";
   }
 
   {  // ft2 , 2h1p
@@ -2029,11 +1908,6 @@ SECTION("Open-shell spin-tracing") {
                    Symmetry::Antisymm) *
         ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
 
-    // auto result = open_shell_spintrace(
-    //     input,
-    //     IdxGroupList{{L"i_1", L"a_1"}, {L"i_2"}},
-    //     std::nullopt, true, std::make_optional<std::size_t>(1));
-    //
     auto result =
         open_shell_spintrace(input, IdxGroupList{{L"i_1", L"a_1"}, {L"i_2"}});
     REQUIRE(result.size() == 4);
@@ -2098,25 +1972,6 @@ SECTION("Open-shell spin-tracing") {
     canonicalize(input_sum);
     std::wcout << "how it canonicalizes the sum? " << to_latex_align(input_sum)
                << std::endl;
-
-    // auto input = ex<Tensor>(A2_ab) * ex<Tensor>(R) * ex<Tensor>(f);
-    // auto result = expand_A_op(input);
-    // result->visit(reset_idx_tags);
-    // REQUIRE_THAT(result,
-    //              EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-C-S * "
-    //                           "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-C-S"));
-
-    // R = Tensor(L"g", bra{i4A, i5A}, ket{i1A, i2A}, Symmetry::Antisymm);
-    // f =
-    //     Tensor(L"t", bra{a1A, a2A, a3B}, ket{i4A, i5A, i3B},
-    //     Symmetry::Nonsymm);
-    //
-    // input = ex<Tensor>(A2_ab) * ex<Tensor>(R) * ex<Tensor>(f);
-    // result = expand_A_op(input);
-    // result->visit(reset_idx_tags);
-    // REQUIRE_THAT(result,
-    //              EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-C-S * "
-    //                           "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-C-S"));
   }
   // aab: g*t3 (CCSDT R3 4)
   {
