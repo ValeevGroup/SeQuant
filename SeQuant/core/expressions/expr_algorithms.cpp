@@ -11,6 +11,7 @@
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/primitives.hpp>
@@ -667,7 +668,7 @@ ExprPtr conjugate(const ExprPtr& expr) {
     for (const auto& f : p) r->append(1, conjugate(f), Product::Flatten::No);
     return r;
   }
-  throw std::logic_error(
+  throw Exception(
       "sequant::conjugate: unsupported expression kind (operator-valued "
       "content has no elementwise conjugation here)");
 }

@@ -167,17 +167,16 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // The flat-leaf conjugate-braket fold is DISABLED at the eval boundary:
     // leaves keep their as-written (value) orientation so leaf yielders and
     // evaluators need no conjugation awareness (Symm still folds, as on
-    // master). An already-starred spelling keeps its marker -- binarize
+    // master). An already-starred spelling keeps its modifier -- binarize
     // serves it through an EvalOp::Adjoint wrap; folding fresh flat leaves
     // onto one orientation-shared slot is the lazy-conj eval follow-up.
     auto phase =
         TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
     canon_phase_ = phase ? -1 : 1;
-    // Leaf-hash invariant (owned by hash_terminal_tensor): the marker
+    // Leaf-hash invariant (owned by hash_terminal_tensor): the modifier
     // enters the hash only where it is value-distinctive (Nonsymm); for
     // Conjugate (orientation fold) and Symm (value-redundant) both
-    // spellings share one cache slot. The marker itself stays on expr_
-    // (its symbolic spelling).
+    // spellings share one cache slot.
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
@@ -448,60 +447,52 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
 EvalExprNode binarize(Tensor const& t) {
-  // A value-distinctive modifier that has no Adjoint-served equivalent
-  // (Nonsymm t^* or t^T) is refused up front (lazy-conj eval is the
-  // follow-up).
-  if (t.braket_symmetry() == BraKetSymmetry::Nonsymm &&
-      (t.value_modifier() == ValueModifier::Conjugate ||
-       t.value_modifier() == ValueModifier::Transpose))
-    throw Exception(
-        "sequant::binarize: an elementwise-conjugated or transposed "
-        "BraKetSymmetry::Nonsymm tensor leaf is not evaluable (no "
-        "Adjoint-served equivalent; lazy-conj eval is the follow-up)");
-  // Adjoint leaves (Nonsymm tensors whose adjoint() was taken) are surfaced
-  // as an explicit IR op (EvalOp::Adjoint) wrapping the bare operand, so
-  // backends serve T† by conjugating + permuting the cached T result.
-  //
-  // IR shape: Adjoint(Tensor{<bare>}, Constant{1}); the Constant(1) right
-  // child is a sentinel so the FullBinaryNode invariant holds.
-  if (t.value_modifier() == ValueModifier::Adjoint) {
-    // undo the adjoint on a copy: clears both bits, swaps bra/ket back
-    Tensor bare{t};
-    bare.adjoint();
-    SEQUANT_ASSERT(bare.value_modifier() == ValueModifier::None);
-    return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, t.clone(),
-                             t.indices() | ranges::to<EvalExpr::index_vector>,
-                             1);
+  // Leaves keep their as-written orientation at the eval boundary (the leaf
+  // ctor disables the Conjugate fold); a modifier arrives only on a spelling
+  // that was produced symbolically. Serve it per modifier.
+  switch (t.value_modifier()) {
+    case ValueModifier::None:
+      return EvalExprNode{EvalExpr{t}};
+
+    case ValueModifier::Adjoint: {
+      // Surface the adjoint as an explicit IR op (EvalOp::Adjoint) wrapping
+      // the bare operand, so backends serve T† by conjugating + permuting
+      // the cached T result. IR shape: Adjoint(Tensor{<bare>}, Constant{1});
+      // the Constant(1) right child is a sentinel so the FullBinaryNode
+      // invariant ("every non-leaf has two children") holds.
+      Tensor bare{t};
+      bare.adjoint();  // undo: clears both bits, swaps bra/ket back
+      SEQUANT_ASSERT(bare.value_modifier() == ValueModifier::None);
+      return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, t.clone(),
+                               t.indices() | ranges::to<EvalExpr::index_vector>,
+                               1);
+    }
+
+    case ValueModifier::Conjugate: {
+      if (t.braket_symmetry() == BraKetSymmetry::Nonsymm)
+        throw Exception(
+            "sequant::binarize: an elementwise-conjugated "
+            "BraKetSymmetry::Nonsymm tensor leaf is not evaluable (no "
+            "Adjoint-served equivalent; lazy-conj eval is the follow-up)");
+      // Conjugate symmetry: the starred spelling is the canonicalizer's
+      // orientation fold. Serve it like the adjoint channel: an
+      // EvalOp::Adjoint node over the unmarked VALUE-orientation operand,
+      // so evaluation and leaf yielders need no modifier awareness.
+      EvalExpr ee{t};
+      Tensor bare = value_oriented(ee.expr()->as<Tensor>());
+      return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, ee.expr(),
+                               ee.canon_indices(), ee.canon_phase());
+    }
+
+    case ValueModifier::Transpose:
+      // only a Nonsymm tensor can carry this state (normalization); there is
+      // no EvalOp for a plain transpose yet
+      throw Exception(
+          "sequant::binarize: a transposed BraKetSymmetry::Nonsymm tensor "
+          "leaf is not evaluable (no EvalOp for a plain transpose; lazy-conj "
+          "eval is the follow-up)");
   }
-  if (t.conjugated() && t.braket_symmetry() == BraKetSymmetry::Symm) {
-    // Symm marker: conj is the identity in value -- serve the unmarked
-    // spelling (value_oriented just clears the marker here)
-    return EvalExprNode{EvalExpr{value_oriented(t)}};
-  }
-  EvalExpr ee{t};
-  if (ee.expr()->as<Tensor>().conjugated()) {
-    // Conjugate-braket fold marker: a leaf arrives starred when its
-    // symbolic spelling was folded (the leaf ctor itself never creates
-    // markers at the eval boundary). Serve the marker the same way as the
-    // '⁺' channel above: an explicit EvalOp::Adjoint node over the unmarked
-    // VALUE-orientation operand, so evaluation and leaf yielders need no
-    // marker awareness (lazy conj is the eval follow-up).
-    //
-    // Serving convention (pinned until the lazy-conj follow-up): a yielder
-    // serves every leaf's as-written spelling truthfully; mixing a starred
-    // spelling of a Conjugate tensor with its PLAIN swapped spelling in one
-    // network is outside the designed symbolic-canonicalize-first pipeline
-    // (the fold spells the swapped orientation starred) and is not
-    // orientation-reconciled here.
-    Tensor const& folded = ee.expr()->as<Tensor>();
-    // unstar + swap back: the VALUE (as-written) orientation -- the leaf
-    // ctor never folds Conjugate tensors, so the bare operand stays in this
-    // spelling, the one leaf yielders serve
-    Tensor bare = value_oriented(folded);
-    return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, ee.expr(),
-                             ee.canon_indices(), ee.canon_phase());
-  }
-  return EvalExprNode{std::move(ee)};
+  SEQUANT_UNREACHABLE;
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,

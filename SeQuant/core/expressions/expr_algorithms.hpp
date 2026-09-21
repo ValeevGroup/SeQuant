@@ -299,7 +299,7 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 ///
 /// @param expr a scalar-valued expression
 /// @return a new expression denoting `conj(expr)`
-/// @throw std::logic_error for operator-valued content (a normal-ordered
+/// @throw sequant::Exception for operator-valued content (a normal-ordered
 ///        operator string has no elementwise conjugation here)
 [[nodiscard]] ExprPtr conjugate(const ExprPtr& expr);
 

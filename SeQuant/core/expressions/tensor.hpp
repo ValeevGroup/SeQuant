@@ -1405,22 +1405,18 @@ static_assert(is_tensor<Tensor>,
 using TensorPtr = std::shared_ptr<Tensor>;
 
 /// @return @p t rewritten in its VALUE orientation: the spelling whose slot
-///         layout denotes the value directly, for every value_modifier()
-///         state that has one:
-///         - `None`, `Adjoint`: unchanged (`t⁺` names a distinct array whose
-///           slots are as written)
-///         - `Transpose`: transpose(), i.e. `T^T{q;p}` becomes `T{p;q}`
-///         - `Conjugate` on `Conjugate` braket symmetry: transpose() (the
-///           starred swapped spelling T^*{q;p} denotes conj(T{p;q}), the
-///           canonicalizer's fold, so unfolding is the bare unstarred
-///           spelling)
-///         - `Conjugate` on `Nonsymm` braket symmetry: no slot layout can
-///           express genuine elementwise conjugation -- throws
-///           sequant::Exception rather than silently dropping or misreading
-///           it (serving such spellings is the lazy-conj eval follow-up)
+///         layout denotes the value directly, with no modifier left for a
+///         slot-rebuilding consumer to drop:
+///         - `None`, `Adjoint`: returned unchanged (`t⁺` names a distinct
+///           array whose slots are as written);
+///         - `Transpose` (Nonsymm only): `T^T{q;p}` respelled as `T{p;q}`;
+///         - `Conjugate` on #BraKetSymmetry::Conjugate: the canonicalizer's
+///           fold `T^*{q;p}` respelled as `T{p;q}`;
+///         - `Conjugate` on #BraKetSymmetry::Nonsymm: genuine elementwise
+///           conjugation, which no slot layout can express -- throws
+///           sequant::Exception rather than silently dropping it.
 ///         Any transform that reads or rebuilds a tensor from its slot
-///         layout (rather than round-tripping it unchanged) must consume
-///         this form.
+///         layout must consume this form.
 [[nodiscard]] Tensor value_oriented(Tensor const &t);
 
 /// @return @p t viewed as a c-number Tensor, or nullptr if @p t is some other

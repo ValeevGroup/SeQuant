@@ -379,13 +379,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     t_adj.adjoint();
     REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_adj}.hash_value());
 
-    // '⁺'-labeled AND marked (the symbolic transpose conj(adjoint(t))): the
-    // marker refusal must fire before the '⁺' label channel, else the label
-    // channel builds Adjoint over a still-marked bare leaf and the marker is
-    // silently ignored
+    // Nonsymm transpose (conj(adjoint(t)) == t^T): not evaluable either --
+    // there is no EvalOp for a plain transpose yet
     Tensor t_adj_star = t;
-    t_adj_star.adjoint();    // '⁺' label + slot swap
-    t_adj_star.conjugate();  // marker on top: t^T, not evaluable
+    t_adj_star.adjoint();
+    t_adj_star.conjugate();
     REQUIRE(t_adj_star.value_modifier() == ValueModifier::Transpose);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_adj_star)), sequant::Exception);
