@@ -1338,12 +1338,11 @@ class ResultTensorOfTensorTA final : public Result {
     }
 
     // a relabeled INNER order cannot ride on the addition (TA permutes only
-    // the outer modes of a nested sum), and neither does a conjugation (TA's
-    // nested add with a conjugate factor does not conjugate arena inner
-    // cells; see add_inplace): materialize such an operand
-    if (view_ && (!view_->iperm.empty() || view_->conj)) ensure_materialized();
-    if (o.view_ && (!o.view_->iperm.empty() || o.view_->conj))
-      o.ensure_materialized();
+    // the outer modes of a nested sum): materialize such an operand. A
+    // conj / phase view rides on it (`le + ph * re.conj()`; the nested add
+    // conjugates arena inner cells: TA tests/tot_add_conj.cpp)
+    if (view_ && !view_->iperm.empty()) ensure_materialized();
+    if (o.view_ && !o.view_->iperm.empty()) o.ensure_materialized();
     ArrayT result;
     // a TA failure names the operands (as the product's wrapper does): the
     // raw TA message carries no annotation
@@ -1654,14 +1653,10 @@ class ResultTensorOfTensorTA final : public Result {
     ensure_materialized();  // the target must be a real, unshared array
     auto& t = get<ArrayT>();
     // a relabeled view has a different stored mode order: materialize it;
-    // a phase-only view is consumed lazily. A conj view is materialized too:
-    // TA's nested in-place add with a conjugate factor on the added operand
-    // (`t += ph * o.conj()`) does not conjugate arena inner cells (HSeOH
-    // PNS-CCD, 2026-09-18: a KramersFlip root served through a conj view
-    // was added unconjugated), so the conjugation is applied by the unary
-    // materialization instead.
-    if (o.view_ && (o.view_->relabeled() || o.view_->conj))
-      o.ensure_materialized();
+    // a phase / conj view is consumed lazily (`t += ph * o.conj()`; the
+    // nested in-place add conjugates arena inner cells, null destination
+    // cells included: TA tests/tot_add_conj.cpp)
+    if (o.view_ && o.view_->relabeled()) o.ensure_materialized();
     auto const& oarr = o.template raw<ArrayT>();
 
     SEQUANT_ASSERT(t.trange() == oarr.trange());
