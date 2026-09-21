@@ -54,11 +54,15 @@ std::size_t VertexPainterImpl::to_hash_value(
   //   colors are not merely compared for equality -- bliss's canonical
   //   labeling depends on their VALUES, and hash::combine is not
   //   order-preserving, so folding even a `false` into every color permutes
-  //   the canonical form of every marker-FREE network (measured: the uniform
-  //   combine reoriented Conjugate tensors in 8 canonical-form fixtures,
-  //   θ/γ/F/P/I2, and changed an optimize() factorization). Perturbing only
-  //   marked tensors keeps all marker-free networks bit-identical to their
-  //   pre-conjugation-aware canonical forms.
+  //   the canonical form of every marker-FREE network. Measured with the
+  //   uniform combine: 4 unit fixtures re-spelled (a dummy relabeling, a
+  //   named-index permutation, which Hermitian factor carries the marker)
+  //   and 8 byte-compared goldens broken (every external-interface ITF
+  //   verify and cost_analysis/ccsd_r2; the ccsd ITF code even factorizes
+  //   into 9 CSE intermediates instead of 8, because CSE detection keys on
+  //   the canonical labeling). Perturbing only marked tensors keeps all
+  //   marker-free networks bit-identical to their pre-conjugation-aware
+  //   canonical forms.
   if (color_conjugation_ && tensor._conjugated())
     hash::combine(result, hash::value(true));
   return result;

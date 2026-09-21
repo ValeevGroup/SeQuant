@@ -1197,11 +1197,12 @@ SECTION("MRSO") {
               fcrex(p) * fannx(q);
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
-    // the Hermitian γ canonicalizes to its swapped+starred spelling
-    // (γ^*{u_1;u_2} == γ{u_2;u_1} by the Conjugate value identity)
+    // one of the two Hermitian factors is spelled swapped+starred
+    // (h^*{u_1;u_2} == h{u_2;u_1} by the Conjugate value identity); which
+    // one carries the marker is the canonical labeling's choice
     REQUIRE_THAT(result,
                  SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
-                              L"h{u_1;u_2}:N-C-S * γ^*{u_1;u_2}:N-C-S"));
+                              L"h^*{u_1;u_2}:N-C-S * γ{u_1;u_2}:N-C-S"));
   }
 
 #if 0

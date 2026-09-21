@@ -50,6 +50,7 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/utility/timer.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/split.hpp>
@@ -254,33 +255,55 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
       if constexpr (TN::version() >= 3) {
         // A Hermitian (BraKetSymmetry::Conjugate) tensor satisfies
         //   h{bra;ket} = conj(h{ket;bra}),
-        // so its two bra<->ket orientations fold onto a single canonical form
-        // by default, carrying a recorded conjugation byproduct
-        // (SlotCanonicalizationMetadata::conjugated_tensors).
+        // so its two bra<->ket orientations fold onto a single canonical
+        // spelling; the orientation that had to be swapped carries the
+        // elementwise-conjugation marker (the value is preserved).
         const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
-        auto canonicalize_slots_metadata = [&cardinal](const std::wstring& s) {
+        auto canonical_tensor = [&cardinal](const std::wstring& s) {
           TN tn(deserialize(s));
-          return tn.canonicalize_slots({.cardinal_tensor_labels = cardinal});
+          tn.canonicalize(cardinal);
+          REQUIRE(ranges::size(tn.tensors()) == 1);
+          return std::dynamic_pointer_cast<Tensor>(ranges::front(tn.tensors()));
+        };
+        auto same_slots = [](const Tensor& a, const Tensor& b) {
+          return ranges::equal(a.bra(), b.bra()) &&
+                 ranges::equal(a.ket(), b.ket());
         };
 
-        // Conjugate: orientations fold onto one canonical graph, and exactly
-        // one carries the conjugation byproduct.
+        // Conjugate: one canonical spelling, exactly one input marked.
         {
-          auto a = canonicalize_slots_metadata(L"h{a_1;i_1}:N-C-S");
-          auto b = canonicalize_slots_metadata(L"h{i_1;a_1}:N-C-S");
-          REQUIRE(a.graph->cmp(*b.graph) == 0);
-          REQUIRE(a.hash_value() == b.hash_value());
-          REQUIRE(a.conjugated_tensors.size() + b.conjugated_tensors.size() ==
-                  1);
+          auto a = canonical_tensor(L"h{a_1;i_1}:N-C-S");
+          auto b = canonical_tensor(L"h{i_1;a_1}:N-C-S");
+          REQUIRE(same_slots(*a, *b));
+          REQUIRE(a->conjugated() != b->conjugated());
         }
 
-        // Symm braket also folds and never reports conjugated tensors.
+        // Half-tensors: the graph has no vertex for the empty bundle, so the
+        // per-tensor fold decides -- one spelling, exactly one marked.
         {
-          auto a = canonicalize_slots_metadata(L"h{a_1;i_1}:N-S-S");
-          auto b = canonicalize_slots_metadata(L"h{i_1;a_1}:N-S-S");
-          REQUIRE(a.graph->cmp(*b.graph) == 0);
-          REQUIRE(a.conjugated_tensors.empty());
-          REQUIRE(b.conjugated_tensors.empty());
+          auto a = canonical_tensor(L"h{a_1;}:N-C-S");
+          auto b = canonical_tensor(L"h{;a_1}:N-C-S");
+          INFO(toUtf8(to_latex(*a)) << " vs " << toUtf8(to_latex(*b)));
+          REQUIRE(same_slots(*a, *b));
+          REQUIRE(a->conjugated() != b->conjugated());
+        }
+
+        // Identical bra and ket bundles (a diagonal, hence real, block): the
+        // graph's bundle order is an arbitrary automorphism; the fold leaves
+        // the spelling as written and unmarked.
+        {
+          auto d = canonical_tensor(L"h{p_1,p_2;p_1,p_2}:N-C-S");
+          REQUIRE(!d->conjugated());
+          REQUIRE(ranges::equal(d->bra(), d->ket()));
+        }
+
+        // Symm braket also folds and never marks.
+        {
+          auto a = canonical_tensor(L"h{a_1;i_1}:N-S-S");
+          auto b = canonical_tensor(L"h{i_1;a_1}:N-S-S");
+          REQUIRE(same_slots(*a, *b));
+          REQUIRE(!a->conjugated());
+          REQUIRE(!b->conjugated());
         }
       }
     }
@@ -2195,4 +2218,28 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                              L"2)(i_3,i_4)\n"));
     }
   }
+}
+
+TEST_CASE("conjugate braket fold: marker placement is not part of the value",
+          "[elements]") {
+  using namespace sequant;
+  // One value, three spellings: the Hermitian identity h{q;p} = conj(h{p;q})
+  // lets the elementwise-conjugation marker sit on either factor of
+  //   sum_{p1 p2} h_{p1 p2} gamma_{p2 p1}
+  // or on neither. Canonicalization is a function of the VALUE, so all three
+  // must land on one spelling; the graph must therefore see every tensor in
+  // its value orientation (markers unfolded) before it decides anything.
+  auto canon = [](const wchar_t* s) {
+    auto e = deserialize(s);
+    canonicalize(e);
+    return to_latex(e);
+  };
+  const auto marked_second = canon(L"h{p_1;p_2}:N-C-S * γ^*{p_1;p_2}:N-C-S");
+  const auto marked_first = canon(L"γ{p_1;p_2}:N-C-S * h^*{p_1;p_2}:N-C-S");
+  const auto unmarked = canon(L"h{p_2;p_1}:N-C-S * γ{p_1;p_2}:N-C-S");
+  INFO(toUtf8(marked_second));
+  INFO(toUtf8(marked_first));
+  INFO(toUtf8(unmarked));
+  REQUIRE(marked_second == unmarked);
+  REQUIRE(marked_first == unmarked);
 }

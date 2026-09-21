@@ -297,18 +297,6 @@ class TensorNetworkV3 {
     /// reports the phase change due to permutation of slots relative to their
     /// input order
     std::int8_t phase = +1;  // +1 or -1
-
-    /// antilinear byproduct of canonicalization: the input ordinals of the
-    /// network's BraKetSymmetry::Conjugate tensors whose canonical labeling
-    /// spells them in the bra<->ket-swapped orientation. A Hermitian
-    /// (Conjugate) tensor satisfies T{bra;ket} = conj(T{ket;bra}), so each
-    /// such swap carries an elementwise conjugation of that tensor (cf.
-    /// `phase`, which carries the ±1 linear byproduct of antisymmetric slot
-    /// reorderings). NOTE: flat input ordinals suffice for the flat networks
-    /// canonicalize_slots consumes today; this field is to be replaced
-    /// by/dissolved into the maintainer's TreeIndex-based reporting when
-    /// that lands, so it survives nested expressions.
-    container::svector<std::size_t> conjugated_tensors;
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -364,10 +352,9 @@ class TensorNetworkV3 {
     const tensor_network::NamedIndexColorMap *named_index_colors = nullptr;
     /// if false, BraKetSymmetry::Conjugate tensors are treated
     /// orientation-SENSITIVELY: their bra/ket bundles get distinct graph
-    /// colors (like Nonsymm) and no conjugated_tensors byproduct is
-    /// reported. Used at the eval boundary, where leaves must keep their
-    /// as-written orientation until evaluators understand conjugation (the
-    /// lazy-conj follow-up); symbolic canonicalization keeps the default.
+    /// colors (like Nonsymm). Used at the eval boundary, where leaves must keep
+    /// their as-written orientation until evaluators understand conjugation
+    /// (the lazy-conj follow-up); symbolic canonicalization keeps the default.
     bool fold_conjugate_braket = true;
   };
 

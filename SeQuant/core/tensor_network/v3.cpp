@@ -157,6 +157,27 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     sequant::wprintf(oss.str());
   }
 
+  // Bring every foldable Conjugate tensor to its VALUE orientation before the
+  // graph is built: a marked spelling T^*{q;p} denotes the same value as
+  // T{p;q}, and the canonical form is a function of the value, so the graph
+  // must not see which of the two spellings the input used (else
+  // h{p;q} γ^*{p;q} and γ{p;q} h^*{p;q}, one value, would canonicalize to
+  // different marker placements). The marker re-emerges only from the
+  // graph-dictated bundle swap below and from the label fold after
+  // relabeling.
+  {
+    bool unfolded = false;
+    for (auto &tensor_ptr : tensors_) {
+      auto &tensor = *tensor_ptr;
+      if (braket_conjugate_foldable(tensor) && tensor._conjugated()) {
+        tensor._conjugate();
+        tensor._swap_bra_ket();
+        unfolded = true;
+      }
+    }
+    if (unfolded) have_edges_ = false;  // slots moved: rebuild the edges
+  }
+
   if (!have_edges_) {
     init_edges();
   }
@@ -422,33 +443,13 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     // exclusions live in braket_foldable()
     if (!braket_foldable(tensor)) continue;
 
-    // A half-tensor (empty bra or ket bundle) IS reoriented like any other
-    // Conjugate tensor (T{a1;} <-> T^*{;a1}) -- but not from the graph: the
-    // empty bundle has no vertex, so its recorded canonical bundle position is
-    // a value-initialized sentinel that carries no orientation verdict. For
-    // Symm braket symmetry acting on the sentinel is harmless (both
-    // orientations denote the SAME value; the per-tensor refold below picks
-    // the spelling anyway). For Conjugate braket symmetry the two orientations
-    // denote CONJUGATE values (a swap must toggle the elementwise-conjugation
-    // marker), so acting on a sentinel would corrupt the value: the
-    // content-based refold after the lexicographic relabel decides the
-    // orientation of a half-tensor, deterministically.
-    if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate &&
-        (bra_rank(tensor) == 0 || ket_rank(tensor) == 0))
-      continue;
-
-    // Swap bra and ket bundles into the canonical (graph-dictated) order.
-    // Guard: when the bra and ket bundles are IDENTICAL (diagonal trace
-    // T{p,q;p,q}) the two bundle vertices are automorphic, so the "order"
-    // bliss reports between them is an arbitrary automorphism pick, not
-    // information about the input -- there is nothing to transfer from the
-    // graph. The slot swap itself would be the identity permutation, but for
-    // Conjugate braket symmetry it would still toggle the conjugation marker
-    // and thereby CHANGE the represented value (a spurious T^*{p,q;p,q});
-    // hence skip exactly this no-information case.
+    // Swap bra and ket bundles into the canonical (graph-dictated) order. The
+    // verdict is transferred as-is; where the graph carries no orientation
+    // information it is arbitrary but value-preserving (for a Conjugate
+    // tensor the swap toggles the conjugation marker, see below), and the
+    // pass after this loop settles those tensors deterministically.
     if (canonical_bra_ket_bundle_order[i][0] >
-            canonical_bra_ket_bundle_order[i][1] &&
-        !ranges::equal(tensor._bra(), tensor._ket())) {
+        canonical_bra_ket_bundle_order[i][1]) {
       tensor._swap_bra_ket();
       // for a Conjugate tensor the swapped spelling denotes the conjugate
       // value (T{q;p} = conj(T{p;q})): keep the represented value invariant
@@ -456,6 +457,24 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate)
         tensor._conjugate();
     }
+  }
+
+  // Second pass, for the tensors the graph cannot orient: a half-tensor
+  // (empty bra or ket bundle) has no vertex for the empty bundle, so its
+  // recorded bundle position is a value-initialized sentinel, and identical
+  // bra and ket bundles (diagonal trace T{p,q;p,q}) are automorphic. Their
+  // verdict above was arbitrary; decide them by content instead
+  // (DefaultTensorCanonicalizer::canonicalize_braket unfolds a marked spelling
+  // first, orients a half-tensor by its bundle spaces and never swaps
+  // identical bundles), which is label-independent, so it is a fixed point
+  // of the relabeling that follows.
+  for (auto &tensor_ptr : tensors_) {
+    AbstractTensor &tensor = *tensor_ptr;
+    if (!braket_foldable(tensor)) continue;
+    const bool half = bra_rank(tensor) == 0 || ket_rank(tensor) == 0;
+    const bool diagonal = ranges::equal(tensor._bra(), tensor._ket());
+    if (half || diagonal)
+      DefaultTensorCanonicalizer::canonicalize_braket(tensor);
   }
 
   // Less-than relationship for tensors. Tensors that do not commute are
@@ -958,53 +977,6 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
         // Performed an uneven amount of pairwise exchanges -> this incurs a
         // phase change
         metadata.phase *= -1;
-      }
-    }
-  }
-
-  // Detect the antilinear byproduct: for each foldable Conjugate tensor whose
-  // {bra,ket} bundle vertices are ordered ket-before-bra in the canonical
-  // labeling, the canonical form is the bra<->ket-swapped (conjugated)
-  // orientation of the input -- report the tensor's input ordinal in
-  // metadata.conjugated_tensors.
-  // Vertices are visited tensor-major (TensorCore precedes that tensor's
-  // bundle vertices, before the next TensorCore), mirroring the walk used by
-  // canonicalize_graph to build canonical_bra_ket_bundle_order.
-  {
-    // canonical position of each foldable Conjugate tensor's {bra,ket}
-    // bundle vertex
-    container::map<std::size_t, std::array<std::optional<std::size_t>, 2>>
-        bundle_pos;
-    std::size_t tensor_count = 0;
-    for (std::size_t v = 0; v < graph.vertex_types.size(); ++v) {
-      const auto vt = graph.vertex_types[v];
-      if (vt == VertexType::TensorCore) {
-        ++tensor_count;
-      } else if (vt == VertexType::TensorBraBundle ||
-                 vt == VertexType::TensorKetBundle) {
-        SEQUANT_ASSERT(tensor_count > 0);
-        const std::size_t tensor_ord = tensor_count - 1;
-        // same guard as the fold itself: only a c-number Conjugate tensor
-        // that is not orientation-pinned participates (an operator-valued
-        // Conjugate "tensor" has differently colored bra/ket bundles, so its
-        // bundle positions must not feed the detection)
-        if (options.fold_conjugate_braket &&
-            braket_conjugate_foldable(*tensors_[tensor_ord])) {
-          const bool bra = vt == VertexType::TensorBraBundle;
-          bundle_pos[tensor_ord][bra ? 0 : 1] = canonize_perm[v];
-        }
-      }
-    }
-    for (const auto &[tensor_ord, bk] : bundle_pos) {
-      // bra bundle canonically after ket bundle => canonical form is the
-      // bra<->ket-swapped (conjugated) orientation of the input. Identical
-      // bra and ket bundles (diagonal trace T{p,q;p,q}): the swap is an
-      // identity -- no conjugation byproduct (mirrors the identity-swap skip
-      // in canonicalize_graph).
-      if (bk[0] && bk[1] && *bk[0] > *bk[1] &&
-          !ranges::equal(tensors_[tensor_ord]->_bra(),
-                         tensors_[tensor_ord]->_ket())) {
-        metadata.conjugated_tensors.push_back(tensor_ord);
       }
     }
   }
