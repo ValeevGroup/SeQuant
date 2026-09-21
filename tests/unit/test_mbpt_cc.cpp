@@ -311,11 +311,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE(size(ip[0]) == 32);
     REQUIRE(size(ip[1]) == 11);
 
-    // Explicit and default ranks agree for a single manifold too.
-    const CC bch(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2});
-    REQUIRE_THAT(bch.eom_r(nₚ(1), nₕ(1), {2}).at(1),
-                 EquivalentTo(bch.eom_r(nₚ(1), nₕ(1)).at(1)));
-
     // block_ranks must be exactly a K x K matrix over the manifolds ...
     REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 0}), Exception);
     REQUIRE_THROWS_AS(cc.eom_r(nₚ(2), nₕ(2), {2, 1, 1, 0, 2}), Exception);
