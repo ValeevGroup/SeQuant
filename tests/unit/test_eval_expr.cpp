@@ -369,6 +369,16 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // slot: for Nonsymm they are value-distinct
     REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_star}.hash_value());
 
+    // nor t and t^T, nor t and t⁺ (the adjoint mark is in the decorated label)
+    Tensor t_transposed = t;
+    t_transposed.adjoint();
+    t_transposed.conjugate();
+    REQUIRE(t_transposed.value_modifier() == ValueModifier::Transpose);
+    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_transposed}.hash_value());
+    Tensor t_adj = t;
+    t_adj.adjoint();
+    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_adj}.hash_value());
+
     // '⁺'-labeled AND marked (the symbolic transpose conj(adjoint(t))): the
     // marker refusal must fire before the '⁺' label channel, else the label
     // channel builds Adjoint over a still-marked bare leaf and the marker is

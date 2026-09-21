@@ -1111,15 +1111,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool transposed_ = false;
 
   /// adopts a trailing adjoint mark ('⁺', sequant::adjoint_label) from label_
-  /// into the modifier bits: `Tensor(L"t⁺", ...)` and
-  /// `Tensor(L"t", ...).adjoint()` denote the same object (mbpt's
-  /// Operator::adjoint tensor form and the deserializer both spell the
-  /// adjoint in the label)
+  /// into the modifier bits, mirroring adjoint(): both bits toggle for a
+  /// Nonsymm tensor; for a Hermitian (Conjugate/Symm) tensor the adjoint
+  /// equals the tensor, so the mark is simply dropped. Hence
+  /// `Tensor(L"t⁺", bra{q}, ket{p}, ...)` denotes the same array as
+  /// `Tensor(L"t", bra{p}, ket{q}, ...).adjoint()` (mbpt's Operator::adjoint
+  /// tensor form and the deserializer both spell the adjoint in the label)
   void adopt_adjoint_mark() {
     if (!label_.empty() && label_.back() == sequant::adjoint_label) {
       label_.pop_back();
-      conjugated_ = !conjugated_;
-      transposed_ = !transposed_;
+      if (braket_symmetry_ == BraKetSymmetry::Nonsymm) {
+        conjugated_ = !conjugated_;
+        transposed_ = !transposed_;
+      }
     }
   }
 

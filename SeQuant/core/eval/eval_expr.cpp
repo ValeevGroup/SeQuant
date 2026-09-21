@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstdint>
 #include <ranges>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -340,11 +341,23 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   const std::wstring label = tnsr.decorated_label();  // '⁺' included, as before
   hash::combine(h, hash::value(std::wstring_view(label)));
   hash::combine(h, hash_indices(tnsr.const_slots()));
-  // the conjugation marker enters only where it is value-DISTINCTIVE
-  // (Nonsymm): for Conjugate it is an orientation fold and for Symm it is
-  // value-redundant, so there both spellings share one cache slot
-  if (tnsr.conjugated() && tnsr.braket_symmetry() == BraKetSymmetry::Nonsymm)
-    hash::combine(h, true);
+  // a Conjugate/Transpose modifier enters only where it is value-DISTINCTIVE
+  // (Nonsymm): for Conjugate symmetry the starred spelling is an orientation
+  // fold of the same value, so both spellings share one cache slot. The
+  // Adjoint state is already in the decorated label.
+  if (tnsr.braket_symmetry() == BraKetSymmetry::Nonsymm) {
+    switch (tnsr.value_modifier()) {
+      case ValueModifier::Conjugate:
+        hash::combine(h, true);  // as when conjugated_ was the only bit
+        break;
+      case ValueModifier::Transpose:
+        hash::combine(h, std::uint8_t{2});
+        break;
+      case ValueModifier::None:
+      case ValueModifier::Adjoint:
+        break;
+    }
+  }
   return h;
 }
 }  // namespace

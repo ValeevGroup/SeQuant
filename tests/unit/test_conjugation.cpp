@@ -579,6 +579,13 @@ TEST_CASE("value_modifier_encoding", "[conjugation]") {
     relabeled.set_label(L"t⁺");
     REQUIRE(relabeled.label() == L"t");
     REQUIRE(relabeled.value_modifier() == ValueModifier::Adjoint);
+
+    // a Hermitian tensor's adjoint is itself: the mark is dropped, no bits
+    Tensor g_adj(L"g⁺", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                 BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+    REQUIRE(g_adj.label() == L"g");
+    REQUIRE(g_adj.value_modifier() == ValueModifier::None);
+    REQUIRE(g_adj.decorated_label() == L"g");
   }
 
   SECTION("deserializer: ⁺, ^* and ^T round-trip") {
