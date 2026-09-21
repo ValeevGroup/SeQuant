@@ -692,6 +692,11 @@ TEST_CASE("value_modifier_encoding", "[conjugation]") {
             ValueModifier::Transpose);
     REQUIRE(to_latex(deserialize(L"t^T{i_1;a_1}:N-N-N")) ==
             L"{{t^T}^{{a_1}}_{{i_1}}}");
+
+    // a hand-written ⁺ followed by ^* composes to the transpose
+    REQUIRE(
+        deserialize(L"t⁺^*{i_1;a_1}:N-N-N")->as<Tensor>().value_modifier() ==
+        ValueModifier::Transpose);
   }
 
   SECTION("set_value_modifier copies bits without touching slots") {
@@ -711,6 +716,14 @@ TEST_CASE("value_modifier_encoding", "[conjugation]") {
     auto w = ta.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
                            ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{});
     REQUIRE(w.value_modifier() == ValueModifier::Adjoint);
+
+    Tensor tt = t;
+    tt.adjoint();
+    tt.conjugate();
+    REQUIRE(tt.value_modifier() == ValueModifier::Transpose);
+    REQUIRE(tt.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
+                          ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{})
+                .value_modifier() == ValueModifier::Transpose);
   }
 
   SECTION("ordering: t < t^* < t^T < t⁺, then by slots") {
@@ -718,8 +731,18 @@ TEST_CASE("value_modifier_encoding", "[conjugation]") {
     tc.conjugate();
     Tensor ta = t;
     ta.adjoint();
+    Tensor tt = t;
+    tt.adjoint();
+    tt.conjugate();
+    REQUIRE(tt.value_modifier() == ValueModifier::Transpose);
     REQUIRE(t < tc);
-    REQUIRE(tc < ta);
+    REQUIRE(tc < tt);
+    REQUIRE(tt < ta);
+
+    // slot tie-break: same label and modifier, different bra index
+    Tensor t2(L"t", bra{L"a_2"}, ket{L"i_1"}, Symmetry::Nonsymm,
+              BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    REQUIRE(t < t2);
   }
 }
 
@@ -757,4 +780,24 @@ TEST_CASE("value_oriented_totality", "[conjugation]") {
   Tensor tc = t;
   tc.conjugate();
   REQUIRE_THROWS_AS(value_oriented(tc), sequant::Exception);
+}
+
+TEST_CASE("canonicalize_marked_nonsymm_network", "[conjugation]") {
+  // A Conjugate/Transpose modifier on a Nonsymm tensor is part of the
+  // graph colouring in every canonicalization, so networks that differ
+  // only in which factor carries the mark stay distinguishable, and
+  // canonicalization is idempotent on them.
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto e1 = deserialize(L"t^*{a_1;i_1}:N-N-N u{i_1;a_1}:N-N-N");
+  auto e2 = deserialize(L"t{a_1;i_1}:N-N-N u^*{i_1;a_1}:N-N-N");
+  auto c1 = canonicalize(e1->clone());
+  auto c2 = canonicalize(e2->clone());
+  REQUIRE(*c1 != *c2);
+  REQUIRE(*canonicalize(c1->clone()) == *c1);
+  REQUIRE(*canonicalize(c2->clone()) == *c2);
 }

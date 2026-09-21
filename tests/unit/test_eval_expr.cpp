@@ -237,8 +237,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 
   SECTION("Adjoint op") {
-    // A Nonsymm-braket tensor's adjoint() relabels its label with U+207A '⁺'
-    // (Tensor::adjoint() at expressions/tensor.cpp:25-41). When that leaf
+    // A Nonsymm-braket tensor's adjoint() sets both value-modifier bits
+    // (ValueModifier::Adjoint, printed as the '⁺' mark). When that leaf
     // reaches binarize, the resulting eval-tree should expose the adjoint as
     // a first-class IR op (EvalOp::Adjoint) holding the bare-label tensor as
     // its single operand — not as a leaf with the marker still in the label.
@@ -338,6 +338,13 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(g_tree3.left()->as_tensor().bra().at(0).label() == L"p_3");
     REQUIRE(g_tree3.right()->is_constant());  // sentinel
     REQUIRE(g_tree3->hash_value() != g_tree3.left()->hash_value());
+
+    // a marked Hermitian leaf denotes a different value than its unmarked
+    // twin with the same slots (g^*{i;a} == g{a;i}), so they must not share
+    // a cache slot
+    Tensor g_marked = g;
+    g_marked.conjugate();
+    REQUIRE(EvalExpr{g}.hash_value() != EvalExpr{g_marked}.hash_value());
   }
 
   SECTION("starred non-Conjugate leaves") {
@@ -391,12 +398,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 
   SECTION("Adjoint op in a binarized term") {
-    // Regression: a tensor leaf can carry the adjoint marker U+207A '⁺' in its
-    // label without having been produced by Tensor::adjoint() — e.g. when built
-    // directly from a label string that already ends in '⁺'. Adjointness is
-    // tracked solely by this label marker, so such a leaf is a valid adjoint.
+    // Regression: a tensor leaf can carry the Adjoint modifier without having
+    // been produced by Tensor::adjoint() — e.g. when built from a label
+    // string ending in '⁺' (the constructor adopts the mark into the bits).
     //
-    // binarize() keys off the '⁺' label to surface the marker-bearing leaf as
+    // binarize() switches on value_modifier() to surface such a leaf as
     // EvalOp::Adjoint (see the "Adjoint op" section above), stripping the
     // marker via Tensor::adjoint(). That path must tolerate a leaf that never
     // went through Tensor::adjoint().
@@ -703,8 +709,10 @@ TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
     // DISABLED: leaves keep their as-written orientation so leaf yielders and
     // evaluators need no conjugation awareness -- folding flat leaves onto
     // one orientation-shared slot is the lazy-conj eval follow-up. A marked
-    // spelling keeps its marker, shares the slot of its unstarred spelling
-    // (leaf-hash invariant), and binarize serves it through EvalOp::Adjoint.
+    // spelling keeps its marker, and its leaf hash differs from its unmarked
+    // twin (the marker is part of the leaf's value identity for every braket
+    // symmetry: F^*{a_1;i_1} denotes F{i_1;a_1}, a different value from
+    // F{a_1;i_1}); binarize serves the marked leaf through EvalOp::Adjoint.
     auto F = deserialize(L"C{a_1;i_1}:N-C-S")->as<Tensor>();
     REQUIRE_FALSE(ranges::any_of(F.const_indices(), &Index::has_proto_indices));
     auto F_swap = F;
@@ -716,12 +724,14 @@ TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
     // no fold: both orientations stay unmarked, in their own spelling
     REQUIRE_FALSE(is_conj_leaf(fa));
     REQUIRE_FALSE(is_conj_leaf(fb));
-    // a starred spelling hashes onto its unstarred spelling's slot
+    // a starred spelling does NOT hash onto its unstarred spelling's slot:
+    // the modifier is part of the leaf's value identity for every braket
+    // symmetry (see hash_terminal_tensor)
     auto F_star = F;
     F_star.conjugate();
     EvalExpr fs{F_star};
     REQUIRE(is_conj_leaf(fs));
-    REQUIRE(fs.hash_value() == fa.hash_value());
+    REQUIRE(fs.hash_value() != fa.hash_value());
   }
 }
 

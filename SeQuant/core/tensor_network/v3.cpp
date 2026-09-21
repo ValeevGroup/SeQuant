@@ -452,11 +452,13 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     // pass after this loop settles those tensors deterministically.
     if (canonical_bra_ket_bundle_order[i][0] >
         canonical_bra_ket_bundle_order[i][1]) {
-      if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate)
+      if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate) {
         // value-preserving respelling: T{q;p} = conj(T{p;q}), transpose()
         // records the conjugation
-        as_cnumber_tensor(tensor)->transpose();
-      else
+        Tensor *ct = as_cnumber_tensor(tensor);
+        SEQUANT_ASSERT(ct);
+        ct->transpose();
+      } else
         tensor._swap_bra_ket();  // Symm: free
     }
   }

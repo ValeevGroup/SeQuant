@@ -396,9 +396,14 @@ struct Transformer {
                               aux(std::move(auxiliaries)), perm_symm, symm,
                               column_symm);
           // label^*{...} / label^T{...}: the value modifier
-          if (tensor.modifier != 0)
-            t->template as<Tensor>().set_value_modifier(
-                static_cast<ValueModifier>(tensor.modifier));
+          if (tensor.modifier != 0) {
+            auto &tt = t->template as<Tensor>();
+            // compose with a mark adopted from the label (t⁺^* is the
+            // transpose)
+            tt.set_value_modifier(static_cast<ValueModifier>(
+                static_cast<std::uint8_t>(tt.value_modifier()) ^
+                tensor.modifier));
+          }
           return t;
         },
         braket_symm);

@@ -222,6 +222,10 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   Tensor reordered(tensor.label(), bra(), ket(), aux(std::move(indices)),
                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                    ColumnSymmetry::Nonsymm);
+  // the bits are copied verbatim onto a Nonsymm rebuild; a Conjugate bit that
+  // meant "swapped orientation" on a Hermitian source would mean elementwise
+  // conjugation here. Unreachable today (binarize refuses such a leaf);
+  // revisit with lazy-conj eval.
   reordered.set_value_modifier(tensor.value_modifier());
   tensor = std::move(reordered);
 

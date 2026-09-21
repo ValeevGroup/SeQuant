@@ -780,7 +780,8 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
     REQUIRE(tc.bra().at(0).label() == L"a_1");  // swapped
   }
 
-  SECTION("adjoint and the marker compose as swap∘conj (Klein four-group)") {
+  SECTION(
+      "adjoint and the marker compose as transpose∘conj (Klein four-group)") {
     // adjoint = transpose∘conj = conj∘transpose in VALUE, so conjugate() and
     // adjoint() commute on the spelling too. For Conjugate braket symmetry
     // adjoint() is a pure bra<->ket swap and leaves the conjugation bit

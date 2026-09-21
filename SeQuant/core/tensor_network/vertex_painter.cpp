@@ -39,11 +39,9 @@ std::size_t VertexPainterImpl::to_hash_value(
   // the shade hashes the DECORATED label (with the '⁺' adjoint mark): that is
   // what _label() returned while the mark lived in the label, so adjoint
   // tensors keep their colours and hence their canonical forms
-  const std::wstring shade_label = [&]() -> std::wstring {
-    if (auto *t = dynamic_cast<const Tensor *>(&tensor))
-      return t->decorated_label();
-    return std::wstring(tensor._label());
-  }();
+  const Tensor *ct = as_cnumber_tensor(tensor);
+  const std::wstring shade_label =
+      ct ? ct->decorated_label() : std::wstring(tensor._label());
   auto hashes = {hash::value(std::wstring_view(shade_label)),
                  hash::value(bra_rank),
                  hash::value(ket_rank),
@@ -66,8 +64,8 @@ std::size_t VertexPainterImpl::to_hash_value(
   // distinguishes the two vertices, so a canonical labeling is free to swap
   // them, and C * C^* would collide with C^* * C under one shared hash and
   // graph.
-  if (auto *t = dynamic_cast<const Tensor *>(&tensor)) {
-    switch (t->value_modifier()) {
+  if (ct) {
+    switch (ct->value_modifier()) {
       case ValueModifier::Conjugate:
         hash::combine(result, hash::value(true));  // as in PR #602
         break;

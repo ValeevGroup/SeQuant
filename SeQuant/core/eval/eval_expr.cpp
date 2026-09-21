@@ -174,9 +174,10 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
         TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
     canon_phase_ = phase ? -1 : 1;
     // Leaf-hash invariant (owned by hash_terminal_tensor): the modifier
-    // enters the hash only where it is value-distinctive (Nonsymm); for
-    // Conjugate (orientation fold) and Symm (value-redundant) both
-    // spellings share one cache slot.
+    // enters the hash whenever it is set. A Conjugate-symmetry leaf that
+    // arrives marked is served by binarize through an EvalOp::Adjoint node
+    // over its value orientation, so the marked leaf hash is only ever
+    // compared against other marked leaves.
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
@@ -340,22 +341,21 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   const std::wstring label = tnsr.decorated_label();  // '⁺' included, as before
   hash::combine(h, hash::value(std::wstring_view(label)));
   hash::combine(h, hash_indices(tnsr.const_slots()));
-  // a Conjugate/Transpose modifier enters only where it is value-DISTINCTIVE
-  // (Nonsymm): for Conjugate symmetry the starred spelling is an orientation
-  // fold of the same value, so both spellings share one cache slot. The
-  // Adjoint state is already in the decorated label.
-  if (tnsr.braket_symmetry() == BraKetSymmetry::Nonsymm) {
-    switch (tnsr.value_modifier()) {
-      case ValueModifier::Conjugate:
-        hash::combine(h, true);  // as when conjugated_ was the only bit
-        break;
-      case ValueModifier::Transpose:
-        hash::combine(h, std::uint8_t{2});
-        break;
-      case ValueModifier::None:
-      case ValueModifier::Adjoint:
-        break;
-    }
+  // A set Conjugate/Transpose modifier is part of the leaf's value identity
+  // for EVERY braket symmetry: g^*{i;a} denotes g{a;i}, not g{i;a}, so the
+  // two spellings must not share a cache slot even though g is Hermitian.
+  // (The two spellings of ONE value, g{i;a} and g^*{a;i}, already differ in
+  // their slot hashes.) The Adjoint state is in the decorated label.
+  switch (tnsr.value_modifier()) {
+    case ValueModifier::Conjugate:
+      hash::combine(h, true);  // as when conjugated_ was the only bit
+      break;
+    case ValueModifier::Transpose:
+      hash::combine(h, std::uint8_t{2});
+      break;
+    case ValueModifier::None:
+    case ValueModifier::Adjoint:
+      break;
   }
   return h;
 }
