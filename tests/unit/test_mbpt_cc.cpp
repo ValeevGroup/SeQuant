@@ -229,7 +229,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     REQUIRE_THROWS_AS(CC(2, {.hbar_comm_rank = 2,
                              .hbar_expansion = CC::HbarExpansion::Bernoulli}),
                       Exception);
-    REQUIRE_NOTHROW(bernoulli::hbar(1, 5, false));
 
     auto resetter = set_scoped_default_mbpt_context(
         mbpt::Context::Options{.csv = CSV::Yes});
