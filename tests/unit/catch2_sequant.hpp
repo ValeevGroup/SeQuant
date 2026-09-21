@@ -305,15 +305,11 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
 
     Subclass::pre_comparison(clone);
 
-    const sequant::Expr &self = [&]() -> const sequant::Expr & {
-      if (std::holds_alternative<sequant::ResultExpr>(m_expr)) {
-        return *std::get<sequant::ResultExpr>(m_expr).expression();
-      }
+    if (std::holds_alternative<sequant::ResultExpr>(m_expr)) {
+      return *clone == *std::get<sequant::ResultExpr>(m_expr).expression();
+    }
 
-      return *std::get<sequant::ExprPtr>(m_expr);
-    }();
-
-    return *clone == self;
+    return *clone == *std::get<sequant::ExprPtr>(m_expr);
   }
 
   std::string stringify(const ExprVar &expr) const {
