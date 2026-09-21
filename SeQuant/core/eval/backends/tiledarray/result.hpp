@@ -296,18 +296,19 @@ inline void log_ta(Args const&... args) noexcept {
 /// identical across ranks). These movements are not eval-tree ops, so the
 /// `Eval` records never see them; this is the only accounting of their cost.
 template <typename... Args>
-inline void log_batch_op([[maybe_unused]] char const* kind,
-                         [[maybe_unused]] std::chrono::nanoseconds elapsed,
-                         [[maybe_unused]] TA::DistArray<Args...> const& moved,
-                         [[maybe_unused]] std::string const& annot) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
+inline void log_batch_op(char const* kind, std::chrono::nanoseconds elapsed,
+                         TA::DistArray<Args...> const& moved,
+                         std::string const& annot) noexcept {
+  // Gated at run time by the trace level (like the per-op `Eval |` lines a
+  // Trace::On evaluation emits), not by SEQUANT_EVAL_TRACE: the batched
+  // executor's data movement (Slice / Scatter / Accumulate / Clone) is
+  // exactly what a wet trace on a release build must account for.
   auto& l = Logger::instance();
   if (l.eval.level == 0) return;
   auto bytes = TA::size_of<TA::MemorySpace::Host>(moved);
   moved.world().gop.sum(bytes);
   write_log(l, "Batch | ", kind, " | ", elapsed.count(), "ns | bytes=", bytes,
             "B | ", annot, '\n');
-#endif
 }
 
 /// Convert sequant::DeNest to TA::DeNest
@@ -923,7 +924,11 @@ class ResultTensorTA final : public Result {
   /// would be seen by every other holder -- \c TA::clone allocates and copies
   /// the tiles.
   [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+    auto const t0 = std::chrono::steady_clock::now();
+    auto res = eval_result<this_type>(TA::clone(get<ArrayT>()));
+    detail::log_batch_op("Clone", std::chrono::steady_clock::now() - t0,
+                         get<ArrayT>(), "");
+    return res;
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -1620,7 +1625,11 @@ class ResultTensorOfTensorTA final : public Result {
   /// Deep copy; see \c ResultTensorTA::clone. \c TA::clone deep-copies the
   /// (nested) tiles too, so the copy shares no inner tensor with this one.
   [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+    auto const t0 = std::chrono::steady_clock::now();
+    auto res = eval_result<this_type>(TA::clone(get<ArrayT>()));
+    detail::log_batch_op("Clone", std::chrono::steady_clock::now() - t0,
+                         get<ArrayT>(), "");
+    return res;
   }
 
   [[nodiscard]] ResultPtr permute(
