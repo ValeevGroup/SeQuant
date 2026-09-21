@@ -189,7 +189,11 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   }
   virtual ~DefaultTensorCanonicalizer() = default;
 
-  /// Canonicalizes the assignment of indices to bra and ket
+  /// Canonicalizes the assignment of indices to bra and ket of a
+  /// braket-foldable tensor (see braket_foldable()): a free swap for
+  /// BraKetSymmetry::Symm, Tensor::transpose() (which records the
+  /// conjugation) for BraKetSymmetry::Conjugate
+  /// @param fold_conjugate if false, Conjugate tensors are left untouched
   static void canonicalize_braket(AbstractTensor& t,
                                   bool fold_conjugate = true);
 

@@ -88,29 +88,48 @@ struct TensorSymmetries {
 // clang-format off
 /// ### Conjugation / transposition / adjoint algebra
 ///
-/// Two independent involutions act on a tensor's VALUE; together with the
-/// identity and their composition they form a Klein four-group
-/// (see #ValueModifier):
+/// A Tensor is a field-valued multilinear array whose bra and ket slot
+/// groups make it a matrix: a linear map from the ket-slot product space to
+/// the bra-slot one. It may or may not be the matrix of an operator in the
+/// index basis; either way the grouping gives it a transpose and a conjugate
+/// transpose ("adjoint" is the name the latter carries when the array does
+/// represent an operator; `V^{ij}_{kl} = g^{ij}_{pq} r^{pq}_{kl}` versus
+/// `V⁺^{ij}_{kl} = r^{ij}_{pq} g^{pq}_{kl}` needs no operator at all).
 ///
-/// | operation | effect                                       | via                    |
-/// |-----------|-----------------------------------------------|------------------------|
-/// | `conj`    | elementwise complex conjugation, slots kept    | `conjugate()`          |
-/// | `T`       | bra<->ket transposition, elements kept         | `transpose()`          |
-/// | `adjoint` | conjugate transpose = `T∘conj` = `conj∘T`      | `adjoint()`            |
+/// Two involutions act on the value and are recorded in the modifier bits
+/// (#ValueModifier, value_modifier()); they commute and generate a Klein
+/// four-group together with their composition:
 ///
-/// The two bits (conjugated(), transposed()) are normalized against this
-/// tensor's #BraKetSymmetry after every mutator (see
-/// normalize_value_modifier()), so a set bit always denotes a genuinely
-/// distinct value:
-/// - `Symm` (Hermitian over a real field): `conj` and `T` are both the
-///   identity in value; both bits always clear.
-/// - `Conjugate` (Hermitian over a complex field): `adjoint(T) == T` in
-///   value, hence `T(x) == conj(x)`, so `transposed_` folds into
-///   `conjugated_` -- the fold identity `T{q;p} = conj(T{p;q})` the
-///   canonicalizer uses to spell both orientations over one canonical slot
-///   order (the swapped spelling carrying the conjugation bit).
-/// - `Nonsymm`: both bits are independent and kept; `adjoint()` sets both,
-///   printed as the reserved '⁺' suffix (see decorated_label()).
+/// | operation   | effect                                   | via                    | spelling |
+/// |-------------|------------------------------------------|------------------------|----------|
+/// | `conj`      | elements conjugated, slots kept          | conjugate()            | `T^*`    |
+/// | `transpose` | slots read in exchanged bra/ket roles    | transpose()            | `T^T`    |
+/// | `adjoint`   | conjugate transpose = both               | adjoint()              | `T⁺`     |
+///
+/// The bits are normalized against #BraKetSymmetry after every mutation, so
+/// a set bit always denotes a genuinely distinct value:
+/// - `Symm` (Hermitian over a real field): both bits clear; every operation
+///   is at most a bra<->ket respelling.
+/// - `Conjugate` (Hermitian over a complex field): `T^T = T^*`, so the
+///   transposition folds into the conjugation bit. transpose() therefore
+///   yields the starred swapped spelling `T^*{q;p} = T{p;q}` that the
+///   canonicalizer uses to fold both orientations onto one canonical slot
+///   order, and adjoint() is a pure swap (`T⁺ = T`).
+/// - `Nonsymm`: both bits are kept; adjoint() sets both (the `⁺` spelling).
+///
+/// label() is always the bare array name; a trailing `⁺` in a constructor or
+/// set_label() argument is adopted into the bits. decorated_label() (label
+/// plus `⁺` for the adjoint state) is what printing, hashing and graph
+/// colouring use, so the adjoint keeps the spelling, hash and canonical
+/// form it had when the mark lived in the label.
+///
+/// Conjugation is pointwise and order-preserving; transposition reverses
+/// factor order in a product; adjoint inherits the reversal from its
+/// transpose half (compare sequant::conjugate(), which does not reverse,
+/// with Product::adjoint(), which does). Operator-valued AbstractTensors
+/// (NormalOperator) have an adjoint but neither half: complex conjugation of
+/// an operator needs an antiunitary (the time-reversal work), so the bits
+/// live on Tensor only (see as_cnumber_tensor()).
 // clang-format on
 
 /// value modifier of a c-number tensor relative to the array its label names:
@@ -1016,15 +1035,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// @brief rebuilds this tensor with new slot bundles, carrying every
   /// non-slot attribute: label, #Symmetry, #BraKetSymmetry, #Hermiticity,
-  /// #ColumnSymmetry, and the value modifier (conjugated()/transposed()).
+  /// #ColumnSymmetry, and the value modifier (conjugation/transposition
+  /// bits).
   ///
   /// The sanctioned rebuild API for transforms that rewrite a tensor's slots
   /// (relabeling, expansion, factorization rules): rebuilding through a plain
   /// constructor silently drops conjugated() (and can demote Hermiticity),
   /// corrupting every complex-field workflow downstream. A transform that
   /// instead REINTERPRETS the slots positionally must first normalize the
-  /// spelling to the value orientation (unstar + bra<->ket swap for a
-  /// #BraKetSymmetry::Conjugate tensor) before reading them.
+  /// spelling to the value orientation (see value_oriented()) before reading
+  /// them.
   // N.B. the slot bundle types are qualified because at this point in the
   // class the bra()/ket()/aux() member accessors shadow the strong-type
   // templates

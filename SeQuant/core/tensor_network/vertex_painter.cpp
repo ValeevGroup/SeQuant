@@ -61,6 +61,11 @@ std::size_t VertexPainterImpl::to_hash_value(
   // folding even a "no modifier" value into every colour would re-spell
   // every marker-free network (measured on the PR: 4 unit fixtures and 8
   // byte-compared goldens).
+  // Without the modifier in the core-vertex color, an uncolored graph for
+  // C{x;m} and C^*{y;m} is automorphic: nothing but the modifier bit
+  // distinguishes the two vertices, so a canonical labeling is free to swap
+  // them, and C * C^* would collide with C^* * C under one shared hash and
+  // graph.
   if (auto *t = dynamic_cast<const Tensor *>(&tensor)) {
     switch (t->value_modifier()) {
       case ValueModifier::Conjugate:
