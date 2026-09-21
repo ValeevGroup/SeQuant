@@ -388,8 +388,9 @@ TEST_CASE("re_im_scalar_rules", "[conjugation]") {
 }
 
 TEST_CASE("adjoint_conjugate_transpose_relations", "[conjugation]") {
-  // the Klein four-group {id, conj, swap, adjoint}: each op is an involution
-  // and adjoint = swap o conj = conj o swap
+  // the Klein four-group {id, conj, transpose, adjoint}: each op is an
+  // involution, adjoint = transpose o conj = conj o transpose, and the
+  // modifier bits record exactly which group element was applied
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
@@ -397,20 +398,111 @@ TEST_CASE("adjoint_conjugate_transpose_relations", "[conjugation]") {
   auto resetter = set_scoped_default_context(ctx);
 
   auto t0 = deserialize(L"t{a_1;i_1}:N-N-S");
-  // adjoint is an involution (incl. the Nonsymm label marker)
-  auto t = t0->clone();
-  t->adjoint();
-  t->adjoint();
-  REQUIRE(*t == *t0);
-  // conj is an involution
-  REQUIRE(*conjugate(conjugate(t0)) == *t0);
-  // adjoint and conj commute
-  auto ca = t0->clone();
-  ca->adjoint();
-  ca = conjugate(ca);
-  auto ac = conjugate(t0);
-  ac->adjoint();
-  REQUIRE(*ca == *ac);
+  auto& T0 = t0->as<Tensor>();
+
+  SECTION("involutions") {
+    for (auto op : {&Tensor::conjugate, &Tensor::transpose, &Tensor::adjoint}) {
+      Tensor t = T0;
+      (t.*op)();
+      REQUIRE(t != T0);
+      (t.*op)();
+      REQUIRE(t == T0);
+      REQUIRE(t.hash_value() == T0.hash_value());
+    }
+  }
+
+  SECTION("transpose swaps slots and sets the bit") {
+    Tensor t = T0;
+    t.transpose();
+    REQUIRE(t.value_modifier() == ValueModifier::Transpose);
+    REQUIRE(t.bra()[0].label() == L"i_1");
+    REQUIRE(t.ket()[0].label() == L"a_1");
+    REQUIRE(serialize(ex<Tensor>(t), {.annot_symm = true}) ==
+            L"t^T{i_1;a_1}:N-N-S");
+  }
+
+  SECTION("adjoint = transpose o conjugate = conjugate o transpose") {
+    Tensor a = T0;
+    a.adjoint();
+    Tensor tc = T0;
+    tc.transpose();
+    tc.conjugate();
+    Tensor ct = T0;
+    ct.conjugate();
+    ct.transpose();
+    REQUIRE(a == tc);
+    REQUIRE(a == ct);
+    REQUIRE(a.value_modifier() == ValueModifier::Adjoint);
+    Tensor ctt = T0;
+    ctt.conjugate_transpose();
+    REQUIRE(a == ctt);
+  }
+
+  SECTION("conj(adjoint(t)) is the transpose") {
+    Tensor t = T0;
+    t.adjoint();
+    t.conjugate();
+    REQUIRE(t.value_modifier() == ValueModifier::Transpose);
+  }
+}
+
+TEST_CASE("value_modifier_normalization", "[conjugation]") {
+  // the bits are normalized against the braket symmetry: Symm clears both,
+  // Conjugate folds the transposition into the conjugation, Nonsymm keeps both
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+
+  SECTION("Conjugate: transpose() is the starred swapped spelling") {
+    Tensor gt = g;
+    gt.transpose();
+    REQUIRE(gt.value_modifier() == ValueModifier::Conjugate);
+    REQUIRE(gt.bra()[0].label() == L"a_1");
+    REQUIRE(serialize(ex<Tensor>(gt), {.annot_symm = true}) ==
+            L"g^*{a_1;i_1}:N-C-S");
+    // and adjoint() is a pure swap
+    Tensor ga = g;
+    ga.adjoint();
+    REQUIRE(ga.value_modifier() == ValueModifier::None);
+    REQUIRE(ga.bra()[0].label() == L"a_1");
+    // transpose() again unfolds
+    gt.transpose();
+    REQUIRE(gt == g);
+  }
+
+  SECTION("Symm: every modifier is the identity") {
+    Tensor sc = s;
+    sc.conjugate();
+    REQUIRE(sc == s);
+    Tensor st = s;
+    st.transpose();
+    REQUIRE(st.value_modifier() == ValueModifier::None);
+    REQUIRE(st.bra()[0].label() == L"a_1");  // slots did swap
+  }
+
+  SECTION("a ⁺ label on a Hermitian tensor normalizes away") {
+    Tensor g_adj(L"g⁺", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                 BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+    Tensor g_swapped(L"g", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+    REQUIRE(g_adj == g_swapped);
+    REQUIRE(g_adj.value_modifier() == ValueModifier::None);
+  }
+
+  SECTION("set_value_modifier normalizes too") {
+    Tensor gt = g;
+    gt.set_value_modifier(ValueModifier::Transpose);
+    REQUIRE(gt.value_modifier() == ValueModifier::Conjugate);
+    Tensor sa = s;
+    sa.set_value_modifier(ValueModifier::Adjoint);
+    REQUIRE(sa.value_modifier() == ValueModifier::None);
+  }
 }
 
 TEST_CASE("conj_serialization_roundtrip", "[conjugation]") {
@@ -632,38 +724,37 @@ TEST_CASE("value_modifier_encoding", "[conjugation]") {
 }
 
 TEST_CASE("value_oriented_totality", "[conjugation]") {
-  // The conjugation marker is first-class (sequant::conjugate, deserialized
-  // "^*"), not only a Conjugate-fold byproduct -- value_oriented must be
-  // total over the marker x braket-symmetry grid.
+  // value_oriented() returns the spelling whose slot layout denotes the
+  // value directly, for every state that has one
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
   auto resetter = set_scoped_default_context(ctx);
 
-  // Conjugate: the folded (starred + swapped) spelling unfolds back
   Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  Tensor folded = g;
-  folded.conjugate();
-  folded.adjoint();  // pure swap for Conjugate: now the folded spelling
-  REQUIRE(value_oriented(folded) == g);
-  REQUIRE(value_oriented(g) == g);  // unstarred: no-op
-
-  // Symm: conj is the identity in value -> marker cleared, slots untouched
-  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
-  Tensor s_star = s;
-  s_star.conjugate();
-  auto s_vo = value_oriented(s_star);
-  REQUIRE_FALSE(s_vo.conjugated());
-  REQUIRE(s_vo == s);
-
-  // Nonsymm: genuine elementwise conjugation has no slot-only spelling, so a
-  // slot-rebuilding caller cannot consume it -> refuse loudly (a swap here
-  // would silently rewrite the value)
   Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  Tensor t_star = t;
-  t_star.conjugate();
-  REQUIRE_THROWS_AS(value_oriented(t_star), std::logic_error);
+
+  // Conjugate: the folded (starred + swapped) spelling unfolds back
+  Tensor folded = g;
+  folded.transpose();
+  REQUIRE(folded.value_modifier() == ValueModifier::Conjugate);
+  REQUIRE(value_oriented(folded) == g);
+  REQUIRE(value_oriented(g) == g);
+
+  // Nonsymm transpose: a pure respelling
+  Tensor tt = t;
+  tt.transpose();
+  REQUIRE(value_oriented(tt) == t);
+
+  // Nonsymm adjoint: a distinct array, slots as written -- unchanged
+  Tensor ta = t;
+  ta.adjoint();
+  REQUIRE(value_oriented(ta) == ta);
+
+  // Nonsymm conjugate: no slot spelling -> refuse loudly
+  Tensor tc = t;
+  tc.conjugate();
+  REQUIRE_THROWS_AS(value_oriented(tc), sequant::Exception);
 }

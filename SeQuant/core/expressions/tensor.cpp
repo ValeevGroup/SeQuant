@@ -10,7 +10,6 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <stdexcept>
 
 #include <range/v3/algorithm/contains.hpp>
 
@@ -24,41 +23,38 @@ void Tensor::assert_nonreserved_label(
                  !ranges::contains(BNOperator::labels(), label));
 }
 
-void Tensor::adjoint() {
-  // _swap_bra_ket() swaps bra<->ket *and* the derived net ranks, then
-  // re-canonicalizes slots (needed when empty slots are present) and resets
-  // the hash; a bare std::swap of the index containers would leave the net
-  // ranks and slot order inconsistent
-  _swap_bra_ket();
-
-  // for a Nonsymm tensor the conjugate transpose is a distinct array: record
-  // it in the modifier bits (printed as the '⁺' mark); for Conjugate/Symm
-  // the adjoint equals the tensor, so the slot swap is the whole operation
-  if (braket_symmetry() == BraKetSymmetry::Nonsymm) {
-    conjugated_ = !conjugated_;
-    transposed_ = !transposed_;
-  }
-
-  reset_hash_value();
-}
-
 ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   return TensorCanonicalizer::instance()->apply(*this);
 }
 
 Tensor value_oriented(Tensor const &t) {
-  if (t.value_modifier() != ValueModifier::Conjugate) return t;
-  if (t.braket_symmetry() == BraKetSymmetry::Nonsymm)
-    throw std::logic_error(
-        "sequant::value_oriented: an elementwise-conjugated "
-        "BraKetSymmetry::Nonsymm tensor has no value-oriented slot spelling "
-        "(the conjugation cannot be consumed into slots)");
-  Tensor bare{t};
-  bare.conjugate();
-  if (t.braket_symmetry() == BraKetSymmetry::Conjugate)
-    bare.adjoint();  // pure bra<->ket swap: undoes the fold
-  // Symm: conj is the identity in value -- clearing the marker suffices
-  return bare;
+  switch (t.value_modifier()) {
+    case ValueModifier::None:
+    case ValueModifier::Adjoint:
+      // t⁺ names a distinct array whose slots are as written; every consumer
+      // has always treated the '⁺' spelling that way
+      return t;
+    case ValueModifier::Transpose: {
+      // T^T{q;p} = T{p;q}: a pure respelling (Nonsymm only; the other
+      // symmetries normalize the transposition away)
+      Tensor r{t};
+      r.transpose();
+      return r;
+    }
+    case ValueModifier::Conjugate:
+      if (t.braket_symmetry() == BraKetSymmetry::Conjugate) {
+        // T^*{q;p} = T{p;q}: transpose() folds into, and so clears, the
+        // conjugation bit
+        Tensor r{t};
+        r.transpose();
+        return r;
+      }
+      throw Exception(
+          "sequant::value_oriented: an elementwise-conjugated "
+          "BraKetSymmetry::Nonsymm tensor has no slot spelling of its value "
+          "(the conjugation cannot be consumed into slots)");
+  }
+  SEQUANT_UNREACHABLE;
 }
 
 }  // namespace sequant

@@ -8,6 +8,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
@@ -169,9 +170,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     bool unfolded = false;
     for (auto &tensor_ptr : tensors_) {
       auto &tensor = *tensor_ptr;
-      if (braket_conjugate_foldable(tensor) && tensor._conjugated()) {
-        tensor._conjugate();
-        tensor._swap_bra_ket();
+      if (!braket_conjugate_foldable(tensor)) continue;
+      Tensor &ct = *as_cnumber_tensor(tensor);
+      if (ct.conjugated()) {
+        ct.transpose();  // T^*{q;p} -> T{p;q}: the value orientation
         unfolded = true;
       }
     }
@@ -450,12 +452,12 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     // pass after this loop settles those tensors deterministically.
     if (canonical_bra_ket_bundle_order[i][0] >
         canonical_bra_ket_bundle_order[i][1]) {
-      tensor._swap_bra_ket();
-      // for a Conjugate tensor the swapped spelling denotes the conjugate
-      // value (T{q;p} = conj(T{p;q})): keep the represented value invariant
-      // by toggling the elementwise-conjugation marker
       if (braket_symmetry(tensor) == BraKetSymmetry::Conjugate)
-        tensor._conjugate();
+        // value-preserving respelling: T{q;p} = conj(T{p;q}), transpose()
+        // records the conjugation
+        as_cnumber_tensor(tensor)->transpose();
+      else
+        tensor._swap_bra_ket();  // Symm: free
     }
   }
 
@@ -777,19 +779,10 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   // make the graph
   // only slots (hence, attr) of named indices define their color, so
   // distinct_named_indices = false
-  // color_conjugation = true: this is the value-identity canonicalization
-  // (eval-node hash, connectivity graph, canonical slot order). Every tensor
-  // is already in its canonical orientation here (its conjugation is carried
-  // solely by Tensor::conjugated()), and without the marker in the color a
-  // network like C(x;m) C*(y;m) has an automorphism exchanging the conjugated
-  // and unconjugated factors, so its canonical slot order is pinned by the
-  // named-index labels alone and C(x)C*(y) / C*(x)C(y) -- S and S^T* -- share
-  // one hash and one graph.
   Graph graph = create_graph(
       {.named_indices = &named_indices,
        .named_index_colors = named_index_colors,
        .distinct_named_indices = false,
-       .color_conjugation = true,
        .fold_conjugate_braket = options.fold_conjugate_braket,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
@@ -993,9 +986,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter<TensorNetworkV3> colorizer(
-      named_indices, options.distinct_named_indices, options.named_index_colors,
-      options.color_conjugation);
+  VertexPainter<TensorNetworkV3> colorizer(named_indices,
+                                           options.distinct_named_indices,
+                                           options.named_index_colors);
 
   // results
   Graph graph;
