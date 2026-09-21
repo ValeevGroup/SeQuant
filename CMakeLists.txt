@@ -681,7 +681,7 @@ if (SEQUANT_HAS_TILEDARRAY)
     add_library(SeQuant::eval::ta ALIAS SeQuant-eval-ta)
     target_link_libraries(SeQuant-eval-ta PUBLIC SeQuant-eval SeQuant-symb tiledarray)
     target_compile_definitions(SeQuant-eval-ta PUBLIC SEQUANT_HAS_TILEDARRAY=1)
-    target_set_warning_flags(SeQuant-eval-ta)
+    target_set_compiler_flags(SeQuant-eval-ta)
     target_set_optimization_flags(SeQuant-eval-ta)
 endif()
 
