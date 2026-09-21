@@ -1,8 +1,11 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace sequant {
@@ -34,7 +37,15 @@ std::size_t VertexPainterImpl::to_hash_value(
       bra_rank > ket_rank) {
     std::swap(bra_rank, ket_rank);
   }
-  auto hashes = {hash::value(tensor._label()),
+  // the shade hashes the DECORATED label (with the '⁺' adjoint mark): that is
+  // what _label() returned while the mark lived in the label, so adjoint
+  // tensors keep their colours and hence their canonical forms
+  const std::wstring shade_label = [&]() -> std::wstring {
+    if (auto *t = dynamic_cast<const Tensor *>(&tensor))
+      return t->decorated_label();
+    return std::wstring(tensor._label());
+  }();
+  auto hashes = {hash::value(std::wstring_view(shade_label)),
                  hash::value(bra_rank),
                  hash::value(ket_rank),
                  hash::value(tensor._aux_rank()),

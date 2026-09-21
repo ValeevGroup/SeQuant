@@ -781,14 +781,12 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
   }
 
   SECTION("adjoint and the marker compose as swap∘conj (Klein four-group)") {
-    // adjoint = swap∘conj = conj∘swap in VALUE, and the marker denotes
-    // elementwise conj ALONE; so the two operations commute on the spelling
-    // and adjoint() never toggles the marker (its own conj half is carried by
-    // the symmetry relation (Conjugate/Symm) or by the '⁺' label suffix
-    // (Nonsymm)). Hence adjoint(T^*{p;q}) = T^*{q;p} for a Hermitian T and
-    // T⁺^*{q;p} for a Nonsymm T -- and a marker that had to be toggled by
-    // adjoint() would make conj(adjoint(T)) == swap(T) collapse two distinct
-    // values (the plain transpose and the adjoint) onto one spelling.
+    // adjoint = transpose∘conj = conj∘transpose in VALUE, so conjugate() and
+    // adjoint() commute on the spelling too. For Conjugate braket symmetry
+    // adjoint() is a pure bra<->ket swap and leaves the conjugation bit
+    // alone; for Nonsymm, adjoint() toggles both modifier bits, so
+    // conj(adjoint(u)) is the plain transpose u^T (value_modifier() ==
+    // ValueModifier::Transpose), a state distinct from both u^* and u⁺.
     for (auto bks : {BraKetSymmetry::Conjugate, BraKetSymmetry::Nonsymm}) {
       auto u = Tensor(L"u", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm, bks,
                       ColumnSymmetry::Nonsymm);
@@ -801,13 +799,16 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
       ac.adjoint();
       ac.conjugate();
       REQUIRE(ca == ac);  // the marker commutes with adjoint()
-      REQUIRE(ca.conjugated());
       REQUIRE(ca.bra().at(0).label() == L"a_1");  // swapped
-      // Nonsymm: the value-distinct adjoint is spelled by the '⁺' suffix,
-      // the elementwise conj by the marker, independently
-      const bool suffixed =
-          std::wstring(ca.label()).find(L"⁺") != std::wstring::npos;
-      REQUIRE(suffixed == (bks == BraKetSymmetry::Nonsymm));
+      if (bks == BraKetSymmetry::Conjugate) {
+        REQUIRE(ca.value_modifier() == ValueModifier::Conjugate);
+      } else {
+        REQUIRE(ca.value_modifier() == ValueModifier::Transpose);
+        REQUIRE_FALSE(ca.conjugated());
+        REQUIRE(ca.transposed());
+        REQUIRE(ca.label() == L"u");
+        REQUIRE(ca.decorated_label() == L"u");  // no ⁺: this is not the adjoint
+      }
       // adjoint is an involution that leaves the marker as it found it
       ca.adjoint();
       REQUIRE(ca.conjugated());

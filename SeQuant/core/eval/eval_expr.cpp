@@ -10,6 +10,7 @@
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
@@ -27,7 +28,6 @@
 #include <cmath>
 #include <cstdint>
 #include <ranges>
-#include <stdexcept>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -337,7 +337,8 @@ size_t hash_indices(T const& indices) noexcept {
 
 size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
-  hash::combine(h, hash::value(tnsr.label()));
+  const std::wstring label = tnsr.decorated_label();  // '⁺' included, as before
+  hash::combine(h, hash::value(std::wstring_view(label)));
   hash::combine(h, hash_indices(tnsr.const_slots()));
   // the conjugation marker enters only where it is value-DISTINCTIVE
   // (Nonsymm): for Conjugate it is an orientation fold and for Symm it is
@@ -434,37 +435,27 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
 EvalExprNode binarize(Tensor const& t) {
-  // A value-distinctive conjugation marker (Nonsymm braket symmetry) is
-  // refused up front -- BEFORE the '⁺' label channel below, which would
-  // otherwise serve a still-marked bare leaf with the marker silently
-  // ignored (conj(adjoint(t)) is the symbolic transpose t^T: no slot
-  // spelling, no Adjoint-served equivalent; lazy-conj eval is the
+  // A value-distinctive modifier that has no Adjoint-served equivalent
+  // (Nonsymm t^* or t^T) is refused up front (lazy-conj eval is the
   // follow-up).
-  if (t.conjugated() && t.braket_symmetry() == BraKetSymmetry::Nonsymm)
-    throw std::logic_error(
-        "sequant::binarize: an elementwise-conjugated "
+  if (t.braket_symmetry() == BraKetSymmetry::Nonsymm &&
+      (t.value_modifier() == ValueModifier::Conjugate ||
+       t.value_modifier() == ValueModifier::Transpose))
+    throw Exception(
+        "sequant::binarize: an elementwise-conjugated or transposed "
         "BraKetSymmetry::Nonsymm tensor leaf is not evaluable (no "
         "Adjoint-served equivalent; lazy-conj eval is the follow-up)");
-  // Detect adjoint-marked tensor leaves (label ending in U+207A '⁺'). These
-  // arise when the user wrote an adjoint of a BraKetSymmetry::Nonsymm tensor,
-  // see Tensor::adjoint() in expressions/tensor.cpp. We surface the adjoint
-  // as an explicit IR op (EvalOp::Adjoint) wrapping the bare-label operand,
-  // so backends can serve T† by conjugating + permuting the cached T result.
+  // Adjoint leaves (Nonsymm tensors whose adjoint() was taken) are surfaced
+  // as an explicit IR op (EvalOp::Adjoint) wrapping the bare operand, so
+  // backends serve T† by conjugating + permuting the cached T result.
   //
-  // IR shape: Adjoint(Tensor{<bare>}, Constant{1})
-  // The Constant(1) right child is a sentinel — present so the FullBinaryNode
-  // invariant ("every non-leaf has two children") holds; evaluate ignores it
-  // for EvalOp::Adjoint dispatch.
-  if (!t.label().empty() && t.label().back() == adjoint_label) {
-    // The Adjoint node carries the *adjointed* tensor (so its canon_indices
-    // reflect the slot order parents see).
-
-    // Build the bare-label operand: copy and call adjoint() to toggle the
-    // marker off and swap bra/ket back to natural orientation.
+  // IR shape: Adjoint(Tensor{<bare>}, Constant{1}); the Constant(1) right
+  // child is a sentinel so the FullBinaryNode invariant holds.
+  if (t.value_modifier() == ValueModifier::Adjoint) {
+    // undo the adjoint on a copy: clears both bits, swaps bra/ket back
     Tensor bare{t};
     bare.adjoint();
-    SEQUANT_ASSERT(bare.label().empty() ||
-                   bare.label().back() != adjoint_label);
+    SEQUANT_ASSERT(bare.value_modifier() == ValueModifier::None);
     return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, t.clone(),
                              t.indices() | ranges::to<EvalExpr::index_vector>,
                              1);

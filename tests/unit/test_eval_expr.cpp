@@ -247,7 +247,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(t.label() == L"t");
     Tensor t_adj = t;
     t_adj.adjoint();
-    REQUIRE(t_adj.label() == L"t⁺");
+    REQUIRE(t_adj.label() == L"t");
+    REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
+    REQUIRE(t_adj.decorated_label() == L"t⁺");
     REQUIRE(t_adj.bra().at(0).label() == L"i_1");
     REQUIRE(t_adj.ket().at(0).label() == L"a_1");
 
@@ -360,7 +362,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     Tensor t_star = t;
     t_star.conjugate();
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_star)), std::logic_error);
+    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_star)), sequant::Exception);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
     // a directly-constructed EvalExpr must not alias t and t* onto one cache
@@ -374,10 +376,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     Tensor t_adj_star = t;
     t_adj_star.adjoint();    // '⁺' label + slot swap
     t_adj_star.conjugate();  // marker on top: t^T, not evaluable
-    REQUIRE(t_adj_star.label() == L"t⁺");
-    REQUIRE(t_adj_star.conjugated());
+    REQUIRE(t_adj_star.value_modifier() == ValueModifier::Transpose);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_adj_star)), std::logic_error);
+    REQUIRE_THROWS_AS(binarize(ex<Tensor>(t_adj_star)), sequant::Exception);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   }
 
@@ -398,7 +399,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     bool has_marker_leaf = false;
     for (auto const& factor : expr->as<Product>().factors())
       has_marker_leaf |=
-          factor->is<Tensor>() && factor->as<Tensor>().label() == L"t⁺";
+          factor->is<Tensor>() &&
+          factor->as<Tensor>().value_modifier() == ValueModifier::Adjoint;
     REQUIRE(has_marker_leaf);
 
     // binarize() must not throw on this term:

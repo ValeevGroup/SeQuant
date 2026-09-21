@@ -103,13 +103,7 @@ struct CanonicalTensorCompare {
       return false;
     }
 
-    const auto get_label = [](const auto &t) {
-      if (label(t).back() == adjoint_label) {
-        // grab base label if adjoint label is present
-        return label(t).substr(0, label(t).size() - 1);
-      }
-      return label(t);
-    };
+    const auto get_label = [](const auto &t) { return label(t); };
 
     const auto lhs_it = std::find(labels.begin(), labels.end(), get_label(lhs));
     const auto rhs_it = std::find(labels.begin(), labels.end(), get_label(rhs));

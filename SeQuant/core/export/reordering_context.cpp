@@ -219,9 +219,11 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
     std::stable_sort(aux_begin, indices.end(), comparator);
   }
 
-  tensor = Tensor(tensor.label(), bra(), ket(), aux(std::move(indices)),
-                  Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
-                  ColumnSymmetry::Nonsymm);
+  Tensor reordered(tensor.label(), bra(), ket(), aux(std::move(indices)),
+                   Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                   ColumnSymmetry::Nonsymm);
+  reordered.set_value_modifier(tensor.value_modifier());
+  tensor = std::move(reordered);
 
   return true;
 }

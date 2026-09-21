@@ -26,17 +26,17 @@ void Tensor::assert_nonreserved_label(
 
 void Tensor::adjoint() {
   // _swap_bra_ket() swaps bra<->ket *and* the derived net ranks, then
-  // re-canonicalizes slots (needed when empty slots are present) and resets the
-  // hash; a bare std::swap of the index containers would leave the net ranks
-  // and slot order inconsistent
+  // re-canonicalizes slots (needed when empty slots are present) and resets
+  // the hash; a bare std::swap of the index containers would leave the net
+  // ranks and slot order inconsistent
   _swap_bra_ket();
 
-  // adjointness is tracked solely by the label marker, for Nonsymm braket
+  // for a Nonsymm tensor the conjugate transpose is a distinct array: record
+  // it in the modifier bits (printed as the '⁺' mark); for Conjugate/Symm
+  // the adjoint equals the tensor, so the slot swap is the whole operation
   if (braket_symmetry() == BraKetSymmetry::Nonsymm) {
-    if (!label_.empty() && label_.back() == sequant::adjoint_label)
-      label_.pop_back();
-    else
-      label_.push_back(sequant::adjoint_label);
+    conjugated_ = !conjugated_;
+    transposed_ = !transposed_;
   }
 
   reset_hash_value();
@@ -47,7 +47,7 @@ ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
 }
 
 Tensor value_oriented(Tensor const &t) {
-  if (!t.conjugated()) return t;
+  if (t.value_modifier() != ValueModifier::Conjugate) return t;
   if (t.braket_symmetry() == BraKetSymmetry::Nonsymm)
     throw std::logic_error(
         "sequant::value_oriented: an elementwise-conjugated "

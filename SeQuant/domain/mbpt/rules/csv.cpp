@@ -104,6 +104,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
   auto xtnsr = ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), tnsr.aux(),
                           tnsr.symmetry(), tnsr.braket_symmetry(),
                           tnsr.column_symmetry());
+  xtnsr->as<Tensor>().set_value_modifier(tnsr.value_modifier());
   result.prepend(1, std::move(xtnsr));
 
   return ex<Product>(std::move(result));

@@ -537,6 +537,93 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
   REQUIRE(ci[2].has_proto_indices());
 }
 
+TEST_CASE("value_modifier_encoding", "[conjugation]") {
+  // The adjoint mark is a value modifier, not a label character: a '⁺'
+  // arriving in a label is adopted into the bits, label() is bare, and
+  // decorated_label() reproduces the old spelling for printing/hashing.
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  REQUIRE(t.value_modifier() == ValueModifier::None);
+  REQUIRE(t.decorated_label() == L"t");
+
+  SECTION("adjoint() sets both bits and keeps the ⁺ spelling") {
+    Tensor ta = t;
+    ta.adjoint();
+    REQUIRE(ta.label() == L"t");
+    REQUIRE(ta.value_modifier() == ValueModifier::Adjoint);
+    REQUIRE(ta.conjugated());
+    REQUIRE(ta.transposed());
+    REQUIRE(ta.decorated_label() == L"t⁺");
+    REQUIRE(to_latex(ta) == L"{t⁺^{{a_1}}_{{i_1}}}");
+    REQUIRE(serialize(ex<Tensor>(ta), {.annot_symm = true}) ==
+            L"t⁺{i_1;a_1}:N-N-N");
+  }
+
+  SECTION("a ⁺ in the label is adopted into the bits") {
+    Tensor from_label(L"t⁺", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    Tensor ta = t;
+    ta.adjoint();
+    REQUIRE(from_label.label() == L"t");
+    REQUIRE(from_label.value_modifier() == ValueModifier::Adjoint);
+    REQUIRE(from_label == ta);
+    REQUIRE(from_label.hash_value() == ta.hash_value());
+    // same through set_label
+    Tensor relabeled = t;
+    relabeled.set_label(L"t⁺");
+    REQUIRE(relabeled.label() == L"t");
+    REQUIRE(relabeled.value_modifier() == ValueModifier::Adjoint);
+  }
+
+  SECTION("deserializer: ⁺, ^* and ^T round-trip") {
+    for (auto spelling :
+         {L"t⁺{i_1;a_1}:N-N-N", L"t^*{a_1;i_1}:N-N-N", L"t^T{i_1;a_1}:N-N-N"}) {
+      auto e = deserialize(spelling);
+      REQUIRE(e->is<Tensor>());
+      REQUIRE(e->as<Tensor>().label() == L"t");
+      REQUIRE(serialize(e, {.annot_symm = true}) == spelling);
+    }
+    REQUIRE(deserialize(L"t^T{i_1;a_1}:N-N-N")->as<Tensor>().value_modifier() ==
+            ValueModifier::Transpose);
+    REQUIRE(to_latex(deserialize(L"t^T{i_1;a_1}:N-N-N")) ==
+            L"{{t^T}^{{a_1}}_{{i_1}}}");
+  }
+
+  SECTION("set_value_modifier copies bits without touching slots") {
+    Tensor ta = t;
+    ta.adjoint();
+    Tensor rebuilt(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                   BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    rebuilt.set_value_modifier(ta.value_modifier());
+    REQUIRE(rebuilt == ta);
+    REQUIRE(rebuilt.hash_value() == ta.hash_value());
+  }
+
+  SECTION("with_slots carries both bits") {
+    Tensor ta = t;
+    ta.adjoint();
+    using ixvec = container::svector<Index>;
+    auto w = ta.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
+                           ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{});
+    REQUIRE(w.value_modifier() == ValueModifier::Adjoint);
+  }
+
+  SECTION("ordering: t < t^* < t^T < t⁺, then by slots") {
+    Tensor tc = t;
+    tc.conjugate();
+    Tensor ta = t;
+    ta.adjoint();
+    REQUIRE(t < tc);
+    REQUIRE(tc < ta);
+  }
+}
+
 TEST_CASE("value_oriented_totality", "[conjugation]") {
   // The conjugation marker is first-class (sequant::conjugate, deserialized
   // "^*"), not only a Conjugate-fold byproduct -- value_oriented must be
