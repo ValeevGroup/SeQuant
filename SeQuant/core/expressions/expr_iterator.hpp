@@ -4,6 +4,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <compare>
+#include <concepts>
 #include <iterator>
 #include <type_traits>
 
@@ -26,6 +27,16 @@ class ExprIteratorImpl {
   using difference_type = std::ptrdiff_t;
 
   explicit ExprIteratorImpl(pointer ptr = nullptr) : ptr_(ptr) {}
+
+  /// converting constructor: a mutable iterator converts to a const iterator
+  /// (but not the other way around)
+  /// @note this is a constructor *template* on purpose: that way it is never
+  ///       considered a copy constructor and thus never suppresses the
+  ///       implicitly-declared one
+  template <bool other_is_const>
+    requires(is_const && !other_is_const)
+  ExprIteratorImpl(const ExprIteratorImpl<other_is_const> &other)
+      : ptr_(other.ptr_) {}
 
   ExprIteratorImpl &operator+=(difference_type val) {
     ptr_ += val;
@@ -65,11 +76,6 @@ class ExprIteratorImpl {
     return ExprIteratorImpl(it.ptr_ - val);
   }
 
-  friend ExprIteratorImpl operator-(difference_type val,
-                                    const ExprIteratorImpl &it) {
-    return ExprIteratorImpl(it.ptr_ - val);
-  }
-
   ExprIteratorImpl &operator--() {
     --ptr_;
     return *this;
@@ -93,17 +99,14 @@ class ExprIteratorImpl {
     return ptr_;
   }
 
-  difference_type operator-(const ExprIteratorImpl<is_const> &other) const {
-    return ptr_ - other.ptr_;
-  }
-  difference_type operator-(const ExprIteratorImpl<!is_const> &other) const {
+  template <bool other_is_const>
+  difference_type operator-(
+      const ExprIteratorImpl<other_is_const> &other) const {
     return ptr_ - other.ptr_;
   }
 
-  bool operator==(const ExprIteratorImpl<is_const> &other) const {
-    return ptr_ == other.ptr_;
-  }
-  bool operator==(const ExprIteratorImpl<!is_const> &other) const {
+  template <bool other_is_const>
+  bool operator==(const ExprIteratorImpl<other_is_const> &other) const {
     return ptr_ == other.ptr_;
   }
 
@@ -112,16 +115,19 @@ class ExprIteratorImpl {
     return *(ptr_ + offset);
   }
 
+  template <bool other_is_const>
   std::strong_ordering operator<=>(
-      const ExprIteratorImpl<is_const> &other) const {
-    return ptr_ <=> other.ptr_;
-  }
-  std::strong_ordering operator<=>(
-      const ExprIteratorImpl<!is_const> &other) const {
+      const ExprIteratorImpl<other_is_const> &other) const {
     return ptr_ <=> other.ptr_;
   }
 
  private:
+  // needed so that the const and the non-const specializations can access each
+  // other's ptr_ (see the converting constructor and the heterogeneous
+  // comparison/difference operators above)
+  template <bool>
+  friend class ExprIteratorImpl;
+
   pointer ptr_ = nullptr;
 };
 
@@ -134,6 +140,23 @@ static_assert(std::bidirectional_iterator<ExprIterator>);
 static_assert(std::random_access_iterator<ExprIterator>);
 static_assert(std::bidirectional_iterator<ConstExprIterator>);
 static_assert(std::random_access_iterator<ConstExprIterator>);
+
+// mutable iterators must interoperate with (and convert to) const iterators,
+// but not vice versa
+static_assert(std::convertible_to<ExprIterator, ConstExprIterator>);
+static_assert(!std::convertible_to<ConstExprIterator, ExprIterator>);
+static_assert(std::equality_comparable_with<ExprIterator, ConstExprIterator>);
+static_assert(std::totally_ordered_with<ExprIterator, ConstExprIterator>);
+
+namespace detail {
+// `it - n` is a valid random-access-iterator expression, `n - it` is not
+// (unlike `n + it`, which is)
+template <typename It>
+concept subtractable_from_difference =
+    requires(It it, std::ptrdiff_t n) { n - it; };
+}  // namespace detail
+static_assert(!detail::subtractable_from_difference<ExprIterator>);
+static_assert(!detail::subtractable_from_difference<ConstExprIterator>);
 
 }  // namespace sequant
 

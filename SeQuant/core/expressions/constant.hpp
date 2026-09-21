@@ -98,6 +98,11 @@ class Constant : public Expr {
 
   bool static_equal(const Expr &that) const override;
 
+  /// orders by value: by real part, then by imaginary part
+  /// @note the base implementation orders by hash, which is neither
+  /// consistent with numeric order nor portable across platforms
+  bool static_less_than(const Expr &that) const override;
+
 };  // class Constant
 
 }  // namespace sequant

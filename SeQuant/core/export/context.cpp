@@ -1,5 +1,7 @@
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
+#include <algorithm>
 #include <type_traits>
 
 namespace sequant {
@@ -264,9 +266,26 @@ void ExportContext::clear_current_expression_id() {
   m_currentExpressionID.reset();
 }
 
-std::vector<Index> ExportContext::batch_indices(
+std::span<const Index> ExportContext::batch_indices(
     std::optional<std::size_t>) const {
   return {};
+}
+
+void ExportContext::set_batch_indices(std::span<const Index>,
+                                      std::optional<std::size_t>) {
+  throw Exception(
+      "The generator this context belongs to does not support index batching");
+}
+
+bool ExportContext::is_batched(std::optional<std::size_t> id) const {
+  return !batch_indices(std::move(id)).empty();
+}
+
+bool ExportContext::is_index_batched(const Index &idx,
+                                     std::optional<std::size_t> id) const {
+  const auto &indices = batch_indices(std::move(id));
+
+  return std::ranges::find(indices, idx) != indices.end();
 }
 
 }  // namespace sequant

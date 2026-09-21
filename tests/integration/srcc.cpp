@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/expr.hpp>
@@ -26,7 +27,7 @@ namespace {
     std::ostringstream oss;                                        \
     oss << "failed assert at line " << __LINE__ << " in function " \
         << __func__;                                               \
-    throw std::runtime_error(oss.str().c_str());                   \
+    throw sequant::Exception(oss.str());                           \
   }
 
 TimerPool<32> tpool;
@@ -102,8 +103,11 @@ class compute_cceqvec {
                            ? AssertStrictBraKetSymmetry::No
                            : AssertStrictBraKetSymmetry::Yes;
       auto context_resetter = sequant::set_scoped_default_context(
-          sequant::Context({.index_space_registry_shared_ptr = so_reg,
-                            .vacuum = Vacuum::SingleProduct})
+          sequant::Context(
+              {.index_space_registry_shared_ptr = so_reg,
+               .vacuum = Vacuum::SingleProduct,
+               // mbpt works with particle-symmetric tensors
+               .deserialization_column_symmetry = ColumnSymmetry::Symm})
               .set(so_strict));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
@@ -282,12 +286,13 @@ int main(int argc, char* argv[]) {
   auto strict = field_override == Field::Real ? AssertStrictBraKetSymmetry::No
                                               : AssertStrictBraKetSymmetry::Yes;
   sequant::set_default_context(
-      sequant::Context({.index_space_registry_shared_ptr = sr_reg,
-                        .vacuum = Vacuum::SingleProduct,
-                        .spbasis = spbasis})
+      sequant::Context(
+          {.index_space_registry_shared_ptr = sr_reg,
+           .vacuum = Vacuum::SingleProduct,
+           .spbasis = spbasis,
+           // mbpt works with particle-symmetric tensors
+           .deserialization_column_symmetry = ColumnSymmetry::Symm})
           .set(strict));
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print stats
   Logger::instance().wick_stats = false;

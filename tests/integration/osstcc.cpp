@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/op.hpp>
@@ -19,7 +20,7 @@ using namespace sequant;
     std::ostringstream oss;                                      \
     oss << "failed assert at line " << __LINE__                  \
         << " in open-shell spin-traced coupled cluster example"; \
-    throw std::runtime_error(oss.str().c_str());                 \
+    throw sequant::Exception(oss.str());                         \
   }
 
 int main(int argc, char* argv[]) {
@@ -38,8 +39,6 @@ int main(int argc, char* argv[]) {
                CanonicalizationMethod::Complete)});
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
@@ -48,7 +47,7 @@ int main(int argc, char* argv[]) {
 #endif
   const size_t NMAX = argc > 1 ? string_to<size_t>(argv[1]) : DEFAULT_NMAX;
   if (NMAX >= 4)
-    throw std::logic_error(
+    throw sequant::Exception(
         "spin-tracing rank-4 and "
         "higher-body equations is not currently supported");
 

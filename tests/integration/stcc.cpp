@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/math.hpp>
@@ -22,7 +23,7 @@ using namespace sequant;
     std::ostringstream oss;                                        \
     oss << "failed assert at line " << __LINE__                    \
         << " in closed-shell spin-traced coupled cluster example"; \
-    throw std::runtime_error(oss.str().c_str());                   \
+    throw sequant::Exception(oss.str());                           \
   }
 
 int main(int argc, char* argv[]) {
@@ -38,9 +39,9 @@ int main(int argc, char* argv[]) {
        .vacuum = Vacuum::SingleProduct,
        .canonicalization_options =
            CanonicalizeOptions::default_options().copy_and_set(
-               CanonicalizationMethod::Complete)});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
+               CanonicalizationMethod::Complete),
+       // mbpt works with particle-symmetric tensors
+       .deserialization_column_symmetry = ColumnSymmetry::Symm});
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
 

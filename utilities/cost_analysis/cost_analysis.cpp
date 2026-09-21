@@ -162,9 +162,6 @@ void setup_context(const Config& cfg) {
       .set(BraKetSlotTypesetting::Naive)
       .set(copts);
   set_default_context(ctx);
-
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 }
 
 ResultExpr parse_equation(const std::string& text) {

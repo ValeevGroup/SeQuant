@@ -4,6 +4,7 @@
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/core/demangle.hpp>
@@ -252,7 +253,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @tparam T Expr or a class derived from Expr
   /// @return true if @c *this is less than @c that
   /// @note the derived class must implement Expr::static_less_than
-  template <typename T, typename = std::enable_if<is_an_expr_v<T>>>
+  template <typename T>
+    requires(is_an_expr_v<T>)
   bool operator<(const T &that) const {
     if (type_id() ==
         that.type_id()) {  // if same type, use generic (or type-specific, if
@@ -334,19 +336,37 @@ class Expr : public std::enable_shared_from_this<Expr> {
 
   bool empty() const;
 
+  /// unchecked element access
+  /// @note the bounds check is only performed if `SEQUANT_ASSERT_ENABLED` is
+  ///       #defined; use at() for a bounds check that is always performed
   ExprPtr &operator[](std::size_t idx);
+  /// @copydoc operator[](std::size_t)
   const ExprPtr &operator[](std::size_t idx) const;
 
+  /// @return The subexpression identified by the given index
+  Expr &operator[](const TreeIndex &idx);
+  const Expr &operator[](const TreeIndex &idx) const;
+
+  /// checked element access
+  /// @throw Exception if @p idx is not less than size()
   ExprPtr &at(std::size_t idx);
+  /// @copydoc at(std::size_t)
   const ExprPtr &at(std::size_t idx) const;
 
+  /// @throw Exception if this Expr is empty (e.g. is an atom)
   ExprPtr &front();
+  /// @copydoc front()
   const ExprPtr &front() const;
 
+  /// @throw Exception if this Expr is empty (e.g. is an atom)
   ExprPtr &back();
+  /// @copydoc back()
   const ExprPtr &back() const;
 
  private:
+  /// reports an out-of-range access by at()/front()/back()
+  [[noreturn]] void throw_out_of_range(std::size_t idx) const;
+
   template <
       typename E, typename Visitor,
       typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>

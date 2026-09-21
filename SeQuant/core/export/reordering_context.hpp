@@ -22,6 +22,7 @@ class ReorderingContext : public ExportContext {
   MemoryLayout memory_layout() const { return m_layout; }
   void set_memory_layout(MemoryLayout layout) { m_layout = layout; }
 
+  using ExportContext::rewrite;
   bool rewrite(Tensor &tensor) const override;
 
   bool rewriting_enabled() const { return m_rewrite; }

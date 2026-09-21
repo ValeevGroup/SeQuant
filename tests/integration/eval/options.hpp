@@ -6,6 +6,7 @@
 #define SEQUANT_EVAL_OPTIONS_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <fstream>
 #include <iomanip>
 #include <range/v3/range/operations.hpp>
@@ -45,18 +46,18 @@ struct OptionsLog {
 
 namespace detail {
 
-struct ErrorArgValInvalid : public std::runtime_error {
-  ErrorArgValInvalid() : std::runtime_error{"invalid value for the argument"} {}
+struct ErrorArgValInvalid : public sequant::Exception {
+  ErrorArgValInvalid() : sequant::Exception{"invalid value for the argument"} {}
 };
 
-struct ErrorArgValOutOfRange : public std::runtime_error {
+struct ErrorArgValOutOfRange : public sequant::Exception {
   ErrorArgValOutOfRange()
-      : std::runtime_error{"value out of range for the argument"} {}
+      : sequant::Exception{"value out of range for the argument"} {}
 };
 
-struct ErrorArgNameInvalid : public std::runtime_error {
+struct ErrorArgNameInvalid : public sequant::Exception {
   ErrorArgNameInvalid(std::string const& name)
-      : std::runtime_error{"invalid argument name " + name} {}
+      : sequant::Exception{"invalid argument name " + name} {}
 };
 
 inline std::string help(std::string_view arg_name,  //

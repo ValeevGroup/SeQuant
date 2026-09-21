@@ -162,8 +162,11 @@ OpClass to_op_class(const std::wstring& op) {
 }
 
 Hermiticity op_hermiticity(const std::wstring& op) {
-  // reserved labels are OpClass::Gen, hence Hermitian by default
-  if (ranges::contains(reserved::labels(), op)) {
+  if (op == reserved::antisymm_label() || op == reserved::symm_label()) {
+    // Symmetrization operators are non-hermitian
+    return Hermiticity::NonHermitian;
+  } else if (ranges::contains(reserved::labels(), op)) {
+    // reserved labels are OpClass::Gen, hence Hermitian by default
     return default_hermiticity(OpClass::Gen);
   } else {
     return get_default_mbpt_context().op_registry()->hermiticity(op);

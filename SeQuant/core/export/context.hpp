@@ -8,6 +8,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -202,10 +203,23 @@ class ExportContext {
   virtual void clear_current_expression_id();
 
   /// @param id The ID of the relevant expression
-  /// @returns The list of indices that the given expression should be batched
+  /// @returns The set of indices that the given expression should be batched
   /// over
-  virtual std::vector<Index> batch_indices(
+  virtual std::span<const Index> batch_indices(
       std::optional<std::size_t> id = {}) const;
+  /// Sets the batch indices for the given expression
+  /// @param indices The batch indices
+  /// @param id ID of the target expression
+  virtual void set_batch_indices(std::span<const Index> indices,
+                                 std::optional<std::size_t> id = {});
+  /// @param id ID of the relevant expression
+  /// @returns Whether this expression is computed in index batches
+  virtual bool is_batched(std::optional<std::size_t> id = {}) const;
+  /// @param idx The index to check
+  /// @param id ID of the relevant expression
+  /// @returns Whether this expression uses idx as a batch index
+  virtual bool is_index_batched(const Index &idx,
+                                std::optional<std::size_t> id = {}) const;
 
  protected:
   static constexpr std::size_t ID_GLOBAL =

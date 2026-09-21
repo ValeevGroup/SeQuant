@@ -11,21 +11,24 @@
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sequant {
 
 /// Context for the TextGenerator
 class TextGeneratorContext : public ExportContext {
  public:
-  void set_batch_indices(std::vector<Index> indices,
-                         std::optional<std::size_t> id = {}) {
-    m_batch_indices[id.value_or(ID_GLOBAL)] = std::move(indices);
+  void set_batch_indices(std::span<const Index> indices,
+                         std::optional<std::size_t> id = {}) override {
+    m_batch_indices[id.value_or(ID_GLOBAL)].assign(indices.begin(),
+                                                   indices.end());
   }
 
-  std::vector<Index> batch_indices(
+  std::span<const Index> batch_indices(
       std::optional<std::size_t> id = {}) const override {
     auto it = m_batch_indices.find(id.value_or(ID_GLOBAL));
 
@@ -296,11 +299,12 @@ class TextGenerator : public Generator<Context> {
       m_generated += "\n";
     }
 
-    std::vector<Index> batch = ctx.batch_indices(ctx.current_expression_id());
+    std::span<const Index> batch =
+        ctx.batch_indices(ctx.current_expression_id());
     if (!batch.empty()) {
       m_generated += "Start batching over ";
       for (std::size_t i = 0; i < batch.size(); ++i) {
-        m_generated += represent(batch.at(i), ctx);
+        m_generated += represent(batch[i], ctx);
 
         if (i + 1 < batch.size()) {
           m_generated += ", ";
@@ -315,8 +319,7 @@ class TextGenerator : public Generator<Context> {
   void end_export(const Context &) override {}
 
   void end_expression(const Context &ctx) override {
-    std::vector<Index> batch = ctx.batch_indices(ctx.current_expression_id());
-    if (!batch.empty()) {
+    if (ctx.is_batched(ctx.current_expression_id())) {
       m_generated += "End batching\n";
     }
   }

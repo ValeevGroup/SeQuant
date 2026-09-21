@@ -1,6 +1,7 @@
 //
 // Created by Ajay Melekamburath on 2/3/25.
 //
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/logger.hpp>
@@ -23,7 +24,7 @@ namespace {
     std::ostringstream oss;                                  \
     oss << "failed assert at line " << __LINE__              \
         << " in equation-of-motion coupled cluster example"; \
-    throw std::runtime_error(oss.str().c_str());             \
+    throw sequant::Exception(oss.str());                     \
   }
 
 TimerPool<32> timer_pool;
@@ -36,7 +37,7 @@ std::pair<size_t, size_t> parse_excitation_manifold(std::string& str) {
   const auto p_pos = str.find('p');
 
   if (h_pos == std::string::npos && p_pos == std::string::npos) {
-    throw std::runtime_error(
+    throw sequant::Exception(
         "Invalid excitation manifold string: must contain 'h' or 'p'");
   }
 
@@ -60,7 +61,7 @@ std::pair<size_t, size_t> parse_excitation_manifold(std::string& str) {
   }
 
   if (result.first == 0 && result.second == 0)
-    throw std::runtime_error(
+    throw sequant::Exception(
         "Invalid excitation manifold: both particle and hole ranks cannot be "
         "zero");
 
@@ -164,8 +165,6 @@ int main(int argc, char* argv[]) {
                         .vacuum = Vacuum::SingleProduct}));
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print stats
   Logger::instance().wick_stats = false;

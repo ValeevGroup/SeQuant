@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <ostream>
 #include <string>
+#include <type_traits>
 
 namespace sequant {
 
@@ -130,10 +131,10 @@ enum class BraKetPos {
 ///
 /// @note This does not include slot bundles, like braket, etc.
 enum class SlotType {
-  Bra,
-  Ket,
-  Aux,
-  Proto,
+  Bra = 0b1,
+  Ket = 0b10,
+  Aux = 0b100,
+  Proto = 0b1000,
 };
 
 template <typename CharT, typename Traits>
@@ -155,6 +156,33 @@ std::basic_ostream<CharT, Traits>& operator<<(
   }
   return stream;
 }
+
+struct SlotTypes {
+  std::underlying_type_t<SlotType> active = 0;
+
+  constexpr SlotTypes(SlotType type)
+      : active(static_cast<decltype(active)>(type)) {}
+  constexpr SlotTypes(decltype(active) val) : active(val) {}
+
+  constexpr bool operator==(const SlotTypes&) const = default;
+  constexpr auto operator<=>(const SlotTypes&) const = default;
+
+  constexpr bool operator&(SlotType type) const {
+    return active & static_cast<decltype(active)>(type);
+  }
+
+  constexpr SlotTypes operator|(SlotType type) const {
+    return {active | static_cast<decltype(active)>(type)};
+  }
+};
+
+constexpr SlotTypes operator|(SlotType lhs, SlotType rhs) {
+  using IntType = std::underlying_type_t<SlotType>;
+  return {static_cast<IntType>(lhs) | static_cast<IntType>(rhs)};
+}
+
+static constexpr const SlotTypes AnySlotType =
+    SlotType::Bra | SlotType::Ket | SlotType::Aux | SlotType::Proto;
 
 enum class Statistics {
   FermiDirac,

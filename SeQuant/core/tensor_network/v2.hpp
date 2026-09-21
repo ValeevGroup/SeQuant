@@ -392,6 +392,7 @@ class TensorNetworkV2 {
   ///     terminal's type (bra/ket).
   Graph create_graph(
       const CreateGraphOptions &options = make_default_graph_options()) const;
+  static const unsigned int *canonicalize_graph(const Graph &graph);
 
  private:
   /// list of tensors

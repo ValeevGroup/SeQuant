@@ -241,6 +241,33 @@ class FullBinaryNode {
 
   FullBinaryNode<T>* parent_{nullptr};
 
+  /// Number of nodes in the subtree rooted here, cached. A node's children are
+  /// fixed once it exists (every constructor takes them; only assignment
+  /// replaces them, and both assignment operators refresh this), so the count
+  /// can be maintained in O(1) at construction instead of being walked on
+  /// every call. It is walked on every \c TreeNodeEqualityComparator probe --
+  /// a structurally-keyed map over a deep tree (the residency meet in
+  /// lifetime_mask.hpp, the CSE scan in cache_manager.hpp) probes once per
+  /// node -- so an O(subtree) size() made those quadratic in tree size, and
+  /// each call heap-allocated its stack vector besides.
+  std::size_t size_{1};
+
+  /// Recompute \c size_ from the children's cached counts (O(1)).
+  void refresh_size() noexcept {
+    size_ = 1 + (left_ ? left_->size_ : 0) + (right_ ? right_->size_ : 0);
+  }
+
+  /// Recompute \c size_ here and in every ancestor. Assigning to a node that
+  /// is already someone'S child (\c n.left() = other, which the public
+  /// left()/right() accessors permit) changes the enclosing tree's node count
+  /// too, and only the assignment operators can see that; constructors run
+  /// before \c parent_ is set, so they use \c refresh_size alone. Iterative,
+  /// so a deep tree costs stack depth 1.
+  void refresh_size_up() noexcept {
+    for (FullBinaryNode<T>* n = this; n != nullptr; n = n->parent_)
+      n->refresh_size();
+  }
+
   node_ptr deep_copy() const {
     // Iterative post-order clone: build the copy bottom-up with an explicit
     // stack so cloning a deep tree does not recurse to the tree's depth (which
@@ -335,6 +362,7 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size();
   }
 
   FullBinaryNode(FullBinaryNode<T> const& other)
@@ -348,6 +376,7 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size();
   }
 
   FullBinaryNode& operator=(FullBinaryNode<T> const& other) {
@@ -361,6 +390,7 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size_up();
     // parent_ remains unchanged
     return *this;
   }
@@ -374,13 +404,22 @@ class FullBinaryNode {
   }
 
   FullBinaryNode& operator=(FullBinaryNode<T>&& node) {
+    // Self-move is a no-op, checked first: every line below would otherwise
+    // read `node`'s members after moving out of them -- `data_` self-moved, and
+    // both children parked in the temporaries below while `node.left_/right_`
+    // (the same members) read null, which would leave the node a childless leaf
+    // and destroy both subtrees at scope exit.
+    if (&node == this) return *this;
+
     data_ = std::move(node.data_);
 
     // We have to save a temporary copy of these, in case the node we're moving
-    // from is pointed to (and thus owned) by either left_.
+    // from is pointed to (and thus owned) by either left_ or right_.
     // If we don't do this, overwriting of the owning pointer leads to deleting
-    // node, in which case subsequent accesses to it are invalid.
+    // node, in which case subsequent accesses to it -- the child steal just
+    // below, and the source-side size refresh at the end -- are invalid.
     auto left_tmp = std::move(left_);
+    auto right_tmp = std::move(right_);
 
     left_ = std::move(node.left_);
     right_ = std::move(node.right_);
@@ -391,6 +430,18 @@ class FullBinaryNode {
     if (right_) {
       right_->parent_ = this;
     }
+    refresh_size_up();
+
+    // The source is a leaf now -- its children are ours -- so its own cached
+    // count and every count above it have to drop: `node` may itself be
+    // someone's child, as in `std::move(n.parent().right())` (the live shape,
+    // export.hpp's prune_scalar_factor), which otherwise leaves that parent's
+    // chain over-counting the subtree it no longer holds. `this`'s chain was
+    // refreshed just above; walking the source's chain is safe because both
+    // temporaries above keep `node` alive until this function returns even
+    // when it was owned by one of our former children. (`node` is not `this`:
+    // self-move returned at the top.)
+    node.refresh_size_up();
 
     // parent_ remains unchanged
 
@@ -462,12 +513,12 @@ class FullBinaryNode {
   ///
   /// \return Size of the tree rooted at this node
   ///
-  [[nodiscard]] std::size_t size() const {
-    if (leaf()) {
-      return 1;
-    }
-
-    return left().size() + right().size() + 1;
+  [[nodiscard]] std::size_t size() const noexcept {
+    // O(1): maintained at construction / assignment (see size_ above). It used
+    // to walk the subtree through an explicit stack -- correct and stack-safe,
+    // but O(subtree) and heap-allocating on every call, which made every
+    // structurally-keyed map probe over a deep tree quadratic in tree size.
+    return size_;
   }
 
   ///

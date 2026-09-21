@@ -8,6 +8,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -20,7 +21,7 @@
   if (!(tf)) {                                                              \
     std::ostringstream oss;                                                 \
     oss << "failed assert at line " << __LINE__ << " in eval_btas example"; \
-    throw std::runtime_error(oss.str().c_str());                            \
+    throw sequant::Exception(oss.str());                                    \
   }
 
 ///
@@ -65,8 +66,6 @@ int main(int argc, char* argv[]) {
        .canonicalization_options =
            CanonicalizeOptions::default_options().copy_and_set(
                CanonicalizationMethod::Complete)});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
 
