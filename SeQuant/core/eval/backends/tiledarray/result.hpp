@@ -305,10 +305,12 @@ inline void log_batch_op(char const* kind, std::chrono::nanoseconds elapsed,
   // exactly what a wet trace on a release build must account for.
   auto& l = Logger::instance();
   if (l.eval.level == 0) return;
-  auto bytes = TA::size_of<TA::MemorySpace::Host>(moved);
-  moved.world().gop.sum(bytes);
-  write_log(l, "Batch | ", kind, " | ", elapsed.count(), "ns | bytes=", bytes,
-            "B | ", annot, '\n');
+  // this rank's share of the moved array: no collective here, so a batch op
+  // a rank runs on its own never waits on the others (and the line costs a
+  // tile walk, not a reduction)
+  auto const bytes = TA::size_of<TA::MemorySpace::Host>(moved);
+  write_log(l, "Batch | ", kind, " | ", elapsed.count(),
+            "ns | local_bytes=", bytes, "B | ", annot, '\n');
 }
 
 /// Convert sequant::DeNest to TA::DeNest
