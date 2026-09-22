@@ -801,3 +801,36 @@ TEST_CASE("canonicalize_marked_nonsymm_network", "[conjugation]") {
   REQUIRE(*canonicalize(c1->clone()) == *c1);
   REQUIRE(*canonicalize(c2->clone()) == *c2);
 }
+
+TEST_CASE("value_modifier_group", "[conjugation]") {
+  // ValueModifier is the direct product of its two Z2 factors, with `*` the
+  // group operation on all three types
+  using CM = ConjugateModifier;
+  using TM = TransposeModifier;
+  using VM = ValueModifier;
+  STATIC_REQUIRE(CM::Yes * CM::Yes == CM::No);
+  STATIC_REQUIRE(TM::Yes * TM::Yes == TM::No);
+  STATIC_REQUIRE(CM::No * TM::No == VM::None);
+  STATIC_REQUIRE(CM::Yes * TM::No == VM::Conjugate);
+  STATIC_REQUIRE(CM::No * TM::Yes == VM::Transpose);
+  STATIC_REQUIRE(CM::Yes * TM::Yes == VM::Adjoint);
+  STATIC_REQUIRE(TM::Yes * CM::Yes == VM::Adjoint);
+  STATIC_REQUIRE(VM::Adjoint * VM::Conjugate == VM::Transpose);
+  STATIC_REQUIRE(VM::Transpose * VM::Transpose == VM::None);
+  STATIC_REQUIRE(conjugate_modifier(VM::Adjoint) == CM::Yes);
+  STATIC_REQUIRE(transpose_modifier(VM::Conjugate) == TM::No);
+
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  t.adjoint();
+  REQUIRE(t.conjugate_modifier() == CM::Yes);
+  REQUIRE(t.transpose_modifier() == TM::Yes);
+  REQUIRE(t.value_modifier() ==
+          t.conjugate_modifier() * t.transpose_modifier());
+}

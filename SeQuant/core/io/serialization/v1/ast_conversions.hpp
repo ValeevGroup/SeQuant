@@ -398,11 +398,10 @@ struct Transformer {
           // label^*{...} / label^T{...}: the value modifier
           if (tensor.modifier != 0) {
             auto &tt = t->template as<Tensor>();
-            // compose with a mark adopted from the label (t⁺^* is the
-            // transpose)
-            tt.set_value_modifier(static_cast<ValueModifier>(
-                static_cast<std::uint8_t>(tt.value_modifier()) ^
-                tensor.modifier));
+            // compose with a mark adopted from the label: `t⁺^*` is the
+            // transpose
+            tt.set_value_modifier(tt.value_modifier() *
+                                  static_cast<ValueModifier>(tensor.modifier));
           }
           return t;
         },
