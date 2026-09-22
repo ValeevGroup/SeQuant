@@ -13,6 +13,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/utility/topological.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -433,10 +434,11 @@ struct OrderedScheduleStepMeta {
 /// \brief Topologically sort \p items (one already-built \c Step per entry,
 /// paired index-for-index with \p meta) by the local dependency edges among
 /// this block's own steps: step A must precede step B whenever B's \c
-/// requires_ names a value_id that's in A's \c produced. Kahn's algorithm;
-/// among simultaneously-ready steps, always picks the smallest \c tie_key
-/// first, for a deterministic result when the true dependency order leaves
-/// steps genuinely unordered relative to each other.
+/// requires_ names a value_id that's in A's \c produced. Delegates the
+/// actual ordering to \c sequant::topological_order_indexed (Kahn's
+/// algorithm); among simultaneously-ready steps, always picks the smallest
+/// \c tie_key first, for a deterministic result when the true dependency
+/// order leaves steps genuinely unordered relative to each other.
 ///
 /// \details A single scalar per step can be made to sort a child block before
 /// every value that reads its output (see \c build_ordered_schedule's own doc
@@ -470,8 +472,6 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
     for (std::size_t vid : meta[i].produced) produced_by.emplace(vid, i);
 
   container::vector<container::svector<std::size_t>> prerequisites(m);
-  container::vector<std::size_t> indegree(m, 0);
-  container::vector<container::svector<std::size_t>> dependents(m);
   for (std::size_t i = 0; i < m; ++i) {
     for (std::size_t vid : meta[i].requires_) {
       auto const it = produced_by.find(vid);
@@ -479,45 +479,30 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
       auto& preqs = prerequisites[i];
       if (std::find(preqs.begin(), preqs.end(), it->second) == preqs.end()) {
         preqs.push_back(it->second);
-        dependents[it->second].push_back(i);
       }
     }
-    indegree[i] = prerequisites[i].size();
   }
 
-  container::svector<std::size_t> ready;
-  for (std::size_t i = 0; i < m; ++i)
-    if (indegree[i] == 0) ready.push_back(i);
-
-  container::svector<std::size_t> order;
-  order.reserve(m);
-  while (!ready.empty()) {
-    auto const best_it = std::min_element(
-        ready.begin(), ready.end(), [&](std::size_t a, std::size_t b) {
-          if (meta[a].tie_key != meta[b].tie_key)
-            return meta[a].tie_key < meta[b].tie_key;
-          return a < b;  // full determinism on an exact tie
+  container::vector<std::size_t> order;
+  try {
+    order = topological_order_indexed(
+        m,
+        [&](std::size_t i) -> container::svector<std::size_t> const& {
+          return prerequisites[i];
+        },
+        [&](std::size_t a, std::size_t b) {
+          return meta[a].tie_key < meta[b].tie_key;
         });
-    std::size_t const cur = *best_it;
-    ready.erase(best_it);
-    order.push_back(cur);
-    for (std::size_t dep : dependents[cur]) {
-      SEQUANT_ASSERT(indegree[dep] > 0);
-      if (--indegree[dep] == 0) ready.push_back(dep);
-    }
-  }
-  // No cycle: see the function doc comment. Thrown rather than asserted so
-  // this stays loud in a build with asserts disabled -- with a short \c
-  // order, the code below would otherwise build \c out_steps from a
-  // truncated \c order and silently drop the unplaced steps.
-  if (order.size() != m) {
-    std::size_t unsatisfied_edges = 0;
-    for (std::size_t i = 0; i < m; ++i) unsatisfied_edges += indegree[i];
+  } catch (Exception const&) {
+    // No cycle expected: see the function doc comment. Re-thrown with a
+    // more specific message, and still a throw rather than an assert, so
+    // this stays loud in a build with asserts disabled.
+    std::size_t total_edges = 0;
+    for (std::size_t i = 0; i < m; ++i) total_edges += prerequisites[i].size();
     throw Exception(
         "ordered_schedule_topo_sort_steps: cyclic step dependencies among " +
-        std::to_string(m) + " sibling steps (" +
-        std::to_string(unsatisfied_edges) +
-        " prerequisite edges never satisfied)");
+        std::to_string(m) + " sibling steps (" + std::to_string(total_edges) +
+        " prerequisite edges)");
   }
 
   // Post-sort validation (loud tripwire, see the function doc comment):
