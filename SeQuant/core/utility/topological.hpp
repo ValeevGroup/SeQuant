@@ -7,8 +7,6 @@
 #include <range/v3/view/enumerate.hpp>
 
 #include <algorithm>
-#include <limits>
-#include <map>
 #include <ranges>
 #include <vector>
 
@@ -21,6 +19,73 @@ concept dependency_query = requires(const Func &f, const T &val) {
            std::remove_cvref_t<std::ranges::range_value_t<decltype(f(val))>>,
            T>);
 };
+
+/// @brief Determines the topological ordering (in the computer-science sense)
+/// of the indices in [0, n), given their dependency edges directly as
+/// indices into that same range
+///
+/// @param n The number of elements to order
+/// @param get_dependencies A function that, given an index in [0, n), yields
+/// a range of indices in [0, n) that it depends on
+/// @param comp If provided, a strict weak order over indices used to pick
+/// among candidates with no (remaining) dependencies; among candidates that
+/// compare equivalent under it (or when no comp is given), the smallest
+/// index is chosen, so that the result is always deterministic
+/// @returns The topological ordering as a list of indices in [0, n)
+template <typename IndexDepFunc, typename Comp = std::identity>
+  requires((std::same_as<Comp, std::identity> ||
+            std::relation<Comp, std::size_t, std::size_t>) &&
+           dependency_query<IndexDepFunc, std::size_t>)
+std::vector<std::size_t> topological_order_indexed(
+    std::size_t n, const IndexDepFunc &get_dependencies, Comp comp = {}) {
+  std::vector<std::size_t> indegree(n, 0);
+  std::vector<std::vector<std::size_t>> dependents(n);
+
+  for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t dep : get_dependencies(i)) {
+      SEQUANT_ASSERT(dep < n);
+      ++indegree[i];
+      dependents[dep].push_back(i);
+    }
+  }
+
+  auto tie_broken_less = [&](std::size_t a, std::size_t b) {
+    if constexpr (std::same_as<Comp, std::identity>) {
+      return a < b;
+    } else {
+      if (comp(a, b)) return true;
+      if (comp(b, a)) return false;
+      return a < b;
+    }
+  };
+
+  std::vector<std::size_t> ready;
+  for (std::size_t i = 0; i < n; ++i)
+    if (indegree[i] == 0) ready.push_back(i);
+
+  // Kahn's algorithm to select indices in (a) topological order
+  std::vector<std::size_t> order;
+  order.reserve(n);
+  while (!ready.empty()) {
+    auto best = std::ranges::min_element(ready, tie_broken_less);
+    std::size_t idx = *best;
+    ready.erase(best);
+
+    order.push_back(idx);
+
+    for (std::size_t dep : dependents[idx]) {
+      SEQUANT_ASSERT(indegree[dep] > 0);
+      if (--indegree[dep] == 0) ready.push_back(dep);
+    }
+  }
+
+  if (order.size() != n) {
+    throw Exception(
+        "Impossible dependencies encountered in topological_order_indexed()");
+  }
+
+  return order;
+}
 
 /// @brief Determines the topological ordering (in the computer-science sense)
 /// of the provided elements
@@ -48,68 +113,32 @@ std::vector<std::size_t> topological_order(Range &&range,
 
   using Value = std::ranges::range_value_t<Range>;
 
-  std::vector<std::size_t> order;
-  order.reserve(size(range));
+  const std::size_t n = size(range);
 
-  std::map<std::size_t, std::size_t> num_deps;
-  std::map<std::size_t, std::vector<std::size_t>> dependents;
-
-  // Pre-compute dependencies between elements in range
+  // Pre-compute dependencies between elements in range, expressed as indices
+  // into range
+  std::vector<std::vector<std::size_t>> deps_by_index(n);
   for (const auto &[i, current] : ranges::views::enumerate(range)) {
-    auto deps = get_dependencies(current);
-
-    num_deps.emplace(i, 0);
-
-    for (const Value &current_dep : deps) {
+    for (const Value &current_dep : get_dependencies(current)) {
       auto it = std::ranges::find(range, current_dep);
       SEQUANT_ASSERT(it != end(range));
-      std::size_t dep_idx = std::ranges::distance(begin(range), it);
-      ++num_deps[i];
-      dependents[dep_idx].emplace_back(i);
+      deps_by_index[i].push_back(std::ranges::distance(begin(range), it));
     }
   }
 
-  // Kahn's algorithm to select entries from range in (a) topological order
-  do {
-    auto candidates = num_deps | std::views::filter([](const auto &pair) {
-                        return pair.second == 0;
-                      });
+  auto get_dep_indices =
+      [&](std::size_t i) -> const std::vector<std::size_t> & {
+    return deps_by_index[i];
+  };
 
-    // If a comparator was specified, use it to determine which of the
-    // candidates to select first, otherwise just use the first
-    auto elem = [&]() {
-      if constexpr (std::same_as<Comp, std::identity>) {
-        return begin(candidates);
-      } else {
-        return std::ranges::min_element(candidates, comp,
-                                        [&](const auto &pair) -> const Value & {
-                                          return *(begin(range) + pair.first);
-                                        });
-      }
-    }();
-
-    if (elem == end(candidates)) {
-      throw Exception(
-          "Impossible dependencies encountered in topological_order()");
-    }
-
-    std::size_t idx = elem->first;
-    // mark as used
-    num_deps.erase(elem.base());
-
-    order.emplace_back(idx);
-
-    auto deps = dependents.find(idx);
-
-    if (deps != end(dependents)) {
-      for (std::size_t current : deps->second) {
-        SEQUANT_ASSERT(num_deps.at(current) > 0);
-        --num_deps.at(current);
-      }
-    }
-  } while (order.size() != size(range));
-
-  return order;
+  if constexpr (std::same_as<Comp, std::identity>) {
+    return topological_order_indexed(n, get_dep_indices);
+  } else {
+    return topological_order_indexed(
+        n, get_dep_indices, [&](std::size_t a, std::size_t b) {
+          return comp(*(begin(range) + a), *(begin(range) + b));
+        });
+  }
 }
 
 }  // namespace sequant
