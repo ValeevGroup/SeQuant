@@ -340,8 +340,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(g_tree3->hash_value() != g_tree3.left()->hash_value());
 
     // a marked Hermitian leaf denotes a different value than its unmarked
-    // twin with the same slots (g^*{i;a} == g{a;i}), so they must not share
-    // a cache slot
+    // twin with the same slots (for Hermitian g, g^*{i;a} == g{a;i}), so they
+    // must not share a cache slot
     Tensor g_marked = g;
     g_marked.conjugate();
     REQUIRE(EvalExpr{g}.hash_value() != EvalExpr{g_marked}.hash_value());

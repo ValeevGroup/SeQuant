@@ -342,10 +342,11 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   hash::combine(h, hash::value(std::wstring_view(label)));
   hash::combine(h, hash_indices(tnsr.const_slots()));
   // A set Conjugate/Transpose modifier is part of the leaf's value identity
-  // for every braket symmetry: g^*{i;a} denotes g{a;i}, not g{i;a}, so the
-  // two spellings must not share a cache slot even though g is Hermitian.
-  // (The two spellings of one value, g{i;a} and g^*{a;i}, already differ in
-  // their slot hashes.) The Adjoint state is in the decorated label.
+  // for every braket symmetry: g^*{i;a} is conj(g{i;a}), a different array
+  // unless g is real (for Hermitian g it equals g{a;i}), so the two spellings
+  // must not share a cache slot. The two spellings of one value that a
+  // Hermitian g does have, g{i;a} and g^*{a;i}, already differ in their slot
+  // hashes. The Adjoint state is in the decorated label.
   switch (tnsr.value_modifier()) {
     case ValueModifier::Conjugate:
       hash::combine(h, true);  // distinguishes Conjugate from Transpose
