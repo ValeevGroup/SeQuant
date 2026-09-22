@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -335,8 +336,9 @@ bool braket_orientation_pinned(const AbstractTensor& t) {
 }
 
 bool braket_conjugate_foldable(const AbstractTensor& t) {
+  // the fold records a conjugation, which only a c-number Tensor can carry
   return t._braket_symmetry() == BraKetSymmetry::Conjugate && t._is_cnumber() &&
-         !braket_orientation_pinned(t);
+         !braket_orientation_pinned(t) && as_cnumber_tensor(t) != nullptr;
 }
 
 bool braket_foldable(const AbstractTensor& t) {
@@ -354,16 +356,15 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
     return;
   }
 
-  // Normalize to the VALUE orientation first: a marked Conjugate tensor's
-  // starred spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has
-  // TWO spellings. Deciding on the current spelling is not marker-convergent
-  // (both spellings can satisfy "no swap"), which would let different
-  // canonicalization routes (graph vs content) end on different members of
-  // the pair. Unfold, then decide -- one canonical spelling per VALUE.
-  if (bks == BraKetSymmetry::Conjugate && t._conjugated()) {
-    t._conjugate();
-    t._swap_bra_ket();
-  }
+  // Normalize to the _value_ orientation first: a Conjugate tensor's starred
+  // spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has two
+  // spellings, and deciding on the current one is not convergent. Unfold
+  // (transpose() toggles the conjugation bit off), then decide -- one
+  // canonical spelling per value.
+  Tensor* ct =
+      bks == BraKetSymmetry::Conjugate ? as_cnumber_tensor(t) : nullptr;
+  SEQUANT_ASSERT(bks != BraKetSymmetry::Conjugate || ct);
+  if (ct && ct->conjugated()) ct->transpose();
 
   // bra<->ket exchange is a symmetry for braket-foldable tensors, so pick a
   // canonical orientation: freely for Symm braket symmetry, and combined with
@@ -420,9 +421,10 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
   }
 
   if (swap) {
-    t._swap_bra_ket();
-    // preserve the represented value: T{q;p} = conj(T{p;q})
-    if (bks == BraKetSymmetry::Conjugate) t._conjugate();
+    if (ct)
+      ct->transpose();  // value-preserving: T{q;p} = conj(T{p;q}) sets the bit
+    else
+      t._swap_bra_ket();  // Symm: a free respelling
   }
 }
 

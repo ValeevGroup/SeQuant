@@ -63,7 +63,8 @@ std::wstring to_string(const Power& power) {
   } else {
     result = base->to_latex() + L"^" + to_string(exp);
   }
-  if (power.conjugated()) result = L"{" + result + L"^*}";
+  if (power.conjugated())
+    result = L"{" + result + std::wstring(conjugate_label) + L"}";
   return result;
 }
 

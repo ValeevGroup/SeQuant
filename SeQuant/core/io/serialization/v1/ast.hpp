@@ -12,6 +12,7 @@
 #include <boost/spirit/home/x3/support/ast/position_tagged.hpp>
 #include <boost/variant.hpp>
 
+#include <cstdint>
 #include <string>
 #include <variant>
 #include <vector>
@@ -77,16 +78,17 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
 // represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
   std::wstring name;
-  // elementwise-conjugation marker: label^*{...} (matches the serializer's
-  // spelling of Tensor::conjugated())
-  bool conjugated = false;
+  // value modifier: 0 none, 1 `label^*{...}` (Conjugate), 2 `label^T{...}`
+  // (Transpose); numerically sequant::ValueModifier. A '⁺' adjoint mark is
+  // part of `name` and is adopted by the Tensor constructor.
+  std::uint8_t modifier = 0;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;
 
-  Tensor(std::wstring name = {}, bool conjugated = false,
+  Tensor(std::wstring name = {}, std::uint8_t modifier = 0,
          IndexGroups indices = {}, boost::optional<SymmetrySpec> symmetry = {})
       : name(std::move(name)),
-        conjugated(conjugated),
+        modifier(modifier),
         indices(std::move(indices)),
         symmetry(std::move(symmetry)) {}
 };
@@ -164,7 +166,7 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
                           perm_symm, braket_symm, column_symm);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
-                          conjugated, indices, symmetry);
+                          modifier, indices, symmetry);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,
                           exponent, conjugated);
 

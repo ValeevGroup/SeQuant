@@ -13,11 +13,18 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <string_view>
 
 namespace sequant {
 
 /// @brief the wchar used for labeling adjoints, i.e. the superscript + sign
 static const wchar_t adjoint_label = L'\u207A';
+/// @brief the suffix spelling an elementwise conjugation of a labelled object
+/// (Tensor with ValueModifier::Conjugate, Variable, Power), e.g. `t^*`
+static constexpr std::wstring_view conjugate_label = L"^*";
+/// @brief the suffix spelling a bra<->ket transposition of a Tensor
+/// (ValueModifier::Transpose), e.g. `t^T`
+static constexpr std::wstring_view transpose_label = L"^T";
 
 /// @brief Base expression class
 

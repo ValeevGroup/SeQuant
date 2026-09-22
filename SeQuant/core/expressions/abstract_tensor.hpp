@@ -285,16 +285,13 @@ class AbstractTensor {
   virtual void _permute_columns(std::span<std::size_t> perm) {
     permute_columns_impl(_bra_mutable(), _ket_mutable(), perm);
   }
-  /// swaps bra and ket slots
+  /// swaps bra and ket slots. A respelling, not a value operation: it does
+  /// not record a transposition (contrast Tensor::transpose()). Used where
+  /// the swap is a symmetry (BraKetSymmetry::Symm) or the caller tracks the
+  /// value itself.
   virtual void _swap_bra_ket() {
     throw missing_instantiation_for("_swap_bra_ket");
   }
-  /// complex-conjugates the tensor elementwise (no slot reordering); see
-  /// Tensor::conjugate()
-  virtual void _conjugate() { throw missing_instantiation_for("_conjugate"); }
-  /// @return whether the tensor is elementwise complex-conjugated
-  virtual bool _conjugated() const { return false; }
-
   /// @return mutable view of bra
   /// @warning this is used for mutable access, flush memoized state before
   /// returning!

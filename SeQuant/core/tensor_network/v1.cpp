@@ -88,14 +88,7 @@ ExprPtr TensorNetworkV1::canonicalize(
                                         const auto &second_ptr_and_ord) {
                 const auto &first = *(first_ptr_and_ord.first);
                 const auto &second = *(second_ptr_and_ord.first);
-                // grab base label if adjoint label is present
-                auto base_label = [](const auto &t) {
-                  if (label(t).back() == adjoint_label) {
-                    return label(t).substr(0, label(t).size() - 1);
-                  } else {
-                    return label(t);
-                  }
-                };
+                auto base_label = [](const auto &t) { return label(t); };
                 // tensors commute if their colors are different or either one
                 // of them is a c-number
                 if ((color(first) != color(second)) || is_cnumber(first) ||

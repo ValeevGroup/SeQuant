@@ -686,8 +686,9 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   const size_t nocc = 2, nvirt = 5;
   auto yield_ = rand_tensor_yield<BTensorC>{nocc, nvirt};
 
-  // A Nonsymm-braket tensor's adjoint() marks the label with '⁺' and swaps
-  // bra/ket; binarize lowers that to an EvalOp::Adjoint node, and evaluating it
+  // A Nonsymm-braket tensor's adjoint() sets the Adjoint value modifier
+  // (spelled with '⁺') and swaps bra/ket; binarize lowers that to an
+  // EvalOp::Adjoint node, and evaluating it
   // must conjugate-transpose the operand. With genuinely complex data the
   // conjugation is observable (a missing conj would leave imaginary parts
   // unflipped — a pure transpose would still pass a norm-only check).
@@ -695,7 +696,8 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
   t_adj.adjoint();
-  REQUIRE(t_adj.label() == L"t⁺");
+  REQUIRE(t_adj.label() == L"t");
+  REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node->op_type() == EvalOp::Adjoint);

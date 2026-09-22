@@ -417,12 +417,6 @@ class TensorNetworkV3 {
     /// set this to true
     bool distinct_named_indices = false;
 
-    /// if true, a tensor's elementwise-conjugation marker
-    /// (Tensor::conjugated()) enters its core-vertex color, so that `T` and
-    /// `T*` are distinguishable (default: false, since canonicalize() toggles
-    /// the marker while re-orienting Conjugate tensors)
-    bool color_conjugation = false;
-
     /// if false, BraKetSymmetry::Conjugate tensors get distinct bra/ket
     /// bundle colors (orientation-sensitive), disabling the braket-conjugate
     /// fold for graphs built with these options

@@ -133,9 +133,22 @@ std::wstring to_string(Tensor const& tensor,
                        const SerializationOptions& options) {
   auto serialized =
       to_string(static_cast<const AbstractTensor&>(tensor), options);
-  // conjugation spelling matches Variable: label^*{...}; the deserializer
-  // grammar accepts the same spelling, so the round-trip is lossless
-  if (tensor.conjugated()) serialized.insert(tensor.label().size(), L"^*");
+  // the modifier is spelled right after the label, in the form the
+  // deserializer grammar accepts, so the round-trip is lossless
+  switch (tensor.value_modifier()) {
+    case ValueModifier::Adjoint:
+      serialized.insert(tensor.label().size(),
+                        std::wstring(1, sequant::adjoint_label));
+      break;
+    case ValueModifier::Conjugate:
+      serialized.insert(tensor.label().size(), std::wstring(conjugate_label));
+      break;
+    case ValueModifier::Transpose:
+      serialized.insert(tensor.label().size(), std::wstring(transpose_label));
+      break;
+    case ValueModifier::None:
+      break;
+  }
   return serialized;
 }
 
@@ -145,7 +158,8 @@ std::wstring to_string(const Constant& constant,
 }
 
 std::wstring to_string(const Variable& variable, const SerializationOptions&) {
-  return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
+  return std::wstring(variable.label()) +
+         (variable.conjugated() ? std::wstring(conjugate_label) : L"");
 }
 
 std::wstring to_string(const Power& power,
@@ -162,7 +176,8 @@ std::wstring to_string(const Power& power,
   core += L"^(";
   core += serialize_scalar(Constant::scalar_type{power.exponent()}, options);
   core += L")";
-  if (power.conjugated()) return L"(" + std::move(core) + L")^*";
+  if (power.conjugated())
+    return L"(" + std::move(core) + L")" + std::wstring(conjugate_label);
   return core;
 }
 

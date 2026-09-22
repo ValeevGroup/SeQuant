@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <optional>
@@ -115,8 +116,13 @@ auto symmetry_spec_def= x3::lexeme[
                          ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper)
                         ];
 
+// the suffix spellings are sequant::conjugate_label ("^*") and
+// sequant::transpose_label ("^T"); the grammar spells them out character by
+// character
 auto tensor_def       = x3::lexeme[
-                            name >> (x3::lit('^') >> '*' >> x3::attr(true) | x3::attr(false))
+                            name >> (  x3::lit('^') >> '*' >> x3::attr(std::uint8_t{1})
+                                     | x3::lit('^') >> 'T' >> x3::attr(std::uint8_t{2})
+                                     | x3::attr(std::uint8_t{0}))
                                  >> x3::skip[index_groups] >> -(symmetry_spec)
                         ];
 

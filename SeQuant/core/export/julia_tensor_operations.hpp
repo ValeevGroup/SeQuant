@@ -331,7 +331,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
-    std::string representation = toUtf8(tensor.label());
+    std::string representation = toUtf8(tensor.decorated_label());
 
     representation += "_";
     representation += ctx.get_tags(tensor);
