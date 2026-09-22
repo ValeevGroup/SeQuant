@@ -66,6 +66,41 @@ trailer — that default is overridden here, and the override is not negotiable
 per-session. If you have already committed with one, amend it out before
 pushing.
 
+## Keep commits to one logical change
+
+When a change is implemented as a sequence of commits, give each commit
+exactly one logical change — even within the same task, and even when a
+later change builds directly on an earlier one. A logical change may touch
+multiple files, but distinct bug fixes go in separate commits from each
+other, a refactor that enables a later change is its own commit separate
+from that change, and a new feature is its own commit separate from the
+fix/refactor it depends on. Do not fold "fix A", "fix B", and "add feature C
+that uses the fixed code" into one commit just because they happened in the
+same session.
+
+## Prefer the smallest diff that achieves the change
+
+Make the smallest change that gets the job done, without compromising on
+correctness or code readability. Don't fold in unrelated refactoring, cleanup,
+or new abstractions the change doesn't strictly require, even if the
+surrounding code looks like it could use it while you're in the area
+— propose that separately and let it be its own change.
+
+## Comments explain the present code; commit messages explain the change
+
+Keep comments brief, and only write one where the *why* isn't obvious from
+the code — a hidden constraint, a subtle invariant, a workaround. Don't use
+a comment to narrate what the code used to do before this change, and don't
+use a comment to justify why this change was made or why this approach was
+chosen over an alternative. That reasoning belongs in the commit message.
+
+## Reuse logic across similar call sites instead of duplicating it
+
+Before adding a second implementation of behavior that already exists
+elsewhere in the tree — even in a different file or class than the one
+being added — factor the shared part out into a function or utility both
+call, rather than copying it.
+
 ## Throw `sequant::Exception`, nothing else
 
 Everything thrown in this tree — library, `utilities/`, `tests/`,
@@ -155,6 +190,22 @@ cover the fence hierarchy, `MAD_NUM_THREADS` and the other environment
 variables, and the tracing switches such as `TA::exception_break()`; it in
 turn defers to the MADNESS `AGENTS.md` for the runtime.
 
+## Compiler Warnings
+
+All code should compile without emitting compiler warnings. Any emitted warnings
+should be fixed unless clearly false-positives and fixing them would cause
+unreasonable code bloat or performance/readability issues. Any non-trivially
+fixable warning must be reported for further investigation by a human instead
+of being silently ignored.
+
+## Assertions
+
+Assertions inside assert() or SEQUANT_ASSERT are only conditionally enabled.
+Hence, code in assertions must not be relied on to be executed or even compiled.
+This may take some care with regards to unused-variable warnings when the variable
+is only used inside an assertion. In such cases explicitly marking a variable as
+unused via a (void) cast or a [[maybe_unused]] attribute solves the problem.
+
 ## Formatting
 
 CI pins clang-format 17 (`.github/workflows/formatting_check.yml`), and other
@@ -199,3 +250,61 @@ an include from a row further down is a back-edge.
 `utilities/` holds standalone tools (`external_interface`, `cost_analysis`, …)
 whose fixtures are covered above; `SEQUANT_UTILITIES` is `ON` by default for
 top-level builds.
+
+## Documentation
+
+`doc/` holds the Sphinx sources (`user/`, `developer/`, `maintainer/`) plus the
+Doxygen setup behind the API reference; see `doc/developer/documentation.rst`
+for how it's built. Conventions that hold across the existing pages:
+
+- **Scope a page relative to its companion, and don't repeat it.** A
+  `user/guide/` page covers the public API; a `developer/` page (if any)
+  covers the implementation for contributors, opens by naming its companion,
+  and states what it assumes rather than re-explaining it. Keep that split —
+  don't inline implementation detail into a user-facing page, and don't
+  re-teach usage in a developer one.
+- **Every new page goes into a `toctree`.** A page that exists on disk but
+  isn't linked from the relevant `index.rst` is orphaned; check `doc/*/index.rst`
+  whenever a file is added. Order entries to mirror the conceptual order a
+  reader encounters the topics in (the pipeline order for guide pages), not
+  alphabetically or by when they were added.
+- **Code samples are real, compiled files, never hand-typed blocks.** Every
+  `.. literalinclude::` must point at a file under `doc/examples/{user,synopsis}/`,
+  delimited by `start-snippet-N`/`end-snippet-N` comments — see
+  `doc/examples/CMakeLists.txt`: "Make sure all example snippets are compiled
+  to avoid documented examples becoming out of date." A snippet file with
+  `main()` is additionally run as a ctest (`sequant/doc-examples/<name>`); it
+  must succeed, not merely compile.
+- **Defer exhaustive or volatile detail to the API reference** (`:class:`,
+  `:func:`, `:concept:`, `:doc:` roles) instead of hand-copying a struct's
+  full field list or an enum's full value set into prose. Describe the
+  members that matter conceptually and link the rest, so prose doesn't drift
+  out of sync as the struct grows.
+- **No tangents.** Stay scoped to the point being made; background that isn't
+  load-bearing belongs behind a link, not inlined.
+- Match formatting already in place: a heading's underline runs a few
+  characters longer than its title (not exactly equal length), prose is
+  hard-wrapped near 120 columns, and a `.. note::` is reserved for a genuine
+  caveat, not a dumping ground for secondary information.
+- Quote a source `///` comment verbatim when its precise wording carries the
+  meaning (a subtlety, a documented limitation); paraphrase everything else.
+
+### Keep documentation in sync with source changes
+
+Before finishing a change, check whether anything in `doc/` describes what
+you just touched — a public function/class signature, a default value, an
+enum's members, a documented algorithm, a file/directory layout — and whether
+that description is now wrong. Compiling is not sufficient evidence that the
+docs are still correct.
+
+```
+grep -rn '<symbol or concept>' doc/
+```
+
+for whatever you changed. If a page's prose, a `literalinclude`d example, or
+a quoted rationale no longer matches the new behavior, update it as part of
+the same change rather than leaving it for later — an outdated doc is worse
+than no doc, since it actively misleads the next reader. If you're unsure
+whether a description is still accurate but don't have the domain judgement
+to fix the prose correctly, say so explicitly instead of leaving it silently
+stale.
