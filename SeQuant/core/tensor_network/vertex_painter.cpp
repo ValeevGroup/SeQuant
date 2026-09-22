@@ -36,9 +36,9 @@ std::size_t VertexPainterImpl::to_hash_value(
       bra_rank > ket_rank) {
     std::swap(bra_rank, ket_rank);
   }
-  // the shade hashes the DECORATED label (with the '⁺' adjoint mark): that is
-  // what _label() returned while the mark lived in the label, so adjoint
-  // tensors keep their colours and hence their canonical forms
+  // the shade hashes decorated_label(): the printed core label, adjoint mark
+  // included, so adjoint tensors keep their colours and hence their
+  // canonical forms
   const Tensor *ct = as_cnumber_tensor(tensor);
   const std::wstring shade_label =
       ct ? ct->decorated_label() : std::wstring(tensor._label());
@@ -54,11 +54,10 @@ std::size_t VertexPainterImpl::to_hash_value(
   // (T^* != T and T^T != T for a Nonsymm tensor; Conjugate-symmetry tensors
   // are value-oriented before canonicalize() builds its graph, and are
   // coloured as-is by canonicalize_slots). The Adjoint modifier is already
-  // in shade_label. Perturb ONLY marked tensors: bliss's canonical labeling
-  // depends on colour VALUES and hash::combine is not order-preserving, so
+  // in shade_label. Perturb only marked tensors: bliss's canonical labeling
+  // depends on colour values and hash::combine is not order-preserving, so
   // folding even a "no modifier" value into every colour would re-spell
-  // every marker-free network (measured on the PR: 4 unit fixtures and 8
-  // byte-compared goldens).
+  // every marker-free network.
   // Without the modifier in the core-vertex color, an uncolored graph for
   // C{x;m} and C^*{y;m} is automorphic: nothing but the modifier bit
   // distinguishes the two vertices, so a canonical labeling is free to swap
@@ -67,7 +66,8 @@ std::size_t VertexPainterImpl::to_hash_value(
   if (ct) {
     switch (ct->value_modifier()) {
       case ValueModifier::Conjugate:
-        hash::combine(result, hash::value(true));  // as in PR #602
+        // distinguishes Conjugate from Transpose and None
+        hash::combine(result, hash::value(true));
         break;
       case ValueModifier::Transpose:
         hash::combine(result, hash::value(std::uint8_t{2}));

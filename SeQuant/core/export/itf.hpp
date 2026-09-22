@@ -158,8 +158,8 @@ class ItfGenerator : public Generator<Context> {
   }
 
   std::string get_name(const Tensor &tensor, const Context &ctx) const {
-    // the adjoint mark is part of the array name, as it was when it lived in
-    // label()
+    // the adjoint mark is part of the generated array name: `t` and `t⁺` are
+    // different arrays
     std::string name = toUtf8(tensor.decorated_label());
 
     if (tensor.num_indices() > 0) {

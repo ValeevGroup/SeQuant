@@ -724,7 +724,7 @@ TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
     // no fold: both orientations stay unmarked, in their own spelling
     REQUIRE_FALSE(is_conj_leaf(fa));
     REQUIRE_FALSE(is_conj_leaf(fb));
-    // a starred spelling does NOT hash onto its unstarred spelling's slot:
+    // a starred spelling does not hash onto its unstarred spelling's slot:
     // the modifier is part of the leaf's value identity for every braket
     // symmetry (see hash_terminal_tensor)
     auto F_star = F;

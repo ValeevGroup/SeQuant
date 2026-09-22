@@ -632,7 +632,7 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
 TEST_CASE("value_modifier_encoding", "[conjugation]") {
   // The adjoint mark is a value modifier, not a label character: a '⁺'
   // arriving in a label is adopted into the bits, label() is bare, and
-  // decorated_label() reproduces the old spelling for printing/hashing.
+  // decorated_label() reproduces that spelling for printing/hashing.
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);

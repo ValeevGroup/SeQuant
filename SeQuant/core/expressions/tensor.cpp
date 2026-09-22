@@ -32,7 +32,7 @@ Tensor value_oriented(Tensor const &t) {
     case ValueModifier::None:
     case ValueModifier::Adjoint:
       // t⁺ names a distinct array whose slots are as written; every consumer
-      // has always treated the '⁺' spelling that way
+      // treats the '⁺' spelling that way
       return t;
     case ValueModifier::Transpose: {
       // T^T{q;p} = T{p;q}: a pure respelling (Nonsymm only; the other

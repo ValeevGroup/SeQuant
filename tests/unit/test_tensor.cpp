@@ -782,7 +782,7 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
 
   SECTION(
       "adjoint and the marker compose as transpose∘conj (Klein four-group)") {
-    // adjoint = transpose∘conj = conj∘transpose in VALUE, so conjugate() and
+    // adjoint = transpose∘conj = conj∘transpose in _value_, so conjugate() and
     // adjoint() commute on the spelling too. For Conjugate braket symmetry
     // adjoint() is a pure bra<->ket swap and leaves the conjugation bit
     // alone; for Nonsymm, adjoint() toggles both modifier bits, so

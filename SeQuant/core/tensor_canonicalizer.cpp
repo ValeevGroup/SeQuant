@@ -356,11 +356,11 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
     return;
   }
 
-  // Normalize to the VALUE orientation first: a Conjugate tensor's starred
-  // spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has TWO
+  // Normalize to the _value_ orientation first: a Conjugate tensor's starred
+  // spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has two
   // spellings, and deciding on the current one is not convergent. Unfold
   // (transpose() toggles the conjugation bit off), then decide -- one
-  // canonical spelling per VALUE.
+  // canonical spelling per value.
   Tensor* ct =
       bks == BraKetSymmetry::Conjugate ? as_cnumber_tensor(t) : nullptr;
   SEQUANT_ASSERT(bks != BraKetSymmetry::Conjugate || ct);

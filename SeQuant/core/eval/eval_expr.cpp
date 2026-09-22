@@ -164,12 +164,12 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // and it normalizes bra<->ket orientation for braket-symmetric tensors so
     // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
     auto& t = expr_->as<Tensor>();
-    // The flat-leaf conjugate-braket fold is DISABLED at the eval boundary:
+    // The flat-leaf conjugate-braket fold is disabled at the eval boundary:
     // leaves keep their as-written (value) orientation so leaf yielders and
-    // evaluators need no conjugation awareness (Symm still folds, as on
-    // master). An already-starred spelling keeps its modifier -- binarize
-    // serves it through an EvalOp::Adjoint wrap; folding fresh flat leaves
-    // onto one orientation-shared slot is the lazy-conj eval follow-up.
+    // evaluators need no conjugation awareness (Symm still folds). An
+    // already-starred spelling keeps its modifier -- binarize serves it
+    // through an EvalOp::Adjoint wrap; folding fresh flat leaves onto one
+    // orientation-shared slot is the lazy-conj eval follow-up.
     auto phase =
         TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
     canon_phase_ = phase ? -1 : 1;
@@ -338,17 +338,17 @@ size_t hash_indices(T const& indices) noexcept {
 
 size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
-  const std::wstring label = tnsr.decorated_label();  // '⁺' included, as before
+  const std::wstring label = tnsr.decorated_label();  // includes '⁺'
   hash::combine(h, hash::value(std::wstring_view(label)));
   hash::combine(h, hash_indices(tnsr.const_slots()));
   // A set Conjugate/Transpose modifier is part of the leaf's value identity
-  // for EVERY braket symmetry: g^*{i;a} denotes g{a;i}, not g{i;a}, so the
+  // for every braket symmetry: g^*{i;a} denotes g{a;i}, not g{i;a}, so the
   // two spellings must not share a cache slot even though g is Hermitian.
-  // (The two spellings of ONE value, g{i;a} and g^*{a;i}, already differ in
+  // (The two spellings of one value, g{i;a} and g^*{a;i}, already differ in
   // their slot hashes.) The Adjoint state is in the decorated label.
   switch (tnsr.value_modifier()) {
     case ValueModifier::Conjugate:
-      hash::combine(h, true);  // as when conjugated_ was the only bit
+      hash::combine(h, true);  // distinguishes Conjugate from Transpose
       break;
     case ValueModifier::Transpose:
       hash::combine(h, std::uint8_t{2});
@@ -476,7 +476,7 @@ EvalExprNode binarize(Tensor const& t) {
             "Adjoint-served equivalent; lazy-conj eval is the follow-up)");
       // Conjugate symmetry: the starred spelling is the canonicalizer's
       // orientation fold. Serve it like the adjoint channel: an
-      // EvalOp::Adjoint node over the unmarked VALUE-orientation operand,
+      // EvalOp::Adjoint node over the unmarked value-orientation operand,
       // so evaluation and leaf yielders need no modifier awareness.
       EvalExpr ee{t};
       Tensor bare = value_oriented(ee.expr()->as<Tensor>());
