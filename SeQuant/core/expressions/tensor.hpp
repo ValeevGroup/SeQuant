@@ -166,6 +166,9 @@ constexpr TransposeModifier transpose_modifier(ValueModifier m) noexcept {
 /// | `transpose` | slots read in exchanged bra/ket roles    | transpose()            | `T^T`    |
 /// | `adjoint`   | conjugate transpose = both               | adjoint()              | `T⁺`     |
 ///
+/// The spellings are sequant::conjugate_label (`^*`), sequant::transpose_label
+/// (`^T`) and sequant::adjoint_label (`⁺`).
+///
 /// The bits are normalized against #BraKetSymmetry after every mutation, so
 /// a set bit always denotes a genuinely distinct value:
 /// - `Symm` (Hermitian over a real field): both bits clear; every operation
@@ -954,16 +957,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     std::wstring core_label;
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
       core_label += L"\\bar{";
-    // the adjoint mark is part of the core label, as it was when it lived
-    // in label_
+    // the adjoint mark is part of the core label: `t` and `t⁺` are different
+    // arrays
     core_label += io::latex::utf_to_string(decorated_label());
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
     switch (value_modifier()) {
       case ValueModifier::Conjugate:
-        core_label = L"{" + core_label + L"^*}";
+        core_label = L"{" + core_label + std::wstring(conjugate_label) + L"}";
         break;
       case ValueModifier::Transpose:
-        core_label = L"{" + core_label + L"^T}";
+        core_label = L"{" + core_label + std::wstring(transpose_label) + L"}";
         break;
       case ValueModifier::None:
       case ValueModifier::Adjoint:
