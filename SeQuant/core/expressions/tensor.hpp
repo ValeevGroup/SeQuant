@@ -497,35 +497,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             syms.perm.has_value()};
   }
 
-  /// @return the field the elementwise conjugation relation is stated over:
-  ///         Complex if any non-null slot (bra, ket or aux) is over a complex
-  ///         space, Real if all are real, nullopt if there are no slots
-  template <typename R1, typename R2, typename R3>
-  static std::optional<Field> conjugation_field(const R1 &bra, const R2 &ket,
-                                                const R3 &aux) {
-    bool any_slot = false;
-    bool has_complex = false;
-    auto scan = [&](auto &indices) {
-      for (const Index &idx : indices) {
-        if (!idx) continue;
-        any_slot = true;
-        if (idx.space().field() == Field::Complex) has_complex = true;
-      }
-    };
-    scan(bra);
-    scan(ket);
-    scan(aux);
-    if (!any_slot) return std::nullopt;
-    return has_complex ? Field::Complex : Field::Real;
-  }
-
   /// @return the elementwise ConjugationSymmetry derived from
-  ///         conjugation_parity_ and conjugation_field() over the current
-  ///         bra_/ket_/aux_
+  ///         conjugation_parity_ and base_field() over the current bra_/ket_
+  /// @note the aux slots take no part: they are array-like, with no
+  ///       primal/dual pairing, so they carry no basis over which the
+  ///       conjugation relation could be stated. A tensor without bra/ket
+  ///       slots therefore has a vacuously real base field and an Even parity
+  ///       reports Symm.
   ConjugationSymmetry derive_conjugation_symmetry() const {
-    const auto f = conjugation_field(bra_, ket_, aux_);
-    return f ? to_conjugation_symmetry(conjugation_parity_, *f)
-             : ConjugationSymmetry::Nonsymm;
+    return to_conjugation_symmetry(conjugation_parity_, base_field());
   }
 
   // fully-resolved terminal ctor (range form)
@@ -962,8 +942,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @return the trait of the represented operator under complex conjugation
   ConjugationParity conjugation_parity() const { return conjugation_parity_; }
   /// @return the elementwise conjugation symmetry of this array, derived at
-  ///         construction from conjugation_parity() and the field of all
-  ///         slots (bra, ket, aux); Nonsymm for a tensor without slots
+  ///         construction from conjugation_parity() and base_field() (the
+  ///         bra/ket slots only; aux slots are array-like and pair nothing).
+  ///         A tensor without bra/ket slots has a vacuously real base field,
+  ///         so an Even parity reports Symm.
   ConjugationSymmetry conjugation_symmetry() const {
     return conjugation_symmetry_;
   }
@@ -1292,11 +1274,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   // N.B. not separately serialized: (de)serialization records braket_symmetry_,
   // from which hermiticity is reconstructed via to_hermiticity().
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
-  // field-agnostic trait; conjugation_symmetry_ is its resolution against the
-  // field of all slots (bra, ket, aux; see conjugation_field()) at
-  // construction. The parity itself is not folded into the hash /
-  // static_equal, only the resolved conjugation_symmetry_ (see
-  // memoizing_hash).
+  // field-agnostic trait; conjugation_symmetry_ is its resolution against
+  // base_field() (see derive_conjugation_symmetry()) at construction. The
+  // parity itself is not folded into the hash / static_equal, only the resolved
+  // conjugation_symmetry_ (see memoizing_hash).
   ConjugationParity conjugation_parity_ = ConjugationParity::Even;
   ConjugationSymmetry conjugation_symmetry_ = ConjugationSymmetry::Nonsymm;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
