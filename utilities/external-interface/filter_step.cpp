@@ -111,7 +111,7 @@ void apply_negate(ExpressionFilter::Rule &rule,
 }
 
 std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
-    const nlohmann::json &spec) {
+    const nlohmann::json &spec, TensorComparison default_cmp) {
   const io::serialization::DeserializationOptions options{
       .def_perm_symm = Symmetry::Nonsymm,
       .def_braket_symm = BraKetSymmetry::Nonsymm,
@@ -120,7 +120,7 @@ std::unique_ptr<ExpressionFilter::Rule> parse_contains_expr(
   ExprPtr expr = io::serialization::from_string<ExprPtr>(
       spec.at("expr").get<std::string>(), options);
 
-  ExprMatcherOptions match_opts;
+  ExprMatcherOptions match_opts{.tensor_cmp = default_cmp};
   if (spec.contains("tensor_equality_mode")) {
     const nlohmann::json &mode = spec.at("tensor_equality_mode");
 
