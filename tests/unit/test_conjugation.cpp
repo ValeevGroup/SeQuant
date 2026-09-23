@@ -1055,11 +1055,10 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
 
   SECTION("aux slots do not enter the conjugation field") {
     // the elementwise conjugation relation is stated over the bra/ket basis;
-    // aux slots are array-like and pair nothing, so a complex aux space says
-    // nothing, and the bra/ket-less tensor's base field is vacuously real
+    // aux slots are array-like and pair nothing, so a tensor carrying aux
+    // slots alone has no basis to state the relation over and asserts none
     Tensor w(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
-    REQUIRE(w.base_field() == Field::Real);
-    REQUIRE(w.conjugation_symmetry() == ConjugationSymmetry::Symm);
+    REQUIRE(w.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
   }
 
   SECTION(
@@ -1098,10 +1097,9 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
     REQUIRE(d.hermiticity() == Hermiticity::Hermitian);
   }
 
-  SECTION("tensor with no slots at all has a vacuously real base field") {
+  SECTION("tensor with no slots at all asserts no conjugation symmetry") {
     Tensor c(L"c", bra{}, ket{}, aux{});
-    REQUIRE(c.base_field() == Field::Real);
-    REQUIRE(c.conjugation_symmetry() == ConjugationSymmetry::Symm);
+    REQUIRE(c.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
   }
 
   SECTION(

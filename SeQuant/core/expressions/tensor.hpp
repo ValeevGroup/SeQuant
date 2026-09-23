@@ -498,13 +498,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   }
 
   /// @return the elementwise ConjugationSymmetry derived from
-  ///         conjugation_parity_ and base_field() over the current bra_/ket_
+  ///         conjugation_parity_ and base_field() over the current bra_/ket_,
+  ///         or Nonsymm for a tensor with no bra/ket slot at all
   /// @note the aux slots take no part: they are array-like, with no
   ///       primal/dual pairing, so they carry no basis over which the
   ///       conjugation relation could be stated. A tensor without bra/ket
-  ///       slots therefore has a vacuously real base field and an Even parity
-  ///       reports Symm.
+  ///       slots has no such basis either, so it asserts no conjugation
+  ///       symmetry rather than borrowing a vacuously real field.
   ConjugationSymmetry derive_conjugation_symmetry() const {
+    const auto has_slot = [](const auto &indices) {
+      for (const Index &idx : indices)
+        if (idx) return true;
+      return false;
+    };
+    if (!has_slot(bra_) && !has_slot(ket_)) return ConjugationSymmetry::Nonsymm;
     return to_conjugation_symmetry(conjugation_parity_, base_field());
   }
 
@@ -944,8 +951,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @return the elementwise conjugation symmetry of this array, derived at
   ///         construction from conjugation_parity() and base_field() (the
   ///         bra/ket slots only; aux slots are array-like and pair nothing).
-  ///         A tensor without bra/ket slots has a vacuously real base field,
-  ///         so an Even parity reports Symm.
+  ///         A tensor without bra/ket slots has no basis for the relation to
+  ///         be stated over and asserts none: Nonsymm.
   ConjugationSymmetry conjugation_symmetry() const {
     return conjugation_symmetry_;
   }

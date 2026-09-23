@@ -63,9 +63,16 @@ std::size_t VertexPainterImpl::to_hash_value(
   // a conjugation symmetry other than the one parity Even would give over this
   // tensor's field enters the shade: Even tensors add nothing in any field,
   // complex-field tensors, whose parity is unobservable, colour alike as they
-  // compare alike, and over a real field Odd and None both differ from Even
-  if (tensor._conjugation_symmetry() !=
-      to_conjugation_symmetry(ConjugationParity::Even, tensor._base_field()))
+  // compare alike, and over a real field Odd and None both differ from Even.
+  // A tensor without bra/ket slots has no basis for the relation and asserts
+  // none whatever its parity (Tensor::derive_conjugation_symmetry), so
+  // Nonsymm is its default and adds nothing either.
+  const auto even_default =
+      (tensor._bra_rank() == 0 && tensor._ket_rank() == 0)
+          ? ConjugationSymmetry::Nonsymm
+          : to_conjugation_symmetry(ConjugationParity::Even,
+                                    tensor._base_field());
+  if (tensor._conjugation_symmetry() != even_default)
     hash::combine(result, hash::value(tensor._conjugation_symmetry()));
   return result;
 }
