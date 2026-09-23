@@ -723,3 +723,93 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
                      ->as<Tensor>());
   }
 }
+
+TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
+  using namespace sequant;
+
+  // Tensor::conjugated_ mirrors Variable/Power: a first-class elementwise
+  // complex-conjugation marker (no slot reordering), rendered ^* on the label
+
+  auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+                  BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+
+  SECTION("toggle, identity, ordering") {
+    REQUIRE(!t.conjugated());
+    const auto h0 = t.hash_value();
+    const auto latex0 = t.to_latex();
+
+    Tensor tc{t};
+    tc.conjugate();
+    REQUIRE(tc.conjugated());
+    REQUIRE(tc.hash_value() != h0);  // conj is first-class identity
+    REQUIRE(!(t == tc));             // not equal to the bare tensor
+    REQUIRE(t < tc);                 // T orders before conj(T)
+    REQUIRE(tc.to_latex().find(L"^*") != std::wstring::npos);
+    REQUIRE(latex0.find(L"^*") == std::wstring::npos);
+
+    tc.conjugate();  // toggling back restores everything bit-for-bit
+    REQUIRE(!tc.conjugated());
+    REQUIRE(tc.hash_value() == h0);
+    REQUIRE(t == tc);
+  }
+
+  SECTION("clone preserves the marker") {
+    Tensor tc{t};
+    tc.conjugate();
+    auto cloned = tc.clone();
+    REQUIRE(cloned->as<Tensor>().conjugated());
+    REQUIRE(cloned->as<Tensor>() == tc);
+  }
+
+  SECTION("serialization spells label^*") {
+    Tensor tc{t};
+    tc.conjugate();
+    auto s = serialize(tc);
+    REQUIRE(s.find(L"t^*{") == 0);  // marker directly after the label
+    REQUIRE(serialize(Tensor{t}).find(L"^*") == std::wstring::npos);
+  }
+
+  SECTION("adjoint commutes with the marker for Conjugate braket symmetry") {
+    // for BraKetSymmetry::Conjugate, adjoint() is a pure bra<->ket swap (the
+    // conj is carried by the symmetry relation itself), so it must leave the
+    // marker alone
+    Tensor tc{t};
+    tc.conjugate();
+    tc.adjoint();
+    REQUIRE(tc.conjugated());
+    REQUIRE(tc.bra().at(0).label() == L"a_1");  // swapped
+  }
+
+  SECTION("adjoint and the marker compose as swap∘conj (Klein four-group)") {
+    // adjoint = swap∘conj = conj∘swap in VALUE, and the marker denotes
+    // elementwise conj ALONE; so the two operations commute on the spelling
+    // and adjoint() never toggles the marker (its own conj half is carried by
+    // the symmetry relation (Conjugate/Symm) or by the '⁺' label suffix
+    // (Nonsymm)). Hence adjoint(T^*{p;q}) = T^*{q;p} for a Hermitian T and
+    // T⁺^*{q;p} for a Nonsymm T -- and a marker that had to be toggled by
+    // adjoint() would make conj(adjoint(T)) == swap(T) collapse two distinct
+    // values (the plain transpose and the adjoint) onto one spelling.
+    for (auto bks : {BraKetSymmetry::Conjugate, BraKetSymmetry::Nonsymm}) {
+      auto u = Tensor(L"u", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm, bks,
+                      ColumnSymmetry::Nonsymm);
+      Tensor ca{u};
+      ca.conjugate();
+      ca.adjoint();
+      Tensor ac{u};
+      ac.adjoint();
+      ac.conjugate();
+      REQUIRE(ca == ac);  // the marker commutes with adjoint()
+      REQUIRE(ca.conjugated());
+      REQUIRE(ca.bra().at(0).label() == L"a_1");  // swapped
+      const bool suffixed =
+          std::wstring(ca.label()).find(L"⁺") != std::wstring::npos;
+      REQUIRE(suffixed == (bks == BraKetSymmetry::Nonsymm));
+      ca.adjoint();  // involution; the marker is left as found
+      REQUIRE(ca.conjugated());
+      REQUIRE(ca.bra().at(0).label() == L"i_1");
+      Tensor uc{u};
+      uc.conjugate();
+      REQUIRE(ca == uc);
+    }
+  }
+}

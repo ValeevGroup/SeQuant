@@ -374,15 +374,19 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
 ///        \c Logger::instance().eval.stream is redirected there for the
 ///        duration of the call (restored on exit, along with the elevated
 ///        \c eval.level and the installed \c eval.node_meta).
+/// \param roofline machine parameters of the \c CostModel's exec-cost
+///        roofline; the default (no machine balance) prices every op by its
+///        flops. Pass the optimizer's \c RooflineParams so a dry-run replay
+///        of a DP-chosen tree prices each op the way the DP did.
 /// \return the assembled \c MeterReport (peak, persistent/volatile
 ///         FLOPs+time, build-vs-home fidelity), stamped with
 ///         \p policy.scheduler.
 ///
 inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
                          BatchPolicy const& policy, SizeRegime const& regime,
-                         CacheConfig const& cfg,
-                         std::ostream* trace = nullptr) {
-  auto cm = std::make_shared<CostModel const>(regime);
+                         CacheConfig const& cfg, std::ostream* trace = nullptr,
+                         RooflineParams const& roofline = {}) {
+  auto cm = std::make_shared<CostModel const>(regime, roofline);
   DryRunLeafEvaluator yield{cm};
 
   // Default is_volatile the same way build_dryrun_cache does (an empty

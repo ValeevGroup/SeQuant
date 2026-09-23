@@ -84,6 +84,9 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
       this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
     }
   });
+  // a subfactor may have canonicalized in place (e.g. RealPart/ImagPart
+  // normalize their inner), invalidating this Product's memoized hash
+  this->reset_hash_value();
 
   if (Logger::instance().canonicalize) {
     std::wcout << "Product canonicalization(" << to_wstring(opts.method)

@@ -53,9 +53,11 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 [[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
-                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
-                           ->as<sequant::Tensor>());
+  return tensor_to_key(
+      sequant::deserialize<sequant::ExprPtr>(
+          spec, {.def_perm_symm = sequant::Symmetry::Nonsymm,
+                 .def_braket_symm = sequant::Hermiticity::NonHermitian})
+          ->as<sequant::Tensor>());
 }
 
 template <typename Tensor_t>
@@ -304,7 +306,8 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   auto parse_antisymm = [](auto const& xpr) {
     return deserialize<sequant::ExprPtr>(
-        xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+        xpr, {.def_perm_symm = sequant::Symmetry::Antisymm,
+              .def_braket_symm = sequant::Hermiticity::NonHermitian});
   };
 
   SECTION("Summation") {
@@ -748,7 +751,8 @@ TEST_CASE("binarize_highorder_aux_hyperindex", "[eval_btas][hyperindex]") {
       L"d{μ7;μ3;z1} * c{μ2;i2;z1} * ć{i2;μ6;z1} * d{μ8;μ4;z1} * "
       L"g{μ4,μ3;μ1,μ2;z1}";
 
-  auto res = deserialize<ResultExpr>(e_a_expr);
+  auto res = deserialize<ResultExpr>(
+      e_a_expr, {.def_braket_symm = sequant::Hermiticity::NonHermitian});
 
   // the regression: this used to throw
   //   SEQUANT_ASSERT(edge_it->vertex_count() == 2) in canonicalize_slots

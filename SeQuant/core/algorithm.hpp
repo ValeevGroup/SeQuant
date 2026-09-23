@@ -149,19 +149,6 @@ bool next_permutation_parity(int& parity, BidirIt first, BidirIt last,
 ///
 using EvalSequence = container::svector<int>;
 
-///
-/// Given a range [a_0, a_1, ..., a_n] returns a range of sliced views of
-/// lengths 1 through n: [[a_0], [a_0, a_1], ..., [a_0, a_1, ..., a_n]].
-///
-template <typename Rng>
-auto inits(Rng const& rng) {
-  using ranges::views::slice;
-  using std::views::transform;
-  return rng | transform([n = 0, &rng](auto&&) mutable {
-           return slice(rng, 0, ++n);
-         });
-}
-
 namespace bits {
 
 ///

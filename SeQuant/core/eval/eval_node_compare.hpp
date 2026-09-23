@@ -8,10 +8,21 @@
 
 #include <compare>
 #include <cstddef>
+#include <cstdlib>
 #include <unordered_map>
 #include <utility>
 
 namespace sequant {
+
+namespace detail {
+/// @return true (the default) unless SEQUANT_EVAL_LAX_LAYOUT is set: the
+/// result mode layout is part of eval-node identity (see the use site in
+/// TreeNodeEqualityComparator)
+inline bool strict_layout_identity() {
+  static const bool lax = std::getenv("SEQUANT_EVAL_LAX_LAYOUT") != nullptr;
+  return !lax;
+}
+}  // namespace detail
 
 /// Functor to compute the hash of a given (evaluation) tree node.
 ///
@@ -187,6 +198,31 @@ struct TreeNodeEqualityComparator {
       }
 
       if (lhs->type_id() != rhs->type_id()) {
+        return false;
+      }
+
+      // NB the canonicalization transform (phase / conjugation / bra-ket
+      // swap) is deliberately NOT part of the identity: a slot holds the
+      // canonical value and every consumer applies its own transform on
+      // retrieval (apply_canon_phase), so +T / -T / T* share one slot -- and
+      // the hash-keyed value maps of the ordered (DAG) executor must agree
+      // with this comparator on what is one value.
+
+      // The two nodes must lay their result modes out the same way (default;
+      // SEQUANT_EVAL_LAX_LAYOUT=1 opts out).
+      //
+      // The hash and the connectivity comparison identify nodes across index
+      // renamings and across bra<->ket orientation -- that is what makes a
+      // subexpression shareable -- and CanonTransform carries the residual
+      // phase / conjugation / bra-ket swap, but nothing carries a permutation
+      // of the result modes. Two same-space external indices of an isomorphic
+      // network can be ordered either way, since bliss breaks an automorphic
+      // orbit by input vertex order, and a cached buffer served under the
+      // other ordering is a transposed value (measured: a residual block's
+      // product node C+.(g.C) laid out (i_1,i_2;..) served to its twin laid
+      // out (i_2,i_1;..) put a PNS-MP1 energy 7 % off).
+      if (detail::strict_layout_identity() &&
+          lhs->layout_fingerprint() != rhs->layout_fingerprint()) {
         return false;
       }
 

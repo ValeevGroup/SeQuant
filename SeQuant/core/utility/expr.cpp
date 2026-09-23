@@ -1,5 +1,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
@@ -453,6 +454,13 @@ bool is_valid(const Expr &expr, std::string *msg) {
     // rational and is always well-formed. Power is atomic (it exposes no
     // subexpressions to the children loop above), so validate the base here.
     if (!is_valid(expr.as<Power>().base(), msg)) return false;
+  } else if (expr.is<RealPart>()) {
+    // Re(x) / Im(x) are valid iff x is; like Power they are atomic (the inner
+    // expression is not exposed to the children loop above), so validate it
+    // here. The time-reversal fold of a complex network emits these.
+    if (!is_valid(expr.as<RealPart>().inner(), msg)) return false;
+  } else if (expr.is<ImagPart>()) {
+    if (!is_valid(expr.as<ImagPart>().inner(), msg)) return false;
   } else {
     SEQUANT_ASSERT(false, "Unsupported expression type in is_valid");
   }

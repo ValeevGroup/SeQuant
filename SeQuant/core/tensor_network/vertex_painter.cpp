@@ -10,11 +10,13 @@ namespace sequant {
 VertexPainterImpl::VertexPainterImpl(
     const VertexPainterImpl::NamedIndexSet &named_indices,
     bool distinct_named_indices,
-    const VertexPainterImpl::NamedIndexColorMap *named_index_colors)
+    const VertexPainterImpl::NamedIndexColorMap *named_index_colors,
+    bool color_conjugation)
     : used_colors_(),
       named_indices_(named_indices),
       distinct_named_indices_(distinct_named_indices),
-      named_index_colors_(named_index_colors) {}
+      named_index_colors_(named_index_colors),
+      color_conjugation_(color_conjugation) {}
 
 std::size_t VertexPainterImpl::to_hash_value(
     const AbstractTensor &tensor) const {
@@ -39,8 +41,27 @@ std::size_t VertexPainterImpl::to_hash_value(
                  hash::value(tensor._symmetry()),
                  hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
-
-  return to_hash_value(hashes);
+  auto result = to_hash_value(hashes);
+  // The elementwise-conjugation marker is part of a tensor's value identity
+  // (T* != T unless T is real). Two deliberate choices here:
+  // - opt-in (color_conjugation_): the symbolic canonicalizer
+  //   (TensorNetworkV3::canonicalize) toggles the marker while it re-orients
+  //   BraKetSymmetry::Conjugate tensors, so a marker-dependent coloring there
+  //   would not be a fixed point; opt in (canonicalize_slots) once every
+  //   tensor's orientation is final.
+  // - conditional on the marker, NOT an unconditional
+  //   hash::combine(result, hash::value(color_conjugation_ && _conjugated())):
+  //   colors are not merely compared for equality -- bliss's canonical
+  //   labeling depends on their VALUES, and hash::combine is not
+  //   order-preserving, so folding even a `false` into every color permutes
+  //   the canonical form of every marker-FREE network (measured: the uniform
+  //   combine reoriented Conjugate tensors in 8 canonical-form fixtures,
+  //   θ/γ/F/P/I2, and changed an optimize() factorization). Perturbing only
+  //   marked tensors keeps all marker-free networks bit-identical to their
+  //   pre-conjugation-aware canonical forms.
+  if (color_conjugation_ && tensor._conjugated())
+    hash::combine(result, hash::value(true));
+  return result;
 }
 
 VertexPainterImpl::Color VertexPainterImpl::operator()(const BraGroup &group) {

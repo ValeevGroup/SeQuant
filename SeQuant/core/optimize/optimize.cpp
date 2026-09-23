@@ -4,6 +4,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
@@ -92,6 +93,12 @@ void log_chosen_factorization(ExprPtr const& result,
 }
 
 /// Optimize a Product that contains only Tensor and scalar factors.
+/// Guards every access to OptimizeOptions::term_batch_axes: optimize_impl
+/// optimizes a Sum's summands in parallel (sequant::for_each) and each summand
+/// inserts into, re-keys and reads that one shared unordered_map; an unlocked
+/// insert racing a rehash is a segfault (seen on a rank of an 8-rank run).
+static std::mutex term_batch_axes_mutex;
+
 ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
   bool const subnet_cse = opts.CSE.subnet;
   // Build the cost knobs field-by-field from OptimizeOptions / its BatchPolicy.
@@ -155,7 +162,6 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
     // binarize's node_counter == size assertion (a nondeterministic, thread-
     // count-dependent SIGABRT, absent under a sequential par_unseq fallback
     // such as libc++).
-    static std::mutex term_batch_axes_mutex;
     std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
     (*opts.term_batch_axes)[result.get()] = std::move(node_axes);
   }
@@ -169,9 +175,59 @@ ExprPtr opt_pure_product(Product const& prod, OptimizeOptions const& opts) {
 /// user-defined tensor label can collide with it.
 inline constexpr std::wstring_view placeholder_label_prefix = L"@__opt_";
 
+/// The non_tensors slot a placeholder tensor label (see
+/// placeholder_label_prefix) stands in for. The prefix is internal; anything
+/// carrying it must have been emitted by opt_mixed_product with a
+/// pure-decimal suffix, so any deviation is a programming error.
+std::size_t placeholder_index(std::wstring_view label) {
+  SEQUANT_ASSERT(label.starts_with(placeholder_label_prefix));
+  auto suffix_view = label.substr(placeholder_label_prefix.size());
+  SEQUANT_ASSERT(!suffix_view.empty());
+  std::size_t suffix = 0;
+  for (wchar_t c : suffix_view) {
+    SEQUANT_ASSERT(c >= L'0' && c <= L'9');
+    suffix = suffix * 10 + static_cast<std::size_t>(c - L'0');
+  }
+  return suffix;
+}
+
+/// Number of contraction (DP) nodes binarize builds for \p e, i.e. how many
+/// BinarizationOptions::node_batch_axes entries it consumes, mirroring
+/// impl::binarize: a Product consumes its factors' counts (in factor order)
+/// plus one per tensor x tensor left-fold step (#non-scalar factors - 1); a
+/// Sum factor is binarized on a private counter (consumes none); a Re/Im
+/// wrapper factor shares the counter only when every factor is a scalar (its
+/// inner nodes are then the product's DP nodes).
+std::size_t binarize_dp_node_count(ExprPtr const& e) {
+  if (e->is<RealPart>())
+    return binarize_dp_node_count(e->as<RealPart>().inner());
+  if (e->is<ImagPart>())
+    return binarize_dp_node_count(e->as<ImagPart>().inner());
+  if (!e->is<Product>()) return 0;
+  auto const& prod = e->as<Product>();
+  bool const wrapper_shares_counter = ranges::all_of(
+      prod.factors(), [](ExprPtr const& f) { return f->is_scalar(); });
+  std::size_t n = 0;
+  std::size_t n_tensor = 0;
+  for (auto const& f : prod.factors()) {
+    if (f->is<Sum>()) {
+      // private counter, no entries
+    } else if (f->is<RealPart>() || f->is<ImagPart>()) {
+      if (wrapper_shares_counter) n += binarize_dp_node_count(f);
+    } else {
+      n += binarize_dp_node_count(f);
+    }
+    if (!f->is_scalar()) ++n_tensor;
+  }
+  return n + (n_tensor > 1 ? n_tensor - 1 : 0);
+}
+
 /// Optimize a Product that contains some non-Tensor, non-scalar factors by
 /// substituting placeholder tensors with target indices, optimizing the
 /// resulting tensor-only product, then swapping the originals back in.
+ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
+                      bool reorder, bool parallel_outer);
+
 ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   container::svector<ExprPtr> non_tensors(prod.size());
   container::svector<ExprPtr> new_factors;
@@ -182,7 +238,17 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
     if (f->is<Tensor>() || f->is_scalar()) {
       new_factors.emplace_back(f);
     } else {
-      non_tensors[i] = f;
+      // A non-tensor factor (a Sum of products, e.g. the flavor bracket a
+      // CSV transform wraps around a projected leaf, sum_flavors g.C.C; or a
+      // nested product) is opaque to the outer contraction order, but its
+      // own contraction order matters just as much: put back as written it
+      // evaluates in its authored left-to-right order. Measured on DCH
+      // cc-pVDZ PNS-CCD (2026-09-05): a projection bracket whose external-
+      // pair C came first materialized an n_occ^4 n_v n_csv intermediate
+      // (3.3 GB each, 32 GB of them cached) where the optimal order, which
+      // the DF cost model had assumed, peaks at n_occ^2 n_v n_csv.
+      non_tensors[i] = optimize_impl(f, opts, /*reorder=*/false,
+                                     /*parallel_outer=*/false);
       auto target_idxs = get_unique_indices(f);
       new_factors.emplace_back(ex<Tensor>(
           std::wstring(placeholder_label_prefix) + std::to_wstring(i),
@@ -193,21 +259,65 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
   auto result = opt_pure_product(
       Product{prod.scalar(), new_factors, Product::Flatten::No}, opts);
 
+  // Per-node batch annotations (opts.term_batch_axes): opt_pure_product keyed
+  // the outer network's entries -- one per DP node over the placeholders, in
+  // binarize's left-first post-order -- on `result`, and each nested Product
+  // factor's own optimization above keyed its entries on non_tensors[i].
+  // binarize consumes one shared counter in post-order over the whole tree,
+  // a nested Product factor's contraction nodes included (only a Sum factor
+  // gets a private counter and no entries), so splice each nested product's
+  // entries in at its placeholder's position and re-key the merged list on
+  // `result`. Without this the outer entries land on the brackets' inner
+  // nodes: e.g. the DF driver (g C C)(K) . (g C C)(K), contracted over the
+  // aux index K at the root with each bracket keeping K open, had the root's
+  // contracted-K mark stamped on the first bracket's inner node, whose result
+  // still carries K -- the batched runtime then accumulated per-batch
+  // partials of unequal K extent (Kramers-union PNS-CCD, 2026-09-09).
+  if (opts.term_batch_axes) {
+    std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
+    container::vector<NodeBatchAnnotation> outer;
+    if (auto it = opts.term_batch_axes->find(result.get());
+        it != opts.term_batch_axes->end())
+      outer = std::move(it->second);
+    container::vector<NodeBatchAnnotation> merged;
+    std::size_t next_outer = 0;
+    std::function<void(ExprPtr const&)> walk = [&](ExprPtr const& e) {
+      if (e->is<Product>()) {
+        std::size_t n_tensor = 0;
+        for (auto const& f : e->as<Product>().factors()) {
+          walk(f);
+          if (!f->is_scalar()) ++n_tensor;
+        }
+        for (std::size_t k = 1; k < n_tensor; ++k, ++next_outer)
+          merged.push_back(next_outer < outer.size() ? outer[next_outer]
+                                                     : NodeBatchAnnotation{});
+        return;
+      }
+      if (!e->is<Tensor>()) return;
+      auto const label = e->as<Tensor>().label();
+      if (!label.starts_with(placeholder_label_prefix)) return;
+      auto const& inner = non_tensors[placeholder_index(label)];
+      SEQUANT_ASSERT(inner);
+      // the nested product's own entries, in its post-order; a Sum bracket
+      // contributes none (private counter in binarize). A count mismatch
+      // (an inner optimization path that did not record) degrades to
+      // unannotated inner nodes rather than misaligning the outer ones.
+      std::size_t const need = binarize_dp_node_count(inner);
+      auto it = opts.term_batch_axes->find(inner.get());
+      if (it != opts.term_batch_axes->end() && it->second.size() == need)
+        merged.insert(merged.end(), it->second.begin(), it->second.end());
+      else
+        merged.insert(merged.end(), need, NodeBatchAnnotation{});
+    };
+    walk(result);
+    (*opts.term_batch_axes)[result.get()] = std::move(merged);
+  }
+
   auto replacer = [&non_tensors](ExprPtr& out) {
     if (!out->is<Tensor>()) return;
     auto label = out->as<Tensor>().label();
     if (!label.starts_with(placeholder_label_prefix)) return;
-
-    // The placeholder prefix is internal; anything carrying it must have been
-    // emitted by this function, with a pure-decimal suffix indexing
-    // non_tensors. Any deviation is a programming error.
-    auto suffix_view = label.substr(placeholder_label_prefix.size());
-    SEQUANT_ASSERT(!suffix_view.empty());
-    std::size_t suffix = 0;
-    for (wchar_t c : suffix_view) {
-      SEQUANT_ASSERT(c >= L'0' && c <= L'9');
-      suffix = suffix * 10 + static_cast<std::size_t>(c - L'0');
-    }
+    auto const suffix = placeholder_index(label);
     SEQUANT_ASSERT(suffix < non_tensors.size() && non_tensors[suffix]);
     out = non_tensors[suffix].clone();
   };
@@ -221,20 +331,116 @@ ExprPtr opt_mixed_product(Product const& prod, OptimizeOptions const& opts) {
 /// calls always run sequentially to avoid `sequant::for_each` oversubscription.
 ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                       bool reorder, bool parallel_outer) {
+  // Re/Im wrappers are transparent to optimization: optimize the wrapped
+  // expression and re-wrap. Without this the wrapper is returned untouched
+  // and its inner product evaluates in naive left-to-right order (measured:
+  // 14.4 GB vs 1.7 GB peak RSS on a Kramers-CSV MP2 energy whose TRS fold
+  // wrapped three terms).
+  // A wrapper at the summand root: its inner contraction nodes are the
+  // summand's DP nodes (binarize shares the node counter with it), so its
+  // batch axes are re-keyed under the wrapper the caller keys on.
+  auto rekey_axes = [&opts](ExprPtr const& inner, ExprPtr const& wrapper) {
+    if (!opts.term_batch_axes) return;
+    std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
+    auto it = opts.term_batch_axes->find(inner.get());
+    if (it != opts.term_batch_axes->end())
+      (*opts.term_batch_axes)[wrapper.get()] = it->second;
+  };
+  if (expr->is<RealPart>()) {
+    auto inner = optimize_impl(expr->as<RealPart>().inner(), opts,
+                               /*reorder=*/false, /*parallel_outer=*/false);
+    auto wrapped = ex<RealPart>(inner);
+    rekey_axes(inner, wrapped);
+    return wrapped;
+  }
+  if (expr->is<ImagPart>()) {
+    auto inner = optimize_impl(expr->as<ImagPart>().inner(), opts,
+                               /*reorder=*/false, /*parallel_outer=*/false);
+    auto wrapped = ex<ImagPart>(inner);
+    rekey_axes(inner, wrapped);
+    return wrapped;
+  }
   if (expr->is<Product>()) {
-    auto const& prod = expr->as<Product>();
+    auto const& prod_in = expr->as<Product>();
+    // Re/Im wrapper factors are transparent too (the conjugate-pair fold
+    // emits `2 Re[A]`): RealPart::is_scalar() would otherwise let the
+    // wrapper pass through opt_pure_product as an opaque scalar with A left
+    // in its naive left-to-right order. Optimize each wrapper's inner first.
+    auto const has_wrapper = ranges::any_of(prod_in, [](auto&& x) {
+      return x->template is<RealPart>() || x->template is<ImagPart>();
+    });
+    Product::factors_type factors;
+    container::svector<ExprPtr> inners;  // optimized wrapper inners, in order
+    if (has_wrapper) {
+      for (auto const& f : prod_in) {
+        if (f->is<RealPart>()) {
+          inners.push_back(
+              optimize_impl(f->as<RealPart>().inner(), opts, false, false));
+          factors.push_back(ex<RealPart>(inners.back()));
+        } else if (f->is<ImagPart>()) {
+          inners.push_back(
+              optimize_impl(f->as<ImagPart>().inner(), opts, false, false));
+          factors.push_back(ex<ImagPart>(inners.back()));
+        } else
+          factors.push_back(f);
+      }
+    }
+    Product const prod_rewrapped =
+        has_wrapper ? Product{prod_in.scalar(), factors, Product::Flatten::No}
+                    : Product{};
+    auto const& prod = has_wrapper ? prod_rewrapped : prod_in;
     bool pure = ranges::all_of(prod, [](auto&& x) {
       return x->template is<Tensor>() || x->is_scalar();
     });
-    return pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    auto result =
+        pure ? opt_pure_product(prod, opts) : opt_mixed_product(prod, opts);
+    // Wrappers whose siblings are all scalars (the fold's `2 Re[A]`): the
+    // product has no contraction nodes of its own, so the summand's DP nodes
+    // are exactly the wrappers' inner nodes, in factor order (binarize
+    // shares its node counter with such wrappers). Re-key their batch axes
+    // under the summand pointer the caller keys on.
+    if (has_wrapper && opts.term_batch_axes) {
+      const bool scalar_siblings =
+          ranges::all_of(prod_in, [](auto&& x) { return x->is_scalar(); });
+      if (scalar_siblings) {
+        std::lock_guard<std::mutex> lock(term_batch_axes_mutex);
+        container::vector<NodeBatchAnnotation> axes;
+        for (auto const& inner : inners) {
+          auto it = opts.term_batch_axes->find(inner.get());
+          if (it != opts.term_batch_axes->end())
+            axes.insert(axes.end(), it->second.begin(), it->second.end());
+        }
+        (*opts.term_batch_axes)[result.get()] = std::move(axes);
+      }
+    }
+    return result;
   }
 
   if (expr->is<Sum>()) {
     auto const& in_sum = expr->as<Sum>();
     Sum::summands_type new_smands(in_sum.size());
 
+    // Every summand is optimized on a private clone, taken here, sequentially,
+    // before the (possibly parallel) loop below. Summands routinely share
+    // subexpression objects -- tensors reused by expand(), or a whole nested
+    // Sum factor (the flavor bracket a CSV transform wraps around a projected
+    // leaf) reused across the terms it appears in -- and Index/Expr memoize
+    // labels and hashes lazily in unsynchronized mutable members. Optimizing
+    // (and, since opt_mixed_product also optimizes nested Sum factors, walking
+    // and canonicalizing) a shared object from several threads races on those
+    // caches and can yield a run-to-run different tree; on a distributed
+    // evaluation that is a deadlock, since every rank must build the same
+    // tree (DCH PNS-MP1 on 8 ranks, 2026-09-05: two ranks built a different
+    // residual tree and the run hung in iteration 1). The clones make
+    // invariant (1) below hold by construction; the input is never touched
+    // concurrently.
+    Sum::summands_type private_smands;
+    private_smands.reserve(in_sum.size());
+    for (auto const& s : in_sum.summands())
+      private_smands.push_back(s->clone());
+
     auto do_term = [&](std::size_t i) {
-      new_smands[i] = optimize_impl(in_sum.summand(i), opts,
+      new_smands[i] = optimize_impl(private_smands[i], opts,
                                     /*reorder=*/false,
                                     /*parallel_outer=*/false);
     };
@@ -281,6 +487,12 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     // clusters, each a list of positions into new_sum, flattened in emission
     // order (identity for the no-reorder path); it must match how the final Sum
     // orders its summands.
+    // The keys are the optimized summands' addresses, taken here, before the
+    // no-reorder path below moves new_sum into its result (the ExprPtrs keep
+    // their pointees, so the keys stay valid; new_sum's summand list does not).
+    container::vector<Expr const*> smand_keys;
+    smand_keys.reserve(new_sum.size());
+    for (auto const& s : new_sum.summands()) smand_keys.push_back(s.get());
     auto rekey_onto =
         [&](ExprPtr const& result,
             container::vector<container::vector<std::size_t>> const& order) {
@@ -288,7 +500,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
           container::vector<NodeBatchAnnotation> combined;
           for (auto const& clstr : order)
             for (auto p : clstr) {
-              auto it = opts.term_batch_axes->find(new_sum.summand(p).get());
+              auto it = opts.term_batch_axes->find(smand_keys.at(p));
               if (it == opts.term_batch_axes->end()) continue;
               combined.insert(combined.end(),
                               std::make_move_iterator(it->second.begin()),

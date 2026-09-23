@@ -27,6 +27,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -79,10 +80,47 @@ struct TensorSymmetries {
   std::optional<Hermiticity> hermiticity = std::nullopt;
   /// particle (column) permutation symmetry
   std::optional<ColumnSymmetry> column = std::nullopt;
+  /// Kramers (time-reversal) symmetry
+  std::optional<KramersSymmetry> kramers = std::nullopt;
 };
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
+///
+// clang-format off
+/// ### Conjugation / transposition / adjoint algebra
+///
+/// Three involutions act on a tensor's VALUE, closed under composition
+/// (together with the identity they form a Klein four-group):
+///
+/// | operation | effect                                          | via               |
+/// |-----------|-------------------------------------------------|-------------------|
+/// | `conj`    | elementwise complex conjugation, slots kept     | `conjugate()`     |
+/// | `swap`    | bra<->ket transposition, elements kept          | `_swap_bra_ket()` |
+/// | `adjoint` | conjugate transpose = `swap∘conj` = `conj∘swap` | `adjoint()`       |
+///
+/// Consequences per #BraKetSymmetry:
+/// - `Conjugate` (Hermitian over a complex field): `adjoint(T) == T` in
+///   value, hence `swap(T) == conj(T)` -- the fold identity
+///   `T{q;p} = conj(T{p;q})` the canonicalizer uses to spell both
+///   orientations over one canonical slot order (the swapped spelling
+///   carrying the marker).
+/// - `Symm` (Hermitian over a real field): `conj` and `swap` are both the
+///   identity in value; canonicalization never needs the marker.
+/// - `Nonsymm`: `adjoint` is value-distinct and is tracked by the reserved
+///   adjoint label suffix (see adjoint()); the marker alone expresses pure
+///   elementwise conjugation.
+///
+/// The elementwise-conjugation marker (conjugated()) and adjoint() compose
+/// independently: adjoint() swaps the slots and carries its own `conj` half
+/// through the symmetry relation (`Conjugate`/`Symm`) or the '⁺' suffix
+/// (`Nonsymm`), and never toggles the marker, so `conj∘adjoint == adjoint∘conj`
+/// on spellings too: adjoint(T^*{p;q}) = T^*{q;p} for a Hermitian T and
+/// T⁺^*{q;p} for a Nonsymm T. (Toggling the marker inside adjoint() would
+/// spell conj(adjoint(T)) and swap(T) identically -- two distinct values of a
+/// Nonsymm tensor -- which is why the marker is kept separate from the
+/// adjoint channel.)
+// clang-format on
 class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
  public:
   /// @brief the fixed library defaults used to resolve the symmetry attributes
@@ -103,6 +141,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     static constexpr Hermiticity hermiticity = Hermiticity::NonHermitian;
     /// default particle-exchange ColumnSymmetry
     static constexpr ColumnSymmetry column_symmetry = ColumnSymmetry::Nonsymm;
+    /// default Kramers (time-reversal) symmetry
+    static constexpr KramersSymmetry kramers_symmetry =
+        KramersSymmetry::Nonsymm;
   };
 
  private:
@@ -303,13 +344,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     }
   }
 
-  /// the four symmetry attributes of a Tensor, fully resolved (no defaulting
+  /// the five symmetry attributes of a Tensor, fully resolved (no defaulting
   /// left to do)
   struct ResolvedSymmetries {
     Symmetry symmetry;
     BraKetSymmetry braket_symmetry;
     Hermiticity hermiticity;
     ColumnSymmetry column_symmetry;
+    KramersSymmetry kramers_symmetry;
     /// whether #column_symmetry was spelled out by the caller rather than
     /// defaulted; see check_symmetries()
     bool column_symmetry_specified;
@@ -322,7 +364,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// - #BraKetSymmetry is a *derived* property: if not given explicitly it is
   ///   computed from the (explicit or default) #Hermiticity and the tensor's
   ///   @p base_fld via to_braket_symmetry().
-  /// - #Symmetry, #Hermiticity and #ColumnSymmetry fall back to the *fixed*
+  /// - #Symmetry, #Hermiticity, #ColumnSymmetry and #KramersSymmetry fall
+  ///   back to the *fixed*
   ///   library defaults in Tensor::Defaults -- the safest, fully non-symmetric
   ///   / non-Hermitian choice -- when not specified.
   /// @param syms the (partially specified) symmetry pack
@@ -340,6 +383,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const Symmetry s_resolved = syms.perm.value_or(Defaults::symmetry);
     const ColumnSymmetry ps_resolved =
         syms.column.value_or(Defaults::column_symmetry);
+    const KramersSymmetry ks_resolved =
+        syms.kramers.value_or(Defaults::kramers_symmetry);
     const Hermiticity h_resolved =
         syms.hermiticity.value_or(Defaults::hermiticity);
     const BraKetSymmetry bks_resolved =
@@ -361,11 +406,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             ? *syms.hermiticity
             : (syms.braket.has_value() ? to_hermiticity(*syms.braket)
                                        : h_resolved);
-    return {s_resolved,
-            bks_resolved,
-            hermiticity_resolved,
-            ps_resolved,
-            syms.column.has_value(),
+    return {s_resolved,           bks_resolved, hermiticity_resolved,
+            ps_resolved,          ks_resolved,  syms.column.has_value(),
             syms.perm.has_value()};
   }
 
@@ -385,6 +427,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         braket_symmetry_(rsym.braket_symmetry),
         hermiticity_(rsym.hermiticity),
         column_symmetry_(rsym.column_symmetry),
+        kramers_symmetry_(rsym.kramers_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -408,6 +451,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         braket_symmetry_(rsym.braket_symmetry),
         hermiticity_(rsym.hermiticity),
         column_symmetry_(rsym.column_symmetry),
+        kramers_symmetry_(rsym.kramers_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -476,16 +520,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param ps particle- (column-) exchange symmetry; if unset
   /// (`std::nullopt`), defaults to Tensor::Defaults::column_symmetry
   /// (#ColumnSymmetry::Nonsymm)
+  /// @param ks Kramers (time-reversal) symmetry; defaults to
+  /// Tensor::Defaults::kramers_symmetry (#KramersSymmetry::Nonsymm)
   template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
             range_of_castables_to_index IndexRange2>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         std::optional<ColumnSymmetry> ps = std::nullopt)
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
                reserved_tag{},
-               TensorSymmetries{.perm = s, .braket = bks_opt, .column = ps}) {
+               TensorSymmetries{
+                   .perm = s, .braket = bks_opt, .column = ps, .kramers = ks}) {
     assert_nonreserved_label(label_);
   }
 
@@ -504,6 +552,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param ps particle- (column-) exchange symmetry; if unset
   /// (`std::nullopt`), defaults to Tensor::Defaults::column_symmetry
   /// (#ColumnSymmetry::Nonsymm)
+  /// @param ks Kramers (time-reversal) symmetry; defaults to
+  /// Tensor::Defaults::kramers_symmetry (#KramersSymmetry::Nonsymm)
   template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
             range_of_castables_to_index IndexRange2,
             range_of_castables_to_index IndexRange3>
@@ -512,10 +562,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          const aux<IndexRange3> &aux_indices,
          std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         std::optional<ColumnSymmetry> ps = std::nullopt)
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
                reserved_tag{},
-               TensorSymmetries{.perm = s, .braket = bks_opt, .column = ps}) {
+               TensorSymmetries{
+                   .perm = s, .braket = bks_opt, .column = ps, .kramers = ks}) {
     assert_nonreserved_label(label_);
   }
 
@@ -532,15 +584,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param ps particle- (column-) exchange symmetry; if unset
   /// (`std::nullopt`), defaults to Tensor::Defaults::column_symmetry
   /// (#ColumnSymmetry::Nonsymm)
+  /// @param ks Kramers (time-reversal) symmetry; defaults to
+  /// Tensor::Defaults::kramers_symmetry (#KramersSymmetry::Nonsymm)
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         std::optional<ColumnSymmetry> ps = std::nullopt)
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), sequant::aux{}, reserved_tag{},
-               TensorSymmetries{.perm = s, .braket = bks_opt, .column = ps}) {
+               TensorSymmetries{
+                   .perm = s, .braket = bks_opt, .column = ps, .kramers = ks}) {
     assert_nonreserved_label(label_);
   }
 
@@ -559,16 +615,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param ps particle- (column-) exchange symmetry; if unset
   /// (`std::nullopt`), defaults to Tensor::Defaults::column_symmetry
   /// (#ColumnSymmetry::Nonsymm)
+  /// @param ks Kramers (time-reversal) symmetry; defaults to
+  /// Tensor::Defaults::kramers_symmetry (#KramersSymmetry::Nonsymm)
   template <basic_string_convertible S>
   Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices,
          std::optional<Symmetry> s = std::nullopt,
          std::optional<BraKetSymmetry> bks_opt = std::nullopt,
-         std::optional<ColumnSymmetry> ps = std::nullopt)
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       : Tensor(std::forward<S>(label), std::move(bra_indices),
                std::move(ket_indices), std::move(aux_indices), reserved_tag{},
-               TensorSymmetries{.perm = s, .braket = bks_opt, .column = ps}) {
+               TensorSymmetries{
+                   .perm = s, .braket = bks_opt, .column = ps, .kramers = ks}) {
     assert_nonreserved_label(label_);
   }
 
@@ -590,16 +650,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param ps particle- (column-) exchange symmetry; if unset
   /// (`std::nullopt`), defaults to Tensor::Defaults::column_symmetry
   /// (#ColumnSymmetry::Nonsymm)
+  /// @param ks Kramers (time-reversal) symmetry; defaults to
+  /// Tensor::Defaults::kramers_symmetry (#KramersSymmetry::Nonsymm)
   template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
             range_of_castables_to_index IndexRange2>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s, Hermiticity h,
-         std::optional<ColumnSymmetry> ps = std::nullopt)
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       // braket_symmetry_ must be derived from h before canonicalize_slots()
       // runs, so let the reserved-tag ctor do it
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
                reserved_tag{},
-               TensorSymmetries{.perm = s, .hermiticity = h, .column = ps}) {
+               TensorSymmetries{
+                   .perm = s, .hermiticity = h, .column = ps, .kramers = ks}) {
     assert_nonreserved_label(label_);
   }
 
@@ -613,18 +677,22 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param ps particle- (column-) exchange symmetry; if unset
   /// (`std::nullopt`), defaults to Tensor::Defaults::column_symmetry
   /// (#ColumnSymmetry::Nonsymm)
+  /// @param ks Kramers (time-reversal) symmetry; defaults to
+  /// Tensor::Defaults::kramers_symmetry (#KramersSymmetry::Nonsymm)
   template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
             range_of_castables_to_index IndexRange2,
             range_of_castables_to_index IndexRange3>
   Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s, Hermiticity h,
-         std::optional<ColumnSymmetry> ps = std::nullopt)
+         std::optional<ColumnSymmetry> ps = std::nullopt,
+         KramersSymmetry ks = KramersSymmetry::Nonsymm)
       // braket_symmetry_ must be derived from h before canonicalize_slots()
       // runs, so let the reserved-tag ctor do it
       : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
                reserved_tag{},
-               TensorSymmetries{.perm = s, .hermiticity = h, .column = ps}) {
+               TensorSymmetries{
+                   .perm = s, .hermiticity = h, .column = ps, .kramers = ks}) {
     assert_nonreserved_label(label_);
   }
 
@@ -793,6 +861,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}
   /// slot bundles).
   ColumnSymmetry column_symmetry() const { return column_symmetry_; }
+  KramersSymmetry kramers_symmetry() const { return kramers_symmetry_; }
+  /// sets the Kramers (time-reversal) symmetry attribute
+  void set_kramers_symmetry(KramersSymmetry ks) {
+    kramers_symmetry_ = ks;
+    reset_hash_value();
+  }
 
   /// @return number of bra slots (some may be occupied by null indices, hence
   /// this is the gross rank)
@@ -840,6 +914,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       core_label += L"\\bar{";
     core_label += io::latex::utf_to_string(this->label());
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
+    if (conjugated_) core_label = L"{" + core_label + L"^*}";
 
     switch (bkst) {
       case BraKetSlotTypesetting::Naive: {
@@ -891,8 +966,71 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @note this performs rapid canonicalization only
   ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
-  /// @brief adjoint of a Tensor swaps its bra and ket
+  /// @brief adjoint of a Tensor: the conjugate transpose (`swap∘conj`; see
+  /// the algebra table in the class documentation)
+  ///
+  /// The slot swap happens immediately; the conjugation half is carried per
+  /// #BraKetSymmetry:
+  /// - `Nonsymm`: the adjoint is value-distinct from every slot permutation
+  ///   of the original, so it is marked by the reserved '⁺' label suffix.
+  /// - `Conjugate`/`Symm` (Hermitian): the conjugation is redundant in value
+  ///   (`adjoint(T) == T`), so adjoint() reduces to a pure bra<->ket swap.
+  ///
+  /// adjoint() deliberately does NOT toggle conjugated(): the marker
+  /// expresses elementwise conjugation ALONE, and the two operations
+  /// compose -- e.g. for a Conjugate-symmetry tensor, `conjugate()` followed
+  /// by `adjoint()` unfolds a marked spelling back to its value orientation
+  /// (see value_oriented()).
   virtual void adjoint() override;
+
+  /// @return whether this tensor is complex-conjugated elementwise (no slot
+  /// reordering; contrast adjoint(), which swaps bra and ket)
+  bool conjugated() const { return conjugated_; }
+
+  /// @brief complex-conjugates this tensor elementwise: toggles conjugated();
+  /// the slots are untouched. For a BraKetSymmetry::Conjugate tensor the
+  /// value identity T{q;p} = conj(T{p;q}) means a bra<->ket swap combined
+  /// with conjugate() preserves the represented value -- which is how the
+  /// canonicalizer folds the two orientations onto one spelling.
+  void conjugate() {
+    conjugated_ = !conjugated_;
+    reset_hash_value();
+  }
+
+  /// @brief rebuilds this tensor with new slot bundles, carrying every
+  /// non-slot attribute: label, #Symmetry, #BraKetSymmetry, #Hermiticity,
+  /// #ColumnSymmetry, and the elementwise-conjugation marker.
+  ///
+  /// The sanctioned rebuild API for transforms that rewrite a tensor's slots
+  /// (relabeling, expansion, factorization rules): rebuilding through a plain
+  /// constructor silently drops conjugated() (and can demote Hermiticity),
+  /// corrupting every complex-field workflow downstream. A transform that
+  /// instead REINTERPRETS the slots positionally must first normalize the
+  /// spelling to the value orientation (unstar + bra<->ket swap for a
+  /// #BraKetSymmetry::Conjugate tensor) before reading them.
+  // N.B. the slot bundle types are qualified because at this point in the
+  // class the bra()/ket()/aux() member accessors shadow the strong-type
+  // templates
+  [[nodiscard]] Tensor with_slots(
+      sequant::bra<index_container_type> new_bra,
+      sequant::ket<index_container_type> new_ket,
+      sequant::aux<index_container_type> new_aux) const {
+    // every attribute is carried verbatim (already resolved on *this), so
+    // the "specified" flags are true: check_symmetries validates the
+    // combination exactly as it did for the original spelling
+    Tensor t(label_, std::move(new_bra), std::move(new_ket), std::move(new_aux),
+             reserved_tag{},
+             ResolvedSymmetries{.symmetry = symmetry_,
+                                .braket_symmetry = braket_symmetry_,
+                                .hermiticity = hermiticity_,
+                                .column_symmetry = column_symmetry_,
+                                .kramers_symmetry = kramers_symmetry_,
+                                .column_symmetry_specified = true,
+                                .symmetry_specified = true});
+    t.conjugated_ = conjugated_;
+    t.reset_hash_value();
+    return t;
+  }
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
@@ -950,6 +1088,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   // distinct canonicalization behavior yet); revisit if that changes.
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
+  KramersSymmetry kramers_symmetry_ = KramersSymmetry::Nonsymm;
+  /// whether this tensor is complex-conjugated elementwise (no slot
+  /// reordering); mirrors Variable::conjugated_ / Power::conjugated_ and is
+  /// rendered as a trailing ^* on the label
+  bool conjugated_ = false;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   std::size_t bra_net_rank_;
@@ -1021,7 +1164,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
       hash::combine(val, column_symmetry_);
-      // N.B. adjointness is baked into the label
+      if (kramers_symmetry_ != KramersSymmetry::Nonsymm)
+        hash::combine(val, kramers_symmetry_);
+      // N.B. adjointness is baked into the label; conjugation contributes
+      // only when set so unconjugated tensors hash identically to builds
+      // that predate conjugated_
+      if (conjugated_) hash::combine(val, conjugated_);
       return val;
     };
     if (!hash_value_) {
@@ -1039,9 +1187,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() == that_cast.label() &&
+        this->conjugated() == that_cast.conjugated() &&
         this->symmetry() == that_cast.symmetry() &&
         this->braket_symmetry() == that_cast.braket_symmetry() &&
         this->column_symmetry() == that_cast.column_symmetry() &&
+        this->kramers_symmetry() == that_cast.kramers_symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
         this->ket_rank() == that_cast.ket_rank() &&
         this->aux_rank() == that_cast.aux_rank()) {
@@ -1062,6 +1212,13 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() != that_cast.label()) {
       return this->label() < that_cast.label();
+    }
+
+    if (this->conjugated() != that_cast.conjugated()) {
+      return !this->conjugated();  // T orders before conj(T)
+    }
+    if (this->kramers_symmetry() != that_cast.kramers_symmetry()) {
+      return this->kramers_symmetry() == KramersSymmetry::Nonsymm;
     }
 
     if (this->bra_rank() != that_cast.bra_rank()) {
@@ -1138,6 +1295,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ColumnSymmetry _column_symmetry() const override final {
     return column_symmetry_;
   }
+  KramersSymmetry _kramers_symmetry() const override final {
+    return kramers_symmetry_;
+  }
   std::size_t _color() const override final { return 0; }
   bool _is_cnumber() const override final { return true; }
   std::wstring_view _label() const override final { return label_; }
@@ -1175,6 +1335,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     canonicalize_slots();
   }
 
+  void _conjugate() override final { conjugate(); }
+  bool _conjugated() const override final { return conjugated_; }
+
 };  // class Tensor
 
 static_assert(is_tensor<Tensor>,
@@ -1182,6 +1345,26 @@ static_assert(is_tensor<Tensor>,
               "Tensor interface");
 
 using TensorPtr = std::shared_ptr<Tensor>;
+
+/// @return @p t rewritten in its VALUE orientation: the spelling whose slot
+///         layout denotes the value directly, with no conjugation marker
+///         left for a slot-rebuilding consumer to drop. No-op for unstarred
+///         tensors; for a marked tensor the result follows the braket
+///         symmetry (the marker is first-class, not only a fold byproduct):
+///         - `Conjugate`: the starred swapped spelling T^*{q;p} denotes
+///           conj(T{p;q}) (the canonicalizer's fold), so the bare unstarred
+///           spelling is returned (marker cleared, bra<->ket swapped back)
+///         - `Symm`: conjugation is the identity in value, so the marker is
+///           simply cleared (slots untouched)
+///         - `Nonsymm`: the marker denotes genuine elementwise conjugation,
+///           which no slot layout can express -- throws std::logic_error
+///           rather than silently dropping or misreading it (serving such
+///           spellings is the lazy-conj eval follow-up)
+///         Any transform that reads or rebuilds a tensor from its slot
+///         layout (rather than round-tripping it unchanged) must consume
+///         this form. A '⁺'-relabeled NonHermitian adjoint is NOT unfolded:
+///         its swap is a genuine value transpose.
+[[nodiscard]] Tensor value_oriented(Tensor const &t);
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   // an overlap is Hermitian and particle (column) symmetric by definition;
