@@ -124,7 +124,10 @@ ExprPtr Power::clone() const {
   return cloned;
 }
 
-void Power::adjoint() { conjugate(); }
+std::int8_t Power::adjoint() {
+  conjugate();
+  return 1;
+}
 
 Power& Power::operator*=(const Expr& that) {
   // b^e1 *= b^e2  ->  b^(e1+e2)

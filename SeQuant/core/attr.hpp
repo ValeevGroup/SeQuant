@@ -187,6 +187,17 @@ constexpr std::optional<std::int8_t> braket_conjugate_swap_sign(
   if (s == BraKetSymmetry::AntiConjugate) return std::int8_t{-1};
   return std::nullopt;
 }
+/// @return the sign `s` in `T⁺ = s T` if the #Hermiticity states one, else
+///         nullopt. The adjoint of an operator is the conjugate transpose of
+///         its matrix in any orthonormal basis, so this relation holds
+///         whatever the #Field -- including where #BraKetSymmetry spells the
+///         observable relation as a plain (anti)symmetry (`Symm`/`Antisymm`)
+///         and braket_conjugate_swap_sign() therefore reports nothing.
+constexpr std::optional<std::int8_t> adjoint_sign(Hermiticity h) noexcept {
+  if (h == Hermiticity::Hermitian) return std::int8_t{1};
+  if (h == Hermiticity::AntiHermitian) return std::int8_t{-1};
+  return std::nullopt;
+}
 /// @return the sign `s` in `conj(T) = s T` if known, else nullopt
 constexpr std::optional<std::int8_t> conjugation_sign(
     ConjugationSymmetry s) noexcept {

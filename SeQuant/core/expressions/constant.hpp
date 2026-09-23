@@ -76,7 +76,7 @@ class Constant : public Expr {
   ExprPtr clone() const override;
 
   /// @brief adjoint of a Constant is its complex conjugate
-  virtual void adjoint() override;
+  virtual std::int8_t adjoint() override;
 
   Constant &operator*=(const Expr &that);
 

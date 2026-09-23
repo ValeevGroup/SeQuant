@@ -448,7 +448,7 @@ TEST_CASE("tensor", "[elements]") {
                      BraKetSymmetry::Nonsymm);
     REQUIRE_NOTHROW(t1.adjoint());
     REQUIRE(to_latex(t1) == L"{t⁺^{{a_1}}_{{i_1}}}");
-    t1.adjoint();
+    REQUIRE(t1.adjoint() == 1);
     REQUIRE(to_latex(t1) == L"{t^{{i_1}}_{{a_1}}}");
 
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
@@ -784,7 +784,7 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
     const auto latex0 = t.to_latex();
 
     Tensor tc{t};
-    tc.conjugate();
+    REQUIRE(tc.conjugate() == 1);
     REQUIRE(tc.conjugated());
     REQUIRE(tc.hash_value() != h0);  // conj is first-class identity
     REQUIRE(!(t == tc));             // not equal to the bare tensor
@@ -792,7 +792,8 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
     REQUIRE(tc.to_latex().find(L"^*") != std::wstring::npos);
     REQUIRE(latex0.find(L"^*") == std::wstring::npos);
 
-    tc.conjugate();  // toggling back restores everything bit-for-bit
+    // toggling back restores everything bit-for-bit
+    REQUIRE(tc.conjugate() == 1);
     REQUIRE(!tc.conjugated());
     REQUIRE(tc.hash_value() == h0);
     REQUIRE(t == tc);
@@ -800,7 +801,7 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
 
   SECTION("clone preserves the marker") {
     Tensor tc{t};
-    tc.conjugate();
+    REQUIRE(tc.conjugate() == 1);
     auto cloned = tc.clone();
     REQUIRE(cloned->as<Tensor>().conjugated());
     REQUIRE(cloned->as<Tensor>() == tc);
@@ -808,7 +809,7 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
 
   SECTION("serialization spells label^*") {
     Tensor tc{t};
-    tc.conjugate();
+    REQUIRE(tc.conjugate() == 1);
     auto s = serialize(tc);
     REQUIRE(s.find(L"t^*{") == 0);  // marker directly after the label
     REQUIRE(serialize(Tensor{t}).find(L"^*") == std::wstring::npos);
@@ -819,8 +820,8 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
     // conj is carried by the symmetry relation itself), so it must leave the
     // marker alone
     Tensor tc{t};
-    tc.conjugate();
-    tc.adjoint();
+    REQUIRE(tc.conjugate() == 1);
+    REQUIRE(tc.adjoint() == 1);
     REQUIRE(tc.conjugated());
     REQUIRE(tc.bra().at(0).label() == L"a_1");  // swapped
   }
@@ -838,12 +839,12 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
                       ColumnSymmetry::Nonsymm);
       // conj then adjoint
       Tensor ca{u};
-      ca.conjugate();
-      ca.adjoint();
+      REQUIRE(ca.conjugate() == 1);
+      REQUIRE(ca.adjoint() == 1);
       // adjoint then conj
       Tensor ac{u};
-      ac.adjoint();
-      ac.conjugate();
+      REQUIRE(ac.adjoint() == 1);
+      REQUIRE(ac.conjugate() == 1);
       REQUIRE(ca == ac);  // the marker commutes with adjoint()
       REQUIRE(ca.bra().at(0).label() == L"a_1");  // swapped
       if (bks == BraKetSymmetry::Conjugate) {
@@ -856,11 +857,11 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
         REQUIRE(ca.decorated_label() == L"u");  // no ⁺: this is not the adjoint
       }
       // adjoint is an involution that leaves the marker as it found it
-      ca.adjoint();
+      REQUIRE(ca.adjoint() == 1);
       REQUIRE(ca.conjugated());
       REQUIRE(ca.bra().at(0).label() == L"i_1");
       Tensor uc{u};
-      uc.conjugate();
+      REQUIRE(uc.conjugate() == 1);
       REQUIRE(ca == uc);
     }
   }

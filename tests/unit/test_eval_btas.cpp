@@ -695,7 +695,7 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
-  t_adj.adjoint();
+  REQUIRE(t_adj.adjoint() == 1);
   REQUIRE(t_adj.label() == L"t");
   REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
 

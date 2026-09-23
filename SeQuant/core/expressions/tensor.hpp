@@ -549,8 +549,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
-    adopt_adjoint_mark();
+    // the conjugation symmetry is resolved before the label's adjoint mark is
+    // adopted: normalizing the mark's modifier bits reads it
     conjugation_symmetry_ = derive_conjugation_symmetry();
+    adopt_adjoint_mark();
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -575,8 +577,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
-    adopt_adjoint_mark();
+    // the conjugation symmetry is resolved before the label's adjoint mark is
+    // adopted: normalizing the mark's modifier bits reads it
     conjugation_symmetry_ = derive_conjugation_symmetry();
+    adopt_adjoint_mark();
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -1095,39 +1099,75 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @note this performs rapid canonicalization only
   ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
-  /// @brief transposes this tensor: swaps bra and ket slots and toggles
-  /// transposed(). A value operation (`T^T{q;p} = T{p;q}`), unlike
-  /// _swap_bra_ket(), which only respells. For a #BraKetSymmetry::Conjugate
-  /// tensor the transposition folds into the conjugation bit
-  /// (`T^T = T^*`), producing the canonicalizer's starred swapped spelling;
-  /// for #BraKetSymmetry::Symm it is the identity in value and clears.
-  void transpose() {
+  /// @brief transposes this tensor: swaps the bra and ket slots and toggles
+  /// transposed(), then normalizes the bits against the value relations this
+  /// tensor's symmetries provide (normalize_value_modifier()). A value
+  /// operation (`T^T{q;p} = T{p;q}`), unlike _swap_bra_ket(), which only
+  /// respells. Which relation the normalization spends depends on what is
+  /// known:
+  /// - #BraKetSymmetry::Symm / #BraKetSymmetry::Antisymm: the bit clears with
+  ///   the sign s(t) = braket_swap_sign(), the transpose being a plain
+  ///   (anti)symmetric respelling;
+  /// - #BraKetSymmetry::Conjugate / #BraKetSymmetry::AntiConjugate: the bit
+  ///   folds into the conjugation bit with the sign
+  ///   s(ct) = adjoint_sign(hermiticity()), producing the starred swapped
+  ///   spelling `T^*{q;p}` with which the canonicalizer folds both
+  ///   orientations onto one slot order;
+  /// - a real-field tensor of known #ConjugationParity and no adjoint
+  ///   relation: `T^T = s(c) T⁺`, so the result is the Adjoint state carrying
+  ///   the sign s(c) = conjugation_sign(conjugation_symmetry());
+  /// - no relation known: the bit stays set and the sign is +1.
+  /// @return the sign the normalization consumed (see
+  ///         normalize_value_modifier()): the transposed tensor is that sign
+  ///         times the object this leaves behind
+  [[nodiscard]] std::int8_t transpose() {
     _swap_bra_ket();
     transposed_ = transposed_ * TransposeModifier::Yes;
-    normalize_value_modifier();
+    const auto sign = normalize_value_modifier();
     reset_hash_value();
+    return sign;
   }
 
-  /// @brief complex-conjugates this tensor elementwise: toggles conjugated();
-  /// the slots are untouched. Identity for #BraKetSymmetry::Symm (the
-  /// real-field image of Hermitian).
-  void conjugate() {
+  /// @brief complex-conjugates this tensor elementwise: toggles conjugated(),
+  /// then normalizes the bits (normalize_value_modifier()); the slots are
+  /// untouched. Whenever conjugation_symmetry() states a relation --
+  /// `Symm` or `Antisymm`, i.e. for every real-field tensor of known
+  /// #ConjugationParity -- the normalization takes the bit straight back out,
+  /// so the operation is the identity on the spelling and the sign s(c) is
+  /// its whole effect. With no such relation the bit simply toggles.
+  /// @return the sign the normalization consumed: s(c) =
+  ///         conjugation_sign(conjugation_symmetry()), hence −1 for an array
+  ///         of odd #ConjugationParity over a real basis, whose conjugate is
+  ///         minus itself, and +1 wherever the relation is unknown
+  [[nodiscard]] std::int8_t conjugate() {
     conjugated_ = conjugated_ * ConjugateModifier::Yes;
-    normalize_value_modifier();
+    const auto sign = normalize_value_modifier();
     reset_hash_value();
+    return sign;
   }
 
   /// @brief the conjugate transpose: transpose() followed by conjugate()
-  void conjugate_transpose() {
-    transpose();
-    conjugate();
+  /// @return the product of the two operations' signs
+  [[nodiscard]] std::int8_t conjugate_transpose() {
+    const auto s = transpose();
+    return static_cast<std::int8_t>(s * conjugate());
   }
 
   /// @brief adjoint of a Tensor is its conjugate transpose, see
-  /// conjugate_transpose(). After normalization this is a pure bra<->ket
-  /// swap for #BraKetSymmetry::Conjugate and #BraKetSymmetry::Symm and sets
-  /// both modifier bits (the '⁺' spelling) for #BraKetSymmetry::Nonsymm.
-  void adjoint() override { conjugate_transpose(); }
+  /// conjugate_transpose(). Wherever the #Hermiticity states a relation --
+  /// that is, for every #BraKetSymmetry but #BraKetSymmetry::Nonsymm --
+  /// normalization reduces it to a pure bra<->ket swap carrying the sign
+  /// s(ct) = adjoint_sign(hermiticity()): +1 for a Hermitian tensor
+  /// (#BraKetSymmetry::Conjugate, #BraKetSymmetry::Symm at even
+  /// #ConjugationParity, #BraKetSymmetry::Antisymm at odd) and −1 for an
+  /// anti-Hermitian one (#BraKetSymmetry::AntiConjugate,
+  /// #BraKetSymmetry::Antisymm at even parity, #BraKetSymmetry::Symm at odd).
+  /// For #BraKetSymmetry::Nonsymm nothing folds: both modifier bits are set
+  /// (the '⁺' spelling) and the sign is +1.
+  /// @return the sign byproduct of the conjugate transpose, which
+  ///         Expr::adjoint hands on; sequant::adjoint(const ExprPtr&) turns it
+  ///         into a scalar factor
+  [[nodiscard]] std::int8_t adjoint() override { return conjugate_transpose(); }
 
   /// @return whether this tensor is complex-conjugated elementwise
   bool conjugated() const { return conjugated_ == ConjugateModifier::Yes; }
@@ -1154,11 +1194,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @brief overwrites the modifier bits without touching the slots. For
   /// rebuilds that copy a tensor's identity onto new slots (contrast
   /// conjugate()/adjoint(), which apply an operation).
-  void set_value_modifier(ValueModifier m) {
+  /// @return the sign the normalization consumed (see
+  ///         normalize_value_modifier())
+  [[nodiscard]] std::int8_t set_value_modifier(ValueModifier m) {
     conjugated_ = sequant::conjugate_modifier(m);
     transposed_ = sequant::transpose_modifier(m);
-    normalize_value_modifier();
+    const auto sign = normalize_value_modifier();
     reset_hash_value();
+    return sign;
   }
 
   /// @brief rebuilds this tensor with new slot bundles, carrying every
@@ -1259,35 +1302,48 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ConjugateModifier conjugated_ = ConjugateModifier::No;
   TransposeModifier transposed_ = TransposeModifier::No;
 
-  /// reduces the modifier bits by the value identities the braket symmetry
-  /// provides, so that a set bit always denotes a genuinely distinct value:
-  /// - Symm (Hermitian over a real field): `T^T = T` and `T^* = T`, both
-  ///   bits clear;
-  /// - Conjugate (Hermitian over a complex field): `T^T = T^*`, the
-  ///   transposition folds into the conjugation bit;
-  /// - Antisymm, AntiConjugate, Nonsymm: nothing to fold (the signed states'
-  ///   sign is not yet reducible against a bit).
-  /// The field enters only through the braket symmetry (to_braket_symmetry),
-  /// as everywhere else in Tensor.
-  void normalize_value_modifier() {
-    switch (braket_symmetry_) {
-      case BraKetSymmetry::Symm:
-        conjugated_ = ConjugateModifier::No;
+  /// reduces the modifier bits by the value relations this tensor's
+  /// symmetries provide, choosing a canonical representative of each coset of
+  /// the relations' subgroup of the modifier group, and returns the sign
+  /// those relations contribute: the tensor as it stood is that sign times
+  /// the tensor this leaves behind. The known relations are `T^{ct} = s_ct T`
+  /// (the #Hermiticity trait, adjoint_sign()), `T^t = s_t T`
+  /// (braket_swap_sign()) and `T^c = s_c T` (conjugation_sign()). They compose
+  /// (`t = c·ct`), so any two of them give the third. `t` folds into `c` when
+  /// only the adjoint relation is known, `c` clears when the conjugation
+  /// relation is known and `{t, ct}` is then represented by `ct` (the '⁺'
+  /// spelling), so that a state already normalized stays put.
+  [[nodiscard]] std::int8_t normalize_value_modifier() {
+    std::int8_t sign = 1;
+    auto s_t = braket_swap_sign(braket_symmetry_);
+    auto s_ct = adjoint_sign(hermiticity_);
+    auto s_c = conjugation_sign(conjugation_symmetry_);
+    if (!s_ct) s_ct = braket_conjugate_swap_sign(braket_symmetry_);
+    if (!s_t && s_c && s_ct) s_t = static_cast<std::int8_t>(*s_c * *s_ct);
+    if (!s_c && s_t && s_ct) s_c = static_cast<std::int8_t>(*s_t * *s_ct);
+    if (transposed_ == TransposeModifier::Yes) {
+      if (s_t) {
         transposed_ = TransposeModifier::No;
-        break;
-      case BraKetSymmetry::Conjugate:
-        if (transposed_ == TransposeModifier::Yes) {
-          transposed_ = TransposeModifier::No;
-          conjugated_ = conjugated_ * ConjugateModifier::Yes;
-        }
-        break;
-      case BraKetSymmetry::Antisymm:
-      case BraKetSymmetry::AntiConjugate:
-        // the signed states carry a ±1 that a Tensor cannot hold; they are
-        // left as written
-      case BraKetSymmetry::Nonsymm:
-        break;
+        sign = static_cast<std::int8_t>(sign * *s_t);
+      } else if (s_ct) {
+        transposed_ = TransposeModifier::No;
+        conjugated_ = conjugated_ * ConjugateModifier::Yes;
+        sign = static_cast<std::int8_t>(sign * *s_ct);
+      }
     }
+    if (s_c) {
+      if (transposed_ == TransposeModifier::Yes) {
+        // {t, ct} is one coset; represent it by the adjoint
+        if (conjugated_ == ConjugateModifier::No) {
+          conjugated_ = ConjugateModifier::Yes;
+          sign = static_cast<std::int8_t>(sign * *s_c);
+        }
+      } else if (conjugated_ == ConjugateModifier::Yes) {
+        conjugated_ = ConjugateModifier::No;
+        sign = static_cast<std::int8_t>(sign * *s_c);
+      }
+    }
+    return sign;
   }
 
   /// adopts a trailing adjoint mark ('⁺', sequant::adjoint_label) from label_
@@ -1298,13 +1354,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// normalizes away. Hence `Tensor(L"t⁺", bra{q}, ket{p}, ...)` denotes the
   /// same array as `Tensor(L"t", bra{p}, ket{q}, ...).adjoint()` (mbpt's
   /// Operator::adjoint tensor form and the deserializer both spell the
-  /// adjoint in the label)
+  /// adjoint in the label). A mark whose normalization consumes a sign names
+  /// minus a tensor, which no Tensor can hold and a constructor cannot hand
+  /// back, so it is refused.
   void adopt_adjoint_mark() {
     if (!label_.empty() && label_.back() == sequant::adjoint_label) {
       label_.pop_back();
       conjugated_ = conjugated_ * ConjugateModifier::Yes;
       transposed_ = transposed_ * TransposeModifier::Yes;
-      normalize_value_modifier();
+      if (normalize_value_modifier() != 1)
+        throw Exception(
+            "Tensor: the label's adjoint mark denotes minus a tensor "
+            "(anti-Hermitian); build it with sequant::adjoint(const ExprPtr&)");
     }
   }
 
@@ -1562,20 +1623,31 @@ static_assert(is_tensor<Tensor>,
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-/// @return @p t rewritten in its _value_ orientation: the spelling whose slot
-///         layout denotes the value directly, with no modifier left for a
-///         slot-rebuilding consumer to drop:
+/// a tensor respelled in its value orientation and the sign the respelling
+/// contributed (see value_oriented())
+struct ValueOriented {
+  Tensor tensor;
+  std::int8_t sign;
+};
+
+/// @return @p t rewritten in its _value_ orientation -- the spelling whose
+///         slot layout denotes the value directly, with no modifier left for
+///         a slot-rebuilding consumer to drop -- together with the sign the
+///         respelling contributed, so that @p t equals that sign times the
+///         returned tensor:
 ///         - `None`, `Adjoint`: returned unchanged (`t⁺` names a distinct
 ///           array whose slots are as written);
-///         - `Transpose` (Nonsymm only): `T^T{q;p}` respelled as `T{p;q}`;
-///         - `Conjugate` on #BraKetSymmetry::Conjugate: the canonicalizer's
-///           fold `T^*{q;p}` respelled as `T{p;q}`;
-///         - `Conjugate` on #BraKetSymmetry::Nonsymm: genuine elementwise
-///           conjugation, which no slot layout can express -- throws
-///           sequant::Exception rather than silently dropping it.
+///         - `Transpose` (no exchange relation): `T^T{q;p}` respelled as
+///           `T{p;q}`;
+///         - `Conjugate` with an adjoint relation: the canonicalizer's fold
+///           `T^*{q;p}` respelled as `T{p;q}`, signed for an AntiConjugate
+///           tensor;
+///         - `Conjugate` without one: genuine elementwise conjugation, which
+///           no slot layout can express -- throws sequant::Exception rather
+///           than silently dropping it.
 ///         Any transform that reads or rebuilds a tensor from its slot
 ///         layout must consume this form.
-[[nodiscard]] Tensor value_oriented(Tensor const &t);
+[[nodiscard]] ValueOriented value_oriented(Tensor const &t);
 
 /// @return @p t viewed as a c-number Tensor, or nullptr if @p t is some other
 ///         AbstractTensor (e.g. an operator-valued NormalOperator), which

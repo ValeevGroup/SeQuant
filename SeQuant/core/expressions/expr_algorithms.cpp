@@ -481,8 +481,7 @@ ExprPtr fold_conjugate_pairs_impl(
     if (conjugate_op) {
       conj = conjugate_op(summands[i]);
     } else {
-      conj = summands[i]->clone();
-      conj->adjoint();
+      conj = sequant::adjoint(summands[i]);
     }
     canon_conj[i] = canonicalize(conj->clone(), opts);
     if (emission == ConjPairEmission::ReIm)
@@ -618,9 +617,7 @@ bool is_hermitian_network(ExprPtr const& expr, CanonicalizeOptions opts) {
   // cross-expression identity requires meaningful named (external) labels
   opts = opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);
   auto lhs = canonicalize(expr->clone(), opts);
-  auto adj = expr->clone();
-  adj->adjoint();
-  auto rhs = canonicalize(std::move(adj), opts);
+  auto rhs = canonicalize(sequant::adjoint(expr), opts);
   return lhs->hash_value() == rhs->hash_value() && *lhs == *rhs;
 }
 
@@ -644,8 +641,11 @@ ExprPtr conjugate(const ExprPtr& expr) {
   }
   if (expr->is<Tensor>()) {
     auto r = expr->clone();
-    r->as<Tensor>().conjugate();
-    return r;
+    // the conjugation of an odd-parity array over a real basis is a sign,
+    // which a Tensor cannot hold
+    const auto sign = r->as<Tensor>().conjugate();
+    if (sign == 1) return r;
+    return ex<Product>(sign, ExprPtrList{std::move(r)});
   }
   // Re/Im are real-valued by convention: conj is the identity
   if (expr->is<RealPart>() || expr->is<ImagPart>()) return expr->clone();

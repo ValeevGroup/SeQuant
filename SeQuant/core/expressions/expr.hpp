@@ -10,6 +10,7 @@
 #include <boost/core/demangle.hpp>
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -233,8 +234,11 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return result;
   }
 
-  /// @brief changes this to its adjoint
-  virtual void adjoint() = 0;
+  /// @brief changes this to its adjoint and returns the sign byproduct: +1,
+  /// or −1 when the adjoint is minus the resulting object (an anti-Hermitian
+  /// Tensor); like canonicalize()'s byproduct it must be applied by the
+  /// caller, see sequant::adjoint(const ExprPtr&)
+  virtual std::int8_t adjoint() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the

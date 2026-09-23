@@ -372,10 +372,12 @@ class Operator : public container::svector<Op<S>>, public Expr {
 
   /// @brief adjoint of an Operator is a reversed string of the adjoints of its
   /// ops
-  virtual void adjoint() override {
+  /// @return +1: an operator string's adjoint carries no sign
+  virtual std::int8_t adjoint() override {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(), [](Op<S> &op) { op.adjoint(); });
     this->reset_hash_value();
+    return 1;
   }
 
   /// @return the string representation of @c this in LaTeX format
@@ -715,11 +717,12 @@ class NormalOperator : public Operator<S>,
     return std::make_shared<NormalOperator>(*this);
   }
 
-  virtual void adjoint() override {
+  virtual std::int8_t adjoint() override {
     // same as base adjoint(), but updates extra state
     Operator<S>::adjoint();
     hug_.reset();
     ncreators_ = nannihilators();
+    return 1;
   }
 
   /// Replaces indices using the index map
@@ -1049,11 +1052,13 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
 
   /// @brief adjoint of a NormalOperatorSequence is a reversed sequence of
   /// adjoints
-  virtual void adjoint() override {
+  /// @return +1: an operator string's adjoint carries no sign
+  virtual std::int8_t adjoint() override {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(),
                   [](NormalOperator<S> &op) { op.adjoint(); });
     reset_hash_value();
+    return 1;
   }
 
   std::wstring to_latex() const override {

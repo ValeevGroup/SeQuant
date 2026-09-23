@@ -97,8 +97,11 @@ std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
 
 ExprPtr adjoint(const ExprPtr &expr) {
   auto result = expr->clone();
-  result->adjoint();
-  return result;
+  // the sign byproduct cannot live in the adjoined object (a Tensor holds no
+  // scalar), so it becomes a scalar factor here
+  const auto sign = result->adjoint();
+  if (sign == 1) return result;
+  return ex<Product>(sign, ExprPtrList{std::move(result)});
 }
 
 bool operator==(const ExprPtr &left, const ExprPtr &right) {

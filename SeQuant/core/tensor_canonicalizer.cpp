@@ -364,7 +364,12 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
   Tensor* ct =
       bks == BraKetSymmetry::Conjugate ? as_cnumber_tensor(t) : nullptr;
   SEQUANT_ASSERT(bks != BraKetSymmetry::Conjugate || ct);
-  if (ct && ct->conjugated()) ct->transpose();
+  if (ct && ct->conjugated()) {
+    // the fold applies to the unsigned Conjugate state only, whose unfold is
+    // free; the signed states are not braket-foldable yet
+    [[maybe_unused]] const auto sign = ct->transpose();
+    SEQUANT_ASSERT(sign == 1);
+  }
 
   // bra<->ket exchange is a symmetry for braket-foldable tensors, so pick a
   // canonical orientation: freely for Symm braket symmetry, and combined with
@@ -421,9 +426,12 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
   }
 
   if (swap) {
-    if (ct)
-      ct->transpose();  // value-preserving: T{q;p} = conj(T{p;q}) sets the bit
-    else
+    if (ct) {
+      // value-preserving: T{q;p} = conj(T{p;q}) sets the bit, with no sign
+      // for the unsigned Conjugate state this fold is restricted to
+      [[maybe_unused]] const auto sign = ct->transpose();
+      SEQUANT_ASSERT(sign == 1);
+    } else
       t._swap_bra_ket();  // Symm: a free respelling
   }
 }

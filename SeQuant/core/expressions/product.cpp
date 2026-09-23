@@ -220,15 +220,18 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
   return {};  // side effects are absorbed into the scalar_
 }
 
-void Product::adjoint() {
+std::int8_t Product::adjoint() {
   SEQUANT_ASSERT(static_commutativity() == false);  // assert no slicing
   auto adj_scalar = conj(scalar());
   using namespace ranges;
   auto adj_factors =
       factors() | views::reverse |
       views::transform([](auto &expr) { return ::sequant::adjoint(expr); });
+  // a factor whose adjoint carries a sign arrives from the free function
+  // wrapped in Product{-1, factor}, which the ctor flattens into the scalar
   *this =
       Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
+  return 1;
 }
 
 ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
@@ -395,7 +398,7 @@ bool CProduct::is_commutative() const { return true; }
 
 ExprPtr CProduct::clone() const { return ex<CProduct>(this->deep_copy()); }
 
-void CProduct::adjoint() {
+std::int8_t CProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
   // no need to reverse for commutative product
@@ -404,6 +407,7 @@ void CProduct::adjoint() {
                      });
   *this = CProduct(adj_scalar, ranges::begin(adj_factors),
                    ranges::end(adj_factors));
+  return 1;
 }
 
 bool CProduct::static_commutativity() const { return true; }
@@ -415,7 +419,7 @@ bool NCProduct::is_commutative() const { return false; }
 
 ExprPtr NCProduct::clone() const { return ex<NCProduct>(this->deep_copy()); }
 
-void NCProduct::adjoint() {
+std::int8_t NCProduct::adjoint() {
   auto adj_scalar = conj(scalar());
   using namespace ranges;
   // factors must be reversed since they do not commute
@@ -424,6 +428,7 @@ void NCProduct::adjoint() {
       views::transform([](auto &&expr) { return ::sequant::adjoint(expr); });
   *this = NCProduct(adj_scalar, ranges::begin(adj_factors),
                     ranges::end(adj_factors));
+  return 1;
 }
 
 bool NCProduct::static_commutativity() const { return true; }

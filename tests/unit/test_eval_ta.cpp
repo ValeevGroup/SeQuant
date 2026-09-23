@@ -6487,7 +6487,7 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
   // a STARRED spelling is served through EvalOp::Adjoint: binarize wraps it
   // over the unmarked VALUE-orientation operand
   auto conj_side = canonical->clone();
-  conj_side->as<Tensor>().conjugate();
+  REQUIRE(conj_side->as<Tensor>().conjugate() == 1);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END

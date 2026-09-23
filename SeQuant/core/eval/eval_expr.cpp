@@ -464,7 +464,10 @@ EvalExprNode binarize(Tensor const& t) {
       // the Constant(1) right child is a sentinel so the FullBinaryNode
       // invariant ("every non-leaf has two children") holds.
       Tensor bare{t};
-      bare.adjoint();  // undo: clears both bits, swaps bra/ket back
+      // undo: clears both bits, swaps bra/ket back. A leaf in the Adjoint
+      // state has no adjoint relation to consume, so the undo is free
+      [[maybe_unused]] const auto sign = bare.adjoint();
+      SEQUANT_ASSERT(sign == 1);
       SEQUANT_ASSERT(bare.value_modifier() == ValueModifier::None);
       return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, t.clone(),
                                t.indices() | ranges::to<EvalExpr::index_vector>,
@@ -482,9 +485,10 @@ EvalExprNode binarize(Tensor const& t) {
       // EvalOp::Adjoint node over the unmarked value-orientation operand,
       // so evaluation and leaf yielders need no modifier awareness.
       EvalExpr ee{t};
-      Tensor bare = value_oriented(ee.expr()->as<Tensor>());
-      return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, ee.expr(),
-                               ee.canon_indices(), ee.canon_phase());
+      auto [bare, sign] = value_oriented(ee.expr()->as<Tensor>());
+      return make_adjoint_node(
+          EvalExprNode{EvalExpr{bare}}, ee.expr(), ee.canon_indices(),
+          static_cast<std::int8_t>(ee.canon_phase() * sign));
     }
 
     case ValueModifier::Transpose:
@@ -531,14 +535,17 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
-      auto const t = value_oriented(left.as_tensor());
+      // the result's slot layout is read off the left operand's value
+      // orientation; a sign the respelling contributed rides on this node's
+      // phase, the same channel the canonicalizer's phase uses
+      auto const [t, sign] = value_oriented(left.as_tensor());
       EvalExpr result{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           left.canon_indices(),                             //
-          1,                                                //
+          sign,                                             //
           h,                                                //
           nullptr};
       result.set_accumulate_in_place(true);
@@ -606,14 +613,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
-      auto const t = value_oriented(tl->as_tensor());
+      auto const [t, sign] = value_oriented(tl->as_tensor());
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
-                                            aux(t.aux())),  //
-          tl->canon_indices(),                              //
-          tl->canon_phase(),                                //
+                                            aux(t.aux())),     //
+          tl->canon_indices(),                                 //
+          static_cast<std::int8_t>(tl->canon_phase() * sign),  //
           h,
           nullptr};
     } else {
@@ -632,8 +639,16 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         // slots by value; counting the folded spelling would migrate its ket
         // group into bra and merge the intermediate's partition
         auto unfolded = ts | transform([](ExprPtr const& x) -> ExprPtr {
-                          if (x->is<Tensor>() && x->as<Tensor>().conjugated())
-                            return ex<Tensor>(value_oriented(x->as<Tensor>()));
+                          if (x->is<Tensor>() && x->as<Tensor>().conjugated()) {
+                            auto [t, sign] = value_oriented(x->as<Tensor>());
+                            // only the slot layout is read here, and the
+                            // spelling this unfolds is the Conjugate fold,
+                            // whose sign is +1; a signed (AntiConjugate)
+                            // leaf reaches this only once the canonicalizer
+                            // produces one, and must then thread the sign
+                            SEQUANT_ASSERT(sign == 1);
+                            return ex<Tensor>(std::move(t));
+                          }
                           return x;
                         }) |
                         ranges::to_vector;
@@ -717,22 +732,29 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
-    auto expr = left->is_tensor()
-                    ? detail::make_tensor(value_oriented(left->as_tensor()),
-                                          false, opts)
-                : left->is_constant() ? (left->expr() * right->expr())
-                                      : detail::make_variable();
+    std::int8_t vo_sign = 1;
+    ExprPtr expr;
+    if (left->is_tensor()) {
+      auto [t, sign] = value_oriented(left->as_tensor());
+      vo_sign = sign;
+      expr = detail::make_tensor(t, false, opts);
+    } else if (left->is_constant()) {
+      expr = left->expr() * right->expr();
+    } else {
+      expr = detail::make_variable();
+    }
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
     auto h = left->hash_value();
     hash::combine(h, right->hash_value());
-    auto result = EvalExpr{EvalOp::Product,        //
-                           type,                   //
-                           expr,                   //
-                           left->canon_indices(),  //
-                           left->canon_phase(),    //
-                           h,                      //
-                           nullptr};
+    auto result =
+        EvalExpr{EvalOp::Product,                                          //
+                 type,                                                     //
+                 expr,                                                     //
+                 left->canon_indices(),                                    //
+                 static_cast<std::int8_t>(left->canon_phase() * vo_sign),  //
+                 h,                                                        //
+                 nullptr};
 
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }

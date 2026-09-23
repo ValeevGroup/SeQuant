@@ -54,7 +54,7 @@ class RealPart : public Expr {
   bool is_scalar() const override { return true; }
   type_id_type type_id() const override { return get_type_id<RealPart>(); }
   ExprPtr clone() const override;
-  void adjoint() override {}  // Re(E) is real, self-adjoint
+  std::int8_t adjoint() override { return 1; }  // Re(E) is real, self-adjoint
   std::wstring to_latex() const override;
 
  private:
@@ -83,7 +83,7 @@ class ImagPart : public Expr {
   bool is_scalar() const override { return true; }
   type_id_type type_id() const override { return get_type_id<ImagPart>(); }
   ExprPtr clone() const override;
-  void adjoint() override {}  // Im(E) is real, self-adjoint
+  std::int8_t adjoint() override { return 1; }  // Im(E) is real, self-adjoint
   std::wstring to_latex() const override;
 
  private:

@@ -173,7 +173,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       if (!braket_conjugate_foldable(tensor)) continue;
       Tensor &ct = *as_cnumber_tensor(tensor);
       if (ct.conjugated()) {
-        ct.transpose();  // T^*{q;p} -> T{p;q}: the value orientation
+        // T^*{q;p} -> T{p;q}: the value orientation. braket_conjugate_foldable
+        // admits only the unsigned Conjugate state, whose unfold is free
+        [[maybe_unused]] const auto sign = ct.transpose();
+        SEQUANT_ASSERT(sign == 1);
         unfolded = true;
       }
     }
@@ -457,7 +460,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
         // records the conjugation
         Tensor *ct = as_cnumber_tensor(tensor);
         SEQUANT_ASSERT(ct);
-        ct->transpose();
+        // the unsigned Conjugate state this branch is restricted to folds
+        // without a sign
+        [[maybe_unused]] const auto sign = ct->transpose();
+        SEQUANT_ASSERT(sign == 1);
       } else
         tensor._swap_bra_ket();  // Symm: free
     }

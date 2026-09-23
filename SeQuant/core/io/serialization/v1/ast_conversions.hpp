@@ -400,8 +400,12 @@ struct Transformer {
             auto &tt = t->template as<Tensor>();
             // compose with a mark adopted from the label: `t⁺^*` is the
             // transpose
-            tt.set_value_modifier(tt.value_modifier() *
-                                  static_cast<ValueModifier>(tensor.modifier));
+            const auto sign = tt.set_value_modifier(
+                tt.value_modifier() *
+                static_cast<ValueModifier>(tensor.modifier));
+            // the normalization can consume a sign (an anti-Hermitian or
+            // odd-parity tensor), which only a scalar factor can carry
+            if (sign != 1) return ex<Product>(sign, ExprPtrList{std::move(t)});
           }
           return t;
         },
