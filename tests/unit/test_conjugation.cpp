@@ -564,6 +564,8 @@ TEST_CASE("conjugation_parity_serialization", "[conjugation]") {
   ctx.set(sr);
   auto resetter = set_scoped_default_context(ctx);
   // fourth letter: parity; absent means Even
+  // a trait letter back-fills the default parity, Even, so an Even tensor
+  // spelled by one needs no fourth letter
   auto d = deserialize(L"d{i_1;i_2}:N-A-N");  // anti-Hermitian trait letter
   REQUIRE(d->as<Tensor>().hermiticity() == Hermiticity::AntiHermitian);
   REQUIRE(d->as<Tensor>().braket_symmetry() == BraKetSymmetry::AntiConjugate);
@@ -614,6 +616,28 @@ TEST_CASE("conjugation_parity_serialization_real_field", "[conjugation]") {
   auto rt = deserialize(str);
   REQUIRE(rt->as<Tensor>().conjugation_parity() == ConjugationParity::Odd);
   REQUIRE(rt->as<Tensor>().braket_symmetry() == BraKetSymmetry::Antisymm);
+
+  // the fourth letter is emitted only when the parser could not back-fill the
+  // parity from the bra/ket letter. Over a real field a pinned Conjugate *is*
+  // what parity None spells, so `:A-C-S` needs no `-N` and round-trips
+  // verbatim; the trait letters back-fill Even, so `:N-A-N` needs nothing
+  // either while an Odd parity under `H` still spells itself out
+  REQUIRE(serialize(deserialize(L"t{i_1;i_2}:A-C-S"), {.annot_symm = true}) ==
+          L"t{i_1;i_2}:A-C-S");
+  REQUIRE(serialize(deserialize(L"d{i_1;i_2}:N-A-N"), {.annot_symm = true}) ==
+          L"d{i_1;i_2}:N-A-N");
+  REQUIRE(serialize(deserialize(L"p{i_1;i_2}:N-H-N-O"), {.annot_symm = true}) ==
+          L"p{i_1;i_2}:N-H-N-O");
+
+  // and the expression round-trip the other way round: what the letters leave
+  // out is exactly what the parser puts back
+  auto pinned = ex<Tensor>(L"c", bra{i1}, ket{i2},
+                           TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
+                                            .column = ColumnSymmetry::Symm});
+  REQUIRE(pinned->as<Tensor>().conjugation_parity() == ConjugationParity::None);
+  REQUIRE(serialize(pinned, {.annot_symm = true}) == L"c{i_1;i_2}:N-C-S");
+  REQUIRE(*deserialize(serialize(pinned, {.annot_symm = true})) == *pinned);
+  REQUIRE(*deserialize(str) == *t);
 }
 
 TEST_CASE("conj_power_roundtrip", "[conjugation]") {

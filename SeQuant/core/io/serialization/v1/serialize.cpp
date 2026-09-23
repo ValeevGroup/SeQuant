@@ -342,14 +342,24 @@ std::wstring to_string(AbstractTensor const& tensor,
 
   if (options.annot_symm) {
     serialized += L":" + details::serialize_symm(tensor._symmetry(), options);
-    serialized +=
-        L"-" + details::serialize_symm(tensor._braket_symmetry(),
-                                       tensor._hermiticity(), options);
+    const std::wstring braket_letter = details::serialize_symm(
+        tensor._braket_symmetry(), tensor._hermiticity(), options);
+    serialized += L"-" + braket_letter;
     serialized +=
         L"-" + details::serialize_symm(tensor._column_symmetry(), options);
-    // the fourth letter is optional: emitted only for a non-Even parity, so
-    // every annotated string produced before this trait existed is unchanged
-    if (tensor._conjugation_parity() != ConjugationParity::Even) {
+    // the fourth letter is optional: emitted only when the parity the parser
+    // back-fills from the bra/ket letter is not the one this tensor carries.
+    // An observable letter (S/C/N) spells a BraKetSymmetry, from which
+    // to_conjugation_parity() recovers the parity against the same base
+    // field; a trait letter (H/A) spells a Hermiticity and leaves the parity
+    // at its default, Even. So every annotated string produced before this
+    // trait existed is unchanged.
+    const ConjugationParity implied_parity =
+        (braket_letter == L"H" || braket_letter == L"A")
+            ? ConjugationParity::Even
+            : to_conjugation_parity(tensor._braket_symmetry(),
+                                    tensor._base_field());
+    if (tensor._conjugation_parity() != implied_parity) {
       serialized +=
           L"-" + details::serialize_symm(tensor._conjugation_parity(), options);
     }
