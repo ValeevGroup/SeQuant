@@ -1495,4 +1495,30 @@ TEST_CASE("painter_colours_by_conjugation_symmetry", "[conjugation]") {
     auto even = canonicalize(p(ConjugationParity::Even) * u());
     REQUIRE_FALSE(*odd == *even);
   }
+
+  SECTION("a real-field None-parity tensor colours apart from its Even twin") {
+    // over a real field Even resolves to Symm and None to Nonsymm: the two
+    // differ in the observable conjugation symmetry although neither exposes
+    // a sign, so the shade must separate them as static_equal does
+    auto p = [](ConjugationParity parity) {
+      return ex<Tensor>(
+          L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+          TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
+                           .conjugation_parity = parity,
+                           .column = ColumnSymmetry::Symm});
+    };
+    auto u = [] {
+      return ex<Tensor>(L"u", bra{idx(L"a_1", Field::Real)},
+                        ket{idx(L"i_1", Field::Real)});
+    };
+    REQUIRE(p(ConjugationParity::None)->as<Tensor>().conjugation_symmetry() ==
+            ConjugationSymmetry::Nonsymm);
+    REQUIRE(p(ConjugationParity::Even)->as<Tensor>().conjugation_symmetry() ==
+            ConjugationSymmetry::Symm);
+    REQUIRE(p(ConjugationParity::None)->as<Tensor>().braket_symmetry() ==
+            p(ConjugationParity::Even)->as<Tensor>().braket_symmetry());
+    auto none = canonicalize(p(ConjugationParity::None) * u());
+    auto even = canonicalize(p(ConjugationParity::Even) * u());
+    REQUIRE_FALSE(*none == *even);
+  }
 }

@@ -60,12 +60,12 @@ std::size_t VertexPainterImpl::to_hash_value(
   if (ct && ct->value_modifier() != ValueModifier::None)
     hash::combine(result,
                   hash::value(static_cast<std::uint8_t>(ct->value_modifier())));
-  // a conjugation symmetry that differs from the default parity's enters the
-  // shade; even-parity tensors add nothing in any field, so canonical forms
-  // that predate the trait are unchanged, and complex-field tensors, whose
-  // parity is unobservable, colour alike as they compare alike
-  if (tensor._conjugation_parity() != ConjugationParity::Even &&
-      tensor._conjugation_symmetry() != ConjugationSymmetry::Nonsymm)
+  // a conjugation symmetry other than the one parity Even would give over this
+  // tensor's field enters the shade: Even tensors add nothing in any field,
+  // complex-field tensors, whose parity is unobservable, colour alike as they
+  // compare alike, and over a real field Odd and None both differ from Even
+  if (tensor._conjugation_symmetry() !=
+      to_conjugation_symmetry(ConjugationParity::Even, tensor._base_field()))
     hash::combine(result, hash::value(tensor._conjugation_symmetry()));
   return result;
 }
