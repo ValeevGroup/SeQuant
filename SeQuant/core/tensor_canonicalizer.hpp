@@ -14,6 +14,7 @@
 #include <range/v3/view/take.hpp>
 #include <range/v3/view/zip.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string_view>
@@ -154,21 +155,22 @@ class NullTensorCanonicalizer : public TensorCanonicalizer {
 ///         never be reoriented
 bool braket_orientation_pinned(const AbstractTensor& t);
 
-/// @return whether the BraKetSymmetry::Conjugate bra<->ket VALUE fold applies
-///         to @p t: Conjugate braket symmetry (`T{p;q} = conj(T{q;p})`) AND
-///         c-number (reorienting an operator-valued tensor would exchange
-///         creators and annihilators) AND not orientation-pinned. Every fold
-///         site must gate on this predicate (never on the marker alone).
-/// @note a future anti-conjugate braket symmetry (`T{p;q} = -conj(T{q;p})`,
-///       the complex-field image of Hermiticity::AntiHermitian) would extend
-///       this predicate with a sign; the time-reversal work will need it.
+/// @return whether the (anti)conjugate bra<->ket VALUE fold applies to @p t:
+///         a braket symmetry with a braket_conjugate_swap_sign()
+///         (`T{p;q} = s conj(T{q;p})`, i.e. BraKetSymmetry::Conjugate or
+///         BraKetSymmetry::AntiConjugate) AND c-number (reorienting an
+///         operator-valued tensor would exchange creators and annihilators)
+///         AND not orientation-pinned. Every fold site must gate on this
+///         predicate (never on the marker alone) and record the sign
+///         DefaultTensorCanonicalizer::canonicalize_braket() returns.
 bool braket_conjugate_foldable(const AbstractTensor& t);
 
-/// @return whether ANY braket orientation fold applies to @p t: Symm braket
-///         symmetry (free swap; reserved operators cannot be Symm -- the
-///         Tensor constructors demote them to Conjugate -- so no extra gates
-///         are needed) or the Conjugate value fold
-///         (braket_conjugate_foldable())
+/// @return whether ANY braket orientation fold applies to @p t: a braket
+///         symmetry with a braket_swap_sign() (BraKetSymmetry::Symm or
+///         BraKetSymmetry::Antisymm, a respelling carrying that sign;
+///         reserved operators cannot be Symm -- the Tensor constructors
+///         demote them to Conjugate -- so no extra gates are needed) or the
+///         (anti)conjugate value fold (braket_conjugate_foldable())
 bool braket_foldable(const AbstractTensor& t);
 
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
@@ -190,12 +192,16 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   virtual ~DefaultTensorCanonicalizer() = default;
 
   /// Canonicalizes the assignment of indices to bra and ket of a
-  /// braket-foldable tensor (see braket_foldable()): a free swap for
-  /// BraKetSymmetry::Symm, Tensor::transpose() (which records the
-  /// conjugation) for BraKetSymmetry::Conjugate
-  /// @param fold_conjugate if false, Conjugate tensors are left untouched
-  static void canonicalize_braket(AbstractTensor& t,
-                                  bool fold_conjugate = true);
+  /// braket-foldable tensor (see braket_foldable()): a bare swap for
+  /// BraKetSymmetry::Symm/Antisymm, Tensor::transpose() (which records the
+  /// conjugation) for BraKetSymmetry::Conjugate/AntiConjugate
+  /// @param fold_conjugate if false, (anti)conjugate tensors are left
+  ///        untouched
+  /// @return the sign the respelling contributed (+1 or -1): the tensor as it
+  ///         stood is that sign times the tensor this leaves behind. The
+  ///         caller must record it, e.g. in the phase byproduct of apply()
+  static std::int8_t canonicalize_braket(AbstractTensor& t,
+                                         bool fold_conjugate = true);
 
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c

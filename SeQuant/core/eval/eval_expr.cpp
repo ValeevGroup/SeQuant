@@ -535,9 +535,12 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
-      // the result's slot layout is read off the left operand's value
-      // orientation; a sign the respelling contributed rides on this node's
-      // phase, the same channel the canonicalizer's phase uses
+      // This node adopts the left operand's value orientation as its own
+      // spelling, so the sign of that respelling rides on this node's phase,
+      // the same channel the canonicalizer's phase uses (and the same rule
+      // the Adjoint and Product nodes below follow). Contrast the unfold in
+      // the tensor*tensor branch, which only reads slot occupancy and so
+      // consumes no sign.
       auto const [t, sign] = value_oriented(left.as_tensor());
       EvalExpr result{
           EvalOp::Sum,         //
@@ -640,13 +643,16 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         // group into bra and merge the intermediate's partition
         auto unfolded = ts | transform([](ExprPtr const& x) -> ExprPtr {
                           if (x->is<Tensor>() && x->as<Tensor>().conjugated()) {
-                            auto [t, sign] = value_oriented(x->as<Tensor>());
-                            // only the slot layout is read here, and the
-                            // spelling this unfolds is the Conjugate fold,
-                            // whose sign is +1; a signed (AntiConjugate)
-                            // leaf reaches this only once the canonicalizer
-                            // produces one, and must then thread the sign
-                            SEQUANT_ASSERT(sign == 1);
+                            // Only slot occupancy is read here: the factors
+                            // keep their as-written spellings and each one's
+                            // own node already carries whatever sign its
+                            // spelling costs. Nothing is respelled, so the
+                            // sign this unfold reports (-1 for an
+                            // AntiConjugate leaf) is not consumed -- unlike
+                            // at the nodes that adopt a value orientation as
+                            // their own spelling, where it rides canon_phase.
+                            [[maybe_unused]] auto [t, sign] =
+                                value_oriented(x->as<Tensor>());
                             return ex<Tensor>(std::move(t));
                           }
                           return x;

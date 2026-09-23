@@ -20,6 +20,7 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
 
@@ -159,6 +160,33 @@ TEST_CASE("braket_foldable_predicates", "[conjugation]") {
            BraKetSymmetry::Symm, ColumnSymmetry::Symm);
   REQUIRE_FALSE(braket_conjugate_foldable(s));
   REQUIRE(braket_foldable(s));
+
+  // Antisymm (anti-Hermitian over a real basis): a swap carrying -1, not the
+  // conjugate value fold
+  Tensor n(L"n", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+           TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                            .column = ColumnSymmetry::Symm});
+  REQUIRE(n.braket_symmetry() == BraKetSymmetry::Antisymm);
+  REQUIRE_FALSE(braket_conjugate_foldable(n));
+  REQUIRE(braket_foldable(n));
+
+  // AntiConjugate (anti-Hermitian over the complex basis): the conjugate
+  // value fold applies, at -1
+  Tensor d(L"d", bra{L"i_1"}, ket{L"a_1"},
+           TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                            .column = ColumnSymmetry::Symm});
+  REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
+  REQUIRE(braket_conjugate_foldable(d));
+  REQUIRE(braket_foldable(d));
+
+  // operator-valued: reorienting would exchange creators and annihilators, so
+  // no fold applies however symmetric the bra/ket exchange looks (this one's
+  // bra and ket agree, hence Hermitian, hence Conjugate over the complex
+  // basis)
+  FNOperator op(cre({L"i_1"}), ann({L"i_1"}));
+  REQUIRE(braket_symmetry(op) == BraKetSymmetry::Conjugate);
+  REQUIRE_FALSE(braket_conjugate_foldable(op));
+  REQUIRE_FALSE(braket_foldable(op));
 }
 
 TEST_CASE("conjugate_braket_fold_per_tensor", "[conjugation]") {
@@ -1098,6 +1126,99 @@ TEST_CASE("signed_normalization", "[conjugation]") {
     REQUIRE(sign2 == -1);
     REQUIRE(vo2.value_modifier() == ValueModifier::None);
     REQUIRE(vo2.bra()[0].label() == L"i_2");
+  }
+}
+
+TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // N.B. the tensors below are column-symmetric: TensorNetworkV3's
+  // graph-dictated bra<->ket reorientation only visits column-symmetric
+  // tensors, so a ColumnSymmetry::Nonsymm tensor keeps its authored
+  // orientation through a network canonicalization whatever its braket
+  // symmetry (this holds for BraKetSymmetry::Conjugate just as much)
+
+  SECTION("anti-Hermitian: the two orientations differ by a sign") {
+    // d{i;a} u{a;i} and d{a;i} u{a;i}: d{a;i} = -conj(d{i;a}), so the
+    // canonical forms differ by -1 and a conjugation marker on d
+    auto d = [](std::wstring_view b, std::wstring_view k) {
+      return ex<Tensor>(
+          L"d", bra{b}, ket{k},
+          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                           .column = ColumnSymmetry::Symm});
+    };
+    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
+    auto e1 = d(L"i_1", L"a_1") * u;
+    auto e2 = d(L"a_1", L"i_1") * u;
+    auto c1 = canonicalize(e1->clone());
+    auto c2 = canonicalize(e2->clone());
+    REQUIRE(c1->is<Product>());
+    REQUIRE(c2->is<Product>());
+    // canonical forms are idempotent
+    REQUIRE(*canonicalize(c1->clone()) == *c1);
+    REQUIRE(*canonicalize(c2->clone()) == *c2);
+    // exactly one of the two carries a conjugation marker on d, and the
+    // product scalars differ by the sign of the fold
+    auto d_of = [](const ExprPtr& p) {
+      for (auto& f : p->as<Product>().factors())
+        if (f->as<Tensor>().label() == L"d") return f->as<Tensor>();
+      throw Exception("test: no factor labelled d");
+    };
+    REQUIRE(d_of(c1).conjugated() != d_of(c2).conjugated());
+    REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
+  }
+
+  SECTION("anti-Hermitian, Complete method: the lexicographic refold signs") {
+    // the test binary pins Topological; run the same check under the
+    // library's default Complete so the post-relabel refold loop in
+    // TensorNetworkV3::canonicalize, whose sign reaches the byproduct
+    // separately from canonicalize_graph's, is exercised too
+    const CanonicalizeOptions opts{.method = CanonicalizationMethod::Complete};
+    auto d = [](std::wstring_view b, std::wstring_view k) {
+      return ex<Tensor>(
+          L"d", bra{b}, ket{k},
+          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                           .column = ColumnSymmetry::Symm});
+    };
+    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
+    auto c1 = canonicalize(d(L"i_1", L"a_1") * u, opts);
+    auto c2 = canonicalize(d(L"a_1", L"i_1") * u, opts);
+    REQUIRE(c1->is<Product>());
+    REQUIRE(c2->is<Product>());
+    REQUIRE(*canonicalize(c1->clone(), opts) == *c1);
+    REQUIRE(*canonicalize(c2->clone(), opts) == *c2);
+    auto d_of = [](const ExprPtr& p) {
+      for (auto& f : p->as<Product>().factors())
+        if (f->as<Tensor>().label() == L"d") return f->as<Tensor>();
+      throw Exception("test: no factor labelled d");
+    };
+    REQUIRE(d_of(c1).conjugated() != d_of(c2).conjugated());
+    REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
+  }
+
+  SECTION("real-field odd-parity Hermitian tensor: antisymmetric, no marker") {
+    auto p = [&](std::wstring_view b, std::wstring_view k) {
+      return ex<Tensor>(
+          L"p", bra{idx(b, Field::Real)}, ket{idx(k, Field::Real)},
+          TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                           .conjugation_parity = ConjugationParity::Odd,
+                           .column = ColumnSymmetry::Symm});
+    };
+    auto u = [&](std::wstring_view b, std::wstring_view k) {
+      return ex<Tensor>(L"u", bra{idx(b, Field::Real)},
+                        ket{idx(k, Field::Real)});
+    };
+    auto c1 = canonicalize(p(L"i_1", L"a_1") * u(L"a_1", L"i_1"));
+    auto c2 = canonicalize(p(L"a_1", L"i_1") * u(L"a_1", L"i_1"));
+    REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
+    for (auto& c : {c1, c2})
+      for (auto& f : c->as<Product>().factors())
+        REQUIRE(f->as<Tensor>().value_modifier() == ValueModifier::None);
+    REQUIRE(*canonicalize(c1->clone()) == *c1);
   }
 }
 

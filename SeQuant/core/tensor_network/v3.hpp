@@ -422,6 +422,13 @@ class TensorNetworkV3 {
     /// fold for graphs built with these options
     bool fold_conjugate_braket = true;
 
+    /// if false, BraKetSymmetry::Antisymm and BraKetSymmetry::AntiConjugate
+    /// bundles keep distinct colours so that no bra/ket interchange, which
+    /// would carry a sign the caller cannot record, is admitted. Set by
+    /// canonicalize_graph(), which consumes that sign into its phase
+    /// byproduct; canonicalize_slots(), which only reports, leaves it false
+    bool fold_signed_braket = false;
+
     /// if false, will not generate the labels
     bool make_labels = true;
 
