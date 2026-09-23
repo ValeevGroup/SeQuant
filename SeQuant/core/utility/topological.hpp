@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_UTILITY_TOPOLOGICAL_HPP
 #define SEQUANT_CORE_UTILITY_TOPOLOGICAL_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -38,8 +39,8 @@ template <typename IndexDepFunc, typename Comp = std::identity>
            dependency_query<IndexDepFunc, std::size_t>)
 std::vector<std::size_t> topological_order_indexed(
     std::size_t n, const IndexDepFunc &get_dependencies, Comp comp = {}) {
-  std::vector<std::size_t> indegree(n, 0);
-  std::vector<std::vector<std::size_t>> dependents(n);
+  container::svector<std::size_t> indegree(n, 0);
+  container::svector<container::svector<std::size_t>> dependents(n);
 
   for (std::size_t i = 0; i < n; ++i) {
     for (std::size_t dep : get_dependencies(i)) {
@@ -58,7 +59,7 @@ std::vector<std::size_t> topological_order_indexed(
     }
   };
 
-  std::vector<std::size_t> ready;
+  container::svector<std::size_t> ready;
   for (std::size_t i = 0; i < n; ++i)
     if (indegree[i] == 0) ready.push_back(i);
 
@@ -116,7 +117,7 @@ std::vector<std::size_t> topological_order(Range &&range,
 
   // Pre-compute dependencies between elements in range, expressed as indices
   // into range
-  std::vector<std::vector<std::size_t>> deps_by_index(n);
+  container::svector<container::svector<std::size_t>> deps_by_index(n);
   for (const auto &[i, current] : ranges::views::enumerate(range)) {
     for (const Value &current_dep : get_dependencies(current)) {
       auto it = std::ranges::find(range, current_dep);
