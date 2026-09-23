@@ -668,6 +668,7 @@ class NumPyEinsumGenerator
     Base::m_generated += Base::m_indent + module_prefix() + "save('" +
                          Base::represent(tensor, ctx) + file_extension() +
                          "', " + Base::represent(tensor, ctx) + ")\n";
+    Base::unload(tensor, ctx);
   }
 
   void load(const Variable &variable, bool set_to_zero,
@@ -691,6 +692,7 @@ class NumPyEinsumGenerator
     Base::m_generated += Base::m_indent + module_prefix() + "save('" +
                          Base::represent(variable, ctx) + file_extension() +
                          "', " + Base::represent(variable, ctx) + ")\n";
+    Base::unload(variable, ctx);
   }
 
  protected:
@@ -777,6 +779,7 @@ class PyTorchEinsumGenerator
     Base::m_generated +=
         Base::m_indent + "torch.save(" + Base::represent(tensor, ctx) + ", '" +
         Base::represent(tensor, ctx) + file_extension() + "')\n";
+    Base::unload(tensor, ctx);
   }
 
   void load(const Variable &variable, bool set_to_zero,
@@ -799,6 +802,7 @@ class PyTorchEinsumGenerator
     Base::m_generated +=
         Base::m_indent + "torch.save(" + Base::represent(variable, ctx) +
         ", '" + Base::represent(variable, ctx) + file_extension() + "')\n";
+    Base::unload(variable, ctx);
   }
 
  protected:

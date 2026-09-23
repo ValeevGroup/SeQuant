@@ -43,6 +43,7 @@ I_vo += x**2 * np.einsum('ai->ai', A_vo, optimize=True)
 del A_vo
 del x
 np.save('I_vo.npy', I_vo)
+del I_vo
 
 =================================================
 C (TAPP)

@@ -94,6 +94,7 @@ I_oo += np.einsum('ai,ba->bi', A_vo, B_ov, optimize=True)
 del B_ov
 del A_vo
 np.save('I_oo.npy', I_oo)
+del I_oo
 
 =================================================
 C (TAPP)

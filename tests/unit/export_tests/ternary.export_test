@@ -131,5 +131,6 @@ I_vo += np.einsum('ab,ib->ai', I_vv, C_ov, optimize=True)
 del C_ov
 del I_vv
 np.save('I_vo.npy', I_vo)
+del I_vo
 
 =================================================
