@@ -14,6 +14,7 @@
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
+#include <SeQuant/core/export/tapp.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -29,6 +30,7 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <concepts>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -94,7 +96,8 @@ using KnownGenerators = std::tuple<
     JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext>,
     NumPyEinsumGenerator,
     PyTorchEinsumGenerator,
-    ItfGenerator<ItfContext>
+    ItfGenerator<ItfContext>,
+    TAPPGenerator<TAPPGeneratorContext>
 >;
 // clang-format on
 
@@ -179,6 +182,21 @@ void configure_context_defaults(PyTorchEinsumGeneratorContext &ctx) {
   ctx.set_tag(aux, "x");
 }
 
+void configure_context_defaults(TAPPGeneratorContext &ctx) {
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+  IndexSpace aux = registry->retrieve("x");
+
+  ctx.set_dim(occ, "nocc");
+  ctx.set_dim(virt, "nvirt");
+  ctx.set_dim(aux, "naux");
+
+  ctx.set_tag(occ, "o");
+  ctx.set_tag(virt, "v");
+  ctx.set_tag(aux, "x");
+}
+
 void add_to_context(TextGeneratorContext &ctx, std::string_view key,
                     std::string_view value) {
   if (key == "batch_indices") {
@@ -214,8 +232,13 @@ void add_to_context(PythonEinsumGeneratorContext &, std::string_view,
                     std::string_view) {
   // PythonEinsumGeneratorContext doesn't support context specifications
 }
-void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
-                    std::string_view key, std::string_view value) {
+/// Handles the tag and dim specifications of contexts that map index spaces to
+/// tags and dimension names
+template <typename Context>
+  requires std::derived_from<Context, JuliaTensorOperationsGeneratorContext> ||
+           std::derived_from<Context, TAPPGeneratorContext>
+void add_to_context(Context &ctx, std::string_view key,
+                    std::string_view value) {
   auto parse_space_map = [](std::string_view spec) {
     auto pos = spec.find("->");
     if (pos == std::string_view::npos) {
@@ -240,9 +263,8 @@ void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
     auto [space, dim] = parse_space_map(value);
     ctx.set_dim(space, dim);
   } else {
-    throw sequant::Exception(
-        "Unsupported key in Julia context specification '" + std::string(key) +
-        "'");
+    throw sequant::Exception("Unsupported key in context specification '" +
+                             std::string(key) + "'");
   }
 }
 
@@ -320,7 +342,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   REQUIRE(Index(L"i_1") < Index(L"a_1"));
 
   // Safe-guard that template magic works
-  const std::size_t n_generators = 7;
+  const std::size_t n_generators = 8;
 
   const std::set<std::string> known_formats =
       known_format_names(KnownGenerators{});
@@ -1020,5 +1042,73 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("E +="));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("->'"));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
+  }
+}
+
+TEST_CASE("TAPPGenerator", "[export]") {
+  using Catch::Matchers::ContainsSubstring;
+
+  auto resetter = to_export_context();
+
+  TAPPGeneratorContext ctx;
+  configure_context_defaults(ctx);
+
+  const auto generate = [&](std::string_view spec) {
+    auto groups = parse_expression_spec(std::string(spec), false);
+    TAPPGenerator<> generator;
+    export_groups<>(groups, generator, ctx);
+    return generator.get_generated_code();
+  };
+
+  SECTION("complex scalars") {
+    ctx.set_scalar_type(TAPPScalarType::Complex);
+
+    Tensor A(L"A", bra{L"a_1"}, ket{L"i_1"});
+    Tensor R(L"R", bra{L"a_1"}, ket{L"i_1"});
+    Variable s(L"s");
+    s.conjugate();
+    ResultExpr expr(R, ex<Constant>(Constant::scalar_type(1, 2)) *
+                           ex<Variable>(s) * ex<Tensor>(A));
+
+    TAPPGenerator<> generator;
+    export_expression(to_export_tree(expr), generator, ctx);
+    const std::string code = generator.get_generated_code();
+
+    REQUIRE_THAT(code, ContainsSubstring("#include <complex.h>"));
+    REQUIRE_THAT(code, ContainsSubstring("TAPP_C64"));
+    REQUIRE_THAT(code, ContainsSubstring("double complex *R_vo = NULL;"));
+    REQUIRE_THAT(code, ContainsSubstring("CMPLX(1.0, 2.0)"));
+    REQUIRE_THAT(code, ContainsSubstring("conj(s)"));
+  }
+
+  SECTION("complex constants require complex scalars") {
+    Tensor A(L"A", bra{L"a_1"}, ket{L"i_1"});
+    Tensor R(L"R", bra{L"a_1"}, ket{L"i_1"});
+    ResultExpr expr(R,
+                    ex<Constant>(Constant::scalar_type(1, 2)) * ex<Tensor>(A));
+
+    TAPPGenerator<> generator;
+    REQUIRE_THROWS_AS(export_expression(to_export_tree(expr), generator, ctx),
+                      Exception);
+  }
+
+  SECTION("identifiers") {
+    const std::string code = generate("one = α{a1;i1} B{i1;a1}");
+
+    // Names used by the generated code itself are escaped
+    REQUIRE_THAT(code, ContainsSubstring("double one_ = 0;"));
+    // Non-ASCII labels are turned into ASCII identifiers
+    REQUIRE_THAT(code, ContainsSubstring("double *u3b1_vo = NULL;"));
+  }
+
+  SECTION("plan reuse") {
+    const std::string code = generate(
+        "section singles:\n"
+        "X{a1;i1} = f{a1;a2} p{a2;i1}\n"
+        "Y{a1;i1} = 2 f{a1;a2} q{a2;i1}\n");
+
+    REQUIRE_THAT(code, ContainsSubstring("TAPP_tensor_product plan_1;"));
+    REQUIRE_THAT(code, !ContainsSubstring("plan_2"));
+    REQUIRE_THAT(code, ContainsSubstring("sequant_status sequant_singles("));
   }
 }
