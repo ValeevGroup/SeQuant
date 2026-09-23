@@ -475,15 +475,59 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
             BraKetSymmetry::Nonsymm);
     REQUIRE(to_braket_symmetry(Hermiticity::NonHermitian, Field::Complex) ==
             BraKetSymmetry::Nonsymm);
-    // AntiHermitian cannot yet be represented in BraKetSymmetry -> Nonsymm
+    // signed derivations
+    using CP = ConjugationParity;
     REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, Field::Real) ==
-            BraKetSymmetry::Nonsymm);
+            BraKetSymmetry::Antisymm);
+    REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, Field::Complex) ==
+            BraKetSymmetry::AntiConjugate);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, CP::Odd, Field::Real) ==
+            BraKetSymmetry::Antisymm);
+    REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, CP::Odd,
+                               Field::Real) == BraKetSymmetry::Symm);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, CP::None, Field::Real) ==
+            BraKetSymmetry::Conjugate);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, CP::Odd,
+                               Field::Complex) == BraKetSymmetry::Conjugate);
+    REQUIRE(to_conjugation_symmetry(CP::Even, Field::Real) ==
+            ConjugationSymmetry::Symm);
+    REQUIRE(to_conjugation_symmetry(CP::Odd, Field::Real) ==
+            ConjugationSymmetry::Antisymm);
+    REQUIRE(to_conjugation_symmetry(CP::None, Field::Real) ==
+            ConjugationSymmetry::Nonsymm);
+    REQUIRE(to_conjugation_symmetry(CP::Even, Field::Complex) ==
+            ConjugationSymmetry::Nonsymm);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Antisymm) ==
+            Hermiticity::AntiHermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Antisymm, CP::Odd) ==
+            Hermiticity::Hermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Symm, CP::Odd) ==
+            Hermiticity::AntiHermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::AntiConjugate) ==
+            Hermiticity::AntiHermitian);
+    REQUIRE(braket_swap_sign(BraKetSymmetry::Antisymm) == -1);
+    REQUIRE_FALSE(braket_swap_sign(BraKetSymmetry::Conjugate).has_value());
+    REQUIRE(braket_conjugate_swap_sign(BraKetSymmetry::AntiConjugate) == -1);
+    REQUIRE(conjugation_sign(ConjugationSymmetry::Antisymm) == -1);
+    REQUIRE(braket_swap_sign(BraKetSymmetry::Symm) == 1);
+    REQUIRE_FALSE(braket_swap_sign(BraKetSymmetry::Nonsymm).has_value());
+    REQUIRE(braket_conjugate_swap_sign(BraKetSymmetry::Conjugate) == 1);
+    REQUIRE(conjugation_sign(ConjugationSymmetry::Symm) == 1);
 
     REQUIRE(to_hermiticity(BraKetSymmetry::Symm) == Hermiticity::Hermitian);
     REQUIRE(to_hermiticity(BraKetSymmetry::Conjugate) ==
             Hermiticity::Hermitian);
     REQUIRE(to_hermiticity(BraKetSymmetry::Nonsymm) ==
             Hermiticity::NonHermitian);
+
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::Conjugate, Field::Real) ==
+            CP::None);
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::AntiConjugate, Field::Real) ==
+            CP::None);
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::Conjugate, Field::Complex) ==
+            CP::Even);
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::Symm, Field::Real) ==
+            CP::Even);
   }
 
   SECTION("braket_symmetry is derived from Hermiticity + base_field") {
@@ -529,13 +573,14 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
       REQUIRE(g.base_field() == Field::Complex);
       REQUIRE(g.braket_symmetry() == BraKetSymmetry::Conjugate);
     }
-    // AntiHermitian is recorded but currently derives to Nonsymm
+    // AntiHermitian over a real field derives the signed Antisymm state (its
+    // even-parity default: T{q;p} = -T{p;q})
     {
       auto w = Tensor(L"w", bra{idx(L"i_1", Field::Real)},
                       ket{idx(L"i_2", Field::Real)}, Symmetry::Nonsymm,
                       Hermiticity::AntiHermitian);
       REQUIRE(w.hermiticity() == Hermiticity::AntiHermitian);
-      REQUIRE(w.braket_symmetry() == BraKetSymmetry::Nonsymm);
+      REQUIRE(w.braket_symmetry() == BraKetSymmetry::Antisymm);
     }
   }
 
@@ -585,11 +630,11 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
                TensorSymmetries{.braket = BraKetSymmetry::Symm,
                                 .hermiticity = Hermiticity::NonHermitian}),
         Exception);
-    // AntiHermitian is the one trait BraKetSymmetry cannot represent, so
-    // pinning it alongside its (Nonsymm) braket must stay legal
+    // AntiHermitian over the default (complex) field derives AntiConjugate;
+    // pinning it alongside its correctly-derived braket symmetry stays legal
     REQUIRE_NOTHROW(
         Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
-               TensorSymmetries{.braket = BraKetSymmetry::Nonsymm,
+               TensorSymmetries{.braket = BraKetSymmetry::AntiConjugate,
                                 .hermiticity = Hermiticity::AntiHermitian}));
   }
 

@@ -205,10 +205,10 @@ class AbstractTensor {
   /// @return the (field-agnostic) symmetry of the abstract tensor under
   /// (Hermitian) adjoint
   /// @note the observable #_braket_symmetry() is the resolution of this trait
-  /// against the ambient Field; by default this is the (lossy) inverse of that
-  /// resolution (so a type need only implement #_braket_symmetry()), but a type
-  /// that tracks hermiticity directly should override this to preserve it
-  /// (e.g. the AntiHermitian case, which #_braket_symmetry() cannot represent)
+  /// against the ambient Field; by default this back-fills the trait from
+  /// #_braket_symmetry() via to_hermiticity(), which is exact except that the
+  /// parity is assumed Even. A type that tracks hermiticity directly should
+  /// override this to preserve it.
   /// @sa to_hermiticity, to_braket_symmetry
   virtual Hermiticity _hermiticity() const {
     return to_hermiticity(this->_braket_symmetry());

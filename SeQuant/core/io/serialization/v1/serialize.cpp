@@ -62,12 +62,19 @@ std::wstring serialize_symm(Symmetry symm, const SerializationOptions&) {
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring serialize_symm(BraKetSymmetry symm, const SerializationOptions&) {
+std::wstring serialize_symm(BraKetSymmetry symm, Hermiticity hermiticity,
+                            const SerializationOptions&) {
   switch (symm) {
     case BraKetSymmetry::Conjugate:
       return L"C";
     case BraKetSymmetry::Symm:
       return L"S";
+    case BraKetSymmetry::Antisymm:
+    case BraKetSymmetry::AntiConjugate:
+      // the observable has no letter of its own: it is spelled through the
+      // hermiticity trait letter, resolved back with the parity and the field
+      // (see to_string(const AbstractTensor&))
+      return hermiticity == Hermiticity::AntiHermitian ? L"A" : L"H";
     case BraKetSymmetry::Nonsymm:
       return L"N";
   }
@@ -322,7 +329,8 @@ std::wstring to_string(AbstractTensor const& tensor,
   if (options.annot_symm) {
     serialized += L":" + details::serialize_symm(tensor._symmetry(), options);
     serialized +=
-        L"-" + details::serialize_symm(tensor._braket_symmetry(), options);
+        L"-" + details::serialize_symm(tensor._braket_symmetry(),
+                                       tensor._hermiticity(), options);
     serialized +=
         L"-" + details::serialize_symm(tensor._column_symmetry(), options);
   }

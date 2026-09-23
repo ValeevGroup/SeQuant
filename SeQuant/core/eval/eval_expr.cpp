@@ -54,8 +54,7 @@ inline constexpr std::wstring_view label_scalar{L"Z"};
 template <std::ranges::range Bra, std::ranges::range Ket,
           std::ranges::range Aux>
 ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
-                    aux<Aux> a, Symmetry symm, BraKetSymmetry bksymm,
-                    ColumnSymmetry csymm) {
+                    aux<Aux> a, const TensorSymmetries& syms) {
   // This function is creating intermediate tensors, which don't come with
   // an externally provided "correct"/canonical order of its indices.
   // Hence, we are free to define our own canonical order, which we
@@ -70,15 +69,15 @@ ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
     indices.insert(indices.end(), begin(a), end(a));
 
     std::ranges::sort(indices);
-    return ex<Tensor>(label_tensor, bra(), ket(), aux(std::move(indices)), symm,
-                      bksymm, csymm);
+    return ex<Tensor>(label_tensor, bra(), ket(), aux(std::move(indices)),
+                      syms);
   } else {
     std::ranges::sort(b);
     std::ranges::sort(k);
     std::ranges::sort(a);
 
     return ex<Tensor>(label_tensor, std::move(b), std::move(k), std::move(a),
-                      symm, bksymm, csymm);
+                      syms);
   }
 }
 
@@ -86,21 +85,24 @@ template <std::ranges::range Bra, std::ranges::range Ket,
           std::ranges::range Aux>
 ExprPtr make_tensor_wo_symmetries(const BinarizationOptions& opts, bra<Bra>&& b,
                                   ket<Ket>&& k, aux<Aux>&& a) {
-  return make_tensor<Bra, Ket, Aux>(opts, b, k, a, Symmetry::Nonsymm,
-                                    BraKetSymmetry::Nonsymm,
-                                    ColumnSymmetry::Nonsymm);
+  return make_tensor<Bra, Ket, Aux>(
+      opts, b, k, a,
+      TensorSymmetries{.perm = Symmetry::Nonsymm,
+                       .braket = BraKetSymmetry::Nonsymm,
+                       .column = ColumnSymmetry::Nonsymm});
 }
 
 ExprPtr make_tensor(Tensor const& t, bool with_symm,
                     const BinarizationOptions& opts) {
-  Symmetry symm = with_symm ? t.symmetry() : Symmetry::Nonsymm;
-  BraKetSymmetry bksymm =
-      with_symm ? t.braket_symmetry() : BraKetSymmetry::Nonsymm;
-  ColumnSymmetry csymm =
-      with_symm ? t.column_symmetry() : ColumnSymmetry::Nonsymm;
+  // carrying the symmetries means carrying the traits: the intermediate's
+  // field-dependent symmetries are derived from them and its own slots
+  const TensorSymmetries syms =
+      with_symm ? t.symmetries()
+                : TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                   .braket = BraKetSymmetry::Nonsymm,
+                                   .column = ColumnSymmetry::Nonsymm};
 
-  return make_tensor(opts, bra(t.bra()), ket(t.ket()), aux(t.aux()), symm,
-                     bksymm, csymm);
+  return make_tensor(opts, bra(t.bra()), ket(t.ket()), aux(t.aux()), syms);
 }
 
 ExprPtr make_variable() { return ex<Variable>(label_scalar); }

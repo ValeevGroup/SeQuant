@@ -834,3 +834,173 @@ TEST_CASE("value_modifier_group", "[conjugation]") {
   REQUIRE(t.value_modifier() ==
           t.conjugate_modifier() * t.transpose_modifier());
 }
+
+TEST_CASE("conjugation_parity_trait", "[conjugation]") {
+  // the parity is a stored trait; the observable symmetries are derived from
+  // it, the hermiticity and the base field at construction
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto idx = [](std::wstring_view label, Field field) {
+    Index i(label);
+    IndexSpace sp = i.space();
+    sp.field(field);
+    return Index(label, sp);
+  };
+
+  SECTION("defaults") {
+    Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    REQUIRE(t.conjugation_parity() == ConjugationParity::Even);
+    REQUIRE(t.base_field() == Field::Complex);
+    REQUIRE(t.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
+  }
+
+  SECTION("odd parity over a real field: imaginary antisymmetric array") {
+    Tensor p(L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                              .conjugation_parity = ConjugationParity::Odd});
+    REQUIRE(p.conjugation_parity() == ConjugationParity::Odd);
+    REQUIRE(p.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
+    REQUIRE(p.braket_symmetry() == BraKetSymmetry::Antisymm);
+    REQUIRE(p.hermiticity() == Hermiticity::Hermitian);
+  }
+
+  SECTION("anti-Hermitian over the complex field") {
+    Tensor d(L"d", bra{L"i_1"}, ket{L"i_2"},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+    REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
+  }
+
+  SECTION("explicit braket contradicting the traits throws") {
+    REQUIRE_THROWS_AS(
+        Tensor(L"d", bra{idx(L"i_1", Field::Real)},
+               ket{idx(L"i_2", Field::Real)},
+               TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                                .hermiticity = Hermiticity::AntiHermitian}),
+        sequant::Exception);
+  }
+
+  SECTION("with_slots carries the parity") {
+    Tensor p(L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                              .conjugation_parity = ConjugationParity::Odd});
+    using ixvec = container::svector<Index>;
+    auto q =
+        p.with_slots(bra<ixvec>{ixvec{idx(L"i_3", Field::Real)}},
+                     ket<ixvec>{ixvec{idx(L"i_4", Field::Real)}}, aux<ixvec>{});
+    REQUIRE(q.conjugation_parity() == ConjugationParity::Odd);
+    REQUIRE(q.braket_symmetry() == BraKetSymmetry::Antisymm);
+  }
+
+  SECTION(
+      "aux-only tensor over complex aux spaces asserts no conjugation "
+      "symmetry") {
+    // the elementwise conjugation relation is stated over the basis of all
+    // slots, aux included; a complex aux space leaves it unknown, same as a
+    // tensor with no slots at all
+    Tensor w(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
+    REQUIRE(w.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
+  }
+
+  SECTION(
+      "all slots (bra, ket, aux) real-field assert Symm conjugation "
+      "symmetry") {
+    Tensor t(L"t", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             aux{idx(L"p_1", Field::Real)}, Symmetry::Nonsymm);
+    REQUIRE(t.conjugation_symmetry() == ConjugationSymmetry::Symm);
+  }
+
+  SECTION("with_slots re-derives the field-dependent symmetries") {
+    // real-field, Odd parity, Hermitian: braket Antisymm, conjugation Antisymm
+    Tensor p(L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                              .conjugation_parity = ConjugationParity::Odd});
+    REQUIRE(p.braket_symmetry() == BraKetSymmetry::Antisymm);
+    REQUIRE(p.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
+
+    // rebuild onto default (complex) indices: the traits (hermiticity,
+    // parity) are carried, but the field-dependent symmetries must be
+    // re-derived against the new (complex) field, not copied verbatim
+    using ixvec = container::svector<Index>;
+    auto q = p.with_slots(bra<ixvec>{ixvec{Index{L"i_3"}}},
+                          ket<ixvec>{ixvec{Index{L"i_4"}}}, aux<ixvec>{});
+    REQUIRE(q.conjugation_parity() == ConjugationParity::Odd);
+    REQUIRE(q.hermiticity() == Hermiticity::Hermitian);
+    REQUIRE(q.braket_symmetry() == BraKetSymmetry::Conjugate);
+    REQUIRE(q.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
+  }
+
+  SECTION("explicit braket consistent with the traits constructs") {
+    Tensor d(L"d", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             TensorSymmetries{.braket = BraKetSymmetry::Antisymm,
+                              .hermiticity = Hermiticity::Hermitian,
+                              .conjugation_parity = ConjugationParity::Odd});
+    REQUIRE(d.hermiticity() == Hermiticity::Hermitian);
+  }
+
+  SECTION("tensor with no slots at all asserts no conjugation symmetry") {
+    Tensor c(L"c", bra{}, ket{}, aux{});
+    REQUIRE(c.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
+  }
+
+  SECTION(
+      "an explicit Conjugate pin over a real field back-fills parity None") {
+    // the pin asserts the adjoint relation and no reality, so the parity it
+    // back-fills is None, and re-deriving the exchange symmetry from the
+    // traits reproduces the pin
+    Tensor t(L"t", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+             TensorSymmetries{.braket = BraKetSymmetry::Conjugate});
+    REQUIRE(t.conjugation_parity() == ConjugationParity::None);
+    REQUIRE(t.hermiticity() == Hermiticity::Hermitian);
+    REQUIRE(t.braket_symmetry() == BraKetSymmetry::Conjugate);
+    REQUIRE(t.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
+
+    using ixvec = container::svector<Index>;
+    auto u =
+        t.with_slots(bra<ixvec>{ixvec{idx(L"i_2", Field::Real)}},
+                     ket<ixvec>{ixvec{idx(L"a_2", Field::Real)}}, aux<ixvec>{});
+    REQUIRE(u.braket_symmetry() == BraKetSymmetry::Conjugate);
+  }
+}
+
+TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {
+  // Tensor::symmetries() hands the field-agnostic traits to a rebuild, which
+  // derives the field-dependent symmetries from them again; a rebuild that
+  // forwards the observable braket symmetry instead loses the parity, and
+  // with it the array's elementwise conjugation relation
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // real-field, Hermitian, odd parity: an imaginary Hermitian array, whose
+  // exchange symmetry and conjugation symmetry are both Antisymm
+  Tensor p(L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+           TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                            .conjugation_parity = ConjugationParity::Odd});
+  REQUIRE(p.braket_symmetry() == BraKetSymmetry::Antisymm);
+  REQUIRE(p.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
+
+  SECTION("the pack carries the traits and pins no exchange symmetry") {
+    const auto syms = p.symmetries();
+    REQUIRE(syms.perm == p.symmetry());
+    REQUIRE(syms.hermiticity == Hermiticity::Hermitian);
+    REQUIRE(syms.conjugation_parity == ConjugationParity::Odd);
+    REQUIRE(syms.column == p.column_symmetry());
+    REQUIRE_FALSE(syms.braket.has_value());
+  }
+
+  SECTION("expand_antisymm keeps the parity") {
+    auto expanded = mbpt::expand_antisymm(p);
+    REQUIRE(expanded->is<Tensor>());
+    const auto& q = expanded->as<Tensor>();
+    REQUIRE(q.symmetry() == Symmetry::Nonsymm);  // the attribute it changes
+    REQUIRE(q.hermiticity() == Hermiticity::Hermitian);
+    REQUIRE(q.conjugation_parity() == ConjugationParity::Odd);
+    REQUIRE(q.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
+    REQUIRE(q.braket_symmetry() == BraKetSymmetry::Antisymm);
+  }
+}
