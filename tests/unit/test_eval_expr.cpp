@@ -306,8 +306,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // only. At the eval boundary a flat Conjugate leaf is NOT folded onto
     // one orientation (that is the lazy-conj eval follow-up): both
     // orientations binarize to plain unmarked leaves in their as-written
-    // spelling. An already-starred spelling, however, is served through an
-    // EvalOp::Adjoint node over its unmarked VALUE-orientation operand.
+    // spelling. An already-starred spelling lowers to its VALUE-orientation
+    // leaf: g^*{p_1,p_2;p_3,p_4} denotes g{p_3,p_4;p_1,p_2}, a bra/ket
+    // exchange and no conjugation.
     Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
              BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     Tensor g_adj = g;
@@ -324,20 +325,40 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(g_tree2.leaf());
     REQUIRE_FALSE(g_tree2->as_tensor().conjugated());
-    // a starred spelling is served via Adjoint over the value orientation
+    // a starred spelling lowers to its value orientation, a plain leaf
     Tensor g_star = g;
     REQUIRE(g_star.conjugate() == 1);
+    auto [g_vo, g_vo_sign] = value_oriented(g_star);
+    REQUIRE(g_vo_sign == 1);  // Conjugate: the exchange costs nothing
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto g_tree3 = binarize(ex<Tensor>(g_star));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE_FALSE(g_tree3.leaf());
-    REQUIRE(g_tree3->op_type() == EvalOp::Adjoint);
-    REQUIRE(g_tree3.left().leaf());
-    REQUIRE_FALSE(g_tree3.left()->as_tensor().conjugated());
-    // bare operand = value orientation of g^*: bra/ket swapped back
-    REQUIRE(g_tree3.left()->as_tensor().bra().at(0).label() == L"p_3");
-    REQUIRE(g_tree3.right()->is_constant());  // sentinel
-    REQUIRE(g_tree3->hash_value() != g_tree3.left()->hash_value());
+    REQUIRE(g_tree3.leaf());
+    REQUIRE_FALSE(g_tree3->as_tensor().conjugated());
+    // the leaf is the value orientation of g^*: bra/ket swapped back
+    REQUIRE(g_tree3->as_tensor().bra().at(0).label() == L"p_3");
+    REQUIRE(g_tree3->hash_value() == EvalExpr{g_vo}.hash_value());
+
+    // an AntiConjugate tensor's starred spelling costs the relation's sign,
+    // which is a scalar factor, not a node phase
+    Tensor d(L"d", bra{L"p_1"}, ket{L"p_2"},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                              .column = ColumnSymmetry::Symm});
+    REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
+    Tensor d_star = d;
+    REQUIRE(d_star.conjugate() == 1);
+    auto [d_vo, d_vo_sign] = value_oriented(d_star);
+    REQUIRE(d_vo_sign == -1);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto d_tree = binarize(ex<Tensor>(d_star));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(d_tree.leaf());
+    REQUIRE(d_tree->op_type() == EvalOp::Product);
+    REQUIRE(d_tree.right()->is_constant());
+    REQUIRE(d_tree.right()->as_constant().value<int>() == -1);
+    REQUIRE(d_tree.left().leaf());
+    REQUIRE_FALSE(d_tree.left()->as_tensor().conjugated());
+    REQUIRE(d_tree.left()->as_tensor().bra().at(0).label() == L"p_2");
 
     // a marked Hermitian leaf denotes a different value than its unmarked
     // twin with the same slots (for Hermitian g, g^*{i;a} == g{a;i}), so they

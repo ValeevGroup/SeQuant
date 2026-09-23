@@ -999,6 +999,12 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   U.generate(rnd);
   BTensorC V{btas::Range{nocc, nvirt}};  // generic v{i_1;a_1}
   V.generate(rnd);
+  // g is Hermitian: g{a_1;i_1} = conj(g{i_1;a_1})
+  BTensorC G{btas::Range{nocc, nvirt}};
+  G.generate(rnd);
+  BTensorC Gswapped{btas::Range{nvirt, nocc}};
+  for (size_t i = 0; i < nocc; ++i)
+    for (size_t a = 0; a < nvirt; ++a) Gswapped(a, i) = std::conj(G(i, a));
 
   auto d = [](std::wstring_view b, std::wstring_view k) {
     return ex<Tensor>(
@@ -1008,12 +1014,18 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   auto u = [] { return ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"}); };
   auto u2 = [] { return ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_2"}); };
   auto v = [] { return ex<Tensor>(L"v", bra{L"i_1"}, ket{L"a_1"}); };
+  auto g = [](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(L"g", bra{b}, ket{k},
+                      TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+  };
 
   pinned_tensor_yield<BTensorC> yield;
   yield.put(d(L"i_1", L"a_1")->as<Tensor>(), D);
   yield.put(d(L"a_1", L"i_1")->as<Tensor>(), Dswapped);
   yield.put(u()->as<Tensor>(), U);
   yield.put(v()->as<Tensor>(), V);
+  yield.put(g(L"i_1", L"a_1")->as<Tensor>(), G);
+  yield.put(g(L"a_1", L"i_1")->as<Tensor>(), Gswapped);
 
   // A node's canonicalization phase converts its own spelling to the
   // canonical orientation the caches hold; the descent engine applies it on
@@ -1069,33 +1081,77 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
       }
   }
 
-  SECTION("a marked summand does not sign the summand beside it") {
-    // A marked leaf: d^*{i_1;a_1} = -d{a_1;i_1} for this anti-Hermitian d, so
-    // binarize serves it through the Adjoint channel with -1 on that node.
-    // That sign belongs to that summand alone; on the Sum node it would
-    // multiply the generic summand v as well, and the sum's value would
-    // depend on the order the two summands are written in.
+  SECTION("a marked leaf evaluates to the value it denotes") {
+    // d^*{i_1;a_1} = conj(d{i_1;a_1}) and, through the anti-Hermitian
+    // relation, = -d{a_1;i_1}: a bra/ket exchange and a sign, no conjugation
+    // of an array. binarize lowers it to the value-orientation leaf times
+    // Constant(-1), and the engine, contracting by index label, reads that
+    // leaf in the requested layout.
     Tensor dstar = d(L"i_1", L"a_1")->as<Tensor>();
     REQUIRE(dstar.conjugate() == 1);
     REQUIRE(dstar.value_modifier() == ValueModifier::Conjugate);
 
     auto const layout = tidxs(L"i_1,a_1");
+    auto const alone = eval_open(ex<Tensor>(dstar), layout);
+    for (size_t i = 0; i < nocc; ++i)
+      for (size_t a = 0; a < nvirt; ++a) {
+        // -transpose(d{a_1;i_1}) == conj(D)
+        auto const expected = std::conj(D(i, a));
+        REQUIRE(expected == -Dswapped(a, i));
+        CHECK(alone(i, a).real() ==
+              Catch::Approx(expected.real()).margin(1e-12));
+        CHECK(alone(i, a).imag() ==
+              Catch::Approx(expected.imag()).margin(1e-12));
+      }
+
+    // the tree: a Product over the value-orientation leaf and Constant(-1),
+    // the sign being a scalar and not a node phase
+    auto marked = eval_node(ex<Tensor>(dstar));
+    REQUIRE(marked->op_type() == EvalOp::Product);
+    REQUIRE(marked.left().leaf());
+    REQUIRE_FALSE(marked.left()->as_tensor().conjugated());
+    REQUIRE(marked.right()->is_constant());
+    REQUIRE(marked.right()->as_constant().value<int>() == -1);
+
+    // and in a sum it carries that sign alone: the generic summand v keeps
+    // its own, whichever order the two are written in
     auto const first = eval_open(ex<Tensor>(dstar) + v(), layout);
     auto const second = eval_open(v() + ex<Tensor>(dstar), layout);
     for (size_t i = 0; i < nocc; ++i)
       for (size_t a = 0; a < nvirt; ++a) {
+        auto const expected = std::conj(D(i, a)) + V(i, a);
         CHECK(first(i, a).real() ==
-              Catch::Approx(second(i, a).real()).margin(1e-12));
+              Catch::Approx(expected.real()).margin(1e-12));
         CHECK(first(i, a).imag() ==
-              Catch::Approx(second(i, a).imag()).margin(1e-12));
+              Catch::Approx(expected.imag()).margin(1e-12));
+        CHECK(second(i, a).real() ==
+              Catch::Approx(expected.real()).margin(1e-12));
+        CHECK(second(i, a).imag() ==
+              Catch::Approx(expected.imag()).margin(1e-12));
       }
+  }
 
-    // and the tree says the same: the respelling's sign rides on the leaf's
-    // own node, and the sum that adopts the leaf's slot layout carries none
-    auto marked_first = eval_node(ex<Tensor>(dstar) + v());
-    REQUIRE(marked_first->op_type() == EvalOp::Sum);
-    REQUIRE(marked_first.left()->op_type() == EvalOp::Adjoint);
-    REQUIRE(int(marked_first.left()->canon_phase()) == -1);
-    REQUIRE(int(marked_first->canon_phase()) == 1);
+  SECTION("a marked Hermitian leaf evaluates to the conjugate array") {
+    // the mainstream case: g^*{i_1;a_1} = conj(g{i_1;a_1}) = g{a_1;i_1},
+    // an exchange with no sign. Lowering it to an adjoint instead would
+    // conjugate the served array a second time and return g{i_1;a_1}.
+    Tensor gstar = g(L"i_1", L"a_1")->as<Tensor>();
+    REQUIRE(gstar.braket_symmetry() == BraKetSymmetry::Conjugate);
+    REQUIRE(gstar.conjugate() == 1);
+    REQUIRE(gstar.value_modifier() == ValueModifier::Conjugate);
+
+    auto marked = eval_node(ex<Tensor>(gstar));
+    REQUIRE(marked.leaf());
+    REQUIRE_FALSE(marked->as_tensor().conjugated());
+    REQUIRE(marked->as_tensor().bra()[0].label() == L"a_1");
+
+    auto const got = eval_open(ex<Tensor>(gstar), tidxs(L"i_1,a_1"));
+    for (size_t i = 0; i < nocc; ++i)
+      for (size_t a = 0; a < nvirt; ++a) {
+        auto const expected = std::conj(G(i, a));
+        REQUIRE(expected == Gswapped(a, i));
+        CHECK(got(i, a).real() == Catch::Approx(expected.real()).margin(1e-12));
+        CHECK(got(i, a).imag() == Catch::Approx(expected.imag()).margin(1e-12));
+      }
   }
 }

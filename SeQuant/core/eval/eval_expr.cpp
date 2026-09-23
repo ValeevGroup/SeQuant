@@ -412,10 +412,10 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   }
 }
 
-/// Assembles the Adjoint IR node shared by binarize(Tensor)'s '⁺'-label and
-/// conjugation-marker channels: Adjoint(adj-metadata, Constant{1} sentinel)
-/// over @p bare_leaf, with the node hash = the bare-leaf hash salted by
-/// EvalOp::Adjoint so cache lookups don't collide.
+/// Assembles the Adjoint IR node of binarize(Tensor)'s '⁺'-label channel:
+/// Adjoint(adj-metadata, Constant{1} sentinel) over @p bare_leaf, with the
+/// node hash = the bare-leaf hash salted by EvalOp::Adjoint so cache lookups
+/// don't collide.
 EvalExprNode make_adjoint_node(EvalExprNode bare_leaf, ExprPtr adjointed,
                                EvalExpr::index_vector canon_ix,
                                std::int8_t phase) {
@@ -439,7 +439,9 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
-EvalExprNode binarize(Tensor const& t) {
+EvalExprNode binarize(Tensor const& t, IndexSet const& uncontract,
+                      const BinarizationOptions& opts,
+                      std::size_t& node_counter) {
   // Leaves keep their as-written orientation at the eval boundary (the leaf
   // ctor disables the Conjugate fold); a modifier arrives only on a spelling
   // that was produced symbolically. Serve it per modifier.
@@ -468,17 +470,21 @@ EvalExprNode binarize(Tensor const& t) {
       if (t.braket_symmetry() == BraKetSymmetry::Nonsymm)
         throw Exception(
             "sequant::binarize: an elementwise-conjugated "
-            "BraKetSymmetry::Nonsymm tensor leaf is not evaluable (no "
-            "Adjoint-served equivalent; lazy-conj eval is the follow-up)");
-      // Conjugate symmetry: the starred spelling is the canonicalizer's
-      // orientation fold. Serve it like the adjoint channel: an
-      // EvalOp::Adjoint node over the unmarked value-orientation operand,
-      // so evaluation and leaf yielders need no modifier awareness.
-      EvalExpr ee{t};
-      auto [bare, sign] = value_oriented(ee.expr()->as<Tensor>());
-      return make_adjoint_node(
-          EvalExprNode{EvalExpr{bare}}, ee.expr(), ee.canon_indices(),
-          static_cast<std::int8_t>(ee.canon_phase() * sign));
+            "BraKetSymmetry::Nonsymm tensor leaf is not evaluable (no slot "
+            "spelling of its value; lazy-conj eval is the follow-up)");
+      // a Conjugate-marked spelling denotes the bare array read with bra and
+      // ket exchanged, times the exchange relation's sign; neither is a
+      // conjugation, so it lowers to the value-orientation leaf and, for a
+      // negative sign, a scalar factor. The exchange itself needs no op: the
+      // engine contracts by index label, so the leaf T{p;q} stands in for
+      // T^*{q;p} exactly. The sign is a Constant, not a node phase, since a
+      // phase is a cache-orientation round trip and never reaches the value.
+      auto [bare, sign] = value_oriented(t);
+      ExprPtr respelled = ex<Tensor>(std::move(bare));
+      if (sign != 1)
+        respelled = ex<Product>(static_cast<int>(sign),
+                                ExprPtrList{std::move(respelled)});
+      return impl::binarize(respelled, uncontract, opts, node_counter);
     }
 
     case ValueModifier::Transpose:
@@ -773,7 +779,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Variable>());
 
   if (expr->is<Tensor>())  //
-    return binarize(expr->as<Tensor>());
+    return binarize(expr->as<Tensor>(), uncontract, opts, node_counter);
 
   if (expr->is<Sum>())  //
     return binarize(expr->as<Sum>(), uncontract, opts, node_counter);

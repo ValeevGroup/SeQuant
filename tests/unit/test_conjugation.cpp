@@ -1371,9 +1371,9 @@ TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {
 
 TEST_CASE("signed_eval_boundary", "[conjugation]") {
   // the sign the value respelling consumes must reach the eval tree: a leaf
-  // whose spelling is minus its value orientation is served through an
-  // EvalOp::Adjoint node whose canon_phase() carries that sign, multiplied by
-  // the leaf's own block-canonicalization phase
+  // whose spelling is minus its value orientation lowers to that orientation
+  // and a Constant(-1) factor, the only channel that reaches a value (a node
+  // phase is a cache-orientation round trip)
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
@@ -1398,13 +1398,15 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     auto tree = binarize(ex<Tensor>(dstar));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE_FALSE(tree.leaf());
-    REQUIRE(tree->op_type() == EvalOp::Adjoint);
-    // the block canonicalization of this leaf contributes no phase, so the
-    // node's phase is the respelling's sign alone
+    REQUIRE(tree->op_type() == EvalOp::Product);
+    REQUIRE(tree.right()->is_constant());
+    REQUIRE(tree.right()->as_constant().value<int>() == -1);
+    // the operand is the value orientation, a plain leaf; its block
+    // canonicalization contributes no phase of its own
     REQUIRE(tree.left().leaf());
     REQUIRE(tree.left()->canon_phase() == 1);
-    REQUIRE(tree->canon_phase() == -1);
     REQUIRE_FALSE(tree.left()->as_tensor().conjugated());
+    REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
   }
 
   SECTION("a plain Adjoint-state Nonsymm leaf carries no sign") {

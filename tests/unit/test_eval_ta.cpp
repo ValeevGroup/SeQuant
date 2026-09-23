@@ -6446,17 +6446,18 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
   }
 }
 
-TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
+TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   // END-TO-END check of serving the conjugation marker at eval: a starred
-  // ToT spelling binarizes to an EvalOp::Adjoint node over its unmarked
-  // VALUE-orientation operand -- Result::adjoint() is private and reachable
-  // only through the Adjoint IR node, so the override was compile-checked
-  // but never driven with data. (Folding fresh leaves onto one
-  // orientation-shared cache slot is the lazy-conj eval follow-up.)
+  // ToT spelling lowers to its unmarked VALUE-orientation leaf, times the
+  // exchange relation's sign when that is -1. For a Conjugate (Hermitian)
+  // tensor the sign is +1, so T^*{q;p} is served as the leaf T{p;q} itself:
+  // the marker denotes a bra/ket exchange, which the engine performs by
+  // index label, and not a conjugation of an array. (Folding fresh leaves
+  // onto one orientation-shared cache slot is the lazy-conj eval follow-up.)
   //
   // Here: binarize a starred spelling, evaluate it against a yielder that
   // only ever serves the unmarked operand's spelling, and require the result
-  // to be the elementwise conjugate of what was served.
+  // to be exactly what was served.
   using namespace sequant;
   auto& world = TA::get_default_world();
   size_t const nocc = 2, nvirt = 3;
@@ -6484,20 +6485,19 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
   REQUIRE_FALSE(is_conj(canon_leaf));
   REQUIRE(swapped_leaf.hash_value() != canon_leaf.hash_value());
 
-  // a STARRED spelling is served through EvalOp::Adjoint: binarize wraps it
-  // over the unmarked VALUE-orientation operand
+  // a STARRED spelling is served as its unmarked VALUE-orientation leaf
   auto conj_side = canonical->clone();
   REQUIRE(conj_side->as<Tensor>().conjugate() == 1);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE(node->op_type().has_value());
-  CHECK(node->op_type().value() == EvalOp::Adjoint);
+  REQUIRE(node.leaf());
+  REQUIRE_FALSE(node->op_type().has_value());
+  REQUIRE_FALSE(node->expr()->as<Tensor>().conjugated());
   auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
   auto const res = evaluate(node, node->annot(), yield, cache);
   auto const& got = res->get<ArrayToT>();
-  auto const& served =
-      yield(node.left()->expr()->as<Tensor>())->get<ArrayToT>();
+  auto const& served = yield(node->expr()->as<Tensor>())->get<ArrayToT>();
 
   auto it_s = served.begin();
   auto it_g = got.begin();
@@ -6511,7 +6511,7 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
       if (sinner.empty()) continue;
       for (std::size_t k = 0; k < sinner.size(); ++k) {
         CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
-        CHECK(ginner[k].imag() == Catch::Approx(-sinner[k].imag()));
+        CHECK(ginner[k].imag() == Catch::Approx(sinner[k].imag()));
       }
     }
   }
