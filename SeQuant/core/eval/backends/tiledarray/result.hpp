@@ -53,15 +53,32 @@ inline std::atomic<std::size_t>& wait_counter() {
   static std::atomic<std::size_t> c{0};
   return c;
 }
-inline void note_wait() {
-  wait_counter().fetch_add(1, std::memory_order_relaxed);
-}
 inline std::atomic<std::size_t>& slice_counter() {
   static std::atomic<std::size_t> c{0};
   return c;
 }
 inline void note_slice() {
   slice_counter().fetch_add(1, std::memory_order_relaxed);
+}
+// Drain policy: every backend op used to end with
+// DistArray::wait_for_lazy_cleanup(world), which blocks until EVERY array
+// scheduled for lazy deletion so far has finished its pending tasks. On one
+// rank that is a cheap local wait; on many ranks it is a pipeline drain after
+// each of the (tens of) thousands of ops an iteration issues, so no op's tail
+// (remote sends, straggler tiles) overlaps the next op's start. The consumer
+// chooses: `true` (default) keeps the drain, `false` lets ops pipeline and
+// leaves the cleanup to run alongside the next op (temporaries are released a
+// little later, so the peak can grow by the in-flight set).
+inline std::atomic<bool>& drain_after_op_flag() {
+  static std::atomic<bool> f{true};
+  return f;
+}
+template <typename ArrayT>
+inline void drain_lazy_cleanup(ArrayT const& arr) {
+  if (drain_after_op_flag().load(std::memory_order_relaxed)) {
+    ArrayT::wait_for_lazy_cleanup(arr.world());
+    wait_counter().fetch_add(1, std::memory_order_relaxed);
+  }
 }
 inline std::atomic<long long>& slice_ns() {
   static std::atomic<long long> c{0};
@@ -79,6 +96,18 @@ struct FenceReporter {
 };
 inline FenceReporter fence_reporter_{};
 
+}  // namespace detail
+
+/// Whether every TA-backend op ends with DistArray::wait_for_lazy_cleanup
+/// (see detail::drain_lazy_cleanup). Default true (the historical behavior).
+inline void set_ta_drain_after_op(bool on) {
+  detail::drain_after_op_flag().store(on, std::memory_order_relaxed);
+}
+inline bool ta_drain_after_op() {
+  return detail::drain_after_op_flag().load(std::memory_order_relaxed);
+}
+
+namespace detail {
 // Wire PhaseTimer's boundary barrier to a TA world fence so per-region phase
 // timers cannot misattribute async (deferred) work across regions. Runs only
 // under SEQUANT_UT_PHASE (PhaseTimer::Scope calls barrier() only when enabled).
@@ -201,8 +230,7 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
   result(lannot) = nf * result(lannot);
 
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::drain_lazy_cleanup(result);
 
   return result;
 }
@@ -273,8 +301,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
       rational{1, factorial(bra_rank) * factorial(ket_rank)});
   result(lannot) = nf * result(lannot);
 
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::drain_lazy_cleanup(result);
   return result;
 }
 
@@ -670,7 +697,7 @@ class ResultTensorTA final : public Result {
     auto const ann = TA::detail::dummy_annotation(rank);
     ArrayT r;
     with_expr(ann, [&](auto&& e) { r(ann) = e; });
-    ArrayT::wait_for_lazy_cleanup(r.world());
+    ::sequant::detail::drain_lazy_cleanup(r);
     log_ta_tensor_host_memory_use();
     reset_value(std::move(r));
     view_.reset();
@@ -737,8 +764,7 @@ class ResultTensorTA final : public Result {
                                " | " + a.lannot + " + " + a.rannot + " -> " +
                                a.this_annot);
     }
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -845,8 +871,7 @@ class ResultTensorTA final : public Result {
       ArrayT result;
       with_expr(a.lannot,
                 [&](auto&& le) { result(a.this_annot) = scalar * le; });
-      decltype(result)::wait_for_lazy_cleanup(result.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     }
@@ -858,10 +883,8 @@ class ResultTensorTA final : public Result {
       with_expr(a.lannot, [&](auto&& le) {
         o.with_expr(a.rannot, [&](auto&& re) { d = le.dot(re).get(); });
       });
-      ArrayT::wait_for_lazy_cleanup(raw<ArrayT>().world());
-      ::sequant::detail::note_wait();
-      ArrayT::wait_for_lazy_cleanup(o.template raw<ArrayT>().world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::drain_lazy_cleanup(raw<ArrayT>());
+      ::sequant::detail::drain_lazy_cleanup(o.template raw<ArrayT>());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -909,8 +932,7 @@ class ResultTensorTA final : public Result {
     } catch (std::exception const& ex) {
       throw std::runtime_error(describe(ex.what()));
     }
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -974,8 +996,7 @@ class ResultTensorTA final : public Result {
 
     auto const t0 = std::chrono::steady_clock::now();
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
-    ArrayT::wait_for_lazy_cleanup(t.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::drain_lazy_cleanup(t);
     detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
                          oarr, ann);
     log_ta_tensor_host_memory_use();
@@ -1227,7 +1248,7 @@ class ResultTensorOfTensorTA final : public Result {
     auto const ann = dummy_annotation();
     ArrayT r;
     with_expr(ann, [&](auto&& e) { r(ann) = e; });
-    ArrayT::wait_for_lazy_cleanup(r.world());
+    ::sequant::detail::drain_lazy_cleanup(r);
     log_ta_tensor_host_memory_use();
     reset_value(std::move(r));
     view_.reset();
@@ -1363,8 +1384,7 @@ class ResultTensorOfTensorTA final : public Result {
                                " | " + a.lannot + " + " + a.rannot + " -> " +
                                a.this_annot);
     }
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -1488,6 +1508,7 @@ class ResultTensorOfTensorTA final : public Result {
     for (auto it = dest.begin(); it != dest.end(); ++it)
       if (dest.is_local(it.index())) *it = value_type{it.make_range()};
     dest.world().gop.fence();
+    ::sequant::detail::note_fence();
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(dest));
   }
@@ -1505,8 +1526,7 @@ class ResultTensorOfTensorTA final : public Result {
       ArrayT result;
       with_expr(a.lannot,
                 [&](auto&& le) { result(a.this_annot) = scalar * le; });
-      decltype(result)::wait_for_lazy_cleanup(result.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
@@ -1515,10 +1535,8 @@ class ResultTensorOfTensorTA final : public Result {
       auto const& o = static_cast<this_type const&>(other);
       numeric_type d =
           TA::dot(logical_array()(a.lannot), o.logical_array()(a.rannot));
-      ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
-      ::sequant::detail::note_wait();
-      ArrayT::wait_for_lazy_cleanup(o.template get<ArrayT>().world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::drain_lazy_cleanup(get<ArrayT>());
+      ::sequant::detail::drain_lazy_cleanup(o.template get<ArrayT>());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -1593,7 +1611,7 @@ class ResultTensorOfTensorTA final : public Result {
           o.with_expr(a.rannot,
                       [&](auto&& re) { result(a.this_annot) = le * re; });
         });
-        decltype(result)::wait_for_lazy_cleanup(result.world());
+        ::sequant::detail::drain_lazy_cleanup(result);
         log_ta_tensor_host_memory_use();
         return eval_result<this_type>(std::move(result));
       }
@@ -1685,8 +1703,7 @@ class ResultTensorOfTensorTA final : public Result {
 
     auto const t0 = std::chrono::steady_clock::now();
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
-    ArrayT::wait_for_lazy_cleanup(t.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::drain_lazy_cleanup(t);
     detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
                          oarr, ann);
     log_ta_tensor_host_memory_use();
@@ -1793,8 +1810,7 @@ template <typename... Args>
   // keeps its real element offset too, consistently across all sliced operands.
   auto const t0 = std::chrono::steady_clock::now();
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::drain_lazy_cleanup(arr);
   detail::log_batch_op("Slice", std::chrono::steady_clock::now() - t0, out,
                        annot + " mode=" + std::to_string(mode) + " tiles=[" +
                            std::to_string(tile_lo) + "," +
@@ -1861,8 +1877,7 @@ void write_array_into_mode(TA::DistArray<Args...>& dest,
   // block() would rebase the sub-block to 0 and mismatch the source trange.
   auto const t0 = std::chrono::steady_clock::now();
   dest(annot).block(lo, hi, TA::preserve_lobound) = block(annot);
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(dest.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::drain_lazy_cleanup(dest);
   detail::log_batch_op("Scatter", std::chrono::steady_clock::now() - t0, block,
                        annot + " mode=" + std::to_string(mode) + " tiles=[" +
                            std::to_string(tile_lo) + "," +
@@ -1964,8 +1979,7 @@ template <typename NumericT, typename PolicyT,
     out(a.this_annot) =
         (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
             .set_shape(shape);
-    FlatArray::wait_for_lazy_cleanup(out.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::drain_lazy_cleanup(out);
     return eval_result<FlatResult>(std::move(out));
   }
 
@@ -1986,8 +2000,7 @@ template <typename NumericT, typename PolicyT,
           (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
               .set_shape(shape);
     }
-    ToTArray::wait_for_lazy_cleanup(out.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::drain_lazy_cleanup(out);
     return eval_result<ToTResult>(std::move(out));
   }
 
@@ -1999,8 +2012,7 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) = left.get<ToTArray>()(a.lannot)
                               .dot_inner(right.get<ToTArray>()(a.rannot))
                               .set_shape(shape);
-      FlatArray::wait_for_lazy_cleanup(out.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::drain_lazy_cleanup(out);
       return eval_result<FlatResult>(std::move(out));
     } else {
       // ToT * ToT -> ToT (general product). TiledArray's expression-layer
@@ -2016,8 +2028,7 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) =
           (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
               .set_shape(shape);
-      ToTArray::wait_for_lazy_cleanup(out.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::drain_lazy_cleanup(out);
       return eval_result<ToTResult>(std::move(out));
     }
   }
