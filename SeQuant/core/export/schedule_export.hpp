@@ -76,10 +76,9 @@ class ScheduleWalkingGenerationVisitor {
   /// \p generator's target (see Generator::memory_model(), generator.hpp),
   /// queried from it rather than chosen by whoever constructs this visitor.
   ScheduleWalkingGenerationVisitor(const eval::CellTable &table,
-                                    const eval::OrderedSchedule &schedule,
-                                    const ValueResolver &resolver,
-                                    Generator<Context> &generator,
-                                    Context &ctx)
+                                   const eval::OrderedSchedule &schedule,
+                                   const ValueResolver &resolver,
+                                   Generator<Context> &generator, Context &ctx)
       : m_table(table),
         m_schedule(schedule),
         m_resolver(resolver),
@@ -132,8 +131,7 @@ class ScheduleWalkingGenerationVisitor {
   }
 
   bool is_leaf(eval::CellId cell) const {
-    return m_table.cells.at(cell).production.kind ==
-           eval::ProductionKind::Leaf;
+    return m_table.cells.at(cell).production.kind == eval::ProductionKind::Leaf;
   }
 
   /// Under MemoryModel::Stack, whether \p cell's natural model
