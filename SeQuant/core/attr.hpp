@@ -37,13 +37,21 @@ enum class Field { Real, Complex };
 // clang-format off
 /// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation), i.e., pairs of {bra[i],ket[i]} slots
 // clang-format on
-enum class ColumnSymmetry { Symm, Nonsymm };
+/// @note `Nonsymm` is an alias of `NonSymm`
+enum class ColumnSymmetry { Symm, NonSymm, Nonsymm = NonSymm };
 
 // clang-format off
 /// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects
 /// @note bra or ket can be symmetric or antisymmetric only if the tensor is particle-symmetric, otherwise it does not make sense to permute indices corresponding to distinguishable particles
 // clang-format on
-enum class Symmetry { Symm, Antisymm, Nonsymm };
+/// @note `Antisymm`/`Nonsymm` are aliases of `AntiSymm`/`NonSymm`
+enum class Symmetry {
+  Symm,
+  AntiSymm,
+  NonSymm,
+  Antisymm = AntiSymm,
+  Nonsymm = NonSymm
+};
 
 /// behaviour of the operator a c-number tensor represents under complex
 /// conjugation K in the position representation: `K I K⁻¹ = +I` (`Even`,
@@ -57,7 +65,7 @@ enum class Symmetry { Symm, Antisymm, Nonsymm };
 enum class ConjugationParity { Even, Odd, None };
 
 /// relation between the array read with bra and ket exchanged and the array
-/// as written: `T{q;p} = +T{p;q}` (`Symm`), `−T{p;q}` (`Antisymm`),
+/// as written: `T{q;p} = +T{p;q}` (`Symm`), `−T{p;q}` (`AntiSymm`),
 /// `conj(T{p;q})` (`Conjugate`), `−conj(T{p;q})` (`AntiConjugate`), or none.
 /// Derived from #Hermiticity, #ConjugationParity and the #Field, see
 /// to_braket_symmetry().
@@ -65,19 +73,29 @@ enum class ConjugationParity { Even, Odd, None };
 ///       single particle's bra and ket slot
 /// @note The enumerator values enter hashes that decide canonical tie-breaks;
 ///       new states are appended so the existing values stay fixed.
+/// @note `Antisymm`/`Nonsymm` are aliases of `AntiSymm`/`NonSymm`
 enum class BraKetSymmetry {
   Symm = 0,
   Conjugate = 1,
-  Nonsymm = 2,
-  Antisymm = 3,
-  AntiConjugate = 4
+  NonSymm = 2,
+  AntiSymm = 3,
+  AntiConjugate = 4,
+  Antisymm = AntiSymm,
+  Nonsymm = NonSymm
 };
 
 /// relation between the complex-conjugated array and the array as written:
-/// `conj(T{p;q}) = +T{p;q}` (`Symm`), `−T{p;q}` (`Antisymm`), or none.
+/// `conj(T{p;q}) = +T{p;q}` (`Symm`), `−T{p;q}` (`AntiSymm`), or none.
 /// Derived from #ConjugationParity and the #Field, see
 /// to_conjugation_symmetry().
-enum class ConjugationSymmetry { Symm, Antisymm, Nonsymm };
+/// @note `Antisymm`/`Nonsymm` are aliases of `AntiSymm`/`NonSymm`
+enum class ConjugationSymmetry {
+  Symm,
+  AntiSymm,
+  NonSymm,
+  Antisymm = AntiSymm,
+  Nonsymm = NonSymm
+};
 
 /// describes the abstract symmetry of a tensorial object under (Hermitian)
 /// adjoint, i.e. whether the abstract tensor equals (`Hermitian`), equals minus
