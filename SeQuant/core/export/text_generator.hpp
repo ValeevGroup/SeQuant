@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/memory_model.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -54,7 +55,13 @@ class TextGeneratorContext : public ExportContext {
 template <typename Context = TextGeneratorContext>
 class TextGenerator : public Generator<Context> {
  public:
-  TextGenerator() = default;
+  /// \param model The memory model to report via memory_model() below.
+  /// Defaults to RandomAccess (no stack-nesting requirement); tests
+  /// exercising MemoryModel::Stack-specific behavior construct a
+  /// TextGenerator(MemoryModel::Stack) instead, rather than needing a
+  /// second generator type.
+  explicit TextGenerator(MemoryModel model = MemoryModel::RandomAccess)
+      : m_memory_model(model) {}
   ~TextGenerator() = default;
 
   std::string get_format_name() const override { return "Plain Text"; }
@@ -64,6 +71,8 @@ class TextGenerator : public Generator<Context> {
   bool requires_named_sections() const override { return false; }
 
   bool supports_index_batching() const override { return true; }
+
+  MemoryModel memory_model() const override { return m_memory_model; }
 
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
@@ -327,6 +336,7 @@ class TextGenerator : public Generator<Context> {
   std::string get_generated_code() const override { return m_generated; }
 
  private:
+  MemoryModel m_memory_model;
   std::string m_generated;
   std::string m_indent;
 

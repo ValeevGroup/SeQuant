@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/memory_model.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -463,6 +464,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   bool supports_named_sections() const override { return m_generator.supports_named_sections(); }
   bool requires_named_sections() const override { return m_generator.requires_named_sections(); }
   bool supports_index_batching() const override { return m_generator.supports_index_batching(); }
+  MemoryModel memory_model() const override { return m_generator.memory_model(); }
   DeclarationScope index_declaration_scope() const override { return m_generator.index_declaration_scope(); }
   DeclarationScope variable_declaration_scope() const override { return m_generator.variable_declaration_scope(); }
   DeclarationScope tensor_declaration_scope() const override { return m_generator.tensor_declaration_scope(); }

@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/memory_model.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -127,6 +128,14 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   bool requires_named_sections() const override { return false; }
 
   bool supports_index_batching() const override { return false; }
+
+  // NumPy/PyTorch arrays are ordinary Python objects with no stack-like
+  // allocation restriction; nothing here is (yet) driven by the
+  // schedule-walking engine that consults this, so RandomAccess is simply
+  // the correct, unconstrained default.
+  MemoryModel memory_model() const override {
+    return MemoryModel::RandomAccess;
+  }
 
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
