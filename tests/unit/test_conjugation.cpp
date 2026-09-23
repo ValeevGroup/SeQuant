@@ -556,6 +556,64 @@ TEST_CASE("conj_serialization_roundtrip", "[conjugation]") {
   REQUIRE(*rt == *t);
 }
 
+TEST_CASE("conjugation_parity_serialization", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+  // fourth letter: parity; absent means Even
+  auto d = deserialize(L"d{i_1;i_2}:N-A-N");  // anti-Hermitian trait letter
+  REQUIRE(d->as<Tensor>().hermiticity() == Hermiticity::AntiHermitian);
+  REQUIRE(d->as<Tensor>().braket_symmetry() == BraKetSymmetry::AntiConjugate);
+  REQUIRE(serialize(d, {.annot_symm = true}) == L"d{i_1;i_2}:N-A-N");
+  auto p = deserialize(L"p{i_1;i_2}:N-H-N-O");
+  REQUIRE(p->as<Tensor>().conjugation_parity() == ConjugationParity::Odd);
+  // over the default complex field a Hermitian tensor's observable braket
+  // symmetry is Conjugate, spelled 'C'; the parity letter survives
+  REQUIRE(serialize(p, {.annot_symm = true}) == L"p{i_1;i_2}:N-C-N-O");
+  // an unsigned braket letter (Nonsymm) together with an explicit Even
+  // parity back-fills NonHermitian; re-serializing drops the parity letter
+  // again since Even is never spelled out
+  auto t = deserialize(L"t{i_1;i_2}:N-N-N-E");
+  REQUIRE(t->as<Tensor>().conjugation_parity() == ConjugationParity::Even);
+  REQUIRE(serialize(t, {.annot_symm = true}) == L"t{i_1;i_2}:N-N-N");
+}
+
+TEST_CASE("conjugation_parity_serialization_real_field", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // a real-field Odd Hermitian tensor: over Field::Real this observable
+  // braket symmetry is a plain (anti)symmetry, not a conjugation, so the
+  // trait letter 'H' (not 'C') is what survives serialization
+  Index i1 = idx(L"i_1", Field::Real);
+  Index i2 = idx(L"i_2", Field::Real);
+  auto t = ex<Tensor>(
+      L"t", bra{i1}, ket{i2},
+      TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                       .conjugation_parity = ConjugationParity::Odd});
+  REQUIRE(t->as<Tensor>().braket_symmetry() == BraKetSymmetry::Antisymm);
+  auto str = serialize(t, {.annot_symm = true});
+  REQUIRE(str == L"t{i_1;i_2}:N-H-N-O");
+
+  // point the deserializer at spaces that are Real too, and check the
+  // parity and braket symmetry round-trip
+  auto sr_reg = std::make_shared<IndexSpaceRegistry>(
+      get_default_context().index_space_registry()->clone());
+  std::vector<std::wstring> keys;
+  for (const auto& s : *sr_reg) keys.push_back(s.base_key());
+  for (const auto& k : keys)
+    if (auto* sp = sr_reg->retrieve_ptr(k)) sp->field(Field::Real);
+  auto real_resetter =
+      set_scoped_default_context(Context(get_default_context()).set(sr_reg));
+
+  auto rt = deserialize(str);
+  REQUIRE(rt->as<Tensor>().conjugation_parity() == ConjugationParity::Odd);
+  REQUIRE(rt->as<Tensor>().braket_symmetry() == BraKetSymmetry::Antisymm);
+}
+
 TEST_CASE("conj_power_roundtrip", "[conjugation]") {
   auto p = ex<Power>(ex<Variable>(L"x"), 2);
   auto pc = conjugate(p);

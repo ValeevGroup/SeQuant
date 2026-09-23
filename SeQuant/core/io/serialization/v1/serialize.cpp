@@ -82,6 +82,20 @@ std::wstring serialize_symm(BraKetSymmetry symm, Hermiticity hermiticity,
   SEQUANT_UNREACHABLE;
 }
 
+std::wstring serialize_symm(ConjugationParity parity,
+                            const SerializationOptions&) {
+  switch (parity) {
+    case ConjugationParity::Even:
+      return L"E";
+    case ConjugationParity::Odd:
+      return L"O";
+    case ConjugationParity::None:
+      return L"N";
+  }
+
+  SEQUANT_UNREACHABLE;
+}
+
 std::wstring serialize_symm(ColumnSymmetry symm, const SerializationOptions&) {
   switch (symm) {
     case ColumnSymmetry::Symm:
@@ -333,6 +347,12 @@ std::wstring to_string(AbstractTensor const& tensor,
                                        tensor._hermiticity(), options);
     serialized +=
         L"-" + details::serialize_symm(tensor._column_symmetry(), options);
+    // the fourth letter is optional: emitted only for a non-Even parity, so
+    // every annotated string produced before this trait existed is unchanged
+    if (tensor._conjugation_parity() != ConjugationParity::Even) {
+      serialized +=
+          L"-" + details::serialize_symm(tensor._conjugation_parity(), options);
+    }
   }
 
   return serialized;

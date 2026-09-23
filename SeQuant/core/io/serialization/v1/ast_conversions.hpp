@@ -20,8 +20,10 @@
 #include <range/v3/algorithm/find.hpp>
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <variant>
 
 namespace sequant::io::serialization::v1::transform {
@@ -192,6 +194,31 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
 }
 
 template <typename Iterator>
+std::optional<ConjugationParity> to_conjugation_parity(char c,
+                                                       std::size_t offset,
+                                                       const Iterator &) {
+  if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
+    return std::nullopt;
+  }
+
+  switch (c) {
+    case 'E':
+    case 'e':
+      return ConjugationParity::Even;
+    case 'O':
+    case 'o':
+      return ConjugationParity::Odd;
+    case 'N':
+    case 'n':
+      return ConjugationParity::None;
+  }
+
+  throw SerializationError(
+      offset, 1,
+      std::string("Invalid conjugation parity specifier '") + c + "'");
+}
+
+template <typename Iterator>
 ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
                                   ColumnSymmetry default_symmetry) {
   if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
@@ -228,14 +255,15 @@ Constant to_constant(const io::serialization::v1::ast::Number &number,
 }
 
 template <typename PositionCache, typename Iterator>
-std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>, ColumnSymmetry>
+std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>, ColumnSymmetry,
+           std::optional<ConjugationParity>>
 to_symmetries(
     const boost::optional<io::serialization::v1::ast::SymmetrySpec> &symm_spec,
     const DefaultSymmetries &default_symms, const PositionCache &cache,
     const Iterator &begin) {
   if (!symm_spec.has_value()) {
     return {std::get<0>(default_symms), std::get<1>(default_symms),
-            std::get<2>(default_symms)};
+            std::get<2>(default_symms), std::nullopt};
   }
 
   const ast::SymmetrySpec &spec = symm_spec.get();
@@ -250,8 +278,12 @@ to_symmetries(
       spec.braket_symm, offset + 3, begin, std::get<1>(default_symms));
   ColumnSymmetry column_symm = to_column_symmetry(
       spec.column_symm, offset + 5, begin, std::get<2>(default_symms));
+  // the fourth letter is optional and has no Context-level default: absent
+  // means "let Tensor::resolve_symmetries derive it", not "Even"
+  std::optional<ConjugationParity> parity =
+      to_conjugation_parity(spec.conjugation_parity, offset + 7, begin);
 
-  return {perm_symm, braket_symm, column_symm};
+  return {perm_symm, braket_symm, column_symm, parity};
 }
 
 template <typename PositionCache, typename Iterator>
@@ -283,7 +315,7 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    auto [perm_symm, braket_symm, column_symm] =
+    auto [perm_symm, braket_symm, column_symm, parity] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
 
@@ -387,14 +419,25 @@ struct Transformer {
         !braket_symm_specified)
       braket_symm = Hermiticity::Hermitian;
 
-    // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
-    // Hermiticity)
+    // Dispatch to correct Tensor symmetry pack member (BraKetSymmetry or
+    // Hermiticity); the parity, when spelled out, is passed alongside it, and
+    // otherwise left unset so Tensor::resolve_symmetries derives or defaults
+    // it the same way a programmatic construction would.
     return std::visit(
         [&](auto symm) {
+          TensorSymmetries syms{.perm = perm_symm, .column = column_symm};
+          using SymmType = std::decay_t<decltype(symm)>;
+          if constexpr (std::is_same_v<SymmType, BraKetSymmetry>) {
+            syms.braket = symm;
+          } else {
+            static_assert(std::is_same_v<SymmType, Hermiticity>);
+            syms.hermiticity = symm;
+          }
+          if (parity.has_value()) syms.conjugation_parity = *parity;
+
           auto t = ex<Tensor>(tensor.name, bra(std::move(braIndices)),
                               ket(std::move(ketIndices)),
-                              aux(std::move(auxiliaries)), perm_symm, symm,
-                              column_symm);
+                              aux(std::move(auxiliaries)), syms);
           // label^*{...} / label^T{...}: the value modifier
           if (tensor.modifier != 0) {
             auto &tt = t->template as<Tensor>();

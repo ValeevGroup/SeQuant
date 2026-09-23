@@ -1575,6 +1575,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     return braket_symmetry_;
   }
   Hermiticity _hermiticity() const override final { return hermiticity_; }
+  ConjugationParity _conjugation_parity() const override final {
+    return conjugation_parity_;
+  }
   ColumnSymmetry _column_symmetry() const override final {
     return column_symmetry_;
   }

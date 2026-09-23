@@ -113,7 +113,7 @@ auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',')  > L"
                         |  '{'  > -(index % ',') > -( ';' > -(index % ',')) > -(';' > -(index % ','))     >  '}'  >> x3::attr(false);
 
 auto symmetry_spec_def= x3::lexeme[
-                         ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper)
+                         ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper) >> -('-' >> x3::upper)
                         ];
 
 // the suffix spellings are sequant::conjugate_label ("^*") and

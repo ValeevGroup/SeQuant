@@ -213,6 +213,15 @@ class AbstractTensor {
   virtual Hermiticity _hermiticity() const {
     return to_hermiticity(this->_braket_symmetry());
   }
+  /// @return the behaviour of the represented operator under complex
+  /// conjugation K in the position representation (see #ConjugationParity).
+  /// The default, #ConjugationParity::Even, is exact for an operator-valued
+  /// tensor: a bra<->ket exchange already spells its adjoint, so it carries
+  /// no independent conjugation state of its own. A type whose value is a
+  /// scalar array (e.g. Tensor) should override this to report its own trait.
+  virtual ConjugationParity _conjugation_parity() const {
+    return ConjugationParity::Even;
+  }
   /// @return the base scalar Field of the tensor: the OR of the
   /// IndexSpace::field() of its bra/ket indices (Complex dominates). Together
   /// with _hermiticity() this determines _braket_symmetry() (a real-field
