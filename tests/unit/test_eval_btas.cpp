@@ -258,6 +258,46 @@ container::svector<long> tidxs(std::wstring const& csv) noexcept {
                transform([](auto&& v) { return ranges::to<std::wstring>(v); }));
 }
 
+/// Leaf yielder backed by pre-built arrays, so that a symmetry relation
+/// between two spellings of the same tensor (d{a;i} = -conj(d{i;a}) for an
+/// anti-Hermitian d) holds exactly in the data. rand_tensor_yield draws the
+/// two spellings independently, which no sign convention could then satisfy.
+template <typename Tensor_t>
+class pinned_tensor_yield {
+ private:
+  std::map<std::wstring, sequant::ResultPtr> label_to_tnsr_;
+
+ public:
+  void put(sequant::Tensor const& tnsr, Tensor_t data) {
+    auto success = label_to_tnsr_.emplace(
+        tensor_to_key(tnsr),
+        sequant::eval_result<sequant::ResultTensorBTAS<Tensor_t>>(
+            std::move(data)));
+    SEQUANT_ASSERT(success.second && "couldn't store tensor!");
+  }
+
+  sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
+    auto found = label_to_tnsr_.find(tensor_to_key(tnsr));
+    if (found == label_to_tnsr_.end())
+      throw sequant::Exception("pinned_tensor_yield: no data for leaf " +
+                               sequant::toUtf8(tensor_to_key(tnsr)));
+    return found->second;
+  }
+
+  sequant::ResultPtr operator()(
+      sequant::meta::can_evaluate auto const& node) const {
+    using namespace sequant;
+    if (node->result_type() == ResultType::Tensor) {
+      SEQUANT_ASSERT(node->expr()->template is<Tensor>());
+      return (*this)(node->expr()->template as<Tensor>());
+    }
+    SEQUANT_ASSERT(node->expr()->template is<Constant>());
+    using numeric_type = typename Tensor_t::numeric_type;
+    return eval_result<ResultScalar<numeric_type>>(
+        node->as_constant().template value<numeric_type>());
+  }
+};
+
 }  // namespace
 
 TEST_CASE("eval_with_btas", "[eval_btas]") {
@@ -923,5 +963,139 @@ TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
       for (size_t a2 = 0; a2 < nvirt; ++a2)
         ref += A(a1, z) * B(a1, a2, z) * C(a2, z);
     CHECK(got(z) == Catch::Approx(ref));
+  }
+}
+
+TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorC = btas::Tensor<std::complex<double>>;
+
+  // The sign a value respelling costs must be applied exactly once. A leaf
+  // that arrives marked -- d^*{i_1;a_1} for an anti-Hermitian d -- is served
+  // through binarize(Tensor)'s EvalOp::Adjoint channel, whose node carries
+  // that sign; an ancestor that adopts the leaf's value orientation for its
+  // own slot layout must not apply it again, because a node's phase
+  // multiplies everything below it, the summand beside the marked one
+  // included.
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  std::srand(2024);
+  const size_t nocc = 2, nvirt = 3;
+  auto rnd = []() {
+    return std::complex<double>(static_cast<double>(std::rand()) / RAND_MAX,
+                                static_cast<double>(std::rand()) / RAND_MAX);
+  };
+
+  // d is anti-Hermitian: the two spellings are related exactly by
+  // d{a_1;i_1} = -conj(d{i_1;a_1}), which the yielder below pins in the data
+  BTensorC D{btas::Range{nocc, nvirt}};
+  D.generate(rnd);
+  BTensorC Dswapped{btas::Range{nvirt, nocc}};
+  for (size_t i = 0; i < nocc; ++i)
+    for (size_t a = 0; a < nvirt; ++a) Dswapped(a, i) = -std::conj(D(i, a));
+  BTensorC U{btas::Range{nvirt, nocc}};  // generic u{a_1;i_1}
+  U.generate(rnd);
+  BTensorC V{btas::Range{nocc, nvirt}};  // generic v{i_1;a_1}
+  V.generate(rnd);
+
+  auto d = [](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(
+        L"d", bra{b}, ket{k},
+        TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+  };
+  auto u = [] { return ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"}); };
+  auto u2 = [] { return ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_2"}); };
+  auto v = [] { return ex<Tensor>(L"v", bra{L"i_1"}, ket{L"a_1"}); };
+
+  pinned_tensor_yield<BTensorC> yield;
+  yield.put(d(L"i_1", L"a_1")->as<Tensor>(), D);
+  yield.put(d(L"a_1", L"i_1")->as<Tensor>(), Dswapped);
+  yield.put(u()->as<Tensor>(), U);
+  yield.put(v()->as<Tensor>(), V);
+
+  // A node's canonicalization phase converts its own spelling to the
+  // canonical orientation the caches hold; the descent engine applies it on
+  // cache reads only and hands the root's value back unoriented, so applying
+  // the root's phase is the caller's job (the ordered executor's root combine
+  // does the same, see evaluate_ordered_schedule's own test).
+  auto eval_open = [&yield](ExprPtr const& expr,
+                            container::svector<long> const& layout) {
+    auto node = eval_node(expr);
+    auto res = evaluate(node, layout, yield)->get<BTensorC>();
+    if (node->canon_phase() != 1)
+      btas::scal(std::complex<double>(node->canon_phase()), res);
+    return res;
+  };
+
+  SECTION("a contraction keeps its value through canonicalization") {
+    // r{i_1;i_2} = d{i_1;a_1} u{a_1;i_2}; an open contraction, so the check
+    // runs through btas::contract. A closed (scalar) network would go through
+    // btas::dot, which conjugates its first operand -- not a linear function
+    // of the operands, so two spellings of one expression legitimately differ
+    // there, and it cannot witness a sign.
+    BTensorC ref{btas::Range{nocc, nocc}};
+    ref.fill(std::complex<double>{0., 0.});
+    for (size_t i = 0; i < nocc; ++i)
+      for (size_t j = 0; j < nocc; ++j)
+        for (size_t a = 0; a < nvirt; ++a) ref(i, j) += D(i, a) * U(a, j);
+
+    auto e = d(L"i_1", L"a_1") * u2();
+    auto const layout = tidxs(L"i_1,i_2");
+    auto const as_written = eval_open(e, layout);
+    auto const canonicalized = eval_open(canonicalize(e->clone()), layout);
+    for (size_t i = 0; i < nocc; ++i)
+      for (size_t j = 0; j < nocc; ++j) {
+        CHECK(as_written(i, j).real() ==
+              Catch::Approx(ref(i, j).real()).margin(1e-12));
+        CHECK(as_written(i, j).imag() ==
+              Catch::Approx(ref(i, j).imag()).margin(1e-12));
+        CHECK(canonicalized(i, j).real() ==
+              Catch::Approx(ref(i, j).real()).margin(1e-12));
+        CHECK(canonicalized(i, j).imag() ==
+              Catch::Approx(ref(i, j).imag()).margin(1e-12));
+      }
+  }
+
+  SECTION("a sum keeps its value through canonicalization") {
+    auto e = d(L"i_1", L"a_1") + v();
+    auto const got = eval_open(canonicalize(e->clone()), tidxs(L"i_1,a_1"));
+    for (size_t i = 0; i < nocc; ++i)
+      for (size_t a = 0; a < nvirt; ++a) {
+        auto const expected = D(i, a) + V(i, a);
+        CHECK(got(i, a).real() == Catch::Approx(expected.real()).margin(1e-12));
+        CHECK(got(i, a).imag() == Catch::Approx(expected.imag()).margin(1e-12));
+      }
+  }
+
+  SECTION("a marked summand does not sign the summand beside it") {
+    // A marked leaf: d^*{i_1;a_1} = -d{a_1;i_1} for this anti-Hermitian d, so
+    // binarize serves it through the Adjoint channel with -1 on that node.
+    // That sign belongs to that summand alone; on the Sum node it would
+    // multiply the generic summand v as well, and the sum's value would
+    // depend on the order the two summands are written in.
+    Tensor dstar = d(L"i_1", L"a_1")->as<Tensor>();
+    REQUIRE(dstar.conjugate() == 1);
+    REQUIRE(dstar.value_modifier() == ValueModifier::Conjugate);
+
+    auto const layout = tidxs(L"i_1,a_1");
+    auto const first = eval_open(ex<Tensor>(dstar) + v(), layout);
+    auto const second = eval_open(v() + ex<Tensor>(dstar), layout);
+    for (size_t i = 0; i < nocc; ++i)
+      for (size_t a = 0; a < nvirt; ++a) {
+        CHECK(first(i, a).real() ==
+              Catch::Approx(second(i, a).real()).margin(1e-12));
+        CHECK(first(i, a).imag() ==
+              Catch::Approx(second(i, a).imag()).margin(1e-12));
+      }
+
+    // and the tree says the same: the respelling's sign rides on the leaf's
+    // own node, and the sum that adopts the leaf's slot layout carries none
+    auto marked_first = eval_node(ex<Tensor>(dstar) + v());
+    REQUIRE(marked_first->op_type() == EvalOp::Sum);
+    REQUIRE(marked_first.left()->op_type() == EvalOp::Adjoint);
+    REQUIRE(int(marked_first.left()->canon_phase()) == -1);
+    REQUIRE(int(marked_first->canon_phase()) == 1);
   }
 }

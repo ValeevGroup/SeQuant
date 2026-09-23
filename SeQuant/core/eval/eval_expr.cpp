@@ -526,19 +526,20 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       // This node adopts the left operand's value orientation as its own
-      // spelling, so the sign of that respelling rides on this node's phase,
-      // the same channel the canonicalizer's phase uses (and the same rule
-      // the Adjoint and Product nodes below follow). Contrast the unfold in
-      // the tensor*tensor branch, which only reads slot occupancy and so
-      // consumes no sign.
-      auto const [t, sign] = value_oriented(left.as_tensor());
+      // slot layout -- the layout only: the respelling's sign belongs to the
+      // leaf's own node. A marked leaf reaches this sum through
+      // binarize(Tensor)'s Adjoint channel, whose node already carries that
+      // sign, while this node's phase would multiply every operand of the
+      // sum. Same reading as the unfold in the tensor*tensor branch, which
+      // also takes slot occupancy alone and consumes no sign.
+      [[maybe_unused]] auto const [t, sign] = value_oriented(left.as_tensor());
       EvalExpr result{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           left.canon_indices(),                             //
-          sign,                                             //
+          1,                                                //
           h,                                                //
           nullptr};
       result.set_accumulate_in_place(true);
@@ -606,14 +607,18 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
-      auto const [t, sign] = value_oriented(tl->as_tensor());
+      // the value orientation supplies this node's slot layout, nothing else:
+      // the respelling's sign belongs to the leaf's own node, which a marked
+      // leaf already carries out of binarize(Tensor)'s Adjoint channel, and
+      // a phase here would multiply every operand of the product
+      [[maybe_unused]] auto const [t, sign] = value_oriented(tl->as_tensor());
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
-                                            aux(t.aux())),     //
-          tl->canon_indices(),                                 //
-          static_cast<std::int8_t>(tl->canon_phase() * sign),  //
+                                            aux(t.aux())),  //
+          tl->canon_indices(),                              //
+          tl->canon_phase(),                                //
           h,
           nullptr};
     } else {
