@@ -7,7 +7,9 @@
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
+#include <cctype>
 #include <sstream>
 #include <utility>
 
@@ -39,6 +41,34 @@ std::string format_power_base(const ExprPtr &base, std::string base_str) {
     }
   }
   return base_str;
+}
+
+std::string sanitize_identifier(std::wstring_view label,
+                                NonAsciiPolicy policy) {
+  std::wstring name;
+  name.reserve(label.size());
+
+  for (wchar_t c : label) {
+    if (c >= 128) {
+      if (policy == NonAsciiPolicy::Keep) {
+        name += c;
+      } else {
+        std::wstringstream hex;
+        hex << L'u' << std::hex << static_cast<unsigned long>(c);
+        name += hex.str();
+      }
+    } else if (std::isalnum(static_cast<unsigned char>(c)) || c == L'_') {
+      name += c;
+    } else {
+      name += L'_';
+    }
+  }
+
+  if (!name.empty() && std::isdigit(static_cast<unsigned char>(name[0]))) {
+    name = L"_" + name;
+  }
+
+  return toUtf8(name);
 }
 
 }  // namespace sequant::detail

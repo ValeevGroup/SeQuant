@@ -17,7 +17,6 @@
 #include <boost/unordered/unordered_map.hpp>
 #include <boost/unordered/unordered_set.hpp>
 
-#include <cctype>
 #include <cstdlib>
 #include <sstream>
 #include <string>
@@ -364,31 +363,8 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   /// Sanitize a label to be a valid Python identifier
   std::string sanitize_python_name(std::wstring_view label) const {
-    std::string name = toUtf8(label);
-
-    // Replace invalid characters with underscores
-    // Python 3 supports unicode identifiers, so we only replace:
-    // - ASCII non-alphanumeric characters (except underscore)
-    // - Keep non-ASCII bytes as they're part of unicode characters (like Greek
-    // letters)
-    for (char &c : name) {
-      unsigned char uc = static_cast<unsigned char>(c);
-      // Only check ASCII range (0-127)
-      if (uc < 128) {
-        if (!std::isalnum(uc) && c != '_') {
-          c = '_';
-        }
-      }
-      // For non-ASCII bytes (>= 128), keep them - they're part of valid UTF-8
-      // unicode chars
-    }
-
-    // Ensure it doesn't start with a number
-    if (!name.empty() && std::isdigit(static_cast<unsigned char>(name[0]))) {
-      name = "_" + name;
-    }
-
-    return name;
+    // Python 3 supports unicode identifiers
+    return detail::sanitize_identifier(label, detail::NonAsciiPolicy::Keep);
   }
 
   /// Get or create a single-character einsum index for a given Index
