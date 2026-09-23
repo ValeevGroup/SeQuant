@@ -92,6 +92,16 @@ target_link_libraries(unit_tests-sequant-export-obj
     PRIVATE Catch2::Catch2 dtl::dtl Eigen3::Eigen)
 target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+# Unlike its export_test_sources siblings, this file's includes
+# (ordered_schedule.hpp -> ... -> optimize/single_term_detail.hpp ->
+# tensor_canonicalizer.hpp) are the only ones in this target that actually
+# instantiate range-v3's take_view (range/v3/view/take.hpp), whose
+# unqualified `meta::conditional_t` becomes ambiguous once unified with
+# test_export.cpp's file-scope `using namespace sequant;` (SeQuant/core/
+# meta.hpp declares sequant::meta, colliding with range-v3's own top-level
+# meta:: namespace). Excluded from unity batching to avoid that collision.
+set_source_files_properties("test_schedule_export.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 ##########################
 # OBJECT library: MBPT tests
