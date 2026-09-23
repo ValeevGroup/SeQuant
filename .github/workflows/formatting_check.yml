@@ -23,3 +23,15 @@ jobs:
             -regex '.*\.(h|hpp|hh|hxx|ipp|cpp|cc|cxx)$' \
             -print0 | \
           xargs -0 clang-format-17 --dry-run --Werror
+
+      - name: Forbid SeQuant/core/export from including eval's runtime execution headers
+        run: |
+          # SeQuant/core/export may depend on eval's pure scheduling data
+          # (cell_table.hpp, ordered_schedule.hpp, ...) but never on its
+          # runtime execution machinery (cell_registry.hpp,
+          # ordered_executor.hpp), which has no meaning for a one-shot
+          # compile. See the export-as-eval-backend migration design notes.
+          if grep -rlE '#\s*include\s*[<"][^>"]*\b(cell_registry|ordered_executor)\.hpp[>"]' SeQuant/core/export; then
+            echo "::error::SeQuant/core/export must not include eval's runtime execution headers (cell_registry.hpp, ordered_executor.hpp) — see above for offending file(s)."
+            exit 1
+          fi
