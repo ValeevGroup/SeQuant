@@ -397,25 +397,33 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   apply_index_replacements(tensors_, idxrepl, true);
 
   // Permute {bra, ket} or column slots of column-symmetric tensors as
-  // indicated by graph canonization
+  // indicated by graph canonization, then fold the bra/ket bundles of every
+  // foldable tensor: permuting slots within a bundle, or columns among
+  // themselves, needs the column symmetry; exchanging the two bundles whole
+  // does not, it needs only braket_foldable()
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
     AbstractTensor &tensor = *tensors_[i];
 
-    if (column_symmetry(tensor) != ColumnSymmetry::Symm) continue;
-    const auto asymm = symmetry(tensor) == Symmetry::Nonsymm;
+    // a lambda, so that a tensor the graph gives no slot verdict for returns
+    // from the permutation without skipping the bundle fold below
+    const auto permute_slots = [&]() {
+      const auto asymm = symmetry(tensor) == Symmetry::Nonsymm;
 
-    if (asymm) {  // asymmetric tensor? order column slots only
+      if (asymm) {  // asymmetric tensor? order column slots only
 
-      auto it = canonical_column_bundle_order.find(i);
-      if (it == canonical_column_bundle_order.end()) continue;
+        auto it = canonical_column_bundle_order.find(i);
+        if (it == canonical_column_bundle_order.end()) return;
 
-      auto &sorted_ordinals = it->second;
+        auto &sorted_ordinals = it->second;
 
-      tensor._permute_columns(
-          std::span(sorted_ordinals.data(), sorted_ordinals.size()));
-    } else {  // symmetric/antisymmetric bra
+        tensor._permute_columns(
+            std::span(sorted_ordinals.data(), sorted_ordinals.size()));
+        return;
+      }
+
+      // symmetric/antisymmetric bra
       auto it = canonical_slot_order.find(i);
-      if (it == canonical_slot_order.end()) continue;
+      if (it == canonical_slot_order.end()) return;
 
       auto &[braparslots, ketparslots] = it->second;
       auto &[braparity, braslots] = braparslots;
@@ -446,7 +454,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       if (symmetry(tensor) == Symmetry::Antisymm) {
         parity *= braparity.value_or(1) * ketparity.value_or(1);
       }
-    }
+    };
+    if (column_symmetry(tensor) == ColumnSymmetry::Symm) permute_slots();
 
     // lastly permute bra with ket bundles, if needed; reserved bookkeeping
     // operators ((anti)symmetrizer, transposition) keep their orientation --

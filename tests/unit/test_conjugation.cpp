@@ -1249,11 +1249,10 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  // N.B. the tensors below are column-symmetric: TensorNetworkV3's
-  // graph-dictated bra<->ket reorientation only visits column-symmetric
-  // tensors, so a ColumnSymmetry::Nonsymm tensor keeps its authored
-  // orientation through a network canonicalization whatever its braket
-  // symmetry (this holds for BraKetSymmetry::Conjugate just as much)
+  // N.B. the tensors below carry the default ColumnSymmetry::Nonsymm:
+  // TensorNetworkV3's graph-dictated bra<->ket reorientation folds the two
+  // bundles of every braket_foldable() tensor, column-symmetric or not (only
+  // permuting slots *within* a bundle needs the column symmetry)
 
   SECTION("anti-Hermitian: the two orientations differ by a sign") {
     // d{i;a} u{a;i} and d{a;i} u{a;i}: d{a;i} = -conj(d{i;a}), so the
@@ -1261,8 +1260,7 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
     auto d = [](std::wstring_view b, std::wstring_view k) {
       return ex<Tensor>(
           L"d", bra{b}, ket{k},
-          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
-                           .column = ColumnSymmetry::Symm});
+          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
     };
     auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
     auto e1 = d(L"i_1", L"a_1") * u;
@@ -1294,8 +1292,7 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
     auto d = [](std::wstring_view b, std::wstring_view k) {
       return ex<Tensor>(
           L"d", bra{b}, ket{k},
-          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
-                           .column = ColumnSymmetry::Symm});
+          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
     };
     auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
     auto c1 = canonicalize(d(L"i_1", L"a_1") * u, opts);
@@ -1318,8 +1315,7 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
       return ex<Tensor>(
           L"p", bra{idx(b, Field::Real)}, ket{idx(k, Field::Real)},
           TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
-                           .conjugation_parity = ConjugationParity::Odd,
-                           .column = ColumnSymmetry::Symm});
+                           .conjugation_parity = ConjugationParity::Odd});
     };
     auto u = [&](std::wstring_view b, std::wstring_view k) {
       return ex<Tensor>(L"u", bra{idx(b, Field::Real)},
