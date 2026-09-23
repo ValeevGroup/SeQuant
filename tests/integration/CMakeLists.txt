@@ -96,3 +96,7 @@ foreach(current IN LISTS TEST_CASES)
 endforeach()
 
 add_subdirectory(eval)
+
+if (SEQUANT_HAS_TAPP)
+    add_subdirectory(export_tapp)
+endif()
