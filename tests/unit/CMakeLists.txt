@@ -80,6 +80,7 @@ set(export_test_sources
     "test_export.cpp"
     "test_export.hpp"
     "test_export_python.cpp"
+    "test_natural_memory_model.cpp"
 )
 add_library(unit_tests-sequant-export-obj OBJECT ${export_test_sources})
 target_set_warning_flags(unit_tests-sequant-export-obj)

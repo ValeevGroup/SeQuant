@@ -526,6 +526,8 @@ set(SeQuant_export_src
         SeQuant/core/export/julia_tensor_operations.cpp
         SeQuant/core/export/julia_tensor_operations.hpp
         SeQuant/core/export/memory_model.hpp
+        SeQuant/core/export/natural_memory_model.cpp
+        SeQuant/core/export/natural_memory_model.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
         SeQuant/core/export/text_generator.hpp
