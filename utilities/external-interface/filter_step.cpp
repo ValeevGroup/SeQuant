@@ -29,7 +29,8 @@ bool ExpressionFilter::matches(const Expr &expr) const {
     }
   }
 
-  return true;
+  // In "any" mode, getting here means that no rule matched
+  return require_all_;
 }
 
 void ExpressionFilter::set_require_all(bool require) { require_all_ = require; }
