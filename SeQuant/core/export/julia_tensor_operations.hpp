@@ -183,6 +183,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   void persist(const Tensor &tensor, const Context &ctx) override {
+    // Returning hands the object over to the caller, which also satisfies the
+    // drop implied by persisting
     m_generated += "return " + tensor_name(tensor, ctx) + "\n";
   }
 
@@ -222,6 +224,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   void persist(const Variable &variable, const Context &ctx) override {
+    // Returning hands the object over to the caller, which also satisfies the
+    // drop implied by persisting
     m_generated += "return " + represent(variable, ctx) + "\n";
   }
 
