@@ -20,9 +20,11 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -1347,6 +1349,95 @@ TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {
     REQUIRE(q.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
     REQUIRE(q.braket_symmetry() == BraKetSymmetry::Antisymm);
   }
+}
+
+TEST_CASE("signed_eval_boundary", "[conjugation]") {
+  // the sign the value respelling consumes must reach the eval tree: a leaf
+  // whose spelling is minus its value orientation is served through an
+  // EvalOp::Adjoint node whose canon_phase() carries that sign, multiplied by
+  // the leaf's own block-canonicalization phase
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  SECTION("an AntiConjugate leaf's starred spelling carries the fold's sign") {
+    Tensor d(L"d", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                              .column = ColumnSymmetry::Symm});
+    REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
+    Tensor dstar = d;
+    REQUIRE(dstar.conjugate() == 1);
+    REQUIRE(dstar.value_modifier() == ValueModifier::Conjugate);
+    // d^* = -d^T: unfolding the marker back to the value orientation costs
+    // the anti-Hermitian sign
+    auto [vo, vo_sign] = value_oriented(dstar);
+    REQUIRE(vo_sign == -1);
+    REQUIRE(vo.value_modifier() == ValueModifier::None);
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Tensor>(dstar));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(tree.leaf());
+    REQUIRE(tree->op_type() == EvalOp::Adjoint);
+    // the block canonicalization of this leaf contributes no phase, so the
+    // node's phase is the respelling's sign alone
+    REQUIRE(tree.left().leaf());
+    REQUIRE(tree.left()->canon_phase() == 1);
+    REQUIRE(tree->canon_phase() == -1);
+    REQUIRE_FALSE(tree.left()->as_tensor().conjugated());
+  }
+
+  SECTION("a plain Adjoint-state Nonsymm leaf carries no sign") {
+    // nothing folds for a Nonsymm tensor, so there is no relation to spend
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    Tensor t_adj = t;
+    REQUIRE(t_adj.adjoint() == 1);
+    REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Tensor>(t_adj));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(tree->op_type() == EvalOp::Adjoint);
+    REQUIRE(tree->canon_phase() == 1);
+  }
+}
+
+TEST_CASE("adjoint_sign_is_absolute", "[conjugation]") {
+  // the sign an adjoint produces belongs to the expression, not to the
+  // spelling it was taken in: adjoining a canonical form and canonicalizing
+  // an adjoint must land on the same signed expression
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto d =
+      ex<Tensor>(L"d", bra{L"i_1"}, ket{L"a_1"},
+                 TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                                  .column = ColumnSymmetry::Symm});
+  auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
+  auto x = d * u;
+
+  auto adj_then_canon = canonicalize(adjoint(x->clone()));
+  auto canon_then_adj = canonicalize(adjoint(canonicalize(x->clone())));
+  REQUIRE(*adj_then_canon == *canon_then_adj);
+}
+
+TEST_CASE("bad_conjugation_parity_letter", "[conjugation]") {
+  // the fourth symmetry letter of an annotation names a ConjugationParity
+  // (E, O or N); anything else is a deserialization error
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  REQUIRE_NOTHROW(deserialize(L"t{i_1;i_2}:N-N-N-O"));
+  REQUIRE_THROWS_AS(deserialize(L"t{i_1;i_2}:N-N-N-X"),
+                    io::serialization::SerializationError);
 }
 
 TEST_CASE("painter_colours_by_conjugation_symmetry", "[conjugation]") {
