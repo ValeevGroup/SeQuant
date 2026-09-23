@@ -43,9 +43,8 @@ std::vector<std::size_t> topological_order_indexed(
 
   for (std::size_t i = 0; i < n; ++i) {
     for (std::size_t dep : get_dependencies(i)) {
-      SEQUANT_ASSERT(dep < n);
-      ++indegree[i];
-      dependents[dep].push_back(i);
+      ++indegree.at(i);
+      dependents.at(dep).push_back(i);
     }
   }
 
@@ -126,9 +125,8 @@ std::vector<std::size_t> topological_order(Range &&range,
     }
   }
 
-  auto get_dep_indices =
-      [&](std::size_t i) -> const std::vector<std::size_t> & {
-    return deps_by_index[i];
+  auto get_dep_indices = [&](std::size_t i) -> decltype(auto) {
+    return deps_by_index.at(i);
   };
 
   if constexpr (std::same_as<Comp, std::identity>) {
