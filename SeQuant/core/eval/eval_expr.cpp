@@ -340,26 +340,16 @@ size_t hash_indices(T const& indices) noexcept {
 
 size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
-  const std::wstring label = tnsr.decorated_label();  // includes '⁺'
-  hash::combine(h, hash::value(std::wstring_view(label)));
+  hash::combine(h, hash::value(tnsr.label()));
   hash::combine(h, hash_indices(tnsr.const_slots()));
-  // A set Conjugate/Transpose modifier is part of the leaf's value identity
-  // for every braket symmetry: g^*{i;a} is conj(g{i;a}), a different array
-  // unless g is real (for Hermitian g it equals g{a;i}), so the two spellings
-  // must not share a cache slot. The two spellings of one value that a
-  // Hermitian g does have, g{i;a} and g^*{a;i}, already differ in their slot
-  // hashes. The Adjoint state is in the decorated label.
-  switch (tnsr.value_modifier()) {
-    case ValueModifier::Conjugate:
-      hash::combine(h, true);  // distinguishes Conjugate from Transpose
-      break;
-    case ValueModifier::Transpose:
-      hash::combine(h, std::uint8_t{2});
-      break;
-    case ValueModifier::None:
-    case ValueModifier::Adjoint:
-      break;
-  }
+  // Every value modifier is part of the leaf's value identity for every
+  // braket symmetry: g^*{i;a} is conj(g{i;a}), a different array unless g is
+  // real (for Hermitian g it equals g{a;i}), so the two spellings must not
+  // share a cache slot. The two spellings of one value that a Hermitian g
+  // does have, g{i;a} and g^*{a;i}, already differ in their slot hashes. The
+  // default state adds nothing, so unmarked leaves keep their hash.
+  if (tnsr.value_modifier() != ValueModifier::None)
+    hash::combine(h, static_cast<std::uint8_t>(tnsr.value_modifier()));
   return h;
 }
 }  // namespace

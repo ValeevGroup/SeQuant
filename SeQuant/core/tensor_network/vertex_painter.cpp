@@ -5,8 +5,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <cstdint>
-#include <string>
-#include <string_view>
 #include <utility>
 
 namespace sequant {
@@ -38,13 +36,8 @@ std::size_t VertexPainterImpl::to_hash_value(
       bra_rank > ket_rank) {
     std::swap(bra_rank, ket_rank);
   }
-  // the shade hashes decorated_label(): the printed core label, adjoint mark
-  // included, so adjoint tensors keep their colours and hence their
-  // canonical forms
   const Tensor *ct = as_cnumber_tensor(tensor);
-  const std::wstring shade_label =
-      ct ? ct->decorated_label() : std::wstring(tensor._label());
-  auto hashes = {hash::value(std::wstring_view(shade_label)),
+  auto hashes = {hash::value(tensor._label()),
                  hash::value(bra_rank),
                  hash::value(ket_rank),
                  hash::value(tensor._aux_rank()),
@@ -52,33 +45,28 @@ std::size_t VertexPainterImpl::to_hash_value(
                  hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
   auto result = to_hash_value(hashes);
-  // A Conjugate or Transpose modifier is part of a tensor's value identity
-  // (T^* != T and T^T != T for a Nonsymm tensor; Conjugate-symmetry tensors
-  // are value-oriented before canonicalize() builds its graph, and are
-  // coloured as-is by canonicalize_slots). The Adjoint modifier is already
-  // in shade_label. Perturb only marked tensors: bliss's canonical labeling
-  // depends on colour values and hash::combine is not order-preserving, so
-  // folding even a "no modifier" value into every colour would re-spell
-  // every marker-free network.
+  // Every value modifier is part of a tensor's value identity (T^* != T and
+  // T^T != T for a Nonsymm tensor; Conjugate-symmetry tensors are
+  // value-oriented before canonicalize() builds its graph, and are coloured
+  // as-is by canonicalize_slots). Perturb only marked tensors: bliss's
+  // canonical labeling depends on colour values and hash::combine is not
+  // order-preserving, so folding even a "no modifier" value into every
+  // colour would re-spell every marker-free network.
   // Without the modifier in the core-vertex color, an uncolored graph for
   // C{x;m} and C^*{y;m} is automorphic: nothing but the modifier bit
   // distinguishes the two vertices, so a canonical labeling is free to swap
   // them, and C * C^* would collide with C^* * C under one shared hash and
   // graph.
-  if (ct) {
-    switch (ct->value_modifier()) {
-      case ValueModifier::Conjugate:
-        // distinguishes Conjugate from Transpose and None
-        hash::combine(result, hash::value(true));
-        break;
-      case ValueModifier::Transpose:
-        hash::combine(result, hash::value(std::uint8_t{2}));
-        break;
-      case ValueModifier::None:
-      case ValueModifier::Adjoint:
-        break;
-    }
-  }
+  if (ct && ct->value_modifier() != ValueModifier::None)
+    hash::combine(result,
+                  hash::value(static_cast<std::uint8_t>(ct->value_modifier())));
+  // a conjugation symmetry that differs from the default parity's enters the
+  // shade; even-parity tensors add nothing in any field, so canonical forms
+  // that predate the trait are unchanged, and complex-field tensors, whose
+  // parity is unobservable, colour alike as they compare alike
+  if (tensor._conjugation_parity() != ConjugationParity::Even &&
+      tensor._conjugation_symmetry() != ConjugationSymmetry::Nonsymm)
+    hash::combine(result, hash::value(tensor._conjugation_symmetry()));
   return result;
 }
 

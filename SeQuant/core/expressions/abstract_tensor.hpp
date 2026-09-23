@@ -222,6 +222,11 @@ class AbstractTensor {
   virtual ConjugationParity _conjugation_parity() const {
     return ConjugationParity::Even;
   }
+  /// @return the elementwise conjugation symmetry of the array; the derived
+  /// observable, see to_conjugation_symmetry()
+  virtual ConjugationSymmetry _conjugation_symmetry() const {
+    return ConjugationSymmetry::Nonsymm;
+  }
   /// @return the base scalar Field of the tensor: the OR of the
   /// IndexSpace::field() of its bra/ket indices (Complex dominates). Together
   /// with _hermiticity() this determines _braket_symmetry() (a real-field

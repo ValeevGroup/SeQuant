@@ -727,7 +727,7 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
 TEST_CASE("value_modifier_encoding", "[conjugation]") {
   // The adjoint mark is a value modifier, not a label character: a '⁺'
   // arriving in a label is adopted into the bits, label() is bare, and
-  // decorated_label() reproduces that spelling for printing/hashing.
+  // decorated_label() reproduces that spelling for printing.
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
@@ -773,6 +773,35 @@ TEST_CASE("value_modifier_encoding", "[conjugation]") {
     REQUIRE(g_adj.label() == L"g");
     REQUIRE(g_adj.value_modifier() == ValueModifier::None);
     REQUIRE(g_adj.decorated_label() == L"g");
+  }
+
+  SECTION(
+      "every value modifier enters the hash the same way, on the bare "
+      "label") {
+    // t, t^*, t^T and t⁺ share one label; each modifier must still give the
+    // tensor a distinct hash, since a colliding pair would alias distinct
+    // values onto one cache slot.
+    Tensor t_star = t;
+    REQUIRE(t_star.conjugate() == 1);
+    Tensor t_transposed = t;
+    REQUIRE(t_transposed.transpose() == 1);
+    Tensor t_adj = t;
+    REQUIRE(t_adj.adjoint() == 1);
+
+    const auto h = t.hash_value();
+    const auto h_star = t_star.hash_value();
+    const auto h_transposed = t_transposed.hash_value();
+    const auto h_adj = t_adj.hash_value();
+    REQUIRE(h != h_star);
+    REQUIRE(h != h_transposed);
+    REQUIRE(h != h_adj);
+    REQUIRE(h_star != h_transposed);
+    REQUIRE(h_star != h_adj);
+    REQUIRE(h_transposed != h_adj);
+
+    // the same holds one level up, for the EvalExpr leaves binarize serves a
+    // marked tensor as (hash_terminal_tensor's invariant)
+    REQUIRE(EvalExpr{t_adj}.hash_value() != EvalExpr{t_star}.hash_value());
   }
 
   SECTION("deserializer: ⁺, ^* and ^T round-trip") {
@@ -1317,5 +1346,62 @@ TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {
     REQUIRE(q.conjugation_parity() == ConjugationParity::Odd);
     REQUIRE(q.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
     REQUIRE(q.braket_symmetry() == BraKetSymmetry::Antisymm);
+  }
+}
+
+TEST_CASE("painter_colours_by_conjugation_symmetry", "[conjugation]") {
+  // the graph painter's shade must follow the observable
+  // ConjugationSymmetry -- the property Tensor::static_equal compares -- and
+  // not the ConjugationParity trait it is derived from, so that tensors which
+  // compare equal also colour, and hence canonicalize, equally
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  SECTION("parities that resolve to the same symmetry colour alike") {
+    // over the complex field neither Even nor None exposes an elementwise
+    // conjugation relation, so both resolve to ConjugationSymmetry::Nonsymm
+    auto c = [](ConjugationParity parity) {
+      return ex<Tensor>(L"c", bra{L"i_1"}, ket{L"a_1"},
+                        TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
+                                         .conjugation_parity = parity,
+                                         .column = ColumnSymmetry::Symm});
+    };
+    auto even = c(ConjugationParity::Even);
+    auto none = c(ConjugationParity::None);
+    REQUIRE(even->as<Tensor>().conjugation_parity() == ConjugationParity::Even);
+    REQUIRE(none->as<Tensor>().conjugation_parity() == ConjugationParity::None);
+    REQUIRE(even->as<Tensor>().conjugation_symmetry() ==
+            ConjugationSymmetry::Nonsymm);
+    REQUIRE(none->as<Tensor>().conjugation_symmetry() ==
+            ConjugationSymmetry::Nonsymm);
+    REQUIRE(*even == *none);
+    REQUIRE(even->hash_value() == none->hash_value());
+    auto u = [] { return ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"}); };
+    REQUIRE(*canonicalize(even->clone() * u()) ==
+            *canonicalize(none->clone() * u()));
+  }
+
+  SECTION("a real-field Odd tensor colours apart from its Even twin") {
+    // the two differ in nothing but the parity, which over a real field is an
+    // observable elementwise relation (Antisymm vs Symm)
+    auto p = [](ConjugationParity parity) {
+      return ex<Tensor>(
+          L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+          TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
+                           .conjugation_parity = parity,
+                           .column = ColumnSymmetry::Symm});
+    };
+    auto u = [] {
+      return ex<Tensor>(L"u", bra{idx(L"a_1", Field::Real)},
+                        ket{idx(L"i_1", Field::Real)});
+    };
+    REQUIRE(p(ConjugationParity::Odd)->as<Tensor>().braket_symmetry() ==
+            p(ConjugationParity::Even)->as<Tensor>().braket_symmetry());
+    auto odd = canonicalize(p(ConjugationParity::Odd) * u());
+    auto even = canonicalize(p(ConjugationParity::Even) * u());
+    REQUIRE_FALSE(*odd == *even);
   }
 }

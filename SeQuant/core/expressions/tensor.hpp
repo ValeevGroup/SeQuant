@@ -1182,9 +1182,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ValueModifier value_modifier() const { return conjugated_ * transposed_; }
   /// @return label() followed by the adjoint mark when value_modifier() is
   ///         ValueModifier::Adjoint: the printed core label, used for
-  ///         printing, hashing and graph colouring so that `t` and `t⁺` are
-  ///         distinct everywhere and `t⁺`'s spelling, hash and colour do not
-  ///         depend on which spelling was constructed.
+  ///         printing and the exporters' array names so that `t⁺`'s spelling
+  ///         does not depend on which spelling was constructed. Hashing and
+  ///         graph colouring instead combine the bare label() with the
+  ///         numeric value_modifier(), so that they too do not depend on
+  ///         which spelling was constructed, without threading the mark
+  ///         through the label string.
   std::wstring decorated_label() const {
     std::wstring result(label_);
     if (value_modifier() == ValueModifier::Adjoint)
@@ -1436,26 +1439,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       bra_hash_value_ = val;
       hash::range(val, begin(ket()), end(ket()));
       hash::range(val, begin(aux()), end(aux()));
-      // the adjoint mark enters the hash through decorated_label(); the
-      // other two states add their own term below
-      hash::combine(val, decorated_label());
+      hash::combine(val, label_);
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
       // the conjugation symmetry is compared by static_equal but kept out of
       // the hash: it is derived from the parity and the slots' field, and
       // every real-field tensor would otherwise change hash
       hash::combine(val, column_symmetry_);
-      switch (value_modifier()) {
-        case ValueModifier::Conjugate:
-          hash::combine(val, true);  // distinguishes Conjugate from Transpose
-          break;
-        case ValueModifier::Transpose:
-          hash::combine(val, std::uint8_t{2});
-          break;
-        case ValueModifier::None:
-        case ValueModifier::Adjoint:
-          break;
-      }
+      // every value modifier enters the hash the same way, as its numeric
+      // value on the bare label; the default state adds nothing, so
+      // unmarked tensors keep their hash
+      if (value_modifier() != ValueModifier::None)
+        hash::combine(val, static_cast<std::uint8_t>(value_modifier()));
       return val;
     };
     if (!hash_value_) {
@@ -1577,6 +1572,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Hermiticity _hermiticity() const override final { return hermiticity_; }
   ConjugationParity _conjugation_parity() const override final {
     return conjugation_parity_;
+  }
+  ConjugationSymmetry _conjugation_symmetry() const override final {
+    return conjugation_symmetry_;
   }
   ColumnSymmetry _column_symmetry() const override final {
     return column_symmetry_;
