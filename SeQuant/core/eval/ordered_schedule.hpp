@@ -493,16 +493,16 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
         [&](std::size_t a, std::size_t b) {
           return meta[a].tie_key < meta[b].tie_key;
         });
-  } catch (Exception const&) {
+  } catch (Exception const& e) {
     // No cycle expected: see the function doc comment. Re-thrown with a
     // more specific message, and still a throw rather than an assert, so
     // this stays loud in a build with asserts disabled.
     std::size_t total_edges = 0;
     for (std::size_t i = 0; i < m; ++i) total_edges += prerequisites[i].size();
-    throw Exception(
-        "ordered_schedule_topo_sort_steps: cyclic step dependencies among " +
-        std::to_string(m) + " sibling steps (" + std::to_string(total_edges) +
-        " prerequisite edges)");
+    throw Exception("ordered_schedule_topo_sort_steps for " +
+                    std::to_string(m) + " sibling steps (" +
+                    std::to_string(total_edges) +
+                    " prerequisite edges): " + e.what());
   }
 
   // Post-sort validation (loud tripwire, see the function doc comment):
