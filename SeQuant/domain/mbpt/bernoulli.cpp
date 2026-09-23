@@ -3,6 +3,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -20,6 +21,7 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 
 // Bernoulli expansion of the unitary-CC similarity-transformed Hamiltonian
@@ -62,18 +64,20 @@ const sequant::NormalOperator<sequant::Statistics::FermiDirac>* find_nop(
   return nullptr;
 }
 
-/// Classifies one block-resolved term as N or R, per the O_N/O_R split above
-/// Eq. (43) of 10.1063/1.5030344. A term is N iff its single residual
+/// Classifies one block-resolved term as @f$N@f$ or @f$R@f$, per the
+/// @f$O_N/O_R@f$ split above Eq. (43) of 10.1063/1.5030344. A term is @f$N@f$
+/// iff its single residual
 /// NormalOperator is a pure excitation (all creators pure-unoccupied AND all
 /// annihilators pure-occupied) or a pure de-excitation (the reverse), with
-/// rank in [@p min_rank, @p cutoff], rank being the larger of its creator and
-/// annihilator counts. A term with no residual NormalOperator is
-/// rank-preserving, hence R.
+/// rank in @f$[\mathtt{min\_rank},\mathtt{cutoff}]@f$, rank being the larger
+/// of its creator and annihilator counts. A term with no residual
+/// NormalOperator is rank-preserving, hence @f$R@f$.
 ///
-/// Rank outside the range falls to R rather than being dropped: dropping is
-/// justified only by V̄_N = 0 (Eq. (43)), which holds exactly over the ranks σ
-/// carries. Above @p cutoff σ is truncated; below @p min_rank, as with skipped
-/// singles, there is no amplitude to solve for.
+/// Rank outside the range falls to @f$R@f$ rather than being dropped: dropping
+/// is justified only by @f$\bar{V}_N=0@f$ (Eq. (43)), which holds exactly over
+/// the ranks @f$\sigma@f$ carries. Above @p cutoff @f$\sigma@f$ is truncated;
+/// below @p min_rank, as with skipped singles, there is no amplitude to solve
+/// for.
 bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff,
                std::size_t min_rank) {
   using namespace sequant;
@@ -110,7 +114,90 @@ bool is_N_term(const sequant::ExprPtr& term, std::size_t cutoff,
 
 namespace sequant::mbpt::bernoulli {
 
+namespace {
+
+/// Returns @f$b_0,\ldots,b_{\mathrm{max\_order}}@f$ in
+/// @f$x/(\exp(x)-1)=\sum_n b_n x^n@f$.
+///
+/// These are the Bernoulli numbers with the factorial absorbed,
+/// @f$b_n=B_n/n!@f$. The recurrence is the coefficient identity obtained by
+/// multiplying this series by @f$(\exp(x)-1)/x@f$.
+container::svector<rational> series_coefficients(std::size_t max_order) {
+  container::svector<rational> inverse_factorial(max_order + 2, 1);
+  for (std::size_t n = 0; n < inverse_factorial.size(); ++n)
+    inverse_factorial[n] = rational{1, factorial(n)};
+
+  container::svector<rational> bernoulli(max_order + 1, 0);
+  bernoulli[0] = 1;
+  for (std::size_t n = 1; n <= max_order; ++n) {
+    for (std::size_t k = 0; k < n; ++k)
+      bernoulli[n] -= bernoulli[k] * inverse_factorial[n - k + 1];
+  }
+  return bernoulli;
+}
+
+/// Replaces @f$c\,As-c\,Rs@f$ with @f$c\,Ns@f$ for paths sharing the suffix
+/// @f$s@f$, using @f$A-R=N@f$.
+void apply_normal_partition_identity(detail::PartitionPathCoefficients& terms) {
+  container::svector<std::pair<std::string, rational>> replacements;
+
+  for (const auto& [path, coefficient] : terms) {
+    if (path.front() != 'A' || coefficient == 0) continue;
+    auto remainder_path = path;
+    remainder_path.front() = 'R';
+    const auto remainder = terms.find(remainder_path);
+    if (remainder != terms.end() && remainder->second == -coefficient)
+      replacements.emplace_back(path, coefficient);
+  }
+
+  for (const auto& [path, coefficient] : replacements) {
+    auto remainder_path = path;
+    remainder_path.front() = 'R';
+    auto normal_path = path;
+    normal_path.front() = 'N';
+    terms.erase(path);
+    terms.erase(remainder_path);
+    terms[normal_path] += coefficient;
+  }
+}
+
+}  // namespace
+
 namespace detail {
+
+container::svector<PartitionPathCoefficients> nested_commutator_coefficients(
+    std::size_t max_order) {
+  const auto bernoulli = series_coefficients(max_order);
+  container::svector<PartitionPathCoefficients> coefficients(max_order + 1);
+  coefficients[0].emplace("A", 1);
+
+  for (std::size_t order = 1; order <= max_order; ++order) {
+    auto& terms = coefficients[order];
+    const auto source_coefficient =
+        order % 2 == 0 ? bernoulli[order] : -bernoulli[order];
+    terms[std::string(order + 1, 'A')] += source_coefficient;
+
+    for (std::size_t nested_rank = 1; nested_rank <= order; ++nested_rank) {
+      const auto coefficient = -bernoulli[nested_rank];
+      if (coefficient == 0) continue;
+      for (const auto& [path, path_coefficient] :
+           coefficients[order - nested_rank]) {
+        auto extended = path;
+        extended.back() = 'R';
+        extended.append(nested_rank, 'A');
+        terms[extended] += coefficient * path_coefficient;
+      }
+    }
+
+    apply_normal_partition_identity(terms);
+    for (auto term = terms.begin(); term != terms.end();)
+      if (term->second == 0)
+        term = terms.erase(term);
+      else
+        ++term;
+  }
+  return coefficients;
+}
 
 ExprPtr wick_reduce(const ExprPtr& expr_in) {
   auto expr = expr_in->clone();
@@ -262,13 +349,9 @@ ExprPtr R_part(const ExprPtr& expr, std::size_t cutoff, std::size_t min_rank) {
 
 }  // namespace detail
 
-// Each H̄^k below transcribes its equation. A subscript R/N means "take that
-// part of the commutator before the next nesting".
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   if (get_default_mbpt_context().csv() == CSV::Yes)
     throw Exception("bernoulli::hbar: CSV is not supported");
-  if (rank > 4)
-    throw Exception("bernoulli::hbar: only ranks [0,4] are implemented");
 
   using namespace detail;
   // σ carries ranks [min_rank, cutoff]; V̄_N = 0 holds over exactly that range
@@ -296,20 +379,20 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
   // one partition tag per level. nest memoizes each prefix (key = p0 + tags so
   // far); prefixes repeat within a rank and across ranks.
   container::map<std::string, ExprPtr> memo;
-  auto nest = [&](char p0, const char* f) -> ExprPtr {
+  auto nest = [&](std::string_view path) -> ExprPtr {
     // grow `key` in place rather than deriving it from the memo iterator:
     // container::map is a flat_map, whose insertions invalidate iterators
-    std::string key{p0};
+    std::string key{path.front()};
     auto it = memo.find(key);
     if (it == memo.end())
-      it = memo.emplace(key, part(p0, V, /*reduced=*/false)).first;
+      it = memo.emplace(key, part(path.front(), V, /*reduced=*/false)).first;
     ExprPtr cur = it->second;
-    for (int i = 0; f[i] != '\0'; ++i) {
-      key += f[i];
+    for (const char tag : path.substr(1)) {
+      key += tag;
       it = memo.find(key);
       if (it == memo.end()) {
         auto cx = wick_commutator(cur, sigma);
-        it = memo.emplace(key, part(f[i], cx, /*reduced=*/true)).first;
+        it = memo.emplace(key, part(tag, cx, /*reduced=*/true)).first;
       }
       cur = it->second;
     }
@@ -333,39 +416,14 @@ ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1) {
 
   add(1, simplify(F + V));  // H̄⁰ = F + V   [Eq. (46)]
   if (rank >= 1) {
-    // H̄¹ = [F,σ] + ½[V,σ] + ½[V_R,σ]   [Eq. (47)]. The only F commutator in H̄;
-    // H̄⁰ carries the bare F. See the F-cancellation at the top of this file.
+    // Eq. (44) generates the V commutators; the F commutator occurs only in
+    // H̄¹. Generate paths before Wick expansion so exact zero coefficients and
+    // duplicate paths disappear before the expensive work begins.
     add(1, wick_commutator(F, sigma));
-    add({1, 2}, nest('A', "A"));
-    add({1, 2}, nest('R', "A"));
-  }
-  if (rank >= 2) {
-    // H̄² = 1/12[[V_N,σ],σ] + ¼[[V,σ]_R,σ] + ¼[[V_R,σ]_R,σ]   [Eq. (48)]
-    add({1, 12}, nest('N', "AA"));
-    add({1, 4}, nest('A', "RA"));
-    add({1, 4}, nest('R', "RA"));
-  }
-  if (rank >= 3) {
-    // H̄³ = 1/24[[[V_N,σ],σ]_R,σ] + ⅛[[[V,σ]_R,σ]_R,σ] + ⅛[[[V_R,σ]_R,σ]_R,σ]
-    //       − 1/24[[[V,σ]_R,σ],σ] − 1/24[[[V_R,σ]_R,σ],σ]   [Eq. (49)]
-    add({1, 24}, nest('N', "ARA"));
-    add({1, 8}, nest('A', "RRA"));
-    add({1, 8}, nest('R', "RRA"));
-    add({-1, 24}, nest('A', "RAA"));
-    add({-1, 24}, nest('R', "RAA"));
-  }
-  if (rank >= 4) {
-    // H̄⁴ = Eq. (50), nine terms, no F. Listed in the paper's order; the
-    // outermost tag is always A.
-    add({1, 16}, nest('R', "RRRA"));
-    add({1, 16}, nest('A', "RRRA"));
-    add({1, 48}, nest('N', "ARRA"));
-    add({-1, 48}, nest('A', "RARA"));
-    add({-1, 48}, nest('R', "RARA"));
-    add({-1, 144}, nest('N', "ARAA"));
-    add({-1, 48}, nest('A', "RRAA"));
-    add({-1, 48}, nest('R', "RRAA"));
-    add({-1, 720}, nest('N', "AAAA"));
+    const auto coefficients = nested_commutator_coefficients(rank);
+    for (std::size_t order = 1; order <= rank; ++order)
+      for (const auto& [path, coefficient] : coefficients[order])
+        add(coefficient, nest(path));
   }
   auto result = acc.make_expr();
   return simplify(result);
