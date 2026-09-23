@@ -1430,9 +1430,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, label_);
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
-      // the conjugation symmetry is compared by static_equal but kept out of
-      // the hash: it is derived from the parity and the slots' field, and
-      // every real-field tensor would otherwise change hash
+      // the default state adds nothing, so complex-field tensors keep their
+      // hash
+      if (conjugation_symmetry_ != ConjugationSymmetry::Nonsymm)
+        hash::combine(val, conjugation_symmetry_);
       hash::combine(val, column_symmetry_);
       // every value modifier enters the hash the same way, as its numeric
       // value on the bare label; the default state adds nothing, so
