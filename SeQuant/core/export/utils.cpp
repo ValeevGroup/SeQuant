@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/rational.hpp>
 
 #include <sstream>
@@ -39,6 +40,20 @@ std::string format_power_base(const ExprPtr &base, std::string base_str) {
     }
   }
   return base_str;
+}
+
+std::string format_power(
+    const Power &power, std::string base_str, std::string_view pow_op,
+    bool double_slash,
+    const std::function<std::string(std::string)> &wrap_conj) {
+  const ExprPtr &base = power.base();
+  if (base->is<Variable>() && base->as<Variable>().conjugated()) {
+    base_str = wrap_conj(std::move(base_str));
+  }
+  auto s = format_power_base(base, std::move(base_str)) + std::string(pow_op) +
+           format_power_exponent(power.exponent(), double_slash);
+  if (power.conjugated()) s = wrap_conj(std::move(s));
+  return s;
 }
 
 }  // namespace sequant::detail

@@ -124,16 +124,8 @@ class TextGenerator : public Generator<Context> {
   }
 
   std::string represent(const Power &power, const Context &ctx) const override {
-    const ExprPtr &base = power.base();
-    std::string base_str = stringify(*base, ctx);
-    if (base->is<Variable>() && base->as<Variable>().conjugated()) {
-      base_str = wrap_conj(std::move(base_str));
-    }
-    auto s = detail::format_power_base(base, std::move(base_str)) + "^" +
-             detail::format_power_exponent(power.exponent(),
-                                           /*double_slash*/ false);
-    if (power.conjugated()) s = wrap_conj(std::move(s));
-    return s;
+    return detail::format_power(power, stringify(*power.base(), ctx), "^",
+                                /*double_slash*/ false, &wrap_conj);
   }
 
   void create(const Tensor &tensor, bool zero_init,
