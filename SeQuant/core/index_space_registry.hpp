@@ -1450,22 +1450,14 @@ class IndexSpaceRegistry {
   /// @brief find an IndexSpace from its attr. return nullspace if not present.
   /// @param attr the attribute of the IndexSpace
   const IndexSpace& find_by_attr(const IndexSpace::Attr& attr) const {
-    for (auto&& space : *spaces_) {
-      if (space.attr() == attr) {
-        return space;
-      }
-    }
-    return IndexSpace::null;
+    const auto* ptr = retrieve_ptr(attr);
+    return ptr ? *ptr : IndexSpace::null;
   }
 
   void throw_if_missing(const IndexSpace::Type& t,
                         const IndexSpace::QuantumNumbers& qn,
                         std::string call_context = "") {
-    for (auto&& space : *spaces_) {
-      if (space.type() == t && space.qns() == qn) {
-        return;
-      }
-    }
+    if (retrieve_ptr(t, qn)) return;
     throw Exception(
         call_context + ": missing { IndexSpace::Type=" + to_string(t) +
         " , IndexSpace::QuantumNumbers=" + to_string(qn) + " } combination");
