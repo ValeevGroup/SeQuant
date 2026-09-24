@@ -27,14 +27,19 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-void disable_outer_product_pruning() {
-  sequant::tests::set_env("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING", "1");
+namespace {
+/// @return @p f() evaluated with outer-product pruning force-disabled via the
+/// environment
+template <typename F>
+decltype(auto) without_outer_product_pruning(F&& f) {
+  sequant::tests::ScopedEnv const guard("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING",
+                                        "1");
+  return std::forward<F>(f)();
 }
-void reenable_outer_product_pruning() {
-  sequant::tests::unset_env("SEQUANT_DISABLE_OUTER_PRODUCT_PRUNING");
-}
+}  // namespace
 
 sequant::ExprPtr extract(sequant::ExprPtr expr,
                          std::initializer_list<size_t> const& idxs) {
@@ -3547,9 +3552,8 @@ TEST_CASE("connected_subsets and outer_product_connectivity",
     if (f->is<Tensor>()) v.push_back(f);
   TensorNetwork tn{v};
   std::vector<Index> tgt{Index{L"i_1"}, Index{L"i_2"}};
-  disable_outer_product_pruning();
-  auto m_off = o::outer_product_connectivity(tn, tgt);
-  reenable_outer_product_pruning();
+  auto m_off = without_outer_product_pruning(
+      [&] { return o::outer_product_connectivity(tn, tgt); });
   for (auto val : m_off) CHECK(val == 1);
 }
 
@@ -3619,10 +3623,12 @@ TEST_CASE("outer-product pruning parity (pruned == unpruned)",
   }
 
   auto run = [&](std::wstring const& term, ObjectiveFunction obj, bool prune) {
-    if (!prune) disable_outer_product_pruning();
-    auto expr = deserialize(term, {.def_perm_symm = Symmetry::Antisymm});
-    auto out = optimize(expr, opts_for(obj));
-    reenable_outer_product_pruning();
+    auto optimize_term = [&] {
+      auto expr = deserialize(term, {.def_perm_symm = Symmetry::Antisymm});
+      return optimize(expr, opts_for(obj));
+    };
+    auto out =
+        prune ? optimize_term() : without_outer_product_pruning(optimize_term);
     REQUIRE(out);
     return to_latex(out);
   };
@@ -3665,9 +3671,8 @@ TEST_CASE("prune_outer_products option controls pruning (default on)",
   auto no_prune = to_latex(optimize(expr, opts_for(false)));
   CHECK(with_prune == no_prune);
   // prune_outer_products == false must reproduce the env force-disable path.
-  disable_outer_product_pruning();
-  auto env_disabled = to_latex(optimize(expr, opts_for(true)));
-  reenable_outer_product_pruning();
+  auto env_disabled = to_latex(without_outer_product_pruning(
+      [&] { return optimize(expr, opts_for(true)); }));
   CHECK(no_prune == env_disabled);
 }
 
@@ -3810,9 +3815,8 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
     return ix.nonnull() ? ix.space().approximate_size() : 1;
   };
   auto with = to_latex(optimize(prod, opt));
-  disable_outer_product_pruning();
-  auto without = to_latex(optimize(prod, opt));
-  reenable_outer_product_pruning();
+  auto without = to_latex(
+      without_outer_product_pruning([&] { return optimize(prod, opt); }));
   CHECK(with == without);
 }
 
