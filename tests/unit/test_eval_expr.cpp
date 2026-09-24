@@ -373,6 +373,21 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     }
   }
 
+  SECTION("named hyperindex in antisymmetric slot") {
+    // i1 survives into the result and is shared by t (in its antisymmetric
+    // bra), f and g
+    auto res = deserialize<ResultExpr>(
+        L"R{i1,i2;} = t{i1,i2;a1,a2}:A f{a1;i1} g{a2;i1}");
+    auto tree = binarize(res);
+    REQUIRE(tree->is_tensor());
+    auto labels = tree->as_tensor().const_indices() |
+                  ranges::views::transform(&Index::label) |
+                  ranges::to<container::set<std::wstring_view>>;
+    auto expected = std::initializer_list<std::wstring_view>{L"i_1", L"i_2"} |
+                    ranges::to<container::set<std::wstring_view>>;
+    REQUIRE(labels == expected);
+  }
+
   SECTION("Sequant expression") {
     const auto& str_t1 = L"g_{a1,a2}^{a3,a4}";
     const auto& str_t2 = L"t_{a3,a4}^{i1,i2}";
