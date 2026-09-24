@@ -117,6 +117,10 @@ jobs:
       with:
         arch: x64
 
+    - name: Install ccache on Windows
+      if: ${{ startswith(matrix.os, 'windows') }}
+      run: choco install ccache -y --no-progress
+
     - name: Install prerequisites Windows packages
       if: ${{ startswith(matrix.os, 'windows') }}
       shell: bash
