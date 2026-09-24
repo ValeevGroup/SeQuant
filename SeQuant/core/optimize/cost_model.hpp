@@ -503,48 +503,6 @@ struct PeakModel {
   EvalSequence reconstruct(Context const& /*ctx*/,
                            container::vector<State> const& st) const {
     size_t const full = st.size() - 1;
-    if (perf_first) {
-      // Perf-first / peak-second (non-batched): min flops, ties by lower peak,
-      // bypassing the peak_flops_tolerance epsilon band (a peak-first knob).
-      auto const& rootf = st[full];
-      int pbest = 0;
-      for (int i = 1; i < static_cast<int>(rootf.size()); ++i)
-        if (rootf[i].flops < rootf[pbest].flops ||
-            (rootf[i].flops == rootf[pbest].flops &&
-             rootf[i].peak < rootf[pbest].peak))
-          pbest = i;
-      // Reuse the existing back-pointer walk with the chosen root index.
-      std::function<EvalSequence(size_t, int)> pbuild =
-          [&](size_t n, int idx) -> EvalSequence {
-        if (std::popcount(n) == 1)
-          return EvalSequence{static_cast<int>(std::countr_zero(n))};
-        FrontPoint const& fp = st[n][idx];
-        size_t const fs = fp.lp_first ? fp.lp : fp.rp;
-        int const fi = fp.lp_first ? fp.lp_idx : fp.rp_idx;
-        size_t const ss = fp.lp_first ? fp.rp : fp.lp;
-        int const si = fp.lp_first ? fp.rp_idx : fp.lp_idx;
-        EvalSequence s = pbuild(fs, fi);
-        EvalSequence b = pbuild(ss, si);
-        s.insert(s.end(), b.begin(), b.end());
-        s.push_back(-1);
-        return s;
-      };
-      return pbuild(full, pbest);
-    }
-    // ε-tolerant selection: among frontier points within
-    // (1 + peak_flops_tolerance) of the minimum peak, take the fewest flops
-    // (ties broken by lower peak). tolerance == 0 recovers strict peak-min.
-    auto const& root = st[full];
-    double minpeak = std::numeric_limits<double>::max();
-    for (auto const& fp : root) minpeak = std::min(minpeak, fp.peak);
-    double const thresh = minpeak * (1.0 + peak_flops_tolerance);
-    int best = -1;
-    for (int i = 0; i < static_cast<int>(root.size()); ++i)
-      if (root[i].peak <= thresh &&
-          (best < 0 || root[i].flops < root[best].flops ||
-           (root[i].flops == root[best].flops &&
-            root[i].peak < root[best].peak)))
-        best = i;
     // Follow back-pointers (which child + which child frontier point).
     std::function<EvalSequence(size_t, int)> build =
         [&](size_t n, int idx) -> EvalSequence {
@@ -561,6 +519,32 @@ struct PeakModel {
       s.push_back(-1);
       return s;
     };
+    if (perf_first) {
+      // Perf-first / peak-second (non-batched): min flops, ties by lower peak,
+      // bypassing the peak_flops_tolerance epsilon band (a peak-first knob).
+      auto const& rootf = st[full];
+      int pbest = 0;
+      for (int i = 1; i < static_cast<int>(rootf.size()); ++i)
+        if (rootf[i].flops < rootf[pbest].flops ||
+            (rootf[i].flops == rootf[pbest].flops &&
+             rootf[i].peak < rootf[pbest].peak))
+          pbest = i;
+      return build(full, pbest);
+    }
+    // ε-tolerant selection: among frontier points within
+    // (1 + peak_flops_tolerance) of the minimum peak, take the fewest flops
+    // (ties broken by lower peak). tolerance == 0 recovers strict peak-min.
+    auto const& root = st[full];
+    double minpeak = std::numeric_limits<double>::max();
+    for (auto const& fp : root) minpeak = std::min(minpeak, fp.peak);
+    double const thresh = minpeak * (1.0 + peak_flops_tolerance);
+    int best = -1;
+    for (int i = 0; i < static_cast<int>(root.size()); ++i)
+      if (root[i].peak <= thresh &&
+          (best < 0 || root[i].flops < root[best].flops ||
+           (root[i].flops == root[best].flops &&
+            root[i].peak < root[best].peak)))
+        best = i;
     return build(full, best);
   }
 };
