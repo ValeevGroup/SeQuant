@@ -134,14 +134,10 @@ template <typename Container, typename TraceFunction, typename... Args>
       permuteBra ? expr.ket().size() : expr.bra().size();
 
   [[maybe_unused]] auto get_phase = [](auto container) {
-    reset_ts_swap_counter<Index>();
-    bubble_sort(container.begin(), container.end(), std::less<Index>{});
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+    return bubble_sort_parity(container, std::less<Index>{});
   };
 
-  reset_ts_swap_counter<Index>();
-  bubble_sort(permIndices.begin(), permIndices.end(), std::less<Index>{});
-  const int initialSign = ts_swap_counter_is_even<Index>() ? 1 : -1;
+  const int initialSign = bubble_sort_parity(permIndices, std::less<Index>{});
   const auto originalIndices = permIndices;
 
   container::svector<container::set<std::pair<IndexSpace, IndexSpace>>>
@@ -410,10 +406,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   auto get_phase = [](const Tensor& t) {
     container::svector<Index> bra(t.bra().begin(), t.bra().end());
     container::svector<Index> ket(t.ket().begin(), t.ket().end());
-    reset_ts_swap_counter<Index>();
-    bubble_sort(std::begin(bra), std::end(bra));
-    bubble_sort(std::begin(ket), std::end(ket));
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+    return bubble_sort_parity(bra) * bubble_sort_parity(ket);
   };
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
@@ -552,9 +545,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
       container::svector<Index> transformed_list;
       for (const auto& [key, val] : map) transformed_list.push_back(val);
 
-      reset_ts_swap_counter<Index>();
-      bubble_sort(std::begin(transformed_list), std::end(transformed_list));
-      phase = ts_swap_counter_is_even<Index>() ? 1 : -1;
+      phase = bubble_sort_parity(transformed_list);
     }
 
     ProductPtr new_product = std::make_shared<Product>();
@@ -656,9 +647,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     auto indices = map | std::ranges::views::values;
     idx_list.insert(idx_list.end(), indices.begin(), indices.end());
 
-    reset_ts_swap_counter<Index>();
-    bubble_sort(std::begin(idx_list), std::end(idx_list));
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+    return bubble_sort_parity(idx_list);
   };
 
   container::svector<container::map<Index, Index>> maps;

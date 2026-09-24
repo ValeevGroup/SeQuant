@@ -873,9 +873,7 @@ TensorNetworkV3::canonicalize_slots(
         vertices.emplace_back(canonize_perm[vertex]);
       }
 
-      reset_ts_swap_counter<std::size_t>();
-      bubble_sort(vertices.begin(), vertices.end());
-      if (!ts_swap_counter_is_even<std::size_t>()) {
+      if (bubble_sort_parity(vertices) == -1) {
         // Performed an uneven amount of pairwise exchanges -> this incurs a
         // phase change
         metadata.phase *= -1;

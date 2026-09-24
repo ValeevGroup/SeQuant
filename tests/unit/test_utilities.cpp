@@ -3,6 +3,7 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -78,6 +79,35 @@ struct Entry {
 
 sequant::Tensor parse_tensor(std::wstring_view str) {
   return sequant::deserialize<sequant::ExprPtr>(str)->as<sequant::Tensor>();
+}
+
+TEST_CASE("bubble_sort_parity", "[utilities]") {
+  using namespace sequant;
+
+  auto make = [](std::initializer_list<int> values) {
+    container::svector<SwapCountable<int>> result;
+    for (int v : values) result.emplace_back(v);
+    return result;
+  };
+  auto as_ints = [](const auto& rng) {
+    return rng | ranges::views::transform([](int v) { return v; }) |
+           ranges::to<std::vector<int>>;
+  };
+
+  auto sorted = make({1, 2, 3});
+  REQUIRE(bubble_sort_parity(sorted) == +1);
+
+  auto odd = make({2, 1, 3});
+  REQUIRE(bubble_sort_parity(odd) == -1);
+  REQUIRE(as_ints(odd) == std::vector<int>{1, 2, 3});
+
+  auto even = make({3, 1, 2});
+  REQUIRE(bubble_sort_parity(even) == +1);
+  REQUIRE(as_ints(even) == std::vector<int>{1, 2, 3});
+
+  auto descending = make({3, 1, 2});
+  REQUIRE(bubble_sort_parity(descending, std::greater<>{}) == -1);
+  REQUIRE(as_ints(descending) == std::vector<int>{3, 2, 1});
 }
 
 TEST_CASE("utilities", "[utilities]") {
