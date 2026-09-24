@@ -322,6 +322,50 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     return "conj(" + std::move(s) + ")";
   }
 
+  /// emits `<name> = <wrapper>(zeros(Float64, <dims>...), <shape>)`
+  void create_wrapped(const Tensor &tensor, bool zero_init, const Context &ctx,
+                      std::string_view wrapper, const std::string &shape) {
+    if (!zero_init) {
+      throw Exception(
+          "In Julia tensors can't be created without being initialized");
+    }
+
+    m_generated += tensor_name(tensor, ctx);
+    m_generated += " = ";
+    m_generated += wrapper;
+    m_generated += "(zeros(Float64";
+
+    for (const Index &idx : tensor.const_indices()) {
+      m_generated += ", ";
+      m_generated += ctx.get_dim(idx.space());
+    }
+
+    m_generated += "), ";
+    m_generated += shape;
+    m_generated += ")\n";
+  }
+
+  /// emits `<name> = <wrapper>(deserialize("<name>.jlbin"), <shape>)`, or
+  /// the zero-initialization of create_wrapped if @p set_to_zero
+  void load_wrapped(const Tensor &tensor, bool set_to_zero, const Context &ctx,
+                    std::string_view wrapper, const std::string &shape) {
+    if (set_to_zero) {
+      // In Julia setting a tensor to zero has to be done by overwriting it with
+      // a zero tensor
+      create_wrapped(tensor, true, ctx, wrapper, shape);
+      return;
+    }
+
+    m_generated += tensor_name(tensor, ctx);
+    m_generated += " = ";
+    m_generated += wrapper;
+    m_generated += "(deserialize(\"";
+    m_generated += tensor_name(tensor, ctx);
+    m_generated += ".jlbin\"), ";
+    m_generated += shape;
+    m_generated += ")\n";
+  }
+
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
     std::string representation = toUtf8(tensor.label());
 
