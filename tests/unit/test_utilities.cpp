@@ -167,6 +167,18 @@ TEST_CASE("find_position", "[utilities]") {
   REQUIRE_FALSE(find_position(std::vector<int>{}, 4).has_value());
 }
 
+TEST_CASE("join_strings", "[utilities]") {
+  using namespace sequant;
+
+  REQUIRE(join_strings<std::string>(std::vector<std::string>{}, ",").empty());
+  REQUIRE(join_strings<std::string>(std::vector<std::string>{"a"}, ",") == "a");
+  REQUIRE(join_strings<std::wstring>(std::vector<std::wstring>{L"a", L"b"},
+                                     L", ") == L"a, b");
+  REQUIRE(join_strings<std::string>(std::vector<int>{1, 2, 3}, "-", [](int i) {
+            return std::to_string(i);
+          }) == "1-2-3");
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 
