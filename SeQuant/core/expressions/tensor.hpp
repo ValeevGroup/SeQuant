@@ -982,11 +982,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ColumnSymmetry column_symmetry() const { return column_symmetry_; }
   /// @return the traits, for rebuilding this tensor with other slots; the
   ///         field-dependent symmetries are derived again from them
-  /// @note no #TensorSymmetries::braket is pinned: the exchange symmetry is
-  ///       derived from #hermiticity, #conjugation_parity and the new slots'
-  ///       field, which is what with_slots() does and what a rebuild onto
-  ///       slots over another field needs
+  /// @note #TensorSymmetries::braket is left unset whenever the traits derive
+  ///       the stored exchange symmetry: it is then derived from #hermiticity,
+  ///       #conjugation_parity and the new slots' field, which is what
+  ///       with_slots() does and what a rebuild onto slots over another field
+  ///       needs. A pinned exchange symmetry the traits do not derive (the
+  ///       Symm pin over a complex basis) is carried as the pin, from which
+  ///       the traits back-fill as they did at construction.
   TensorSymmetries symmetries() const {
+    if (braket_symmetry_ !=
+        to_braket_symmetry(hermiticity_, conjugation_parity_, base_field()))
+      return {.perm = symmetry_,
+              .braket = braket_symmetry_,
+              .conjugation_parity = conjugation_parity_,
+              .column = column_symmetry_};
     return {.perm = symmetry_,
             .hermiticity = hermiticity_,
             .conjugation_parity = conjugation_parity_,

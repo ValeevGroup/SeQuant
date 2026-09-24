@@ -1423,6 +1423,38 @@ TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {
     REQUIRE(q.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
     REQUIRE(q.braket_symmetry() == BraKetSymmetry::Antisymm);
   }
+
+  SECTION("a pinned exchange symmetry the traits do not derive is carried") {
+    // the Symm pin over the complex basis: the traits it back-fills
+    // (Hermitian, Even) derive Conjugate over that basis, so the pack carries
+    // the pin itself, or a rebuild would change the tensor's symmetry
+    Tensor g(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
+             TensorSymmetries{.braket = BraKetSymmetry::Symm});
+    REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
+    const auto syms = g.symmetries();
+    REQUIRE(syms.braket == BraKetSymmetry::Symm);
+    REQUIRE(syms.conjugation_parity == g.conjugation_parity());
+
+    using ixvec = container::svector<Index>;
+    auto r = g.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
+                          ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{});
+    REQUIRE(r.braket_symmetry() == BraKetSymmetry::Symm);
+    REQUIRE(r.hermiticity() == g.hermiticity());
+    REQUIRE(r.conjugation_parity() == g.conjugation_parity());
+
+    // and through a domain rebuild
+    auto expanded = mbpt::expand_antisymm(
+        deserialize(L"g{i_1,i_2;a_1,a_2}:A-S-S")->as<Tensor>());
+    std::size_t n = 0;
+    expanded->visit(
+        [&n](const ExprPtr& e) {
+          if (!e->is<Tensor>()) return;
+          ++n;
+          CHECK(e->as<Tensor>().braket_symmetry() == BraKetSymmetry::Symm);
+        },
+        /* atoms_only = */ true);
+    REQUIRE(n > 1);
+  }
 }
 
 TEST_CASE("signed_eval_boundary", "[conjugation]") {
