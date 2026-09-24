@@ -6,6 +6,8 @@ if (NOT TARGET utf8cpp::utf8cpp)
         GIT_REPOSITORY "https://github.com/nemtrif/utfcpp.git"
 		GIT_TAG "${SEQUANT_TRACKED_UTFCPP_TAG}"
         GIT_SHALLOW
+        SYSTEM
+        EXCLUDE_FROM_ALL
     )
 
     FetchContent_MakeAvailable(utfcpp)
