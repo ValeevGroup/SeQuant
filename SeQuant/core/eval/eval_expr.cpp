@@ -104,16 +104,6 @@ ExprPtr make_variable() { return ex<Variable>(label_scalar); }
 
 }  // namespace detail
 
-std::string to_label_annotation(const Index& idx) {
-  using namespace ranges::views;
-  using ranges::to;
-
-  return toUtf8(idx.label()) +
-         (idx.proto_indices() | transform(&Index::label) |
-          transform([](auto&& str) { return toUtf8(str); }) |
-          ranges::views::join | to<std::string>);
-}
-
 std::string EvalExpr::indices_annot() const noexcept {
   using ranges::views::filter;
   using ranges::views::join;
