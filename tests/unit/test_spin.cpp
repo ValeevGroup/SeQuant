@@ -1839,6 +1839,14 @@ SECTION("ResultExpr") {
       },
   };
 
+  SECTION("rank-3 with mixed spaces") {
+    // permutations of 3 bra indices do not alternate in sign
+    const ResultExpr input = deserialize<ResultExpr>(
+        L"R{a1,u1,i1;i2,u2,a2}:A = g{a1,u1,i1;i2,u2,a2}:A");
+    REQUIRE_NOTHROW(closed_shell_spintrace(input.clone()));
+    REQUIRE_NOTHROW(spintrace(input.clone()));
+  }
+
   REQUIRE(inputs.size() == expected_outputs.size());
 
   for (std::size_t i = 0; i < inputs.size(); ++i) {

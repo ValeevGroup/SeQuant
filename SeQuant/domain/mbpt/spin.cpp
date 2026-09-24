@@ -152,13 +152,9 @@ template <typename Container, typename TraceFunction, typename... Args>
   // For next_permutation to work in this context, permIndices must be sorted
   SEQUANT_ASSERT(std::is_sorted(permIndices.begin(), permIndices.end()));
 
-  int sign = initialSign;
+  int parity = 0;
   do {
-    const int currentSign = sign;
-    // std::next_permutation creates one lexicographical permutation after the
-    // other, which should imply that the phase should alternate between
-    // iterations.
-    sign *= -1;
+    const int currentSign = parity == 0 ? initialSign : -initialSign;
     SEQUANT_ASSERT(currentSign == get_phase(permIndices) * initialSign);
 
     container::set<std::pair<IndexSpace, IndexSpace>> currentPairing;
@@ -213,7 +209,8 @@ template <typename Container, typename TraceFunction, typename... Args>
     result.set_symmetry(Symmetry::Nonsymm);
 
     resultSet.push_back(std::move(result));
-  } while (std::next_permutation(permIndices.begin(), permIndices.end()));
+  } while (next_permutation_parity(parity, permIndices.begin(),
+                                   permIndices.end(), std::less<Index>{}));
 
   return resultSet;
 }
