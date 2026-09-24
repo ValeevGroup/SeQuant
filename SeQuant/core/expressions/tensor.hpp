@@ -1240,6 +1240,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
              reserved_tag{}, rsym);
     t.conjugated_ = conjugated_;
     t.transposed_ = transposed_;
+    // the bits denote a state relative to *this* tensor's symmetries; over the
+    // new slots' field they are normalized again, as a fresh construction
+    // would, so that a set bit always denotes a distinct value. A rebuild
+    // whose normalization costs a sign names minus a tensor, which no Tensor
+    // can hold.
+    if (t.normalize_value_modifier() != 1)
+      throw Exception(
+          "Tensor::with_slots: over the new slots' field the value modifier "
+          "denotes minus the tensor; respell the value first (see "
+          "value_oriented())");
     t.reset_hash_value();
     return t;
   }

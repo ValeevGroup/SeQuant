@@ -1137,6 +1137,45 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
                      ket<ixvec>{ixvec{idx(L"a_2", Field::Real)}}, aux<ixvec>{});
     REQUIRE(u.braket_symmetry() == BraKetSymmetry::Conjugate);
   }
+
+  SECTION("with_slots normalizes the modifier bits against the new field") {
+    // complex-field Hermitian (Conjugate): the starred spelling is a state of
+    // its own, the folded orientation
+    Tensor h(L"h", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
+             TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+    REQUIRE(h.conjugate() == 1);
+    REQUIRE(h.value_modifier() == ValueModifier::Conjugate);
+    // rebuilt onto real-field slots the tensor is Symm, where a set bit
+    // denotes nothing: it normalizes away, as it does in a fresh construction
+    using ixvec = container::svector<Index>;
+    auto r =
+        h.with_slots(bra<ixvec>{ixvec{idx(L"i_2", Field::Real)}},
+                     ket<ixvec>{ixvec{idx(L"a_2", Field::Real)}}, aux<ixvec>{});
+    REQUIRE(r.braket_symmetry() == BraKetSymmetry::Symm);
+    REQUIRE(r.value_modifier() == ValueModifier::None);
+    Tensor fresh(L"h", bra{idx(L"i_2", Field::Real)},
+                 ket{idx(L"a_2", Field::Real)},
+                 TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+    REQUIRE(r == fresh);
+    REQUIRE(r.hash_value() == fresh.hash_value());
+  }
+
+  SECTION("with_slots refuses a rebuild whose normalization costs a sign") {
+    // complex-field anti-Hermitian of odd parity (AntiConjugate): the starred
+    // spelling is a state. Over a real field the odd parity makes
+    // conj(T) = -T, so the bit would be consumed at -1, which no Tensor can
+    // hold
+    Tensor z(L"z", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                              .conjugation_parity = ConjugationParity::Odd});
+    REQUIRE(z.conjugate() == 1);
+    REQUIRE(z.value_modifier() == ValueModifier::Conjugate);
+    using ixvec = container::svector<Index>;
+    REQUIRE_THROWS_AS(
+        z.with_slots(bra<ixvec>{ixvec{idx(L"i_2", Field::Real)}},
+                     ket<ixvec>{ixvec{idx(L"a_2", Field::Real)}}, aux<ixvec>{}),
+        Exception);
+  }
 }
 
 TEST_CASE("signed_normalization", "[conjugation]") {
