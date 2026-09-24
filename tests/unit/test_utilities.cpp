@@ -126,6 +126,25 @@ TEST_CASE("reset_tags", "[utilities]") {
   REQUIRE_FALSE(tensor.bra().at(0).tag().has_value());
 }
 
+TEST_CASE("adjoint_label", "[utilities]") {
+  using namespace sequant;
+
+  const std::wstring adj = std::wstring(L"t") + adjoint_label;
+  REQUIRE(is_adjoint_label(adj));
+  REQUIRE_FALSE(is_adjoint_label(L"t"));
+  REQUIRE_FALSE(is_adjoint_label(L""));
+
+  REQUIRE(strip_adjoint_label(adj) == L"t");
+  REQUIRE(strip_adjoint_label(L"t") == L"t");
+  REQUIRE(strip_adjoint_label(L"").empty());
+
+  std::wstring label = L"t";
+  toggle_adjoint_label(label);
+  REQUIRE(label == adj);
+  toggle_adjoint_label(label);
+  REQUIRE(label == L"t");
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 

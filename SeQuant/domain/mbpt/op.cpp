@@ -318,11 +318,8 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   // perturbation order
   auto base_lbl = std::wstring(op.label());
   SEQUANT_ASSERT(!base_lbl.empty());
-  bool is_adjoint = false;
-  if (base_lbl.back() == adjoint_label) {
-    is_adjoint = true;
-    base_lbl.pop_back();
-  }
+  const bool is_adjoint = is_adjoint_label(base_lbl);
+  if (is_adjoint) base_lbl.pop_back();
 
   // now remove perturbation order decoration if any
   SEQUANT_ASSERT(!base_lbl.empty());

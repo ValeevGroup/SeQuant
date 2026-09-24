@@ -387,7 +387,7 @@ EvalExprNode binarize(Tensor const& t) {
   // The Constant(1) right child is a sentinel — present so the FullBinaryNode
   // invariant ("every non-leaf has two children") holds; evaluate ignores it
   // for EvalOp::Adjoint dispatch.
-  if (!t.label().empty() && t.label().back() == adjoint_label) {
+  if (is_adjoint_label(t.label())) {
     // The Adjoint node carries the *adjointed* tensor (so its canon_indices
     // reflect the slot order parents see).
 
@@ -395,8 +395,7 @@ EvalExprNode binarize(Tensor const& t) {
     // marker off and swap bra/ket back to natural orientation.
     Tensor bare{t};
     bare.adjoint();
-    SEQUANT_ASSERT(bare.label().empty() ||
-                   bare.label().back() != adjoint_label);
+    SEQUANT_ASSERT(!is_adjoint_label(bare.label()));
     EvalExprNode bare_leaf{EvalExpr{bare}};
 
     // Sentinel right child.

@@ -31,10 +31,7 @@ void Tensor::adjoint() {
 
   // adjointness is tracked solely by the label marker, for Nonsymm braket
   if (braket_symmetry() == BraKetSymmetry::Nonsymm) {
-    if (!label_.empty() && label_.back() == sequant::adjoint_label)
-      label_.pop_back();
-    else
-      label_.push_back(sequant::adjoint_label);
+    toggle_adjoint_label(label_);
   }
 
   reset_hash_value();
