@@ -204,7 +204,7 @@ std::wstring to_string(Sum const& sum, const SerializationOptions& options) {
 
     bool is_negative = false;
     if (parenthesize) {
-      current_serialized += L"(" + current_serialized + L")";
+      current_serialized = L"(" + current_serialized + L")";
     } else {
       is_negative = current_serialized.front() == L'-';
     }
