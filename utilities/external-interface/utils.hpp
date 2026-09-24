@@ -54,8 +54,6 @@ sequant::ExprPtr generateResultSymmetrization(
     const sequant::IndexGroups<std::vector<sequant::Index>> &externals,
     const sequant::Tensor &ref);
 
-std::optional<sequant::ExprPtr> pop_symmetrizer(sequant::ResultExpr &expr);
-
 template <std::ranges::random_access_range Container,
           std::ranges::random_access_range Order>
   requires(std::integral<std::ranges::range_value_t<Order>>)

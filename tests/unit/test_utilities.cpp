@@ -179,6 +179,22 @@ TEST_CASE("join_strings", "[utilities]") {
           }) == "1-2-3");
 }
 
+TEST_CASE("pop_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                            ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+                 t;
+  auto symmetrizer = pop_symmetrizer(expr);
+  REQUIRE(symmetrizer.has_value());
+  REQUIRE((*symmetrizer)->as<Tensor>().label() == reserved::antisymm_label());
+  REQUIRE_FALSE(has_tensor(expr, reserved::antisymm_label()));
+  REQUIRE(has_tensor(expr, L"t"));
+
+  REQUIRE_FALSE(pop_symmetrizer(expr).has_value());
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 
