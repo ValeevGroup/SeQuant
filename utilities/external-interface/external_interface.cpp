@@ -269,9 +269,7 @@ std::vector<ResultExpr> splitContributions(const ResultExpr &result) {
 
   SEQUANT_ASSERT(result.expression()->is<Sum>());
 
-  Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()),
-                      aux(result.aux()), result.symmetry(),
-                      result.braket_symmetry(), result.column_symmetry());
+  const Tensor resultTensor = result.result_as_tensor();
 
   std::vector<ResultExpr> contributions;
   contributions.reserve(result.expression()->size());
