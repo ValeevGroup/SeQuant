@@ -5,6 +5,7 @@
 #ifndef SEQUANT_WICK_HPP
 #define SEQUANT_WICK_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -212,16 +213,6 @@ class WickTheorem {
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
   template <typename IndexPairContainer>
   WickTheorem &set_nop_connections(IndexPairContainer &&op_index_pairs) {
-    auto has_duplicates = [](const auto &op_index_pairs) {
-      const auto the_end = end(op_index_pairs);
-      for (auto it = begin(op_index_pairs); it != the_end; ++it) {
-        const auto found_dup_it = std::find(it + 1, the_end, *it);
-        if (found_dup_it != the_end) {
-          return true;
-        }
-      }
-      return false;
-    };
     if (has_duplicates(op_index_pairs)) {
       throw Exception(
           "WickTheorem::set_nop_connections(arg): arg contains duplicates");
@@ -290,16 +281,6 @@ class WickTheorem {
   template <typename IndexPairContainer>
   WickTheorem &set_nop_avoided_connections(
       IndexPairContainer &&op_index_pairs) {
-    auto has_duplicates = [](const auto &op_index_pairs) {
-      const auto the_end = end(op_index_pairs);
-      for (auto it = begin(op_index_pairs); it != the_end; ++it) {
-        const auto found_dup_it = std::find(it + 1, the_end, *it);
-        if (found_dup_it != the_end) {
-          return true;
-        }
-      }
-      return false;
-    };
     if (has_duplicates(op_index_pairs)) {
       throw Exception(
           "WickTheorem::set_nop_avoided_connections(arg): arg contains "

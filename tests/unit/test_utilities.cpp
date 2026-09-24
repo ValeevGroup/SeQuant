@@ -145,6 +145,18 @@ TEST_CASE("adjoint_label", "[utilities]") {
   REQUIRE(label == L"t");
 }
 
+TEST_CASE("has_duplicates", "[utilities]") {
+  using namespace sequant;
+
+  REQUIRE_FALSE(has_duplicates(std::vector<int>{}));
+  REQUIRE_FALSE(has_duplicates(std::vector<int>{1, 2, 3}));
+  REQUIRE(has_duplicates(std::vector<int>{1, 2, 1}));
+  REQUIRE(
+      has_duplicates(std::vector<std::pair<int, int>>{{0, 1}, {1, 2}, {0, 1}}));
+  REQUIRE_FALSE(
+      has_duplicates(std::vector<std::pair<int, int>>{{0, 1}, {1, 0}}));
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 

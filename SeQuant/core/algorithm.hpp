@@ -97,6 +97,18 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp = {}) {
   } while (swapped);
 }
 
+/// @return true if any two elements of @p rng compare equal
+/// @note uses only `operator==`, hence is quadratic in the size of @p rng;
+///       intended for short ranges
+template <std::ranges::forward_range Range>
+bool has_duplicates(const Range& rng) {
+  const auto the_end = std::ranges::end(rng);
+  for (auto it = std::ranges::begin(rng); it != the_end; ++it) {
+    if (std::find(std::next(it), the_end, *it) != the_end) return true;
+  }
+  return false;
+}
+
 namespace detail {
 template <typename T>
 struct swap_counter_key {

@@ -2,6 +2,7 @@
 // Created by Eduard Valeyev on 2019-03-24.
 //
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -14,7 +15,6 @@
 #include <type_traits>
 #include <vector>
 
-#include <range/v3/algorithm/adjacent_find.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/lexicographical_compare.hpp>
@@ -209,10 +209,7 @@ void TensorCanonicalizer::set_cardinal_tensor_labels(
   // check for duplicates
   if constexpr (assert_enabled()) {
     // check for duplicates within user provided labels
-    auto sorted_labels = labels;
-    ranges::sort(sorted_labels);
-    [[maybe_unused]] auto duplicate = ranges::adjacent_find(sorted_labels);
-    SEQUANT_ASSERT(duplicate == sorted_labels.end() &&
+    SEQUANT_ASSERT(!has_duplicates(labels) &&
                    "cardinal tensor labels must not contain duplicates");
 
     // check if any label conflicts with existing ones
