@@ -214,36 +214,27 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
   return tensor;
 }
 
-// Helper function to properly escape shell arguments for shells
-// Uses single quotes and escapes embedded single quotes
+// Helper function to properly quote a shell argument for the platform's
+// shell: cmd.exe on Windows (double quotes; Windows paths cannot contain a
+// double quote, so nothing inside needs escaping), a POSIX shell otherwise
+// (single quotes, with embedded single quotes escaped)
 std::string shell_escape(const std::string &arg) {
 #ifdef _WIN32
-  std::string result = "\"";
+  return "\"" + arg + "\"";
 #else
   std::string result = "'";
-#endif
-
   for (char c : arg) {
     if (c == '\'') {
-#ifdef _WIN32
-      result += "\"\"";
-#else
       // End the current single-quoted string, add an escaped single quote,
       // and start a new single-quoted string
       result += "'\\''";
-#endif
     } else {
       result += c;
     }
   }
-
-#if _WIN32
-  result += "\"";
-#else
   result += "'";
-#endif
-
   return result;
+#endif
 }
 
 // Execute Python code and check for errors
