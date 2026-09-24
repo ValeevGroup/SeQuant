@@ -34,7 +34,10 @@
 
 #include <bitset>
 #include <mutex>
+#include <optional>
+#include <ranges>
 #include <span>
+#include <string>
 #include <utility>
 
 namespace sequant {
@@ -213,48 +216,11 @@ class WickTheorem {
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
   template <typename IndexPairContainer>
   WickTheorem &set_nop_connections(IndexPairContainer &&op_index_pairs) {
-    if (has_duplicates(op_index_pairs)) {
-      throw Exception(
-          "WickTheorem::set_nop_connections(arg): arg contains duplicates");
+    if (auto nconnections =
+            set_nop_pair_mask(op_index_pairs, nop_connections_,
+                              nop_connections_input_, "set_nop_connections")) {
+      nop_nconnections_total_ = *nconnections;
     }
-
-    // process now if input is resolved, or is a deferred call from
-    // compute_nopseq (already cached list)
-    if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
-      for (const auto &opidx_pair : op_index_pairs) {
-        constexpr bool signed_indices =
-            std::is_signed_v<typename std::remove_reference_t<
-                decltype(op_index_pairs)>::value_type::first_type>;
-        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
-            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
-          throw Exception(
-              "WickTheorem::set_nop_connections: nop index out of range");
-        }
-        if constexpr (signed_indices) {
-          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
-            throw Exception(
-                "WickTheorem::set_nop_connections: nop index out of range");
-          }
-        }
-      }
-      if (op_index_pairs.size() != 0ul) {
-        nop_connections_.resize(input_->size());
-        for (auto &v : nop_connections_) {
-          v.set();
-        }
-        for (const auto &opidx_pair : op_index_pairs) {
-          nop_connections_[opidx_pair.first].reset(opidx_pair.second);
-          nop_connections_[opidx_pair.second].reset(opidx_pair.first);
-        }
-      }
-      nop_nconnections_total_ = nop_connections_input_.size();
-      nop_connections_input_.clear();
-    } else {
-      ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
-        nop_connections_input_.push_back(idxpair);
-      });
-    }
-
     return *this;
   }
 
@@ -281,50 +247,9 @@ class WickTheorem {
   template <typename IndexPairContainer>
   WickTheorem &set_nop_avoided_connections(
       IndexPairContainer &&op_index_pairs) {
-    if (has_duplicates(op_index_pairs)) {
-      throw Exception(
-          "WickTheorem::set_nop_avoided_connections(arg): arg contains "
-          "duplicates");
-    }
-
-    // process now if input is resolved, or is a deferred call from
-    // compute_nopseq (already cached list)
-    if (expr_input_ == nullptr || !nop_avoided_connections_input_.empty()) {
-      for (const auto &opidx_pair : op_index_pairs) {
-        constexpr bool signed_indices =
-            std::is_signed_v<typename std::remove_reference_t<
-                decltype(op_index_pairs)>::value_type::first_type>;
-        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
-            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
-          throw Exception(
-              "WickTheorem::set_nop_avoided_connections: nop index out of "
-              "range");
-        }
-        if constexpr (signed_indices) {
-          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
-            throw Exception(
-                "WickTheorem::set_nop_avoided_connections: nop index out of "
-                "range");
-          }
-        }
-      }
-      if (op_index_pairs.size() != 0ul) {
-        nop_avoided_connections_.resize(input_->size());
-        for (auto &v : nop_avoided_connections_) {
-          v.set();  // 1 = not avoided (same convention as nop_connections_)
-        }
-        for (const auto &opidx_pair : op_index_pairs) {
-          nop_avoided_connections_[opidx_pair.first].reset(opidx_pair.second);
-          nop_avoided_connections_[opidx_pair.second].reset(opidx_pair.first);
-        }
-      }
-      nop_avoided_connections_input_.clear();
-    } else {
-      ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
-        nop_avoided_connections_input_.push_back(idxpair);
-      });
-    }
-
+    set_nop_pair_mask(op_index_pairs, nop_avoided_connections_,
+                      nop_avoided_connections_input_,
+                      "set_nop_avoided_connections");
     return *this;
   }
 
@@ -581,6 +506,66 @@ class WickTheorem {
   container::svector<std::pair<size_t, size_t>>
       nop_avoided_connections_input_;  // only used to cache input to
                                        // set_nop_avoided_connections_
+
+  /// validates the pairs of normal operator indices in @p op_index_pairs
+  /// and, once the input is resolved, records them in @p mask as a reverse
+  /// bitmask (0 = pair listed, 1 = not listed); until then, caches them in
+  /// @p cache
+  /// @param caller name of the public setter, used in exception messages
+  /// @return the number of pairs that were in @p cache before it was
+  /// consumed, or std::nullopt if @p op_index_pairs were cached
+  /// @throw Exception if @p op_index_pairs contains duplicates or out-of-range
+  /// indices
+  template <typename IndexPairContainer>
+  std::optional<std::size_t> set_nop_pair_mask(
+      const IndexPairContainer &op_index_pairs,
+      container::svector<std::bitset<max_input_size>> &mask,
+      container::svector<std::pair<size_t, size_t>> &cache,
+      const std::string &caller) {
+    if (has_duplicates(op_index_pairs)) {
+      throw Exception("WickTheorem::" + caller +
+                      "(arg): arg contains duplicates");
+    }
+
+    // process now if input is resolved, or is a deferred call from
+    // compute_nopseq (already cached list)
+    if (expr_input_ == nullptr || !cache.empty()) {
+      for (const auto &opidx_pair : op_index_pairs) {
+        constexpr bool signed_indices =
+            std::is_signed_v<typename std::ranges::range_value_t<
+                IndexPairContainer>::first_type>;
+        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
+            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
+          throw Exception("WickTheorem::" + caller +
+                          ": nop index out of range");
+        }
+        if constexpr (signed_indices) {
+          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
+            throw Exception("WickTheorem::" + caller +
+                            ": nop index out of range");
+          }
+        }
+      }
+      if (op_index_pairs.size() != 0ul) {
+        mask.resize(input_->size());
+        for (auto &v : mask) {
+          v.set();
+        }
+        for (const auto &opidx_pair : op_index_pairs) {
+          mask[opidx_pair.first].reset(opidx_pair.second);
+          mask[opidx_pair.second].reset(opidx_pair.first);
+        }
+      }
+      const auto ncached = cache.size();
+      cache.clear();
+      return ncached;
+    } else {
+      ranges::for_each(op_index_pairs, [&cache](const auto &idxpair) {
+        cache.push_back(idxpair);
+      });
+      return std::nullopt;
+    }
+  }
 
   enum class TopologicalPartitionType { NormalOperator, Index };
 
