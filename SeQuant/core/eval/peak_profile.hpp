@@ -1113,11 +1113,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       carried_seeded[r.key] = true;
       is.assign(r.carried.begin(), r.carried.end());
     } else {
-      container::svector<Index> keep;
-      for (auto const& m : is)
-        if (std::find(r.carried.begin(), r.carried.end(), m) != r.carried.end())
-          keep.push_back(m);
-      is = std::move(keep);
+      detail::lifetime_mask_intersect_in_place(is, r.carried);
     }
   }
 
