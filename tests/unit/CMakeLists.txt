@@ -312,6 +312,9 @@ else()
     message(STATUS "Python not found - PythonEinsumGenerator validation tests will be disabled")
 endif()
 
+# Long cases in these objects (e.g. the water-20-sized eval fixtures) take
+# minutes each under ASan/UBSan, valgrind and MSVC's Debug STL; they are skipped
+# when SEQUANT_SKIP_LONG_TESTS is ON and in every Debug configuration.
 foreach(obj IN ITEMS symb mbpt eval-dryrun)
     target_compile_definitions(unit_tests-sequant-${obj}-obj PRIVATE
         $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)

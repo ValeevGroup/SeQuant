@@ -68,8 +68,9 @@ Useful CMake Variables
      - `BUILD_TESTING <https://cmake.org/cmake/help/latest/variable/BUILD_TESTING.html>`_
      - Enables test targets, e.g. ``check-sequant``.
    * - SEQUANT_SKIP_LONG_TESTS
-     - OFF (ON in ``Debug`` builds)
-     - Skip long test cases within unit and integration tests.
+     - OFF
+     - Skip long test cases within unit and integration tests. ``Debug`` configurations always skip them, regardless of
+       this option.
    * - SEQUANT_BTAS
      - OFF
      - SeQuant will look for (or build) `BTAS tensor library <https://github.com/ValeevGroup/BTAS>` and enable its use as an evaluation backend.

@@ -245,9 +245,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const CC::Options opts{.ansatz = CC::Ansatz::U,
                            .hbar_comm_rank = 2,
                            .hbar_expansion = CC::HbarExpansion::Bernoulli};
-    // Only read under !SEQUANT_SKIP_LONG_TESTS below (both for amps and, via
-    // the pre-existing guard further down, energy(3)); construction itself
-    // is cheap, so keep it unconditional rather than duplicating opts.
+    // Only read under !SEQUANT_SKIP_LONG_TESTS below (for amps and
+    // energy(3)); construction itself is cheap.
     [[maybe_unused]] CC cc(2, opts);
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
