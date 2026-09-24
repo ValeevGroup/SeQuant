@@ -61,19 +61,16 @@ std::size_t VertexPainterImpl::to_hash_value(
     hash::combine(result,
                   hash::value(static_cast<std::uint8_t>(ct->value_modifier())));
   // a conjugation symmetry other than the one parity Even would give over this
-  // tensor's field enters the shade: Even tensors add nothing in any field,
+  // tensor enters the shade: Even tensors add nothing in any field,
   // complex-field tensors, whose parity is unobservable, colour alike as they
-  // compare alike, and over a real field Odd and None both differ from Even.
-  // A tensor without bra/ket slots has no basis for the relation and asserts
-  // none whatever its parity (Tensor::derive_conjugation_symmetry), so
-  // Nonsymm is its default and adds nothing either.
-  const auto even_default =
-      (tensor._bra_rank() == 0 && tensor._ket_rank() == 0)
-          ? ConjugationSymmetry::Nonsymm
-          : to_conjugation_symmetry(ConjugationParity::Even,
-                                    tensor._base_field());
-  if (tensor._conjugation_symmetry() != even_default)
-    hash::combine(result, hash::value(tensor._conjugation_symmetry()));
+  // compare alike, over a real field Odd and None both differ from Even, and a
+  // tensor without bra/ket slots, which asserts no relation whatever its
+  // parity, adds nothing either. The comparison is the Tensor's own
+  // (even_parity_conjugation_symmetry), so only a c-number tensor is shaded
+  // this way -- an operator-valued vertex takes no term.
+  if (ct &&
+      ct->conjugation_symmetry() != ct->even_parity_conjugation_symmetry())
+    hash::combine(result, hash::value(ct->conjugation_symmetry()));
   return result;
 }
 

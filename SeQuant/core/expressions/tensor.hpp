@@ -497,22 +497,28 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             syms.perm.has_value()};
   }
 
-  /// @return the elementwise ConjugationSymmetry derived from
-  ///         conjugation_parity_ and base_field() over the current bra_/ket_,
-  ///         or Nonsymm for a tensor with no bra/ket slot at all
+  /// @return the elementwise ConjugationSymmetry an array of @p parity would
+  ///         have over the current bra_/ket_, or Nonsymm for a tensor with no
+  ///         bra/ket slot at all
   /// @note the aux slots take no part: they are array-like, with no
   ///       primal/dual pairing, so they carry no basis over which the
   ///       conjugation relation could be stated. A tensor without bra/ket
   ///       slots has no such basis either, so it asserts no conjugation
   ///       symmetry rather than borrowing a vacuously real field.
-  ConjugationSymmetry derive_conjugation_symmetry() const {
+  ConjugationSymmetry conjugation_symmetry_of(ConjugationParity parity) const {
     const auto has_slot = [](const auto &indices) {
       for (const Index &idx : indices)
         if (idx) return true;
       return false;
     };
     if (!has_slot(bra_) && !has_slot(ket_)) return ConjugationSymmetry::Nonsymm;
-    return to_conjugation_symmetry(conjugation_parity_, base_field());
+    return to_conjugation_symmetry(parity, base_field());
+  }
+
+  /// @return the elementwise ConjugationSymmetry derived from
+  ///         conjugation_parity_ over the current bra_/ket_
+  ConjugationSymmetry derive_conjugation_symmetry() const {
+    return conjugation_symmetry_of(conjugation_parity_);
   }
 
   // fully-resolved terminal ctor (range form)
@@ -955,6 +961,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///         be stated over and asserts none: Nonsymm.
   ConjugationSymmetry conjugation_symmetry() const {
     return conjugation_symmetry_;
+  }
+  /// @return the conjugation symmetry this tensor would have with parity
+  ///         Even: Nonsymm without bra/ket slots, else
+  ///         to_conjugation_symmetry(Even, base_field())
+  /// @note the default a reader compares against to tell whether this
+  ///       tensor's conjugation symmetry says anything of its own
+  /// @sa conjugation_symmetry()
+  ConjugationSymmetry even_parity_conjugation_symmetry() const {
+    return conjugation_symmetry_of(ConjugationParity::Even);
   }
   /// @return the base scalar Field of this tensor: the OR of its bra/ket index
   /// spaces' IndexSpace::field() (Complex dominates). Together with

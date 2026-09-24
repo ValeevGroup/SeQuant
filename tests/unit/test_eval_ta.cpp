@@ -48,9 +48,9 @@
 // adjoint() override (`result(annot) = arr(annot).conj()`, relying on TA's
 // recursive conj for nested tiles) is type-checked. No TA eval test constructs
 // a complex ToT adjoint, and Result::adjoint() is private (reachable only
-// through the EvalOp::Adjoint IR node); the ta_tot_conj_complex test below
-// runtime-checks the underlying TA conj while this instantiation compile-checks
-// the override.
+// through the EvalOp::Adjoint IR node, which now serves the '+' spelling
+// alone); the ta_tot_conj_complex test below runtime-checks the underlying TA
+// conj while this instantiation compile-checks the override.
 template class sequant::ResultTensorOfTensorTA<
     TA::DistArray<TA::Tensor<TA::Tensor<std::complex<double>>>>>;
 

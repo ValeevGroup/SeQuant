@@ -9,6 +9,8 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -342,23 +344,30 @@ std::wstring to_string(AbstractTensor const& tensor,
 
   if (options.annot_symm) {
     serialized += L":" + details::serialize_symm(tensor._symmetry(), options);
-    const std::wstring braket_letter = details::serialize_symm(
-        tensor._braket_symmetry(), tensor._hermiticity(), options);
-    serialized += L"-" + braket_letter;
+    const auto braket_symmetry = tensor._braket_symmetry();
+    serialized += L"-" + details::serialize_symm(
+                             braket_symmetry, tensor._hermiticity(), options);
     serialized +=
         L"-" + details::serialize_symm(tensor._column_symmetry(), options);
     // the fourth letter is optional: emitted only when the parity the parser
     // back-fills from the bra/ket letter is not the one this tensor carries.
     // An observable letter (S/C/N) spells a BraKetSymmetry, from which
     // to_conjugation_parity() recovers the parity against the same base
-    // field; a trait letter (H/A) spells a Hermiticity and leaves the parity
-    // at its default, Even. So every annotated string produced before this
-    // trait existed is unchanged.
+    // field. The two signed states -- the ones whose swap relation carries a
+    // minus, Antisymm and AntiConjugate -- have no letter of their own and
+    // are spelled through the hermiticity trait (H/A), which leaves the
+    // parity at its default, Even. So every annotated string produced before
+    // this trait existed is unchanged.
+    const auto negative = [](std::optional<std::int8_t> sign) {
+      return sign.has_value() && *sign == -1;
+    };
+    const bool spelled_as_trait =
+        negative(braket_swap_sign(braket_symmetry)) ||
+        negative(braket_conjugate_swap_sign(braket_symmetry));
     const ConjugationParity implied_parity =
-        (braket_letter == L"H" || braket_letter == L"A")
+        spelled_as_trait
             ? ConjugationParity::Even
-            : to_conjugation_parity(tensor._braket_symmetry(),
-                                    tensor._base_field());
+            : to_conjugation_parity(braket_symmetry, tensor._base_field());
     if (tensor._conjugation_parity() != implied_parity) {
       serialized +=
           L"-" + details::serialize_symm(tensor._conjugation_parity(), options);

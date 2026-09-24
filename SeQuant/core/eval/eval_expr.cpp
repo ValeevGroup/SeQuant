@@ -148,8 +148,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     auto tn = TensorNetwork(tlist);
     // The conjugate-braket fold is DISABLED at the eval boundary: leaves
     // keep their as-written orientation (conjugation markers arrive only on
-    // already-starred spellings and are served by binarize through
-    // EvalOp::Adjoint). The marker still colors the graph, so T and T* stay
+    // already-starred spellings, which binarize lowers to their value
+    // orientation). The marker still colors the graph, so T and T* stay
     // distinct (the C·C* vs C*·C aliasing fix).
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
@@ -169,17 +169,17 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // The flat-leaf conjugate-braket fold is disabled at the eval boundary:
     // leaves keep their as-written (value) orientation so leaf yielders and
     // evaluators need no conjugation awareness (Symm still folds). An
-    // already-starred spelling keeps its modifier -- binarize serves it
-    // through an EvalOp::Adjoint wrap; folding fresh flat leaves onto one
+    // already-starred spelling keeps its modifier -- binarize lowers it to
+    // its value orientation; folding fresh flat leaves onto one
     // orientation-shared slot is the lazy-conj eval follow-up.
     auto phase =
         TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
     canon_phase_ = phase ? -1 : 1;
     // Leaf-hash invariant (owned by hash_terminal_tensor): the modifier
-    // enters the hash whenever it is set. A Conjugate-symmetry leaf that
-    // arrives marked is served by binarize through an EvalOp::Adjoint node
-    // over its value orientation, so the marked leaf hash is only ever
-    // compared against other marked leaves.
+    // enters the hash whenever it is set. A marked leaf never becomes an IR
+    // node's expr(); binarize lowers it to its value orientation first, so
+    // hash_terminal_tensor's modifier term only distinguishes leaves that
+    // could not be lowered.
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }
@@ -417,8 +417,7 @@ void collect_tensor_factors(EvalExprNode const& node,  //
 /// node hash = the bare-leaf hash salted by EvalOp::Adjoint so cache lookups
 /// don't collide.
 EvalExprNode make_adjoint_node(EvalExprNode bare_leaf, ExprPtr adjointed,
-                               EvalExpr::index_vector canon_ix,
-                               std::int8_t phase) {
+                               EvalExpr::index_vector canon_ix) {
   EvalExprNode sentinel{EvalExpr{Constant{1}}};
   auto h = bare_leaf->hash_value();
   hash::combine(h, static_cast<size_t>(EvalOp::Adjoint));
@@ -426,7 +425,7 @@ EvalExprNode make_adjoint_node(EvalExprNode bare_leaf, ExprPtr adjointed,
                ResultType::Tensor,
                std::move(adjointed),
                std::move(canon_ix),
-               phase,
+               1,
                h,
                nullptr};
   return EvalExprNode{std::move(adj), std::move(bare_leaf),
@@ -461,9 +460,9 @@ EvalExprNode binarize(Tensor const& t, IndexSet const& uncontract,
       [[maybe_unused]] const auto sign = bare.adjoint();
       SEQUANT_ASSERT(sign == 1);
       SEQUANT_ASSERT(bare.value_modifier() == ValueModifier::None);
-      return make_adjoint_node(EvalExprNode{EvalExpr{bare}}, t.clone(),
-                               t.indices() | ranges::to<EvalExpr::index_vector>,
-                               1);
+      return make_adjoint_node(
+          EvalExprNode{EvalExpr{bare}}, t.clone(),
+          t.indices() | ranges::to<EvalExpr::index_vector>);
     }
 
     case ValueModifier::Conjugate: {
@@ -531,14 +530,13 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
-      // This node adopts the left operand's value orientation as its own
-      // slot layout -- the layout only: the respelling's sign belongs to the
-      // leaf's own node. A marked leaf reaches this sum through
-      // binarize(Tensor)'s Adjoint channel, whose node already carries that
-      // sign, while this node's phase would multiply every operand of the
-      // sum. Same reading as the unfold in the tensor*tensor branch, which
-      // also takes slot occupancy alone and consumes no sign.
-      [[maybe_unused]] auto const [t, sign] = value_oriented(left.as_tensor());
+      // This node takes its slot layout from the left operand, and nothing
+      // else: no operand is a marked spelling whose sign this node would
+      // have to account for. binarize(Tensor) lowers a Conjugate-marked leaf
+      // to its value orientation, and its sign to a Constant(-1) child of
+      // its own, before any parent node is built, so every operand here is
+      // already spelled by its value.
+      auto const& t = left.as_tensor();
       EvalExpr result{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
@@ -613,11 +611,12 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
-      // the value orientation supplies this node's slot layout, nothing else:
-      // the respelling's sign belongs to the leaf's own node, which a marked
-      // leaf already carries out of binarize(Tensor)'s Adjoint channel, and
-      // a phase here would multiply every operand of the product
-      [[maybe_unused]] auto const [t, sign] = value_oriented(tl->as_tensor());
+      // the tensor operand supplies this node's slot layout, and nothing
+      // else: no operand is a marked spelling whose sign this node would
+      // have to account for, binarize(Tensor) having lowered a
+      // Conjugate-marked leaf to its value orientation, and its sign to a
+      // Constant(-1) child of its own, before this node is built
+      auto const& t = tl->as_tensor();
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
@@ -638,20 +637,19 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         // (bra, ket, or aux) based on which slot it occupies in
         // the factor tensors .. if appears in multiple slots put into aux
         //
-        // count on the value orientation of each factor: a folded Conjugate
-        // leaf is spelled swapped+starred but its indices occupy the authored
-        // slots by value; counting the folded spelling would migrate its ket
-        // group into bra and merge the intermediate's partition
+        // count on the value orientation of each factor: a marker-bearing
+        // spelling can occupy slots its value does not, and counting it
+        // would migrate a ket group into bra and merge the intermediate's
+        // partition
         auto unfolded = ts | transform([](ExprPtr const& x) -> ExprPtr {
                           if (x->is<Tensor>() && x->as<Tensor>().conjugated()) {
-                            // Only slot occupancy is read here: the factors
-                            // keep their as-written spellings and each one's
-                            // own node already carries whatever sign its
-                            // spelling costs. Nothing is respelled, so the
-                            // sign this unfold reports (-1 for an
-                            // AntiConjugate leaf) is not consumed -- unlike
-                            // at the nodes that adopt a value orientation as
-                            // their own spelling, where it rides canon_phase.
+                            // Only slot occupancy is read here, never a sign:
+                            // a Conjugate-marked leaf no longer reaches this
+                            // point at all (binarize lowers it to its value
+                            // orientation, whose sign becomes a Constant
+                            // child), and the '+' spelling an Adjoint node
+                            // carries names an array of its own, which
+                            // value_oriented returns unchanged.
                             [[maybe_unused]] auto [t, sign] =
                                 value_oriented(x->as<Tensor>());
                             return ex<Tensor>(std::move(t));
@@ -739,12 +737,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
-    std::int8_t vo_sign = 1;
     ExprPtr expr;
     if (left->is_tensor()) {
-      auto [t, sign] = value_oriented(left->as_tensor());
-      vo_sign = sign;
-      expr = detail::make_tensor(t, false, opts);
+      // the operand supplies the layout, and nothing else: no operand is a
+      // marked spelling whose sign this node would have to account for,
+      // binarize(Tensor) having lowered a Conjugate-marked leaf to its value
+      // orientation, and its sign to a Constant(-1) child of its own, before
+      // this node is built
+      expr = detail::make_tensor(left->as_tensor(), false, opts);
     } else if (left->is_constant()) {
       expr = left->expr() * right->expr();
     } else {
@@ -754,14 +754,13 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
 
     auto h = left->hash_value();
     hash::combine(h, right->hash_value());
-    auto result =
-        EvalExpr{EvalOp::Product,                                          //
-                 type,                                                     //
-                 expr,                                                     //
-                 left->canon_indices(),                                    //
-                 static_cast<std::int8_t>(left->canon_phase() * vo_sign),  //
-                 h,                                                        //
-                 nullptr};
+    auto result = EvalExpr{EvalOp::Product,        //
+                           type,                   //
+                           expr,                   //
+                           left->canon_indices(),  //
+                           left->canon_phase(),    //
+                           h,                      //
+                           nullptr};
 
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }

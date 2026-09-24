@@ -970,13 +970,12 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   using namespace sequant;
   using BTensorC = btas::Tensor<std::complex<double>>;
 
-  // The sign a value respelling costs must be applied exactly once. A leaf
-  // that arrives marked -- d^*{i_1;a_1} for an anti-Hermitian d -- is served
-  // through binarize(Tensor)'s EvalOp::Adjoint channel, whose node carries
-  // that sign; an ancestor that adopts the leaf's value orientation for its
-  // own slot layout must not apply it again, because a node's phase
-  // multiplies everything below it, the summand beside the marked one
-  // included.
+  // The sign a value respelling costs must be applied exactly once, and as
+  // a scalar. A leaf that arrives marked -- d^*{i_1;a_1} for an
+  // anti-Hermitian d -- is lowered to its value orientation with that sign
+  // as a Constant(-1) node of its own; an ancestor that takes the leaf's
+  // slot layout must add nothing, since a node's phase multiplies everything
+  // below it, the summand beside the marked one included.
   Context ctx = get_default_context();
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
