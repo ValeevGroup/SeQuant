@@ -585,6 +585,15 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   return apply_op(node, std::move(left), right);
 }
 
+/// \return the IndexSpace base keys of the modes in \p modes, comma-joined
+///         without a trailing comma (the dag-scope trace format)
+template <typename Modes>
+[[nodiscard]] std::string dag_scope(Modes&& modes) {
+  return join_strings<std::string>(
+      std::forward<Modes>(modes), ",",
+      [](Index const& m) { return toUtf8(m.space().base_key()); });
+}
+
 /// value id -> forest node: the node of \p vmap whose value key is that of
 /// \p rich's cell \p vid.
 /// \throw Exception naming \p what if there is none, i.e. the schedule and
@@ -1890,27 +1899,20 @@ inline std::function<std::string(std::size_t)> make_node_meta(
     RichSchedule const& rich) {
   std::unordered_map<std::size_t, std::string> map;
   map.reserve(rich.cells.size());
-  auto const dag_scope = [](auto const& modes) {
-    std::string s;
-    for (auto const& m : modes) {
-      if (!s.empty()) s += ",";
-      s += toUtf8(m.space().base_key());
-    }
-    return s;
-  };
   for (auto const& cell : rich.cells) {
     std::string uses;
     for (auto const& occ : cell.occurrences) {
       if (!uses.empty()) uses += ",";
-      std::string sc;
-      for (auto const& e : occ.ectx) {
-        if (!sc.empty()) sc += ",";
-        sc += toUtf8(e.first.space().base_key());
-      }
-      uses += std::format("{{{}}}", sc);
+      uses += std::format(
+          "{{{}}}",
+          detail::dag_scope(occ.ectx | std::views::transform(
+                                           [](auto const& e) -> auto const& {
+                                             return e.first;
+                                           })));
     }
-    map.emplace(cell.hash, std::format("home={{{}}} uses=[{}]",
-                                       dag_scope(cell.home_modes), uses));
+    map.emplace(cell.hash,
+                std::format("home={{{}}} uses=[{}]",
+                            detail::dag_scope(cell.home_modes), uses));
   }
   return [map = std::move(map)](std::size_t hash) -> std::string {
     auto const it = map.find(hash);
