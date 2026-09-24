@@ -133,9 +133,9 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ${{github.workspace}}/build/.ccache
-        key: ${{ matrix.config.name }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
+        key: ${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.sanitize }}-${{ matrix.valgrind }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
         restore-keys: |
-          ${{ matrix.config.name }}-ccache-
+          ${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.sanitize }}-${{ matrix.valgrind }}-ccache-
 
     - name: Configure CMake
       shell: bash
