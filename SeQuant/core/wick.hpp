@@ -751,6 +751,28 @@ class WickTheorem {
       return uptri_idx(i, j, this->wick.op_npartitions_);
     }
 
+    /// @return the 0-based topological partition indices of @p op1 and
+    /// @p op2
+    /// @pre op partitions are defined, and @p op1 precedes @p op2 in the input
+    auto op_partition_pair(const Op<S> &op1, const Op<S> &op2) const {
+      auto ordinal_and_partition = [this](const Op<S> &op) {
+        SEQUANT_ASSERT(wick.op_to_input_ordinal_.contains(op));
+        const auto ord = wick.op_to_input_ordinal_[op];
+        const auto partition_idx = wick.op_partition_idx_[ord];
+        SEQUANT_ASSERT(partition_idx > 0);
+        return std::pair{ord, partition_idx - 1};  // partition index 0-based
+      };
+      [[maybe_unused]] const auto [op1_ord, op1_partition_idx] =
+          ordinal_and_partition(op1);
+      [[maybe_unused]] const auto [op2_ord, op2_partition_idx] =
+          ordinal_and_partition(op2);
+
+      // op ordinals and partition indices are in increasing order
+      SEQUANT_ASSERT(op1_ord < op2_ord);
+      SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
+      return std::pair{op1_partition_idx, op2_partition_idx};
+    }
+
     NontensorWickState(const WickTheorem<S> &wt,
                        const NormalOperatorSequence<S> &nopseq)
         : wick(wt),
@@ -972,21 +994,8 @@ class WickTheorem {
 
       auto update_op_metadata = [this](const Op<S> &op1, const Op<S> &op2) {
         if (!this->wick.op_partition_idx_.empty()) {
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op1));
-          const auto op1_ord = this->wick.op_to_input_ordinal_[op1];
-          auto op1_partition_idx = wick.op_partition_idx_[op1_ord];
-          SEQUANT_ASSERT(op1_partition_idx > 0);
-          --op1_partition_idx;  // now partition index is 0-based
-
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op2));
-          const auto op2_ord = this->wick.op_to_input_ordinal_[op2];
-          auto op2_partition_idx = wick.op_partition_idx_[op2_ord];
-          SEQUANT_ASSERT(op2_partition_idx > 0);
-          --op2_partition_idx;  // now partition index is 0-based
-
-          // op ordinals and partition indices are in increasing order
-          SEQUANT_ASSERT(op1_ord < op2_ord);
-          SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
+          const auto [op1_partition_idx, op2_partition_idx] =
+              op_partition_pair(op1, op2);
 
           SEQUANT_ASSERT(op_partition_cdeg_matrix.size() >
                          uptri_op(op1_partition_idx, op2_partition_idx));
@@ -1089,21 +1098,8 @@ class WickTheorem {
 
       auto update_op_metadata = [this](const Op<S> &op1, const Op<S> &op2) {
         if (!this->wick.op_partition_idx_.empty()) {
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op1));
-          const auto op1_ord = this->wick.op_to_input_ordinal_[op1];
-          auto op1_partition_idx = wick.op_partition_idx_[op1_ord];
-          SEQUANT_ASSERT(op1_partition_idx > 0);
-          --op1_partition_idx;  // now partition index is 0-based
-
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op2));
-          const auto op2_ord = this->wick.op_to_input_ordinal_[op2];
-          auto op2_partition_idx = wick.op_partition_idx_[op2_ord];
-          SEQUANT_ASSERT(op2_partition_idx > 0);
-          --op2_partition_idx;  // now partition index is 0-based
-
-          // op ordinals and partition indices are in increasing order
-          SEQUANT_ASSERT(op1_ord < op2_ord);
-          SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
+          const auto [op1_partition_idx, op2_partition_idx] =
+              op_partition_pair(op1, op2);
 
           SEQUANT_ASSERT(op_partition_cdeg_matrix.size() >
                          uptri_op(op1_partition_idx, op2_partition_idx));
