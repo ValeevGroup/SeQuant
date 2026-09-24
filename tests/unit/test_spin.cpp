@@ -817,6 +817,14 @@ SECTION("Swap bra kets") {
     REQUIRE_THAT(result, EquivalentTo("g{a1,a2;i1,i2}"));
   }
 
+  // Tensor with aux indices
+  {
+    auto input = ex<Tensor>(L"B", bra{L"i_1"}, ket{L"a_1"}, aux{L"x_1"},
+                            particle_symmetric);
+    auto result = swap_bra_ket(input);
+    REQUIRE_THAT(result, EquivalentTo("B{a1;i1;x1}"));
+  }
+
   // Product
   {
     auto input = ex<Tensor>(L"g", bra{L"a_5", L"a_6"}, ket{L"i_5", L"i_6"},

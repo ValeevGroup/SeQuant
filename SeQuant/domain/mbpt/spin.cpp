@@ -235,8 +235,9 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
     return ex<Tensor>(tensor.label(), bra(tensor.ket().value()),
-                      ket(tensor.bra().value()), tensor.symmetry(),
-                      tensor.braket_symmetry(), tensor.column_symmetry());
+                      ket(tensor.bra().value()), aux(tensor.aux().value()),
+                      tensor.symmetry(), tensor.braket_symmetry(),
+                      tensor.column_symmetry());
   };
 
   // Lambda for product
