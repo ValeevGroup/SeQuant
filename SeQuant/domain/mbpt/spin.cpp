@@ -275,44 +275,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 
 ExprPtr append_spin(const ExprPtr& expr,
                     const container::map<Index, Index>& index_replacements) {
-  auto add_spin_to_tensor = [&index_replacements](const Tensor& tensor) {
-    auto spin_tensor = std::make_shared<Tensor>(tensor);
-    spin_tensor->transform_indices(index_replacements);
-    return spin_tensor;
-  };
-
-  auto add_spin_to_product = [&add_spin_to_tensor](const Product& product) {
-    auto spin_product = std::make_shared<Product>();
-    spin_product->scale(product.scalar());
-    for (auto&& term : product) {
-      if (term->is<Tensor>()) {
-        spin_product->append(1, add_spin_to_tensor(term->as<Tensor>()));
-      } else if (term->is<Constant>() || term->is<Variable>()) {
-        spin_product->append(1, term);
-      } else {
-        throw Exception(
-            "Invalid Expr type in append_spin::add_spin_to_product: " +
-            term->type_name());
-      }
-    }
-    return spin_product;
-  };
-
-  if (expr->is<Tensor>()) {
-    return add_spin_to_tensor(expr->as<Tensor>());
-  } else if (expr->is<Product>()) {
-    return add_spin_to_product(expr->as<Product>());
-  } else if (expr->is<Sum>()) {
-    auto spin_expr = std::make_shared<Sum>();
-    for (auto&& summand : *expr) {
-      spin_expr->append(append_spin(summand, index_replacements));
-    }
-    return spin_expr;
-  } else if (expr->is<Constant>() || expr->is<Variable>()) {
-    return expr;
-  }
-
-  throw Exception("Unsupported Expr type in append_spin");
+  return transform_expr(expr, index_replacements);
 }
 
 ExprPtr remove_spin(const ExprPtr& expr) {
@@ -824,25 +787,11 @@ ExprPtr expand_P_op(const ProductPtr& product) {
   if (!has_P_operator) return product;
 
   auto result = std::make_shared<Sum>();
+  const auto temp_product =
+      remove_tensor(product, reserved::transposition_label());
   for (auto&& map : map_list) {
-    ProductPtr new_product = std::make_shared<Product>();
-    new_product->scale(product->scalar());
-    auto temp_product = remove_tensor(product, reserved::transposition_label());
-    for (auto&& term : *temp_product) {
-      if (term->is<Tensor>()) {
-        auto new_tensor = term->as<Tensor>();
-        new_tensor.transform_indices(map);
-        new_tensor.reset_tags();
-        new_product->append(1, ex<Tensor>(new_tensor));
-      } else if (term->is<Constant>() || term->is<Variable>()) {
-        new_product->append(1, term);
-      } else {
-        throw Exception("Invalid Expr type in expand_P_op: " +
-                        term->type_name());
-      }
-    }
-    result->append(new_product);
-  }  // map_list
+    result->append(transform_expr(temp_product, map));
+  }
 
   return result;
 }
