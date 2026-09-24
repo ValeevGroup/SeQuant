@@ -1486,6 +1486,29 @@ struct PeakBatchedModel {
     return best;
   }
 
+  /// The children of a chosen frontier point, in the canonical `lp_first`
+  /// order, and the children's enclosing cell.
+  struct ChildFrontier {
+    std::size_t f;
+    int fi;
+    std::size_t s;
+    int si;
+    std::size_t C;
+  };
+
+  /// Back-pointer walk step: for node subset \p n in enclosing cell \p B with
+  /// chosen frontier index \p idx, descends to the children's cell and returns
+  /// the two child subsets/frontier indices.
+  static ChildFrontier child_frontier(Context const& ctx,
+                                      container::vector<State> const& st,
+                                      std::size_t n, std::size_t B, int idx) {
+    auto const& r = st[n][B][idx];
+    std::size_t const C = ctx.descend_pt(B, r.eopen, r.aprime);
+    return ChildFrontier{
+        r.lp_first ? r.lp : r.rp, r.lp_first ? r.lp_idx : r.rp_idx,
+        r.lp_first ? r.rp : r.lp, r.lp_first ? r.rp_idx : r.lp_idx, C};
+  }
+
   EvalSequence reconstruct(Context const& ctx,
                            container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
@@ -1496,12 +1519,7 @@ struct PeakBatchedModel {
         [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
       if (std::popcount(n) == 1)
         return EvalSequence{static_cast<int>(std::countr_zero(n))};
-      BFrontPoint const& r = st[n][B][idx];
-      std::size_t const C = ctx.descend_pt(B, r.eopen, r.aprime);
-      std::size_t const fs = r.lp_first ? r.lp : r.rp;
-      int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
-      std::size_t const ss = r.lp_first ? r.rp : r.lp;
-      int const si = r.lp_first ? r.rp_idx : r.lp_idx;
+      auto const [fs, fi, ss, si, C] = child_frontier(ctx, st, n, B, idx);
       EvalSequence s = build(fs, C, fi);
       EvalSequence b = build(ss, C, si);
       s.insert(s.end(), b.begin(), b.end());
@@ -1526,12 +1544,8 @@ struct PeakBatchedModel {
                       int idx) const {
     if (std::popcount(n) == 1) return ctx.sz_u(Usize, n);
     auto const& r = st[n][Bsched][idx];
-    std::size_t const C = ctx.descend_pt(Bsched, r.eopen, r.aprime);
+    auto const [f, fi, s, si, C] = child_frontier(ctx, st, n, Bsched, idx);
     std::size_t const Uc = Usize | r.aprime;
-    std::size_t const f = r.lp_first ? r.lp : r.rp;
-    int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
-    std::size_t const s = r.lp_first ? r.rp : r.lp;
-    int const si = r.lp_first ? r.rp_idx : r.lp_idx;
     double const peak_f = subtree_peak(ctx, st, f, C, Uc, fi);
     double const peak_s = subtree_peak(ctx, st, s, C, Uc, si);
     double const res = (r.aprime != 0) ? ctx.sz_u(Usize, n) : 0.0;
@@ -1568,32 +1582,13 @@ struct PeakBatchedModel {
     // cost (BFrontPoint::eopen), so there is nothing to re-size afterwards.
     if (out_root_peak_bytes)
       *out_root_peak_bytes = st[root][0][best].peak * numeric_size;
-    // Shared child-extraction for the back-pointer walk below: given a node
-    // subset `n`, its enclosing cell `B`, and the chosen frontier index `idx`,
-    // fetch the frontier point, descend to the children's cell `C`, and return
-    // the two child subsets/indices in the canonical `lp_first` order.
-    struct ChildFrontier {
-      std::size_t f;
-      int fi;
-      std::size_t s;
-      int si;
-      std::size_t C;
-    };
-    auto child_frontier = [&](std::size_t n, std::size_t B,
-                              int idx) -> ChildFrontier {
-      auto const& r = st[n][B][idx];
-      std::size_t const C = ctx.descend_pt(B, r.eopen, r.aprime);
-      return ChildFrontier{
-          r.lp_first ? r.lp : r.rp, r.lp_first ? r.lp_idx : r.rp_idx,
-          r.lp_first ? r.rp : r.lp, r.lp_first ? r.rp_idx : r.lp_idx, C};
-    };
     container::vector<NodeBatchAnnotation> node_axes;
     std::function<EvalSequence(std::size_t, std::size_t, int)> build =
         [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
       if (std::popcount(n) == 1)
         return EvalSequence{static_cast<int>(std::countr_zero(n))};
       BFrontPoint const& r = st[n][B][idx];
-      auto const [fs, fi, ss, si, C] = child_frontier(n, B, idx);
+      auto const [fs, fi, ss, si, C] = child_frontier(ctx, st, n, B, idx);
       EvalSequence s = build(fs, C, fi);
       EvalSequence b = build(ss, C, si);
       s.insert(s.end(), b.begin(), b.end());
