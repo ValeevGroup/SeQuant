@@ -4,6 +4,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/scope.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -1555,29 +1556,33 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
 
     // TensorCanonicalizer is given a custom comparer that moves active
     // indices to the front external-vs-internal trait still takes precedence
-    auto current_index_comparer =
-        TensorCanonicalizer::instance()->index_comparer();
-    TensorCanonicalizer::instance()->index_comparer(
-        [&](const Index& idx1, const Index& idx2) -> bool {
-          auto active_space = isr->intersection(isr->particle_space(Spin::any),
-                                                isr->hole_space(Spin::any));
-          const auto idx1_active = idx1.space().type() == active_space.type();
-          const auto idx2_active = idx2.space().type() == active_space.type();
-          if (idx1_active) {
-            if (idx2_active)
-              return current_index_comparer(idx1, idx2);
-            else
-              return true;
-          } else {
-            if (idx2_active)
-              return false;
-            else
-              return current_index_comparer(idx1, idx2);
-          }
-        });
-    simplify(result);
-    TensorCanonicalizer::instance()->index_comparer(
-        std::move(current_index_comparer));
+    {
+      auto current_index_comparer =
+          TensorCanonicalizer::instance()->index_comparer();
+      auto restore_index_comparer = sequant::detail::make_scope_exit([&] {
+        TensorCanonicalizer::instance()->index_comparer(
+            std::move(current_index_comparer));
+      });
+      TensorCanonicalizer::instance()->index_comparer(
+          [&](const Index& idx1, const Index& idx2) -> bool {
+            auto active_space = isr->intersection(
+                isr->particle_space(Spin::any), isr->hole_space(Spin::any));
+            const auto idx1_active = idx1.space().type() == active_space.type();
+            const auto idx2_active = idx2.space().type() == active_space.type();
+            if (idx1_active) {
+              if (idx2_active)
+                return current_index_comparer(idx1, idx2);
+              else
+                return true;
+            } else {
+              if (idx2_active)
+                return false;
+              else
+                return current_index_comparer(idx1, idx2);
+            }
+          });
+      simplify(result);
+    }
 
     restore_scalars(result);
     return result;
