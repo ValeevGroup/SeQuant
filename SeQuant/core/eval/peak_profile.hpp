@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_PEAK_PROFILE_HPP
 #define SEQUANT_EVAL_PEAK_PROFILE_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -108,9 +109,7 @@ template <typename BlockOfFn>
   // (including as a composite's outer proto), so composite slicing is
   // preserved.
   for (auto const& m : home_modes) {
-    auto const it = std::find(carried.begin(), carried.end(), m);
-    if (it != carried.end())
-      ov[static_cast<std::size_t>(it - carried.begin())] = block_of(m);
+    if (auto const p = find_position(carried, m)) ov[*p] = block_of(m);
   }
   return cm.memsize(carried, ov);  // non-meet carried modes full
 }

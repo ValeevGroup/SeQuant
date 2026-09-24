@@ -15,6 +15,7 @@
 #include <bit>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <ranges>
 #include <tuple>
 #include <type_traits>
@@ -95,6 +96,18 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp = {}) {
       }
     }
   } while (swapped);
+}
+
+/// @return the position of the first element of @p rng that compares equal to
+/// @p value, or std::nullopt if there is none
+template <typename Range, typename T>
+std::optional<std::size_t> find_position(const Range& rng, const T& value) {
+  std::size_t pos = 0;
+  for (auto&& elem : rng) {
+    if (elem == value) return pos;
+    ++pos;
+  }
+  return std::nullopt;
 }
 
 /// @return true if any two elements of @p rng compare equal

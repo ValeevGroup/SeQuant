@@ -157,6 +157,16 @@ TEST_CASE("has_duplicates", "[utilities]") {
       has_duplicates(std::vector<std::pair<int, int>>{{0, 1}, {1, 0}}));
 }
 
+TEST_CASE("find_position", "[utilities]") {
+  using namespace sequant;
+
+  const std::vector<int> v{4, 7, 4};
+  REQUIRE(find_position(v, 4) == std::optional<std::size_t>{0});
+  REQUIRE(find_position(v, 7) == std::optional<std::size_t>{1});
+  REQUIRE_FALSE(find_position(v, 5).has_value());
+  REQUIRE_FALSE(find_position(std::vector<int>{}, 4).has_value());
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 

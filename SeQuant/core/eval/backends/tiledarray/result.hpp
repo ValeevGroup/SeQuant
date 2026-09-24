@@ -5,6 +5,7 @@
 
 #include <sstream>
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
@@ -394,19 +395,12 @@ template <typename LArrayT, typename RArrayT>
   auto const ro = outer_annot_labels(rannot);
   auto const co = outer_annot_labels(cannot);
 
-  auto find_dim = [](container::svector<std::string> const& labels,
-                     std::string const& lbl) -> std::optional<std::size_t> {
-    for (std::size_t i = 0; i < labels.size(); ++i)
-      if (labels[i] == lbl) return i;
-    return std::nullopt;
-  };
-
   std::vector<TA::TiledRange1> dims;
   dims.reserve(co.size());
   for (auto const& lbl : co) {
-    if (auto const i = find_dim(lo, lbl)) {
+    if (auto const i = find_position(lo, lbl)) {
       dims.emplace_back(larr.trange().dim(*i));
-    } else if (auto const j = find_dim(ro, lbl)) {
+    } else if (auto const j = find_position(ro, lbl)) {
       dims.emplace_back(rarr.trange().dim(*j));
     } else {
       throw Exception("result_outer_trange: result outer label '" + lbl +
