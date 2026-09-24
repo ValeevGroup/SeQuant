@@ -164,12 +164,7 @@ EvalSequence single_term_opt(
     SEQUANT_ASSERT(!out_axes &&
                    "out_axes only supported with DenseSpaceTimeBatched");
     if (is_volatile_leaf && volatile_weight > 1.0) {
-      size_t i = 0;
-      for (auto&& t : network.tensors()) {
-        auto tp = std::dynamic_pointer_cast<Tensor>(t);
-        if (tp && is_volatile_leaf(*tp)) volatile_mask |= (size_t{1} << i);
-        ++i;
-      }
+      volatile_mask = leaf_volatile_mask(network, is_volatile_leaf);
       nr = volatile_weight;
     }
     (void)is_batchable_contracted_index;
