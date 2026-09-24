@@ -1579,12 +1579,6 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     TensorCanonicalizer::instance()->index_comparer(
         std::move(current_index_comparer));
 
-    if (Logger::instance().wick_stats) {
-      std::wcout << "WickTheorem stats: # of contractions attempted = "
-                 << wick.stats().num_attempted_contractions
-                 << " # of useful contractions = "
-                 << wick.stats().num_useful_contractions << std::endl;
-    }
     restore_scalars(result);
     return result;
   }
