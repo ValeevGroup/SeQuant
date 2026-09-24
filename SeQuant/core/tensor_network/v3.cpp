@@ -1599,10 +1599,10 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
         TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
-    [[maybe_unused]] const TensorCanonicalizer &tensor_canonizer =
+    const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 
-    auto bp = canonicalizer.apply(*tensor);
+    auto bp = tensor_canonizer.apply(*tensor);
 
     if (bp) {
       byproduct *= bp;
