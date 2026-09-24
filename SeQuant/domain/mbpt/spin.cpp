@@ -85,19 +85,6 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   return Index{space, idx.ordinal(), protoindices};
 }
 
-// The argument really should be non-const but const semantics are broken
-// for the ExprPtr type so we are required to make this const in order
-// to be able to use this function everywhere we want to.
-void reset_idx_tags(const ExprPtr& expr) {
-  expr->visit(
-      [](ExprPtr& current) {
-        if (current.is<AbstractTensor>()) {
-          current.as<AbstractTensor>()._reset_tags();
-        }
-      },
-      true);
-}
-
 template <typename Container, typename TraceFunction, typename... Args>
 [[nodiscard]] Container wrap_trace(const ResultExpr& expr,
                                    TraceFunction&& tracer, Args&&... args) {
@@ -564,7 +551,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
     new_result->append(new_product);
   }  // map_list
 
-  detail::reset_idx_tags(new_result);
+  reset_tags(new_result);
 
   return new_result;
 }
@@ -688,7 +675,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     result->append(ex<Product>(new_product));
   }
 
-  detail::reset_idx_tags(result);
+  reset_tags(result);
 
   return result;
 }
@@ -835,7 +822,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
   // Check if S operator is present
   if (!has_tensor(expr, reserved::symm_label())) return expr;
 
-  detail::reset_idx_tags(expr);
+  reset_tags(expr);
 
   // Lambda for applying S on products
   auto expand_S_product = [](const ProductPtr& product) -> ExprPtr {
@@ -891,7 +878,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
     }
   }
 
-  detail::reset_idx_tags(result);
+  reset_tags(result);
   return result;
 }
 
@@ -1437,7 +1424,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_op(expr);
-  detail::reset_idx_tags(expanded_expr);
+  reset_tags(expanded_expr);
   expand(expanded_expr);
   simplify(expanded_expr);
 
@@ -1474,7 +1461,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   for (auto& e : e_rep) {
     // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
-    detail::reset_idx_tags(spin_expr);
+    reset_tags(spin_expr);
     Sum e_result{};
 
     // Loop over internal index replacement maps
@@ -1483,7 +1470,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       ExprPtr spin_expr_i = append_spin(spin_expr, i);
       spin_expr_i = expand_antisymm(spin_expr_i, true);
       expand(spin_expr_i);
-      detail::reset_idx_tags(spin_expr_i);
+      reset_tags(spin_expr_i);
       Sum i_result{};
 
       if (spin_expr_i->is<Tensor>() || spin_expr_i->is<Constant>() ||
@@ -1517,7 +1504,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   // Canonicalize and simplify all expressions
   for (auto& expression : result) {
-    detail::reset_idx_tags(expression);
+    reset_tags(expression);
     canonicalize(expression);
     rapid_simplify(expression);
   }
@@ -1831,7 +1818,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
 
   SEQUANT_ASSERT(result);
 
-  detail::reset_idx_tags(result);
+  reset_tags(result);
 
   simplify(result);
 

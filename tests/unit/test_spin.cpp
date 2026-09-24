@@ -52,12 +52,6 @@ TEST_CASE("spin", "[spin]") {
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
 
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<AbstractTensor>())
-      ranges::for_each(expr->as<AbstractTensor>()._slots(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
-
   SECTION("protoindices supported") {
     auto isr = get_default_context().index_space_registry();
     Index i1(L"i_1");
@@ -1457,7 +1451,7 @@ SECTION("Relation in spin P operators") {
   auto p6_input = p_aab * input;
   expand(p6_input);
   auto p6_result = expand_P_op(p6_input);
-  p6_result->visit(reset_idx_tags);
+  reset_tags(p6_result);
   simplify(p6_result);
 
   auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
@@ -1471,24 +1465,24 @@ SECTION("Relation in spin P operators") {
   expand(p6_result);
   canonicalize(p6_result);
   p6_result = expand_A_op(p6_result);
-  p6_result->visit(reset_idx_tags);
+  reset_tags(p6_result);
   simplify(p6_result);
 
   auto p7_input = p_abb * input;
   expand(p7_input);
   auto p7_result = expand_P_op(p7_input);
-  p7_result->visit(reset_idx_tags);
+  reset_tags(p7_result);
   simplify(p7_result);
 
   p7_result = A_23 * p7_result;
   expand(p7_result);
   p7_result = expand_A_op(p7_result);
-  p7_result->visit(reset_idx_tags);
+  reset_tags(p7_result);
   simplify(p7_result);
 
   auto expanded_A = A3 * input;
   expanded_A = expand_A_op(expanded_A);
-  expanded_A->visit(reset_idx_tags);
+  reset_tags(expanded_A);
   simplify(expanded_A);
   REQUIRE(p6_result == p7_result);
   REQUIRE(p6_result == expanded_A);
@@ -1666,7 +1660,7 @@ SECTION("Open-shell spin-tracing") {
 
     auto input = ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
     auto result = expand_A_op(input);
-    result->visit(reset_idx_tags);
+    reset_tags(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
                               "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
@@ -1677,7 +1671,7 @@ SECTION("Open-shell spin-tracing") {
 
     input = ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
     result = expand_A_op(input);
-    result->visit(reset_idx_tags);
+    reset_tags(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
                               "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
@@ -1702,7 +1696,7 @@ SECTION("Open-shell spin-tracing") {
     auto result2 = ex<Tensor>(A3_aaa) * result[0];
     expand(result2);
     result2 = expand_A_op(result2);
-    result2->visit(reset_idx_tags);
+    reset_tags(result2);
     canonicalize(result2);
     rapid_simplify(result2);
     REQUIRE(result2->size() == 27);
@@ -1712,7 +1706,7 @@ SECTION("Open-shell spin-tracing") {
     auto result3 = ex<Tensor>(A3_bbb) * result[3];
     expand(result3);
     result3 = expand_A_op(result3);
-    result3->visit(reset_idx_tags);
+    reset_tags(result3);
     canonicalize(result3);
     rapid_simplify(result3);
     REQUIRE(result3->size() == 27);
@@ -1741,7 +1735,7 @@ SECTION("Open-shell spin-tracing") {
                        ket{L"i_3", L"i_4", L"i_5"}, Symmetry::Antisymm);
 
     input = expand_P_op(input);
-    input->visit(reset_idx_tags);
+    reset_tags(input);
     auto result = open_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
@@ -1751,7 +1745,7 @@ SECTION("Open-shell spin-tracing") {
                       result[1];
     expand(result_aab);
     result_aab = expand_A_op(result_aab);
-    result_aab->visit(reset_idx_tags);
+    reset_tags(result_aab);
     canonicalize(result_aab);
     rapid_simplify(result_aab);
     REQUIRE(result_aab->size() == 18);

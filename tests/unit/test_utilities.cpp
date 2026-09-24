@@ -110,6 +110,22 @@ TEST_CASE("bubble_sort_parity", "[utilities]") {
   REQUIRE(as_ints(descending) == std::vector<int>{3, 2, 1});
 }
 
+TEST_CASE("reset_tags", "[utilities]") {
+  using namespace sequant;
+
+  ExprPtr expr = ex<Constant>(2) * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}) *
+                 ex<Tensor>(L"s", bra{L"a_1"}, ket{L"i_1"});
+  REQUIRE(expr->is<Product>());
+  auto& tensor = expr->as<Product>().factors().at(0)->as<Tensor>();
+  const container::map<Index, Index> replacements{
+      {Index(L"i_1"), Index(L"i_2")}};
+  REQUIRE(tensor.transform_indices(replacements));
+  REQUIRE(tensor.bra().at(0).tag().has_value());
+
+  reset_tags(expr);
+  REQUIRE_FALSE(tensor.bra().at(0).tag().has_value());
+}
+
 TEST_CASE("utilities", "[utilities]") {
   using namespace sequant;
 
