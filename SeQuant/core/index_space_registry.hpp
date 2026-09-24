@@ -21,6 +21,8 @@
 #include <boost/hana.hpp>
 #include <boost/hana/ext/std/integral_constant.hpp>
 
+#include <bit>
+#include <cstdint>
 #include <mutex>
 #include <ranges>
 
@@ -892,7 +894,7 @@ class IndexSpaceRegistry {
   /// @return true if @p t is in the basis
   /// @sa space_type_basis
   static bool is_base(const IndexSpace::Type& t) {
-    return has_single_bit(t.to_int32());
+    return std::has_single_bit(static_cast<std::uint32_t>(t.to_int32()));
   }
 
   /// @}
@@ -1395,11 +1397,6 @@ class IndexSpaceRegistry {
     base_space_types_.reset();
     base_spaces_.reset();
     return *this;
-  }
-
-  ///@brief true if has one and only one bit set.
-  static bool has_single_bit(std::uint32_t bits) {
-    return bits && !(bits & (bits - 1));
   }
 
   /// @brief non-throwing counterpart of `vacuum_occupied_space(qn).type()`
