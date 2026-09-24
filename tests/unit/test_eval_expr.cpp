@@ -682,10 +682,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 // orientation-sensitive: neither the flat (block-canonicalization) branch
 // nor the ToT (canonicalize_slots) branch folds bra<->ket orientations --
 // leaves keep their as-written spelling, and only an already-starred
-// spelling carries a marker (served by binarize through an EvalOp::Adjoint
-// node). The conjugation marker still colors the ToT graph, so T and T*
-// stay distinct. Folding fresh leaves onto one orientation-shared slot is
-// the lazy-conj eval follow-up.
+// spelling carries a marker (binarize lowers it to its value orientation,
+// with a scalar sign for the anti-Hermitian case). The conjugation marker
+// still colors the ToT graph, so T and T* stay distinct. Folding fresh leaves
+// onto one orientation-shared slot is the lazy-conj eval follow-up.
 TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
   using namespace sequant;
   TensorCanonicalizer::register_instance(
@@ -734,7 +734,7 @@ TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
     // spelling keeps its marker, and its leaf hash differs from its unmarked
     // twin (the marker is part of the leaf's value identity for every braket
     // symmetry: F^*{a_1;i_1} denotes F{i_1;a_1}, a different value from
-    // F{a_1;i_1}); binarize serves the marked leaf through EvalOp::Adjoint.
+    // F{a_1;i_1}); binarize lowers the marked leaf to its value orientation.
     auto F = deserialize(L"C{a_1;i_1}:N-C-S")->as<Tensor>();
     REQUIRE_FALSE(ranges::any_of(F.const_indices(), &Index::has_proto_indices));
     auto F_swap = F;
