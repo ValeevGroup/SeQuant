@@ -379,10 +379,6 @@ ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
   return result;
 }
 
-template <typename Callable, typename... Args>
-using suitable_call_operator =
-    decltype(std::declval<Callable>()(std::declval<Args>()...));
-
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
