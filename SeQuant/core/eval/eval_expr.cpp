@@ -532,8 +532,9 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
     if (all_tensors) {
       // This node takes its slot layout from the left operand, and nothing
       // else: no operand is a marked spelling whose sign this node would
-      // have to account for. binarize(Tensor) lowers a Conjugate-marked leaf
-      // to its value orientation, and its sign to a Constant(-1) child of
+      // have to account for. binarize(Product) hoists a Conjugate-marked
+      // factor's sign into the product scalar, and binarize(Tensor) lowers a
+      // marked leaf to its value orientation and a Constant(-1) child of
       // its own, before any parent node is built, so every operand here is
       // already spelled by its value.
       auto const& t = left.as_tensor();
@@ -575,6 +576,37 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     return binarize(Constant(prod.scalar()));
   }
 
+  // A Conjugate-marked factor denotes its value orientation times the sign of
+  // the exchange relation (see binarize(Tensor)). Inside a product that sign
+  // belongs in the product's scalar, where it composes with the scalar the
+  // canonicalizer carries beside the marked spelling (usually the same sign,
+  // so the two cancel), instead of costing a scale op per marked factor at
+  // run time. A marked Nonsymm factor has no value orientation; it is left
+  // for binarize(Tensor) to report.
+  {
+    bool hoisted = false;
+    auto scalar = prod.scalar();
+    container::svector<ExprPtr> factors_vo;
+    for (auto const& f : prod.factors()) {
+      if (f->is<Tensor>()) {
+        auto const& t = f->as<Tensor>();
+        if (t.value_modifier() == ValueModifier::Conjugate &&
+            t.braket_symmetry() != BraKetSymmetry::Nonsymm) {
+          auto [bare, sign] = value_oriented(t);
+          if (sign != 1) scalar = -scalar;
+          hoisted = true;
+          factors_vo.emplace_back(ex<Tensor>(std::move(bare)));
+          continue;
+        }
+      }
+      factors_vo.emplace_back(f);
+    }
+    if (hoisted)
+      return binarize(Product(std::move(scalar), std::move(factors_vo),
+                              Product::Flatten::No),
+                      uncontract, opts, node_counter);
+  }
+
   auto const ltr_uncontr_idxs = [&]() {
     auto factor_idxs = prod.factors() |
                        transform([](auto&& xpr) { return all_indices(xpr); }) |
@@ -613,9 +645,11 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       auto const& tl = left->is_tensor() ? left : right;
       // the tensor operand supplies this node's slot layout, and nothing
       // else: no operand is a marked spelling whose sign this node would
-      // have to account for, binarize(Tensor) having lowered a
-      // Conjugate-marked leaf to its value orientation, and its sign to a
-      // Constant(-1) child of its own, before this node is built
+      // have to account for, binarize(Product) having hoisted a
+      // Conjugate-marked factor's sign into the product scalar, and
+      // binarize(Tensor) having lowered a marked leaf to its value
+      // orientation and a Constant(-1) child of its own, before this node
+      // is built
       auto const& t = tl->as_tensor();
       return {
           EvalOp::Product,     //
@@ -740,10 +774,9 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     ExprPtr expr;
     if (left->is_tensor()) {
       // the operand supplies the layout, and nothing else: no operand is a
-      // marked spelling whose sign this node would have to account for,
-      // binarize(Tensor) having lowered a Conjugate-marked leaf to its value
-      // orientation, and its sign to a Constant(-1) child of its own, before
-      // this node is built
+      // marked spelling whose sign this node would have to account for, the
+      // hoist above having moved a Conjugate-marked factor's sign into the
+      // scalar this node applies, before this node is built
       expr = detail::make_tensor(left->as_tensor(), false, opts);
     } else if (left->is_constant()) {
       expr = left->expr() * right->expr();

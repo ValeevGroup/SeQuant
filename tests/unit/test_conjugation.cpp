@@ -1504,6 +1504,38 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
   }
 
+  SECTION("inside a product the marked leaf's sign joins the scalar") {
+    Tensor d(L"d", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+    Tensor dstar = d;
+    REQUIRE(dstar.conjugate() == 1);
+    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
+
+    // -1 d^*{i;a} u{a;i}: the scalar the canonicalizer carries beside the
+    // marked spelling cancels the leaf's sign, so nothing is scaled at run
+    // time; the tree is the bare contraction of the value orientation
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Product>(-1, ExprPtrList{ex<Tensor>(dstar), u}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(tree->op_type() == EvalOp::Product);
+    REQUIRE(tree.left().leaf());
+    REQUIRE(tree.right().leaf());
+    REQUIRE_FALSE(tree.left()->as_tensor().conjugated());
+    REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
+
+    // d^*{i;a} u{a;i} alone: one scale, by the product scalar, over the
+    // contraction, not one per marked factor
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree2 = binarize(ex<Product>(ExprPtrList{ex<Tensor>(dstar), u}));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(tree2->op_type() == EvalOp::Product);
+    REQUIRE(tree2.right()->is_constant());
+    REQUIRE(tree2.right()->as_constant().value<int>() == -1);
+    REQUIRE(tree2.left()->op_type() == EvalOp::Product);
+    REQUIRE(tree2.left().left().leaf());
+    REQUIRE(tree2.left().right().leaf());
+  }
+
   SECTION("a plain Adjoint-state Nonsymm leaf carries no sign") {
     // nothing folds for a Nonsymm tensor, so there is no relation to spend
     Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
