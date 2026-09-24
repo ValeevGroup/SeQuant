@@ -9,18 +9,8 @@ endif()
 
 option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests" OFF)
 
-# CMAKE_BUILD_TYPE only reflects the active configuration for a single-config
-# generator (Ninja, Makefiles); for a multi-config generator (Visual Studio,
-# Ninja Multi-Config) it is always empty at configure time -- the actual
-# configuration is chosen later, per build/test invocation, via --config, and
-# one configure step services every configuration at once. There is
-# therefore no single correct answer to "is this a Debug build?" here in that
-# case; default to skipping the long-running tests then too, rather than
-# silently keeping the always-run behavior that only makes sense for a
-# genuine single-config Release build.
-if (SEQUANT_SKIP_LONG_TESTS OR CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_CONFIGURATION_TYPES)
-    set(SEQUANT_INTERNAL_SKIP_LONG_TESTS ON)
-endif()
+# Generator expression so that multi-config generators decide per configuration
+set(SEQUANT_SKIP_LONG_TESTS_GENEX "$<OR:$<BOOL:${SEQUANT_SKIP_LONG_TESTS}>,$<CONFIG:Debug>>")
 
 if (SEQUANT_TESTS)
     # Add a "test" that builds that "all" target, which includes the tests binaries

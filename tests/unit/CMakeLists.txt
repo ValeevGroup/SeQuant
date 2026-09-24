@@ -312,28 +312,10 @@ else()
     message(STATUS "Python not found - PythonEinsumGenerator validation tests will be disabled")
 endif()
 
-if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
-    target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
-    target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
-endif()
-
-# The water-20-sized eval fixtures (the ordered-executor / dry-run cases that
-# build a schedule out of tests/unit/data/csv_ccsd_doubles_residual_df.txt) run
-# in a second or two under GCC/Clang at -O0 but take >2 minutes EACH under
-# ASan/UBSan, far longer under valgrind, and -- it turns out -- comparably
-# long under a plain MSVC Debug build too: checked iterators and /RTC make
-# MSVC's Debug STL an order of magnitude slower than GCC/Clang's for
-# container-heavy code like this, so "a plain Debug build" is not uniformly
-# cheap across toolchains the way it was when this was gated on
-# SEQUANT_SKIP_LONG_TESTS alone (deliberately not on
-# SEQUANT_INTERNAL_SKIP_LONG_TESTS, to keep exercising these assertion-heavy
-# Debug paths by default). Fold it into SEQUANT_INTERNAL_SKIP_LONG_TESTS like
-# every other object library here, so it's covered by the same Debug default;
-# CI's sanitizer/valgrind jobs and an explicit -DSEQUANT_SKIP_LONG_TESTS=OFF
-# Debug build still exercise the real thing.
-if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
-    target_compile_definitions(unit_tests-sequant-eval-dryrun-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
-endif()
+foreach(obj IN ITEMS symb mbpt eval-dryrun)
+    target_compile_definitions(unit_tests-sequant-${obj}-obj PRIVATE
+        $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
+endforeach()
 
 target_set_compiler_flags(unit_tests-sequant)
 target_set_optimization_flags(unit_tests-sequant)
