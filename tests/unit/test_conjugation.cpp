@@ -1371,6 +1371,35 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
     REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
   }
 
+  SECTION("Hermitian, default column symmetry: one canonical form") {
+    // g{i;a} u{a;i} and g{a;i} u{a;i}: g{a;i} = conj(g{i;a}), so the two
+    // spellings are one value up to a conjugation marker on g. The
+    // graph-dictated reorientation folds g's bundles although g is not
+    // column-symmetric; only permuting slots *within* a bundle needs that
+    auto g = [](std::wstring_view b, std::wstring_view k) {
+      return ex<Tensor>(
+          L"g", bra{b}, ket{k},
+          TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+    };
+    REQUIRE(g(L"i_1", L"a_1")->as<Tensor>().column_symmetry() ==
+            ColumnSymmetry::Nonsymm);
+    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
+    auto c1 = canonicalize(g(L"i_1", L"a_1") * u);
+    auto c2 = canonicalize(g(L"a_1", L"i_1") * u);
+    REQUIRE(c1->is<Product>());
+    REQUIRE(c2->is<Product>());
+    auto g_of = [](const ExprPtr& p) {
+      for (auto& f : p->as<Product>().factors())
+        if (f->as<Tensor>().label() == L"g") return f->as<Tensor>();
+      throw Exception("test: no factor labelled g");
+    };
+    // one slot spelling of g, exactly one marker, the same scalar
+    REQUIRE(g_of(c1).bra()[0].label() == g_of(c2).bra()[0].label());
+    REQUIRE(g_of(c1).ket()[0].label() == g_of(c2).ket()[0].label());
+    REQUIRE(g_of(c1).conjugated() != g_of(c2).conjugated());
+    REQUIRE(c1->as<Product>().scalar() == c2->as<Product>().scalar());
+  }
+
   SECTION("real-field odd-parity Hermitian tensor: antisymmetric, no marker") {
     auto p = [&](std::wstring_view b, std::wstring_view k) {
       return ex<Tensor>(
