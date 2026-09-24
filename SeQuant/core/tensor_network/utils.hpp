@@ -104,7 +104,7 @@ struct CanonicalTensorCompare {
     }
 
     const auto get_label = [](const auto &t) {
-      if (label(t).back() == adjoint_label) {
+      if (!label(t).empty() && label(t).back() == adjoint_label) {
         // grab base label if adjoint label is present
         return label(t).substr(0, label(t).size() - 1);
       }
