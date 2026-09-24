@@ -1069,6 +1069,23 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
     REQUIRE(t.conjugation_symmetry() == ConjugationSymmetry::Symm);
   }
 
+  SECTION("the conjugation field is the bra/ket field, not the aux field") {
+    // an aux slot's own field must not feed base_field(): a real-field
+    // bra/ket pair alongside a complex-field aux index still reads Symm
+    // under Even parity, as if the aux slot were not there
+    Tensor t(L"t", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             aux{idx(L"p_1", Field::Complex)}, Symmetry::Nonsymm);
+    REQUIRE(t.conjugation_symmetry() == ConjugationSymmetry::Symm);
+
+    // twin: swap the ket to complex-field. base_field() is the OR of the
+    // bra/ket fields, so it is now Complex and Even parity reads Nonsymm --
+    // the aux slot's (still complex) field plays no part in the change.
+    Tensor u(L"u", bra{idx(L"i_1", Field::Real)},
+             ket{idx(L"i_2", Field::Complex)}, aux{idx(L"p_1", Field::Complex)},
+             Symmetry::Nonsymm);
+    REQUIRE(u.conjugation_symmetry() == ConjugationSymmetry::Nonsymm);
+  }
+
   SECTION("with_slots re-derives the field-dependent symmetries") {
     // real-field, Odd parity, Hermitian: braket Antisymm, conjugation Antisymm
     Tensor p(L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
