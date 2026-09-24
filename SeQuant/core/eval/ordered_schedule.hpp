@@ -511,7 +511,7 @@ inline container::vector<Step> ordered_schedule_topo_sort_steps(
   for (std::size_t pos = 0; pos < order.size(); ++pos)
     position[order[pos]] = pos;
   for (std::size_t i = 0; i < m; ++i)
-    for (std::size_t p : prerequisites[i])
+    for ([[maybe_unused]] std::size_t p : prerequisites[i])
       SEQUANT_ASSERT(position[p] < position[i]);
 
   container::vector<Step> out_steps;
@@ -1143,17 +1143,14 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
           "batched realization are contradictory (a cycle among loop "
           "instances): the loop identity fused two physical loops that nest "
           "in opposite orders; unplaced constraints:";
-      auto const narrow = [](std::wstring const& w) {
-        return std::string(w.begin(), w.end());
-      };
       for (auto const& [pair, witness] : rich.loop_order) {
         auto const a = item_of.find(pair.first);
         auto const b = item_of.find(pair.second);
         if (a == item_of.end() || b == item_of.end()) continue;
         if (indeg[a->second] == 0 && indeg[b->second] == 0) continue;
-        msg += " [" + narrow(pair.first.first) + "#" +
+        msg += " [" + toUtf8(pair.first.first) + "#" +
                std::to_string(pair.first.second) + " > " +
-               narrow(pair.second.first) + "#" +
+               toUtf8(pair.second.first) + "#" +
                std::to_string(pair.second.second) + " by v" +
                std::to_string(witness) + "]";
       }
@@ -2156,7 +2153,8 @@ inline void assert_global_level_axis_uniqueness(
     auto const key =
         std::make_tuple(child->level.depth, child->level.space,
                         child->level.loop_slot, child->level.latitude_ordinal);
-    auto const [it, inserted] = seen.try_emplace(key, child->axis);
+    [[maybe_unused]] auto const [it, inserted] =
+        seen.try_emplace(key, child->axis);
     SEQUANT_ASSERT(
         (inserted || it->second == child->axis) &&
         "assert_global_level_axis_uniqueness: two blocks at the same "

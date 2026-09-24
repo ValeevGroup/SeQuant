@@ -9,9 +9,8 @@ endif()
 
 option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests" OFF)
 
-if (SEQUANT_SKIP_LONG_TESTS OR CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(SEQUANT_INTERNAL_SKIP_LONG_TESTS ON)
-endif()
+# Generator expression so that multi-config generators decide per configuration
+set(SEQUANT_SKIP_LONG_TESTS_GENEX "$<OR:$<BOOL:${SEQUANT_SKIP_LONG_TESTS}>,$<CONFIG:Debug>>")
 
 if (SEQUANT_TESTS)
     # Add a "test" that builds that "all" target, which includes the tests binaries

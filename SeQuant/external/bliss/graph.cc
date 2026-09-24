@@ -9,7 +9,6 @@
 #include "defs.hh"
 #include "graph.hh"
 #include "partition.hh"
-#include "timer.hh"
 #include "utils.hh"
 
 #ifdef SEQUANT_USE_SYSTEM_BOOST_HASH
@@ -532,15 +531,7 @@ void AbstractGraph::search(const bool canonical, Stats& stats) {
    * This saves some cycles. */
   compute_eqref_hash = false;
 
-  Timer timer1;
-
   make_initial_equitable_partition();
-
-  if (verbstr and verbose_level >= 2) {
-    fprintf(verbstr, "Initial partition computed in %.2f seconds\n",
-            timer1.get_duration());
-    fflush(verbstr);
-  }
 
   /*
    * Allocate space for the "first path" and "best path" labelings

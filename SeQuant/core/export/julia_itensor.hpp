@@ -133,7 +133,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
     return tensor.const_indices() |
            ranges::views::transform(
                [&](const Index &idx) { return Base::represent(idx, ctx); }) |
-           ranges::views::join(", "s) | ranges::to<std::string>();
+           ranges::views::join(", "sv) | ranges::to<std::string>();
   }
 };
 

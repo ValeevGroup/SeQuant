@@ -21,7 +21,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  auto has_tensor = [](const ExprPtr& e, const std::wstring& label) {
+  [[maybe_unused]] auto has_tensor = [](const ExprPtr& e,
+                                        const std::wstring& label) {
     bool found = false;
     e->visit(
         [&](const ExprPtr& n) {
@@ -141,6 +142,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                  EquivalentTo(ex<Constant>(0)));
   }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("bernoulli_commutator_coefficients") {
     using PathCoefficients = bernoulli::detail::PartitionPathCoefficients;
 
@@ -222,6 +224,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
                               L"+ 1/12 t⁺{i_1;a_1}:A-N-S * t⁺{i_2;a_2}:A-N-S "
                               L"* g{a_1,a_2;i_1,i_2}:A-C-S"));
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("bernoulli_config_validation") {
     using namespace sequant;
@@ -242,8 +245,11 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const CC::Options opts{.ansatz = CC::Ansatz::U,
                            .hbar_comm_rank = 2,
                            .hbar_expansion = CC::HbarExpansion::Bernoulli};
-    CC cc(2, opts);
+    // Only read under !SEQUANT_SKIP_LONG_TESTS below (for amps and
+    // energy(3)); construction itself is cheap.
+    [[maybe_unused]] CC cc(2, opts);
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
     // amplitudes through H̄² (hbar_comm_rank)
     const auto amps = cc.t();
     REQUIRE(amps.size() == 3);
@@ -252,8 +258,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 
     REQUIRE(size(amps[1]) == 32);
     REQUIRE(size(amps[2]) == 38);
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
-    // one equation pinned in full: term counts are blind to the coefficients,
+    // one equation pinned in full (rank H̄¹, cheaper than the H̄² amplitudes
+    // above): term counts are blind to the coefficients,
     // where a mis-weighted Wick reduction shows up. Doubles at H̄¹ is the
     // smallest such equation.
     const auto R2_h1 = CC(2, {.ansatz = CC::Ansatz::U,
@@ -334,11 +342,13 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     SECTION("UCC energy == t()[0]") {
       const CC::Options opts{.ansatz = CC::Ansatz::U, .hbar_comm_rank = 2};
       REQUIRE_THAT(CC(N, opts).energy(), EquivalentTo(CC(N, opts).t().at(0)));
+#ifndef SEQUANT_SKIP_LONG_TESTS
       // explicit rank override matches an engine built at that rank
       REQUIRE_THAT(
           CC(N, opts).energy(3),
           EquivalentTo(
               CC(N, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 3}).t().at(0)));
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
     }
   }  // SECTION("energy")
 

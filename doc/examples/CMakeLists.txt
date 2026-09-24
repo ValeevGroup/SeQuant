@@ -44,7 +44,7 @@ foreach(current IN LISTS EXAMPLE_CODES)
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
 
-    target_set_warning_flags("${current_name}")
+    target_set_compiler_flags("${current_name}")
     # The examples are deliberately left out of the automatic LTO defaults (there is no point in
     # paying LTO link time for them), but an explicit SEQUANT_LTO=ON has to reach them as well:
     # without "fat" objects the SeQuant archives are then bitcode-only and can only be linked
