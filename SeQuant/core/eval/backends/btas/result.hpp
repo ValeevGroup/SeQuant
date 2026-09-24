@@ -445,7 +445,7 @@ class ResultTensorBTAS final : public Result {
   [[nodiscard]] std::size_t size_in_bytes() const final {
     const auto& tensor = get<T>();
     // only count data
-    return tensor.range().volume() * sizeof(T);
+    return tensor.range().volume() * sizeof(numeric_type);
   }
 };
 
