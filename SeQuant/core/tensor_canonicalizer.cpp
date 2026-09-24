@@ -362,14 +362,19 @@ bool braket_foldable(const AbstractTensor& t) {
          braket_conjugate_foldable(t);
 }
 
-std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(
-    AbstractTensor& t, bool fold_conjugate) {
+std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
+                                                            bool fold_conjugate,
+                                                            bool fold_signed) {
   if (!braket_foldable(t)) {
     return 1;
   }
   const auto bks = t._braket_symmetry();
   const auto conjugate_sign = braket_conjugate_swap_sign(bks);
   if (conjugate_sign && !fold_conjugate) {
+    return 1;
+  }
+  if (!fold_signed && (bks == BraKetSymmetry::Antisymm ||
+                       bks == BraKetSymmetry::AntiConjugate)) {
     return 1;
   }
 
@@ -477,7 +482,8 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  const auto braket_sign = canonicalize_braket(t, fold_conjugate_braket_);
+  const auto braket_sign =
+      canonicalize_braket(t, fold_conjugate_braket_, fold_signed_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});

@@ -166,20 +166,28 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // and it normalizes bra<->ket orientation for braket-symmetric tensors so
     // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
     auto& t = expr_->as<Tensor>();
-    // The flat-leaf conjugate-braket fold is disabled at the eval boundary:
-    // leaves keep their as-written (value) orientation so leaf yielders and
-    // evaluators need no conjugation awareness (Symm still folds). An
-    // already-starred spelling keeps its modifier -- binarize lowers it to
-    // its value orientation; folding fresh flat leaves onto one
-    // orientation-shared slot is the lazy-conj eval follow-up.
-    auto phase =
-        TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false}.apply(t);
+    // The flat-leaf conjugate-braket fold and the signed bra<->ket swap are
+    // disabled at the eval boundary: leaves keep their as-written (value)
+    // orientation so leaf yielders and evaluators need no conjugation or
+    // sign awareness (Symm, a free respelling, still folds). The yielder is
+    // asked for the leaf's canonical spelling and the engine takes its array
+    // as the leaf's own value, so a leaf's phase is a cache-orientation round
+    // trip that never reaches the value: a respelling that costs a sign
+    // cannot be folded here. An already-starred spelling keeps its modifier
+    // -- binarize lowers it to its value orientation; folding fresh flat
+    // leaves onto one orientation-shared slot is the lazy-conj eval
+    // follow-up.
+    auto phase = TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false,
+                                          /*fold_signed_braket=*/false}
+                     .apply(t);
     canon_phase_ = phase ? -1 : 1;
     // Leaf-hash invariant (owned by hash_terminal_tensor): the modifier
-    // enters the hash whenever it is set. A marked leaf never becomes an IR
-    // node's expr(); binarize lowers it to its value orientation first, so
-    // hash_terminal_tensor's modifier term only distinguishes leaves that
-    // could not be lowered.
+    // enters the hash whenever it is set. A Conjugate-marked leaf never
+    // becomes an IR node's expr(); binarize lowers it to its value
+    // orientation first, so hash_terminal_tensor's modifier term only
+    // distinguishes leaves that could not be lowered. (The Adjoint IR node
+    // does carry the '⁺' spelling as its expr(), but hashes the bare leaf,
+    // salted by the op; see make_adjoint_node.)
     hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
   }

@@ -197,11 +197,14 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   /// conjugation) for BraKetSymmetry::Conjugate/AntiConjugate
   /// @param fold_conjugate if false, (anti)conjugate tensors are left
   ///        untouched
+  /// @param fold_signed if false, a respelling that costs a sign (an
+  ///        Antisymm or AntiConjugate tensor) is left untouched
   /// @return the sign the respelling contributed (+1 or -1): the tensor as it
   ///         stood is that sign times the tensor this leaves behind. The
   ///         caller must record it, e.g. in the phase byproduct of apply()
   static std::int8_t canonicalize_braket(AbstractTensor& t,
-                                         bool fold_conjugate = true);
+                                         bool fold_conjugate = true,
+                                         bool fold_signed = true);
 
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c
@@ -294,8 +297,15 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
   ///        BraKetSymmetry::Conjugate tensors untouched (Symm still folds).
   ///        Eval-boundary bridge: lets the leaf constructor keep a
   ///        Conjugate-symmetry leaf in its as-written orientation.
-  explicit TensorBlockCanonicalizer(bool fold_conjugate_braket)
-      : fold_conjugate_braket_(fold_conjugate_braket) {}
+  /// \param fold_signed_braket if false, canonicalize_braket also leaves a
+  ///        tensor whose bra<->ket exchange costs a sign (Antisymm,
+  ///        AntiConjugate) untouched, so that only sign-free respellings
+  ///        (Symm) fold. Eval-boundary bridge as well: a leaf's phase is a
+  ///        cache-orientation round trip and never reaches its value.
+  explicit TensorBlockCanonicalizer(bool fold_conjugate_braket,
+                                    bool fold_signed_braket = true)
+      : fold_conjugate_braket_(fold_conjugate_braket),
+        fold_signed_braket_(fold_signed_braket) {}
 
   template <typename IndexContainer>
   TensorBlockCanonicalizer(const IndexContainer& external_indices)
@@ -305,6 +315,7 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
 
  private:
   bool fold_conjugate_braket_ = true;
+  bool fold_signed_braket_ = true;
 };
 
 }  // namespace sequant

@@ -761,6 +761,116 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
     }
 }
 
+// A real-field odd-parity Hermitian tensor is antisymmetric under the whole
+// bra<->ket exchange, p{a;i} = -p{i;a}. At the eval boundary a flat leaf keeps
+// such a signed orientation as written: a leaf's phase is a cache-orientation
+// round trip, and the engine takes the yielder's array for the leaf's spelling
+// as the leaf's value, so a swap that costs a sign has no channel to the
+// value. The two orientations are therefore distinct leaves, each with phase
+// +1, and a sum that uses both evaluates to the denoted value, with and
+// without a cache. (The orientations differ in space because the pinned
+// yielder keys leaves by label and slot spaces only.)
+TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  // an Index whose space carries a real field (the default field is Complex)
+  auto ridx = [](std::wstring_view label) {
+    Index i(label);
+    IndexSpace sp = i.space();
+    sp.field(Field::Real);
+    return Index(label, sp);
+  };
+  auto p = [&ridx](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(
+        L"p", bra{ridx(b)}, ket{ridx(k)},
+        TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                         .conjugation_parity = ConjugationParity::Odd});
+  };
+  auto t = [&ridx](std::wstring_view lbl, std::wstring_view b,
+                   std::wstring_view k) {
+    return ex<Tensor>(lbl, bra{ridx(b)}, ket{ridx(k)});
+  };
+  REQUIRE(p(L"i_1", L"a_1")->as<Tensor>().braket_symmetry() ==
+          BraKetSymmetry::Antisymm);
+
+  const std::size_t nocc = 3, nvirt = 4;
+  std::srand(2025);
+  auto rnd = []() { return static_cast<double>(std::rand()) / RAND_MAX - 0.5; };
+  // the swapped spelling reads the same array with the slots exchanged, at
+  // the sign the trait asserts: p{a_1;i_1}(a, i) = -p{i_1;a_1}(i, a)
+  BTensorD P{btas::Range{nocc, nvirt}};
+  P.generate(rnd);
+  BTensorD Pswapped{btas::Range{nvirt, nocc}};
+  for (std::size_t i = 0; i < nocc; ++i)
+    for (std::size_t a = 0; a < nvirt; ++a) Pswapped(a, i) = -P(i, a);
+  BTensorD U{btas::Range{nvirt, nocc}};
+  U.generate(rnd);
+  BTensorD V{btas::Range{nvirt, nocc}};
+  V.generate(rnd);
+
+  pinned_tensor_yield<BTensorD> yield;
+  yield.put(p(L"i_1", L"a_1")->as<Tensor>(), P);
+  yield.put(p(L"a_1", L"i_1")->as<Tensor>(), Pswapped);
+  yield.put(t(L"u", L"a_1", L"i_3")->as<Tensor>(), U);
+  yield.put(t(L"v", L"a_1", L"i_3")->as<Tensor>(), V);
+
+  // r{i_1;i_3} = p{i_1;a_1} u{a_1;i_3} + p{a_1;i_1} v{a_1;i_3}
+  auto e = p(L"i_1", L"a_1") * t(L"u", L"a_1", L"i_3") +
+           p(L"a_1", L"i_1") * t(L"v", L"a_1", L"i_3");
+  auto node = eval_node(e);
+
+  // the two p leaves keep their spellings: distinct hashes, no phase
+  using NodeT = decltype(node);
+  container::svector<NodeT const*> p_leaves;
+  auto collect = [&p_leaves](auto& self, NodeT const& nd) -> void {
+    if (nd.leaf()) {
+      if (nd->is_tensor() && nd->as_tensor().label() == L"p")
+        p_leaves.push_back(&nd);
+      return;
+    }
+    self(self, nd.left());
+    self(self, nd.right());
+  };
+  collect(collect, node);
+  REQUIRE(p_leaves.size() == 2);
+  REQUIRE((*p_leaves[0])->hash_value() != (*p_leaves[1])->hash_value());
+  REQUIRE((*p_leaves[0])->canon_phase() == 1);
+  REQUIRE((*p_leaves[1])->canon_phase() == 1);
+  REQUIRE((*p_leaves[0])->as_tensor().bra()[0].label() == L"i_1");
+  REQUIRE((*p_leaves[1])->as_tensor().bra()[0].label() == L"a_1");
+  REQUIRE(node->canon_phase() == 1);
+
+  BTensorD ref{btas::Range{nocc, nocc}};
+  ref.fill(0.0);
+  for (std::size_t i1 = 0; i1 < nocc; ++i1)
+    for (std::size_t i3 = 0; i3 < nocc; ++i3)
+      for (std::size_t a = 0; a < nvirt; ++a)
+        ref(i1, i3) += P(i1, a) * U(a, i3) + Pswapped(a, i1) * V(a, i3);
+
+  // the root is evaluated in its own canonical layout
+  auto const& root_ix = node->canon_indices();
+  REQUIRE(root_ix.size() == 2);
+  const bool i1_first = root_ix[0].label() == L"i_1";
+  auto check = [&](BTensorD const& got) {
+    for (std::size_t i1 = 0; i1 < nocc; ++i1)
+      for (std::size_t i3 = 0; i3 < nocc; ++i3) {
+        const double g = i1_first ? got(i1, i3) : got(i3, i1);
+        CHECK(g == Catch::Approx(ref(i1, i3)).margin(1e-12));
+      }
+  };
+
+  SECTION("without a cache") {
+    check(evaluate(node, node->annot(), yield)->get<BTensorD>());
+  }
+
+  SECTION("through a shared cache") {
+    auto cache =
+        cache_manager(std::array{node}, [](auto const&) { return false; });
+    check(evaluate(node, node->annot(), yield, cache)->get<BTensorD>());
+  }
+}
+
 // A high-order hyperindex is an index shared among MORE than two tensor slots.
 // When such an index is also *external* (named -- it survives into the result),
 // TensorNetworkV3::canonicalize_slots used to assert that every named-index
@@ -972,9 +1082,10 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
 
   // The sign a value respelling costs must be applied exactly once, and as
   // a scalar. A leaf that arrives marked -- d^*{i_1;a_1} for an
-  // anti-Hermitian d -- is lowered to its value orientation with that sign
-  // as a Constant(-1) node of its own; an ancestor that takes the leaf's
-  // slot layout must add nothing, since a node's phase multiplies everything
+  // anti-Hermitian d -- is lowered to its value orientation, with that sign
+  // in the enclosing product's scalar, or as a Constant(-1) node of its own
+  // for a bare leaf or a summand; an ancestor that takes the leaf's slot
+  // layout must add nothing, since a node's phase multiplies everything
   // below it, the summand beside the marked one included.
   Context ctx = get_default_context();
   ctx.set(AssertStrictBraKetSymmetry::No);
