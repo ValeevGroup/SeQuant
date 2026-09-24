@@ -457,8 +457,12 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   // and greater than one body otherwise, return the tensor
   if (tensor.symmetry() == Symmetry::Antisymm) {
     const auto prefactor = get_phase(tensor);
-    container::set<Index> bra_list(tensor.bra().begin(), tensor.bra().end());
-    container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
+    container::svector<Index> bra_list(tensor.bra().begin(),
+                                       tensor.bra().end());
+    container::svector<Index> ket_list(tensor.ket().begin(),
+                                       tensor.ket().end());
+    std::ranges::sort(bra_list);
+    std::ranges::sort(ket_list);
     auto expr_sum = std::make_shared<Sum>();
     do {
       // N.B. must copy
