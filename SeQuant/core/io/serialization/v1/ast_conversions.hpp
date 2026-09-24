@@ -435,17 +435,23 @@ struct Transformer {
           }
           if (parity.has_value()) syms.conjugation_parity = *parity;
 
-          auto t = ex<Tensor>(tensor.name, bra(std::move(braIndices)),
+          // a trailing adjoint mark in the name (`label⁺{...}`) is a value
+          // modifier like `^*` and `^T`; it is applied below rather than
+          // left to the Tensor constructor's own mark adoption, which cannot
+          // hand back the sign an anti-Hermitian tensor's adjoint carries
+          std::wstring name = tensor.name;
+          ValueModifier modifier = static_cast<ValueModifier>(tensor.modifier);
+          if (!name.empty() && name.back() == sequant::adjoint_label) {
+            name.pop_back();
+            // `t⁺^*` composes to the transpose
+            modifier = ValueModifier::Adjoint * modifier;
+          }
+          auto t = ex<Tensor>(std::move(name), bra(std::move(braIndices)),
                               ket(std::move(ketIndices)),
                               aux(std::move(auxiliaries)), syms);
-          // label^*{...} / label^T{...}: the value modifier
-          if (tensor.modifier != 0) {
-            auto &tt = t->template as<Tensor>();
-            // compose with a mark adopted from the label: `t⁺^*` is the
-            // transpose
-            const auto sign = tt.set_value_modifier(
-                tt.value_modifier() *
-                static_cast<ValueModifier>(tensor.modifier));
+          if (modifier != ValueModifier::None) {
+            const auto sign =
+                t->template as<Tensor>().set_value_modifier(modifier);
             // the normalization can consume a sign (an anti-Hermitian or
             // odd-parity tensor), which only a scalar factor can carry
             if (sign != 1) return ex<Product>(sign, ExprPtrList{std::move(t)});

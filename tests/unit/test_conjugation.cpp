@@ -847,6 +847,13 @@ TEST_CASE("value_modifier_encoding", "[conjugation]") {
     REQUIRE(
         deserialize(L"t⁺^*{i_1;a_1}:N-N-N")->as<Tensor>().value_modifier() ==
         ValueModifier::Transpose);
+
+    // a ⁺ on an anti-Hermitian tensor names minus the bare tensor: the sign
+    // goes to a Product, as it does for a ^* or ^T that costs one
+    auto z_adj = deserialize(L"z⁺{i_1;a_1}:N-A-N");
+    REQUIRE(z_adj->is<Product>());
+    REQUIRE(z_adj->as<Product>().scalar() == -1);
+    REQUIRE(*z_adj == *adjoint(deserialize(L"z{a_1;i_1}:N-A-N")));
   }
 
   SECTION("set_value_modifier copies bits without touching slots") {

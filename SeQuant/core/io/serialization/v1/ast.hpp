@@ -81,7 +81,7 @@ struct Tensor : boost::spirit::x3::position_tagged {
   std::wstring name;
   // value modifier: 0 none, 1 `label^*{...}` (Conjugate), 2 `label^T{...}`
   // (Transpose); numerically sequant::ValueModifier. A '⁺' adjoint mark is
-  // part of `name` and is adopted by the Tensor constructor.
+  // part of `name`; the conversion to Tensor composes it with this.
   std::uint8_t modifier = 0;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;
