@@ -1449,7 +1449,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     // flatten(result);  // TODO where is flatten?
     auto project_rdm_indices_to_target = [&](ExprPtr& exptr) {
       auto impl_for_single_tn = [&](ProductPtr& product_ptr) {
-        // enlist all indices and count their instances
+        // visit every index of every tensor in the TN
         auto for_each_index_in_tn = [](const auto& product_ptr,
                                        const auto& op) {
           ranges::for_each(product_ptr->factors(), [&](auto& factor) {
@@ -1460,26 +1460,6 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             }
           });
         };
-
-        // compute external indices
-        container::map<Index, std::size_t> indices_w_counts;
-        auto retrieve_indices_with_counts = [&indices_w_counts](const auto& idx,
-                                                                auto&) {
-          auto found_it = indices_w_counts.find(idx);
-          if (found_it != indices_w_counts.end()) {
-            found_it->second++;
-          } else {
-            indices_w_counts.emplace(idx, 1);
-          }
-        };
-        for_each_index_in_tn(product_ptr, retrieve_indices_with_counts);
-
-        container::set<Index> external_indices =
-            indices_w_counts | ranges::views::filter([](auto& idx_cnt) {
-              auto& [idx, cnt] = idx_cnt;
-              return cnt == 1;
-            }) |
-            ranges::views::keys | ranges::to<container::set<Index>>;
 
         // extract RDM-only and all indices
         container::set<Index> rdm_indices;
@@ -1504,20 +1484,6 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             replacement_rules.emplace(idx, target);
           }
         });
-
-        if (false) {
-          std::wcout << "expr = " << product_ptr->to_latex()
-                     << "\n  external_indices = ";
-          ranges::for_each(external_indices, [](auto& index) {
-            std::wcout << index.full_label() << " ";
-          });
-          std::wcout << "\n  replrules = ";
-          ranges::for_each(replacement_rules, [](auto& index) {
-            std::wcout << io::latex::to_string(index.first) << "\\to"
-                       << io::latex::to_string(index.second) << "\\,";
-          });
-          std::wcout.flush();
-        }
 
         if (!replacement_rules.empty()) {
           sequant::detail::apply_index_replacement_rules(
