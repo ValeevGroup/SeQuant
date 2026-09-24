@@ -200,7 +200,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     m_generated += represent(variable, ctx) + " = ";
 
     if (set_to_zero)
-      m_generated = "0";
+      m_generated += "0.0";
     else {
       m_generated += "deserialize(\"" + represent(variable, ctx) + ".jlbin\")";
     }
