@@ -1617,15 +1617,7 @@ class WickTheorem {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ASSERT(vacuum == Vacuum::Physical);
-    if (is_qpannihilator<S>(left, vacuum, isr) &&
-        is_qpcreator<S>(right, vacuum, isr)) {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-      const auto qpspace_common =
-          isr->intersection(qpspace_left, qpspace_right);
-      if (qpspace_common) return true;
-    }
-    return false;
+    return sequant::can_contract(left, right, vacuum, isr);
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,

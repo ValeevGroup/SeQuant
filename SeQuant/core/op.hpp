@@ -335,6 +335,24 @@ IndexSpace qpannihilator_space(
   SEQUANT_UNREACHABLE;
 }
 
+/// @return true if @p left is a quasiparticle annihilator and @p right is a
+/// quasiparticle creator with respect to the given vacuum, and their
+/// quasiparticle spaces overlap, i.e. if the pair has a nonzero contraction
+template <Statistics S>
+bool can_contract(const Op<S> &left, const Op<S> &right,
+                  Vacuum vacuum = get_default_context(S).vacuum(),
+                  const std::shared_ptr<const IndexSpaceRegistry> &isr =
+                      get_default_context(S).index_space_registry()) {
+  if (is_qpannihilator<S>(left, vacuum, isr) &&
+      is_qpcreator<S>(right, vacuum, isr)) {
+    const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
+    const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
+    const auto qpspace_common = isr->intersection(qpspace_left, qpspace_right);
+    if (qpspace_common) return true;
+  }
+  return false;
+}
+
 template <Statistics S = Statistics::FermiDirac>
 class NormalOperator;
 
@@ -800,18 +818,6 @@ class NormalOperator : public Operator<S>,
   friend class Operator;
   bool commutes_with_atom(const Expr &that) const override {
     const auto &isr = get_default_context(S).index_space_registry();
-    // same as WickTheorem::can_contract
-    auto can_contract = [this, &isr](const Op<S> &left, const Op<S> &right) {
-      if (is_qpannihilator<S>(left, vacuum_, isr) &&
-          is_qpcreator<S>(right, vacuum_, isr)) {
-        const auto qpspace_left = qpannihilator_space<S>(left, vacuum_, isr);
-        const auto qpspace_right = qpcreator_space<S>(right, vacuum_, isr);
-        const auto qpspace_common =
-            isr->intersection(qpspace_left, qpspace_right);
-        if (qpspace_common) return true;
-      }
-      return false;
-    };
 
     bool result = true;
     /// does not commute with Operator<S>
@@ -824,7 +830,7 @@ class NormalOperator : public Operator<S>,
           op_that.vacuum()) {  // can only check commutativity for same vacua
         for (auto &&op_l : *this) {
           for (auto &&op_r : op_that) {
-            if (can_contract(op_l, op_r)) {
+            if (sequant::can_contract(op_l, op_r, vacuum_, isr)) {
               return false;
             }
           }
