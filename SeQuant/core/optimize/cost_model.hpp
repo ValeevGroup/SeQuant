@@ -943,6 +943,15 @@ struct PeakBatchedModel {
         if (!((carried >> seq[p]) & 1u)) esc |= (std::size_t{1} << seq[p]);
       return esc;
     }
+    // Number of times the node for subset `n` is re-executed inside cell `id`:
+    // the product of nbatches over its escaped-outer enclosing modes.
+    double recompute_factor(std::size_t id, std::size_t n) const {
+      std::size_t const esc = escaped_outer(id, open_modes[n]);
+      double rf = 1.0;
+      for (std::size_t k = 0; k < m; ++k)
+        if (esc & (std::size_t{1} << k)) rf *= nbatches[k];
+      return rf;
+    }
 
     // Fill the cell tables: enumerate every ordered sequence of batched modes
     // up to `cap` length (id 0 = the empty sequence = the term root);
@@ -1233,9 +1242,7 @@ struct PeakBatchedModel {
         // innermost- carried placement (escaped modes inner to it hoist above
         // for free; Carr == 0 hoists above the whole nest => none, subsuming
         // A3a). escaped_outer collapses to the set charge when !ordered.
-        std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
-        for (std::size_t k = 0; k < ctx.m; ++k)
-          if (esc & (std::size_t{1} << k)) rf *= ctx.nbatches[k];
+        rf = ctx.recompute_factor(B, n);
       }
       double const cflops_B = cflops * rf;
       // Batchable indices contracted at THIS node: open at children but not at
@@ -1654,10 +1661,7 @@ struct PeakBatchedModel {
         // (enclosing loops the node does not carry). With no CSE on this path
         // the back-pointer object is a strict tree (single consumer), so this
         // per-node rf is the effective use count.
-        std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
-        double rf = 1.0;
-        for (std::size_t k = 0; k < ctx.m; ++k)
-          if (esc & (std::size_t{1} << k)) rf *= ctx.nbatches[k];
+        double const rf = ctx.recompute_factor(B, n);
         ann.effective_count = static_cast<std::size_t>(std::llround(rf));
       }
       node_axes.push_back(std::move(ann));  // one entry per -1, in RPN order
