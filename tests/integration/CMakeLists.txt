@@ -44,7 +44,7 @@ foreach(current IN LISTS TEST_CASES)
     add_executable(${test_name} ${BUILD_BY_DEFAULT} ${test_source})
     set_target_properties(${test_name} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(${test_name} PRIVATE SeQuant)
-	target_set_compiler_flags(${test_name})
+    target_set_compiler_flags(${test_name})
 
     target_compile_definitions(${test_name} PRIVATE
         $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
