@@ -421,12 +421,7 @@ constexpr Normalization eom_norm = Normalization::SquareRoot;
 /// reference and, for IP/EA, once either count reaches zero.
 container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
                                                                         nₕ nh) {
-  container::svector<std::pair<std::int64_t, std::int64_t>> manifolds;
-  for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
-    if (rp == 0 && rh == 0) break;
-    manifolds.emplace_back(rp, rh);
-    if (rp == 0 || rh == 0) break;
-  }
+  auto manifolds = detail::descending_rank_pairs(np, nh);
   std::ranges::reverse(manifolds);
   return manifolds;
 }

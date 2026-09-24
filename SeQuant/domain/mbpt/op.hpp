@@ -72,6 +72,21 @@ inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
   result += detail::pert_superscripts[pert_order];
   return result;
 }
+
+/// @brief the rank pairs of a sum of operators truncated at ranks
+/// (@p n1, @p n2), highest first
+/// @return `(n1, n2), (n1-1, n2-1), ...`, stopping before `(0, 0)` and after
+/// the first pair with a zero entry
+inline container::svector<std::pair<std::int64_t, std::int64_t>>
+descending_rank_pairs(std::int64_t n1, std::int64_t n2) {
+  container::svector<std::pair<std::int64_t, std::int64_t>> result;
+  for (std::int64_t r1 = n1, r2 = n2; r1 >= 0 && r2 >= 0; --r1, --r2) {
+    if (r1 == 0 && r2 == 0) break;
+    result.emplace_back(r1, r2);
+    if (r1 == 0 || r2 == 0) break;
+  }
+  return result;
+}
 }  // namespace detail
 
 DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t);  // define nₚ

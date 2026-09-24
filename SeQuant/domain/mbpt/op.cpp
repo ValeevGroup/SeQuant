@@ -1133,15 +1133,8 @@ ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
   SEQUANT_ASSERT(na > 0 || nc > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
   ExprPtr result;
-
-  std::int64_t ra = na, rc = nc;
-  while (ra >= 0 && rc >= 0) {
-    if (ra == 0 && rc == 0) break;
+  for (const auto& [ra, rc] : detail::descending_rank_pairs(na, nc))
     result += r(nann(ra), ncre(rc), cre_space, ann_space, norm);
-    if (ra == 0 || rc == 0) break;
-    --ra;
-    --rc;
-  }
   return result;
 }
 
@@ -1155,15 +1148,8 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
   SEQUANT_ASSERT(na > 0 || nc > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
   ExprPtr result;
-
-  std::int64_t ra = na, rc = nc;
-  while (ra >= 0 && rc >= 0) {
-    if (ra == 0 && rc == 0) break;
+  for (const auto& [ra, rc] : detail::descending_rank_pairs(na, nc))
     result += l(nann(ra), ncre(rc), cre_space, ann_space, norm);
-    if (ra == 0 || rc == 0) break;
-    --ra;
-    --rc;
-  }
   return result;
 }
 
