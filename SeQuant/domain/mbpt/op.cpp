@@ -54,126 +54,83 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"E"};
 }
 
+namespace {
+
+/// Builds the quantum numbers of an operator with up to @p particle_rank
+/// quasiparticle creators (excitation) or annihilators (deexcitation) in
+/// @p particle_space and up to @p hole_rank quasiparticle annihilators
+/// (excitation) or creators (deexcitation) in @p hole_space, restricted to the
+/// base spaces with quantum numbers @p SQN. Unless @p interval, the lower
+/// bound of a block equals its rank if the active particle (hole) space is a
+/// base space. Empty @p particle_space / @p hole_space default to the active
+/// particle / hole spaces for @p SQN; they are only consulted for a
+/// non-physical vacuum.
+qns_t make_qp_qns(std::size_t particle_rank, std::size_t hole_rank,
+                  std::optional<IndexSpace> particle_space,
+                  std::optional<IndexSpace> hole_space, bool deexcitation,
+                  bool interval, const IndexSpace::QuantumNumbers SQN) {
+  qnc_t result;
+  if (get_default_context().vacuum() == Vacuum::Physical) {
+    result[0] = {0ul, deexcitation ? particle_rank : hole_rank};
+    result[1] = {0ul, deexcitation ? hole_rank : particle_rank};
+  } else {
+    auto isr = get_default_context().index_space_registry();
+    const auto& base_spaces = isr->base_spaces();
+    if (!particle_space) particle_space = isr->particle_space(SQN);
+    if (!hole_space) hole_space = isr->hole_space(SQN);
+    // are the active qp spaces base spaces?
+    const bool aps_base = !interval && isr->is_base(isr->particle_space(SQN));
+    const bool ahs_base = !interval && isr->is_base(isr->hole_space(SQN));
+    // ex: creators in particle space, annihilators in hole space
+    // deex: annihilators in particle space, creators in hole space
+    const std::size_t particle_offset = deexcitation ? 1 : 0;
+    const std::size_t hole_offset = 1 - particle_offset;
+
+    for (std::size_t i = 0; i < base_spaces.size(); i++) {
+      const auto& base_space = base_spaces[i];
+      result[i * 2] = {0ul, 0ul};
+      result[i * 2 + 1] = {0ul, 0ul};
+      if (base_space.qns() != SQN) continue;
+
+      if (includes(particle_space->type(), base_space.type())) {
+        result[i * 2 + particle_offset] = {aps_base ? particle_rank : 0ul,
+                                           particle_rank};
+      }
+      if (includes(hole_space->type(), base_space.type())) {
+        result[i * 2 + hole_offset] = {ahs_base ? hole_rank : 0ul, hole_rank};
+      }
+    }
+  }
+  return result;
+}
+
+}  // namespace
+
 // Excitation type QNs will have quasiparticle annihilators in every space which
 // intersects with the active hole space. The active particle space will have
 // quasiparticle creators. The presence of additional blocks depends on whether
 // the corresponding active hole or active particle space is a base space.
 qns_t excitation_type_qns(std::size_t K, const IndexSpace::QuantumNumbers SQN) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, K};
-    result[1] = {0ul, K};
-  } else {
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    // are the active qp spaces base spaces?
-    bool aps_base = isr->is_base(isr->particle_space(SQN));
-    bool ahs_base = isr->is_base(isr->hole_space(SQN));
-
-    for (int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
-      if (base_space.qns() != SQN) continue;
-
-      // ex -> creators in particle space
-      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
-        result[i * 2] = {aps_base ? K : 0ul, K};
-      }
-      // ex -> annihilators in hole space
-      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
-        result[i * 2 + 1] = {ahs_base ? K : 0ul, K};
-      }
-    }
-  }
-  return result;
+  return make_qp_qns(K, K, std::nullopt, std::nullopt, /*deexcitation=*/false,
+                     /*interval=*/false, SQN);
 }
 
 qns_t interval_excitation_type_qns(std::size_t K,
                                    const IndexSpace::QuantumNumbers SQN) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, K};
-    result[1] = {0ul, K};
-  } else {
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-
-    for (int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
-      if (base_space.qns() != SQN) continue;
-
-      // ex -> creators in particle space
-      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
-        result[i * 2] = {0ul, K};
-      }
-      // ex -> annihilators in hole space
-      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
-        result[i * 2 + 1] = {0ul, K};
-      }
-    }
-  }
-  return result;
+  return make_qp_qns(K, K, std::nullopt, std::nullopt, /*deexcitation=*/false,
+                     /*interval=*/true, SQN);
 }
 
 qns_t deexcitation_type_qns(std::size_t K,
                             const IndexSpace::QuantumNumbers SQN) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, K};
-    result[1] = {0ul, K};
-  } else {
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base(isr->particle_space(SQN));
-    bool ahs_base = isr->is_base(isr->hole_space(SQN));
-    for (int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
-      if (base_space.qns() != SQN) continue;
-
-      // deex -> annihilators in particle space
-      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
-        result[i * 2 + 1] = {aps_base ? K : 0ul, K};
-      }
-      // deex -> creators in hole space
-      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
-        result[i * 2] = {ahs_base ? K : 0ul, K};
-      }
-    }
-  }
-  return result;
+  return make_qp_qns(K, K, std::nullopt, std::nullopt, /*deexcitation=*/true,
+                     /*interval=*/false, SQN);
 }
 
 qns_t interval_deexcitation_type_qns(std::size_t K,
                                      const IndexSpace::QuantumNumbers SQN) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, K};
-    result[1] = {0ul, K};
-  } else {
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    for (int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
-      if (base_space.qns() != SQN) continue;
-
-      // deex -> annihilators in particle space
-      if (includes(isr->particle_space(SQN).type(), base_space.type())) {
-        result[i * 2 + 1] = {0ul, K};
-      }
-      // deex -> creators in hole space
-      if (includes(isr->hole_space(SQN).type(), base_space.type())) {
-        result[i * 2] = {0ul, K};
-      }
-    }
-  }
-  return result;
+  return make_qp_qns(K, K, std::nullopt, std::nullopt, /*deexcitation=*/true,
+                     /*interval=*/true, SQN);
 }
 
 qns_t general_type_qns(std::size_t K) {
@@ -187,66 +144,17 @@ qns_t general_type_qns(std::size_t K) {
 qns_t generic_excitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                              IndexSpace particle_space, IndexSpace hole_space,
                              const IndexSpace::QuantumNumbers SQN) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, hole_rank};
-    result[1] = {0ul, particle_rank};
-  } else {
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base(isr->particle_space(SQN));
-    bool ahs_base = isr->is_base(isr->hole_space(SQN));
-    for (int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
-      if (base_space.qns() != SQN) continue;
-
-      // ex -> creators in particle space
-      if (includes(particle_space.type(), base_space.type())) {
-        result[i * 2] = {aps_base ? particle_rank : 0ul,
-                         particle_rank};  // creators
-      }
-      // ex -> annihilators in hole space
-      if (includes(hole_space.type(), base_space.type())) {
-        result[i * 2 + 1] = {ahs_base ? hole_rank : 0ul,
-                             hole_rank};  // annihilators
-      }
-    }
-  }
-  return result;
+  return make_qp_qns(particle_rank, hole_rank, std::move(particle_space),
+                     std::move(hole_space), /*deexcitation=*/false,
+                     /*interval=*/false, SQN);
 }
 
 qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
                                IndexSpace particle_space, IndexSpace hole_space,
                                const IndexSpace::QuantumNumbers SQN) {
-  qnc_t result;
-  if (get_default_context().vacuum() == Vacuum::Physical) {
-    result[0] = {0ul, particle_rank};
-    result[1] = {0ul, hole_rank};
-  } else {
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    bool aps_base = isr->is_base(isr->particle_space(SQN));
-    bool ahs_base = isr->is_base(isr->hole_space(SQN));
-    for (int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      result[i * 2] = {0ul, 0ul};
-      result[i * 2 + 1] = {0ul, 0ul};
-      if (base_space.qns() != SQN) continue;
-
-      // deex -> creators in hole space
-      if (includes(hole_space.type(), base_space.type())) {
-        result[i * 2] = {ahs_base ? hole_rank : 0ul, hole_rank};  // creators
-      }
-      // deex -> annihilators in particle space
-      if (includes(particle_space.type(), base_space.type())) {
-        result[i * 2 + 1] = {aps_base ? particle_rank : 0ul,
-                             particle_rank};  // annihilators
-      }
-    }
-  }
-  return result;
+  return make_qp_qns(particle_rank, hole_rank, std::move(particle_space),
+                     std::move(hole_space), /*deexcitation=*/true,
+                     /*interval=*/false, SQN);
 }
 
 // By counting the number of contractions between indices of proper type, we can
