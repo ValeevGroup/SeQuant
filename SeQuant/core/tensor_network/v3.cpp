@@ -1013,7 +1013,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // min (number of bra slots, number of ket slots) slots, i.e. the number of
     // 2-index columns
     const std::size_t num_paired_cols =
-        std::max(bra_rank(tensor), ket_rank(tensor));
+        std::min(bra_rank(tensor), ket_rank(tensor));
     const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::Symm;
 
     // vertices for braket bundles:
