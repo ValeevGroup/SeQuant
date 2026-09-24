@@ -323,47 +323,10 @@ class TextGenerator : public Generator<Context> {
   std::string m_indent;
 
   std::string stringify(const Expr &expr, const Context &ctx) const {
-    if (expr.is<Tensor>()) {
-      return represent(expr.as<Tensor>(), ctx);
-    } else if (expr.is<Variable>()) {
-      return represent(expr.as<Variable>(), ctx);
-    } else if (expr.is<Constant>()) {
-      return represent(expr.as<Constant>(), ctx);
-    } else if (expr.is<Power>()) {
-      return represent(expr.as<Power>(), ctx);
-    } else if (expr.is<Product>()) {
-      const Product &product = expr.as<Product>();
-      std::string repr;
-
-      if (!product.scalar().is_identity()) {
-        repr += represent(Constant(product.scalar()), ctx) + " ";
-      }
-
-      for (std::size_t i = 0; i < product.size(); ++i) {
-        repr += stringify(*product.factor(i), ctx);
-
-        if (i + 1 < product.size()) {
-          repr += " ";
-        }
-      }
-
-      return repr;
-    } else if (expr.is<Sum>()) {
-      const Sum &sum = expr.as<Sum>();
-      std::string repr;
-
-      for (std::size_t i = 0; i < sum.size(); ++i) {
-        repr += stringify(*sum.summand(i), ctx);
-
-        if (i + 1 < sum.size()) {
-          repr += " + ";
-        }
-      }
-
-      return repr;
-    }
-
-    throw Exception("Unsupported expression type in TextGenerator::compute");
+    return detail::stringify_expr(
+        expr, " ",
+        [this, &ctx](const auto &e) { return this->represent(e, ctx); },
+        "TextGenerator::compute");
   }
 
   static std::string wrap_conj(std::string s) {
