@@ -1104,11 +1104,19 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
     REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
   }
 
-  SECTION("explicit braket contradicting the traits throws") {
+  SECTION("explicit braket with a fixed trait: the parity is searched") {
+    // Symm with AntiHermitian over a real basis is an imaginary symmetric
+    // array: odd parity
+    Tensor d(L"d", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                              .hermiticity = Hermiticity::AntiHermitian});
+    REQUIRE(d.conjugation_parity() == ConjugationParity::Odd);
+    REQUIRE(d.braket_symmetry() == BraKetSymmetry::Symm);
+    // no parity reproduces Conjugate from an anti-Hermitian over a real basis
     REQUIRE_THROWS_AS(
         Tensor(L"d", bra{idx(L"i_1", Field::Real)},
                ket{idx(L"i_2", Field::Real)},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm,
+               TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
                                 .hermiticity = Hermiticity::AntiHermitian}),
         sequant::Exception);
   }
@@ -1525,36 +1533,45 @@ TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {
     REQUIRE(q.braket_symmetry() == BraKetSymmetry::Antisymm);
   }
 
-  SECTION("a pinned exchange symmetry the traits do not derive is carried") {
-    // the Symm pin over the complex basis: the traits it back-fills
-    // (Hermitian, Even) derive Conjugate over that basis, so the pack carries
-    // the pin itself, or a rebuild would change the tensor's symmetry
-    Tensor g(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
-             TensorSymmetries{.braket = BraKetSymmetry::Symm});
-    REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
-    const auto syms = g.symmetries();
-    REQUIRE(syms.braket == BraKetSymmetry::Symm);
-    REQUIRE(syms.conjugation_parity == g.conjugation_parity());
-
-    using ixvec = container::svector<Index>;
-    auto r = g.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
-                          ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{});
-    REQUIRE(r.braket_symmetry() == BraKetSymmetry::Symm);
-    REQUIRE(r.hermiticity() == g.hermiticity());
-    REQUIRE(r.conjugation_parity() == g.conjugation_parity());
-
-    // and through a domain rebuild
-    auto expanded = mbpt::expand_antisymm(
-        deserialize(L"g{i_1,i_2;a_1,a_2}:A-S-S")->as<Tensor>());
-    std::size_t n = 0;
-    expanded->visit(
-        [&n](const ExprPtr& e) {
-          if (!e->is<Tensor>()) return;
-          ++n;
-          CHECK(e->as<Tensor>().braket_symmetry() == BraKetSymmetry::Symm);
-        },
-        /* atoms_only = */ true);
-    REQUIRE(n > 1);
+  SECTION("an exchange symmetry the traits do not derive is refused") {
+    // Symm and Antisymm relate an array to itself under the bra<->ket
+    // exchange; over a complex basis the exchange relates an operator's
+    // matrix to its conjugate, so no trait combination derives them there.
+    // Such an array is real, which is declared through the basis field.
+    REQUIRE_THROWS_AS(Tensor(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
+                             TensorSymmetries{.braket = BraKetSymmetry::Symm}),
+                      Exception);
+    REQUIRE_THROWS_AS(
+        Tensor(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
+               TensorSymmetries{.braket = BraKetSymmetry::Antisymm}),
+        Exception);
+    REQUIRE_THROWS_AS(deserialize(L"g{i_1;a_1}:N-S-N"),
+                      io::serialization::SerializationError);
+    // over a real basis both derive
+    Tensor gs(L"g", bra{idx(L"i_1", Field::Real)},
+              ket{idx(L"a_1", Field::Real)},
+              TensorSymmetries{.braket = BraKetSymmetry::Symm});
+    REQUIRE(gs.hermiticity() == Hermiticity::Hermitian);
+    REQUIRE(gs.conjugation_parity() == ConjugationParity::Even);
+    Tensor ga(L"g", bra{idx(L"i_1", Field::Real)},
+              ket{idx(L"a_1", Field::Real)},
+              TensorSymmetries{.braket = BraKetSymmetry::Antisymm});
+    REQUIRE(ga.hermiticity() == Hermiticity::AntiHermitian);
+    REQUIRE(ga.conjugation_parity() == ConjugationParity::Even);
+    // the given traits are fixed and the missing one is searched: Antisymm
+    // with Hermitian is an odd-parity (imaginary) array
+    Tensor go(L"g", bra{idx(L"i_1", Field::Real)},
+              ket{idx(L"a_1", Field::Real)},
+              TensorSymmetries{.braket = BraKetSymmetry::Antisymm,
+                               .hermiticity = Hermiticity::Hermitian});
+    REQUIRE(go.conjugation_parity() == ConjugationParity::Odd);
+    // and a pin the given traits contradict is refused
+    REQUIRE_THROWS_AS(
+        Tensor(L"g", bra{idx(L"i_1", Field::Real)},
+               ket{idx(L"a_1", Field::Real)},
+               TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
+                                .conjugation_parity = ConjugationParity::Odd}),
+        Exception);
   }
 }
 
