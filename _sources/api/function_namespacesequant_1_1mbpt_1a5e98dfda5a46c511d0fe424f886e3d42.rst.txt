@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a5e98dfda5a46c511d0fe424f886e3d42:
+
+Function sequant::mbpt::csv_transform
+=====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_rules_csv.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::csv_transform(ExprPtr const&, const IndexSpace&, std::wstring const&, container::svector<std::wstring> const&)
+   :project: SeQuant

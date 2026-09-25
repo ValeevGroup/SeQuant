@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1ac791ef35055f28fc3d004b35fef9e5a8:
+
+Function sequant::opt::detail::batchable_mode_list
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::batchable_mode_list(TensorNetwork const&, std::function<bool(Index const&)> const&, std::function<bool(Index const&)> const&)
+   :project: SeQuant

@@ -1,0 +1,365 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_dryrun_meter.hpp:
+
+Program Listing for File meter.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_dryrun_meter.hpp>` (``SeQuant/core/eval/backends/dryrun/meter.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_METER_HPP
+   #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_METER_HPP
+   
+   #include <SeQuant/core/batch_policy.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/backends/dryrun/eval_expr.hpp>
+   #include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
+   #include <SeQuant/core/eval/cache_manager.hpp>
+   #include <SeQuant/core/eval/ordered_executor.hpp>
+   #include <SeQuant/core/eval/peak_monitor.hpp>
+   #include <SeQuant/core/eval/peak_profile.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/logger.hpp>
+   #include <SeQuant/core/optimize/single_term_detail.hpp>
+   #include <SeQuant/core/utility/aggregate.hpp>
+   #include <SeQuant/core/utility/string.hpp>
+   
+   #include <algorithm>
+   #include <cstddef>
+   #include <functional>
+   #include <memory>
+   #include <ostream>
+   #include <ranges>
+   #include <string>
+   #include <unordered_map>
+   #include <vector>
+   
+   namespace sequant::eval::dryrun {
+   
+   struct CacheConfig {
+     SEQUANT_DESIGNATED_INIT_ONLY;
+     double max_footprint = 0.;
+     std::size_t min_repeats = 1;
+     std::function<bool(EvalNodeDryRun const&)> is_volatile;
+   };
+   
+   template <typename NodeRange>
+   auto build_dryrun_cache(NodeRange const& nodes, CacheConfig const& cfg,
+                           SizeRegime const& regime) {
+     auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
+                                                          regime.inner_pow_fn());
+   
+     // Footprint (bytes) of a node's result: canon_indices() fed to the
+     // moment-aware counter (as the counter's `result` slot; the empty lhs/rhs
+     // contribute nothing) times 8 bytes/element. Same arithmetic as the DryRun
+     // Result::size_in_bytes(), so the gate is faithful.
+     auto footprint_of =
+         [memsize = std::move(memsize)](EvalNodeDryRun const& n) -> double {
+       std::vector<Index> const result(n->canon_indices().begin(),
+                                       n->canon_indices().end());
+       return memsize(std::vector<Index>{}, std::vector<Index>{}, result) * 8.0;
+     };
+   
+     // Default the volatility predicate so the gated factory never invokes an
+     // empty std::function (nothing volatile leaves that gate inert, matching the
+     // factory's own default).
+     std::function<bool(EvalNodeDryRun const&)> is_volatile =
+         cfg.is_volatile ? cfg.is_volatile
+                         : std::function<bool(EvalNodeDryRun const&)>(
+                               [](EvalNodeDryRun const&) { return false; });
+   
+     // Note: the gated sequant::cache_manager() overload below stamps the
+     // cross-occurrence lifetime mask on `nodes` itself before its DAG walk /
+     // veto (cache_manager.hpp), so this call site does not need to do so.
+     return sequant::cache_manager(nodes, std::move(is_volatile), cfg.min_repeats,
+                                   std::move(footprint_of), cfg.max_footprint);
+   }
+   
+   struct HomeFidelity {
+     std::string label;       
+     std::size_t hash = 0;    
+     std::size_t builds = 0;  
+     std::string home;        
+     std::string uses;        
+   };
+   
+   struct MeterReport {
+     double peak_bytes = 0;         
+     std::size_t peak_op_hash = 0;  
+   
+     double flops_persistent = 0, flops_volatile = 0;  
+     double cost_persistent = 0, cost_volatile = 0;  
+   
+     std::size_t builds_total = 0;
+   
+     std::vector<HomeFidelity> home_fidelity;  
+   
+     BatchScheduler scheduler =
+         BatchScheduler::forest_descent;  
+   };
+   
+   template <class Forest, class IsVolatile>
+   std::unordered_map<std::size_t, bool> compute_volatility(
+       Forest const& forest, IsVolatile const& is_volatile) {
+     using Node = std::ranges::range_value_t<Forest>;
+   
+     std::unordered_map<std::size_t, bool> volatile_of;
+   
+     // Iterative bottom-up walk (explicit frame stack), not recursion: this
+     // classifier runs on the ordered arm of assemble_report too, where an
+     // equation's residual/energy is a single in-place Sum tree whose left spine
+     // is as deep as the number of terms -- thousands for a large equation -- so a
+     // recursive descent would overflow the call stack while merely assembling
+     // the report. The walk order matches the recursive form: a frame is pushed,
+     // its left child resolved, then its right, then the node itself is
+     // classified and memoized.
+     struct Frame {
+       Node const* n = nullptr;
+       int stage = 0;  
+       bool vl = false;
+       bool vr = false;
+     };
+     std::vector<Frame> stack;
+     bool last_v = false;  
+   
+     // Resolve \p n: answer straight away if it is memoized or a leaf, else push
+     // a frame for it.
+     auto const resolve = [&](Node const& n) {
+       if (auto it = volatile_of.find(n->hash_value()); it != volatile_of.end()) {
+         last_v = it->second;
+         return;
+       }
+       if (n.leaf()) {
+         bool const v = is_volatile(n);
+         volatile_of.emplace(n->hash_value(), v);
+         last_v = v;
+         return;
+       }
+       stack.push_back(Frame{.n = &n});
+     };
+   
+     for (auto const& tree : forest) {
+       resolve(tree);
+       while (!stack.empty()) {
+         std::size_t const top = stack.size() - 1;
+         int const stage = stack[top].stage++;
+         Node const& n = *stack[top].n;
+         if (stage == 0) {
+           resolve(n.left());
+           continue;
+         }
+         if (stage == 1) {
+           stack[top].vl = last_v;
+           resolve(n.right());
+           continue;
+         }
+         stack[top].vr = last_v;
+         bool const v = is_volatile(n) || stack[top].vl || stack[top].vr;
+         volatile_of.emplace(n->hash_value(), v);
+         last_v = v;
+         stack.pop_back();
+       }
+     }
+     return volatile_of;
+   }
+   
+   template <class Cache, class Forest, class IsVolatile>
+   MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
+                               RichSchedule const& rich, Forest const& forest,
+                               IsVolatile const& is_volatile,
+                               BatchScheduler scheduler) {
+     MeterReport report;
+     report.scheduler = scheduler;
+     report.peak_bytes = static_cast<double>(mon.hwmark_bytes);
+     report.peak_op_hash = mon.peak.op_hash;
+   
+     auto const volatility = compute_volatility(forest, is_volatile);
+   
+     // hash -> ValueCell* lookup, mirroring make_node_meta's map build
+     // (ordered_executor.hpp): rich.cells is a flat vector, not keyed by hash.
+     std::unordered_map<std::size_t, ValueCell const*> cell_by_hash;
+     cell_by_hash.reserve(rich.cells.size());
+     for (auto const& cell : rich.cells) cell_by_hash.emplace(cell.hash, &cell);
+   
+     // dag-scope formatting: comma-joined IndexSpace base_keys, no trailing
+     // comma -- the same convention make_node_meta uses (ordered_executor.hpp).
+     auto const dag_scope = [](auto const& modes) {
+       std::string s;
+       for (auto const& m : modes) {
+         if (!s.empty()) s += ",";
+         s += toUtf8(m.space().base_key());
+       }
+       return s;
+     };
+   
+     std::size_t idx = 0;
+     for (auto const& [node, tally] : cache.recompute_tally()) {
+       std::size_t builds = 0;
+       double node_flops = 0.0, node_exec = 0.0;
+       for (auto const& [sig, rec] : tally.slices) {
+         builds += rec.count;
+         node_flops += static_cast<double>(rec.count) * rec.flops;
+         node_exec += static_cast<double>(rec.count) * rec.exec;
+       }
+       report.builds_total += builds;
+   
+       std::size_t const hash = node->hash_value();
+       bool const is_vol = [&] {
+         auto it = volatility.find(hash);
+         return it != volatility.end() && it->second;
+       }();
+   
+       if (is_vol) {
+         report.flops_volatile += node_flops;
+         report.cost_volatile += node_exec;
+       } else {
+         report.flops_persistent += node_flops;
+         report.cost_persistent += node_exec;
+       }
+   
+       HomeFidelity hf;
+       hf.label = std::to_string(idx++) + ":" + std::to_string(hash);
+       hf.hash = hash;
+       hf.builds = builds;
+       if (auto it = cell_by_hash.find(hash); it != cell_by_hash.end()) {
+         auto const* cell = it->second;
+         hf.home = dag_scope(cell->home_modes);
+         container::svector<Index> uses_modes;
+         for (auto const& occ : cell->occurrences)
+           for (auto const& [mode, range] : occ.ectx) uses_modes.push_back(mode);
+         hf.uses = dag_scope(uses_modes);
+       }
+       report.home_fidelity.push_back(std::move(hf));
+     }
+   
+     std::sort(report.home_fidelity.begin(), report.home_fidelity.end(),
+               [](HomeFidelity const& a, HomeFidelity const& b) {
+                 return a.builds > b.builds;
+               });
+   
+     return report;
+   }
+   
+   inline MeterReport meter(std::vector<EvalNodeDryRun> const& forest,
+                            BatchPolicy const& policy, SizeRegime const& regime,
+                            CacheConfig const& cfg,
+                            std::ostream* trace = nullptr) {
+     auto cm = std::make_shared<CostModel const>(regime);
+     DryRunLeafEvaluator yield{cm};
+   
+     // Default is_volatile the same way build_dryrun_cache does (an empty
+     // cfg.is_volatile means nothing is volatile) -- but keep the defaulted
+     // function local rather than routing through that builder, so the exact
+     // same predicate can also be threaded to assemble_report below.
+     std::function<bool(EvalNodeDryRun const&)> const is_volatile =
+         cfg.is_volatile ? cfg.is_volatile
+                         : std::function<bool(EvalNodeDryRun const&)>(
+                               [](EvalNodeDryRun const&) { return false; });
+   
+     // Footprint (bytes) of a node's result, identical to build_dryrun_cache's
+     // footprint_of (above): the moment-aware memsize counter over
+     // canon_indices(), scaled to bytes, so cfg.max_footprint gates like-for-like.
+     auto memsize = sequant::opt::detail::memsize_counter(regime.idx_to_extent(),
+                                                          regime.inner_pow_fn());
+     auto footprint_of =
+         [memsize = std::move(memsize)](EvalNodeDryRun const& n) -> double {
+       std::vector<Index> const result(n->canon_indices().begin(),
+                                       n->canon_indices().end());
+       return memsize(std::vector<Index>{}, std::vector<Index>{}, result) * 8.0;
+     };
+   
+     auto cache =
+         sequant::cache_manager(forest, is_volatile, cfg.min_repeats,
+                                std::move(footprint_of), cfg.max_footprint);
+     cache.set_recompute_tally_enabled(true);
+   
+     PeakMonitor mon;
+     cache.set_peak_monitor(&mon);
+   
+     // Backend array-ops for the dry-run backend: the batched executors build a
+     // scatter destination / enumerate axis batches through this seam (the same
+     // one the wet run uses), so the dry replay realizes the same scatter
+     // footprint and batch count. Sourced from the shared CostModel -- no array in
+     // the DAG is consulted. Must outlive the replay below (it is a local here).
+     auto const dry_aops = make_dryrun_array_ops(cm);
+     cache.set_array_ops(&dry_aops);
+   
+     // The same block_of source the driver entry itself derives from
+     // policy.batch_target_size (ordered_executor.hpp's evaluate(Nodes const&,
+     // BatchPolicy const&, ...)) -- an empty batch_target_size means "no
+     // batching", guarded identically so compute_dag_boulevard never invokes an
+     // empty std::function.
+     std::function<std::size_t(Index const&)> const block_of =
+         policy.batch_target_size
+             ? policy.batch_target_size
+             : std::function<std::size_t(Index const&)>(
+                   [](Index const&) -> std::size_t { return 1; });
+     RichSchedule const rich = compute_dag_boulevard(forest, *cm, block_of);
+   
+     // RAII save/restore of every Logger::eval field this call touches, so an
+     // exception from the replay below still leaves the process-wide Singleton
+     // exactly as this call found it.
+     auto& logger = Logger::instance();
+     struct LoggerStateGuard {
+       Logger& l;
+       std::size_t prev_level;
+       std::ostream* prev_stream;
+       std::function<std::string(std::size_t)> prev_node_meta;
+       ~LoggerStateGuard() {
+         l.eval.level = prev_level;
+         l.eval.stream = prev_stream;
+         l.eval.node_meta = std::move(prev_node_meta);
+       }
+     } guard{logger, logger.eval.level, logger.eval.stream, logger.eval.node_meta};
+   
+     // Ensure printing() so DryRunOps::prod records flops/exec (feeding
+     // cache.tally_build) and note_working_set() actually observes the
+     // PeakMonitor -- without raising the level any higher than a caller who
+     // already wants a louder trace.
+     logger.eval.level = std::max<std::size_t>(logger.eval.level, 1);
+     if (trace) logger.eval.stream = trace;
+     logger.eval.node_meta = make_node_meta(rich);
+   
+     // Forest descent (BatchScheduler::forest_descent) needs the same batched
+     // custom evaluator MPQC's wet forest path installs (cck.ipp's `else`
+     // branch, `cache.set_custom_evaluator(sequant::make_evaluator(ctx.
+     // batch_policy, yielder, make_scope_guard))`): without it, plain
+     // sequant::evaluate(Nodes const&, ...) ignores every node_slice_mask()
+     // stamp and runs an unbatched, no-schedule single pass -- an infidelity
+     // vs. the wet run this meter is supposed to mirror. Installed on the
+     // forest path only: evaluate_impl consults cache.custom_evaluator() on
+     // every non-leaf node, so installing it unconditionally would fire on the
+     // ordered path's own evaluate_impl calls too. Ordered
+     // (evaluate_ordered_schedule) drives its own executor via the driver entry
+     // (sequant::evaluate(forest, policy, ...) below, which dispatches on
+     // policy.scheduler) -- installing the forest custom evaluator for ordered
+     // would silently reroute its builds through the forest evaluator instead
+     // of run_ordered_contracted_block, diverging from what the wet ordered run
+     // (which installs no custom evaluator) actually does.
+     // Trace::On explicitly, matching the evaluate<Trace::On> right below: the
+     // evaluator's nested per-batch/per-member re-entries carry their trace level
+     // in the closure's type (make_batched_custom_evaluator's \tparam EvalTrace),
+     // and note_working_set() -- the call that feeds `mon`, hence
+     // MeterReport::peak_bytes -- is compile-time gated on it. Left at
+     // Trace::Default this would (a) report a peak blind to every batched-inner
+     // scratch in any build without SEQUANT_EVAL_TRACE (mpqc's, i.e. the
+     // production dry-run predictor: measured 458x low on the C60 fixture) and
+     // (b) make meter() itself ODR-divergent between a TU that defines
+     // SEQUANT_EVAL_TRACE and one that does not.
+     if (policy.scheduler == BatchScheduler::forest_descent)
+       cache.set_custom_evaluator(sequant::make_evaluator<Trace::On>(
+           policy, yield, sequant::make_no_scope_guard{}));
+   
+     (void)sequant::evaluate<Trace::On>(forest, policy, std::wstring{}, yield,
+                                        cache, {}, sequant::make_no_scope_guard{});
+   
+     return assemble_report(cache, mon, rich, forest, is_volatile,
+                            policy.scheduler);
+   }
+   
+   }  // namespace sequant::eval::dryrun
+   
+   #endif  // SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_METER_HPP

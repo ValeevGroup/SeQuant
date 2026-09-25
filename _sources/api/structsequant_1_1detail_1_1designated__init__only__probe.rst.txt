@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1designated__init__only__probe:
+
+Struct designated_init_only_probe
+=================================
+
+- Defined in :ref:`file_SeQuant_core_utility_aggregate.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::designated_init_only_probe
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

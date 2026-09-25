@@ -1,0 +1,136 @@
+
+.. _file_SeQuant_core_eval_peak_profile.hpp:
+
+File peak_profile.hpp
+=====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/peak_profile.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_peak_profile.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/backends/dryrun/cost_model_object.hpp`` (:ref:`file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp`)
+
+- ``SeQuant/core/eval/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_eval_expr.hpp`)
+
+- ``SeQuant/core/eval/lifetime_mask.hpp`` (:ref:`file_SeQuant_core_eval_lifetime_mask.hpp`)
+
+- ``SeQuant/core/eval/ordered_dump.hpp`` (:ref:`file_SeQuant_core_eval_ordered_dump.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``cstddef``
+
+- ``cstdlib``
+
+- ``iostream``
+
+- ``map`` (:ref:`file_SeQuant_core_eval_value_node_map.hpp`)
+
+- ``optional``
+
+- ``set`` (:ref:`file_SeQuant_core_bitset.hpp`)
+
+- ``unordered_map``
+
+- ``unordered_set``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+- :ref:`file_SeQuant_core_eval_legality.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+- :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+- :ref:`namespace_sequant__eval__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_occurrence_rec`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_profile`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_rich_schedule`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_schedule`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_value_cell`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a7af13fcbe9ac9c100d9cc237048f119e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1a50f770c176ebe4734fd719f19fb88ab0`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1detail_1ac50e6ba316e2a60772e5c7bc4428c598`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1acd433e247c2ec5589b181d178ba876b6`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1a2b6e3036a70ea1eb9a50e91638eee714`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1aa50046870cc596cad77e474f8305b81c`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1detail_1ad4459d1336cdc3c5672eeaa6220744f4`
+

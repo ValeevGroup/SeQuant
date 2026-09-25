@@ -1,0 +1,13 @@
+
+.. _namespace_ranges:
+
+Namespace ranges
+================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

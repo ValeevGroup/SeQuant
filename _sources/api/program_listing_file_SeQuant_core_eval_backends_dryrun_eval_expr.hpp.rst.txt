@@ -1,0 +1,71 @@
+
+.. _program_listing_file_SeQuant_core_eval_backends_dryrun_eval_expr.hpp:
+
+Program Listing for File eval_expr.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backends_dryrun_eval_expr.hpp>` (``SeQuant/core/eval/backends/dryrun/eval_expr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_EVAL_EXPR_HPP
+   #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_EVAL_EXPR_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+   #include <SeQuant/core/eval/backends/dryrun/result.hpp>
+   #include <SeQuant/core/eval/eval_expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <range/v3/range/conversion.hpp>
+   
+   #include <memory>
+   #include <type_traits>
+   #include <utility>
+   
+   namespace sequant::eval::dryrun {
+   
+   class EvalExprDryRun final : public EvalExpr {
+    public:
+     using annot_t = dryrun::annot_t;  // container::svector<Index>
+   
+     template <typename... Args, typename = std::enable_if_t<
+                                     std::is_constructible_v<EvalExpr, Args...>>>
+     explicit EvalExprDryRun(Args&&... args)
+         : EvalExpr{std::forward<Args>(args)...} {
+       annot_ = canon_indices() | ranges::to<annot_t>;
+     }
+   
+     [[nodiscard]] annot_t const& annot() const noexcept { return annot_; }
+   
+    private:
+     annot_t annot_;
+   };
+   
+   using EvalNodeDryRun = EvalNode<EvalExprDryRun>;
+   
+   static_assert(meta::eval_node<EvalNodeDryRun>);
+   static_assert(meta::can_evaluate<EvalNodeDryRun>);
+   
+   struct DryRunLeafEvaluator {
+     std::shared_ptr<CostModel const> cm;
+   
+     [[nodiscard]] ResultPtr operator()(EvalNodeDryRun const& leaf) const {
+       SEQUANT_ASSERT(leaf.leaf());
+       if (!leaf->is_tensor()) {
+         // Constant / Variable leaf: a bare scalar. No real numeric value is
+         // ever tracked by this zero-data backend (only sizes/costs), so 1.0 is
+         // a placeholder never meant to be read as a physical result.
+         return eval_result<ResultScalar<double>>(1.0);
+       }
+       container::svector<Index> idx = leaf->canon_indices() | ranges::to<annot_t>;
+       return make_dryrun_result(std::move(idx), cm);
+     }
+   };
+   
+   }  // namespace sequant::eval::dryrun
+   
+   #endif  // SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_EVAL_EXPR_HPP

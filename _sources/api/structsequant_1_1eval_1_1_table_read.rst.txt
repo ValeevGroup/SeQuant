@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1_table_read:
+
+Struct TableRead
+================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_registry.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::TableRead
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

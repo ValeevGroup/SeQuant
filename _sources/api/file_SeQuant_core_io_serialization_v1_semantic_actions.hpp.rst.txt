@@ -1,0 +1,90 @@
+
+.. _file_SeQuant_core_io_serialization_v1_semantic_actions.hpp:
+
+File semantic_actions.hpp
+=========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_io_serialization_v1>` (``SeQuant/core/io/serialization/v1``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/io/serialization/v1/semantic_actions.hpp``)
+----------------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_io_serialization_v1_semantic_actions.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/io/serialization/v1/ast.hpp`` (:ref:`file_SeQuant_core_io_serialization_v1_ast.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``boost/spirit/home/x3.hpp``
+
+- ``boost/variant/apply_visitor.hpp``
+
+- ``type_traits``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_io_serialization_v1_deserialize.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__io`
+
+- :ref:`namespace_sequant__io__serialization`
+
+- :ref:`namespace_sequant__io__serialization__v1`
+
+- :ref:`namespace_sequant__io__serialization__v1__actions`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1io_1_1serialization_1_1v1_1_1actions_1_1process__addend`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1actions_1aa8b7cf9bf474c4f83c11de02e8b33681`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_semantic__actions_8hpp_1a4d6f7f1e18b9eab7b16fe0f0b6ebe5df`
+

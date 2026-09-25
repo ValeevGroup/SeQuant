@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1eval_1a65373c5e21302e5f7b7b2acf5b336ac1:
+
+Enum ProductionKind
+===================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_table.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::eval::ProductionKind
+   :project: SeQuant

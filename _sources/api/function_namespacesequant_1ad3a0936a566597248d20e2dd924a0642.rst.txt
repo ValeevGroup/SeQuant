@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad3a0936a566597248d20e2dd924a0642:
+
+Template Function sequant::get_uncontracted_indices
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_uncontracted_indices(const Tensor&, const Tensor&)
+   :project: SeQuant

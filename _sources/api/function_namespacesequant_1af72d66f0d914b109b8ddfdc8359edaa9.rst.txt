@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af72d66f0d914b109b8ddfdc8359edaa9:
+
+Function sequant::operator|(ZeroStrategy, ZeroStrategy)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_export_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator|(ZeroStrategy, ZeroStrategy)
+   :project: SeQuant

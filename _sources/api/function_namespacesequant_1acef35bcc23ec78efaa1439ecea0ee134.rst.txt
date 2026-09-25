@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1acef35bcc23ec78efaa1439ecea0ee134:
+
+Function sequant::binarize(Variable const&)
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::binarize(Variable const&)
+   :project: SeQuant

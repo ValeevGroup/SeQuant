@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a271e39608ef5de8169b81d42fb32c6b6:
+
+Function sequant::mbpt::screen_vac_av
+=====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::screen_vac_av(ExprPtr, bool)
+   :project: SeQuant

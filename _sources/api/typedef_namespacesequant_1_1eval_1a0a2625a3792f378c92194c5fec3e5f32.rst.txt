@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1a0a2625a3792f378c92194c5fec3e5f32:
+
+Typedef sequant::eval::DagScopeLevel
+====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_registry.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::DagScopeLevel
+   :project: SeQuant

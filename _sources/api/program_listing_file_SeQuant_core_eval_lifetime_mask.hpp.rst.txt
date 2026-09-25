@@ -1,0 +1,284 @@
+
+.. _program_listing_file_SeQuant_core_eval_lifetime_mask.hpp:
+
+Program Listing for File lifetime_mask.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_lifetime_mask.hpp>` (``SeQuant/core/eval/lifetime_mask.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_LIFETIME_MASK_HPP
+   #define SEQUANT_EVAL_LIFETIME_MASK_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/eval_expr.hpp>
+   #include <SeQuant/core/eval/eval_node_compare.hpp>
+   #include <SeQuant/core/hash.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <algorithm>
+   #include <unordered_map>
+   #include <utility>
+   #include <vector>
+   
+   namespace sequant {
+   
+   namespace eval {
+   
+   namespace detail {
+   
+   inline void lifetime_mask_intersect_in_place(
+       container::svector<Index>& acc, container::svector<Index> const& other) {
+     container::svector<Index> keep;
+     for (auto const& ix : acc)
+       if (std::find(other.begin(), other.end(), ix) != other.end())
+         keep.push_back(ix);
+     acc = std::move(keep);
+   }
+   
+   template <typename Node>
+   container::svector<Index> slot_modes_of(Node const& n) {
+     auto const& ci = n->canon_indices();
+     return {ci.begin(), ci.end()};
+   }
+   
+   template <meta::eval_node_range R, typename ModesOf, typename Setter>
+   void stamp_residency_impl(R const& forest, ModesOf const& modes_of,
+                             Setter const& setter) {
+     using Node = std::ranges::range_value_t<R>;
+   
+     // Running per-canonical intersection, keyed by a live pointer into the
+     // forest (hashed/compared by pointee structure via the tree
+     // hasher/comparator) so grouping does not deep-copy subtrees.
+     std::unordered_map<Node const*, container::svector<Index>,
+                        TreeNodeHasher<Node>, TreeNodeEqualityComparator<Node>>
+         meet;
+     // Every internal-node occurrence, in visitation order, for the stamping
+     // pass, paired with a pointer to its meet entry. Pass 2 does not re-find an
+     // occurrence in `meet`: a lookup there is a structural comparison that walks
+     // the whole subtree, so re-finding would make stamping an in-place Sum tree
+     // O(nodes x subtree), i.e. quadratic in forest size. Pass 1 already knows the
+     // entry, so it records it. `std::unordered_map` keeps references to its
+     // elements valid across rehashing, so these stay good while pass 1 inserts.
+     container::svector<std::pair<Node const*, container::svector<Index>*>> occ;
+   
+     // Pass 1: top-down walk accumulating the enclosing loops opened at or above
+     // n. The full \p acc is passed down to children (descendants must know which
+     // loops enclose them), but a node's contribution to the meet is \p acc
+     // filtered to the modes that live on that node's own result slots.
+     // The descent is iterative (an explicit frame stack), not recursive: an
+     // equation's residual/energy is a single in-place Sum tree with one node per
+     // summand, so its left spine is as deep as the number of terms -- thousands
+     // for a large equation -- and a recursive descent would overflow the call
+     // stack. Pushing the right child before the left one makes the pop order
+     // pre-order (node, left subtree, right subtree), which is the order `occ`
+     // and the meet are built in.
+     struct Frame {
+       Node const* n;
+       container::svector<Index> acc;
+     };
+     std::vector<Frame> stack;
+     auto const walk_node = [&](Node const& n, container::svector<Index> acc) {
+       if (n.leaf()) return;  // leaves are not stamped (they carry no meet)
+       // acc = the enclosing loops opened at or above n, each appearing once: a
+       // physical loop is opened at a single site (\p modes_of reads opens, not
+       // the per-carrying-node slice mask), so accumulating opens down every
+       // root-to- node path visits each loop exactly once -- no dedup needed, acc
+       // is a set by construction. (This is the whole point of sourcing opens: an
+       // External loop reaches its carriers here by inheritance, and a Contracted
+       // loop reaches its below-the-reduction carriers likewise, without either
+       // being double-counted.)
+       for (auto const& ix : modes_of(n)) acc.push_back(ix);
+       // n's meet contribution: acc filtered to n's own result slots, in acc
+       // order.
+       auto const slots = slot_modes_of(n);
+       container::svector<Index> node_modes;
+       for (auto const& m : acc)
+         if (std::find(slots.begin(), slots.end(), m) != slots.end())
+           node_modes.push_back(m);
+       if (auto it = meet.find(&n); it == meet.end()) {
+         // first occurrence seeds the intersection
+         auto const ins = meet.emplace(&n, std::move(node_modes)).first;
+         occ.push_back({&n, &ins->second});
+       } else {
+         lifetime_mask_intersect_in_place(it->second, node_modes);
+         occ.push_back({&n, &it->second});
+       }
+       stack.push_back({&n.right(), acc});
+       stack.push_back({&n.left(), std::move(acc)});
+     };
+     for (auto const& tree : forest) {
+       stack.push_back({&tree, {}});
+       while (!stack.empty()) {
+         Frame f = std::move(stack.back());
+         stack.pop_back();
+         walk_node(*f.n, std::move(f.acc));
+       }
+     }
+   
+     // Pass 2: stamp every occurrence with its canonical meet. The forest is
+     // logically mutable (only the parameter binding is const); the setter
+     // reaches the node payload to stamp it. No lookup: pass 1 recorded which
+     // entry each occurrence belongs to, and the entry it points at now holds the
+     // final intersection (later occurrences narrowed it in place).
+     for (auto const& [n, modes] : occ) setter(n, *modes);
+   }
+   
+   }  // namespace detail
+   
+   template <meta::eval_node_range R>
+   void stamp_lifetime_masks(R const& forest) {
+     using Node = std::ranges::range_value_t<R>;
+     using Data = typename Node::value_type;
+   
+     // The batch loops opened at a node (every kind: External at its open site,
+     // Contracted at its reduction site), each physical loop named exactly once --
+     // not node_slice_mask(), which the DP stamps on every carrying node. Reading
+     // opens is what makes the accumulation below a genuine set: each enclosing
+     // loop reaches a node once, propagated down from its single open site, so an
+     // External loop reaches its carriers by inheritance (not a redundant own-node
+     // stamp) and a Contracted loop reaches its below-the-reduction carriers the
+     // same way -- the one case that genuinely needs the propagation.
+     // (peak_profile reads opens for the identical reason.) The resulting
+     // sliced_modes is the runtime residency place_at_this_level consumes and \c
+     // home_scope returns.
+     auto opened_loops_of = [](Node const& n) {
+       container::svector<Index> v;
+       for (auto const& [ix, kind] : n->batch_loops_opened_here()) v.push_back(ix);
+       return v;
+     };
+   
+     detail::stamp_residency_impl(
+         forest, opened_loops_of, [](Node const* n, container::svector<Index> m) {
+           const_cast<Data&>(**n).set_sliced_modes(std::move(m));
+         });
+   }
+   
+   }  // namespace eval
+   
+   template <meta::eval_node Node>
+   container::svector<Index> const& home_scope(Node const& n) noexcept {
+     return n->occurrence_home();
+   }
+   
+   template <meta::eval_node_range R>
+   void stamp_occurrence_homes(R const& forest) {
+     using Node = std::ranges::range_value_t<R>;
+     using Data = typename Node::value_type;
+     // Iterative for the same reason as \c stamp_residency_impl above: the
+     // residual's Sum spine is as deep as the number of terms, and a recursive
+     // descent would overflow the stack. Right child pushed before left, so the
+     // pop order is the recursion's pre-order.
+     struct Frame {
+       Node const* n;
+       container::svector<Index> acc;
+     };
+     std::vector<Frame> stack;
+     auto const walk_node = [&](Node const& n, container::svector<Index> acc) {
+       if (n.leaf()) return;
+       for (auto const& [ix, kind] : n->batch_loops_opened_here())
+         acc.push_back(ix);
+       auto const slots = eval::detail::slot_modes_of(n);
+       container::svector<Index> home;
+       for (auto const& m : acc)
+         if (std::find(slots.begin(), slots.end(), m) != slots.end())
+           home.push_back(m);
+       const_cast<Data&>(*n).set_occurrence_home(std::move(home));
+       stack.push_back({&n.right(), acc});
+       stack.push_back({&n.left(), std::move(acc)});
+     };
+     for (auto const& tree : forest) {
+       stack.push_back({&tree, {}});
+       while (!stack.empty()) {
+         Frame f = std::move(stack.back());
+         stack.pop_back();
+         walk_node(*f.n, std::move(f.acc));
+       }
+     }
+   }
+   
+   inline std::size_t value_key(std::size_t node_hash,
+                                container::svector<std::size_t> positions) {
+     if (positions.empty()) return node_hash;
+     std::sort(positions.begin(), positions.end());
+     std::size_t h = node_hash;
+     hash::combine(h, positions.size());
+     for (std::size_t p : positions) hash::combine(h, p);
+     return h;
+   }
+   
+   namespace detail {
+   template <meta::eval_node Node>
+   std::pair<std::size_t, bool> value_key_impl(Node const& n) {
+     // The left spine is unwound iteratively (the `spine` vector and the
+     // bottom-up loop below), exactly as TreeNodeEqualityComparator does: an
+     // equation's residual/energy is one in-place Sum tree with a left spine as
+     // deep as the number of terms, and recursing down it would overflow the
+     // call stack. Right children (single terms) and Product operands are bounded
+     // in depth and stay recursive. Aside from that unwinding this is a faithful
+     // transcription of the recursive form.
+     container::svector<Node const*> spine;
+     for (Node const* c = &n;; c = &(*c).left()) {
+       spine.push_back(c);
+       if ((*c).leaf()) break;
+     }
+     std::pair<std::size_t, bool> below{};  // the current node's left child result
+     for (auto sit = spine.rbegin(); sit != spine.rend(); ++sit) {
+       Node const& nd = **sit;
+       container::svector<std::size_t> pos;
+       auto const& carried = nd->canon_indices();
+       for (Index const& m : home_scope(nd))
+         for (std::size_t p = 0; p < carried.size(); ++p)
+           if (carried[p] == m) {
+             pos.push_back(p);
+             break;
+           }
+       bool sliced = !pos.empty();
+       std::size_t h = value_key(nd->hash_value(), std::move(pos));
+       if (!nd.leaf()) {
+         auto [lk, ls] = below;  // the left child, already folded by this loop
+         auto [rk, rs] = value_key_impl(nd.right());
+         if (ls || rs) {
+           sliced = true;
+           // A Product (contraction) is commutative and the binarizer may emit the
+           // same contraction as (X,Y) in one term and (Y,X) in another, so the
+           // two operand keys are combined in a canonical order -- ascending --
+           // and the two spellings key to one value. (The node id they are
+           // combined into already folds the operand order; combining them as
+           // emitted did not, which split swapped occurrences into two builds.) A
+           // Sum's operands are not interchangeable -- its left child is the
+           // in-place accumulator -- so they stay in the emitted order.
+           //
+           // The order is taken on the keys, deliberately not via
+           // canonical_children (eval_node_compare.hpp), whose rule is different
+           // (scalar operand last, then ascending node id). Do not "unify" the
+           // two: a node id ties whenever the two operands are one value, and
+           // their keys can still differ there -- one value home-sliced two
+           // different ways is two keys -- so canonical_children would fall back
+           // to the emitted order and leave exactly this combination
+           // order-dependent. Ordering the keys themselves is order-independent
+           // unconditionally. Both rules are value-determined, so the two
+           // canonicalizations do not need to agree.
+           if (nd->is_product() && lk > rk) std::swap(lk, rk);
+           hash::combine(h, lk);
+           hash::combine(h, rk);
+         }
+       }
+       below = {sliced ? h : nd->hash_value(), sliced};
+     }
+     return below;
+   }
+   }  // namespace detail
+   
+   template <meta::eval_node Node>
+   std::size_t value_key_of(Node const& n) {
+     if (std::size_t const k = n->value_key(); k != 0) return k;  // stamped
+     return detail::value_key_impl(n).first;
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_LIFETIME_MASK_HPP

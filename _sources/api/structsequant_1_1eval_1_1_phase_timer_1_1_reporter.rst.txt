@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1eval_1_1_phase_timer_1_1_reporter:
+
+Struct PhaseTimer::Reporter
+===========================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_struct_structsequant_1_1eval_1_1_phase_timer`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::PhaseTimer::Reporter
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1_scope_block:
+
+Struct ScopeBlock
+=================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_schedule.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::ScopeBlock
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

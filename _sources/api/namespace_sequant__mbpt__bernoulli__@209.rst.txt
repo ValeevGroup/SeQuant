@@ -1,0 +1,13 @@
+
+.. _namespace_sequant__mbpt__bernoulli__@209:
+
+Namespace sequant::mbpt::bernoulli::@209
+========================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

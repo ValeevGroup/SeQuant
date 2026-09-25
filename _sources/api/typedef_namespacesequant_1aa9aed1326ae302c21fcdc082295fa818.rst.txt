@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1aa9aed1326ae302c21fcdc082295fa818:
+
+Typedef sequant::PowerPtr
+=========================
+
+- Defined in :ref:`file_SeQuant_core_expr_fwd.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::PowerPtr
+   :project: SeQuant

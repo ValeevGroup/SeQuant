@@ -1,0 +1,54 @@
+
+.. _program_listing_file_SeQuant_core_eval_peak_monitor.hpp:
+
+Program Listing for File peak_monitor.hpp
+=========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_peak_monitor.hpp>` (``SeQuant/core/eval/peak_monitor.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_EVAL_PEAK_MONITOR_HPP
+   #define SEQUANT_CORE_EVAL_PEAK_MONITOR_HPP
+   
+   #include <cstddef>
+   #include <functional>
+   #include <vector>
+   
+   namespace sequant::eval {
+   
+   struct PeakEvent {
+     std::size_t bytes = 0;
+     std::size_t op_hash = 0;
+   };
+   
+   struct PeakLiveEntry {
+     std::size_t hash = 0;
+     std::size_t bytes = 0;
+   };
+   
+   struct PeakMonitor {
+     std::size_t hwmark_bytes = 0;
+   
+     PeakEvent peak{};
+   
+     std::function<void(PeakEvent const&)> on_peak{};
+   
+     std::function<void(std::size_t total_bytes,
+                        std::vector<PeakLiveEntry> const&)>
+         on_peak_liveset{};
+   
+     void observe(std::size_t bytes, std::size_t op_hash) noexcept {
+       if (bytes > hwmark_bytes) {
+         hwmark_bytes = bytes;
+         peak = {bytes, op_hash};
+         if (on_peak) on_peak(peak);
+       }
+     }
+   };
+   
+   }  // namespace sequant::eval
+   
+   #endif  // SEQUANT_CORE_EVAL_PEAK_MONITOR_HPP

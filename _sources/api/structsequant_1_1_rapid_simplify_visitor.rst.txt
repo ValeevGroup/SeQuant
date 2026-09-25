@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_rapid_simplify_visitor:
+
+Struct RapidSimplifyVisitor
+===========================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::RapidSimplifyVisitor
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

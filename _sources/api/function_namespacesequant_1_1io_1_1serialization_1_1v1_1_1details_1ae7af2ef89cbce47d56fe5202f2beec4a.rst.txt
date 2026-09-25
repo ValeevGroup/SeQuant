@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1details_1ae7af2ef89cbce47d56fe5202f2beec4a:
+
+Template Function sequant::io::serialization::v1::details::serialize_ops
+========================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_serialize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::details::serialize_ops(const Range&, const SerializationOptions&)
+   :project: SeQuant

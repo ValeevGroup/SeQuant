@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1_access_clock:
+
+Struct AccessClock
+==================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::AccessClock
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

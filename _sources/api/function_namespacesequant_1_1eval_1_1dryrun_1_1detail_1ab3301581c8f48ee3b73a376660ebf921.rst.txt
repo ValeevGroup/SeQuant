@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1ab3301581c8f48ee3b73a376660ebf921:
+
+Function sequant::eval::dryrun::detail::check_shared_ranges
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::dryrun::detail::check_shared_ranges(char const *, annot_t const&, ExtentOverrides const&, ExtentOverrides const&, annot_t const&, ExtentOverrides const&, ExtentOverrides const&, std::shared_ptr<CostModel const> const&)
+   :project: SeQuant

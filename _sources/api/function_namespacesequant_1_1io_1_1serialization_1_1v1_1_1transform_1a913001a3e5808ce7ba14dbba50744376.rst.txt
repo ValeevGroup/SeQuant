@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1transform_1a913001a3e5808ce7ba14dbba50744376:
+
+Template Function sequant::io::serialization::v1::transform::to_column_symmetry
+===============================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::transform::to_column_symmetry(char, std::size_t, const Iterator&, ColumnSymmetry)
+   :project: SeQuant

@@ -1,0 +1,144 @@
+
+.. _file_SeQuant_core_eval_backends_dryrun_result.hpp:
+
+File result.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval_backends_dryrun>` (``SeQuant/core/eval/backends/dryrun``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/backends/dryrun/result.hpp``)
+-------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_backends_dryrun_result.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval/backend_array_ops.hpp`` (:ref:`file_SeQuant_core_eval_backend_array_ops.hpp`)
+
+- ``SeQuant/core/eval/backends/dryrun/cost_model_object.hpp`` (:ref:`file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp`)
+
+- ``SeQuant/core/eval/result.hpp`` (:ref:`file_SeQuant_core_eval_result.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/utility/exception.hpp`` (:ref:`file_SeQuant_core_utility_exception.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``any``
+
+- ``array`` (:ref:`file_SeQuant_core_eval_backends_tiledarray_array_ops.hpp`)
+
+- ``cstddef``
+
+- ``format``
+
+- ``memory`` (:ref:`file_SeQuant_core_memory_layout.hpp`)
+
+- ``numeric``
+
+- ``stdexcept``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_aggregate.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_eval_expr.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+- :ref:`namespace_sequant__eval__dryrun`
+
+- :ref:`namespace_sequant__eval__dryrun__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1detail_1_1_dry_run_ops`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_1_1_payload`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested_1_1_payload`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run`
+
+- :ref:`exhale_class_classsequant_1_1eval_1_1dryrun_1_1_result_dry_run_nested`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a6a8566f88be25ef2ecf4017de1f71c11`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1ab3301581c8f48ee3b73a376660ebf921`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a17789413a05217205198b7de8409000f`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a70db0a16e4f7eadc38781a78414ecb9e`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a7f9e0d222f10553619026f98dc4dd46c`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1aa4476899a0980375ed27c6f7463dbf07`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a304f2673a9c72f43172c5360238ca678`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1aa7337a7b2e0b2c14387a921840dd1ddd`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1ae38310bdeb795211b6a917c409228cbe`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1a5740ecabfe21a3150fc60f4b35222a51`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a09b68cc7e308cc28694531440c3a94bf`
+
+- :ref:`exhale_function_namespacesequant_1_1eval_1_1dryrun_1a465c4dbe8d5c099e5278c4e8150e49f0`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a450bf24b51b7c05ddb3a855f4e67c387`
+
+- :ref:`exhale_typedef_namespacesequant_1_1eval_1_1dryrun_1a7ca944e2459dae5187cc2b3bf61465a5`
+

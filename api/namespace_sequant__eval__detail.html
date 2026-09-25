@@ -1,0 +1,520 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
+        <link rel="prefetch" href="../_static/logo.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Namespace sequant::eval::detail - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=821744c5" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/logo.svg" alt="Logo"/>
+  </div>
+  
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input aria-label="Toggle navigation of Getting started" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/expressions.html">The Expression Tree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/context.html">Context and Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/canonicalization.html">Canonicalization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/spin_tracing.html">Spin Tracing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/optimize.html">Optimizing Evaluation Cost</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/batching.html">Batched (Memory-Bounded) Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/export.html">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/io.html">I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/utilities/index.html">Utilities</a><input aria-label="Toggle navigation of Utilities" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../user/utilities/external_interface.html">External Interface</a><input aria-label="Toggle navigation of External Interface" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user/utilities/external_interface_v1.html">Driver File v1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user/utilities/external_interface_v2.html">Driver File v2</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input aria-label="Toggle navigation of Developer docs" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../developer/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../developer/tnc.html">Tensor Network Canonicalizer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../developer/cost_model.html">Cost Model and Single-Term Optimization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../developer/batched_evaluation.html">Batched Evaluation Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../developer/export.html">Export Framework Architecture</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../maintainer/index.html">Maintainer docs</a><input aria-label="Toggle navigation of Maintainer docs" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../maintainer/release.html">Release Guide</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/namespace_sequant__eval__detail.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="namespace-sequant-eval-detail">
+<span id="id1"></span><h1>Namespace sequant::eval::detail<a class="headerlink" href="#namespace-sequant-eval-detail" title="Link to this heading">¶</a></h1>
+<p>The deterministic sequencer  lowers the <code class="docutils literal notranslate"><span class="pre">LegalitySchedule</span></code> (per-value <code class="docutils literal notranslate"><span class="pre">home_floor</span></code> / <code class="docutils literal notranslate"><span class="pre">per_axis</span></code> roles) plus the <code class="docutils literal notranslate"><span class="pre">RichSchedule</span></code> (per-value <code class="docutils literal notranslate"><span class="pre">first_use</span></code> / <code class="docutils literal notranslate"><span class="pre">last_use</span></code> over the forest’s single post-order static-point timeline) into an <code class="docutils literal notranslate"><span class="pre">OrderedSchedule</span></code>.</p>
+<nav class="contents local" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#detailed-description" id="id2">Detailed Description</a></p></li>
+<li><p><a class="reference internal" href="#classes" id="id3">Classes</a></p></li>
+<li><p><a class="reference internal" href="#functions" id="id4">Functions</a></p></li>
+<li><p><a class="reference internal" href="#typedefs" id="id5">Typedefs</a></p></li>
+</ul>
+</nav>
+<section id="detailed-description">
+<h2>Detailed Description<a class="headerlink" href="#detailed-description" title="Link to this heading">¶</a></h2>
+<p>Static peak-profile analysis over an eval forest (see <code class="docutils literal notranslate"><span class="pre">doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md</span></code>, section 5).</p>
+<p>The realized chain is per loop instance, not per axis type: one block per distinct fusion <code class="docutils literal notranslate"><span class="pre">loop_slot</span></code> appearing on a space across all cells, so a value carrying two same-space modes on different slots gets two nested loops, not one. A nest holding members of more than one pass additionally emits one sibling block per pass (latitude = pass), run in schedule order (see step 2b and <code class="docutils literal notranslate"><span class="pre">forced_split_levels</span></code>). See the as-built design section 6.1, <code class="docutils literal notranslate"><span class="pre">doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md</span></code>.</p>
+<p>Four-part algorithm, pure scheduling (no cost choice):</p>
+<p>1. The canonical chain
+For each batch axis space (<code class="docutils literal notranslate"><span class="pre">IndexSpace::base_key()</span></code>) appearing in any cell’s <code class="docutils literal notranslate"><span class="pre">CellLegality::per_axis</span></code> (not just <code class="docutils literal notranslate"><span class="pre">home_floor</span></code>  a <code class="docutils literal notranslate"><span class="pre">None</span></code> must still get a block to host its escape output, even though no cell is homed inside it in that role), one realized depth per distinct fusion <code class="docutils literal notranslate"><span class="pre">loop_slot</span></code> on it (<code class="docutils literal notranslate"><span class="pre">slots_of_space</span></code> / <code class="docutils literal notranslate"><span class="pre">type_slot</span></code>, resolved through <code class="docutils literal notranslate"><span class="pre">fusion_slot</span></code>). Spaces are ordered by <code class="docutils literal notranslate"><span class="pre">mode_order</span></code> (most-significant/outermost first), ties/ unlisted spaces alphabetical, slot-ascending within a space  but that is only a stable tie-break: the nesting actually satisfies every <code class="docutils literal notranslate"><span class="pre">RichSchedule::loop_order</span></code> pair, and a cycle among those is a builder error. Loop members that never co-occur (no value is home-sliced on both) are then cut into disjoint nests by a union-find (<code class="docutils literal notranslate"><span class="pre">type_cluster</span></code> / <code class="docutils literal notranslate"><span class="pre">cluster_min</span></code>) and concatenated at root, rather than realized as one over-deep chain.</p>
+<p>2. Per-value placement: home <code class="docutils literal notranslate"><span class="pre">BuildStep</span></code> vs. escape output
+A value’s <code class="docutils literal notranslate"><span class="pre">CellLegality::per_axis</span></code> has, by construction (see <code class="docutils literal notranslate"><span class="pre">None</span></code> own doc comment), only <code class="docutils literal notranslate"><span class="pre">LoopLocal</span></code>, <code class="docutils literal notranslate"><span class="pre">Reduction</span></code>, or <code class="docutils literal notranslate"><span class="pre">LoopCarried</span></code> entries (never the implicit <code class="docutils literal notranslate"><span class="pre">LoopInvariant</span></code>). Two cases:</p>
+<ul class="simple">
+<li><p>every <code class="docutils literal notranslate"><span class="pre">per_axis</span></code> entry is <code class="docutils literal notranslate"><span class="pre">LoopLocal</span></code> (this includes the empty case: no batch-axis dependence at all, e.g. water-20’s <code class="docutils literal notranslate"><span class="pre">I``(i,i;a,a))</span>&#160; <span class="pre">the</span> <span class="pre">value</span> <span class="pre">is</span> <span class="pre">a</span> <span class="pre">plain</span> <span class="pre">``BuildStep</span></code>. Its home block is the depth whose accumulated (root-to-depth) type set equals <code class="docutils literal notranslate"><span class="pre">home_floor's</span></code> type set (root if <code class="docutils literal notranslate"><span class="pre">home_floor</span></code> is empty), by set equality (an unmatched/non-prefix <code class="docutils literal notranslate"><span class="pre">home_floor</span></code> falls back to root). This value gets no <code class="docutils literal notranslate"><span class="pre">outputs</span></code> entry anywhere (see <code class="docutils literal notranslate"><span class="pre">well_formed's</span></code> single- producer invariant): “Transient” (design point 4) is realized as “produced by a c BuildStep and nothing else”, not as an explicit <code class="docutils literal notranslate"><span class="pre">OutputKind::Transient</span></code> <code class="docutils literal notranslate"><span class="pre">outputs</span></code> record, since <code class="docutils literal notranslate"><span class="pre">well_formed::detail::collect_production_ids</span></code> counts every <code class="docutils literal notranslate"><span class="pre">outputs</span></code> entry (regardless of <code class="docutils literal notranslate"><span class="pre">OutputKind</span></code>) as an independent production site  a <code class="docutils literal notranslate"><span class="pre">Transient</span></code> <code class="docutils literal notranslate"><span class="pre">outputs</span></code> entry alongside the <code class="docutils literal notranslate"><span class="pre">BuildStep</span></code> would be flagged as double-production.</p></li>
+<li><p>at least one <code class="docutils literal notranslate"><span class="pre">per_axis</span></code> entry is <code class="docutils literal notranslate"><span class="pre">Reduction</span></code> or <code class="docutils literal notranslate"><span class="pre">LoopCarried</span></code> (“escapes” that axis, per design point 4: <code class="docutils literal notranslate"><span class="pre">Reduction</span></code> -&gt; accumulate-summed out, <code class="docutils literal notranslate"><span class="pre">LoopCarried</span></code> -&gt; accumulate-scattered out)  the value has no <code class="docutils literal notranslate"><span class="pre">BuildStep</span></code> anywhere; instead it is recorded as an <code class="docutils literal notranslate"><span class="pre">outputs</span></code> entry (kind <code class="docutils literal notranslate"><span class="pre">AccumulateSum</span></code> / <code class="docutils literal notranslate"><span class="pre">AccumulateScatter</span></code>) of each escaped instance’s block. With more than one escape this is a multi-level escape chain: raw production at the deepest escape site, pure forwarding at every shallower one. The innermost escaped loop is where the accumulation the value’s own node performs actually happens, so that block is its true production site; an outer escape on a shallower axis needs this value already complete before the outer loop can close  exactly consistent with an outer accumulator reading an inner one. A chain may legitimately skip a level the value is invariant on; that crossing is carried by residency plus <code class="docutils literal notranslate"><span class="pre">produce_if_absent</span></code>, not by an escape (as-built section 6.2).</p></li>
+</ul>
+<p>3. Topological order within a block  a real topological sort
+Each block’s own <code class="docutils literal notranslate"><span class="pre">steps</span></code> interleave its <code class="docutils literal notranslate"><span class="pre">None</span></code> (one per value homed there) with, if the chain continues, one nested child <code class="docutils literal notranslate"><span class="pre">ScopeBlock</span></code> <code class="docutils literal notranslate"><span class="pre">Step</span></code> for the next-deeper axis. These are ordered by <code class="docutils literal notranslate"><span class="pre">detail::ordered_schedule_topo_sort_steps</span></code> against a per-step dependency graph, not a scalar key alone (see below for why a scalar key cannot suffice), reconstructed from <code class="docutils literal notranslate"><span class="pre">rich</span></code> alone  no forest access needed:</p>
+<ul>
+<li><p>global direct-dependency edges: for every <code class="docutils literal notranslate"><span class="pre">OccurrenceRec</span></code> of every value, its <code class="docutils literal notranslate"><span class="pre">consumer_point</span></code> names the static point of its structural parent node; resolving that point back to the value_id whose own occurrence starts there (<code class="docutils literal notranslate"><span class="pre">point_owner</span></code>, built once up front) recovers “this parent value directly reads that child value”  the exact same edges the forest itself encodes, without needing the forest.</p></li>
+<li><p>Per level (one <code class="docutils literal notranslate"><span class="pre">None</span></code> own <code class="docutils literal notranslate"><span class="pre">steps</span></code> list, including root), each candidate step gets a <code class="docutils literal notranslate"><span class="pre">None</span></code></p>
+<blockquote>
+<div><ul class="simple">
+<li><p>a <code class="docutils literal notranslate"><span class="pre">None</span></code> <code class="docutils literal notranslate"><span class="pre">produced</span></code> = <code class="docutils literal notranslate"><span class="pre">{v}</span></code>; its <code class="docutils literal notranslate"><span class="pre">requires_</span></code> = every value_id <code class="docutils literal notranslate"><span class="pre">v</span></code> directly reads (raw, unfiltered  irrelevant/ external entries are dropped by the topo-sort itself, since they simply never match a local <code class="docutils literal notranslate"><span class="pre">produced</span></code> set).</p></li>
+<li><p>a nested child block’s <code class="docutils literal notranslate"><span class="pre">produced</span></code> = that block’s own top-level <code class="docutils literal notranslate"><span class="pre">outputs</span></code> value_id’s (what it makes visible to its own parent’s siblings  its internal <code class="docutils literal notranslate"><span class="pre">None</span></code> and any further-nested child’s content are never directly readable from outside it: by construction, a value crossing a block boundary as an operand must first have been resolved out of that axis, which is exactly the escape/<code class="docutils literal notranslate"><span class="pre">outputs</span></code> case). Its <code class="docutils literal notranslate"><span class="pre">requires_</span></code> is the full, recursively bubbled external need of its whole subtree (built bottom-up alongside the block itself: <code class="docutils literal notranslate"><span class="pre">requires_all(level)</span></code> = (this level’s own direct needs union its child’s already-bubbled <code class="docutils literal notranslate"><span class="pre">requires_all</span></code>) minus <code class="docutils literal notranslate"><span class="pre">produced_all(level)</span></code>, where <code class="docutils literal notranslate"><span class="pre">produced_all</span></code> is everything ever produced anywhere in the subtree, recursively)  so a need that is only satisfiable several levels further out (e.g. a root-homed common factor consumed by a value nested two axes deep) still surfaces at whichever level can actually satisfy it.</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>Ties (two ready steps with no dependency relation to each other) are broken by <code class="docutils literal notranslate"><span class="pre">tie_key</span></code> ascending: a <code class="docutils literal notranslate"><span class="pre">None</span></code> is its value’s own <code class="docutils literal notranslate"><span class="pre">ValueCell::first_use</span></code>; a child block’s is the min <code class="docutils literal notranslate"><span class="pre">first_use</span></code> over its own <code class="docutils literal notranslate"><span class="pre">produced_all</span></code> (deterministic, and  though correctness rests on the real edges, which enforce both directions  it places a block as early as its own true dependency slack allows).</p></li>
+</ul>
+<p>A single scalar key alone cannot express both directions of this at once. Taking the min <code class="docutils literal notranslate"><span class="pre">first_use</span></code> as the sort key itself is sound for “the block
+sorts before every true consumer”, but carries no corresponding guarantee for “the block sorts after every true input it reads”: a value produced by a same-level sibling <code class="docutils literal notranslate"><span class="pre">BuildStep</span></code> (e.g. a root-homed operand consumed by content nested inside a child block) can land, by raw point value, after the block’s min-derived key, mis-ordering the schedule with no structural check to catch it. The topological sort above satisfies both directions by construction and is checked twice (no-cycle placement count, then a second pass confirming every edge survived the final order)  see <code class="docutils literal notranslate"><span class="pre">ordered_schedule_topo_sort_steps's</span></code> own doc comment.</p>
+<p><code class="docutils literal notranslate"><span class="pre">policy</span></code> is accepted for interface symmetry with the rest of the pipeline (every stage from <code class="docutils literal notranslate"><span class="pre">analyze_legality</span></code> onward threads it) and as a hook for a split threshold; the logic here only consults <code class="docutils literal notranslate"><span class="pre">rich</span></code> and <code class="docutils literal notranslate"><span class="pre">legality</span></code>; the batchable-axis filtering <code class="docutils literal notranslate"><span class="pre">policy</span></code> would otherwise provide is already baked into <code class="docutils literal notranslate"><span class="pre">CellLegality::per_axis</span></code> by <code class="docutils literal notranslate"><span class="pre">analyze_legality</span></code>.</p>
+<p>Two sizing primitives (<code class="docutils literal notranslate"><span class="pre">detail::home_depth_of</span></code>, <code class="docutils literal notranslate"><span class="pre">detail::cell_footprint</span></code>), the forest linearization plus loop-identity pass (<code class="docutils literal notranslate"><span class="pre">compute_dag_boulevard</span></code>) and the interval-event sweep (<code class="docutils literal notranslate"><span class="pre">peak_profile_sweep</span></code>) that turns an eval forest into a <code class="docutils literal notranslate"><span class="pre">PeakProfile</span></code>. <code class="docutils literal notranslate"><span class="pre">compute_dag_boulevard</span></code> is on the ordered runtime path: it produces the <code class="docutils literal notranslate"><span class="pre">RichSchedule</span></code> the schedule builder, the cell table and the executor all consume; <code class="docutils literal notranslate"><span class="pre">peak_profile_sweep</span></code> is the analysis-only half.</p>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_cell_build_state.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-cell-build-state"><span class="std std-ref">Struct CellBuildState</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_forced_split_levels.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-forced-split-levels"><span class="std std-ref">Struct ForcedSplitLevels</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_forgo_plan.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-forgo-plan"><span class="std std-ref">Struct ForgoPlan</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_forked_subchain.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-forked-subchain"><span class="std std-ref">Struct ForkedSubchain</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_ordered_op_counts.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-ordered-op-counts"><span class="std std-ref">Struct OrderedOpCounts</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_ordered_registry_residency.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-ordered-registry-residency"><span class="std std-ref">Struct OrderedRegistryResidency</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_ordered_schedule_dep_graph.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-ordered-schedule-dep-graph"><span class="std std-ref">Struct OrderedScheduleDepGraph</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_ordered_schedule_depth_bucket.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-ordered-schedule-depth-bucket"><span class="std std-ref">Struct OrderedScheduleDepthBucket</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_ordered_schedule_step_meta.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-ordered-schedule-step-meta"><span class="std std-ref">Struct OrderedScheduleStepMeta</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_output_site.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-output-site"><span class="std std-ref">Struct OutputSite</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1eval_1_1detail_1_1_scope_block_axis_level.html#exhale-struct-structsequant-1-1eval-1-1detail-1-1-scope-block-axis-level"><span class="std std-ref">Struct ScopeBlockAxisLevel</span></a></p></li>
+</ul>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a24999f9efdb7d5eddcc57faa18348b82.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a24999f9efdb7d5eddcc57faa18348b82"><span class="std std-ref">Function sequant::eval::detail::apply_persistence_frontier</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a9e34f3be60d5b0ca9326990717d3bda7.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a9e34f3be60d5b0ca9326990717d3bda7"><span class="std std-ref">Function sequant::eval::detail::assert_global_level_axis_uniqueness</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ad85e6428d56f451bf65eaf5274a80157.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ad85e6428d56f451bf65eaf5274a80157"><span class="std std-ref">Function sequant::eval::detail::bound_instances</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a50f770c176ebe4734fd719f19fb88ab0.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a50f770c176ebe4734fd719f19fb88ab0"><span class="std std-ref">Template Function sequant::eval::detail::cell_footprint</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1abc269e5fd581a8dc35556f0ea8caf4a5.html#exhale-function-namespacesequant-1-1eval-1-1detail-1abc269e5fd581a8dc35556f0ea8caf4a5"><span class="std std-ref">Function sequant::eval::detail::cell_str</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a60c24d6c01aa66e50eadfbab6136b782.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a60c24d6c01aa66e50eadfbab6136b782"><span class="std std-ref">Function sequant::eval::detail::collect_production_ids</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a3c898732dfc098c82629e32525911d0e.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a3c898732dfc098c82629e32525911d0e"><span class="std std-ref">Function sequant::eval::detail::collect_productions</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a0e3a17a17055bf26e022b327b8d9ccdd.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a0e3a17a17055bf26e022b327b8d9ccdd"><span class="std std-ref">Template Function sequant::eval::detail::compute_cell</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a16bd50fb2fa96deda8b62233bd8f961c.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a16bd50fb2fa96deda8b62233bd8f961c"><span class="std std-ref">Function sequant::eval::detail::current_scope(eval::BatchContext const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a26ab15f1005ac9533f62dd4eacabe482.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a26ab15f1005ac9533f62dd4eacabe482"><span class="std std-ref">Function sequant::eval::detail::current_scope(eval::BatchContext const&amp;, ScopeBlock const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ac3feb866fa67bfbe19247297a1ae9e13.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ac3feb866fa67bfbe19247297a1ae9e13"><span class="std std-ref">Template Function sequant::eval::detail::deepest_visible_form</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a69ee08a4c47c03b7ffd5335a434a7555.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a69ee08a4c47c03b7ffd5335a434a7555"><span class="std std-ref">Function sequant::eval::detail::dump_block_assemble</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a3bf194e4efdf09398aafc90e88e10067.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a3bf194e4efdf09398aafc90e88e10067"><span class="std std-ref">Function sequant::eval::detail::dump_block_build</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a553728e67ddaa3517eee8f9dc6608f33.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a553728e67ddaa3517eee8f9dc6608f33"><span class="std std-ref">Function sequant::eval::detail::dump_block_skipped</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a516a46a5f9051f925595d2dc8a5db3de.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a516a46a5f9051f925595d2dc8a5db3de"><span class="std std-ref">Function sequant::eval::detail::dump_build_norm</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aefaf7243b3ae75210f6026be76917cdc.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aefaf7243b3ae75210f6026be76917cdc"><span class="std std-ref">Function sequant::eval::detail::dump_cache_halt_skips</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ae4e85d8312531ce6c389101417d59087.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ae4e85d8312531ce6c389101417d59087"><span class="std std-ref">Template Function sequant::eval::detail::dump_cells_of</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a94996856a62a3bd447a1c4e363346fa5.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a94996856a62a3bd447a1c4e363346fa5"><span class="std std-ref">Function sequant::eval::detail::dump_cells_of_values</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a93e0345109707440e2e1fdce901a918f.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a93e0345109707440e2e1fdce901a918f"><span class="std std-ref">Function sequant::eval::detail::dump_enabled</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ae7681ae7e66d39c9ebb128d4d88ff012.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ae7681ae7e66d39c9ebb128d4d88ff012"><span class="std std-ref">Function sequant::eval::detail::dump_level_bump</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aafe6d1aa5a3204aa2ec9a26e5e055027.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aafe6d1aa5a3204aa2ec9a26e5e055027"><span class="std std-ref">Template Function sequant::eval::detail::dump_loop_chain</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1af7af45cdd7947217db1a8c2f86e947f5.html#exhale-function-namespacesequant-1-1eval-1-1detail-1af7af45cdd7947217db1a8c2f86e947f5"><span class="std std-ref">Template Function sequant::eval::detail::dump_norm2</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a6334bdc327c72f1b805bcea600875f14.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a6334bdc327c72f1b805bcea600875f14"><span class="std std-ref">Template Function sequant::eval::detail::dump_norm2_of</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a76c7f46f927131ea700212954422d010.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a76c7f46f927131ea700212954422d010"><span class="std std-ref">Template Function sequant::eval::detail::dump_occs_of</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aa6bd884057d3cd53bda1b176679e3e30.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aa6bd884057d3cd53bda1b176679e3e30"><span class="std std-ref">Template Function sequant::eval::detail::dump_opens</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aede505ea7fbed23bf435ac3d5f6ce789.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aede505ea7fbed23bf435ac3d5f6ce789"><span class="std std-ref">Template Function sequant::eval::detail::dump_read</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a09dffb55d6c98556013e18646d2b77ff.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a09dffb55d6c98556013e18646d2b77ff"><span class="std std-ref">Function sequant::eval::detail::dump_registry_residency</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a08684d78286a161e8c5b8ebb6dab81d1.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a08684d78286a161e8c5b8ebb6dab81d1"><span class="std std-ref">Function sequant::eval::detail::dump_resolver_served</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aeec72bbe7037856f1dd29a62ad3f785d.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aeec72bbe7037856f1dd29a62ad3f785d"><span class="std std-ref">Function sequant::eval::detail::dump_root_norm</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ab0e1603de7deedc1c8917245787d5c35.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ab0e1603de7deedc1c8917245787d5c35"><span class="std std-ref">Template Function sequant::eval::detail::dump_sched_collapse</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a085c22bdcae4e4d77e395e16020e75d9.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a085c22bdcae4e4d77e395e16020e75d9"><span class="std std-ref">Template Function sequant::eval::detail::dump_sched_materialize</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a176a3ecdf6a482babd1b6e0ee7921054.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a176a3ecdf6a482babd1b6e0ee7921054"><span class="std std-ref">Template Function sequant::eval::detail::dump_sched_nests</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ac4aa81ecd2f08081b3271c1f962b640a.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ac4aa81ecd2f08081b3271c1f962b640a"><span class="std std-ref">Template Function sequant::eval::detail::dump_schedule_tree</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a96774a2759855f24583a32e2f824eec7.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a96774a2759855f24583a32e2f824eec7"><span class="std std-ref">Function sequant::eval::detail::dump_use_induced</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a17fabae2fe08acbf67aa95fdfde40f3f.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a17fabae2fe08acbf67aa95fdfde40f3f"><span class="std std-ref">Function sequant::eval::detail::dump_value</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aa5d27162714f32ae8fe01c409286c21a.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aa5d27162714f32ae8fe01c409286c21a"><span class="std std-ref">Function sequant::eval::detail::emit_build_cell</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aae1ff433eb226a757fad6594b061d194.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aae1ff433eb226a757fad6594b061d194"><span class="std std-ref">Function sequant::eval::detail::emit_cells</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a9ab6b66f07ef2886111bec030fd9b332.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a9ab6b66f07ef2886111bec030fd9b332"><span class="std std-ref">Function sequant::eval::detail::enumerate_realized_levels</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a426ce1089c2cc41fa029a5edec757d63.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a426ce1089c2cc41fa029a5edec757d63"><span class="std std-ref">Function sequant::eval::detail::forced_split_levels</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a329ba4198c8f57657cfecf9da62c8903.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a329ba4198c8f57657cfecf9da62c8903"><span class="std std-ref">Function sequant::eval::detail::fork_subchain</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a9c57473ad3e183a2ba2ea5b7f10eb64d.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a9c57473ad3e183a2ba2ea5b7f10eb64d"><span class="std std-ref">Function sequant::eval::detail::has_accumulate_sum_output</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ac50e6ba316e2a60772e5c7bc4428c598.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ac50e6ba316e2a60772e5c7bc4428c598"><span class="std std-ref">Function sequant::eval::detail::home_depth_of</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a5481aaa2653012a47ab2dbd1b339517d.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a5481aaa2653012a47ab2dbd1b339517d"><span class="std std-ref">Template Function sequant::eval::detail::home_modes_in_cell_frame</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a02837a144ef0cf49159d15881e76529d.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a02837a144ef0cf49159d15881e76529d"><span class="std std-ref">Function sequant::eval::detail::last_op_exec</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a2289bd77bbb0d7abdce8f0360458ee8e.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a2289bd77bbb0d7abdce8f0360458ee8e"><span class="std std-ref">Function sequant::eval::detail::last_op_flops</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1accbda2a2a229e9472f559af32c7ab141.html#exhale-function-namespacesequant-1-1eval-1-1detail-1accbda2a2a229e9472f559af32c7ab141"><span class="std std-ref">Function sequant::eval::detail::lifetime_mask_intersect_in_place</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1af3948c923b04884f7a2795006d21ae7e.html#exhale-function-namespacesequant-1-1eval-1-1detail-1af3948c923b04884f7a2795006d21ae7e"><span class="std std-ref">Template Function sequant::eval::detail::make_cell_table_inputs</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a4d3a422e9770a8a916d3b8021130a7b2.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a4d3a422e9770a8a916d3b8021130a7b2"><span class="std std-ref">Function sequant::eval::detail::mode_is_external</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a18d48ea612ccd97fd2a94f6f0fb14a3a.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a18d48ea612ccd97fd2a94f6f0fb14a3a"><span class="std std-ref">Function sequant::eval::detail::ordered_block_fully_skipped</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a82139a8b1abefcc970b4c597fdb6ffd6.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a82139a8b1abefcc970b4c597fdb6ffd6"><span class="std std-ref">Function sequant::eval::detail::ordered_cache_halt_skip</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a1d209df335d400fb205a1e0085a840d5.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a1d209df335d400fb205a1e0085a840d5"><span class="std std-ref">Function sequant::eval::detail::ordered_elided_reads</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1af2d414b5fd0dad7a2914d494c0ab9d1d.html#exhale-function-namespacesequant-1-1eval-1-1detail-1af2d414b5fd0dad7a2914d494c0ab9d1d"><span class="std std-ref">Function sequant::eval::detail::ordered_forgo_block</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ae72afc5cb305cf82803e297450de4ed6.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ae72afc5cb305cf82803e297450de4ed6"><span class="std std-ref">Function sequant::eval::detail::ordered_forgo_plan</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ac54d861468872b617b6f4f08c01259ef.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ac54d861468872b617b6f4f08c01259ef"><span class="std std-ref">Function sequant::eval::detail::ordered_forgo_reads</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a355d3cba1341e4a1bbadb328b4884fcc.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a355d3cba1341e4a1bbadb328b4884fcc"><span class="std std-ref">Function sequant::eval::detail::ordered_forgo_visit</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a6ba421e9061c39d6e4d1d7276424ba84.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a6ba421e9061c39d6e4d1d7276424ba84"><span class="std std-ref">Function sequant::eval::detail::ordered_last_block_skips</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a279cca1b4a9b491e1826f348f51a72f1.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a279cca1b4a9b491e1826f348f51a72f1"><span class="std std-ref">Function sequant::eval::detail::ordered_last_block_skips_slot</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1af7dd3895b94d03b33be244b6ef3cf5df.html#exhale-function-namespacesequant-1-1eval-1-1detail-1af7dd3895b94d03b33be244b6ef3cf5df"><span class="std std-ref">Function sequant::eval::detail::ordered_last_cell_table_size</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1abfa0a45366f28c2f2aa272d2065f123f.html#exhale-function-namespacesequant-1-1eval-1-1detail-1abfa0a45366f28c2f2aa272d2065f123f"><span class="std std-ref">Function sequant::eval::detail::ordered_last_cell_table_size_slot</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a4d37168cb698146da97bec991263caf7.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a4d37168cb698146da97bec991263caf7"><span class="std std-ref">Function sequant::eval::detail::ordered_last_registry_residency</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ac4fa5f03670f459c0c2b26013b877fce.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ac4fa5f03670f459c0c2b26013b877fce"><span class="std std-ref">Function sequant::eval::detail::ordered_last_registry_residency_slot</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a391040682e3b9ddc4c3fce23456152d5.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a391040682e3b9ddc4c3fce23456152d5"><span class="std std-ref">Function sequant::eval::detail::ordered_n_batches_by_loop</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a0f6d6212808b15e4ad4574fbedd4f092.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a0f6d6212808b15e4ad4574fbedd4f092"><span class="std std-ref">Function sequant::eval::detail::ordered_op_counts</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a3bfd3fd62951dd34caf4c267fee29151.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a3bfd3fd62951dd34caf4c267fee29151"><span class="std std-ref">Function sequant::eval::detail::ordered_op_counts_slot</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a8741aad38ecbe64247d2e68ac18427d5.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a8741aad38ecbe64247d2e68ac18427d5"><span class="std std-ref">Function sequant::eval::detail::ordered_range_of</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a7aa723b2b55d4874be3743f77c071d4c.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a7aa723b2b55d4874be3743f77c071d4c"><span class="std std-ref">Function sequant::eval::detail::ordered_schedule_block_well_formed</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ab968fb85c932efb0292043a4343934f8.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ab968fb85c932efb0292043a4343934f8"><span class="std std-ref">Function sequant::eval::detail::ordered_schedule_dep_graph</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a2c331dbf92cd646bdd532f7da05051bd.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a2c331dbf92cd646bdd532f7da05051bd"><span class="std std-ref">Function sequant::eval::detail::ordered_schedule_topo_sort_steps</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aeb405becb553a6219a0ee567b5e9617f.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aeb405becb553a6219a0ee567b5e9617f"><span class="std std-ref">Function sequant::eval::detail::ordered_skip_closure</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ae274d93f19fca4f3233d534e84c7c6d7.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ae274d93f19fca4f3233d534e84c7c6d7"><span class="std std-ref">Function sequant::eval::detail::ordered_visit_skip_seedable(TableCell const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ae09bdd7f78be7fc899d6b7b4a1c3a49e.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ae09bdd7f78be7fc899d6b7b4a1c3a49e"><span class="std std-ref">Function sequant::eval::detail::ordered_visit_skip_seedable(TableCell const&amp;, CellScope const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ae9345a4d558348f9770e4ffd994ba99b.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ae9345a4d558348f9770e4ffd994ba99b"><span class="std std-ref">Function sequant::eval::detail::populate_build_scope_walk</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a27576b94395ecb8919b7326e0514a557.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a27576b94395ecb8919b7326e0514a557"><span class="std std-ref">Function sequant::eval::detail::read_multiplicity</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a3e47d9419925d8ee945b9926c6e2afb3.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a3e47d9419925d8ee945b9926c6e2afb3"><span class="std std-ref">Function sequant::eval::detail::residency_scope</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a97bb3dea9db91cd66a521e3d5368ae84.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a97bb3dea9db91cd66a521e3d5368ae84"><span class="std std-ref">Template Function sequant::eval::detail::run_ordered_contracted_block</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ac7bf00fbcf94b9ceaf4c0ede8d6163db.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ac7bf00fbcf94b9ceaf4c0ede8d6163db"><span class="std std-ref">Template Function sequant::eval::detail::run_ordered_schedule_pre_results</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a325c83e8c23ef9425172bcad6ed7c356.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a325c83e8c23ef9425172bcad6ed7c356"><span class="std std-ref">Function sequant::eval::detail::same_key</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a99dd8a9be8eeb1fb48bda55cfacaed72.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a99dd8a9be8eeb1fb48bda55cfacaed72"><span class="std std-ref">Function sequant::eval::detail::sched_json_escape</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1ab6f49c5af49651817385eaf4ff727100.html#exhale-function-namespacesequant-1-1eval-1-1detail-1ab6f49c5af49651817385eaf4ff727100"><span class="std std-ref">Template Function sequant::eval::detail::sched_json_index_array</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a89efd189c49bdc4cfddf20372bd1bad6.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a89efd189c49bdc4cfddf20372bd1bad6"><span class="std std-ref">Function sequant::eval::detail::sched_mode_name</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1aa27236760eb1750907942c44b5a127eb.html#exhale-function-namespacesequant-1-1eval-1-1detail-1aa27236760eb1750907942c44b5a127eb"><span class="std std-ref">Function sequant::eval::detail::set_residency_flags</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a932608aad489196d8d8f71903e6e6d7e.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a932608aad489196d8d8f71903e6e6d7e"><span class="std std-ref">Function sequant::eval::detail::slicing_instance</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1afbe23f4e7ee010257c61a5a1428ebf0e.html#exhale-function-namespacesequant-1-1eval-1-1detail-1afbe23f4e7ee010257c61a5a1428ebf0e"><span class="std std-ref">Template Function sequant::eval::detail::slot_modes_of</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1eval_1_1detail_1a61841b282b8e0a92a11d31df37e4037e.html#exhale-function-namespacesequant-1-1eval-1-1detail-1a61841b282b8e0a92a11d31df37e4037e"><span class="std std-ref">Template Function sequant::eval::detail::stamp_residency_impl</span></a></p></li>
+</ul>
+</section>
+<section id="typedefs">
+<h2>Typedefs<a class="headerlink" href="#typedefs" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="typedef_namespacesequant_1_1eval_1_1detail_1ad4459d1336cdc3c5672eeaa6220744f4.html#exhale-typedef-namespacesequant-1-1eval-1-1detail-1ad4459d1336cdc3c5672eeaa6220744f4"><span class="std std-ref">Typedef sequant::eval::detail::BatchContext</span></a></p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Sep 25, 2026 6:19:09 PM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Namespace sequant::eval::detail</a><ul>
+<li><a class="reference internal" href="#detailed-description">Detailed Description</a></li>
+<li><a class="reference internal" href="#classes">Classes</a></li>
+<li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#typedefs">Typedefs</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

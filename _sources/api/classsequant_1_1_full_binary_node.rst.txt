@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_full_binary_node:
+
+Template Class FullBinaryNode
+=============================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::FullBinaryNode
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

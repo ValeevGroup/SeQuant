@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_usage_set:
+
+Class UsageSet
+==============
+
+- Defined in :ref:`file_SeQuant_core_export_context.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::UsageSet
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

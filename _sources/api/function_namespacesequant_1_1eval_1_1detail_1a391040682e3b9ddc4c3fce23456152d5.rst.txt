@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a391040682e3b9ddc4c3fce23456152d5:
+
+Function sequant::eval::detail::ordered_n_batches_by_loop
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_n_batches_by_loop(OrderedSchedule const&, std::function<std::size_t(Index const&)> const&, BackendArrayOps const *)
+   :project: SeQuant

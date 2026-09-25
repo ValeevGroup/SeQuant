@@ -1,0 +1,27 @@
+.. _exhale_struct_structsequant_1_1eval_1_1_lookup_meter:
+
+Struct LookupMeter
+==================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_lookup_meter_1_1_reporter`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::LookupMeter
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

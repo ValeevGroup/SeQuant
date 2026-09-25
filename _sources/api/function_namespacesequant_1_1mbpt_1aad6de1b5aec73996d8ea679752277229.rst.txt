@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1aad6de1b5aec73996d8ea679752277229:
+
+Function sequant::mbpt::biorthogonal_transform(const ExprPtr&, const container::svector<container::svector<sequant::SlottedIndex>>&, double)
+============================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::biorthogonal_transform(const ExprPtr&, const container::svector<container::svector<sequant::SlottedIndex>>&, double)
+   :project: SeQuant

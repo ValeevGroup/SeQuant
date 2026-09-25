@@ -1,0 +1,29 @@
+
+.. _program_listing_file_SeQuant_core_utility_overloads.hpp:
+
+Program Listing for File overloads.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_overloads.hpp>` (``SeQuant/core/utility/overloads.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_UTILITY_OVERLOADS_HPP
+   #define SEQUANT_CORE_UTILITY_OVERLOADS_HPP
+   
+   #include <initializer_list>
+   
+   namespace sequant {
+   
+   class Nonconstructible {
+    private:
+     Nonconstructible() = default;
+   };
+   
+   using EmptyInitializerList = std::initializer_list<Nonconstructible>;
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CORE_UTILITY_OVERLOADS_HPP

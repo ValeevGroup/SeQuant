@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1aba2f65a5fec0171aac73b513eac05fbb:
+
+Typedef sequant::FOperator
+==========================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::FOperator
+   :project: SeQuant

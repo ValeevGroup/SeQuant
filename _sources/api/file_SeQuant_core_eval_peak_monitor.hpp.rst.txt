@@ -1,0 +1,70 @@
+
+.. _file_SeQuant_core_eval_peak_monitor.hpp:
+
+File peak_monitor.hpp
+=====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval>` (``SeQuant/core/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/eval/peak_monitor.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_eval_peak_monitor.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``cstddef``
+
+- ``functional``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_backends_dryrun_meter.hpp`
+
+- :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__eval`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_event`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_live_entry`
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_peak_monitor`
+

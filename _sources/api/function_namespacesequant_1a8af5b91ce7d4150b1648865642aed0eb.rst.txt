@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8af5b91ce7d4150b1648865642aed0eb:
+
+Function sequant::make_kronecker
+================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_kronecker(const Index&, const Index&)
+   :project: SeQuant
