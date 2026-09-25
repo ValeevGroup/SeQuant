@@ -20,7 +20,7 @@ Mandatory
 
 * `CMake <https://cmake.org/>`_ 3.28 or later
 * `C++20 compatible compiler <https://en.cppreference.com/w/cpp/compiler_support#cpp20>`_
-* `Boost <https://www.boost.org/>`_ 1.81 or later
+* `Boost <https://www.boost.org/>`_ 1.81 or later (1.85 or later with MSVC)
 * `Range-V3 <https://github.com/ericniebler/range-v3.git>`_ 0.12.0 or later
 * `Eigen3 <http://eigen.tuxfamily.org/>`_ 3.0 or later
 * `libperm <https://github.com/Krzmbrzl/libPerm>`_
@@ -68,8 +68,9 @@ Useful CMake Variables
      - `BUILD_TESTING <https://cmake.org/cmake/help/latest/variable/BUILD_TESTING.html>`_
      - Enables test targets, e.g. ``check-sequant``.
    * - SEQUANT_SKIP_LONG_TESTS
-     - OFF (ON in ``Debug`` builds)
-     - Skip long test cases within unit and integration tests.
+     - OFF
+     - Skip long test cases within unit and integration tests. ``Debug`` configurations always skip them, regardless of
+       this option.
    * - SEQUANT_BTAS
      - OFF
      - SeQuant will look for (or build) `BTAS tensor library <https://github.com/ValeevGroup/BTAS>` and enable its use as an evaluation backend.
@@ -139,3 +140,13 @@ Now you can build SeQuant running the following command in the source directory:
     cmake --build build -S .
     cmake --build build --target check-sequant # for testing
     cmake --build build --target install
+
+
+Windows
+----------
+
+SeQuant needs more stack space than the 1 MB that Windows reserves per thread by default (Linux and macOS typically
+provide 8 MB). SeQuant's own executables are therefore linked with :code:`/STACK:8388608`, and executables using
+SeQuant must be linked with an equivalent stack reserve too, e.g. via
+:code:`target_link_options(<target> PRIVATE /STACK:8388608)`. This reserve is the default for every thread of the
+program; threads created with an explicit stack size that call into SeQuant need a comparable size.

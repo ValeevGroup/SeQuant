@@ -214,9 +214,14 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
   return tensor;
 }
 
-// Helper function to properly escape shell arguments for POSIX shells
-// Uses single quotes and escapes embedded single quotes
+// Helper function to properly quote a shell argument for the platform's
+// shell: cmd.exe on Windows (double quotes; Windows paths cannot contain a
+// double quote, so nothing inside needs escaping), a POSIX shell otherwise
+// (single quotes, with embedded single quotes escaped)
 std::string shell_escape(const std::string &arg) {
+#ifdef _WIN32
+  return "\"" + arg + "\"";
+#else
   std::string result = "'";
   for (char c : arg) {
     if (c == '\'') {
@@ -229,6 +234,7 @@ std::string shell_escape(const std::string &arg) {
   }
   result += "'";
   return result;
+#endif
 }
 
 // Execute Python code and check for errors
@@ -272,22 +278,25 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
   // Execute Python (use CMake-discovered Python executable)
   std::string python_exe = SEQUANT_UNITTESTS_PYTHON_EXECUTABLE;
   // Execute Python directly with properly escaped script path
-  std::string cmd = shell_escape(python_exe) + " " +
-                    shell_escape(script_path.string()) + " 2>&1";
-  FILE *pipe = popen(cmd.c_str(), "r");
-  if (!pipe) return false;
-
-  char buffer[256];
-  std::string output;
-  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-    output += buffer;
-  }
-
-  int exit_code = pclose(pipe);
+  std::string cmd =
+      shell_escape(python_exe) + " " + shell_escape(script_path.string());
+#ifdef _WIN32
+  // std::system() on Windows runs the command through `cmd.exe /c`, which
+  // strips exactly the first and last character of the command line whenever
+  // it starts with a quote -- fine for a single quoted token, but here the
+  // command is two quoted tokens (executable, then script path) separated by
+  // a space, so that stripping corrupts the quoting of the first token
+  // instead: cmd.exe ends up trying to run the executable path's prefix up to
+  // its first space (e.g. "C:/Program") as the command. Wrapping the whole
+  // command in one more, redundant pair of quotes gives cmd.exe's stripping
+  // something harmless to remove instead.
+  cmd = "\"" + cmd + "\"";
+#endif
+  int exit_code = std::system(cmd.data());
+  if (exit_code < 0) return false;
 
   if (exit_code != 0) {
     std::cerr << "Python execution failed with exit code " << exit_code << "\n";
-    std::cerr << "Output:\n" << output << "\n";
     return false;
   }
 

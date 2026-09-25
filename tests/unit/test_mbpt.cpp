@@ -1286,6 +1286,10 @@ SECTION("MRSO") {
   }
 
   // H2 ** T2 ** T2 -> 0
+#ifndef SEQUANT_SKIP_LONG_TESTS
+  // Cross-checks that use_topology's contraction-symmetry exploitation
+  // agrees with the brute-force (use_topology=false) path; the brute-force
+  // side dominates this section's runtime.
   SECTION("wick(H2**T2**T2 -> 0)") {
     // first without use of topology
     auto result = t::ref_av(t::h(2) * t::t(2) * t::t(2),
@@ -1296,6 +1300,7 @@ SECTION("MRSO") {
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   // non-normal-ordered one-body operator in product form: h * a†_p * a_q
   SECTION("ref_av of non-normal-ordered one-body product") {
@@ -1475,6 +1480,7 @@ SECTION("manuscript-examples") {
     REQUIRE(result.size() == 21);
   }
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("EOM-CC Equations") {
     // connectivity info for right and left amplitude equations
     const auto r_connect = concat(
@@ -1508,7 +1514,9 @@ SECTION("manuscript-examples") {
     REQUIRE(r_IP.size() == 32);
     REQUIRE(l_IP.size() == 24);
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
   SECTION("CC Perturbed Amplitudes") {
     // connectivity info for perturbed t and λ amplitude equations
     const auto t_connect =
@@ -1539,6 +1547,7 @@ SECTION("manuscript-examples") {
     REQUIRE(t.size() == 58);
     REQUIRE(λ.size() == 63);
   }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("Custom MBPT Operators") {
     using namespace sequant;

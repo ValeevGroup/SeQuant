@@ -11,18 +11,38 @@ function(target_warnings_as_errors TARGET)
 
     if (IS_GNU_LIKE_COMPILER)
         target_compile_options("${TARGET}" PRIVATE "-Werror")
+    elseif(MSVC)
+        target_compile_options("${TARGET}" PRIVATE "/WX")
     else()
         message(DEBUG "Warnings-as-errors not supported for compiler '${CMAKE_CXX_COMPILER_ID}' - disabling…")
     endif()
 endfunction()
 
-function(target_set_warning_flags TARGET)
+function(target_set_compiler_flags TARGET)
     __check_gnu_like_compiler()
 
+    if (MSVC)
+        # By default MSVC is not standard-compliant in its preprocessor implementation
+        # but we need it to be (partially in headers, which is why this is a public option)
+        target_compile_options("${TARGET}" PUBLIC "/Zc:preprocessor")
+        # By default MSVC does not set the __cplusplus macro to the correct value
+        # That breaks any code that tries to be compatible with different C++ standards
+        target_compile_options("${TARGET}" PUBLIC "/Zc:__cplusplus")
+        # Don't error due to object files being too big
+        target_compile_options("${TARGET}" PRIVATE "/bigobj")
+        # Make MSVC use and understand UTF-8 encoding in source files
+        target_compile_options("${TARGET}" PUBLIC "/utf-8")
+
+        # Increase the available stack memory to what appears to be the default on Linux/macOS (8MB)
+        target_link_options("${TARGET}" PRIVATE "/STACK:8388608")
+    endif()
+
     if (NOT PROJECT_IS_TOP_LEVEL)
+        # Disable compiler warnings
         if (IS_GNU_LIKE_COMPILER)
-            # Disable compiler warnings
             target_compile_options("${TARGET}" PRIVATE "-w")
+        elseif(MSVC)
+            target_compile_options("${TARGET}" PRIVATE "/w")
         endif()
 
         return()
@@ -35,6 +55,7 @@ function(target_set_warning_flags TARGET)
     if (IS_GNU_LIKE_COMPILER)
         target_compile_options("${TARGET}" PRIVATE "-Wall" "-Wpedantic" "-Wextra" "-Wno-sign-conversion" "-Wno-sign-compare" "-Wno-parentheses")
     endif()
+
     if (CMAKE_COMPILER_IS_GNUCXX)
         # Certain kinds of warnings are no longer suppressed inside system headers (under all circumstances) when using GCC 12+
         # Hence, we have to ensure we're not causing a compile error for those warnings as the warning might
@@ -50,6 +71,7 @@ function(target_set_warning_flags TARGET)
         # causing it to effectively only create noise. Hence, we disable it entirely.
         target_compile_options("${TARGET}" PRIVATE "-Wno-maybe-uninitialized")
     endif()
+
     if (CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|AppleClang)$")
         # This warning can be a bit odd in that it seems like some Clang versions emit it incorrectly,
         # others don't emit it and some emit it correctly but in places where fixing the code causes
@@ -134,7 +156,29 @@ elseif (APPLE)
 endif()
 
 function(target_set_optimization_flags TARGET)
-	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	# CMAKE_BUILD_TYPE only reflects the active configuration for a single-config
+	# generator (Ninja, Makefiles); for a multi-config generator (Visual Studio,
+	# Ninja Multi-Config) it is always empty at configure time, since one configure
+	# step services every configuration at once. Bail out only if EVERY configuration
+	# this generator will ever build is Debug (matching the single-config check this
+	# replaces); otherwise proceed and let the per-config guards further down (generator
+	# expressions for hand-set flags, INTERPROCEDURAL_OPTIMIZATION_<CONFIG> for the
+	# CMake-driven path) keep Debug itself LTO-free among the configurations that do want it.
+	if (CMAKE_CONFIGURATION_TYPES)
+		set(_seq_any_nondebug_config FALSE)
+		foreach(_seq_config IN LISTS CMAKE_CONFIGURATION_TYPES)
+			if (NOT _seq_config STREQUAL "Debug")
+				set(_seq_any_nondebug_config TRUE)
+			endif()
+		endforeach()
+	else()
+		if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+			set(_seq_any_nondebug_config FALSE)
+		else()
+			set(_seq_any_nondebug_config TRUE)
+		endif()
+	endif()
+	if (NOT _seq_any_nondebug_config)
 		return()
 	endif()
 
@@ -190,25 +234,45 @@ function(target_set_optimization_flags TARGET)
 			# with explicitly asking for fat LTO object files.
 			# Besides, it seems like full LTO achieves quite a bit better optimizations
 			# with Clang.
+			# Wrapped in $<CONFIG:Debug>'s negation (rather than relying on the early
+			# return above alone) so that under a multi-config generator, a Debug build
+			# stays LTO-free even though some other configuration here wants it.
 			if (SEQUANT_LTO_AUTO_SUPPORTED)
-				target_compile_options("${TARGET}" PRIVATE -flto=auto)
-				target_link_options("${TARGET}" PRIVATE -flto=auto)
+				target_compile_options("${TARGET}" PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
+				target_link_options("${TARGET}" PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
 			else()
-				target_compile_options("${TARGET}" PRIVATE -flto)
-				target_link_options("${TARGET}" PRIVATE -flto)
+				target_compile_options("${TARGET}" PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-flto>")
+				target_link_options("${TARGET}" PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-flto>")
 			endif()
 
 			# Only static libraries benefit from "fat" objects (see above): everything else
 			# is linked by us, so the extra machine-code copy is never used - while producing it
 			# costs an entire second compilation of every translation unit on GCC.
 			if (SEQUANT_FAT_LTO_FLAG_SUPPORTED AND IS_ARCHIVE_LIKE_TARGET)
-				target_compile_options("${TARGET}" PRIVATE -ffat-lto-objects)
+				target_compile_options("${TARGET}" PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-ffat-lto-objects>")
 			endif()
 		else()
 			if (NOT SEQUANT_CAN_RELY_ON_CMAKE_LTO)
 				message(FATAL_ERROR "Requested LTO but CMake doesn't know how to enable it for your compiler - Use SEQUANT_LTO=OFF")
 			endif()
-			set_target_properties("${TARGET}" PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+			# INTERPROCEDURAL_OPTIMIZATION (unsuffixed) is a fallback CMake applies to
+			# EVERY configuration under a multi-config generator, Debug included; set the
+			# per-configuration property for each non-Debug configuration instead so Debug
+			# is left alone there. A single-config generator has no per-config properties
+			# to set (CMAKE_CONFIGURATION_TYPES is empty) and takes the plain property,
+			# exactly as before -- this function already returned above whenever that one
+			# configuration is Debug.
+			if (CMAKE_CONFIGURATION_TYPES)
+				foreach(_seq_config IN LISTS CMAKE_CONFIGURATION_TYPES)
+					if (NOT _seq_config STREQUAL "Debug")
+						string(TOUPPER "${_seq_config}" _seq_config_upper)
+						set_target_properties("${TARGET}" PROPERTIES
+							"INTERPROCEDURAL_OPTIMIZATION_${_seq_config_upper}" ON)
+					endif()
+				endforeach()
+			else()
+				set_target_properties("${TARGET}" PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+			endif()
 		endif()
 	endif()
 endfunction()

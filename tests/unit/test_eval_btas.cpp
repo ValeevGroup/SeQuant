@@ -27,6 +27,7 @@
 #include <range/v3/view/split.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <cmath>
 #include <complex>
 #include <sstream>
 #include <string>
@@ -868,6 +869,68 @@ TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
     auto cache =
         cache_manager(std::array{node}, [](auto const&) { return false; });
     check(evaluate(node, node->annot(), yield, cache)->get<BTensorD>());
+  }
+}
+
+// A product that contracts every index of both operands is a bilinear dot,
+// sum_k L[k] R[k], with no conjugation: SeQuant spells a conjugated operand
+// explicitly (a Conjugate value modifier, an EvalOp::Adjoint node), so the
+// backend must not conjugate on its own. BTAS's btas::dot is dotc (BLAS zdotc,
+// the first operand conjugated), which is only observable on complex data.
+TEST_CASE("eval_dot_complex_btas", "[eval_btas]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+  using BTensorC = btas::Tensor<C>;
+
+  // arbitrary distinct annotation labels; x is a batch axis
+  const long k = 3, x = 9;
+  const std::size_t nk = 4, nx = 3;
+
+  // deterministic fill with nonzero imaginary parts, distinct per element
+  auto make = [](std::initializer_list<std::size_t> ext, double phase) {
+    BTensorC t{btas::Range{container::svector<std::size_t>{ext}}};
+    double v = 0.0;
+    t.generate([&v, phase]() {
+      v += 1.0;
+      return C{std::cos(v * phase) * v / 7.0, std::sin(v * phase) * v / 5.0};
+    });
+    return t;
+  };
+  auto annots = [](container::svector<long> l, container::svector<long> r,
+                   container::svector<long> c) {
+    return std::array<std::any, 3>{std::move(l), std::move(r), std::move(c)};
+  };
+  auto prod = [](BTensorC const& L, BTensorC const& R,
+                 std::array<std::any, 3> const& ann) {
+    ResultPtr lr = eval_result<ResultTensorBTAS<BTensorC>>(L);
+    ResultPtr rr = eval_result<ResultTensorBTAS<BTensorC>>(R);
+    return lr->prod(*rr, ann, DeNest::False);
+  };
+
+  SECTION("full contraction: L[k] R[k] -> scalar") {
+    auto L = make({nk}, 0.7), R = make({nk}, 1.3);
+    auto res = prod(L, R, annots({k}, {k}, {}));
+    REQUIRE(res->is<ResultScalar<C>>());
+    C ref{0.0, 0.0};
+    for (std::size_t ik = 0; ik < nk; ++ik) ref += L(ik) * R(ik);
+    auto const got = res->as<ResultScalar<C>>().value();
+    CHECK(got.real() == Catch::Approx(ref.real()).margin(1e-12));
+    CHECK(got.imag() == Catch::Approx(ref.imag()).margin(1e-12));
+  }
+
+  SECTION("full contraction of the non-batch indices: L[k,x] R[k,x] -> C[x]") {
+    auto L = make({nk, nx}, 0.7), R = make({nk, nx}, 1.3);
+    auto res = prod(L, R, annots({k, x}, {k, x}, {x}));
+    REQUIRE(res->is<ResultTensorBTAS<BTensorC>>());
+    auto const& got = res->get<BTensorC>();
+    REQUIRE(got.rank() == 1);
+    REQUIRE(got.extent(0) == nx);
+    for (std::size_t ix = 0; ix < nx; ++ix) {
+      C ref{0.0, 0.0};
+      for (std::size_t ik = 0; ik < nk; ++ik) ref += L(ik, ix) * R(ik, ix);
+      CHECK(got(ix).real() == Catch::Approx(ref.real()).margin(1e-12));
+      CHECK(got(ix).imag() == Catch::Approx(ref.imag()).margin(1e-12));
+    }
   }
 }
 

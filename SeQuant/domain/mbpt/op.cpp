@@ -632,7 +632,7 @@ ExprPtr OpMaker<S>::operator()(
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt, full_label, make_tensor](
+        [opsymm_opt, full_label, make_tensor](
             const auto& creidxs, const auto& annidxs, const auto& batchidxs,
             Symmetry opsymm) {
           // mbpt operators act on indistinguishable particles, hence are
@@ -646,7 +646,7 @@ ExprPtr OpMaker<S>::operator()(
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt, full_label, make_tensor](
+      [opsymm_opt, full_label, make_tensor](
           const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
         // mbpt operators act on indistinguishable particles, hence are
         // particle (column) symmetric

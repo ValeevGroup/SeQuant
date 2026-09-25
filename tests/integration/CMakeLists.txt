@@ -1,46 +1,36 @@
 set(TEST_CASES
     "antisymmetrizer.cpp"
+    # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free).
+    # The "real" keyword toggles every IndexSpace's scalar field to real;
+    # this promotes Hermitian integrals to braket-Symm, exercising the
+    # bra<->ket-swap canonicalization path that does not fire under the
+    # default complex (Conjugate) field.
+    "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf|2 t std sf real|2 t csv sf real|2 lambda std sf real|2 lambda csv sf real"
+    # Single-Reference open-shell equation generation (spin-traced)
+    "osstcc.cpp"
+    # Equation-of-motion Coupled-Cluster
+    "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R|2 1h3p R|2 4h2p R|3 3h3p R"
+    # Unitary Coupled-Cluster, both H̄ expansions (BCH and Bernoulli).
+    "ucc.cpp -> 2 bch 2|2 bch 3|2 bernoulli 2|2 bernoulli 3"
 )
-if (NOT SEQUANT_INTERNAL_SKIP_LONG_TESTS)
-    list(APPEND TEST_CASES
-        # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free).
-        # The "real" keyword toggles every IndexSpace's scalar field to real;
-        # this promotes Hermitian integrals to braket-Symm, exercising the
-        # bra<->ket-swap canonicalization path that does not fire under the
-        # default complex (Conjugate) field.
-        "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf|2 t std sf real|2 t csv sf real|2 lambda std sf real|2 lambda csv sf real"
-        # Single-Reference open-shell equation generation (spin-traced)
-        "osstcc.cpp"
-        # Equation-of-motion Coupled-Cluster
-        "eomcc.cpp -> 2 2h2p R|2 1h2p R|2 2h1p R|2 3h1p R|2 1h3p R|2 4h2p R|3 3h3p R"
-        # Unitary Coupled-Cluster, both H̄ expansions (BCH and Bernoulli).
-        "ucc.cpp -> 2 bch 2|2 bch 3|2 bernoulli 2|2 bernoulli 3"
-    )
 
-    if (TARGET Eigen3::Eigen)
-        # these examples require Eigen for full functionality
-        list(APPEND TEST_CASES
-            # Single-Reference closed-shell Coupled-Cluster equation generation
-            "stcc.cpp -> |2 v1 naive|2 v1|2 v2|3 v1|3 v2|4 v1|4 v2"
-        )
-    endif()
-else()
+if (TARGET Eigen3::Eigen)
+    # these examples require Eigen for full functionality
     list(APPEND TEST_CASES
-        # Single-Reference Coupled-Cluster equation generation (reduced test set)
-        "srcc.cpp ->  |2 t csv sf"
-        # Equation-of-motion Coupled-Cluster (reduced test set)
-        "eomcc.cpp -> 2 2h1p R"
-        # Unitary Coupled-Cluster (reduced test set: one variant per expansion)
-        "ucc.cpp -> 2 bch 2|2 bernoulli 2"
+        # Single-Reference closed-shell Coupled-Cluster equation generation
+        "stcc.cpp -> |2 v1 naive|2 v1|2 v2|3 v1|3 v2|4 v1|4 v2"
     )
-    if (TARGET Eigen3::Eigen)
-        # these examples require Eigen for full functionality
-        list(APPEND TEST_CASES
-                # Single-Reference closed-shell Coupled-Cluster equation generation
-                "stcc.cpp -> |2 v1 naive|3 v1|3 v2"
-        )
-    endif()
 endif()
+
+# The only tests that stay enabled when long tests are skipped
+set(SHORT_TESTS
+    "sequant/integration/antisymmetrizer"
+    "sequant/integration/srcc/default"
+    "sequant/integration/srcc/2_t_csv_sf"
+    "sequant/integration/eomcc/2_2h1p_R"
+    "sequant/integration/ucc/2_bch_2"
+    "sequant/integration/stcc/2_v1_naive"
+)
 
 foreach(current IN LISTS TEST_CASES)
     if (NOT "${current}" MATCHES "([a-zA-z0-9_-]+\\.cpp) *(-> *(.+))?")
@@ -54,12 +44,11 @@ foreach(current IN LISTS TEST_CASES)
     add_executable(${test_name} ${BUILD_BY_DEFAULT} ${test_source})
     set_target_properties(${test_name} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
     target_link_libraries(${test_name} PRIVATE SeQuant)
+    target_set_compiler_flags(${test_name})
 
-    if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
-        target_compile_definitions(${test_name} PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
-    endif()
+    target_compile_definitions(${test_name} PRIVATE
+        $<${SEQUANT_SKIP_LONG_TESTS_GENEX}:SEQUANT_SKIP_LONG_TESTS=1>)
 
-    target_set_warning_flags("${test_name}")
     target_set_optimization_flags("${test_name}")
 
     set(variant_names "")
@@ -91,6 +80,12 @@ foreach(current IN LISTS TEST_CASES)
             list(APPEND variant_names "sequant/integration/${test_name}/${variant_name}")
         endforeach()
     endif()
+
+    foreach(current IN LISTS variant_names)
+        if (NOT current IN_LIST SHORT_TESTS)
+            set_tests_properties("${current}" PROPERTIES DISABLED "${SEQUANT_SKIP_LONG_TESTS_GENEX}")
+        endif()
+    endforeach()
 
     build_test_as_needed(${test_name} "sequant/integration/${test_name}" variant_names)
 endforeach()

@@ -1091,4 +1091,104 @@ TEST_CASE("utilities", "[utilities]") {
       }
     }
   }
+
+  SECTION("topological_order_indexed") {
+    std::vector<std::pair<std::vector<std::vector<std::size_t>>,
+                          std::vector<std::size_t>>>
+        tests;
+    // Tests with unique topological order (same graphs as the "topological"
+    // section above, but with dependencies expressed directly as indices)
+    tests.emplace_back(
+        std::vector<std::vector<std::size_t>>{
+            {2},
+            {},
+            {1},
+        },
+        std::vector<std::size_t>{1, 2, 0});
+    tests.emplace_back(
+        std::vector<std::vector<std::size_t>>{
+            {1},
+            {},
+            {1, 0},
+        },
+        std::vector<std::size_t>{1, 0, 2});
+    tests.emplace_back(
+        std::vector<std::vector<std::size_t>>{
+            {2},
+            {3},
+            {},
+            {2, 0},
+        },
+        std::vector<std::size_t>{2, 0, 3, 1});
+
+    // Tests with ambiguous topological order
+    const std::size_t ambiguous_start = tests.size();
+    tests.emplace_back(
+        std::vector<std::vector<std::size_t>>{
+            {},
+            {},
+            {1},
+            {0},
+        },
+        std::vector<std::size_t>{0, 1, 2, 3});
+    tests.emplace_back(
+        std::vector<std::vector<std::size_t>>{
+            {},
+            {},
+            {0, 1, 3},
+            {0},
+        },
+        std::vector<std::size_t>{0, 1, 3, 2});
+
+    for (std::size_t i = 0; i < tests.size(); ++i) {
+      const auto& [deps, expected_order] = tests.at(i);
+      CAPTURE(i);
+
+      auto get_deps = [&](std::size_t idx) -> const std::vector<std::size_t>& {
+        return deps.at(idx);
+      };
+
+      if (i < ambiguous_start) {
+        REQUIRE(topological_order_indexed(deps.size(), get_deps) ==
+                expected_order);
+      }
+
+      // Our tests are set up such that in case of ambiguity the indices
+      // are listed in increasing order
+      REQUIRE(topological_order_indexed(deps.size(), get_deps, std::less<>{}) ==
+              expected_order);
+
+      if (i >= ambiguous_start) {
+        // Test validity of order by simulating an execution
+        std::set<std::size_t> processed;
+        const auto order =
+            topological_order_indexed(deps.size(), get_deps, std::greater<>{});
+        REQUIRE(order != expected_order);
+
+        for (std::size_t current_idx : order) {
+          REQUIRE(processed.find(current_idx) == processed.end());
+          for (std::size_t dep : deps.at(current_idx)) {
+            REQUIRE(processed.find(dep) != processed.end());
+          }
+
+          processed.emplace(current_idx);
+        }
+      }
+    }
+
+    SECTION("cycle detection") {
+      auto get_deps = [](std::size_t idx) -> std::vector<std::size_t> {
+        switch (idx) {
+          case 0:
+            return {1};
+          case 1:
+            return {0};
+          default:
+            return {};
+        }
+      };
+
+      REQUIRE_THROWS_AS(topological_order_indexed(2, get_deps), Exception);
+    }
+  }
 }

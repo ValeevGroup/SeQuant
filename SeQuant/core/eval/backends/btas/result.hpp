@@ -255,7 +255,8 @@ T batched_contract(typename T::numeric_type alpha, T const& L, Annot const& la,
         T Rb = slice(Rp, b * rrsz, rrext, rrsz);
         T Rb2;
         btas::permute(Rb, rr, Rb2, rl);  // align for the dot
-        d = btas::dot(Lb, Rb2);
+        // bilinear (btas::dot is dotc, which conjugates the first operand)
+        d = btas::dotu(Lb, Rb2);
       }
       C.data()[b] = alpha * d;
     } else if (rl.empty() || rr.empty()) {
@@ -343,7 +344,8 @@ class ResultTensorBTAS final : public Result {
     if (a.this_annot.empty()) {
       T rres;
       btas::permute(other.get<T>(), a.rannot, rres, a.lannot);
-      numeric_type const d = btas::dot(get<T>(), rres);
+      // bilinear (btas::dot is dotc, which conjugates the first operand)
+      numeric_type const d = btas::dotu(get<T>(), rres);
       detail::log_btas(detail::ords_to_labels(a.lannot), " * ",
                        detail::ords_to_labels(a.rannot), " = ", d, "\n");
       return eval_result<ResultScalar<numeric_type>>(d);
