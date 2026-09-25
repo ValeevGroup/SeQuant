@@ -94,7 +94,7 @@ class TextGenerator : public Generator<Context> {
                       ranges::views::transform([&](const Index &idx) {
                         return represent(idx, ctx);
                       }) |
-                      ranges::views::join(", "s) | ranges::to<std::string>();
+                      ranges::views::join(", "sv) | ranges::to<std::string>();
 
     representation += "]";
 

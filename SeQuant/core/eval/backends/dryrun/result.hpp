@@ -226,7 +226,7 @@ inline void check_accumulate_ranges(
 /// mode_batches bodies are one-line forwards, not near-duplicated logic.
 ///
 struct DryRunOps {
-  [[nodiscard]] static ResultPtr sum(container::svector<Index> const& idx,
+  [[nodiscard]] static ResultPtr sum(container::svector<Index> const&,
                                      ExtentOverrides const& ov,
                                      std::shared_ptr<CostModel const> const& cm,
                                      Result const& other,

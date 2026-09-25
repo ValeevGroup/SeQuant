@@ -1047,7 +1047,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   SEQUANT_ASSERT(nvertex == graph.vertex_types.size());
 
   // Create the actual BLISS graph object
-  graph.bliss_graph = std::make_unique<bliss::Graph>(nvertex);
+  graph.bliss_graph =
+      std::make_unique<bliss::Graph>(static_cast<unsigned int>(nvertex));
 
   for (const std::pair<std::size_t, std::size_t> &current_edge : edges) {
     graph.bliss_graph->add_edge(current_edge.first, current_edge.second);

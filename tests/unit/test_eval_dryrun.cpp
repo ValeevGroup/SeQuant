@@ -4096,11 +4096,10 @@ TEST_CASE("canon_indices preserves distinct composite proto pairs",
   // a1<i_1,i_2> and a2<i_2,i_3> -- composites on distinct pairs, spanning 3
   // occ. This is the (binary) node whose canon_indices the static cost walk
   // sizes; check IT preserves the distinct pairs too.
-  Index const i4{L"i_4"};
-  Tensor const A(L"A", bra{a1, i4}, ket{}, Symmetry::Nonsymm);
-  Tensor const B(L"B", bra{a2}, ket{i4}, Symmetry::Nonsymm);
-  auto const prod = ex<Product>(ExprPtrList{ex<Tensor>(A), ex<Tensor>(B)});
-  auto const node = binarize(prod);
+  const ResultExpr expr = deserialize<ResultExpr>(
+      "R{a1<i_1,i_2>,a2<i_2,i_3>;} = A{a1<i_1,i_2>,i_4;} * B{a2<i_2,i_3>; "
+      "i_4}");
+  auto const node = binarize(expr);
   auto const& cci = node->canon_indices();
   std::set<std::wstring> bprotos;
   std::string bdump;

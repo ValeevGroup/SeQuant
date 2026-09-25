@@ -18,10 +18,13 @@
 #include <algorithm>
 #include <cassert>
 #include <concepts>
+#include <cstdlib>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace sequant::tests {
@@ -33,6 +36,49 @@ namespace sequant::tests {
 /// cannot collide with a library symbol.
 inline constexpr TensorSymmetries particle_symmetric{.column =
                                                          ColumnSymmetry::Symm};
+
+/// Sets environment variable @p name to @p value for the lifetime of this
+/// object and restores its previous state (value or absence) on destruction,
+/// including when a failed assertion unwinds the test case.
+class ScopedEnv {
+ public:
+  ScopedEnv(std::string name, const char *value) : name_(std::move(name)) {
+    if (const char *prev = std::getenv(name_.c_str())) prev_ = prev;
+    set(name_.c_str(), value);
+  }
+
+  ~ScopedEnv() {
+    if (prev_)
+      set(name_.c_str(), prev_->c_str());
+    else
+      unset(name_.c_str());
+  }
+
+  ScopedEnv(const ScopedEnv &) = delete;
+  ScopedEnv &operator=(const ScopedEnv &) = delete;
+
+ private:
+  std::string name_;
+  std::optional<std::string> prev_;
+
+  // POSIX has setenv/unsetenv, MSVC has neither and provides _putenv_s
+  // instead (whose "" value removes the variable, matching unsetenv)
+  static void set(const char *name, const char *value) {
+#ifdef _WIN32
+    _putenv_s(name, value);
+#else
+    setenv(name, value, 1);
+#endif
+  }
+
+  static void unset(const char *name) {
+#ifdef _WIN32
+    _putenv_s(name, "");
+#else
+    unsetenv(name);
+#endif
+  }
+};
 }  // namespace sequant::tests
 
 namespace Catch {
