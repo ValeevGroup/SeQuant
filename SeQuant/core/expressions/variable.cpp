@@ -63,6 +63,9 @@ std::wstring Variable::to_latex() const {
 
 ExprPtr Variable::clone() const { return ex<Variable>(*this); }
 
-void Variable::adjoint() { conjugate(); }
+std::int8_t Variable::adjoint() {
+  conjugate();
+  return 1;
+}
 
 }  // namespace sequant

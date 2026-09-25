@@ -606,31 +606,53 @@ ExprPtr OpMaker<S>::operator()(
             : Normalization::Default;
   }
 
+  // Builds the operator's tensor for the given slots. A trailing adjoint mark
+  // on full_label is stripped and applied via set_value_modifier() ourselves,
+  // rather than left for the Tensor constructor's own mark adoption: that
+  // throws when the mark's normalization would consume a sign (an
+  // anti-Hermitian operator's adjoint), which no Tensor can hold but the
+  // Product this returns instead can.
+  auto make_tensor = [op_herm](std::wstring_view lbl, auto&& b, auto&& k,
+                               auto&& a, Symmetry symm,
+                               ColumnSymmetry column) -> ExprPtr {
+    std::wstring base_label(lbl);
+    const bool is_adjoint =
+        !base_label.empty() && base_label.back() == sequant::adjoint_label;
+    if (is_adjoint) base_label.pop_back();
+    Tensor t(std::move(base_label), std::forward<decltype(b)>(b),
+             std::forward<decltype(k)>(k), std::forward<decltype(a)>(a), symm,
+             op_herm, column);
+    if (!is_adjoint) return ex<Tensor>(std::move(t));
+    const auto sign = t.set_value_modifier(ValueModifier::Adjoint);
+    return sign == 1 ? ex<Tensor>(std::move(t))
+                     : ex<Product>(sign, ExprPtrList{ex<Tensor>(std::move(t))});
+  };
+
   // if batching indices are present, use them
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt, full_label, op_herm](
+        [this, opsymm_opt, full_label, make_tensor](
             const auto& creidxs, const auto& annidxs, const auto& batchidxs,
             Symmetry opsymm) {
           // mbpt operators act on indistinguishable particles, hence are
           // particle (column) symmetric
-          return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
-                            aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
-                            op_herm, ColumnSymmetry::Symm);
+          return make_tensor(full_label, bra(creidxs), ket(annidxs),
+                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
+                             ColumnSymmetry::Symm);
         },
         dep ? *dep : UseDepIdx::None, normalization.value());
   }
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt, full_label, op_herm](
+      [this, opsymm_opt, full_label, make_tensor](
           const auto& creidxs, const auto& annidxs, Symmetry opsymm) {
         // mbpt operators act on indistinguishable particles, hence are
         // particle (column) symmetric
-        return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
-                          opsymm_opt ? *opsymm_opt : opsymm, op_herm,
-                          ColumnSymmetry::Symm);
+        return make_tensor(full_label, bra(creidxs), ket(annidxs),
+                           sequant::aux{}, opsymm_opt ? *opsymm_opt : opsymm,
+                           ColumnSymmetry::Symm);
       },
       dep ? *dep : UseDepIdx::None, normalization.value());
 }

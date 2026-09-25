@@ -140,7 +140,7 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
 }
 
 template <typename QuantumNumbers, Statistics S>
-void Operator<QuantumNumbers, S>::adjoint() {
+std::int8_t Operator<QuantumNumbers, S>::adjoint() {
   const auto dN = (*this)(QuantumNumbers{});
   using qnc_t = std::decay_t<decltype(dN)>;
   static_assert(std::is_same_v<QuantumNumbers, qnc_t>,
@@ -178,6 +178,10 @@ void Operator<QuantumNumbers, S>::adjoint() {
   // restore original order and batch_ordinals
   this->order_ = saved_order;
   this->batch_ordinals_ = saved_batch_ordinals;
+
+  // the tensor form is built through sequant::adjoint, which absorbs a sign
+  // of its own into a scalar factor
+  return 1;
 }
 
 template <typename QuantumNumbers, Statistics S>

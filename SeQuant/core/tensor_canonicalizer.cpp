@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -11,6 +12,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <compare>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <type_traits>
@@ -329,6 +331,19 @@ void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
   });
 }
 
+namespace {
+/// @return the canonicalization phase byproduct @p phase -- the convention
+///         every TensorCanonicalizer::apply() returns, nullptr for +1 and
+///         Constant(-1) for -1 -- multiplied by @p sign, spelled in the same
+///         convention so that a +1 product stays nullptr
+ExprPtr multiply_phase(ExprPtr phase, std::int8_t sign) {
+  if (sign == 1) return phase;
+  if (!phase) return ex<Constant>(-1);
+  SEQUANT_ASSERT(phase->is<Constant>() && phase->as<Constant>().value() == -1);
+  return {};
+}
+}  // namespace
+
 bool braket_orientation_pinned(const AbstractTensor& t) {
   const auto lbl = t._label();
   return lbl == reserved::antisymm_label() || lbl == reserved::symm_label() ||
@@ -337,45 +352,57 @@ bool braket_orientation_pinned(const AbstractTensor& t) {
 
 bool braket_conjugate_foldable(const AbstractTensor& t) {
   // the fold records a conjugation, which only a c-number Tensor can carry
-  return t._braket_symmetry() == BraKetSymmetry::Conjugate && t._is_cnumber() &&
-         !braket_orientation_pinned(t) && as_cnumber_tensor(t) != nullptr;
+  return braket_conjugate_swap_sign(t._braket_symmetry()).has_value() &&
+         t._is_cnumber() && !braket_orientation_pinned(t) &&
+         as_cnumber_tensor(t) != nullptr;
 }
 
 bool braket_foldable(const AbstractTensor& t) {
-  return t._braket_symmetry() == BraKetSymmetry::Symm ||
+  return braket_swap_sign(t._braket_symmetry()).has_value() ||
          braket_conjugate_foldable(t);
 }
 
-void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
-                                                     bool fold_conjugate) {
+std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
+                                                            bool fold_conjugate,
+                                                            bool fold_signed) {
   if (!braket_foldable(t)) {
-    return;
+    return 1;
   }
   const auto bks = t._braket_symmetry();
-  if (bks == BraKetSymmetry::Conjugate && !fold_conjugate) {
-    return;
+  const auto conjugate_sign = braket_conjugate_swap_sign(bks);
+  if (conjugate_sign && !fold_conjugate) {
+    return 1;
+  }
+  if (!fold_signed && (bks == BraKetSymmetry::Antisymm ||
+                       bks == BraKetSymmetry::AntiConjugate)) {
+    return 1;
   }
 
-  // Normalize to the _value_ orientation first: a Conjugate tensor's starred
-  // spelling T^*{q;p} equals the unstarred T{p;q}, i.e. the value has two
-  // spellings, and deciding on the current one is not convergent. Unfold
-  // (transpose() toggles the conjugation bit off), then decide -- one
-  // canonical spelling per value.
-  Tensor* ct =
-      bks == BraKetSymmetry::Conjugate ? as_cnumber_tensor(t) : nullptr;
-  SEQUANT_ASSERT(bks != BraKetSymmetry::Conjugate || ct);
-  if (ct && ct->conjugated()) ct->transpose();
+  // the sign every respelling below contributes, for the caller to record
+  std::int8_t sign = 1;
+
+  // Normalize to the _value_ orientation first: a (Anti)Conjugate tensor's
+  // starred spelling T^*{q;p} is the unstarred T{p;q} up to the relation's
+  // sign, i.e. the value has two spellings, and deciding on the current one is
+  // not convergent. Unfold (transpose() toggles the conjugation bit off, at
+  // the relation's sign), then decide -- one canonical spelling per value.
+  Tensor* ct = conjugate_sign ? as_cnumber_tensor(t) : nullptr;
+  SEQUANT_ASSERT(!conjugate_sign || ct);
+  if (ct && ct->conjugated()) {
+    sign = static_cast<std::int8_t>(sign * ct->transpose());
+  }
 
   // bra<->ket exchange is a symmetry for braket-foldable tensors, so pick a
-  // canonical orientation: freely for Symm braket symmetry, and combined with
-  // the elementwise-conjugation marker for Conjugate braket symmetry (the
-  // value identity T{q;p} = conj(T{p;q})). The choice is governed by the
+  // canonical orientation: a plain respelling for Symm/Antisymm braket
+  // symmetry, and combined with the elementwise-conjugation marker for
+  // Conjugate/AntiConjugate braket symmetry (the value identity
+  // T{q;p} = s conj(T{p;q})). The choice is governed by the
   // canonical "colors" of the bra and ket bundles -- i.e. their index spaces,
   // not the index labels -- so the result is label-independent. Bundles with
   // identical spaces (e.g. g{p,q;r,s}) compare equal and are left untouched
-  // for Symm; for Conjugate a full space tie is broken on the index labels
-  // (below), because the two orientations denote DIFFERENT (conjugate) values
-  // that must nevertheless land on one canonical spelling.
+  // for Symm/Antisymm; for (Anti)Conjugate a full space tie is broken on the
+  // index labels (below), because the two orientations denote DIFFERENT
+  // (conjugate) values that must nevertheless land on one canonical spelling.
   const TensorBlockIndexComparer cmp;
   auto space_less = [&cmp](const Index& a, const Index& b) {
     return cmp.compare_spaces(a, b) < 0;
@@ -406,13 +433,14 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
       });
   bool swap = space_order < 0;
 
-  // Full space tie, Conjugate braket symmetry: break on the index labels,
-  // keeping the label-lexicographically SMALLER bundle in the bra, so
+  // Full space tie, (Anti)Conjugate braket symmetry: break on the index
+  // labels, keeping the label-lexicographically SMALLER bundle in the bra, so
   // label-ascending spellings (e.g. g{p_1,p_2;p_3,p_4}) remain canonical as
   // written. Identical bundles (diagonal T{p,q;p,q}) compare equal and never
-  // swap. (Symm ties stay untouched: both orientations denote the SAME value
-  // there, so no fold is required.)
-  if (space_order == 0 && bks == BraKetSymmetry::Conjugate) {
+  // swap. (Symm/Antisymm ties stay untouched: both orientations are spellings
+  // of one array there, so no conjugation marker has to be placed and the
+  // sign of a tie-breaking swap would buy nothing.)
+  if (space_order == 0 && conjugate_sign.has_value()) {
     std::vector<Index> bra_full(bra_spaces), ket_full(ket_spaces);
     ranges::sort(bra_full, std::less<Index>{});
     ranges::sort(ket_full, std::less<Index>{});
@@ -421,24 +449,30 @@ void DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
   }
 
   if (swap) {
-    if (ct)
-      ct->transpose();  // value-preserving: T{q;p} = conj(T{p;q}) sets the bit
-    else
-      t._swap_bra_ket();  // Symm: a free respelling
+    if (ct) {
+      // T{q;p} = s conj(T{p;q}): transpose() sets the conjugation bit and
+      // returns s (+1 for Conjugate, -1 for AntiConjugate)
+      sign = static_cast<std::int8_t>(sign * ct->transpose());
+    } else {
+      t._swap_bra_ket();
+      // Symm: +1, Antisymm: -1
+      sign = static_cast<std::int8_t>(sign * *braket_swap_sign(bks));
+    }
   }
+  return sign;
 }
 
 ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  canonicalize_braket(t);
+  const auto braket_sign = canonicalize_braket(t);
 
   auto result =
       this->apply(t, this->index_comparer_, this->index_pair_comparer_);
 
   reset_tags(t);
 
-  return result;
+  return multiply_phase(std::move(result), braket_sign);
 }
 
 template <typename Callable, typename... Args>
@@ -448,14 +482,15 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  canonicalize_braket(t, fold_conjugate_braket_);
+  const auto braket_sign =
+      canonicalize_braket(t, fold_conjugate_braket_, fold_signed_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});
 
   reset_tags(t);
 
-  return result;
+  return multiply_phase(std::move(result), braket_sign);
 }
 
 }  // namespace sequant

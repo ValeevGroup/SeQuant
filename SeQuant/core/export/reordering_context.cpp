@@ -226,7 +226,11 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   // meant "swapped orientation" on a Hermitian source would mean elementwise
   // conjugation here. Unreachable today (binarize refuses such a leaf);
   // revisit with lazy-conj eval.
-  reordered.set_value_modifier(tensor.value_modifier());
+  [[maybe_unused]] const auto sign =
+      reordered.set_value_modifier(tensor.value_modifier());
+  // the bits are already normalized against the source's symmetries and the
+  // rebuild is Nonsymm, so nothing is consumed here
+  SEQUANT_ASSERT(sign == 1);
   tensor = std::move(reordered);
 
   return true;

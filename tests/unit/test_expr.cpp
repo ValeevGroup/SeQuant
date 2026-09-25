@@ -40,7 +40,7 @@ struct Dummy : public sequant::Expr {
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
-  void adjoint() override {}
+  std::int8_t adjoint() override { return 1; }
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
@@ -72,7 +72,7 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
 
   type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
 
-  void adjoint() override {}
+  std::int8_t adjoint() override { return 1; }
 
   sequant::ConstExprIterator begin_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
@@ -131,7 +131,10 @@ struct Adjointable : public sequant::Expr {
   bool static_equal(const sequant::Expr &that) const override {
     return v == that.as<Adjointable>().v;
   }
-  void adjoint() override { v = -v; };
+  std::int8_t adjoint() override {
+    v = -v;
+    return 1;
+  };
 
   int v = 1;
 };

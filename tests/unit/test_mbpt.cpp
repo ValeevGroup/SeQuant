@@ -578,6 +578,118 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     }  // SECTION("adjoint")
 
+    SECTION("adjoint tensor form: sign vs. mark") {
+      // OpMaker<S>::operator() builds an operator's tensor with its
+      // Hermiticity threaded through as the tensor's BraKetSymmetry (and
+      // returns Tensor * NormalOperator; the NormalOperator factor is
+      // irrelevant here). Adjointing the tensor factor alone
+      // (sequant::adjoint(ExprPtr), through Tensor::adjoint() and
+      // set_value_modifier()) shows the two cases Task 6 is about: a
+      // NonHermitian tensor's adjoint stays a distinct, Adjoint-marked
+      // array (as today); an anti-Hermitian one's adjoint mark normalizes
+      // away a sign that no Tensor can hold, so it comes back unmarked with
+      // swapped slots and a -1 Product scalar.
+      using namespace sequant::mbpt;
+
+      OpRegistry registry;
+      registry.add(L"x", OpClass::Gen, Hermiticity::NonHermitian)
+          .add(L"z", OpClass::Gen, Hermiticity::AntiHermitian);
+      auto ctx_resetter = set_scoped_default_mbpt_context(
+          {.csv = CSV::No, .op_registry = registry});
+
+      // pulls the Tensor factor out of OpMaker's Tensor * NormalOperator
+      auto tensor_factor = [](const ExprPtr& e) -> const Tensor& {
+        if (e->is<Tensor>()) return e->as<Tensor>();
+        REQUIRE(e->is<Product>());
+        for (auto&& f : e->as<Product>().factors())
+          if (f->is<Tensor>()) return f->as<Tensor>();
+        throw Exception("adjoint tensor form test: no Tensor factor found");
+      };
+
+      // NonHermitian: the adjoint tensor form is the Adjoint-marked tensor,
+      // as today.
+      {
+        auto x_base = OpMaker<Statistics::FermiDirac>(L"x", 1)(
+            {}, {}, Normalization::Implicit);
+        auto x_adj = sequant::adjoint(ex<Tensor>(tensor_factor(x_base)));
+        REQUIRE(x_adj->is<Tensor>());
+        REQUIRE(x_adj->as<Tensor>().value_modifier() == ValueModifier::Adjoint);
+      }
+
+      // anti-Hermitian: -1 times the unmarked, slot-swapped tensor.
+      {
+        auto z_base = OpMaker<Statistics::FermiDirac>(L"z", 1)(
+            {}, {}, Normalization::Implicit);
+        const auto& zt_base = tensor_factor(z_base);
+
+        auto z_adj = sequant::adjoint(ex<Tensor>(zt_base));
+        REQUIRE(z_adj->is<Product>());
+        const auto& zp = z_adj->as<Product>();
+        REQUIRE(zp.scalar() == sequant::Constant::scalar_type(-1));
+        REQUIRE(zp.factors().size() == 1);
+        REQUIRE(zp.factor(0)->is<Tensor>());
+        const auto& zt = zp.factor(0)->as<Tensor>();
+        REQUIRE(zt.value_modifier() == ValueModifier::None);
+        REQUIRE(zt.label() == L"z");
+        REQUIRE(zt.bra().at(0) == zt_base.ket().at(0));
+        REQUIRE(zt.ket().at(0) == zt_base.bra().at(0));
+      }
+    }  // SECTION("adjoint tensor form: sign vs. mark")
+
+    SECTION("OpMaker: a pre-marked operator name's sign vs. mark") {
+      // OpMaker<S>::operator() builds full_label =
+      // decorate_with_pert_order(label_, order_); if label_ itself ends in
+      // the adjoint mark (as here, an operator registered under an
+      // already-marked name), full_label carries it too, and the two
+      // ex<Tensor>(full_label, ...) sites strip that mark and apply it via
+      // set_value_modifier() themselves, rather than leave it for the
+      // Tensor constructor's own mark adoption: that throws when the
+      // mark's normalization would consume a sign (an anti-Hermitian
+      // operator), which no Tensor can hold but the Product this returns
+      // instead can.
+      using namespace sequant::mbpt;
+
+      auto tensor_factor = [](const ExprPtr& e) -> const Tensor& {
+        if (e->is<Tensor>()) return e->as<Tensor>();
+        REQUIRE(e->is<Product>());
+        for (auto&& f : e->as<Product>().factors())
+          if (f->is<Tensor>()) return f->as<Tensor>();
+        throw Exception("adjoint tensor form test: no Tensor factor found");
+      };
+
+      // NonHermitian: the mark just becomes the Adjoint bits, no sign --
+      // matching the Tensor constructor's own mark adoption, unchanged.
+      {
+        OpRegistry registry;
+        registry.add(L"v⁺", OpClass::Gen, Hermiticity::NonHermitian);
+        auto ctx_resetter = set_scoped_default_mbpt_context(
+            {.csv = CSV::No, .op_registry = registry});
+        auto v = OpMaker<Statistics::FermiDirac>(L"v⁺", 1)(
+            {}, {}, Normalization::Implicit);
+        const auto& vt = tensor_factor(v);
+        REQUIRE(vt.label() == L"v");
+        REQUIRE(vt.value_modifier() == ValueModifier::Adjoint);
+      }
+
+      // anti-Hermitian: the mark's normalization consumes a sign, so the
+      // tensor form is -1 times the unmarked, slot-swapped tensor -- where
+      // the Tensor constructor's own mark adoption would instead throw.
+      {
+        OpRegistry registry;
+        registry.add(L"w⁺", OpClass::Gen, Hermiticity::AntiHermitian);
+        auto ctx_resetter = set_scoped_default_mbpt_context(
+            {.csv = CSV::No, .op_registry = registry});
+        auto w = OpMaker<Statistics::FermiDirac>(L"w⁺", 1)(
+            {}, {}, Normalization::Implicit);
+        REQUIRE(w->is<Product>());
+        const auto& wp = w->as<Product>();
+        REQUIRE(wp.scalar() == sequant::Constant::scalar_type(-1));
+        const auto& wt = tensor_factor(w);
+        REQUIRE(wt.label() == L"w");
+        REQUIRE(wt.value_modifier() == ValueModifier::None);
+      }
+    }  // SECTION("OpMaker: a pre-marked operator name's sign vs. mark")
+
     SECTION("screen") {
       using namespace sequant::mbpt;
       auto g_t2_t2 = h(2) * t(2) * t(2);

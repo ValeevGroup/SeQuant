@@ -438,11 +438,15 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   SEQUANT_ASSERT(tensor.bra_rank() == tensor.ket_rank());
   // Return non-symmetric tensor if rank is 1
   if (tensor.bra_rank() <= 1) {
+    auto syms = tensor.symmetries();
+    syms.perm = Symmetry::Nonsymm;
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
-                      Symmetry::Nonsymm, tensor.braket_symmetry(),
-                      tensor.column_symmetry());
+                      syms);
     // slot-rebuilding transform: carry the value modifier (conjugation/adjoint)
-    new_tensor.set_value_modifier(tensor.value_modifier());
+    // onto the same symmetries, which consumes no relation
+    [[maybe_unused]] const auto sign =
+        new_tensor.set_value_modifier(tensor.value_modifier());
+    SEQUANT_ASSERT(sign == 1);
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -472,13 +476,16 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     auto expr_sum = std::make_shared<Sum>();
     do {
       // N.B. must copy
-      auto new_tensor =
-          Tensor(tensor.label(), bra(bra_list), ket(ket_list), tensor.aux(),
-                 Symmetry::Nonsymm, tensor.braket_symmetry(),
-                 tensor.column_symmetry());
+      auto syms = tensor.symmetries();
+      syms.perm = Symmetry::Nonsymm;
+      auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
+                               tensor.aux(), syms);
       // slot-rebuilding transform: carry the value modifier
-      // (conjugation/adjoint)
-      new_tensor.set_value_modifier(tensor.value_modifier());
+      // (conjugation/adjoint) onto the same symmetries, which consumes no
+      // relation
+      [[maybe_unused]] const auto sign =
+          new_tensor.set_value_modifier(tensor.value_modifier());
+      SEQUANT_ASSERT(sign == 1);
 
       if (ms_conserving_columns(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();

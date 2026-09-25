@@ -296,7 +296,7 @@ class Product : public Expr {
 
   /// @brief adjoint of a Product is a reversed product of adjoints of its
   /// factors, with complex-conjugated scalar
-  virtual void adjoint() override;
+  virtual std::int8_t adjoint() override;
 
   std::wstring to_latex() const override;
 
@@ -375,7 +375,7 @@ class CProduct : public Product {
   /// @brief adjoint of a CProduct is a product of adjoints of its factors, with
   /// complex-conjugated scalar
   /// @note factors are not reversed since the factors commute
-  virtual void adjoint() override;
+  virtual std::int8_t adjoint() override;
 
  private:
   bool static_commutativity() const override;
@@ -397,7 +397,7 @@ class NCProduct : public Product {
 
   /// @brief adjoint of a NCProduct is a reversed product of adjoints of its
   /// factors, with complex-conjugated scalar
-  virtual void adjoint() override;
+  virtual std::int8_t adjoint() override;
 
  private:
   bool static_commutativity() const override;

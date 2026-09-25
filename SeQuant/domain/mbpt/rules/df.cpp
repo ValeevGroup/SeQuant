@@ -20,7 +20,9 @@ ExprPtr density_fit_impl(Tensor const& tnsr_in, Index const& aux_idx,
   // Normalize to the VALUE orientation first: a marker-conjugated (folded)
   // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
   // layout would silently drop the conjugation (see sequant::value_oriented).
-  const Tensor tnsr = value_oriented(tnsr_in);
+  // The respelling can contribute a sign (an anti-Hermitian or odd-parity
+  // tensor), which the rebuilt expression carries.
+  auto const [tnsr, vo_sign] = value_oriented(tnsr_in);
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
@@ -53,10 +55,14 @@ ExprPtr density_fit_impl(Tensor const& tnsr_in, Index const& aux_idx,
                          ket({ranges::back(tnsr.ket())}), aux({aux_idx}),
                          Symmetry::Nonsymm, Hermiticity::Hermitian,
                          ColumnSymmetry::Symm);
-    return t1 * t2 - t3 * t4;
+    ExprPtr result = t1 * t2 - t3 * t4;
+    if (vo_sign != 1) return ex<Product>(vo_sign, ExprPtrList{result});
+    return result;
   }
 
-  return t1 * t2;
+  ExprPtr result = t1 * t2;
+  if (vo_sign != 1) return ex<Product>(vo_sign, ExprPtrList{result});
+  return result;
 }
 
 ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,

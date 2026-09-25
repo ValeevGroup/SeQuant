@@ -27,31 +27,32 @@ ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   return TensorCanonicalizer::instance()->apply(*this);
 }
 
-Tensor value_oriented(Tensor const &t) {
+ValueOriented value_oriented(Tensor const &t) {
   switch (t.value_modifier()) {
     case ValueModifier::None:
     case ValueModifier::Adjoint:
       // t⁺ names a distinct array whose slots are as written; every consumer
       // treats the '⁺' spelling that way
-      return t;
+      return {t, 1};
     case ValueModifier::Transpose: {
-      // T^T{q;p} = T{p;q}: a pure respelling (Nonsymm only; the other
-      // symmetries normalize the transposition away)
+      // T^T{q;p} = T{p;q}: a pure respelling (only a tensor without an
+      // exchange relation carries this state; the others normalize the
+      // transposition away)
       Tensor r{t};
-      r.transpose();
-      return r;
+      const auto sign = r.transpose();
+      return {std::move(r), sign};
     }
     case ValueModifier::Conjugate:
-      if (t.braket_symmetry() == BraKetSymmetry::Conjugate) {
-        // T^*{q;p} = T{p;q}: transpose() folds into, and so clears, the
-        // conjugation bit
+      if (braket_conjugate_swap_sign(t.braket_symmetry())) {
+        // T^*{q;p} = s T{p;q}: transpose() folds into, and so clears, the
+        // conjugation bit, contributing the relation's sign
         Tensor r{t};
-        r.transpose();
-        return r;
+        const auto sign = r.transpose();
+        return {std::move(r), sign};
       }
       throw Exception(
-          "sequant::value_oriented: an elementwise-conjugated "
-          "BraKetSymmetry::Nonsymm tensor has no slot spelling of its value "
+          "sequant::value_oriented: an elementwise-conjugated tensor without "
+          "an adjoint relation has no slot spelling of its value "
           "(the conjugation cannot be consumed into slots)");
   }
   SEQUANT_UNREACHABLE;

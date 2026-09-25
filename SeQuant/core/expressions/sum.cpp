@@ -152,12 +152,15 @@ ExprPtr Sum::clone() const {
   return ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
 }
 
-void Sum::adjoint() {
+std::int8_t Sum::adjoint() {
   using namespace ranges;
+  // a summand whose adjoint carries a sign arrives from the free function
+  // already wrapped in Product{-1, summand}, so the Sum itself has no sign
   auto adj_summands = summands() | views::transform([](auto &&expr) {
                         return ::sequant::adjoint(expr);
                       });
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
+  return 1;
 }
 
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
