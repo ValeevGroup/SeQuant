@@ -1,8 +1,8 @@
 Wick's Theorem
 ---------------
 
-To get started let's use SeQuant to apply `Wick's theorem <https://en.wikipedia.org/wiki/Wick's_theorem>`_ to a simple product of elementary (creation
-and annihilation) fermionic operators:
+To get started let's use SeQuant to apply `Wick's theorem <https://en.wikipedia.org/wiki/Wick's_theorem>`_ to a simple product of elementary
+(`creation and annihilation <https://en.wikipedia.org/wiki/Creation_and_annihilation_operators>`_) fermionic operators:
 
 .. math::
    a_{p_3} a_{p_4} a^\dagger_{p_1} a^\dagger_{p_2}.
@@ -27,7 +27,11 @@ Running this program should produce a LaTeX expression for this formula:
      - {{s^{{p_1}}_ {{p_4}}}{a^{{p_2}}_ {{p_3}}}} + {{s^{{p_2}}_ {{p_3}}}{s^{{p_1}}_ {{p_4}}}} - {{s^{{p_2}}_ {{p_3}}}{a^{{p_1}}_ {{p_4}}}}
      + {{s^{{p_2}}_ {{p_4}}}{a^{{p_1}}_ {{p_3}}}}\bigr)
 
-where the tensor notation is used to denote elementary and composite *normal-ordered* (or, shortly, *normal*) operators:
+Wick's theorem reduces this to a sum of terms in which the elementary operators have been reordered so that every creation operator sits to the
+left of every annihilation operator — the `normal order <https://en.wikipedia.org/wiki/Normal_order>`_, or *normal-ordered* form — plus terms in
+which some operator pairs have been contracted into overlaps instead. Normal-ordered operators are useful because their vacuum expectation value
+vanishes trivially, which is why SeQuant expresses Wick's-theorem output in terms of them. The following tensor notation is used to denote
+elementary and composite *normal-ordered* (or, shortly, *normal*) operators:
 
 .. math::
    a^p \equiv a_p^\dagger
@@ -52,9 +56,10 @@ produces
    = \bigl({a^{␣\,{p_1}{p_2}{p_5}}_ {{p_3}{p_4}{p_6}{p_7}}} - {{s^{{p_5}}_ {{p_4}}}{a^{␣\,{p_1}{p_2}}_ {{p_3}{p_6}{p_7}}}}
      + {{s^{{p_5}}_ {{p_3}}}{a^{␣\,{p_1}{p_2}}_ {{p_4}{p_6}{p_7}}}}\bigr)
 
-where :math:`␣` is used in number-nonconserving operators to point out the empty "slots".
+A number-nonconserving operator has an unequal number of upper (creation) and lower (annihilation) indices; :math:`␣` marks the resulting empty
+"slots" that would otherwise misalign the tensor's rows.
 
-Same algebra can be performed for bosons:
+Same algebra can be performed for `bosons <https://en.wikipedia.org/wiki/Boson>`_:
 
 .. literalinclude:: /examples/user/getting_started/wick.cpp
    :language: cpp
@@ -70,4 +75,4 @@ Same algebra can be performed for bosons:
      + {{s^{{p_5}}_{{p_3}}}{s^{{p_6}}_{{p_4}}}{b^{{p_1}{p_2}}_{␣\,{p_7}}}}
      + {{s^{{p_6}}_{{p_3}}}{s^{{p_5}}_{{p_4}}}{b^{{p_2}{p_1}}_{␣\,{p_7}}}} \bigr)
 
-where :math:`b` denotes normal bosonic operators constructed analogously with the normal fermionic operators :math:`a`
+where :math:`b` denotes normal bosonic operators constructed analogously with the normal fermionic operators :math:`a`.
