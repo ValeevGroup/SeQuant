@@ -73,6 +73,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
 
   SECTION("canonicalize_slots") {
     SECTION("TN isomorphism") {
+      // the bra-ket-symmetric networks below (`S` braket letter) are derivable
+      // only over a real basis; unannotated tensors deserialize NonHermitian,
+      // hence Nonsymm, over either
+      auto real_basis = tests::scoped_real_basis();
       enum EqEnum { Eq, NEq };
       enum SignEnum { Plus, Minus };
 
@@ -297,8 +301,9 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           REQUIRE(ranges::equal(d->bra(), d->ket()));
         }
 
-        // Symm braket also folds and never marks.
+        // Symm braket (a real array) also folds and never marks.
         {
+          auto real_basis = tests::scoped_real_basis();
           auto a = canonical_tensor(L"h{a_1;i_1}:N-S-S");
           auto b = canonical_tensor(L"h{i_1;a_1}:N-S-S");
           REQUIRE(same_slots(*a, *b));
@@ -339,6 +344,9 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
     }
 
     SECTION("Named index ordering") {
+      // the bra-ket-symmetric networks below (`S` braket letter) are derivable
+      // only over a real basis
+      auto real_basis = tests::scoped_real_basis();
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 
       using idxvec_t = std::vector<std::wstring>;

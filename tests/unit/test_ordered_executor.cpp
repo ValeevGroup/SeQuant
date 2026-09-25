@@ -4118,6 +4118,8 @@ TEST_CASE(
   auto ctx0 = sequant::get_default_context().clone();
   ctx0.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx0));
+  // X and P are real arrays (Symm), derivable only over a real basis
+  auto real_basis = sequant::tests::scoped_real_basis();
 
   sequant::eval::dryrun::SizeRegime regime;
   regime.space_extent = {{L"i", 8}, {L"a", 4}};

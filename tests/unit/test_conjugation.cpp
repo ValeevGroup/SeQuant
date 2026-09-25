@@ -157,9 +157,10 @@ TEST_CASE("braket_foldable_predicates", "[conjugation]") {
   REQUIRE_FALSE(braket_conjugate_foldable(t));
   REQUIRE_FALSE(braket_foldable(t));
 
-  // Symm: free swap, not the Conjugate value fold
-  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  // Symm (Hermitian over a real basis): free swap, not the Conjugate value
+  // fold
+  Tensor s(L"s", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+           Symmetry::Nonsymm, BraKetSymmetry::Symm, ColumnSymmetry::Symm);
   REQUIRE_FALSE(braket_conjugate_foldable(s));
   REQUIRE(braket_foldable(s));
 
@@ -332,8 +333,12 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
   // factor order reversed, bra<->ket swapped, dummies renamed
   auto term = deserialize(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
   auto term_adj = deserialize(L"1/2 t{i_2;a_2}:N-C-S h{a_2;i_2}:N-C-S");
-  // a manifestly real (self-conjugate) summand: BraKetSymmetry::Symm tensors
-  auto self_adj = deserialize(L"1/4 f{i_1;a_1}:N-S-S u{a_1;i_1}:N-S-S");
+  // a manifestly real (self-conjugate) summand: BraKetSymmetry::Symm tensors,
+  // derivable only over a real basis
+  auto self_adj = [] {
+    auto real_basis = tests::scoped_real_basis();
+    return deserialize(L"1/4 f{i_1;a_1}:N-S-S u{a_1;i_1}:N-S-S");
+  }();
 
   SECTION("sum pair emits 2 Re(A)") {
     auto folded = fold_conjugate_pairs(term->clone() + term_adj->clone());
@@ -560,8 +565,9 @@ TEST_CASE("value_modifier_normalization", "[conjugation]") {
 
   Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  // Symm is derivable only over a real basis
+  Tensor s(L"s", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+           Symmetry::Nonsymm, BraKetSymmetry::Symm, ColumnSymmetry::Symm);
 
   SECTION("Conjugate: transpose() is the starred swapped spelling") {
     Tensor gt = g;

@@ -1313,6 +1313,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(expr, EquivalentTo("R1{a1;i1} = 2 t{a1,i1}:A"));
     }
     SECTION("braket-symmetry") {
+      // the `S` braket letter is derivable only over a real basis
+      auto real_basis = sequant::tests::scoped_real_basis();
       auto expr = deserialize<ResultExpr>(
           "R1{a1;i1} = f{a1;i1}:A-S-S + f{i1;a1}:A-S-S");
 

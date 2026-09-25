@@ -65,6 +65,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -395,6 +397,7 @@ TEST_CASE("is_valid accepts a CSV proto-indexed residual",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -435,6 +438,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -531,6 +535,7 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   auto prod =
@@ -603,6 +608,7 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -662,6 +668,7 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -764,6 +771,7 @@ TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -836,6 +844,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -1922,6 +1931,7 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2265,6 +2275,7 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2598,6 +2609,7 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2753,6 +2765,7 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -2951,6 +2964,7 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3122,6 +3136,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3468,6 +3483,7 @@ TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3754,6 +3770,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
   sequant::mbpt::add_df_spaces(isr);                             // K
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -3947,6 +3964,7 @@ TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +

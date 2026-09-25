@@ -235,8 +235,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
     }
     // with bra-ket symmetry
     {
-      // Tensor's BraKetSymmetry is per-tensor (Symm passed explicitly below);
-      // no Context manipulation needed.
+      // B is a real array: declared through the basis field, which makes the
+      // explicit Symm exchange derivable
+      auto real_basis = scoped_real_basis();
       // TN is invariant wrt flipping one if the tensors
       // N.B. it's not possible purely to canonicalize each tensor since bra and
       // ket slots are equivalent, only the overall TN topology determines
@@ -293,6 +294,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
     // if cmp != 0 we'd know the encoding (not the consumer) is at fault.
     {
       auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+      declare_real_basis(*sr_reg);
       Context ctx_min = get_default_context();
       ctx_min.set(sr_reg);
       ctx_min.set(AssertStrictBraKetSymmetry::No);
@@ -682,6 +684,10 @@ TEST_CASE("canonicalization", "[algorithms]") {
 
 TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   using namespace sequant;
+
+  // X is a real array: the `S` braket letter is derivable only over a real
+  // basis
+  auto real_basis = scoped_real_basis();
 
   auto canon_hash = [](std::wstring spec) {
     auto e = deserialize(spec);
