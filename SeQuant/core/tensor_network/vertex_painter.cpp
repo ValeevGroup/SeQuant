@@ -1,8 +1,10 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <cstdint>
 #include <utility>
 
 namespace sequant {
@@ -18,20 +20,23 @@ VertexPainterImpl::VertexPainterImpl(
 
 std::size_t VertexPainterImpl::to_hash_value(
     const AbstractTensor &tensor) const {
-  // For a braket-symmetric tensor, bra<->ket exchange is a symmetry, so the
-  // tensor's "shade" (which salts the colors of all of its slot and index
-  // vertices) must be invariant under swapping the bra and ket ranks. Hash them
-  // as an unordered pair in that case, so e.g. a half-tensor X{a;;x} and its
-  // bra/ket-swapped form X{;a;x} receive the same color and canonicalize to the
-  // same form. (TNV3 already colors bra/ket slot and bundle vertices
-  // symmetrically for such tensors; this removes the last ordered-by-bra/ket
-  // asymmetry, in the core-vertex shade.)
+  // For a tensor whose bra<->ket exchange is a plain (anti)symmetry, the two
+  // orientations are spellings of one array, so the tensor's "shade" (which
+  // salts the colors of all of its slot and index vertices) must be invariant
+  // under swapping the bra and ket ranks. Hash them as an unordered pair in
+  // that case, so e.g. a half-tensor X{a;;x} and its bra/ket-swapped form
+  // X{;a;x} receive the same color and canonicalize to the same form. (TNV3
+  // already colors bra/ket slot and bundle vertices symmetrically for such
+  // tensors; this removes the last ordered-by-bra/ket asymmetry, in the
+  // core-vertex shade.) Whether the swap is admitted, and hence whether its
+  // sign is recorded, remains the bundle colours' business.
   auto bra_rank = tensor._bra_rank();
   auto ket_rank = tensor._ket_rank();
-  if (tensor._braket_symmetry() == BraKetSymmetry::Symm &&
+  if (braket_swap_sign(tensor._braket_symmetry()).has_value() &&
       bra_rank > ket_rank) {
     std::swap(bra_rank, ket_rank);
   }
+  const Tensor *ct = as_cnumber_tensor(tensor);
   auto hashes = {hash::value(tensor._label()),
                  hash::value(bra_rank),
                  hash::value(ket_rank),
@@ -39,8 +44,34 @@ std::size_t VertexPainterImpl::to_hash_value(
                  hash::value(tensor._symmetry()),
                  hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
-
-  return to_hash_value(hashes);
+  auto result = to_hash_value(hashes);
+  // Every value modifier is part of a tensor's value identity (T^* != T and
+  // T^T != T for a Nonsymm tensor; Conjugate-symmetry tensors are
+  // value-oriented before canonicalize() builds its graph, and are coloured
+  // as-is by canonicalize_slots). Perturb only marked tensors: bliss's
+  // canonical labeling depends on colour values and hash::combine is not
+  // order-preserving, so folding even a "no modifier" value into every
+  // colour would re-spell every marker-free network.
+  // Without the modifier in the core-vertex color, an uncolored graph for
+  // C{x;m} and C^*{y;m} is automorphic: nothing but the modifier bit
+  // distinguishes the two vertices, so a canonical labeling is free to swap
+  // them, and C * C^* would collide with C^* * C under one shared hash and
+  // graph.
+  if (ct && ct->value_modifier() != ValueModifier::None)
+    hash::combine(result,
+                  hash::value(static_cast<std::uint8_t>(ct->value_modifier())));
+  // a conjugation symmetry other than the one parity Even would give over this
+  // tensor enters the shade: Even tensors add nothing in any field,
+  // complex-field tensors, whose parity is unobservable, colour alike as they
+  // compare alike, over a real field Odd and None both differ from Even, and a
+  // tensor without bra/ket slots, which asserts no relation whatever its
+  // parity, adds nothing either. The comparison is the Tensor's own
+  // (even_parity_conjugation_symmetry), so only a c-number tensor is shaded
+  // this way -- an operator-valued vertex takes no term.
+  if (ct &&
+      ct->conjugation_symmetry() != ct->even_parity_conjugation_symmetry())
+    hash::combine(result, hash::value(ct->conjugation_symmetry()));
+  return result;
 }
 
 VertexPainterImpl::Color VertexPainterImpl::operator()(const BraGroup &group) {

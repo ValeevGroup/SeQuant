@@ -53,7 +53,7 @@ class Variable : public Expr, public MutatableLabeled {
   ExprPtr clone() const override;
 
   /// @brief adjoint of a Variable is its complex conjugate
-  virtual void adjoint() override;
+  virtual std::int8_t adjoint() override;
 
  private:
   std::wstring label_;

@@ -316,8 +316,9 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   /// Get the tensor name (without indices)
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
-    // For Python variable names, start with sanitized tensor label
-    std::string name = sanitize_python_name(tensor.label());
+    // For Python variable names, start with sanitized tensor label (the
+    // decorated label, so the adjoint mark stays part of the name)
+    std::string name = sanitize_python_name(tensor.decorated_label());
 
     // Append index space tags to distinguish different tensor blocks
     // e.g., I[i1,a1] becomes "I_ov", I[a2,a1] becomes "I_vv"

@@ -20,8 +20,14 @@ namespace sequant::mbpt {
 /// AOs, etc.)
 /// @param tnsr a Tensor object
 /// @param csv_basis the basis in terms of which the CSVs are expanded
-ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
+ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
                            std::wstring_view coeff_tensor_label) {
+  // Normalize to the VALUE orientation first: a marker-conjugated (folded)
+  // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
+  // layout would silently drop the conjugation (see sequant::value_oriented).
+  // The respelling can contribute a sign (an anti-Hermitian or odd-parity
+  // tensor), which the rebuilt expression carries.
+  auto const [tnsr, vo_sign] = value_oriented(tnsr_in);
   using ranges::views::transform;
   using sequant::reserved::overlap_label;
 
@@ -98,9 +104,14 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   }
 
   auto xtnsr = ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), tnsr.aux(),
-                          tnsr.symmetry(), tnsr.braket_symmetry(),
-                          tnsr.column_symmetry());
+                          tnsr.symmetries());
+  // the value-oriented source's bits are copied onto the same symmetries,
+  // which consumes no relation
+  [[maybe_unused]] const auto modifier_sign =
+      xtnsr->as<Tensor>().set_value_modifier(tnsr.value_modifier());
+  SEQUANT_ASSERT(modifier_sign == 1);
   result.prepend(1, std::move(xtnsr));
+  result.scale(vo_sign);  // the value respelling's sign
 
   return ex<Product>(std::move(result));
 }

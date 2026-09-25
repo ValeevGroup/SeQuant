@@ -190,8 +190,7 @@ bool ItfContext::rewrite(Tensor &tensor) const {
 
     tensor =
         Tensor(std::move(label), sequant::bra(std::move(bra)),
-               sequant::ket(std::move(ket)), tensor.aux(), tensor.symmetry(),
-               tensor.braket_symmetry(), tensor.column_symmetry());
+               sequant::ket(std::move(ket)), tensor.aux(), tensor.symmetries());
 
     modified = true;
   }

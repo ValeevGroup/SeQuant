@@ -50,6 +50,7 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/utility/timer.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/split.hpp>
@@ -58,8 +59,9 @@
 using namespace sequant;
 using namespace std::literals;
 
-TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
-                   TensorNetworkV2, TensorNetworkV3) {
+// TensorNetworkV3 is the only supported network implementation; V1/V2
+// predate the braket-orientation fold and cannot ingest folded spellings
+TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr, mbpt::Spin::null);
   auto ctx = get_default_context();
@@ -169,6 +171,13 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
               {L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
           };
 
+      // the same two orientations of a Conjugate-braket (c-number) tensor:
+      // V3's braket-orientation fold shares the graph between them (they are
+      // conj-related spellings of one value, served from one cache slot);
+      // pre-V3 networks keep them distinct
+      tests.emplace_back(L"C{μ̃_1;a_3<i_3>}:N-C-N", L"C{a_1<i_2>;μ̃_1}:N-C-N",
+                         TN::version() >= 3 ? Eq : NEq, Plus);
+
       if constexpr (TN::version() >= 3) {
         ///////////////////// TNs with braket symmetries
         tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u3;u1,u5}",
@@ -240,6 +249,63 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
 
       REQUIRE(canon1.hash_value() == canon2.hash_value());
       REQUIRE(canon1.phase != canon2.phase);
+    }
+
+    SECTION("conjugate braket fold") {
+      if constexpr (TN::version() >= 3) {
+        // A Hermitian (BraKetSymmetry::Conjugate) tensor satisfies
+        //   h{bra;ket} = conj(h{ket;bra}),
+        // so its two bra<->ket orientations fold onto a single canonical
+        // spelling; the orientation that had to be swapped carries the
+        // elementwise-conjugation marker (the value is preserved).
+        const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+        auto canonical_tensor = [&cardinal](const std::wstring& s) {
+          TN tn(deserialize(s));
+          tn.canonicalize(cardinal);
+          REQUIRE(ranges::size(tn.tensors()) == 1);
+          return std::dynamic_pointer_cast<Tensor>(ranges::front(tn.tensors()));
+        };
+        auto same_slots = [](const Tensor& a, const Tensor& b) {
+          return ranges::equal(a.bra(), b.bra()) &&
+                 ranges::equal(a.ket(), b.ket());
+        };
+
+        // Conjugate: one canonical spelling, exactly one input marked.
+        {
+          auto a = canonical_tensor(L"h{a_1;i_1}:N-C-S");
+          auto b = canonical_tensor(L"h{i_1;a_1}:N-C-S");
+          REQUIRE(same_slots(*a, *b));
+          REQUIRE(a->conjugated() != b->conjugated());
+        }
+
+        // Half-tensors: the graph has no vertex for the empty bundle, so the
+        // per-tensor fold decides -- one spelling, exactly one marked.
+        {
+          auto a = canonical_tensor(L"h{a_1;}:N-C-S");
+          auto b = canonical_tensor(L"h{;a_1}:N-C-S");
+          INFO(toUtf8(to_latex(*a)) << " vs " << toUtf8(to_latex(*b)));
+          REQUIRE(same_slots(*a, *b));
+          REQUIRE(a->conjugated() != b->conjugated());
+        }
+
+        // Identical bra and ket bundles (a diagonal, hence real, block): the
+        // graph's bundle order is an arbitrary automorphism; the fold leaves
+        // the spelling as written and unmarked.
+        {
+          auto d = canonical_tensor(L"h{p_1,p_2;p_1,p_2}:N-C-S");
+          REQUIRE(!d->conjugated());
+          REQUIRE(ranges::equal(d->bra(), d->ket()));
+        }
+
+        // Symm braket also folds and never marks.
+        {
+          auto a = canonical_tensor(L"h{a_1;i_1}:N-S-S");
+          auto b = canonical_tensor(L"h{i_1;a_1}:N-S-S");
+          REQUIRE(same_slots(*a, *b));
+          REQUIRE(!a->conjugated());
+          REQUIRE(!b->conjugated());
+        }
+      }
     }
 
     SECTION("amazing hash collision") {
@@ -385,7 +451,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
   }
 }
 
-TEST_CASE("tensor_network", "[elements]") {
+// legacy network; unsupported since the braket-orientation fold went
+// default-on (folded spellings contract bra with bra) -- hidden, kept for
+// reference only
+TEST_CASE("tensor_network", "[elements][.legacy-tn]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;
@@ -871,7 +940,9 @@ class TensorNetworkV2Accessor {
 };
 }  // namespace sequant
 
-TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
+// legacy network; unsupported since the braket-orientation fold went
+// default-on -- hidden, kept for reference only
+TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;
@@ -1005,10 +1076,11 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
       //        std::endl; std::wcout <<
       //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
       //        std::endl;
+      // the Hermitian F canonicalizes to its swapped+starred spelling
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-              L"{F^{{i_2}}_{{i_1}}}");
+              L"{{F^*}^{{i_2}}_{{i_1}}}");
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-              L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
+              L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
     }
 
     {
@@ -1033,8 +1105,9 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
         // std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                 L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
+        // the Hermitian F canonicalizes to its swapped+starred spelling
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{F^{{i_{17}}}_{{i_1}}}");
+                L"{{F^*}^{{i_1}}_{{i_{17}}}}");
       }
 
       // with explicit named indices
@@ -1057,15 +1130,16 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
         //        << std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                 L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+        // the Hermitian F canonicalizes to its swapped+starred spelling
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{F^{{i_{17}}}_{{i_2}}}");
+                L"{{F^*}^{{i_2}}_{{i_{17}}}}");
       }
     }
 
     SECTION("particle non-conserving") {
       const auto input1 = deserialize(L"P{;a1,a3}");
       const auto input2 = deserialize(L"P{a1,a3;}");
-      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
+      const std::wstring expected1 = L"{{{P^*}^{}_{{a_1}{a_3}}}}";
       const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
@@ -1086,7 +1160,8 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
               .as<Product>()
               .factors();
       const std::wstring expected =
-          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
+          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * "
+          L"I2^*{i_1,i_2;;x_1}:N";
 
       for (bool fast : {true, false}) {
         TensorNetworkV2 tn(input);
@@ -1153,14 +1228,14 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
     SECTION("miscellaneous") {
       const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
           {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+           L"g{i_1,a_1;i_2,i_3}:A * I^*{i_1,a_1;i_2,i_3}:A"},
           {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+           L"-1 g{i_1,a_1;i_2,i_3}:A * I^*{i_1,a_1;i_2,i_3}:A"},
 
           {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I^*{i_1,a_1;i_2,i_3}:N"},
           {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I^*{i_1,a_1;i_3,i_2}:N"},
       };
 
       for (const auto& [input, expected] : inputs) {
@@ -1206,7 +1281,8 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           deserialize(
-              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              L"Â{i1,i2;a1,a2} g^*{a3,a4;i3,i4} t{a1,a3;i1,i2} "
+              L"t{a2,a4;i3,i4}",
               {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
@@ -2142,4 +2218,28 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                              L"2)(i_3,i_4)\n"));
     }
   }
+}
+
+TEST_CASE("conjugate braket fold: marker placement is not part of the value",
+          "[elements]") {
+  using namespace sequant;
+  // One value, three spellings: the Hermitian identity h{q;p} = conj(h{p;q})
+  // lets the elementwise-conjugation marker sit on either factor of
+  //   sum_{p1 p2} h_{p1 p2} gamma_{p2 p1}
+  // or on neither. Canonicalization is a function of the VALUE, so all three
+  // must land on one spelling; the graph must therefore see every tensor in
+  // its value orientation (markers unfolded) before it decides anything.
+  auto canon = [](const wchar_t* s) {
+    auto e = deserialize(s);
+    canonicalize(e);
+    return to_latex(e);
+  };
+  const auto marked_second = canon(L"h{p_1;p_2}:N-C-S * γ^*{p_1;p_2}:N-C-S");
+  const auto marked_first = canon(L"γ{p_1;p_2}:N-C-S * h^*{p_1;p_2}:N-C-S");
+  const auto unmarked = canon(L"h{p_2;p_1}:N-C-S * γ{p_1;p_2}:N-C-S");
+  INFO(toUtf8(marked_second));
+  INFO(toUtf8(marked_first));
+  INFO(toUtf8(unmarked));
+  REQUIRE(marked_second == unmarked);
+  REQUIRE(marked_first == unmarked);
 }

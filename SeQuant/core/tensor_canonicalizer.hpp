@@ -14,6 +14,7 @@
 #include <range/v3/view/take.hpp>
 #include <range/v3/view/zip.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string_view>
@@ -148,6 +149,30 @@ class NullTensorCanonicalizer : public TensorCanonicalizer {
   ExprPtr apply(AbstractTensor&) const override;
 };
 
+/// @return whether @p t 's braket orientation is pinned: the reserved
+///         (anti)symmetrization/transposition bookkeeping operators, whose
+///         bra<->ket orientation defines/extracts external indices and must
+///         never be reoriented
+bool braket_orientation_pinned(const AbstractTensor& t);
+
+/// @return whether the (anti)conjugate bra<->ket VALUE fold applies to @p t:
+///         a braket symmetry with a braket_conjugate_swap_sign()
+///         (`T{p;q} = s conj(T{q;p})`, i.e. BraKetSymmetry::Conjugate or
+///         BraKetSymmetry::AntiConjugate) AND c-number (reorienting an
+///         operator-valued tensor would exchange creators and annihilators)
+///         AND not orientation-pinned. Every fold site must gate on this
+///         predicate (never on the marker alone) and record the sign
+///         DefaultTensorCanonicalizer::canonicalize_braket() returns.
+bool braket_conjugate_foldable(const AbstractTensor& t);
+
+/// @return whether ANY braket orientation fold applies to @p t: a braket
+///         symmetry with a braket_swap_sign() (BraKetSymmetry::Symm or
+///         BraKetSymmetry::Antisymm, a respelling carrying that sign;
+///         reserved operators cannot be Symm -- the Tensor constructors
+///         demote them to Conjugate -- so no extra gates are needed) or the
+///         (anti)conjugate value fold (braket_conjugate_foldable())
+bool braket_foldable(const AbstractTensor& t);
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;
@@ -166,8 +191,20 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   }
   virtual ~DefaultTensorCanonicalizer() = default;
 
-  /// Canonicalizes the assignment of indices to bra and ket
-  static void canonicalize_braket(AbstractTensor& t);
+  /// Canonicalizes the assignment of indices to bra and ket of a
+  /// braket-foldable tensor (see braket_foldable()): a bare swap for
+  /// BraKetSymmetry::Symm/Antisymm, Tensor::transpose() (which records the
+  /// conjugation) for BraKetSymmetry::Conjugate/AntiConjugate
+  /// @param fold_conjugate if false, (anti)conjugate tensors are left
+  ///        untouched
+  /// @param fold_signed if false, a respelling that costs a sign (an
+  ///        Antisymm or AntiConjugate tensor) is left untouched
+  /// @return the sign the respelling contributed (+1 or -1): the tensor as it
+  ///         stood is that sign times the tensor this leaves behind. The
+  ///         caller must record it, e.g. in the phase byproduct of apply()
+  static std::int8_t canonicalize_braket(AbstractTensor& t,
+                                         bool fold_conjugate = true,
+                                         bool fold_signed = true);
 
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c
@@ -256,11 +293,29 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
   TensorBlockCanonicalizer() = default;
   ~TensorBlockCanonicalizer() = default;
 
+  /// \param fold_conjugate_braket if false, canonicalize_braket leaves
+  ///        BraKetSymmetry::Conjugate tensors untouched (Symm still folds).
+  ///        Eval-boundary bridge: lets the leaf constructor keep a
+  ///        Conjugate-symmetry leaf in its as-written orientation.
+  /// \param fold_signed_braket if false, canonicalize_braket also leaves a
+  ///        tensor whose bra<->ket exchange costs a sign (Antisymm,
+  ///        AntiConjugate) untouched, so that only sign-free respellings
+  ///        (Symm) fold. Eval-boundary bridge as well: a leaf's phase is a
+  ///        cache-orientation round trip and never reaches its value.
+  explicit TensorBlockCanonicalizer(bool fold_conjugate_braket,
+                                    bool fold_signed_braket = true)
+      : fold_conjugate_braket_(fold_conjugate_braket),
+        fold_signed_braket_(fold_signed_braket) {}
+
   template <typename IndexContainer>
   TensorBlockCanonicalizer(const IndexContainer& external_indices)
       : DefaultTensorCanonicalizer(external_indices) {}
 
   ExprPtr apply(AbstractTensor& t) const override;
+
+ private:
+  bool fold_conjugate_braket_ = true;
+  bool fold_signed_braket_ = true;
 };
 
 }  // namespace sequant

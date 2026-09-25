@@ -21,10 +21,16 @@ namespace {
 constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 }  // namespace
 
-ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
+ExprPtr tensor_hypercontract_impl(Tensor const& tnsr_in, Index const& aux_idx_1,
                                   Index const& aux_idx_2,
                                   std::wstring_view factor_label,
                                   std::wstring_view aux_label) {
+  // Normalize to the VALUE orientation first: a marker-conjugated (folded)
+  // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
+  // layout would silently drop the conjugation (see sequant::value_oriented).
+  // The respelling can contribute a sign (an anti-Hermitian or odd-parity
+  // tensor), which the rebuilt expression carries.
+  auto const [tnsr, vo_sign] = value_oriented(tnsr_in);
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
@@ -46,10 +52,14 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
     auto t3a = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
                           aux({aux_idx_2}), particle_symmetric);
 
-    return (t1 * t2 * z * t3 * t4) - (t1a * t2 * z * t3a * t4);
+    ExprPtr result = (t1 * t2 * z * t3 * t4) - (t1a * t2 * z * t3a * t4);
+    if (vo_sign != 1) return ex<Product>(vo_sign, ExprPtrList{result});
+    return result;
   }
 
-  return t1 * t2 * z * t3 * t4;
+  ExprPtr result = t1 * t2 * z * t3 * t4;
+  if (vo_sign != 1) return ex<Product>(vo_sign, ExprPtrList{result});
+  return result;
 }
 
 ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,

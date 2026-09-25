@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <optional>
@@ -112,11 +113,17 @@ auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',')  > L"
                         |  '{'  > -(index % ',') > -( ';' > -(index % ',')) > -(';' > -(index % ','))     >  '}'  >> x3::attr(false);
 
 auto symmetry_spec_def= x3::lexeme[
-                         ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper)
+                         ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper) >> -('-' >> x3::upper)
                         ];
 
+// the suffix spellings are sequant::conjugate_label ("^*") and
+// sequant::transpose_label ("^T"); the grammar spells them out character by
+// character
 auto tensor_def       = x3::lexeme[
-                            name >> x3::skip[index_groups] >> -(symmetry_spec)
+                            name >> (  x3::lit('^') >> '*' >> x3::attr(std::uint8_t{1})
+                                     | x3::lit('^') >> 'T' >> x3::attr(std::uint8_t{2})
+                                     | x3::attr(std::uint8_t{0}))
+                                 >> x3::skip[index_groups] >> -(symmetry_spec)
                         ];
 
 // TODO(power): per comments on PR #513, promote `^` to a binary operator (with higher precedence than *) and then reject unsupported cases while traversing the AST.

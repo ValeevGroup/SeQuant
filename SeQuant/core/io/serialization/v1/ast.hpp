@@ -12,6 +12,7 @@
 #include <boost/spirit/home/x3/support/ast/position_tagged.hpp>
 #include <boost/variant.hpp>
 
+#include <cstdint>
 #include <string>
 #include <variant>
 #include <vector>
@@ -72,17 +73,23 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
   char perm_symm = unspecified;
   char braket_symm = unspecified;
   char column_symm = unspecified;
+  char conjugation_parity = unspecified;
 };
 
 // represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
   std::wstring name;
+  // value modifier: 0 none, 1 `label^*{...}` (Conjugate), 2 `label^T{...}`
+  // (Transpose); numerically sequant::ValueModifier. A '⁺' adjoint mark is
+  // part of `name`; the conversion to Tensor composes it with this.
+  std::uint8_t modifier = 0;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;
 
-  Tensor(std::wstring name = {}, IndexGroups indices = {},
-         boost::optional<SymmetrySpec> symmetry = {})
+  Tensor(std::wstring name = {}, std::uint8_t modifier = 0,
+         IndexGroups indices = {}, boost::optional<SymmetrySpec> symmetry = {})
       : name(std::move(name)),
+        modifier(modifier),
         indices(std::move(indices)),
         symmetry(std::move(symmetry)) {}
 };
@@ -158,9 +165,10 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Variable, name,
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
                           ket, auxiliaries, reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
-                          perm_symm, braket_symm, column_symm);
+                          perm_symm, braket_symm, column_symm,
+                          conjugation_parity);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
-                          indices, symmetry);
+                          modifier, indices, symmetry);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,
                           exponent, conjugated);
 

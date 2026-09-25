@@ -87,7 +87,7 @@ class TextGenerator : public Generator<Context> {
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
-    std::string representation = toUtf8(tensor.label()) + "[";
+    std::string representation = toUtf8(tensor.decorated_label()) + "[";
 
     using namespace std::literals;
     representation += tensor.const_indices() |

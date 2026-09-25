@@ -130,7 +130,7 @@ class Sum : public Expr {
   ExprPtr clone() const override;
 
   /// @brief adjoint of a Sum is a sum of adjoints of its factors
-  virtual void adjoint() override;
+  virtual std::int8_t adjoint() override;
 
   Sum &operator+=(const Expr &that);
 

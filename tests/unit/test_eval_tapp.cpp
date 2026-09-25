@@ -43,7 +43,9 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 
 [[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
   return tensor_to_key(
-      sequant::deserialize(spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
+      sequant::deserialize(
+          spec, {.def_perm_symm = sequant::Symmetry::Nonsymm,
+                 .def_braket_symm = sequant::Hermiticity::NonHermitian})
           ->as<sequant::Tensor>());
 }
 
@@ -229,7 +231,9 @@ TEST_CASE("eval_with_tapp", "[eval_tapp]") {
       };
 
   auto parse_antisymm = [](auto const& xpr) {
-    return deserialize(xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+    return deserialize(xpr,
+                       {.def_perm_symm = sequant::Symmetry::Antisymm,
+                        .def_braket_symm = sequant::Hermiticity::NonHermitian});
   };
 
   SECTION("Summation") {
@@ -477,16 +481,18 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
   const size_t nocc = 2, nvirt = 5;
   auto yield_ = rand_tensor_yield<TAPPTensorC>{nocc, nvirt};
 
-  // A Nonsymm-braket tensor's adjoint() marks the label with '⁺' and swaps
-  // bra/ket; binarize lowers that to an EvalOp::Adjoint node, and evaluating it
-  // must conjugate-transpose the operand. With genuinely complex data the
-  // conjugation is observable (a missing conj would leave imaginary parts
-  // unflipped — a pure transpose would still pass a norm-only check).
+  // A Nonsymm-braket tensor's adjoint() sets the Adjoint value modifier
+  // (spelled with '⁺') and swaps bra/ket; binarize lowers that to an
+  // EvalOp::Adjoint node, and evaluating it must conjugate-transpose the
+  // operand. With genuinely complex data the conjugation is observable (a
+  // missing conj would leave imaginary parts unflipped — a pure transpose
+  // would still pass a norm-only check).
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
-  t_adj.adjoint();
-  REQUIRE(t_adj.label() == L"t⁺");
+  REQUIRE(t_adj.adjoint() == 1);
+  REQUIRE(t_adj.label() == L"t");
+  REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node->op_type() == EvalOp::Adjoint);
@@ -525,8 +531,10 @@ TEST_CASE("evaluate consults the custom evaluator and short-circuits",
 
   // A two-tensor product binarizes to a single non-leaf (Product) root with two
   // tensor leaves.
-  auto node = eval_node(deserialize(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}",
-                                    {.def_perm_symm = Symmetry::Antisymm}));
+  auto node =
+      eval_node(deserialize(L"g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}",
+                            {.def_perm_symm = Symmetry::Antisymm,
+                             .def_braket_symm = Hermiticity::NonHermitian}));
   REQUIRE_FALSE(node.leaf());
 
   // Leaf evaluator that counts how many leaves get evaluated.
