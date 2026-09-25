@@ -404,6 +404,98 @@ tensor contractions, chosen so as to minimize the configured :code:`objective`.
      - Whether to prune disconnected (outer-product) subsets from the search space while looking for the best evaluation order.
      - true
      - No
+   * - :code:`replay`
+     - Configures the treatment of expressions that are evaluated repeatedly (e.g. once per iteration of an iterative solver), in which only some
+       tensors (the *volatile* ones, e.g. amplitudes) change between evaluations. See below.
+     - -
+     - No
+
+:code:`replay` is an object with the following properties:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Option
+     - Description
+     - Default
+     - Required
+   * - :code:`volatile`
+     - Identifies the volatile tensors. Either a single entry or an array of entries, where each entry is a String (a full-match regular expression
+       for the tensor label), an object with a :code:`label` property or an object with an :code:`expr` property (a serialized tensor) and an
+       optional :code:`tensor_equality_mode` (:code:`identity`, :code:`block` or :code:`shape`). The objects accept the same properties as the
+       :code:`contains` rules of the :code:`filter` step, except that :code:`tensor_equality_mode` defaults to :code:`block`. A tensor is volatile if
+       it matches any of the entries.
+     - -
+     - Yes
+   * - :code:`weight`
+     - Weight of the cost of contractions involving volatile tensors, relative to the ones that don't (conceptually the number of evaluations).
+     - 1.0
+     - No
+   * - :code:`intermediate_label`
+     - Label prefix of the persistent intermediates (see below). Has to be unique among all :code:`optimize` steps.
+     - :code:`Persistent`
+     - No
+   * - :code:`persistent_id`
+     - Name of the sub-ID referring to the persistent part of an output.
+     - :code:`persistent`
+     - No
+   * - :code:`volatile_id`
+     - Name of the sub-ID referring to the volatile part of an output.
+     - :code:`volatile`
+     - No
+
+With :code:`replay`, every largest subexpression that contains at least two tensors but no volatile one is replaced by a *persistent*
+intermediate, which only needs to be computed once. Equal subexpressions share an intermediate across all inputs of the step. Every input then
+produces two outputs: the definitions of the persistent intermediates (the *persistent* part) and the input's optimized expressions, which
+reference these intermediates (the *volatile* part). For every ID :code:`<id>` under which the outputs can be referenced (including the step ID
+itself), the two parts are available as :code:`<id>.persistent` and :code:`<id>.volatile`. :code:`<id>` still refers to both parts.
+
+The main use case is to export the persistent parts into their own code section, which is run once, before the sections that are run in every
+iteration:
+
+.. code-block:: json
+
+   {
+       "steps": [
+           {
+               "id": "opt",
+               "kind": "optimize",
+               "inputs": "biorth",
+               "options": {
+                   "replay": { "volatile": "T\\d\\w*", "weight": 10 }
+               }
+           },
+           {
+               "id": "treeify",
+               "kind": "to_export_tree",
+               "inputs": "opt"
+           },
+           {
+               "kind": "export",
+               "inputs": "treeify",
+               "options": {
+                   "language": "itf",
+                   "output": "code.itfaa",
+                   "grouping": {
+                       "Init": "persistent",
+                       "Residual": "res.volatile"
+                   }
+               }
+           }
+       ]
+   }
+
+Only the steps relevant for this feature are shown.
+
+Keep the following in mind:
+
+- A persistent intermediate that is used by several outputs is only part of the persistent part of the first of them. Use the step-wide
+  :code:`<step>.persistent` to get all of them.
+- There are no dependencies between the parts of an output, so exporting both into the same group gives no guarantee that the intermediates are
+  computed before they are used. Put them into different groups.
+- Don't reference both an ID and one of its sub-IDs in the :code:`grouping` of the :code:`export` step, as it is unspecified which of them takes
+  effect.
+- Steps that merge their inputs (e.g. :code:`cse` with :code:`merge_inputs`) merge the parts back together if given both of them.
 
 
 output
