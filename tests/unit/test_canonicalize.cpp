@@ -177,7 +177,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
 
     {  // Product containing Variables
       auto q2 = ex<Variable>(L"q2");
-      q2->adjoint();
+      REQUIRE(q2->adjoint() == 1);
       auto input =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -196,7 +196,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto f2 = ex<Tensor>(L"f", bra{L"a_1", L"a_2"}, ket{L"i_5", L"i_2"},
                            Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                            ColumnSymmetry::Symm);
-      f2->adjoint();
+      REQUIRE(f2->adjoint() == 1);
       auto input1 =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *

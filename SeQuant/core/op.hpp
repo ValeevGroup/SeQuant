@@ -373,7 +373,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
   /// @brief adjoint of an Operator is a reversed string of the adjoints of its
   /// ops
   /// @return +1: an operator string's adjoint carries no sign
-  virtual std::int8_t adjoint() override {
+  [[nodiscard]] virtual std::int8_t adjoint() override {
     std::reverse(this->begin(), this->end());
     std::for_each(this->begin(), this->end(), [](Op<S> &op) { op.adjoint(); });
     this->reset_hash_value();
@@ -717,9 +717,10 @@ class NormalOperator : public Operator<S>,
     return std::make_shared<NormalOperator>(*this);
   }
 
-  virtual std::int8_t adjoint() override {
+  [[nodiscard]] virtual std::int8_t adjoint() override {
     // same as base adjoint(), but updates extra state
-    Operator<S>::adjoint();
+    [[maybe_unused]] const auto sign = Operator<S>::adjoint();
+    SEQUANT_ASSERT(sign == 1);
     hug_.reset();
     ncreators_ = nannihilators();
     return 1;
@@ -1064,10 +1065,12 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   /// @brief adjoint of a NormalOperatorSequence is a reversed sequence of
   /// adjoints
   /// @return +1: an operator string's adjoint carries no sign
-  virtual std::int8_t adjoint() override {
+  [[nodiscard]] virtual std::int8_t adjoint() override {
     std::reverse(this->begin(), this->end());
-    std::for_each(this->begin(), this->end(),
-                  [](NormalOperator<S> &op) { op.adjoint(); });
+    std::for_each(this->begin(), this->end(), [](NormalOperator<S> &op) {
+      [[maybe_unused]] const auto sign = op.adjoint();
+      SEQUANT_ASSERT(sign == 1);
+    });
     reset_hash_value();
     return 1;
   }
@@ -1295,17 +1298,23 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
                                     ann(std::move(annihilators)), vacuum));
 }
 
+/// @return the adjoint of @p t, as a @c T
+/// @throw Exception if the adjoint of @p t is minus a @c T (an anti-Hermitian
+///        Tensor), which a @c T cannot hold; sequant::adjoint(const ExprPtr&)
+///        returns such an adjoint with its sign as a scalar factor
 template <typename T>
 std::decay_t<T> adjoint(
     T &&t, std::void_t<decltype(std::declval<T &>().adjoint())> * = nullptr) {
-  if constexpr (std::is_reference_v<T>) {
-    std::decay_t<T> t_copy(t);
-    t_copy.adjoint();
-    return t_copy;
+  std::decay_t<T> result(std::forward<T>(t));
+  if constexpr (std::is_void_v<decltype(result.adjoint())>) {
+    result.adjoint();  // an Op: no sign to account for
   } else {
-    t.adjoint();
-    return std::move(t);
+    if (result.adjoint() != 1)
+      throw Exception(
+          "sequant::adjoint(T): the adjoint carries a sign that a T cannot "
+          "hold; use sequant::adjoint(const ExprPtr&)");
   }
+  return result;
 }
 
 }  // namespace sequant

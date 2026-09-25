@@ -940,7 +940,7 @@ class Operator : public Operator<void, S> {
 
   bool commutes_with_atom(const Expr& that) const override;
 
-  std::int8_t adjoint() override;
+  [[nodiscard]] std::int8_t adjoint() override;
 
   /// @brief returns the batch ordinals if any
   std::optional<container::svector<std::size_t>> batch_ordinals() const {

@@ -578,12 +578,12 @@ TEST_CASE("expr", "[elements]") {
     {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
       Power pv(ex<Variable>(L"z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
-      pv.adjoint();
+      REQUIRE(pv.adjoint() == 1);
       REQUIRE(pv.conjugated());
       REQUIRE(!pv.base()->as<Variable>().conjugated());
       REQUIRE(pv.exponent() == rational{1, 2});
       // double adjoint is identity
-      pv.adjoint();
+      REQUIRE(pv.adjoint() == 1);
       REQUIRE(!pv.conjugated());
 
       using scalar_type = Constant::scalar_type;
@@ -596,7 +596,7 @@ TEST_CASE("expr", "[elements]") {
       // (1+i)^{2} = 2i; ((1+i)^{2})* = -2i
       auto one_plus_i = ex<Constant>(scalar_type{1, 1});  // (1+i)
       auto square = ex<Power>(one_plus_i, 2);             // (1+i)^{2}
-      square->as<Power>().adjoint();
+      REQUIRE(square->as<Power>().adjoint() == 1);
       REQUIRE(square->as<Power>().conjugated());
       Power::flatten(square);
       REQUIRE(square->is<Constant>());

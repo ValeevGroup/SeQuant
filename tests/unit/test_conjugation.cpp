@@ -1763,3 +1763,25 @@ TEST_CASE("painter_colours_by_conjugation_symmetry", "[conjugation]") {
     REQUIRE_FALSE(*none == *even);
   }
 }
+
+TEST_CASE("generic_adjoint_keeps_no_sign", "[conjugation]") {
+  // sequant::adjoint(T) returns a T, which cannot hold the sign an
+  // anti-Hermitian tensor's adjoint carries: it throws, and the ExprPtr
+  // overload is the way to get that adjoint with its sign
+  Tensor d(L"d", bra{L"i_1"}, ket{L"i_2"},
+           TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+  REQUIRE_THROWS_AS(sequant::adjoint(d), Exception);
+  auto viaExpr = sequant::adjoint(ex<Tensor>(d));
+  REQUIRE(viaExpr->is<Product>());
+  REQUIRE(viaExpr->as<Product>().scalar() == -1);
+
+  // a Hermitian tensor's adjoint is itself, respelled
+  Tensor h(L"h", bra{L"i_1"}, ket{L"i_2"},
+           TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+  Tensor h_adj = sequant::adjoint(h);
+  REQUIRE(h_adj.bra()[0].label() == L"i_2");
+  REQUIRE(h_adj.value_modifier() == ValueModifier::None);
+  // and a Nonsymm one is the ⁺ state
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  REQUIRE(sequant::adjoint(t).value_modifier() == ValueModifier::Adjoint);
+}
