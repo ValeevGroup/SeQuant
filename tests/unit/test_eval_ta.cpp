@@ -4564,13 +4564,11 @@ TEST_CASE("batched_eval_external_axis_scatter", "[eval][batched-external]") {
   // the mode without overlap, the scattered result equals the unbatched one
   // EXACTLY -- a memory schedule, never an approximation.
   //
-  // The external here is an AUXILIARY index x_1 rather than an occupied one
-  // only because canonicalize forbids a NON-auxiliary index shared among > 2
-  // tensor slots (no well-defined bra/ket slot type); a high-order aux
-  // hyperindex carried into the result IS supported. The runtime scatter
-  // mechanism under test is mode-agnostic -- occ vs aux matters only at the
-  // DP/cost level (covered by the [dryrun-occ-*] gates). Same rationale as
-  // "eval_forest_over_external_occ nests intra-term aux batching".
+  // The external here is an AUXILIARY index x_1 rather than an occupied one;
+  // the runtime scatter mechanism under test is mode-agnostic -- occ vs aux
+  // matters only at the DP/cost level (covered by the [dryrun-occ-*] gates).
+  // Same rationale as "eval_forest_over_external_occ nests intra-term aux
+  // batching".
   using sequant::evaluate;
   using sequant::make_batched_custom_evaluator;
   using TA::TArrayD;

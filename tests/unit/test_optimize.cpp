@@ -3447,6 +3447,16 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
   CHECK(st[root][0][none].flops == st[root][0][unb].flops);
 }
 
+TEST_CASE("named hyperindex in antisymmetric slot", "[optimize]") {
+  using namespace sequant;
+  // i1 survives into the result and is shared by t (in its antisymmetric bra),
+  // f and g
+  auto res = deserialize<ResultExpr>(
+      L"R{i1,i2;} = t{i1,i2;a1,a2}:A f{a1;i1} g{a2;i1}");
+  REQUIRE_NOTHROW(optimize(res));
+  REQUIRE_NOTHROW(binarize(res));
+}
+
 TEST_CASE("contractible_adjacency", "[optimize][pruning]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;

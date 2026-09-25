@@ -789,25 +789,18 @@ TensorNetworkV3::canonicalize_slots(
           slot_type = IndexSlotType::IndexBundle;
         } else {
           // a high-order hyperindex: a named index shared among more than 2
-          // tensor slots (e.g. an auxiliary/batching index common to many
-          // factors, as in Laplace-transform MP2 or tensor hypercontraction).
-          // Supported only for auxiliary indices, which carry no vector-space
-          // (bra/ket) character; classify by the aux slot it occupies. A
-          // non-auxiliary high-order hyperindex has no well-defined slot type,
-          // so hard-error (in every build config, not just assertion-enabled
-          // ones) rather than silently mis-canonicalize it.
+          // tensor slots (e.g. a batching index common to many factors, as in
+          // Laplace-transform MP2 or tensor hypercontraction). If it only
+          // occupies aux slots classify it as such, otherwise treat it like
+          // the 2-slot case above.
           bool all_aux = true;
           for (std::size_t v = 0; v != edge_it->vertex_count(); ++v)
             if (edge_it->vertex(v).getOrigin() != Origin::Aux) {
               all_aux = false;
               break;
             }
-          if (!all_aux)
-            throw Exception(
-                "TensorNetworkV3::canonicalize_slots: high-order (shared among "
-                ">2 tensor slots) non-auxiliary hyperindices are not "
-                "supported");
-          slot_type = IndexSlotType::TensorAux;
+          slot_type =
+              all_aux ? IndexSlotType::TensorAux : IndexSlotType::IndexBundle;
         }
       } else
         slot_type = IndexSlotType::IndexBundle;
@@ -1269,7 +1262,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // - can involve any number of aux indices
         if (current_edge.vertex_count() > 1) {
           // ignore if named index
-          if (!this->ext_indices_.contains(current_edge.idx())) {
+          if (!named_indices.contains(current_edge.idx())) {
             [[maybe_unused]] std::size_t nbra = 0;
             [[maybe_unused]] std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;

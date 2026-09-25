@@ -1601,6 +1601,30 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
   }  // SECTION("constructors")
 
+  SECTION("canonicalize_slots with named non-aux hyperindex") {
+    // i1 is named and shared by 3 slots, one of them in the antisymmetric bra
+    // of t
+    const TN::NamedIndexSet named{Index{L"i_1"}, Index{L"i_2"}};
+    auto canonicalize = [&named](std::wstring_view input) {
+      TN tn(deserialize(input));
+      return tn.canonicalize_slots(
+          TensorCanonicalizer::cardinal_tensor_labels(), &named);
+    };
+
+    const auto ref = canonicalize(L"t{i1,i2;a1,a2}:A f{a1;i1} g{a2;i1}");
+    const auto reordered = canonicalize(L"g{a3;i1} f{a4;i1} t{i1,i2;a4,a3}:A");
+    const auto ket_swapped =
+        canonicalize(L"t{i1,i2;a2,a1}:A f{a1;i1} g{a2;i1}");
+
+    REQUIRE(ref.graph->cmp(*reordered.graph) == 0);
+    REQUIRE(ref.phase == reordered.phase);
+    REQUIRE(ref.get_indices<container::svector<Index>>() ==
+            reordered.get_indices<container::svector<Index>>());
+
+    REQUIRE(ref.graph->cmp(*ket_swapped.graph) == 0);
+    REQUIRE(ref.phase == -ket_swapped.phase);
+  }
+
   SECTION("accessors") {
     {
       constexpr const auto V = Vacuum::SingleProduct;
