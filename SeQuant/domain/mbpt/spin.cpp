@@ -1953,9 +1953,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
       os_st.at(s) = P_vec.at(s) * term;
       expand(os_st.at(s));
       os_st.at(s) = expand_P_op(os_st.at(s));
-      os_st.at(s) =
-          open_shell_spintrace(os_st.at(s), ext_groups, static_cast<int>(s))
-              .at(0);
+      os_st.at(s) = open_shell_spintrace(os_st.at(s), ext_groups, s).at(0);
 
       bool need_A =
           (std::max(n_bra, n_ket) > 2) && !A_vec.at(s)->is<Constant>();
