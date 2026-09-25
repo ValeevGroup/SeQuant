@@ -104,16 +104,6 @@ ExprPtr make_variable() { return ex<Variable>(label_scalar); }
 
 }  // namespace detail
 
-std::string to_label_annotation(const Index& idx) {
-  using namespace ranges::views;
-  using ranges::to;
-
-  return toUtf8(idx.label()) +
-         (idx.proto_indices() | transform(&Index::label) |
-          transform([](auto&& str) { return toUtf8(str); }) |
-          ranges::views::join | to<std::string>);
-}
-
 std::string EvalExpr::indices_annot() const noexcept {
   using ranges::views::filter;
   using ranges::views::join;
@@ -397,7 +387,7 @@ EvalExprNode binarize(Tensor const& t) {
   // The Constant(1) right child is a sentinel — present so the FullBinaryNode
   // invariant ("every non-leaf has two children") holds; evaluate ignores it
   // for EvalOp::Adjoint dispatch.
-  if (!t.label().empty() && t.label().back() == adjoint_label) {
+  if (is_adjoint_label(t.label())) {
     // The Adjoint node carries the *adjointed* tensor (so its canon_indices
     // reflect the slot order parents see).
 
@@ -405,8 +395,7 @@ EvalExprNode binarize(Tensor const& t) {
     // marker off and swap bra/ket back to natural orientation.
     Tensor bare{t};
     bare.adjoint();
-    SEQUANT_ASSERT(bare.label().empty() ||
-                   bare.label().back() != adjoint_label);
+    SEQUANT_ASSERT(!is_adjoint_label(bare.label()));
     EvalExprNode bare_leaf{EvalExpr{bare}};
 
     // Sentinel right child.

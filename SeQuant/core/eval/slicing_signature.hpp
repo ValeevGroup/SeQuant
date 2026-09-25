@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_SLICING_SIGNATURE_HPP
 #define SEQUANT_EVAL_SLICING_SIGNATURE_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
@@ -18,10 +19,7 @@ namespace sequant {
 ///         (i.e. the corresponding tensor mode), or nullopt if absent.
 [[nodiscard]] inline std::optional<std::size_t> index_position(
     meta::eval_node auto const& node, Index const& ix) {
-  auto const& idxs = node->canon_indices();
-  for (std::size_t p = 0; p < idxs.size(); ++p)
-    if (idxs[p] == ix) return p;
-  return std::nullopt;
+  return find_position(node->canon_indices(), ix);
 }
 
 /// \brief The slicing signature of \p node over \p modes: the canonical

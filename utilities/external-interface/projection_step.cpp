@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <nlohmann/json.hpp>

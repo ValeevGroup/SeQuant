@@ -585,6 +585,34 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   return apply_op(node, std::move(left), right);
 }
 
+/// \return the IndexSpace base keys of the modes in \p modes, comma-joined
+///         without a trailing comma (the dag-scope trace format)
+template <typename Modes>
+[[nodiscard]] std::string dag_scope(Modes&& modes) {
+  return join_strings<std::string>(
+      std::forward<Modes>(modes), ",",
+      [](Index const& m) { return toUtf8(m.space().base_key()); });
+}
+
+/// value id -> forest node: the node of \p vmap whose value key is that of
+/// \p rich's cell \p vid.
+/// \throw Exception naming \p what if there is none, i.e. the schedule and
+///        the forest disagree; throwing rather than asserting also keeps the
+///        non-Debug build from dereferencing an end iterator.
+template <typename ValueMap, typename Rich>
+[[nodiscard]] auto const& resolve_value_node(ValueMap const& vmap,
+                                             Rich const& rich, std::size_t vid,
+                                             std::string const& what) {
+  auto const it = vmap.find(value_key_of(rich.cells[vid]));
+  if (it == vmap.end())
+    throw Exception("evaluate_ordered_schedule: a " + what +
+                    " was not found in the forest's value-node map (value " +
+                    std::to_string(vid) + ")");
+  // The map holds non-owning pointers into the forest, which outlives it (see
+  // ValueNodeMap, value_node_map.hpp).
+  return *it->second;
+}
+
 ///
 /// \brief Realize one \c ScopeBlock's batch loop against \p parent_cache,
 /// executed entirely on the cell table (the explicit-value-cells design,
@@ -696,19 +724,7 @@ void run_ordered_contracted_block(
         "only Contracted/External are realizable");
 
   auto const resolve = [&](std::size_t vid) -> node_t const& {
-    auto const it = vmap.find(value_key_of(rich.cells[vid]));
-    // Refusal: an ill-formed schedule (table/forest disagreement). Throwing
-    // rather than asserting also keeps the non-Debug build from dereferencing
-    // an end iterator.
-    if (it == vmap.end())
-      throw Exception(
-          "evaluate_ordered_schedule: a loop-block value_id was not found in "
-          "the forest's value-node map (value " +
-          std::to_string(vid) + ")");
-    // The map holds non-owning pointers into the forest, which outlives it:
-    // the forest is a parameter of the enclosing call and the map a local of
-    // that call (see ValueNodeMap, value_node_map.hpp).
-    return *it->second;
+    return resolve_value_node(vmap, rich, vid, "loop-block value_id");
   };
 
   // A cell holds the canonical orientation (see CellRegistry's own doc);
@@ -1279,23 +1295,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
   // block walk below, which takes it by const reference.
   auto const vmap = build_value_key_node_map(forest);
 
-  // value_id -> forest node: the same lookup run_ordered_contracted_block's
-  // own `resolve` performs (see its definition above this function), built
-  // again here since that one closes over the block function's own
-  // parameters, not this function's locals.
   auto const resolve = [&](std::size_t vid) -> node_t const& {
-    auto const it = vmap.find(value_key_of(rich.cells[vid]));
-    // Refusal: an ill-formed schedule (table/forest disagreement); see the
-    // same lambda inside run_ordered_contracted_block.
-    if (it == vmap.end())
-      throw Exception(
-          "evaluate_ordered_schedule: a value_id was not found in the "
-          "forest's value-node map (value " +
-          std::to_string(vid) + ")");
-    // The map holds non-owning pointers into the forest, which outlives it:
-    // the forest is a parameter of the enclosing call and the map a local of
-    // that call (see ValueNodeMap, value_node_map.hpp).
-    return *it->second;
+    return resolve_value_node(vmap, rich, vid, "value_id");
   };
 
   // Explicit value cells: build and statically validate the cell
@@ -1898,27 +1899,20 @@ inline std::function<std::string(std::size_t)> make_node_meta(
     RichSchedule const& rich) {
   std::unordered_map<std::size_t, std::string> map;
   map.reserve(rich.cells.size());
-  auto const dag_scope = [](auto const& modes) {
-    std::string s;
-    for (auto const& m : modes) {
-      if (!s.empty()) s += ",";
-      s += toUtf8(m.space().base_key());
-    }
-    return s;
-  };
   for (auto const& cell : rich.cells) {
     std::string uses;
     for (auto const& occ : cell.occurrences) {
       if (!uses.empty()) uses += ",";
-      std::string sc;
-      for (auto const& e : occ.ectx) {
-        if (!sc.empty()) sc += ",";
-        sc += toUtf8(e.first.space().base_key());
-      }
-      uses += std::format("{{{}}}", sc);
+      uses += std::format(
+          "{{{}}}",
+          detail::dag_scope(occ.ectx | std::views::transform(
+                                           [](auto const& e) -> auto const& {
+                                             return e.first;
+                                           })));
     }
-    map.emplace(cell.hash, std::format("home={{{}}} uses=[{}]",
-                                       dag_scope(cell.home_modes), uses));
+    map.emplace(cell.hash,
+                std::format("home={{{}}} uses=[{}]",
+                            detail::dag_scope(cell.home_modes), uses));
   }
   return [map = std::move(map)](std::size_t hash) -> std::string {
     auto const it = map.find(hash);

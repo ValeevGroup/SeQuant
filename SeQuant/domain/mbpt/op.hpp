@@ -72,6 +72,21 @@ inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
   result += detail::pert_superscripts[pert_order];
   return result;
 }
+
+/// @brief the rank pairs of a sum of operators truncated at ranks
+/// (@p n1, @p n2), highest first
+/// @return `(n1, n2), (n1-1, n2-1), ...`, stopping before `(0, 0)` and after
+/// the first pair with a zero entry
+inline container::svector<std::pair<std::int64_t, std::int64_t>>
+descending_rank_pairs(std::int64_t n1, std::int64_t n2) {
+  container::svector<std::pair<std::int64_t, std::int64_t>> result;
+  for (std::int64_t r1 = n1, r2 = n2; r1 >= 0 && r2 >= 0; --r1, --r2) {
+    if (r1 == 0 && r2 == 0) break;
+    result.emplace_back(r1, r2);
+    if (r1 == 0 || r2 == 0) break;
+  }
+  return result;
+}
 }  // namespace detail
 
 DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t);  // define nₚ
@@ -296,83 +311,19 @@ class QuantumNumberChange
 
   /// @brief determines the number of creators in the particle space defined in
   /// the current context
-  interval_t ncre_particles() {
-    const auto& qnvec = this->base();
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    interval_t result = 0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      const auto intersect_type =
-          base_space.attr()
-              .intersection(isr->particle_space(base_space.qns()).attr())
-              .type();
-      if (IndexSpace::Type{} != intersect_type) {
-        result += qnvec[2 * i];
-      }
-    }
-    return result;
-  }
+  interval_t ncre_particles() { return count_in_active_space(true, true); }
 
   /// @brief determines the number of annihilators in the particle space defined
   /// in the current context
-  interval_t nann_particles() {
-    const auto& qnvec = this->base();
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    interval_t result = 0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      const auto intersect_type =
-          base_space.attr()
-              .intersection(isr->particle_space(base_space.qns()).attr())
-              .type();
-      if (IndexSpace::Type{} != intersect_type) {
-        result += qnvec[2 * i + 1];
-      }
-    }
-    return result;
-  }
+  interval_t nann_particles() { return count_in_active_space(true, false); }
 
   /// @brief determines the number of creators in the hole space defined in the
   /// current context
-  interval_t ncre_holes() {
-    const auto& qnvec = this->base();
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    interval_t result = 0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      const auto intersect_type =
-          base_space.attr()
-              .intersection(isr->hole_space(base_space.qns()).attr())
-              .type();
-      if (IndexSpace::Type{} != intersect_type) {
-        result += qnvec[2 * i];
-      }
-    }
-    return result;
-  }
+  interval_t ncre_holes() { return count_in_active_space(false, true); }
 
   /// @brief determines the number of annihilators in the hole space defined in
   /// the current context
-  interval_t nann_holes() {
-    const auto& qnvec = this->base();
-    auto isr = get_default_context().index_space_registry();
-    const auto& base_spaces = isr->base_spaces();
-    interval_t result = 0;
-    for (unsigned int i = 0; i < base_spaces.size(); i++) {
-      const auto& base_space = base_spaces[i];
-      const auto intersect_type =
-          base_space.attr()
-              .intersection(isr->hole_space(base_space.qns()).attr())
-              .type();
-      if (IndexSpace::Type{} != intersect_type) {
-        result += qnvec[2 * i + 1];
-      }
-    }
-    return result;
-  }
+  interval_t nann_holes() { return count_in_active_space(false, false); }
 
   /// tests whether particular changes in quantum number change
   /// @param i an integer
@@ -415,6 +366,28 @@ class QuantumNumberChange
 
  private:
   auto& base() { return static_cast<base_type&>(*this); }
+
+  /// @return the number of creators (if @p creators) or annihilators in the
+  /// base spaces that intersect the active particle (if @p particle) or hole
+  /// space defined in the current context
+  interval_t count_in_active_space(bool particle, bool creators) {
+    const auto& qnvec = this->base();
+    auto isr = get_default_context().index_space_registry();
+    const auto& base_spaces = isr->base_spaces();
+    interval_t result = 0;
+    for (unsigned int i = 0; i < base_spaces.size(); i++) {
+      const auto& base_space = base_spaces[i];
+      const auto& active_space = particle
+                                     ? isr->particle_space(base_space.qns())
+                                     : isr->hole_space(base_space.qns());
+      const auto intersect_type =
+          base_space.attr().intersection(active_space.attr()).type();
+      if (IndexSpace::Type{} != intersect_type) {
+        result += qnvec[creators ? 2 * i : 2 * i + 1];
+      }
+    }
+    return result;
+  }
 };
 
 template <std::size_t N, typename Tag, typename QNV>

@@ -13,6 +13,7 @@
 
 #include <range/v3/algorithm/all_of.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -729,6 +730,34 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
     SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
     return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
   }
+}
+
+/// \brief The indices contracted at a binary evaluation node.
+///
+/// These are the indices present in *both* children's (canonical) result
+/// indices but absent from the node's own result indices -- i.e. the indices
+/// summed over by this node's product. Empty for leaves, for sums, and for
+/// products with no contracted index (e.g. a pure outer/Hadamard product).
+///
+/// Each such index `K` is a valid mode to evaluate the subtree rooted at
+/// `node` in batches: the node computes `R = sum_K f(K)`, so
+/// `R = sum_{blocks b} sum_{K in b} f(K)` -- evaluating per-block and summing
+/// bounds the peak memory of `K`-carrying intermediates in the subtree. A
+/// custom evaluator (see CacheManager::custom_evaluator_type) can use this to
+/// implement batched evaluation.
+[[nodiscard]] inline Index::index_vector contracted_indices(
+    meta::eval_node auto const& node) {
+  Index::index_vector result;
+  if (node.leaf() || !node->is_product()) return result;
+  auto const& l = node.left()->canon_indices();
+  auto const& r = node.right()->canon_indices();
+  auto const& c = node->canon_indices();
+  auto contains = [](auto const& vec, Index const& ix) {
+    return std::find(vec.begin(), vec.end(), ix) != vec.end();
+  };
+  for (Index const& ix : l)
+    if (contains(r, ix) && !contains(c, ix)) result.push_back(ix);
+  return result;
 }
 
 }  // namespace sequant

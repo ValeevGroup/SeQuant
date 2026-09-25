@@ -982,3 +982,12 @@ TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
     CHECK(got(z) == Catch::Approx(ref));
   }
 }
+
+TEST_CASE("result_size_in_bytes_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  BTensorD t{btas::Range{container::svector<std::size_t>{2, 3}}};
+  ResultPtr r = eval_result<ResultTensorBTAS<BTensorD>>(std::move(t));
+  REQUIRE(r->size_in_bytes() == 6 * sizeof(double));
+}

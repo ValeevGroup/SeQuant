@@ -5,6 +5,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 
 #include <nlohmann/json.hpp>
 

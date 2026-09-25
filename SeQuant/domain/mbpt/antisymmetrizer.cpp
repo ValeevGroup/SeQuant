@@ -2,6 +2,7 @@
 // Created by Eduard Valeyev on 9/22/24.
 //
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
@@ -140,67 +141,31 @@ antisymm_element::gen_antisymm_unique(std::vector<T> ordered_indices) {
     ordered_numbers.push_back(i);
   }
 
-  // return {next_exists, nswaps for this permutation} N.B.
-  // nswaps_relative_to_input != nswaps_relative_to_оriginal
-  auto swapcounting_tracking_next_permutation =
-      [](auto first, auto last) -> std::pair<bool, int> {
-    int nswaps = 0;
-    using BidirIt = decltype(first);
-    if (first == last) return std::make_pair(false, 0);
-    BidirIt i = last;
-    if (first == --i) return std::make_pair(false, 0);
-    while (true) {
-      BidirIt i1, i2;
-      i1 = i;
-      if (*--i < *i1) {
-        i2 = last;
-        while (!(*i < *--i2))
-          ;
-        std::iter_swap(i, i2);
-        ++nswaps;
-        std::reverse(i1, last);
-        nswaps += (std::distance(i1, last)) / 2;  // logic from
-        // https://en.cppreference.com/w/cpp/algorithm/reverse
-        return std::make_pair(true, nswaps);
-      }
-      if (i == first) {
-        std::reverse(first, last);
-        nswaps += (std::distance(first, last)) / 2;
-        return std::make_pair(false, nswaps);
-      }
-    }
-  };
-
   std::vector<int> numbers = ordered_numbers;
   result.push_back({1, ordered_indices});
 
-  int total_swaps = 0;  // even # swaps produces positive and odd # of swaps
-  // produce negative
+  int parity = 0;  // even permutations produce positive and odd negative
   [[maybe_unused]] int counter = 0;
 
   bool do_next_perm = true;
 
   while (do_next_perm) {
-    auto do_swaps =
-        swapcounting_tracking_next_permutation(begin(numbers), end(numbers));
-    do_next_perm = do_swaps.first;
-    total_swaps += do_swaps.second;
+    do_next_perm =
+        next_permutation_parity(parity, begin(numbers), end(numbers));
     if (!do_next_perm) {
       break;
     }
     auto is_canonical_sign =
-        [this, &total_swaps](const auto& indices) -> std::pair<bool, bool> {
+        [this, &parity](const auto& indices) -> std::pair<bool, bool> {
       for (auto& group :
            this->index_group) {  // There is only one sorted possibility in a
         // set (tensor) considering that no index
         // label should be the same.
         if (!is_sorted(indices.begin() + group.first,
                        indices.begin() + group.second))
-          return {false,
-                  total_swaps % 2 ==
-                      0};  // total swaps divisible by 2 means true = positive.
+          return {false, parity == 0};  // even parity means true = positive.
       }
-      return {true, total_swaps % 2 == 0};
+      return {true, parity == 0};
     };
     // sieve out non-canonical terms
     auto [is_canonical, sign] = is_canonical_sign(numbers);

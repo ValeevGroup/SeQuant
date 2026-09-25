@@ -5,6 +5,7 @@
 #ifndef SEQUANT_TENSOR_NETWORK_UTILITIES_HPP
 #define SEQUANT_TENSOR_NETWORK_UTILITIES_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -104,11 +105,7 @@ struct CanonicalTensorCompare {
     }
 
     const auto get_label = [](const auto &t) {
-      if (label(t).back() == adjoint_label) {
-        // grab base label if adjoint label is present
-        return label(t).substr(0, label(t).size() - 1);
-      }
-      return label(t);
+      return strip_adjoint_label(label(t));
     };
 
     const auto lhs_it = std::find(labels.begin(), labels.end(), get_label(lhs));
@@ -191,16 +188,15 @@ int sort_then_replace_by_ordinals(IntegerSequence &iseq) {
       ranges::views::iota(0ul, N) |
       ranges::to<container::svector<SwapCountable<std::size_t>>>();
 
-  reset_ts_swap_counter<std::size_t>();
-  bubble_sort(begin(input_ordinals), end(input_ordinals),
-              [&iseq](std::size_t lhs, std::size_t rhs) {
-                return iseq[lhs] < iseq[rhs];
-              });
+  const int parity = bubble_sort_parity(
+      input_ordinals, [&iseq](std::size_t lhs, std::size_t rhs) {
+        return iseq[lhs] < iseq[rhs];
+      });
 
   // Overwrite iseq contents with the input ordinals
   std::copy(input_ordinals.begin(), input_ordinals.end(), iseq.begin());
 
-  return ts_swap_counter_is_even<std::size_t>() ? +1 : -1;
+  return parity;
 }
 
 /// type of order specifies by a less-than comparison operation

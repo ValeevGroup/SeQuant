@@ -5,6 +5,7 @@
 #ifndef SEQUANT_WICK_HPP
 #define SEQUANT_WICK_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -33,7 +34,10 @@
 
 #include <bitset>
 #include <mutex>
+#include <optional>
+#include <ranges>
 #include <span>
+#include <string>
 #include <utility>
 
 namespace sequant {
@@ -212,58 +216,11 @@ class WickTheorem {
   /// @tparam IndexPairContainer a sequence of std::pair<Integer,Integer>
   template <typename IndexPairContainer>
   WickTheorem &set_nop_connections(IndexPairContainer &&op_index_pairs) {
-    auto has_duplicates = [](const auto &op_index_pairs) {
-      const auto the_end = end(op_index_pairs);
-      for (auto it = begin(op_index_pairs); it != the_end; ++it) {
-        const auto found_dup_it = std::find(it + 1, the_end, *it);
-        if (found_dup_it != the_end) {
-          return true;
-        }
-      }
-      return false;
-    };
-    if (has_duplicates(op_index_pairs)) {
-      throw Exception(
-          "WickTheorem::set_nop_connections(arg): arg contains duplicates");
+    if (auto nconnections =
+            set_nop_pair_mask(op_index_pairs, nop_connections_,
+                              nop_connections_input_, "set_nop_connections")) {
+      nop_nconnections_total_ = *nconnections;
     }
-
-    // process now if input is resolved, or is a deferred call from
-    // compute_nopseq (already cached list)
-    if (expr_input_ == nullptr || !nop_connections_input_.empty()) {
-      for (const auto &opidx_pair : op_index_pairs) {
-        constexpr bool signed_indices =
-            std::is_signed_v<typename std::remove_reference_t<
-                decltype(op_index_pairs)>::value_type::first_type>;
-        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
-            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
-          throw Exception(
-              "WickTheorem::set_nop_connections: nop index out of range");
-        }
-        if constexpr (signed_indices) {
-          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
-            throw Exception(
-                "WickTheorem::set_nop_connections: nop index out of range");
-          }
-        }
-      }
-      if (op_index_pairs.size() != 0ul) {
-        nop_connections_.resize(input_->size());
-        for (auto &v : nop_connections_) {
-          v.set();
-        }
-        for (const auto &opidx_pair : op_index_pairs) {
-          nop_connections_[opidx_pair.first].reset(opidx_pair.second);
-          nop_connections_[opidx_pair.second].reset(opidx_pair.first);
-        }
-      }
-      nop_nconnections_total_ = nop_connections_input_.size();
-      nop_connections_input_.clear();
-    } else {
-      ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
-        nop_connections_input_.push_back(idxpair);
-      });
-    }
-
     return *this;
   }
 
@@ -290,60 +247,9 @@ class WickTheorem {
   template <typename IndexPairContainer>
   WickTheorem &set_nop_avoided_connections(
       IndexPairContainer &&op_index_pairs) {
-    auto has_duplicates = [](const auto &op_index_pairs) {
-      const auto the_end = end(op_index_pairs);
-      for (auto it = begin(op_index_pairs); it != the_end; ++it) {
-        const auto found_dup_it = std::find(it + 1, the_end, *it);
-        if (found_dup_it != the_end) {
-          return true;
-        }
-      }
-      return false;
-    };
-    if (has_duplicates(op_index_pairs)) {
-      throw Exception(
-          "WickTheorem::set_nop_avoided_connections(arg): arg contains "
-          "duplicates");
-    }
-
-    // process now if input is resolved, or is a deferred call from
-    // compute_nopseq (already cached list)
-    if (expr_input_ == nullptr || !nop_avoided_connections_input_.empty()) {
-      for (const auto &opidx_pair : op_index_pairs) {
-        constexpr bool signed_indices =
-            std::is_signed_v<typename std::remove_reference_t<
-                decltype(op_index_pairs)>::value_type::first_type>;
-        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
-            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
-          throw Exception(
-              "WickTheorem::set_nop_avoided_connections: nop index out of "
-              "range");
-        }
-        if constexpr (signed_indices) {
-          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
-            throw Exception(
-                "WickTheorem::set_nop_avoided_connections: nop index out of "
-                "range");
-          }
-        }
-      }
-      if (op_index_pairs.size() != 0ul) {
-        nop_avoided_connections_.resize(input_->size());
-        for (auto &v : nop_avoided_connections_) {
-          v.set();  // 1 = not avoided (same convention as nop_connections_)
-        }
-        for (const auto &opidx_pair : op_index_pairs) {
-          nop_avoided_connections_[opidx_pair.first].reset(opidx_pair.second);
-          nop_avoided_connections_[opidx_pair.second].reset(opidx_pair.first);
-        }
-      }
-      nop_avoided_connections_input_.clear();
-    } else {
-      ranges::for_each(op_index_pairs, [this](const auto &idxpair) {
-        nop_avoided_connections_input_.push_back(idxpair);
-      });
-    }
-
+    set_nop_pair_mask(op_index_pairs, nop_avoided_connections_,
+                      nop_avoided_connections_input_,
+                      "set_nop_avoided_connections");
     return *this;
   }
 
@@ -601,6 +507,66 @@ class WickTheorem {
       nop_avoided_connections_input_;  // only used to cache input to
                                        // set_nop_avoided_connections_
 
+  /// validates the pairs of normal operator indices in @p op_index_pairs
+  /// and, once the input is resolved, records them in @p mask as a reverse
+  /// bitmask (0 = pair listed, 1 = not listed); until then, caches them in
+  /// @p cache
+  /// @param caller name of the public setter, used in exception messages
+  /// @return the number of pairs that were in @p cache before it was
+  /// consumed, or std::nullopt if @p op_index_pairs were cached
+  /// @throw Exception if @p op_index_pairs contains duplicates or out-of-range
+  /// indices
+  template <typename IndexPairContainer>
+  std::optional<std::size_t> set_nop_pair_mask(
+      const IndexPairContainer &op_index_pairs,
+      container::svector<std::bitset<max_input_size>> &mask,
+      container::svector<std::pair<size_t, size_t>> &cache,
+      const std::string &caller) {
+    if (has_duplicates(op_index_pairs)) {
+      throw Exception("WickTheorem::" + caller +
+                      "(arg): arg contains duplicates");
+    }
+
+    // process now if input is resolved, or is a deferred call from
+    // compute_nopseq (already cached list)
+    if (expr_input_ == nullptr || !cache.empty()) {
+      for (const auto &opidx_pair : op_index_pairs) {
+        constexpr bool signed_indices =
+            std::is_signed_v<typename std::ranges::range_value_t<
+                IndexPairContainer>::first_type>;
+        if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
+            static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
+          throw Exception("WickTheorem::" + caller +
+                          ": nop index out of range");
+        }
+        if constexpr (signed_indices) {
+          if (opidx_pair.first < 0 || opidx_pair.second < 0) {
+            throw Exception("WickTheorem::" + caller +
+                            ": nop index out of range");
+          }
+        }
+      }
+      if (op_index_pairs.size() != 0ul) {
+        mask.resize(input_->size());
+        for (auto &v : mask) {
+          v.set();
+        }
+        for (const auto &opidx_pair : op_index_pairs) {
+          mask[opidx_pair.first].reset(opidx_pair.second);
+          mask[opidx_pair.second].reset(opidx_pair.first);
+        }
+      }
+      const auto ncached = cache.size();
+      cache.clear();
+      return ncached;
+    } else {
+      ranges::for_each(op_index_pairs, [&cache](const auto &idxpair) {
+        cache.push_back(idxpair);
+      });
+      return std::nullopt;
+    }
+  }
+
   enum class TopologicalPartitionType { NormalOperator, Index };
 
   /// the number of partitions of the topologically equivalent NormalOperator's
@@ -783,6 +749,28 @@ class WickTheorem {
     template <typename T>
     auto uptri_op(T i, T j) const {
       return uptri_idx(i, j, this->wick.op_npartitions_);
+    }
+
+    /// @return the 0-based topological partition indices of @p op1 and
+    /// @p op2
+    /// @pre op partitions are defined, and @p op1 precedes @p op2 in the input
+    auto op_partition_pair(const Op<S> &op1, const Op<S> &op2) const {
+      auto ordinal_and_partition = [this](const Op<S> &op) {
+        SEQUANT_ASSERT(wick.op_to_input_ordinal_.contains(op));
+        const auto ord = wick.op_to_input_ordinal_[op];
+        const auto partition_idx = wick.op_partition_idx_[ord];
+        SEQUANT_ASSERT(partition_idx > 0);
+        return std::pair{ord, partition_idx - 1};  // partition index 0-based
+      };
+      [[maybe_unused]] const auto [op1_ord, op1_partition_idx] =
+          ordinal_and_partition(op1);
+      [[maybe_unused]] const auto [op2_ord, op2_partition_idx] =
+          ordinal_and_partition(op2);
+
+      // op ordinals and partition indices are in increasing order
+      SEQUANT_ASSERT(op1_ord < op2_ord);
+      SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
+      return std::pair{op1_partition_idx, op2_partition_idx};
     }
 
     NontensorWickState(const WickTheorem<S> &wt,
@@ -1006,21 +994,8 @@ class WickTheorem {
 
       auto update_op_metadata = [this](const Op<S> &op1, const Op<S> &op2) {
         if (!this->wick.op_partition_idx_.empty()) {
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op1));
-          const auto op1_ord = this->wick.op_to_input_ordinal_[op1];
-          auto op1_partition_idx = wick.op_partition_idx_[op1_ord];
-          SEQUANT_ASSERT(op1_partition_idx > 0);
-          --op1_partition_idx;  // now partition index is 0-based
-
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op2));
-          const auto op2_ord = this->wick.op_to_input_ordinal_[op2];
-          auto op2_partition_idx = wick.op_partition_idx_[op2_ord];
-          SEQUANT_ASSERT(op2_partition_idx > 0);
-          --op2_partition_idx;  // now partition index is 0-based
-
-          // op ordinals and partition indices are in increasing order
-          SEQUANT_ASSERT(op1_ord < op2_ord);
-          SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
+          const auto [op1_partition_idx, op2_partition_idx] =
+              op_partition_pair(op1, op2);
 
           SEQUANT_ASSERT(op_partition_cdeg_matrix.size() >
                          uptri_op(op1_partition_idx, op2_partition_idx));
@@ -1123,21 +1098,8 @@ class WickTheorem {
 
       auto update_op_metadata = [this](const Op<S> &op1, const Op<S> &op2) {
         if (!this->wick.op_partition_idx_.empty()) {
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op1));
-          const auto op1_ord = this->wick.op_to_input_ordinal_[op1];
-          auto op1_partition_idx = wick.op_partition_idx_[op1_ord];
-          SEQUANT_ASSERT(op1_partition_idx > 0);
-          --op1_partition_idx;  // now partition index is 0-based
-
-          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op2));
-          const auto op2_ord = this->wick.op_to_input_ordinal_[op2];
-          auto op2_partition_idx = wick.op_partition_idx_[op2_ord];
-          SEQUANT_ASSERT(op2_partition_idx > 0);
-          --op2_partition_idx;  // now partition index is 0-based
-
-          // op ordinals and partition indices are in increasing order
-          SEQUANT_ASSERT(op1_ord < op2_ord);
-          SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
+          const auto [op1_partition_idx, op2_partition_idx] =
+              op_partition_pair(op1, op2);
 
           SEQUANT_ASSERT(op_partition_cdeg_matrix.size() >
                          uptri_op(op1_partition_idx, op2_partition_idx));
@@ -1655,15 +1617,7 @@ class WickTheorem {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ASSERT(vacuum == Vacuum::Physical);
-    if (is_qpannihilator<S>(left, vacuum, isr) &&
-        is_qpcreator<S>(right, vacuum, isr)) {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-      const auto qpspace_common =
-          isr->intersection(qpspace_left, qpspace_right);
-      if (qpspace_common) return true;
-    }
-    return false;
+    return sequant::can_contract(left, right, vacuum, isr);
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,

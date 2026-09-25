@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/swap.hpp>
 
 #include <range/v3/view/slice.hpp>
 
@@ -14,6 +15,8 @@
 #include <bit>
 #include <functional>
 #include <iterator>
+#include <optional>
+#include <ranges>
 #include <tuple>
 #include <type_traits>
 
@@ -93,6 +96,62 @@ void bubble_sort(ForwardIter begin, Sentinel end, Compare comp = {}) {
       }
     }
   } while (swapped);
+}
+
+/// @return the position of the first element of @p rng that compares equal to
+/// @p value, or std::nullopt if there is none
+template <typename Range, typename T>
+std::optional<std::size_t> find_position(const Range& rng, const T& value) {
+  std::size_t pos = 0;
+  for (auto&& elem : rng) {
+    if (elem == value) return pos;
+    ++pos;
+  }
+  return std::nullopt;
+}
+
+/// @return true if any two elements of @p rng compare equal
+/// @note uses only `operator==`, hence is quadratic in the size of @p rng;
+///       intended for short ranges
+template <std::ranges::forward_range Range>
+bool has_duplicates(const Range& rng) {
+  const auto the_end = std::ranges::end(rng);
+  for (auto it = std::ranges::begin(rng); it != the_end; ++it) {
+    if (std::find(std::next(it), the_end, *it) != the_end) return true;
+  }
+  return false;
+}
+
+namespace detail {
+template <typename T>
+struct swap_counter_key {
+  using type = T;
+};
+template <typename T>
+struct swap_counter_key<SwapCountable<T>> {
+  using type = T;
+};
+template <typename T>
+struct swap_counter_key<SwapCountableRef<T>> {
+  using type = T;
+};
+}  // namespace detail
+
+/// @brief sorts @p rng in place with bubble_sort and returns the parity of
+///        the sorting permutation
+/// @param rng a range whose element swaps are counted, i.e. elements are
+///        SwapCountable, SwapCountableRef, or have a counting swap (e.g.
+///        Index)
+/// @param comp a less-than relationship that specifies a weak order
+/// @return +1 if an even number of swaps was performed, -1 otherwise
+/// @note resets the thread-local swap counter of the element type
+template <std::ranges::range Range, typename Compare = std::less<>>
+int bubble_sort_parity(Range&& rng, Compare comp = {}) {
+  using counter_key = typename detail::swap_counter_key<
+      std::ranges::range_value_t<Range>>::type;
+  reset_ts_swap_counter<counter_key>();
+  bubble_sort(std::ranges::begin(rng), std::ranges::end(rng), comp);
+  return ts_swap_counter_is_even<counter_key>() ? +1 : -1;
 }
 
 ///

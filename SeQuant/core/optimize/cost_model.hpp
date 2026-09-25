@@ -503,48 +503,6 @@ struct PeakModel {
   EvalSequence reconstruct(Context const& /*ctx*/,
                            container::vector<State> const& st) const {
     size_t const full = st.size() - 1;
-    if (perf_first) {
-      // Perf-first / peak-second (non-batched): min flops, ties by lower peak,
-      // bypassing the peak_flops_tolerance epsilon band (a peak-first knob).
-      auto const& rootf = st[full];
-      int pbest = 0;
-      for (int i = 1; i < static_cast<int>(rootf.size()); ++i)
-        if (rootf[i].flops < rootf[pbest].flops ||
-            (rootf[i].flops == rootf[pbest].flops &&
-             rootf[i].peak < rootf[pbest].peak))
-          pbest = i;
-      // Reuse the existing back-pointer walk with the chosen root index.
-      std::function<EvalSequence(size_t, int)> pbuild =
-          [&](size_t n, int idx) -> EvalSequence {
-        if (std::popcount(n) == 1)
-          return EvalSequence{static_cast<int>(std::countr_zero(n))};
-        FrontPoint const& fp = st[n][idx];
-        size_t const fs = fp.lp_first ? fp.lp : fp.rp;
-        int const fi = fp.lp_first ? fp.lp_idx : fp.rp_idx;
-        size_t const ss = fp.lp_first ? fp.rp : fp.lp;
-        int const si = fp.lp_first ? fp.rp_idx : fp.lp_idx;
-        EvalSequence s = pbuild(fs, fi);
-        EvalSequence b = pbuild(ss, si);
-        s.insert(s.end(), b.begin(), b.end());
-        s.push_back(-1);
-        return s;
-      };
-      return pbuild(full, pbest);
-    }
-    // ε-tolerant selection: among frontier points within
-    // (1 + peak_flops_tolerance) of the minimum peak, take the fewest flops
-    // (ties broken by lower peak). tolerance == 0 recovers strict peak-min.
-    auto const& root = st[full];
-    double minpeak = std::numeric_limits<double>::max();
-    for (auto const& fp : root) minpeak = std::min(minpeak, fp.peak);
-    double const thresh = minpeak * (1.0 + peak_flops_tolerance);
-    int best = -1;
-    for (int i = 0; i < static_cast<int>(root.size()); ++i)
-      if (root[i].peak <= thresh &&
-          (best < 0 || root[i].flops < root[best].flops ||
-           (root[i].flops == root[best].flops &&
-            root[i].peak < root[best].peak)))
-        best = i;
     // Follow back-pointers (which child + which child frontier point).
     std::function<EvalSequence(size_t, int)> build =
         [&](size_t n, int idx) -> EvalSequence {
@@ -561,6 +519,32 @@ struct PeakModel {
       s.push_back(-1);
       return s;
     };
+    if (perf_first) {
+      // Perf-first / peak-second (non-batched): min flops, ties by lower peak,
+      // bypassing the peak_flops_tolerance epsilon band (a peak-first knob).
+      auto const& rootf = st[full];
+      int pbest = 0;
+      for (int i = 1; i < static_cast<int>(rootf.size()); ++i)
+        if (rootf[i].flops < rootf[pbest].flops ||
+            (rootf[i].flops == rootf[pbest].flops &&
+             rootf[i].peak < rootf[pbest].peak))
+          pbest = i;
+      return build(full, pbest);
+    }
+    // ε-tolerant selection: among frontier points within
+    // (1 + peak_flops_tolerance) of the minimum peak, take the fewest flops
+    // (ties broken by lower peak). tolerance == 0 recovers strict peak-min.
+    auto const& root = st[full];
+    double minpeak = std::numeric_limits<double>::max();
+    for (auto const& fp : root) minpeak = std::min(minpeak, fp.peak);
+    double const thresh = minpeak * (1.0 + peak_flops_tolerance);
+    int best = -1;
+    for (int i = 0; i < static_cast<int>(root.size()); ++i)
+      if (root[i].peak <= thresh &&
+          (best < 0 || root[i].flops < root[best].flops ||
+           (root[i].flops == root[best].flops &&
+            root[i].peak < root[best].peak)))
+        best = i;
     return build(full, best);
   }
 };
@@ -959,6 +943,15 @@ struct PeakBatchedModel {
         if (!((carried >> seq[p]) & 1u)) esc |= (std::size_t{1} << seq[p]);
       return esc;
     }
+    // Number of times the node for subset `n` is re-executed inside cell `id`:
+    // the product of nbatches over its escaped-outer enclosing modes.
+    double recompute_factor(std::size_t id, std::size_t n) const {
+      std::size_t const esc = escaped_outer(id, open_modes[n]);
+      double rf = 1.0;
+      for (std::size_t k = 0; k < m; ++k)
+        if (esc & (std::size_t{1} << k)) rf *= nbatches[k];
+      return rf;
+    }
 
     // Fill the cell tables: enumerate every ordered sequence of batched modes
     // up to `cap` length (id 0 = the empty sequence = the term root);
@@ -1249,9 +1242,7 @@ struct PeakBatchedModel {
         // innermost- carried placement (escaped modes inner to it hoist above
         // for free; Carr == 0 hoists above the whole nest => none, subsuming
         // A3a). escaped_outer collapses to the set charge when !ordered.
-        std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
-        for (std::size_t k = 0; k < ctx.m; ++k)
-          if (esc & (std::size_t{1} << k)) rf *= ctx.nbatches[k];
+        rf = ctx.recompute_factor(B, n);
       }
       double const cflops_B = cflops * rf;
       // Batchable indices contracted at THIS node: open at children but not at
@@ -1502,6 +1493,29 @@ struct PeakBatchedModel {
     return best;
   }
 
+  /// The children of a chosen frontier point, in the canonical `lp_first`
+  /// order, and the children's enclosing cell.
+  struct ChildFrontier {
+    std::size_t f;
+    int fi;
+    std::size_t s;
+    int si;
+    std::size_t C;
+  };
+
+  /// Back-pointer walk step: for node subset \p n in enclosing cell \p B with
+  /// chosen frontier index \p idx, descends to the children's cell and returns
+  /// the two child subsets/frontier indices.
+  static ChildFrontier child_frontier(Context const& ctx,
+                                      container::vector<State> const& st,
+                                      std::size_t n, std::size_t B, int idx) {
+    auto const& r = st[n][B][idx];
+    std::size_t const C = ctx.descend_pt(B, r.eopen, r.aprime);
+    return ChildFrontier{
+        r.lp_first ? r.lp : r.rp, r.lp_first ? r.lp_idx : r.rp_idx,
+        r.lp_first ? r.rp : r.lp, r.lp_first ? r.rp_idx : r.lp_idx, C};
+  }
+
   EvalSequence reconstruct(Context const& ctx,
                            container::vector<State> const& st) const {
     std::size_t const root = (std::size_t{1} << ctx.nt) - 1;
@@ -1512,12 +1526,7 @@ struct PeakBatchedModel {
         [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
       if (std::popcount(n) == 1)
         return EvalSequence{static_cast<int>(std::countr_zero(n))};
-      BFrontPoint const& r = st[n][B][idx];
-      std::size_t const C = ctx.descend_pt(B, r.eopen, r.aprime);
-      std::size_t const fs = r.lp_first ? r.lp : r.rp;
-      int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
-      std::size_t const ss = r.lp_first ? r.rp : r.lp;
-      int const si = r.lp_first ? r.rp_idx : r.lp_idx;
+      auto const [fs, fi, ss, si, C] = child_frontier(ctx, st, n, B, idx);
       EvalSequence s = build(fs, C, fi);
       EvalSequence b = build(ss, C, si);
       s.insert(s.end(), b.begin(), b.end());
@@ -1542,12 +1551,8 @@ struct PeakBatchedModel {
                       int idx) const {
     if (std::popcount(n) == 1) return ctx.sz_u(Usize, n);
     auto const& r = st[n][Bsched][idx];
-    std::size_t const C = ctx.descend_pt(Bsched, r.eopen, r.aprime);
+    auto const [f, fi, s, si, C] = child_frontier(ctx, st, n, Bsched, idx);
     std::size_t const Uc = Usize | r.aprime;
-    std::size_t const f = r.lp_first ? r.lp : r.rp;
-    int const fi = r.lp_first ? r.lp_idx : r.rp_idx;
-    std::size_t const s = r.lp_first ? r.rp : r.lp;
-    int const si = r.lp_first ? r.rp_idx : r.lp_idx;
     double const peak_f = subtree_peak(ctx, st, f, C, Uc, fi);
     double const peak_s = subtree_peak(ctx, st, s, C, Uc, si);
     double const res = (r.aprime != 0) ? ctx.sz_u(Usize, n) : 0.0;
@@ -1584,32 +1589,13 @@ struct PeakBatchedModel {
     // cost (BFrontPoint::eopen), so there is nothing to re-size afterwards.
     if (out_root_peak_bytes)
       *out_root_peak_bytes = st[root][0][best].peak * numeric_size;
-    // Shared child-extraction for the back-pointer walk below: given a node
-    // subset `n`, its enclosing cell `B`, and the chosen frontier index `idx`,
-    // fetch the frontier point, descend to the children's cell `C`, and return
-    // the two child subsets/indices in the canonical `lp_first` order.
-    struct ChildFrontier {
-      std::size_t f;
-      int fi;
-      std::size_t s;
-      int si;
-      std::size_t C;
-    };
-    auto child_frontier = [&](std::size_t n, std::size_t B,
-                              int idx) -> ChildFrontier {
-      auto const& r = st[n][B][idx];
-      std::size_t const C = ctx.descend_pt(B, r.eopen, r.aprime);
-      return ChildFrontier{
-          r.lp_first ? r.lp : r.rp, r.lp_first ? r.lp_idx : r.rp_idx,
-          r.lp_first ? r.rp : r.lp, r.lp_first ? r.rp_idx : r.lp_idx, C};
-    };
     container::vector<NodeBatchAnnotation> node_axes;
     std::function<EvalSequence(std::size_t, std::size_t, int)> build =
         [&](std::size_t n, std::size_t B, int idx) -> EvalSequence {
       if (std::popcount(n) == 1)
         return EvalSequence{static_cast<int>(std::countr_zero(n))};
       BFrontPoint const& r = st[n][B][idx];
-      auto const [fs, fi, ss, si, C] = child_frontier(n, B, idx);
+      auto const [fs, fi, ss, si, C] = child_frontier(ctx, st, n, B, idx);
       EvalSequence s = build(fs, C, fi);
       EvalSequence b = build(ss, C, si);
       s.insert(s.end(), b.begin(), b.end());
@@ -1675,10 +1661,7 @@ struct PeakBatchedModel {
         // (enclosing loops the node does not carry). With no CSE on this path
         // the back-pointer object is a strict tree (single consumer), so this
         // per-node rf is the effective use count.
-        std::size_t const esc = ctx.escaped_outer(B, ctx.open_modes[n]);
-        double rf = 1.0;
-        for (std::size_t k = 0; k < ctx.m; ++k)
-          if (esc & (std::size_t{1} << k)) rf *= ctx.nbatches[k];
+        double const rf = ctx.recompute_factor(B, n);
         ann.effective_count = static_cast<std::size_t>(std::llround(rf));
       }
       node_axes.push_back(std::move(ann));  // one entry per -1, in RPN order

@@ -896,6 +896,17 @@ TEST_CASE("ExportExpr", "[export]") {
   }
 }
 
+TEST_CASE("JuliaTensorOperationsGenerator", "[export]") {
+  SECTION("load scalar and set to zero") {
+    JuliaTensorOperationsGenerator<> generator;
+    JuliaTensorOperationsGeneratorContext ctx;
+    generator.set_to_zero(Variable(L"x"), ctx);
+    generator.load(Variable(L"y"), /*set_to_zero=*/true, ctx);
+
+    REQUIRE(generator.get_generated_code() == "x = 0.0\ny = 0.0\n");
+  }
+}
+
 TEST_CASE("PythonEinsumGenerator", "[export]") {
   auto resetter = to_export_context();
 

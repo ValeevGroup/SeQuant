@@ -8,6 +8,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -95,6 +96,26 @@ std::basic_string_view<meta::char_t<S>> to_basic_string_view(S &&str) {
     return {&str, 1};
   else
     return str;
+}
+
+/// Joins the elements of a range into a string
+/// @tparam String the string type to produce
+/// @param rng the range to join
+/// @param separator inserted between consecutive elements
+/// @param proj maps each element to something appendable to @p String
+/// @return the projected elements of @p rng, separated by @p separator
+template <typename String, typename Range, typename Proj = std::identity>
+String join_strings(
+    Range &&rng, std::basic_string_view<typename String::value_type> separator,
+    Proj proj = {}) {
+  String result;
+  bool first = true;
+  for (auto &&elem : rng) {
+    if (!first) result += separator;
+    first = false;
+    result += std::invoke(proj, elem);
+  }
+  return result;
 }
 
 /// Converts integral type to its std::wstring representation

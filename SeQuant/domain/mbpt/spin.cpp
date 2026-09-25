@@ -85,19 +85,6 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   return Index{space, idx.ordinal(), protoindices};
 }
 
-// The argument really should be non-const but const semantics are broken
-// for the ExprPtr type so we are required to make this const in order
-// to be able to use this function everywhere we want to.
-void reset_idx_tags(const ExprPtr& expr) {
-  expr->visit(
-      [](ExprPtr& current) {
-        if (current.is<AbstractTensor>()) {
-          current.as<AbstractTensor>()._reset_tags();
-        }
-      },
-      true);
-}
-
 template <typename Container, typename TraceFunction, typename... Args>
 [[nodiscard]] Container wrap_trace(const ResultExpr& expr,
                                    TraceFunction&& tracer, Args&&... args) {
@@ -134,14 +121,10 @@ template <typename Container, typename TraceFunction, typename... Args>
       permuteBra ? expr.ket().size() : expr.bra().size();
 
   [[maybe_unused]] auto get_phase = [](auto container) {
-    reset_ts_swap_counter<Index>();
-    bubble_sort(container.begin(), container.end(), std::less<Index>{});
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+    return bubble_sort_parity(container, std::less<Index>{});
   };
 
-  reset_ts_swap_counter<Index>();
-  bubble_sort(permIndices.begin(), permIndices.end(), std::less<Index>{});
-  const int initialSign = ts_swap_counter_is_even<Index>() ? 1 : -1;
+  const int initialSign = bubble_sort_parity(permIndices, std::less<Index>{});
   const auto originalIndices = permIndices;
 
   container::svector<container::set<std::pair<IndexSpace, IndexSpace>>>
@@ -152,13 +135,9 @@ template <typename Container, typename TraceFunction, typename... Args>
   // For next_permutation to work in this context, permIndices must be sorted
   SEQUANT_ASSERT(std::is_sorted(permIndices.begin(), permIndices.end()));
 
-  int sign = initialSign;
+  int parity = 0;
   do {
-    const int currentSign = sign;
-    // std::next_permutation creates one lexicographical permutation after the
-    // other, which should imply that the phase should alternate between
-    // iterations.
-    sign *= -1;
+    const int currentSign = parity == 0 ? initialSign : -initialSign;
     SEQUANT_ASSERT(currentSign == get_phase(permIndices) * initialSign);
 
     container::set<std::pair<IndexSpace, IndexSpace>> currentPairing;
@@ -213,7 +192,8 @@ template <typename Container, typename TraceFunction, typename... Args>
     result.set_symmetry(Symmetry::Nonsymm);
 
     resultSet.push_back(std::move(result));
-  } while (std::next_permutation(permIndices.begin(), permIndices.end()));
+  } while (next_permutation_parity(parity, permIndices.begin(),
+                                   permIndices.end(), std::less<Index>{}));
 
   return resultSet;
 }
@@ -238,8 +218,9 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
     return ex<Tensor>(tensor.label(), bra(tensor.ket().value()),
-                      ket(tensor.bra().value()), tensor.symmetry(),
-                      tensor.braket_symmetry(), tensor.column_symmetry());
+                      ket(tensor.bra().value()), aux(tensor.aux().value()),
+                      tensor.symmetry(), tensor.braket_symmetry(),
+                      tensor.column_symmetry());
   };
 
   // Lambda for product
@@ -277,44 +258,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 
 ExprPtr append_spin(const ExprPtr& expr,
                     const container::map<Index, Index>& index_replacements) {
-  auto add_spin_to_tensor = [&index_replacements](const Tensor& tensor) {
-    auto spin_tensor = std::make_shared<Tensor>(tensor);
-    spin_tensor->transform_indices(index_replacements);
-    return spin_tensor;
-  };
-
-  auto add_spin_to_product = [&add_spin_to_tensor](const Product& product) {
-    auto spin_product = std::make_shared<Product>();
-    spin_product->scale(product.scalar());
-    for (auto&& term : product) {
-      if (term->is<Tensor>()) {
-        spin_product->append(1, add_spin_to_tensor(term->as<Tensor>()));
-      } else if (term->is<Constant>() || term->is<Variable>()) {
-        spin_product->append(1, term);
-      } else {
-        throw Exception(
-            "Invalid Expr type in append_spin::add_spin_to_product: " +
-            term->type_name());
-      }
-    }
-    return spin_product;
-  };
-
-  if (expr->is<Tensor>()) {
-    return add_spin_to_tensor(expr->as<Tensor>());
-  } else if (expr->is<Product>()) {
-    return add_spin_to_product(expr->as<Product>());
-  } else if (expr->is<Sum>()) {
-    auto spin_expr = std::make_shared<Sum>();
-    for (auto&& summand : *expr) {
-      spin_expr->append(append_spin(summand, index_replacements));
-    }
-    return spin_expr;
-  } else if (expr->is<Constant>() || expr->is<Variable>()) {
-    return expr;
-  }
-
-  throw Exception("Unsupported Expr type in append_spin");
+  return transform_expr(expr, index_replacements);
 }
 
 ExprPtr remove_spin(const ExprPtr& expr) {
@@ -449,18 +393,19 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   auto get_phase = [](const Tensor& t) {
     container::svector<Index> bra(t.bra().begin(), t.bra().end());
     container::svector<Index> ket(t.ket().begin(), t.ket().end());
-    reset_ts_swap_counter<Index>();
-    bubble_sort(std::begin(bra), std::end(bra));
-    bubble_sort(std::begin(ket), std::end(ket));
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+    return bubble_sort_parity(bra) * bubble_sort_parity(ket);
   };
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // and greater than one body otherwise, return the tensor
   if (tensor.symmetry() == Symmetry::Antisymm) {
     const auto prefactor = get_phase(tensor);
-    container::set<Index> bra_list(tensor.bra().begin(), tensor.bra().end());
-    container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
+    container::svector<Index> bra_list(tensor.bra().begin(),
+                                       tensor.bra().end());
+    container::svector<Index> ket_list(tensor.ket().begin(),
+                                       tensor.ket().end());
+    std::ranges::sort(bra_list);
+    std::ranges::sort(ket_list);
     auto expr_sum = std::make_shared<Sum>();
     do {
       // N.B. must copy
@@ -587,9 +532,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
       container::svector<Index> transformed_list;
       for (const auto& [key, val] : map) transformed_list.push_back(val);
 
-      reset_ts_swap_counter<Index>();
-      bubble_sort(std::begin(transformed_list), std::end(transformed_list));
-      phase = ts_swap_counter_is_even<Index>() ? 1 : -1;
+      phase = bubble_sort_parity(transformed_list);
     }
 
     ProductPtr new_product = std::make_shared<Product>();
@@ -608,7 +551,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
     new_result->append(new_product);
   }  // map_list
 
-  detail::reset_idx_tags(new_result);
+  reset_tags(new_result);
 
   return new_result;
 }
@@ -691,9 +634,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     auto indices = map | std::ranges::views::values;
     idx_list.insert(idx_list.end(), indices.begin(), indices.end());
 
-    reset_ts_swap_counter<Index>();
-    bubble_sort(std::begin(idx_list), std::end(idx_list));
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+    return bubble_sort_parity(idx_list);
   };
 
   container::svector<container::map<Index, Index>> maps;
@@ -734,7 +675,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     result->append(ex<Product>(new_product));
   }
 
-  detail::reset_idx_tags(result);
+  reset_tags(result);
 
   return result;
 }
@@ -822,25 +763,11 @@ ExprPtr expand_P_op(const ProductPtr& product) {
   if (!has_P_operator) return product;
 
   auto result = std::make_shared<Sum>();
+  const auto temp_product =
+      remove_tensor(product, reserved::transposition_label());
   for (auto&& map : map_list) {
-    ProductPtr new_product = std::make_shared<Product>();
-    new_product->scale(product->scalar());
-    auto temp_product = remove_tensor(product, reserved::transposition_label());
-    for (auto&& term : *temp_product) {
-      if (term->is<Tensor>()) {
-        auto new_tensor = term->as<Tensor>();
-        new_tensor.transform_indices(map);
-        new_tensor.reset_tags();
-        new_product->append(1, ex<Tensor>(new_tensor));
-      } else if (term->is<Constant>() || term->is<Variable>()) {
-        new_product->append(1, term);
-      } else {
-        throw Exception("Invalid Expr type in expand_P_op: " +
-                        term->type_name());
-      }
-    }
-    result->append(new_product);
-  }  // map_list
+    result->append(transform_expr(temp_product, map));
+  }
 
   return result;
 }
@@ -895,7 +822,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
   // Check if S operator is present
   if (!has_tensor(expr, reserved::symm_label())) return expr;
 
-  detail::reset_idx_tags(expr);
+  reset_tags(expr);
 
   // Lambda for applying S on products
   auto expand_S_product = [](const ProductPtr& product) -> ExprPtr {
@@ -951,7 +878,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
     }
   }
 
-  detail::reset_idx_tags(result);
+  reset_tags(result);
   return result;
 }
 
@@ -1497,7 +1424,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   // Expand 'A' operator and 'antisymm' tensors
   auto expanded_expr = expand_A_op(expr);
-  detail::reset_idx_tags(expanded_expr);
+  reset_tags(expanded_expr);
   expand(expanded_expr);
   simplify(expanded_expr);
 
@@ -1534,7 +1461,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   for (auto& e : e_rep) {
     // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
-    detail::reset_idx_tags(spin_expr);
+    reset_tags(spin_expr);
     Sum e_result{};
 
     // Loop over internal index replacement maps
@@ -1543,7 +1470,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       ExprPtr spin_expr_i = append_spin(spin_expr, i);
       spin_expr_i = expand_antisymm(spin_expr_i, true);
       expand(spin_expr_i);
-      detail::reset_idx_tags(spin_expr_i);
+      reset_tags(spin_expr_i);
       Sum i_result{};
 
       if (spin_expr_i->is<Tensor>() || spin_expr_i->is<Constant>() ||
@@ -1577,7 +1504,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
 
   // Canonicalize and simplify all expressions
   for (auto& expression : result) {
-    detail::reset_idx_tags(expression);
+    reset_tags(expression);
     canonicalize(expression);
     rapid_simplify(expression);
   }
@@ -1891,7 +1818,7 @@ ExprPtr spintrace_impl(const ExprPtr& expression, IdxGroups&& ext_index_groups,
 
   SEQUANT_ASSERT(result);
 
-  detail::reset_idx_tags(result);
+  reset_tags(result);
 
   simplify(result);
 

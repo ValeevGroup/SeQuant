@@ -3,6 +3,7 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -78,6 +79,120 @@ struct Entry {
 
 sequant::Tensor parse_tensor(std::wstring_view str) {
   return sequant::deserialize<sequant::ExprPtr>(str)->as<sequant::Tensor>();
+}
+
+TEST_CASE("bubble_sort_parity", "[utilities]") {
+  using namespace sequant;
+
+  auto make = [](std::initializer_list<int> values) {
+    container::svector<SwapCountable<int>> result;
+    for (int v : values) result.emplace_back(v);
+    return result;
+  };
+  auto as_ints = [](const auto& rng) {
+    return rng | ranges::views::transform([](int v) { return v; }) |
+           ranges::to<std::vector<int>>;
+  };
+
+  auto sorted = make({1, 2, 3});
+  REQUIRE(bubble_sort_parity(sorted) == +1);
+
+  auto odd = make({2, 1, 3});
+  REQUIRE(bubble_sort_parity(odd) == -1);
+  REQUIRE(as_ints(odd) == std::vector<int>{1, 2, 3});
+
+  auto even = make({3, 1, 2});
+  REQUIRE(bubble_sort_parity(even) == +1);
+  REQUIRE(as_ints(even) == std::vector<int>{1, 2, 3});
+
+  auto descending = make({3, 1, 2});
+  REQUIRE(bubble_sort_parity(descending, std::greater<>{}) == -1);
+  REQUIRE(as_ints(descending) == std::vector<int>{3, 2, 1});
+}
+
+TEST_CASE("reset_tags", "[utilities]") {
+  using namespace sequant;
+
+  ExprPtr expr = ex<Constant>(2) * ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}) *
+                 ex<Tensor>(L"s", bra{L"a_1"}, ket{L"i_1"});
+  REQUIRE(expr->is<Product>());
+  auto& tensor = expr->as<Product>().factors().at(0)->as<Tensor>();
+  const container::map<Index, Index> replacements{
+      {Index(L"i_1"), Index(L"i_2")}};
+  REQUIRE(tensor.transform_indices(replacements));
+  REQUIRE(tensor.bra().at(0).tag().has_value());
+
+  reset_tags(expr);
+  REQUIRE_FALSE(tensor.bra().at(0).tag().has_value());
+}
+
+TEST_CASE("adjoint_label", "[utilities]") {
+  using namespace sequant;
+
+  const std::wstring adj = std::wstring(L"t") + adjoint_label;
+  REQUIRE(is_adjoint_label(adj));
+  REQUIRE_FALSE(is_adjoint_label(L"t"));
+  REQUIRE_FALSE(is_adjoint_label(L""));
+
+  REQUIRE(strip_adjoint_label(adj) == L"t");
+  REQUIRE(strip_adjoint_label(L"t") == L"t");
+  REQUIRE(strip_adjoint_label(L"").empty());
+
+  std::wstring label = L"t";
+  toggle_adjoint_label(label);
+  REQUIRE(label == adj);
+  toggle_adjoint_label(label);
+  REQUIRE(label == L"t");
+}
+
+TEST_CASE("has_duplicates", "[utilities]") {
+  using namespace sequant;
+
+  REQUIRE_FALSE(has_duplicates(std::vector<int>{}));
+  REQUIRE_FALSE(has_duplicates(std::vector<int>{1, 2, 3}));
+  REQUIRE(has_duplicates(std::vector<int>{1, 2, 1}));
+  REQUIRE(
+      has_duplicates(std::vector<std::pair<int, int>>{{0, 1}, {1, 2}, {0, 1}}));
+  REQUIRE_FALSE(
+      has_duplicates(std::vector<std::pair<int, int>>{{0, 1}, {1, 0}}));
+}
+
+TEST_CASE("find_position", "[utilities]") {
+  using namespace sequant;
+
+  const std::vector<int> v{4, 7, 4};
+  REQUIRE(find_position(v, 4) == std::optional<std::size_t>{0});
+  REQUIRE(find_position(v, 7) == std::optional<std::size_t>{1});
+  REQUIRE_FALSE(find_position(v, 5).has_value());
+  REQUIRE_FALSE(find_position(std::vector<int>{}, 4).has_value());
+}
+
+TEST_CASE("join_strings", "[utilities]") {
+  using namespace sequant;
+
+  REQUIRE(join_strings<std::string>(std::vector<std::string>{}, ",").empty());
+  REQUIRE(join_strings<std::string>(std::vector<std::string>{"a"}, ",") == "a");
+  REQUIRE(join_strings<std::wstring>(std::vector<std::wstring>{L"a", L"b"},
+                                     L", ") == L"a, b");
+  REQUIRE(join_strings<std::string>(std::vector<int>{1, 2, 3}, "-", [](int i) {
+            return std::to_string(i);
+          }) == "1-2-3");
+}
+
+TEST_CASE("pop_symmetrizer", "[utilities]") {
+  using namespace sequant;
+
+  auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  ExprPtr expr = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
+                            ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
+                 t;
+  auto symmetrizer = pop_symmetrizer(expr);
+  REQUIRE(symmetrizer.has_value());
+  REQUIRE((*symmetrizer)->as<Tensor>().label() == reserved::antisymm_label());
+  REQUIRE_FALSE(has_tensor(expr, reserved::antisymm_label()));
+  REQUIRE(has_tensor(expr, L"t"));
+
+  REQUIRE_FALSE(pop_symmetrizer(expr).has_value());
 }
 
 TEST_CASE("utilities", "[utilities]") {

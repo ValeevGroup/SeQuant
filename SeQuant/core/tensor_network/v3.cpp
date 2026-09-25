@@ -873,9 +873,7 @@ TensorNetworkV3::canonicalize_slots(
         vertices.emplace_back(canonize_perm[vertex]);
       }
 
-      reset_ts_swap_counter<std::size_t>();
-      bubble_sort(vertices.begin(), vertices.end());
-      if (!ts_swap_counter_is_even<std::size_t>()) {
+      if (bubble_sort_parity(vertices) == -1) {
         // Performed an uneven amount of pairwise exchanges -> this incurs a
         // phase change
         metadata.phase *= -1;
@@ -1013,7 +1011,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // min (number of bra slots, number of ket slots) slots, i.e. the number of
     // 2-index columns
     const std::size_t num_paired_cols =
-        std::max(bra_rank(tensor), ket_rank(tensor));
+        std::min(bra_rank(tensor), ket_rank(tensor));
     const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::Symm;
 
     // vertices for braket bundles:
@@ -1599,10 +1597,10 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
         TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
-    [[maybe_unused]] const TensorCanonicalizer &tensor_canonizer =
+    const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 
-    auto bp = canonicalizer.apply(*tensor);
+    auto bp = tensor_canonizer.apply(*tensor);
 
     if (bp) {
       byproduct *= bp;
