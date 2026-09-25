@@ -189,6 +189,71 @@ TEST_CASE("braket_foldable_predicates", "[conjugation]") {
   REQUIRE(braket_symmetry(op) == BraKetSymmetry::Conjugate);
   REQUIRE_FALSE(braket_conjugate_foldable(op));
   REQUIRE_FALSE(braket_foldable(op));
+
+  // operator-valued over a real basis: Hermitian (equal creator and
+  // annihilator index multisets) derives Symm, and the free bra<->ket
+  // exchange is a symmetry of the operator, so it is foldable; the exchange
+  // is NormalOperator::_swap_bra_ket
+  FNOperator rop(cre({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}),
+                 ann({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}));
+  REQUIRE(braket_symmetry(rop) == BraKetSymmetry::Symm);
+  REQUIRE_FALSE(braket_conjugate_foldable(rop));
+  REQUIRE(braket_foldable(rop));
+  // a non-Hermitian one is not
+  FNOperator nop(cre({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}),
+                 ann({idx(L"p_3", Field::Real), idx(L"p_4", Field::Real)}));
+  REQUIRE(braket_symmetry(nop) == BraKetSymmetry::Nonsymm);
+  REQUIRE_FALSE(braket_foldable(nop));
+}
+
+TEST_CASE("normal_operator_swap_bra_ket", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  SECTION("the exchange swaps the bundles, each kept in particle order") {
+    FNOperator op(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"}));
+    static_cast<AbstractTensor&>(op)._swap_bra_ket();
+    REQUIRE(op.ncreators() == 2);
+    REQUIRE(op.nannihilators() == 2);
+    const auto cre_labels = op.creators() |
+                            ranges::views::transform([](auto const& o) {
+                              return o.index().label();
+                            }) |
+                            ranges::to_vector;
+    const auto ann_labels = op.annihilators() |
+                            ranges::views::transform([](auto const& o) {
+                              return o.index().label();
+                            }) |
+                            ranges::to_vector;
+    REQUIRE(cre_labels == decltype(cre_labels){L"p_3", L"p_4"});
+    REQUIRE(ann_labels == decltype(ann_labels){L"p_1", L"p_2"});
+    // twice is the identity
+    static_cast<AbstractTensor&>(op)._swap_bra_ket();
+    REQUIRE(op == FNOperator(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})));
+  }
+
+  SECTION("a Hermitian operator over a real basis canonicalizes") {
+    // the graph verdict may exchange the operator's bundles; with the
+    // exchange implemented that is a respelling of the same operator
+    auto ridx = [](std::wstring_view l) { return idx(l, Field::Real); };
+    auto make = [&](std::wstring_view c1, std::wstring_view c2,
+                    std::wstring_view a1, std::wstring_view a2) {
+      return ex<Tensor>(L"h", bra{ridx(L"p_5")}, ket{ridx(L"p_6")}) *
+             ex<FNOperator>(cre({ridx(c1), ridx(c2)}),
+                            ann({ridx(a1), ridx(a2)}));
+    };
+    auto e1 = make(L"p_1", L"p_2", L"p_1", L"p_2");
+    auto e2 = make(L"p_2", L"p_1", L"p_2", L"p_1");  // same operator
+    REQUIRE_NOTHROW(canonicalize(e1));
+    REQUIRE_NOTHROW(canonicalize(e2));
+    REQUIRE(*e1 == *e2);
+    auto e3 = e1->clone();
+    canonicalize(e3);
+    REQUIRE(*e3 == *e1);
+  }
 }
 
 TEST_CASE("conjugate_braket_fold_per_tensor", "[conjugation]") {

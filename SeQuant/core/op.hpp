@@ -913,6 +913,17 @@ class NormalOperator : public Operator<S>,
   ColumnSymmetry _column_symmetry() const override final {
     return ColumnSymmetry::Symm;
   }
+  /// exchanges the creator and annihilator bundles: the annihilators' indices
+  /// become the creators' (in particle order) and vice versa. For an operator
+  /// string that is the adjoint's rearrangement, which carries no sign, so
+  /// the exchange is a symmetry exactly when the operator is Hermitian
+  /// (equal creator and annihilator index multisets), the only case a
+  /// braket-foldable operator presents; a permutation the exchange induces
+  /// inside a bundle is the caller's to sign, as for a Tensor.
+  void _swap_bra_ket() override final {
+    [[maybe_unused]] const auto sign = this->adjoint();
+    SEQUANT_ASSERT(sign == 1);
+  }
   std::size_t _color() const override final {
     return S == Statistics::FermiDirac ? 1 : 2;
   }
