@@ -542,11 +542,16 @@ set(SeQuant_export_src
         SeQuant/core/export/julia_tensor_kit.hpp
         SeQuant/core/export/julia_tensor_operations.cpp
         SeQuant/core/export/julia_tensor_operations.hpp
+        SeQuant/core/export/memory_model.hpp
+        SeQuant/core/export/natural_memory_model.cpp
+        SeQuant/core/export/natural_memory_model.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
+        SeQuant/core/export/schedule_export.hpp
         SeQuant/core/export/text_generator.hpp
         SeQuant/core/export/utils.hpp
         SeQuant/core/export/utils.cpp
+        SeQuant/core/export/value_resolver.hpp
 )
 
 # TiledArray backend sources
