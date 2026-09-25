@@ -444,17 +444,24 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///   computed from the (explicit or default) #Hermiticity and
   ///   #ConjugationParity and the tensor's @p base_fld via
   ///   to_braket_symmetry().
-  /// - an explicitly given #BraKetSymmetry back-fills the traits it spells:
-  ///   the #Hermiticity via to_hermiticity() and, when the parity is not given
-  ///   either, the #ConjugationParity via to_conjugation_parity(), so that
-  ///   deriving the exchange symmetry from the traits again reproduces what
-  ///   was given.
+  /// - an explicitly given #BraKetSymmetry is accepted only where the traits
+  ///   derive it: the traits that are given are used as given, and the
+  ///   missing ones are back-filled with the values that reproduce the pin
+  ///   (the first parity of Even, Odd, None and, for it, the first of
+  ///   Hermitian, AntiHermitian, NonHermitian that does), so that deriving
+  ///   the exchange symmetry from the
+  ///   traits again reproduces what was given. A pin no trait combination
+  ///   derives over @p base_fld (Symm or Antisymm over a complex basis, where
+  ///   the exchange relates an array to its conjugate) is refused: such an
+  ///   array is real, and a real array is declared through the basis field.
   /// - #Symmetry, #Hermiticity, #ConjugationParity and #ColumnSymmetry fall
   ///   back to the *fixed* library defaults in Tensor::Defaults -- the safest,
   ///   fully non-symmetric / non-Hermitian choice -- when not specified.
   /// @param syms the (partially specified) symmetry pack
   /// @param base_fld the tensor's #base_field, used to derive the
   ///        #BraKetSymmetry from the #Hermiticity and #ConjugationParity
+  /// @throw Exception if the given #BraKetSymmetry is not derivable from the
+  ///        given traits over @p base_fld
   /// @note Programmatic Tensor construction never consults the default
   ///       sequant::Context: the meaning of a ctor call is independent of
   ///       ambient global state (so it is predictable and lock-free). Only the
@@ -467,34 +474,65 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const Symmetry s_resolved = syms.perm.value_or(Defaults::symmetry);
     const ColumnSymmetry ps_resolved =
         syms.column.value_or(Defaults::column_symmetry);
-    const Hermiticity h_resolved =
-        syms.hermiticity.value_or(Defaults::hermiticity);
-    const ConjugationParity parity_resolved = syms.conjugation_parity.value_or(
-        syms.braket.has_value() ? to_conjugation_parity(*syms.braket, base_fld)
-                                : Defaults::conjugation_parity);
-    const BraKetSymmetry bks_resolved =
-        syms.braket.has_value()
-            ? *syms.braket
-            : to_braket_symmetry(h_resolved, parity_resolved, base_fld);
-    // #braket and #hermiticity spell the same underlying trait, so a caller
-    // that gives both must give a consistent pair.
-    if (syms.braket.has_value() && syms.hermiticity.has_value() &&
-        to_braket_symmetry(*syms.hermiticity, parity_resolved, base_fld) !=
-            *syms.braket)
-      throw Exception(
-          "Tensor: the given BraKetSymmetry and Hermiticity contradict each "
-          "other");
-    // an explicit Hermiticity is reported verbatim, to preserve traits that
-    // the BraKetSymmetry round-trip cannot represent
-    const Hermiticity hermiticity_resolved =
-        syms.hermiticity.has_value()
-            ? *syms.hermiticity
-            : (syms.braket.has_value()
-                   ? to_hermiticity(*syms.braket, parity_resolved)
-                   : h_resolved);
-    return {s_resolved,           bks_resolved, hermiticity_resolved,
-            parity_resolved,      ps_resolved,  syms.column.has_value(),
-            syms.perm.has_value()};
+    if (!syms.braket.has_value()) {
+      const Hermiticity h = syms.hermiticity.value_or(Defaults::hermiticity);
+      const ConjugationParity k =
+          syms.conjugation_parity.value_or(Defaults::conjugation_parity);
+      return {s_resolved,
+              to_braket_symmetry(h, k, base_fld),
+              h,
+              k,
+              ps_resolved,
+              syms.column.has_value(),
+              syms.perm.has_value()};
+    }
+    // an explicit exchange symmetry: search the traits that derive it, the
+    // given ones fixed
+    constexpr std::array hermiticities{Hermiticity::Hermitian,
+                                       Hermiticity::AntiHermitian,
+                                       Hermiticity::NonHermitian};
+    constexpr std::array parities{ConjugationParity::Even,
+                                  ConjugationParity::Odd,
+                                  ConjugationParity::None};
+    for (const auto k : parities) {
+      if (syms.conjugation_parity.has_value() && k != *syms.conjugation_parity)
+        continue;
+      for (const auto h : hermiticities) {
+        if (syms.hermiticity.has_value() && h != *syms.hermiticity) continue;
+        if (to_braket_symmetry(h, k, base_fld) == *syms.braket)
+          return {s_resolved,
+                  *syms.braket,
+                  h,
+                  k,
+                  ps_resolved,
+                  syms.column.has_value(),
+                  syms.perm.has_value()};
+      }
+    }
+    const auto name = [](BraKetSymmetry b) -> const char * {
+      switch (b) {
+        case BraKetSymmetry::Symm:
+          return "Symm";
+        case BraKetSymmetry::Conjugate:
+          return "Conjugate";
+        case BraKetSymmetry::Nonsymm:
+          return "Nonsymm";
+        case BraKetSymmetry::Antisymm:
+          return "Antisymm";
+        case BraKetSymmetry::AntiConjugate:
+          return "AntiConjugate";
+      }
+      SEQUANT_UNREACHABLE;
+    };
+    throw Exception(
+        std::string("Tensor: BraKetSymmetry::") + name(*syms.braket) +
+        " is not derivable from " +
+        (syms.hermiticity.has_value() || syms.conjugation_parity.has_value()
+             ? "the given traits"
+             : "any hermiticity and conjugation parity") +
+        " over a " + (base_fld == Field::Real ? "real" : "complex") +
+        " basis (a real array is declared through the basis field, "
+        "IndexSpace::field)");
   }
 
   /// @return the elementwise ConjugationSymmetry an array of @p parity would
@@ -982,20 +1020,13 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ColumnSymmetry column_symmetry() const { return column_symmetry_; }
   /// @return the traits, for rebuilding this tensor with other slots; the
   ///         field-dependent symmetries are derived again from them
-  /// @note #TensorSymmetries::braket is left unset whenever the traits derive
-  ///       the stored exchange symmetry: it is then derived from #hermiticity,
+  /// @note no #TensorSymmetries::braket is pinned: the traits always derive
+  ///       the stored exchange symmetry (resolve_symmetries() accepts no
+  ///       other), so it is derived again from #hermiticity,
   ///       #conjugation_parity and the new slots' field, which is what
   ///       with_slots() does and what a rebuild onto slots over another field
-  ///       needs. A pinned exchange symmetry the traits do not derive (the
-  ///       Symm pin over a complex basis) is carried as the pin, from which
-  ///       the traits back-fill as they did at construction.
+  ///       needs
   TensorSymmetries symmetries() const {
-    if (braket_symmetry_ !=
-        to_braket_symmetry(hermiticity_, conjugation_parity_, base_field()))
-      return {.perm = symmetry_,
-              .braket = braket_symmetry_,
-              .conjugation_parity = conjugation_parity_,
-              .column = column_symmetry_};
     return {.perm = symmetry_,
             .hermiticity = hermiticity_,
             .conjugation_parity = conjugation_parity_,

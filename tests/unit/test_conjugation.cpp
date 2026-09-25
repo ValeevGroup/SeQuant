@@ -157,9 +157,10 @@ TEST_CASE("braket_foldable_predicates", "[conjugation]") {
   REQUIRE_FALSE(braket_conjugate_foldable(t));
   REQUIRE_FALSE(braket_foldable(t));
 
-  // Symm: free swap, not the Conjugate value fold
-  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  // Symm (Hermitian over a real basis): free swap, not the Conjugate value
+  // fold
+  Tensor s(L"s", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+           Symmetry::Nonsymm, BraKetSymmetry::Symm, ColumnSymmetry::Symm);
   REQUIRE_FALSE(braket_conjugate_foldable(s));
   REQUIRE(braket_foldable(s));
 
@@ -189,6 +190,71 @@ TEST_CASE("braket_foldable_predicates", "[conjugation]") {
   REQUIRE(braket_symmetry(op) == BraKetSymmetry::Conjugate);
   REQUIRE_FALSE(braket_conjugate_foldable(op));
   REQUIRE_FALSE(braket_foldable(op));
+
+  // operator-valued over a real basis: Hermitian (equal creator and
+  // annihilator index multisets) derives Symm, and the free bra<->ket
+  // exchange is a symmetry of the operator, so it is foldable; the exchange
+  // is NormalOperator::_swap_bra_ket
+  FNOperator rop(cre({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}),
+                 ann({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}));
+  REQUIRE(braket_symmetry(rop) == BraKetSymmetry::Symm);
+  REQUIRE_FALSE(braket_conjugate_foldable(rop));
+  REQUIRE(braket_foldable(rop));
+  // a non-Hermitian one is not
+  FNOperator nop(cre({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}),
+                 ann({idx(L"p_3", Field::Real), idx(L"p_4", Field::Real)}));
+  REQUIRE(braket_symmetry(nop) == BraKetSymmetry::Nonsymm);
+  REQUIRE_FALSE(braket_foldable(nop));
+}
+
+TEST_CASE("normal_operator_swap_bra_ket", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  SECTION("the exchange swaps the bundles, each kept in particle order") {
+    FNOperator op(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"}));
+    static_cast<AbstractTensor&>(op)._swap_bra_ket();
+    REQUIRE(op.ncreators() == 2);
+    REQUIRE(op.nannihilators() == 2);
+    const auto cre_labels = op.creators() |
+                            ranges::views::transform([](auto const& o) {
+                              return o.index().label();
+                            }) |
+                            ranges::to_vector;
+    const auto ann_labels = op.annihilators() |
+                            ranges::views::transform([](auto const& o) {
+                              return o.index().label();
+                            }) |
+                            ranges::to_vector;
+    REQUIRE(cre_labels == decltype(cre_labels){L"p_3", L"p_4"});
+    REQUIRE(ann_labels == decltype(ann_labels){L"p_1", L"p_2"});
+    // twice is the identity
+    static_cast<AbstractTensor&>(op)._swap_bra_ket();
+    REQUIRE(op == FNOperator(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})));
+  }
+
+  SECTION("a Hermitian operator over a real basis canonicalizes") {
+    // the graph verdict may exchange the operator's bundles; with the
+    // exchange implemented that is a respelling of the same operator
+    auto ridx = [](std::wstring_view l) { return idx(l, Field::Real); };
+    auto make = [&](std::wstring_view c1, std::wstring_view c2,
+                    std::wstring_view a1, std::wstring_view a2) {
+      return ex<Tensor>(L"h", bra{ridx(L"p_5")}, ket{ridx(L"p_6")}) *
+             ex<FNOperator>(cre({ridx(c1), ridx(c2)}),
+                            ann({ridx(a1), ridx(a2)}));
+    };
+    auto e1 = make(L"p_1", L"p_2", L"p_1", L"p_2");
+    auto e2 = make(L"p_2", L"p_1", L"p_2", L"p_1");  // same operator
+    REQUIRE_NOTHROW(canonicalize(e1));
+    REQUIRE_NOTHROW(canonicalize(e2));
+    REQUIRE(*e1 == *e2);
+    auto e3 = e1->clone();
+    canonicalize(e3);
+    REQUIRE(*e3 == *e1);
+  }
 }
 
 TEST_CASE("conjugate_braket_fold_per_tensor", "[conjugation]") {
@@ -267,8 +333,12 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
   // factor order reversed, bra<->ket swapped, dummies renamed
   auto term = deserialize(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
   auto term_adj = deserialize(L"1/2 t{i_2;a_2}:N-C-S h{a_2;i_2}:N-C-S");
-  // a manifestly real (self-conjugate) summand: BraKetSymmetry::Symm tensors
-  auto self_adj = deserialize(L"1/4 f{i_1;a_1}:N-S-S u{a_1;i_1}:N-S-S");
+  // a manifestly real (self-conjugate) summand: BraKetSymmetry::Symm tensors,
+  // derivable only over a real basis
+  auto self_adj = [] {
+    auto real_basis = tests::scoped_real_basis();
+    return deserialize(L"1/4 f{i_1;a_1}:N-S-S u{a_1;i_1}:N-S-S");
+  }();
 
   SECTION("sum pair emits 2 Re(A)") {
     auto folded = fold_conjugate_pairs(term->clone() + term_adj->clone());
@@ -495,8 +565,9 @@ TEST_CASE("value_modifier_normalization", "[conjugation]") {
 
   Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  // Symm is derivable only over a real basis
+  Tensor s(L"s", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+           Symmetry::Nonsymm, BraKetSymmetry::Symm, ColumnSymmetry::Symm);
 
   SECTION("Conjugate: transpose() is the starred swapped spelling") {
     Tensor gt = g;
@@ -1039,11 +1110,19 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
     REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
   }
 
-  SECTION("explicit braket contradicting the traits throws") {
+  SECTION("explicit braket with a fixed trait: the parity is searched") {
+    // Symm with AntiHermitian over a real basis is an imaginary symmetric
+    // array: odd parity
+    Tensor d(L"d", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
+             TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                              .hermiticity = Hermiticity::AntiHermitian});
+    REQUIRE(d.conjugation_parity() == ConjugationParity::Odd);
+    REQUIRE(d.braket_symmetry() == BraKetSymmetry::Symm);
+    // no parity reproduces Conjugate from an anti-Hermitian over a real basis
     REQUIRE_THROWS_AS(
         Tensor(L"d", bra{idx(L"i_1", Field::Real)},
                ket{idx(L"i_2", Field::Real)},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm,
+               TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
                                 .hermiticity = Hermiticity::AntiHermitian}),
         sequant::Exception);
   }
@@ -1460,36 +1539,45 @@ TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {
     REQUIRE(q.braket_symmetry() == BraKetSymmetry::Antisymm);
   }
 
-  SECTION("a pinned exchange symmetry the traits do not derive is carried") {
-    // the Symm pin over the complex basis: the traits it back-fills
-    // (Hermitian, Even) derive Conjugate over that basis, so the pack carries
-    // the pin itself, or a rebuild would change the tensor's symmetry
-    Tensor g(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
-             TensorSymmetries{.braket = BraKetSymmetry::Symm});
-    REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
-    const auto syms = g.symmetries();
-    REQUIRE(syms.braket == BraKetSymmetry::Symm);
-    REQUIRE(syms.conjugation_parity == g.conjugation_parity());
-
-    using ixvec = container::svector<Index>;
-    auto r = g.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
-                          ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{});
-    REQUIRE(r.braket_symmetry() == BraKetSymmetry::Symm);
-    REQUIRE(r.hermiticity() == g.hermiticity());
-    REQUIRE(r.conjugation_parity() == g.conjugation_parity());
-
-    // and through a domain rebuild
-    auto expanded = mbpt::expand_antisymm(
-        deserialize(L"g{i_1,i_2;a_1,a_2}:A-S-S")->as<Tensor>());
-    std::size_t n = 0;
-    expanded->visit(
-        [&n](const ExprPtr& e) {
-          if (!e->is<Tensor>()) return;
-          ++n;
-          CHECK(e->as<Tensor>().braket_symmetry() == BraKetSymmetry::Symm);
-        },
-        /* atoms_only = */ true);
-    REQUIRE(n > 1);
+  SECTION("an exchange symmetry the traits do not derive is refused") {
+    // Symm and Antisymm relate an array to itself under the bra<->ket
+    // exchange; over a complex basis the exchange relates an operator's
+    // matrix to its conjugate, so no trait combination derives them there.
+    // Such an array is real, which is declared through the basis field.
+    REQUIRE_THROWS_AS(Tensor(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
+                             TensorSymmetries{.braket = BraKetSymmetry::Symm}),
+                      Exception);
+    REQUIRE_THROWS_AS(
+        Tensor(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
+               TensorSymmetries{.braket = BraKetSymmetry::Antisymm}),
+        Exception);
+    REQUIRE_THROWS_AS(deserialize(L"g{i_1;a_1}:N-S-N"),
+                      io::serialization::SerializationError);
+    // over a real basis both derive
+    Tensor gs(L"g", bra{idx(L"i_1", Field::Real)},
+              ket{idx(L"a_1", Field::Real)},
+              TensorSymmetries{.braket = BraKetSymmetry::Symm});
+    REQUIRE(gs.hermiticity() == Hermiticity::Hermitian);
+    REQUIRE(gs.conjugation_parity() == ConjugationParity::Even);
+    Tensor ga(L"g", bra{idx(L"i_1", Field::Real)},
+              ket{idx(L"a_1", Field::Real)},
+              TensorSymmetries{.braket = BraKetSymmetry::Antisymm});
+    REQUIRE(ga.hermiticity() == Hermiticity::AntiHermitian);
+    REQUIRE(ga.conjugation_parity() == ConjugationParity::Even);
+    // the given traits are fixed and the missing one is searched: Antisymm
+    // with Hermitian is an odd-parity (imaginary) array
+    Tensor go(L"g", bra{idx(L"i_1", Field::Real)},
+              ket{idx(L"a_1", Field::Real)},
+              TensorSymmetries{.braket = BraKetSymmetry::Antisymm,
+                               .hermiticity = Hermiticity::Hermitian});
+    REQUIRE(go.conjugation_parity() == ConjugationParity::Odd);
+    // and a pin the given traits contradict is refused
+    REQUIRE_THROWS_AS(
+        Tensor(L"g", bra{idx(L"i_1", Field::Real)},
+               ket{idx(L"a_1", Field::Real)},
+               TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
+                                .conjugation_parity = ConjugationParity::Odd}),
+        Exception);
   }
 }
 
@@ -1697,4 +1785,26 @@ TEST_CASE("painter_colours_by_conjugation_symmetry", "[conjugation]") {
     auto even = canonicalize(p(ConjugationParity::Even) * u());
     REQUIRE_FALSE(*none == *even);
   }
+}
+
+TEST_CASE("generic_adjoint_keeps_no_sign", "[conjugation]") {
+  // sequant::adjoint(T) returns a T, which cannot hold the sign an
+  // anti-Hermitian tensor's adjoint carries: it throws, and the ExprPtr
+  // overload is the way to get that adjoint with its sign
+  Tensor d(L"d", bra{L"i_1"}, ket{L"i_2"},
+           TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+  REQUIRE_THROWS_AS(sequant::adjoint(d), Exception);
+  auto viaExpr = sequant::adjoint(ex<Tensor>(d));
+  REQUIRE(viaExpr->is<Product>());
+  REQUIRE(viaExpr->as<Product>().scalar() == -1);
+
+  // a Hermitian tensor's adjoint is itself, respelled
+  Tensor h(L"h", bra{L"i_1"}, ket{L"i_2"},
+           TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+  Tensor h_adj = sequant::adjoint(h);
+  REQUIRE(h_adj.bra()[0].label() == L"i_2");
+  REQUIRE(h_adj.value_modifier() == ValueModifier::None);
+  // and a Nonsymm one is the ⁺ state
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  REQUIRE(sequant::adjoint(t).value_modifier() == ValueModifier::Adjoint);
 }

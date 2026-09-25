@@ -238,7 +238,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// or −1 when the adjoint is minus the resulting object (an anti-Hermitian
   /// Tensor); like canonicalize()'s byproduct it must be applied by the
   /// caller, see sequant::adjoint(const ExprPtr&)
-  virtual std::int8_t adjoint() = 0;
+  [[nodiscard]] virtual std::int8_t adjoint() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the

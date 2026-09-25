@@ -73,6 +73,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
 
   SECTION("canonicalize_slots") {
     SECTION("TN isomorphism") {
+      // the bra-ket-symmetric networks below (`S` braket letter) are derivable
+      // only over a real basis; unannotated tensors deserialize NonHermitian,
+      // hence Nonsymm, over either
+      auto real_basis = tests::scoped_real_basis();
       enum EqEnum { Eq, NEq };
       enum SignEnum { Plus, Minus };
 
@@ -297,8 +301,9 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           REQUIRE(ranges::equal(d->bra(), d->ket()));
         }
 
-        // Symm braket also folds and never marks.
+        // Symm braket (a real array) also folds and never marks.
         {
+          auto real_basis = tests::scoped_real_basis();
           auto a = canonical_tensor(L"h{a_1;i_1}:N-S-S");
           auto b = canonical_tensor(L"h{i_1;a_1}:N-S-S");
           REQUIRE(same_slots(*a, *b));
@@ -339,6 +344,9 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
     }
 
     SECTION("Named index ordering") {
+      // the bra-ket-symmetric networks below (`S` braket letter) are derivable
+      // only over a real basis
+      auto real_basis = tests::scoped_real_basis();
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 
       using idxvec_t = std::vector<std::wstring>;
@@ -1011,7 +1019,7 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
       REQUIRE_THROWS_AS(TensorNetworkV2(*t1_x_t2_p_t2), Exception);
 
       // must be covariant: no bra to bra or ket to ket
-      t2->adjoint();
+      REQUIRE(t2->adjoint() == 1);
       auto t1_x_t2_adjoint = t1 * t2;
       REQUIRE_THROWS_AS(TensorNetworkV2(t1_x_t2_adjoint), Exception);
     }
@@ -1633,7 +1641,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
       // must be covariant: no bra to bra or ket to ket
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
-        t2->adjoint();
+        REQUIRE(t2->adjoint() == 1);
         auto t1_x_t2_adjoint = t1 * t2;
         REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint).create_graph(), Exception);
       }
