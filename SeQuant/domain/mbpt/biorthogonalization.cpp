@@ -1003,6 +1003,7 @@ ExprPtr triplet_weighted_perm_sum(
 
   Sum out;
   for (const auto& term : *compact_expr) {
+    SEQUANT_ASSERT(term->is<Product>());
     if (!term->is<Product>()) {
       out.append(term);
       continue;
@@ -1071,6 +1072,7 @@ ExprPtr triplet_maxcoeff_compact(
 
   container::map<std::size_t, container::vector<ExprPtr>> groups;
   for (const auto& term : *work) {
+    SEQUANT_ASSERT(term->is<Product>());
     if (!term->is<Product>()) continue;
     groups[product_network_hash(term)].push_back(term);
   }
