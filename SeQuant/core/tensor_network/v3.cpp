@@ -837,12 +837,11 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
             slot_type = IndexSlotType::TensorAux;
           } else if (symm == BraKetSymmetry::Symm ||
                      edge_it->vertex(0).getOrigin() == Origin::Bra) {
-            // Note: we must not distinguis bra and ket indices in case braket
-            // symmetry is present Technically, this should (to some degree)
-            // also apply to BraKetSymmetry::Conjugate but this TN
-            // implementation currently doesn't exploit conjugate braket
-            // symmetry (as it is not entirely clear how to handle the required
-            // complex conjugation)
+            // Note: we must not distinguish bra and ket indices in case
+            // braket symmetry is present. BraKetSymmetry::Conjugate is not
+            // among them by design: its two orientations are two values
+            // (T{q;p} = conj(T{p;q})), so its bra and ket slots stay
+            // distinct.
             slot_type = IndexSlotType::TensorBra;
           } else {
             SEQUANT_ASSERT(edge_it->vertex(0).getOrigin() == Origin::Ket);

@@ -2240,9 +2240,9 @@ TEST_CASE("braket orientation is part of the value", "[elements]") {
   // The Hermitian identity h{q;p} = conj(h{p;q}) relates two DIFFERENT
   // arrays, so canonicalization, which is a function of the value, keeps the
   // two orientations apart: a Hermitian 3-cycle and its reverse (which is its
-  // conjugate) get two canonical forms. The ꙳ state is orthogonal to that:
-  // these tensors carry the default parity Even, against which ꙳ normalizes
-  // away, so marking a factor spells the same value as marking none.
+  // conjugate) get two canonical forms. A kept ꙳ state (parity None, the
+  // fourth annotation letter) is another distinct value, which the graph
+  // colouring must see as well.
   auto canon = [](const wchar_t* s) {
     auto e = deserialize(s);
     canonicalize(e);
@@ -2252,11 +2252,17 @@ TEST_CASE("braket orientation is part of the value", "[elements]") {
       canon(L"h{p_1;p_2}:N-C-S * γ{p_2;p_3}:N-C-S * Z{p_3;p_1}:N-C-S");
   const auto reverse =
       canon(L"h{p_2;p_1}:N-C-S * γ{p_3;p_2}:N-C-S * Z{p_1;p_3}:N-C-S");
-  const auto marked =
-      canon(L"h꙳{p_1;p_2}:N-C-S * γ{p_2;p_3}:N-C-S * Z꙳{p_3;p_1}:N-C-S");
+  const auto unmarked_none =
+      canon(L"h{p_1;p_2}:N-C-S-N * γ{p_2;p_3}:N-C-S * Z{p_3;p_1}:N-C-S-N");
+  const auto marked = canon(
+      L"h꙳{p_1;p_2}:N-C-S-N * γ{p_2;p_3}:N-C-S * "
+      L"Z꙳{p_3;p_1}:N-C-S-N");
   INFO(toUtf8(forward));
   INFO(toUtf8(reverse));
+  INFO(toUtf8(unmarked_none));
   INFO(toUtf8(marked));
   REQUIRE(forward != reverse);
-  REQUIRE(marked == forward);
+  REQUIRE(marked != forward);
+  // the mark, not the parity letter, is what tells the two apart
+  REQUIRE(marked != unmarked_none);
 }

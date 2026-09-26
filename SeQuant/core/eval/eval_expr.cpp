@@ -438,9 +438,9 @@ EvalExprNode binarize(Tensor const& t,
                       [[maybe_unused]] IndexSet const& uncontract,
                       [[maybe_unused]] const BinarizationOptions& opts,
                       [[maybe_unused]] std::size_t& node_counter) {
-  // Leaves keep their as-written orientation at the eval boundary (the leaf
-  // ctor disables the Conjugate fold); a state arrives only on a spelling
-  // that was produced symbolically. Serve it per state.
+  // Leaves keep their as-written orientation: canonicalization never
+  // exchanges a Conjugate tensor's bundles, so a state arrives only on a
+  // spelling produced symbolically. Serve it per state.
   if (t.kconjugated())
     throw Exception(
         "sequant::binarize: a K-conjugated tensor leaf is not evaluable (no "

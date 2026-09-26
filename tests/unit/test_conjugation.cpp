@@ -1196,12 +1196,16 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
     REQUIRE(*c1 != *c2);
     // the pair is still a conjugate pair of the VALUE: s + (-s*) = 2i Im(s)
     auto folded = fold_conjugate_pairs(e1->clone() + e2->clone());
-    bool have_im = false;
-    folded->visit([&](ExprPtr const& n) { have_im |= n->is<ImagPart>(); },
-                  /*atoms_only=*/false);
-    have_im |= folded->is<ImagPart>();
     INFO(toUtf8(to_latex(folded)));
-    REQUIRE(have_im);
+    REQUIRE_FALSE(folded->is<Sum>());
+    REQUIRE(folded->is<Product>());
+    REQUIRE(folded->as<Product>().scalar() == (C{0, 2}));
+    REQUIRE(folded->as<Product>().factors().size() == 1);
+    auto const& wrapped = folded->as<Product>().factors()[0];
+    REQUIRE(wrapped->is<ImagPart>());
+    // the wrapper carries one of the pair's two canonical forms
+    auto const inner = canonicalize(wrapped->as<ImagPart>().inner()->clone());
+    REQUIRE((*inner == *c1 || *inner == *c2));
   }
 
   SECTION("anti-Hermitian, Complete method: the lexicographic pass agrees") {
@@ -1240,12 +1244,16 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
         REQUIRE_FALSE(f->as<Tensor>().kconjugated());
     REQUIRE(*c1 != *c2);
     auto folded = fold_conjugate_pairs(e1->clone() + e2->clone());
-    bool have_re = false;
-    folded->visit([&](ExprPtr const& n) { have_re |= n->is<RealPart>(); },
-                  /*atoms_only=*/false);
-    have_re |= folded->is<RealPart>();
     INFO(toUtf8(to_latex(folded)));
-    REQUIRE(have_re);
+    REQUIRE_FALSE(folded->is<Sum>());
+    REQUIRE(folded->is<Product>());
+    REQUIRE(folded->as<Product>().scalar() == (C{2, 0}));
+    REQUIRE(folded->as<Product>().factors().size() == 1);
+    auto const& wrapped = folded->as<Product>().factors()[0];
+    REQUIRE(wrapped->is<RealPart>());
+    // the wrapper carries one of the pair's two canonical forms
+    auto const inner = canonicalize(wrapped->as<RealPart>().inner()->clone());
+    REQUIRE((*inner == *c1 || *inner == *c2));
   }
 
   SECTION("real-field odd-parity Hermitian tensor: antisymmetric, no marker") {
