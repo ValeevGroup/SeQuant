@@ -146,15 +146,9 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
-    // The conjugate-braket fold is DISABLED at the eval boundary: leaves
-    // keep their as-written orientation (conjugation markers arrive only on
-    // already-starred spellings, which binarize lowers to their value
-    // orientation). The marker still colors the graph, so T and T* stay
-    // distinct (the C·C* vs C*·C aliasing fix).
     auto md = tn.canonicalize_slots(
         {.cardinal_tensor_labels =
-             TensorCanonicalizer::cardinal_tensor_labels(),
-         .fold_conjugate_braket = false});
+             TensorCanonicalizer::cardinal_tensor_labels()});
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
     canon_indices_ = md.get_indices<index_vector>();
@@ -166,20 +160,15 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // and it normalizes bra<->ket orientation for braket-symmetric tensors so
     // that equivalent half-tensor forms (e.g. X{a;;x} and X{;a;x}) fold.
     auto& t = expr_->as<Tensor>();
-    // The flat-leaf conjugate-braket fold and the signed bra<->ket swap are
-    // disabled at the eval boundary: leaves keep their as-written (value)
-    // orientation so leaf yielders and evaluators need no conjugation or
-    // sign awareness (Symm, a free respelling, still folds). The yielder is
-    // asked for the leaf's canonical spelling and the engine takes its array
-    // as the leaf's own value, so a leaf's phase is a cache-orientation round
-    // trip that never reaches the value: a respelling that costs a sign
-    // cannot be folded here. An already-starred spelling keeps its modifier
-    // -- binarize lowers it to its value orientation; folding fresh flat
-    // leaves onto one orientation-shared slot is the lazy-conj eval
-    // follow-up.
-    auto phase = TensorBlockCanonicalizer{/*fold_conjugate_braket=*/false,
-                                          /*fold_signed_braket=*/false}
-                     .apply(t);
+    // The signed bra<->ket swap is disabled at the eval boundary: leaves keep
+    // their as-written (value) orientation so leaf yielders and evaluators
+    // need no sign awareness (Symm, a free respelling, still folds). The
+    // yielder is asked for the leaf's canonical spelling and the engine takes
+    // its array as the leaf's own value, so a leaf's phase is a
+    // cache-orientation round trip that never reaches the value: a
+    // respelling that costs a sign cannot be folded here.
+    auto phase =
+        TensorBlockCanonicalizer{/*fold_signed_braket=*/false}.apply(t);
     canon_phase_ = phase ? -1 : 1;
     // Leaf-hash invariant (owned by hash_terminal_tensor): the modifier
     // enters the hash whenever it is set. A Conjugate-marked leaf never
@@ -634,21 +623,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       auto named_indices = tn.ext_indices();
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
 
-      // The conjugate-braket fold is DISABLED at the eval boundary, here as
-      // in the leaf ctor: the operands are evaluated in their as-written
-      // orientation, so the intermediate's canonical slot order (its layout)
-      // must come from the same orientation-sensitive graph. Folding here
-      // lets a BraKetSymmetry::Conjugate operand's bra/ket bundles trade
-      // places in the graph and shifts the canonical order of the named
-      // indices away from the operands' own layout (a ToT*ToT general
-      // product then needs an inner result permutation TA cannot emit, and
-      // the shaped-product hook declines). The fold buys no identity either:
-      // the node hash already carries the orientation-sensitive leaf hashes.
       auto canon = tn.canonicalize_slots(
           {.cardinal_tensor_labels =
                TensorCanonicalizer::cardinal_tensor_labels(),
-           .named_indices = &named_indices,
-           .fold_conjugate_braket = false});
+           .named_indices = &named_indices});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       EvalExpr result =

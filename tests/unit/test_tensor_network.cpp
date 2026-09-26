@@ -175,12 +175,15 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
               {L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
           };
 
-      // the same two orientations of a Conjugate-braket (c-number) tensor:
-      // V3's braket-orientation fold shares the graph between them (they are
-      // conj-related spellings of one value, served from one cache slot);
-      // pre-V3 networks keep them distinct
+      // the two orientations of a Conjugate-braket tensor are two values
+      // (C{q;p} = conj(C{p;q})), so their bundles carry distinct colours and
+      // the networks are not isomorphic
       tests.emplace_back(L"C{μ̃_1;a_3<i_3>}:N-C-N", L"C{a_1<i_2>;μ̃_1}:N-C-N",
-                         TN::version() >= 3 ? Eq : NEq, Plus);
+                         NEq, Plus);
+      // the Symm counterpart: the exchange is a free respelling, so the two
+      // orientations share one graph
+      tests.emplace_back(L"C{μ̃_1;a_3<i_3>}:N-S-N", L"C{a_1<i_2>;μ̃_1}:N-S-N", Eq,
+                         Plus);
 
       if constexpr (TN::version() >= 3) {
         ///////////////////// TNs with braket symmetries
@@ -255,13 +258,13 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
       REQUIRE(canon1.phase != canon2.phase);
     }
 
-    SECTION("conjugate braket fold") {
+    SECTION("braket orientation fold") {
       if constexpr (TN::version() >= 3) {
-        // A Hermitian (BraKetSymmetry::Conjugate) tensor satisfies
+        // Only a free or signed bra<->ket exchange is a respelling. A
+        // Hermitian (BraKetSymmetry::Conjugate) tensor satisfies
         //   h{bra;ket} = conj(h{ket;bra}),
-        // so its two bra<->ket orientations fold onto a single canonical
-        // spelling; the orientation that had to be swapped carries the
-        // elementwise-conjugation marker (the value is preserved).
+        // so its two orientations are two values and canonicalization keeps
+        // each as written; a Symm tensor's two orientations fold onto one.
         const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
         auto canonical_tensor = [&cardinal](const std::wstring& s) {
           TN tn(deserialize(s));
@@ -274,34 +277,38 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
                  ranges::equal(a.ket(), b.ket());
         };
 
-        // Conjugate: one canonical spelling, exactly one input marked.
+        // Conjugate: each orientation stays as written and stays unmarked.
         {
           auto a = canonical_tensor(L"h{a_1;i_1}:N-C-S");
           auto b = canonical_tensor(L"h{i_1;a_1}:N-C-S");
-          REQUIRE(same_slots(*a, *b));
-          REQUIRE(a->kconjugated() != b->kconjugated());
+          INFO(toUtf8(to_latex(*a)) << " vs " << toUtf8(to_latex(*b)));
+          REQUIRE(!same_slots(*a, *b));
+          REQUIRE(a->bra()[0].label() == L"a_1");
+          REQUIRE(b->bra()[0].label() == L"i_1");
+          REQUIRE(!a->kconjugated());
+          REQUIRE(!b->kconjugated());
         }
 
-        // Half-tensors: the graph has no vertex for the empty bundle, so the
-        // per-tensor fold decides -- one spelling, exactly one marked.
+        // Conjugate half-tensors: likewise kept apart.
         {
           auto a = canonical_tensor(L"h{a_1;}:N-C-S");
           auto b = canonical_tensor(L"h{;a_1}:N-C-S");
           INFO(toUtf8(to_latex(*a)) << " vs " << toUtf8(to_latex(*b)));
-          REQUIRE(same_slots(*a, *b));
-          REQUIRE(a->kconjugated() != b->kconjugated());
+          REQUIRE(a->bra_rank() == 1);
+          REQUIRE(b->ket_rank() == 1);
+          REQUIRE(!a->kconjugated());
+          REQUIRE(!b->kconjugated());
         }
 
-        // Identical bra and ket bundles (a diagonal, hence real, block): the
-        // graph's bundle order is an arbitrary automorphism; the fold leaves
-        // the spelling as written and unmarked.
+        // Identical bra and ket bundles (a diagonal, hence real, block):
+        // nothing to decide, the spelling stands.
         {
           auto d = canonical_tensor(L"h{p_1,p_2;p_1,p_2}:N-C-S");
           REQUIRE(!d->kconjugated());
           REQUIRE(ranges::equal(d->bra(), d->ket()));
         }
 
-        // Symm braket (a real array) also folds and never marks.
+        // Symm braket (a real array) folds and never marks.
         {
           auto real_basis = tests::scoped_real_basis();
           auto a = canonical_tensor(L"h{a_1;i_1}:N-S-S");
@@ -1084,11 +1091,11 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
       //        std::endl; std::wcout <<
       //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
       //        std::endl;
-      // the Hermitian F canonicalizes to its swapped+starred spelling
+      // the Hermitian F keeps the orientation it was written in
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-              L"{{F^{*}}^{{i_2}}_{{i_1}}}");
+              L"{F^{{i_2}}_{{i_1}}}");
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-              L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+              L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
     }
 
     {
@@ -1113,9 +1120,9 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
         // std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                 L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
-        // the Hermitian F canonicalizes to its swapped+starred spelling
+        // the Hermitian F keeps the orientation it was written in
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{{F^{*}}^{{i_1}}_{{i_{17}}}}");
+                L"{F^{{i_{17}}}_{{i_1}}}");
       }
 
       // with explicit named indices
@@ -1138,16 +1145,16 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
         //        << std::endl;
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                 L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
-        // the Hermitian F canonicalizes to its swapped+starred spelling
+        // the Hermitian F keeps the orientation it was written in
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{{F^{*}}^{{i_2}}_{{i_{17}}}}");
+                L"{F^{{i_{17}}}_{{i_2}}}");
       }
     }
 
     SECTION("particle non-conserving") {
       const auto input1 = deserialize(L"P{;a1,a3}");
       const auto input2 = deserialize(L"P{a1,a3;}");
-      const std::wstring expected1 = L"{{{P^{*}}^{}_{{a_1}{a_3}}}}";
+      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
       const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
@@ -1169,7 +1176,7 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
               .factors();
       const std::wstring expected =
           L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * "
-          L"I2꙳{i_1,i_2;;x_1}:N";
+          L"I2{;i_1,i_2;x_1}:N";
 
       for (bool fast : {true, false}) {
         TensorNetworkV2 tn(input);
@@ -1236,14 +1243,14 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
     SECTION("miscellaneous") {
       const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
           {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"g{i_1,a_1;i_2,i_3}:A * I꙳{i_1,a_1;i_2,i_3}:A"},
+           L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
           {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"-1 g{i_1,a_1;i_2,i_3}:A * I꙳{i_1,a_1;i_2,i_3}:A"},
+           L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
 
           {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I꙳{i_1,a_1;i_2,i_3}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
           {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I꙳{i_1,a_1;i_3,i_2}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
       };
 
       for (const auto& [input, expected] : inputs) {
@@ -2228,26 +2235,28 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   }
 }
 
-TEST_CASE("conjugate braket fold: marker placement is not part of the value",
-          "[elements]") {
+TEST_CASE("braket orientation is part of the value", "[elements]") {
   using namespace sequant;
-  // One value, three spellings: the Hermitian identity h{q;p} = conj(h{p;q})
-  // lets the elementwise-conjugation marker sit on either factor of
-  //   sum_{p1 p2} h_{p1 p2} gamma_{p2 p1}
-  // or on neither. Canonicalization is a function of the VALUE, so all three
-  // must land on one spelling; the graph must therefore see every tensor in
-  // its value orientation (markers unfolded) before it decides anything.
+  // The Hermitian identity h{q;p} = conj(h{p;q}) relates two DIFFERENT
+  // arrays, so canonicalization, which is a function of the value, keeps the
+  // two orientations apart: a Hermitian 3-cycle and its reverse (which is its
+  // conjugate) get two canonical forms. The ꙳ state is orthogonal to that:
+  // these tensors carry the default parity Even, against which ꙳ normalizes
+  // away, so marking a factor spells the same value as marking none.
   auto canon = [](const wchar_t* s) {
     auto e = deserialize(s);
     canonicalize(e);
     return to_latex(e);
   };
-  const auto marked_second = canon(L"h{p_1;p_2}:N-C-S * γ꙳{p_1;p_2}:N-C-S");
-  const auto marked_first = canon(L"γ{p_1;p_2}:N-C-S * h꙳{p_1;p_2}:N-C-S");
-  const auto unmarked = canon(L"h{p_2;p_1}:N-C-S * γ{p_1;p_2}:N-C-S");
-  INFO(toUtf8(marked_second));
-  INFO(toUtf8(marked_first));
-  INFO(toUtf8(unmarked));
-  REQUIRE(marked_second == unmarked);
-  REQUIRE(marked_first == unmarked);
+  const auto forward =
+      canon(L"h{p_1;p_2}:N-C-S * γ{p_2;p_3}:N-C-S * Z{p_3;p_1}:N-C-S");
+  const auto reverse =
+      canon(L"h{p_2;p_1}:N-C-S * γ{p_3;p_2}:N-C-S * Z{p_1;p_3}:N-C-S");
+  const auto marked =
+      canon(L"h꙳{p_1;p_2}:N-C-S * γ{p_2;p_3}:N-C-S * Z꙳{p_3;p_1}:N-C-S");
+  INFO(toUtf8(forward));
+  INFO(toUtf8(reverse));
+  INFO(toUtf8(marked));
+  REQUIRE(forward != reverse);
+  REQUIRE(marked == forward);
 }

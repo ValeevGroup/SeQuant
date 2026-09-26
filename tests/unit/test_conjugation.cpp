@@ -27,6 +27,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -132,50 +133,42 @@ TEST_CASE("braket_foldable_predicates", "[conjugation]") {
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  // Conjugate c-number: value fold applies
+  // Conjugate: the two orientations are two values (T{q;p} = conj(T{p;q})),
+  // so no fold applies
   Tensor h(L"h", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  REQUIRE(braket_conjugate_foldable(h));
-  REQUIRE(braket_foldable(h));
+  REQUIRE_FALSE(braket_foldable(h));
 
   // Nonsymm: no fold of any kind
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
-  REQUIRE_FALSE(braket_conjugate_foldable(t));
   REQUIRE_FALSE(braket_foldable(t));
 
-  // Symm (Hermitian over a real basis): free swap, not the Conjugate value
-  // fold
+  // Symm (Hermitian over a real basis): the exchange is a free respelling
   Tensor s(L"s", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
            Symmetry::Nonsymm, BraKetSymmetry::Symm, ColumnSymmetry::Symm);
-  REQUIRE_FALSE(braket_conjugate_foldable(s));
   REQUIRE(braket_foldable(s));
 
-  // Antisymm (anti-Hermitian over a real basis): a swap carrying -1, not the
-  // conjugate value fold
+  // Antisymm (anti-Hermitian over a real basis): a respelling carrying -1
   Tensor n(L"n", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
            TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
                             .column = ColumnSymmetry::Symm});
   REQUIRE(n.braket_symmetry() == BraKetSymmetry::Antisymm);
-  REQUIRE_FALSE(braket_conjugate_foldable(n));
   REQUIRE(braket_foldable(n));
 
-  // AntiConjugate (anti-Hermitian over the complex basis): the conjugate
-  // value fold applies, at -1
+  // AntiConjugate (anti-Hermitian over the complex basis): the two
+  // orientations are two values as well, so no fold applies
   Tensor d(L"d", bra{L"i_1"}, ket{L"a_1"},
            TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
                             .column = ColumnSymmetry::Symm});
   REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
-  REQUIRE(braket_conjugate_foldable(d));
-  REQUIRE(braket_foldable(d));
+  REQUIRE_FALSE(braket_foldable(d));
 
-  // operator-valued: reorienting would exchange creators and annihilators, so
-  // no fold applies however symmetric the bra/ket exchange looks (this one's
-  // bra and ket agree, hence Hermitian, hence Conjugate over the complex
-  // basis)
+  // operator-valued whose braket symmetry is Conjugate (this one's creator
+  // and annihilator index multisets agree, hence Hermitian, hence Conjugate
+  // over the complex basis): not foldable, like every other Conjugate
   FNOperator op(cre({L"i_1"}), ann({L"i_1"}));
   REQUIRE(braket_symmetry(op) == BraKetSymmetry::Conjugate);
-  REQUIRE_FALSE(braket_conjugate_foldable(op));
   REQUIRE_FALSE(braket_foldable(op));
 
   // operator-valued over a real basis: Hermitian (equal creator and
@@ -185,13 +178,26 @@ TEST_CASE("braket_foldable_predicates", "[conjugation]") {
   FNOperator rop(cre({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}),
                  ann({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}));
   REQUIRE(braket_symmetry(rop) == BraKetSymmetry::Symm);
-  REQUIRE_FALSE(braket_conjugate_foldable(rop));
   REQUIRE(braket_foldable(rop));
   // a non-Hermitian one is not
   FNOperator nop(cre({idx(L"p_1", Field::Real), idx(L"p_2", Field::Real)}),
                  ann({idx(L"p_3", Field::Real), idx(L"p_4", Field::Real)}));
   REQUIRE(braket_symmetry(nop) == BraKetSymmetry::Nonsymm);
   REQUIRE_FALSE(braket_foldable(nop));
+
+  // a reserved bookkeeping operator's orientation defines its external
+  // indices, so it is pinned and never folds; the Tensor constructor also
+  // refuses to give it a braket symmetry in the first place
+  Tensor A(reserved::antisymm_label(), bra{idx(L"i_1", Field::Real)},
+           ket{idx(L"a_1", Field::Real)}, Symmetry::Antisymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  REQUIRE(braket_orientation_pinned(A));
+  REQUIRE_FALSE(braket_foldable(A));
+  REQUIRE_THROWS_AS(
+      Tensor(reserved::antisymm_label(), bra{idx(L"i_1", Field::Real)},
+             ket{idx(L"a_1", Field::Real)}, Symmetry::Antisymm,
+             BraKetSymmetry::Symm, ColumnSymmetry::Symm),
+      Exception);
 }
 
 TEST_CASE("normal_operator_swap_bra_ket", "[conjugation]") {
@@ -245,42 +251,88 @@ TEST_CASE("normal_operator_swap_bra_ket", "[conjugation]") {
 }
 
 TEST_CASE("conjugate_braket_fold_per_tensor", "[conjugation]") {
-  // The Conjugate bra<->ket fold engages in per-tensor canonicalization:
-  // both orientations of a c-number Conjugate tensor land on ONE canonical
-  // spelling, the originally-swapped input acquiring the
-  // elementwise-conjugation marker so the represented value is unchanged.
+  // Per-tensor canonicalization exchanges the two bra/ket bundles only where
+  // the exchange is a respelling of one value: Symm swaps freely, Antisymm
+  // swaps at -1. A Conjugate/AntiConjugate tensor's two orientations are two
+  // values, so both are left exactly as written and neither picks up a state.
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  // occ (i) vs virt (a) bundles: space-decidable orientation
+  // occ (i) vs virt (a) bundles: space-decidable, yet Conjugate does not fold
   Tensor A(L"h", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
   Tensor B(L"h", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  DefaultTensorCanonicalizer::canonicalize_braket(A);
-  DefaultTensorCanonicalizer::canonicalize_braket(B);
-  // both spell the same slot order; exactly one carries the marker
-  REQUIRE(A.bra()[0].label() == B.bra()[0].label());
-  REQUIRE(A.kconjugated() != B.kconjugated());
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(A) == 1);
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(B) == 1);
+  REQUIRE(A.bra()[0].label() == L"a_1");
+  REQUIRE(A.ket()[0].label() == L"i_1");
+  REQUIRE(B.bra()[0].label() == L"i_1");
+  REQUIRE(B.ket()[0].label() == L"a_1");
+  for (const Tensor& t : {A, B}) {
+    REQUIRE_FALSE(t.adjointed());
+    REQUIRE_FALSE(t.kconjugated());
+  }
 
-  // full space tie (same-space named indices): label tie-break folds too
-  Tensor C1(L"T", bra{L"p_1"}, ket{L"p_2"}, Symmetry::Nonsymm,
-            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  Tensor C2(L"T", bra{L"p_2"}, ket{L"p_1"}, Symmetry::Nonsymm,
-            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  DefaultTensorCanonicalizer::canonicalize_braket(C1);
-  DefaultTensorCanonicalizer::canonicalize_braket(C2);
-  REQUIRE(C1.bra()[0].label() == C2.bra()[0].label());
-  REQUIRE(C1.kconjugated() != C2.kconjugated());
+  // AntiConjugate: likewise untouched, and no sign is consumed
+  Tensor D1(L"d", bra{L"a_1"}, ket{L"i_1"},
+            TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                             .column = ColumnSymmetry::Symm});
+  Tensor D2(L"d", bra{L"i_1"}, ket{L"a_1"},
+            TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                             .column = ColumnSymmetry::Symm});
+  REQUIRE(D1.braket_symmetry() == BraKetSymmetry::AntiConjugate);
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(D1) == 1);
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(D2) == 1);
+  REQUIRE(D1.bra()[0].label() == L"a_1");
+  REQUIRE(D2.bra()[0].label() == L"i_1");
 
-  // identical bundles (diagonal): never swapped, never marked
-  Tensor D(L"T", bra{L"p_1"}, ket{L"p_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  DefaultTensorCanonicalizer::canonicalize_braket(D);
-  REQUIRE_FALSE(D.kconjugated());
+  // Symm over a real basis: the two orientations land on one spelling, free
+  auto real = [](std::wstring_view l) { return idx(l, Field::Real); };
+  Tensor S1(L"s", bra{real(L"a_1")}, ket{real(L"i_1")}, Symmetry::Nonsymm,
+            BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  Tensor S2(L"s", bra{real(L"i_1")}, ket{real(L"a_1")}, Symmetry::Nonsymm,
+            BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(S1) == 1);
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(S2) == 1);
+  REQUIRE(S1.bra()[0].label() == S2.bra()[0].label());
+  REQUIRE(S1.ket()[0].label() == S2.ket()[0].label());
+  REQUIRE_FALSE(S1.kconjugated());
+  REQUIRE_FALSE(S2.kconjugated());
+
+  // Antisymm over a real basis: one spelling as well, the swapped one at -1
+  auto anti = [&real](std::wstring_view b, std::wstring_view k) {
+    return Tensor(L"n", bra{real(b)}, ket{real(k)},
+                  TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                                   .column = ColumnSymmetry::Symm});
+  };
+  Tensor N1 = anti(L"a_1", L"i_1");
+  Tensor N2 = anti(L"i_1", L"a_1");
+  REQUIRE(N1.braket_symmetry() == BraKetSymmetry::Antisymm);
+  const auto n1 = DefaultTensorCanonicalizer::canonicalize_braket(N1);
+  const auto n2 = DefaultTensorCanonicalizer::canonicalize_braket(N2);
+  REQUIRE(N1.bra()[0].label() == N2.bra()[0].label());
+  REQUIRE(n1 * n2 == -1);  // exactly one was swapped, at -1
+
+  // with fold_signed off the signed exchange is declined, so the two
+  // orientations stay apart
+  Tensor N3 = anti(L"a_1", L"i_1");
+  Tensor N4 = anti(L"i_1", L"a_1");
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(
+              N3, /*fold_signed=*/false) == 1);
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(
+              N4, /*fold_signed=*/false) == 1);
+  REQUIRE(N3.bra()[0].label() == L"a_1");
+  REQUIRE(N4.bra()[0].label() == L"i_1");
+
+  // identical bundles (diagonal): never swapped
+  Tensor E(L"s", bra{real(L"p_1")}, ket{real(L"p_1")}, Symmetry::Nonsymm,
+           BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+  REQUIRE(DefaultTensorCanonicalizer::canonicalize_braket(E) == 1);
+  REQUIRE(E.bra()[0].label() == L"p_1");
 }
 
 TEST_CASE("with_slots_carries_attributes", "[conjugation]") {
@@ -888,8 +940,10 @@ TEST_CASE("canonicalize_marked_nonsymm_network", "[conjugation]") {
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  auto e1 = deserialize(L"t꙳{a_1;i_1}:N-N-N u{i_1;a_1}:N-N-N");
-  auto e2 = deserialize(L"t{a_1;i_1}:N-N-N u꙳{i_1;a_1}:N-N-N");
+  // parity None (the fourth annotation letter): with the default parity Even
+  // the ꙳ state would normalize away and there would be nothing to colour
+  auto e1 = deserialize(L"t꙳{a_1;i_1}:N-N-N-N u{i_1;a_1}:N-N-N-N");
+  auto e2 = deserialize(L"t{a_1;i_1}:N-N-N-N u꙳{i_1;a_1}:N-N-N-N");
   auto c1 = canonicalize(e1->clone());
   auto c2 = canonicalize(e2->clone());
   REQUIRE(*c1 != *c2);
@@ -1091,17 +1145,40 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
   // bundles of every braket_foldable() tensor, column-symmetric or not (only
   // permuting slots *within* a bundle needs the column symmetry)
 
-  SECTION("anti-Hermitian: the two orientations differ by a sign") {
-    // d{i;a} u{a;i} and d{a;i} u{a;i}: d{a;i} = -conj(d{i;a}), so the
-    // canonical forms differ by -1 and a conjugation marker on d
-    auto d = [](std::wstring_view b, std::wstring_view k) {
-      return ex<Tensor>(
-          L"d", bra{b}, ket{k},
-          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
-    };
-    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
-    auto e1 = d(L"i_1", L"a_1") * u;
-    auto e2 = d(L"a_1", L"i_1") * u;
+  // a fully-contracted summand and its adjoint, over a complex basis: the
+  // adjoint reverses the factors and reorients each of them, so the
+  // orientation of the (Anti)Conjugate factor is what tells the two apart
+  auto d = [](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(
+        L"d", bra{b}, ket{k},
+        TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+  };
+  auto g = [](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(L"g", bra{b}, ket{k},
+                      TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+  };
+  auto u = [](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(L"u", bra{b}, ket{k});
+  };
+  // the u of the adjoint summand: NonHermitian, so its adjoint keeps the ⁺
+  auto u_adj = [](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(L"u⁺", bra{b}, ket{k});
+  };
+  auto factor_of = [](const ExprPtr& p, std::wstring_view label) {
+    for (auto& f : p->as<Product>().factors())
+      if (f->as<Tensor>().label() == label) return f->as<Tensor>();
+    throw Exception("test: no factor with the requested label");
+  };
+
+  SECTION("anti-Hermitian: the two orientations are two values") {
+    // e1 = d{i;a} u{a;i} and its adjoint e2 = d{a;i} u⁺{i;a}: since
+    // d{a;i} = -conj(d{i;a}), e2 is -conj(e1), so the two canonical forms
+    // are distinct and fold_conjugate_pairs emits 2i Im(e1)
+    auto e1 = d(L"i_1", L"a_1") * u(L"a_1", L"i_1");
+    auto e2 = d(L"a_1", L"i_1") * u_adj(L"i_1", L"a_1");
+    // the adjoint reverses the factor order, so compare canonical forms
+    REQUIRE(*canonicalize(adjoint(e1->clone())) ==
+            *canonicalize(ex<Constant>(-1) * e2->clone()));
     auto c1 = canonicalize(e1->clone());
     auto c2 = canonicalize(e2->clone());
     REQUIRE(c1->is<Product>());
@@ -1109,71 +1186,66 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
     // canonical forms are idempotent
     REQUIRE(*canonicalize(c1->clone()) == *c1);
     REQUIRE(*canonicalize(c2->clone()) == *c2);
-    // exactly one of the two carries a conjugation marker on d, and the
-    // product scalars differ by the sign of the fold
-    auto d_of = [](const ExprPtr& p) {
-      for (auto& f : p->as<Product>().factors())
-        if (f->as<Tensor>().label() == L"d") return f->as<Tensor>();
-      throw Exception("test: no factor labelled d");
-    };
-    REQUIRE(d_of(c1).kconjugated() != d_of(c2).kconjugated());
-    REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
+    // d keeps the orientation it was written in, and neither form acquires a
+    // state: the two spellings are two values, not one respelt
+    REQUIRE(factor_of(c1, L"d").bra()[0].label() !=
+            factor_of(c2, L"d").bra()[0].label());
+    for (auto& c : {c1, c2})
+      for (auto& f : c->as<Product>().factors())
+        REQUIRE_FALSE(f->as<Tensor>().kconjugated());
+    REQUIRE(*c1 != *c2);
+    // the pair is still a conjugate pair of the VALUE: s + (-s*) = 2i Im(s)
+    auto folded = fold_conjugate_pairs(e1->clone() + e2->clone());
+    bool have_im = false;
+    folded->visit([&](ExprPtr const& n) { have_im |= n->is<ImagPart>(); },
+                  /*atoms_only=*/false);
+    have_im |= folded->is<ImagPart>();
+    INFO(toUtf8(to_latex(folded)));
+    REQUIRE(have_im);
   }
 
-  SECTION("anti-Hermitian, Complete method: the lexicographic refold signs") {
+  SECTION("anti-Hermitian, Complete method: the lexicographic pass agrees") {
     // the test binary pins Topological; run the same check under the
-    // library's default Complete so the post-relabel refold loop in
-    // TensorNetworkV3::canonicalize, whose sign reaches the byproduct
-    // separately from canonicalize_graph's, is exercised too
+    // library's default Complete so the lexicographic relabeling pass of
+    // TensorNetworkV3::canonicalize is exercised on these tensors too
     const CanonicalizeOptions opts{.method = CanonicalizationMethod::Complete};
-    auto d = [](std::wstring_view b, std::wstring_view k) {
-      return ex<Tensor>(
-          L"d", bra{b}, ket{k},
-          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
-    };
-    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
-    auto c1 = canonicalize(d(L"i_1", L"a_1") * u, opts);
-    auto c2 = canonicalize(d(L"a_1", L"i_1") * u, opts);
+    auto c1 = canonicalize(d(L"i_1", L"a_1") * u(L"a_1", L"i_1"), opts);
+    auto c2 = canonicalize(d(L"a_1", L"i_1") * u_adj(L"i_1", L"a_1"), opts);
     REQUIRE(c1->is<Product>());
     REQUIRE(c2->is<Product>());
     REQUIRE(*canonicalize(c1->clone(), opts) == *c1);
     REQUIRE(*canonicalize(c2->clone(), opts) == *c2);
-    auto d_of = [](const ExprPtr& p) {
-      for (auto& f : p->as<Product>().factors())
-        if (f->as<Tensor>().label() == L"d") return f->as<Tensor>();
-      throw Exception("test: no factor labelled d");
-    };
-    REQUIRE(d_of(c1).kconjugated() != d_of(c2).kconjugated());
-    REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
+    REQUIRE(factor_of(c1, L"d").bra()[0].label() !=
+            factor_of(c2, L"d").bra()[0].label());
+    REQUIRE(*c1 != *c2);
   }
 
-  SECTION("Hermitian, default column symmetry: one canonical form") {
-    // g{i;a} u{a;i} and g{a;i} u{a;i}: g{a;i} = conj(g{i;a}), so the two
-    // spellings are one value up to a conjugation marker on g. The
-    // graph-dictated reorientation folds g's bundles although g is not
-    // column-symmetric; only permuting slots *within* a bundle needs that
-    auto g = [](std::wstring_view b, std::wstring_view k) {
-      return ex<Tensor>(
-          L"g", bra{b}, ket{k},
-          TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
-    };
+  SECTION("Hermitian, default column symmetry: two canonical forms") {
+    // e1 = g{i;a} u{a;i} and its adjoint e2 = g{a;i} u⁺{i;a}: g{a;i} is
+    // conj(g{i;a}), a different array, so canonicalization keeps the two
+    // apart and fold_conjugate_pairs emits 2 Re(e1)
     REQUIRE(g(L"i_1", L"a_1")->as<Tensor>().column_symmetry() ==
             ColumnSymmetry::Nonsymm);
-    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
-    auto c1 = canonicalize(g(L"i_1", L"a_1") * u);
-    auto c2 = canonicalize(g(L"a_1", L"i_1") * u);
+    auto e1 = g(L"i_1", L"a_1") * u(L"a_1", L"i_1");
+    auto e2 = g(L"a_1", L"i_1") * u_adj(L"i_1", L"a_1");
+    REQUIRE(*canonicalize(adjoint(e1->clone())) == *canonicalize(e2->clone()));
+    auto c1 = canonicalize(e1->clone());
+    auto c2 = canonicalize(e2->clone());
     REQUIRE(c1->is<Product>());
     REQUIRE(c2->is<Product>());
-    auto g_of = [](const ExprPtr& p) {
-      for (auto& f : p->as<Product>().factors())
-        if (f->as<Tensor>().label() == L"g") return f->as<Tensor>();
-      throw Exception("test: no factor labelled g");
-    };
-    // one slot spelling of g, exactly one marker, the same scalar
-    REQUIRE(g_of(c1).bra()[0].label() == g_of(c2).bra()[0].label());
-    REQUIRE(g_of(c1).ket()[0].label() == g_of(c2).ket()[0].label());
-    REQUIRE(g_of(c1).kconjugated() != g_of(c2).kconjugated());
-    REQUIRE(c1->as<Product>().scalar() == c2->as<Product>().scalar());
+    REQUIRE(factor_of(c1, L"g").bra()[0].label() !=
+            factor_of(c2, L"g").bra()[0].label());
+    for (auto& c : {c1, c2})
+      for (auto& f : c->as<Product>().factors())
+        REQUIRE_FALSE(f->as<Tensor>().kconjugated());
+    REQUIRE(*c1 != *c2);
+    auto folded = fold_conjugate_pairs(e1->clone() + e2->clone());
+    bool have_re = false;
+    folded->visit([&](ExprPtr const& n) { have_re |= n->is<RealPart>(); },
+                  /*atoms_only=*/false);
+    have_re |= folded->is<RealPart>();
+    INFO(toUtf8(to_latex(folded)));
+    REQUIRE(have_re);
   }
 
   SECTION("real-field odd-parity Hermitian tensor: antisymmetric, no marker") {
@@ -1197,6 +1269,62 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
       }
     REQUIRE(*canonicalize(c1->clone()) == *c1);
   }
+}
+
+TEST_CASE("hermitian_cycle_relabeling_invariance", "[conjugation]") {
+  // A Conjugate-braket tensor keeps the orientation it was written in, so a
+  // canonical form must be decided by the network's shape alone. These
+  // networks are Hermitian cycles: every relabeling and factor reordering of
+  // one spells the same value, and a graph automorphism that exchanged a
+  // tensor's bundles would let the labels leak into the verdict.
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_min_sr_spaces(mbpt::SpinConvention::None));
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto _ = set_scoped_default_context(ctx);
+  auto canon = [](std::wstring s) {
+    auto e = deserialize(s);
+    canonicalize(e);
+    return to_latex(e);
+  };
+  for (auto [X, Y] :
+       std::vector<std::pair<std::wstring, std::wstring>>{{L"h", L"γ"},
+                                                          {L"f", L"d"},
+                                                          {L"X", L"Y"},
+                                                          {L"u", L"v"},
+                                                          {L"A1", L"B7"},
+                                                          {L"g", L"Γ"}}) {
+    std::vector<std::wstring> sp = {
+        X + L"{p_1;p_2}:N-C-S * " + Y + L"{p_2;p_1}:N-C-S",
+        X + L"{p_2;p_1}:N-C-S * " + Y + L"{p_1;p_2}:N-C-S",
+        Y + L"{p_2;p_1}:N-C-S * " + X + L"{p_1;p_2}:N-C-S",
+        X + L"{p_3;p_7}:N-C-S * " + Y + L"{p_7;p_3}:N-C-S",
+        X + L"{p_7;p_3}:N-C-S * " + Y + L"{p_3;p_7}:N-C-S"};
+    auto ref = canon(sp[0]);
+    for (auto& s : sp) {
+      INFO(toUtf8(s));
+      CHECK(canon(s) == ref);
+    }
+    auto diff = deserialize(sp[0]) - deserialize(sp[1]);
+    simplify(diff);
+    INFO(toUtf8(to_latex(diff)));
+    CHECK((diff->is<Constant>() && diff->as<Constant>().is_zero()));
+    // 3-cycle, all Hermitian (reversal automorphism)
+    auto s1 = X + L"{p_1;p_2}:N-C-S * " + Y +
+              L"{p_2;p_3}:N-C-S * "
+              L"Z{p_3;p_1}:N-C-S";
+    auto s2 = X + L"{p_5;p_4}:N-C-S * " + Y +
+              L"{p_4;p_9}:N-C-S * "
+              L"Z{p_9;p_5}:N-C-S";
+    auto s3 = L"Z{p_3;p_1}:N-C-S * " + Y + L"{p_2;p_3}:N-C-S * " + X +
+              L"{p_1;p_2}:N-C-S";
+    CHECK(canon(s1) == canon(s2));
+    CHECK(canon(s1) == canon(s3));
+  }
+  // column-symmetric 4-index Hermitian blocks, both spellings
+  CHECK(canon(L"g{p_1,p_2;p_2,p_1}:N-C-S") ==
+        canon(L"g{p_2,p_1;p_1,p_2}:N-C-S"));
+  CHECK(canon(L"g{p_1,p_2;p_3,p_4}:N-C-S * Γ{p_3,p_4;p_1,p_2}:N-C-S") ==
+        canon(L"g{p_3,p_4;p_1,p_2}:N-C-S * Γ{p_1,p_2;p_3,p_4}:N-C-S"));
 }
 
 TEST_CASE("symmetries_carry_through_slot_rebuilds", "[conjugation]") {

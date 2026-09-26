@@ -114,9 +114,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
     auto _ = set_scoped_default_context(ctx);
 
     {
-      // amplitudes are not Hermitian: declare them BraKetSymmetry::Nonsymm
-      // lest the default (Hermitian -> Conjugate over a complex field) braket
-      // orientation fold rewrite them to their swapped+starred spelling
+      // amplitudes are not Hermitian, so declare them
+      // BraKetSymmetry::Nonsymm rather than take the default (Hermitian ->
+      // Conjugate over a complex field)
       auto input =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -712,7 +712,6 @@ TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
   // not an edge -- e.g. a pure proto index -- shifted that cutoff onto an
   // anonymous edge; its skipped ordinal was then handed to another edge of
   // the same space, duplicating a slot index (both t virtuals became a_1).
-  // Exposed by the Conjugate braket fold reordering the edge sort.
   using namespace sequant;
 
   auto ctx = get_default_context();

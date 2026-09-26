@@ -350,31 +350,18 @@ bool braket_orientation_pinned(const AbstractTensor& t) {
          lbl == reserved::transposition_label();
 }
 
-bool braket_conjugate_foldable(const AbstractTensor& t) {
-  // the fold records a conjugation, which only a c-number Tensor can carry
-  return braket_conjugate_swap_sign(t._braket_symmetry()).has_value() &&
-         t._is_cnumber() && !braket_orientation_pinned(t) &&
-         as_cnumber_tensor(t) != nullptr;
-}
-
 bool braket_foldable(const AbstractTensor& t) {
-  return braket_swap_sign(t._braket_symmetry()).has_value() ||
-         braket_conjugate_foldable(t);
+  return braket_swap_sign(t._braket_symmetry()).has_value() &&
+         !braket_orientation_pinned(t);
 }
 
-std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(
-    AbstractTensor& t, bool /* fold_conjugate */, bool fold_signed) {
+std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
+                                                            bool fold_signed) {
   if (!braket_foldable(t)) {
     return 1;
   }
   const auto bks = t._braket_symmetry();
-  // an (Anti)Conjugate tensor's two orientations are two values (T{q;p} = s
-  // conj(T{p;q}) is not a respelling), so it stays as written
-  if (braket_conjugate_swap_sign(bks)) {
-    return 1;
-  }
-  if (!fold_signed && (bks == BraKetSymmetry::Antisymm ||
-                       bks == BraKetSymmetry::AntiConjugate)) {
+  if (!fold_signed && bks == BraKetSymmetry::Antisymm) {
     return 1;
   }
 
@@ -444,8 +431,7 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  const auto braket_sign =
-      canonicalize_braket(t, fold_conjugate_braket_, fold_signed_braket_);
+  const auto braket_sign = canonicalize_braket(t, fold_signed_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});
