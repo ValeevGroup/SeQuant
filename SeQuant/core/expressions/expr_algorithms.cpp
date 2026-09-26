@@ -621,6 +621,14 @@ bool is_hermitian_network(ExprPtr const& expr, CanonicalizeOptions opts) {
   return lhs->hash_value() == rhs->hash_value() && *lhs == *rhs;
 }
 
+ExprPtr kconjugate(const ExprPtr& expr) {
+  SEQUANT_ASSERT(expr);
+  auto result = expr->clone();
+  const auto sign = result->kconjugate();
+  if (sign == 1) return result;
+  return ex<Product>(sign, ExprPtrList{std::move(result)});
+}
+
 ExprPtr conjugate(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr);
   auto conj_scalar = [](const auto& z) {

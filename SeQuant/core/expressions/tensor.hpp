@@ -170,8 +170,7 @@ constexpr TransposeModifier transpose_modifier(ValueModifier m) noexcept {
 /// | `transpose` | slots read in exchanged bra/ket roles    | transpose()            | `T^T`    |
 /// | `adjoint`   | conjugate transpose = both               | adjoint()              | `T⁺`     |
 ///
-/// The spellings are sequant::conjugate_label (`^*`), sequant::transpose_label
-/// (`^T`) and sequant::adjoint_label (`⁺`).
+/// The spellings are `^*`, `^T` and sequant::adjoint_label (`⁺`).
 ///
 /// The bits are normalized against #BraKetSymmetry after every mutation, so
 /// a set bit always denotes a genuinely distinct value:
@@ -1083,10 +1082,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
     switch (value_modifier()) {
       case ValueModifier::Conjugate:
-        core_label = L"{" + core_label + std::wstring(conjugate_label) + L"}";
+        core_label = L"{" + core_label + L"^*}";
         break;
       case ValueModifier::Transpose:
-        core_label = L"{" + core_label + std::wstring(transpose_label) + L"}";
+        core_label = L"{" + core_label + L"^T}";
         break;
       case ValueModifier::None:
       case ValueModifier::Adjoint:
@@ -1212,6 +1211,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///         Expr::adjoint hands on; sequant::adjoint(const ExprPtr&) turns it
   ///         into a scalar factor
   [[nodiscard]] std::int8_t adjoint() override { return conjugate_transpose(); }
+
+  /// @brief K-conjugate of a Tensor toggles its elementwise-conjugation
+  /// marker
+  /// @return the sign byproduct of conjugate()
+  [[nodiscard]] std::int8_t kconjugate() override { return conjugate(); }
 
   /// @return whether this tensor is complex-conjugated elementwise
   bool conjugated() const { return conjugated_ == ConjugateModifier::Yes; }

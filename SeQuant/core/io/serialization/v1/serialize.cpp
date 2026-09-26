@@ -164,10 +164,10 @@ std::wstring to_string(Tensor const& tensor,
                         std::wstring(1, sequant::adjoint_label));
       break;
     case ValueModifier::Conjugate:
-      serialized.insert(tensor.label().size(), std::wstring(conjugate_label));
+      serialized.insert(tensor.label().size(), L"^*");
       break;
     case ValueModifier::Transpose:
-      serialized.insert(tensor.label().size(), std::wstring(transpose_label));
+      serialized.insert(tensor.label().size(), L"^T");
       break;
     case ValueModifier::None:
       break;
@@ -181,8 +181,7 @@ std::wstring to_string(const Constant& constant,
 }
 
 std::wstring to_string(const Variable& variable, const SerializationOptions&) {
-  return std::wstring(variable.label()) +
-         (variable.conjugated() ? std::wstring(conjugate_label) : L"");
+  return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
 std::wstring to_string(const Power& power,
@@ -199,8 +198,7 @@ std::wstring to_string(const Power& power,
   core += L"^(";
   core += serialize_scalar(Constant::scalar_type{power.exponent()}, options);
   core += L")";
-  if (power.conjugated())
-    return L"(" + std::move(core) + L")" + std::wstring(conjugate_label);
+  if (power.conjugated()) return L"(" + std::move(core) + L")^*";
   return core;
 }
 

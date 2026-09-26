@@ -23,6 +23,8 @@ std::int8_t Constant::adjoint() {
   return 1;
 }
 
+std::int8_t Constant::kconjugate() { return adjoint(); }
+
 Constant &Constant::operator*=(const Expr &that) {
   if (that.is<Constant>()) {
     value_ *= that.as<Constant>().value();

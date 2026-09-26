@@ -55,6 +55,7 @@ class RealPart : public Expr {
   type_id_type type_id() const override { return get_type_id<RealPart>(); }
   ExprPtr clone() const override;
   std::int8_t adjoint() override { return 1; }  // Re(E) is real, self-adjoint
+  std::int8_t kconjugate() override { return 1; }  // Re(E) is real
   std::wstring to_latex() const override;
 
  private:
@@ -84,6 +85,7 @@ class ImagPart : public Expr {
   type_id_type type_id() const override { return get_type_id<ImagPart>(); }
   ExprPtr clone() const override;
   std::int8_t adjoint() override { return 1; }  // Im(E) is real, self-adjoint
+  std::int8_t kconjugate() override { return 1; }  // Im(E) is real
   std::wstring to_latex() const override;
 
  private:

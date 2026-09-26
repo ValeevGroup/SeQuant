@@ -298,6 +298,12 @@ class Product : public Expr {
   /// factors, with complex-conjugated scalar
   [[nodiscard]] virtual std::int8_t adjoint() override;
 
+  /// @brief K-conjugate of a Product is the product of the K-conjugates of
+  /// its factors, in the same order, with complex-conjugated scalar
+  /// @note the order is kept whether or not the factors commute, so CProduct
+  ///       and NCProduct inherit this
+  [[nodiscard]] virtual std::int8_t kconjugate() override;
+
   std::wstring to_latex() const override;
 
   /// just like Expr::to_latex() , but can negate before conversion

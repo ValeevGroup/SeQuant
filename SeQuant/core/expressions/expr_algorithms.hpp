@@ -303,6 +303,17 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 ///        operator string has no elementwise conjugation here)
 [[nodiscard]] ExprPtr conjugate(const ExprPtr& expr);
 
+/// @brief the K-conjugate of an expression, `K E K⁻¹`
+///
+/// Dispatches to Expr::kconjugate() on a clone: the complex conjugate of a
+/// scalar, the K-conjugated state of a Tensor, the identity on an operator
+/// string. A sign byproduct that the conjugated object cannot hold (a Tensor
+/// holds no scalar) becomes a scalar factor here.
+///
+/// @param expr an expression
+/// @return a new expression denoting `K expr K⁻¹`
+[[nodiscard]] ExprPtr kconjugate(const ExprPtr& expr);
+
 /// Folds complex-conjugate-related summand pairs of a sum, exactly.
 ///
 /// A summand pair {s, s*} contributes s + s* = 2 Re(s), and a pair

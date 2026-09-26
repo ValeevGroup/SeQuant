@@ -55,6 +55,9 @@ class Variable : public Expr, public MutatableLabeled {
   /// @brief adjoint of a Variable is its complex conjugate
   [[nodiscard]] virtual std::int8_t adjoint() override;
 
+  /// @brief K-conjugate of a Variable is its complex conjugate
+  [[nodiscard]] std::int8_t kconjugate() override;
+
  private:
   std::wstring label_;
   bool conjugated_ = false;

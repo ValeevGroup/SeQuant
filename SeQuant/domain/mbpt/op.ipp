@@ -185,6 +185,11 @@ std::int8_t Operator<QuantumNumbers, S>::adjoint() {
 }
 
 template <typename QuantumNumbers, Statistics S>
+std::int8_t Operator<QuantumNumbers, S>::kconjugate() {
+  return 1;
+}
+
+template <typename QuantumNumbers, Statistics S>
 bool Operator<QuantumNumbers, S>::less_than_rank_of(
     const this_type& that) const {
   return (*this)(QuantumNumbers{}) < that(QuantumNumbers{});

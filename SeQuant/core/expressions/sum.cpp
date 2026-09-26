@@ -163,6 +163,17 @@ std::int8_t Sum::adjoint() {
   return 1;
 }
 
+std::int8_t Sum::kconjugate() {
+  using namespace ranges;
+  // a summand whose K-conjugate carries a sign arrives from the free function
+  // already wrapped in Product{-1, summand}, so the Sum itself has no sign
+  auto conj_summands = summands() | views::transform([](auto &&expr) {
+                         return ::sequant::kconjugate(expr);
+                       });
+  *this = Sum(ranges::begin(conj_summands), ranges::end(conj_summands));
+  return 1;
+}
+
 ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
