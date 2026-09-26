@@ -302,6 +302,9 @@ class Product : public Expr {
   /// its factors, in the same order, with complex-conjugated scalar
   /// @note the order is kept whether or not the factors commute, so CProduct
   ///       and NCProduct inherit this
+  /// @note the product is rebuilt with the constructor's default flattening,
+  ///       so a nested product is spliced in and a factor's sign byproduct
+  ///       folds into this product's scalar
   [[nodiscard]] virtual std::int8_t kconjugate() override;
 
   std::wstring to_latex() const override;

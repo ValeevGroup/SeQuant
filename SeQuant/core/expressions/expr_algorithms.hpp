@@ -310,6 +310,12 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// string. A sign byproduct that the conjugated object cannot hold (a Tensor
 /// holds no scalar) becomes a scalar factor here.
 ///
+/// The result is assembled with the Sum and Product constructors' default
+/// flattening: a nested product is spliced into its parent, and a factor's
+/// (summand's) sign byproduct folds into the enclosing product's scalar
+/// rather than staying a nested `Product{-1, ...}`. conjugate() keeps the
+/// input's nesting instead.
+///
 /// @param expr an expression
 /// @return a new expression denoting `K expr K⁻¹`
 [[nodiscard]] ExprPtr kconjugate(const ExprPtr& expr);

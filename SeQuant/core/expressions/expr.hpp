@@ -14,7 +14,6 @@
 #include <memory>
 #include <optional>
 #include <ranges>
-#include <string_view>
 
 namespace sequant {
 
