@@ -258,18 +258,6 @@ enum class BiorthogonalizationMethod {
 };
 // clang-format on
 
-/// closed-shell triplet (M_S = 0) EOM residual variants
-enum class TripletResidualKind {
-  /// A combination of T and E operators with their permutations
-  /// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434)
-  /// (see triplet_combined_residual)
-  Combined,
-  /// EOM triplet doubles: the bare TE primitive only, i.e.
-  /// (1/4)*TE instead of (3*TE - TE_ps)/16; drops the pair-swap
-  /// TE_ps. Doubles only (for now).
-  BareTE
-};
-
 /// controls behavior of biorthogonal closed-shell spin-tracing
 struct ClosedShellCCSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
@@ -278,20 +266,6 @@ struct ClosedShellCCSpintraceOptions {
   /// (spin-free) basis and thus has an exponential cost;
   /// the default is to use closed_shell_spintrace, which is more efficient
   bool naive_spintrace = false;
-  /// EOM triplet residual: compact the residual to one representative slot
-  /// permutation per tensor-network group via triplet_maxcoeff_compact
-  /// (doubles: the -3c member of each {c,c,c,-3c} group, 135 terms for 2h2p;
-  /// triples: one stabilizer-scaled member per 36 slot perms); the dropped
-  /// terms are recovered on evaluation by triplet_nns_project (numerical) or
-  /// triplet_symbolic_reconstruct (symbolic).
-  /// Combined with TripletResidualKind::BareTE it instead compacts the bare-TE
-  /// residual, whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the
-  /// kept -2c representative is expanded by triplet_te_nns_project
-  /// ({1,-1/2,-1/2,0}, numerical) or triplet_symbolic_reconstruct with
-  /// TeNnsReconstruction (symbolic).
-  bool triplet_doubles_compact = false;
-  /// EOM triplet residual: which residual variant to build
-  TripletResidualKind triplet_residual = TripletResidualKind::Combined;
 };
 
 // clang-format off
@@ -334,18 +308,51 @@ ExprPtr closed_shell_CC_spintrace_v2(
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
+/// closed-shell triplet (M_S = 0) EOM residual variants
+enum class TripletResidualKind {
+  /// A combination of T and E operators with their permutations
+  /// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434)
+  /// (see triplet_combined_residual)
+  Combined,
+  /// EOM triplet doubles: the bare TE primitive only, i.e.
+  /// (1/4)*TE instead of (3*TE - TE_ps)/16; drops the pair-swap
+  /// TE_ps. Doubles only (for now).
+  BareTE
+};
+
+/// controls behavior of closed-shell triplet EOM spin-tracing
+struct ClosedShellEOMTripletSpintraceOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
+  /// biorthogonalization of the singles projection
+  BiorthogonalizationMethod method = BiorthogonalizationMethod::V2;
+  /// compact the residual to one representative slot permutation per
+  /// tensor-network group via triplet_maxcoeff_compact (doubles: the -3c member
+  /// of each {c,c,c,-3c} group, 135 terms for 2h2p; triples: one
+  /// stabilizer-scaled member per 36 slot perms); the dropped terms are
+  /// recovered on evaluation by triplet_nns_project (numerical) or
+  /// triplet_symbolic_reconstruct (symbolic).
+  /// Combined with TripletResidualKind::BareTE it instead compacts the bareTE
+  /// residual, whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the
+  /// kept -2c representative is expanded by triplet_te_nns_project
+  /// ({1,-1/2,-1/2,0}, numerical) or triplet_symbolic_reconstruct with
+  /// TeNnsReconstruction (symbolic).
+  bool compact = false;
+  /// which residual variant to build
+  TripletResidualKind residual = TripletResidualKind::Combined;
+};
+
 // clang-format off
 /// @brief Closed-shell triplet (M_S = 0) spin trace of EOM-CC equations
 /// @param expr spin-orbital EOM equation (from CC::eom_r or CC::eom_l) with
 ///        one or two external index groups (singles or doubles projection)
-/// @param options biorthogonalization method; affects the singles projection
-///        only (doubles use the paper channel combination above; V1/V2 N/A)
+/// @param options triplet spin-tracing options; `method` only affects the singles
+///  (doubles use the Kohn's paper combination)
 /// @throw Exception for projection manifolds beyond doubles, or if the
 ///        equations contain amplitudes beyond doubles (triples coupling
 ///        T (x) E (x) E is not implemented)
 // clang-format on
 ExprPtr closed_shell_EOM_triplet_spintrace(
-    ExprPtr const& expr, ClosedShellCCSpintraceOptions options = {});
+    ExprPtr const& expr, ClosedShellEOMTripletSpintraceOptions options = {});
 
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);

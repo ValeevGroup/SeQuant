@@ -2346,7 +2346,7 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
 }  // namespace
 
 ExprPtr closed_shell_EOM_triplet_spintrace(
-    ExprPtr const& expr, ClosedShellCCSpintraceOptions options) {
+    ExprPtr const& expr, ClosedShellEOMTripletSpintraceOptions options) {
   container::svector<container::svector<Index>> ext_groups;
   const auto ext_idxs = external_indices(expr);
   for (const auto& g : ext_idxs) {
@@ -2397,8 +2397,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         abort();
     }
   } else {  // n_ext == 2 or 3: one set of external permutation weights
-    const bool te_only =
-        options.triplet_residual == TripletResidualKind::BareTE;
+    const bool te_only = options.residual == TripletResidualKind::BareTE;
     if (n_ext != 2 && te_only)
       throw Exception(
           "closed_shell_EOM_triplet_spintrace: te_only is a doubles-only "
@@ -2408,7 +2407,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 
     triplet = triplet_combined_residual(triplet, ext_groups, te_only);
     simplify(triplet);
-    if (options.triplet_doubles_compact)
+    if (options.compact)
       triplet = triplet_maxcoeff_compact(
           triplet, ext_groups,
           te_only ? TripletWeightKind::TeNnsReconstruction
