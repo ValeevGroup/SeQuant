@@ -156,12 +156,9 @@ std::wstring to_string(Tensor const& tensor,
                        const SerializationOptions& options) {
   auto serialized =
       to_string(static_cast<const AbstractTensor&>(tensor), options);
-  // the states are spelled right after the label, in the form the
+  // the states are spelled as marks trailing the label, the form the
   // deserializer grammar accepts, so the round-trip is lossless
-  std::wstring marks;
-  if (tensor.adjointed()) marks.push_back(sequant::adjoint_label);
-  if (tensor.kconjugated()) marks += L"^*";
-  serialized.insert(tensor.label().size(), marks);
+  serialized.replace(0, tensor.label().size(), tensor.decorated_label());
   return serialized;
 }
 
@@ -171,7 +168,9 @@ std::wstring to_string(const Constant& constant,
 }
 
 std::wstring to_string(const Variable& variable, const SerializationOptions&) {
-  return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
+  std::wstring serialized(variable.label());
+  if (variable.conjugated()) serialized.push_back(sequant::conjugate_label);
+  return serialized;
 }
 
 std::wstring to_string(const Power& power,

@@ -450,13 +450,13 @@ TEST_CASE("tensor", "[elements]") {
     auto f1 = Tensor(L"F", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"});
     REQUIRE_NOTHROW(f1.adjoint());
     // F is now non-Hermitian by default (braket Nonsymm), so its adjoint is
-    // marked with the conjugation superscript
-    REQUIRE(to_latex(f1) == L"{F⁺^{{i_1}{i_2}}_{{i_3}{i_4}}}");
+    // typeset with the dagger superscript
+    REQUIRE(to_latex(f1) == L"{{F^{\\dagger}}^{{i_1}{i_2}}_{{i_3}{i_4}}}");
 
     auto t1 = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
                      BraKetSymmetry::Nonsymm);
     REQUIRE_NOTHROW(t1.adjoint());
-    REQUIRE(to_latex(t1) == L"{t⁺^{{a_1}}_{{i_1}}}");
+    REQUIRE(to_latex(t1) == L"{{t^{\\dagger}}^{{a_1}}_{{i_1}}}");
     REQUIRE(t1.adjoint() == 1);
     REQUIRE(to_latex(t1) == L"{t^{{i_1}}_{{a_1}}}");
 
@@ -464,7 +464,7 @@ TEST_CASE("tensor", "[elements]") {
               ex<FNOperator>(cre{L"i_1"}, ann{L"i_2"});
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
-            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{F⁺^{{i_1}}_{{i_2}}}}");
+            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{{F^{\\dagger}}^{{i_1}}_{{i_2}}}}");
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
@@ -818,8 +818,8 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
     REQUIRE(tc.hash_value() != h0);  // conj is first-class identity
     REQUIRE(!(t == tc));             // not equal to the bare tensor
     REQUIRE(t < tc);                 // T orders before conj(T)
-    REQUIRE(tc.to_latex().find(L"^*") != std::wstring::npos);
-    REQUIRE(latex0.find(L"^*") == std::wstring::npos);
+    REQUIRE(tc.to_latex().find(L"^{*}") != std::wstring::npos);
+    REQUIRE(latex0.find(L"^{*}") == std::wstring::npos);
 
     // toggling back restores everything bit-for-bit
     REQUIRE(tc.kconjugate() == 1);
@@ -836,12 +836,12 @@ TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
     REQUIRE(cloned->as<Tensor>() == tc);
   }
 
-  SECTION("serialization spells label^*") {
+  SECTION("serialization spells label꙳") {
     Tensor tc{t};
     REQUIRE(tc.kconjugate() == 1);
     auto s = serialize(tc);
-    REQUIRE(s.find(L"t^*{") == 0);  // marker directly after the label
-    REQUIRE(serialize(Tensor{t}).find(L"^*") == std::wstring::npos);
+    REQUIRE(s.find(L"t꙳{") == 0);  // mark directly after the label
+    REQUIRE(serialize(Tensor{t}).find(L"꙳") == std::wstring::npos);
   }
 
   SECTION("adjoint commutes with the K state for Conjugate braket symmetry") {

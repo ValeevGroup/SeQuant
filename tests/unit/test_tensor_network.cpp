@@ -1086,7 +1086,7 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
       //        std::endl;
       // the Hermitian F canonicalizes to its swapped+starred spelling
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-              L"{{F^*}^{{i_2}}_{{i_1}}}");
+              L"{{F^{*}}^{{i_2}}_{{i_1}}}");
       REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
               L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
     }
@@ -1115,7 +1115,7 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
                 L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
         // the Hermitian F canonicalizes to its swapped+starred spelling
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{{F^*}^{{i_1}}_{{i_{17}}}}");
+                L"{{F^{*}}^{{i_1}}_{{i_{17}}}}");
       }
 
       // with explicit named indices
@@ -1140,14 +1140,14 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
                 L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
         // the Hermitian F canonicalizes to its swapped+starred spelling
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                L"{{F^*}^{{i_2}}_{{i_{17}}}}");
+                L"{{F^{*}}^{{i_2}}_{{i_{17}}}}");
       }
     }
 
     SECTION("particle non-conserving") {
       const auto input1 = deserialize(L"P{;a1,a3}");
       const auto input2 = deserialize(L"P{a1,a3;}");
-      const std::wstring expected1 = L"{{{P^*}^{}_{{a_1}{a_3}}}}";
+      const std::wstring expected1 = L"{{{P^{*}}^{}_{{a_1}{a_3}}}}";
       const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
@@ -1169,7 +1169,7 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
               .factors();
       const std::wstring expected =
           L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * "
-          L"I2^*{i_1,i_2;;x_1}:N";
+          L"I2꙳{i_1,i_2;;x_1}:N";
 
       for (bool fast : {true, false}) {
         TensorNetworkV2 tn(input);
@@ -1236,14 +1236,14 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
     SECTION("miscellaneous") {
       const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
           {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"g{i_1,a_1;i_2,i_3}:A * I^*{i_1,a_1;i_2,i_3}:A"},
+           L"g{i_1,a_1;i_2,i_3}:A * I꙳{i_1,a_1;i_2,i_3}:A"},
           {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
-           L"-1 g{i_1,a_1;i_2,i_3}:A * I^*{i_1,a_1;i_2,i_3}:A"},
+           L"-1 g{i_1,a_1;i_2,i_3}:A * I꙳{i_1,a_1;i_2,i_3}:A"},
 
           {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I^*{i_1,a_1;i_2,i_3}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I꙳{i_1,a_1;i_2,i_3}:N"},
           {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I^*{i_1,a_1;i_3,i_2}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I꙳{i_1,a_1;i_3,i_2}:N"},
       };
 
       for (const auto& [input, expected] : inputs) {
@@ -1289,7 +1289,7 @@ TEST_CASE("tensor_network_v2", "[elements][valgrind_skip][.legacy-tn]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           deserialize(
-              L"Â{i1,i2;a1,a2} g^*{a3,a4;i3,i4} t{a1,a3;i1,i2} "
+              L"Â{i1,i2;a1,a2} g꙳{a3,a4;i3,i4} t{a1,a3;i1,i2} "
               L"t{a2,a4;i3,i4}",
               {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
@@ -2242,8 +2242,8 @@ TEST_CASE("conjugate braket fold: marker placement is not part of the value",
     canonicalize(e);
     return to_latex(e);
   };
-  const auto marked_second = canon(L"h{p_1;p_2}:N-C-S * γ^*{p_1;p_2}:N-C-S");
-  const auto marked_first = canon(L"γ{p_1;p_2}:N-C-S * h^*{p_1;p_2}:N-C-S");
+  const auto marked_second = canon(L"h{p_1;p_2}:N-C-S * γ꙳{p_1;p_2}:N-C-S");
+  const auto marked_first = canon(L"γ{p_1;p_2}:N-C-S * h꙳{p_1;p_2}:N-C-S");
   const auto unmarked = canon(L"h{p_2;p_1}:N-C-S * γ{p_1;p_2}:N-C-S");
   INFO(toUtf8(marked_second));
   INFO(toUtf8(marked_first));

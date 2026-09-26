@@ -1017,13 +1017,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     std::wstring core_label;
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
       core_label += L"\\bar{";
-    // the adjoint mark is part of the core label: `t` and `t⁺` are different
-    // arrays
-    std::wstring marked_label(label_);
-    if (adjointed_) marked_label.push_back(sequant::adjoint_label);
-    core_label += io::latex::utf_to_string(marked_label);
+    core_label += io::latex::utf_to_string(label_);
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
-    if (kconjugated_) core_label = L"{" + core_label + L"^*}";
+    // the states are part of the core label -- `t`, `t⁺` and `t꙳` are
+    // different arrays -- and typeset as its superscript
+    if (adjointed_ || kconjugated_) {
+      std::wstring states;
+      if (adjointed_) states += L"\\dagger";
+      if (kconjugated_) {
+        if (!states.empty()) states += L" ";
+        states += L"*";
+      }
+      core_label = L"{" + core_label + L"^{" + states + L"}}";
+    }
 
     switch (bkst) {
       case BraKetSlotTypesetting::Naive: {

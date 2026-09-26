@@ -648,7 +648,7 @@ TEST_CASE("expr", "[elements]") {
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->to_latex() == L"{q}");
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->to_latex() == L"{{q}^*}");
+      REQUIRE(e->to_latex() == L"{{q}^{*}}");
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->to_latex() == L"{q}");
     }

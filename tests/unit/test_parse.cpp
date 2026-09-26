@@ -304,7 +304,7 @@ TEST_CASE("serialization", "[serialization]") {
     }
 
     SECTION("Variable") {
-      // SeQuant variable is just a label followed by an optional ^*
+      // SeQuant variable is just a label followed by an optional ꙳
       // to denote if the variable is conjugated
       REQUIRE(deserialize<ExprPtr>(L"a")->is<Variable>());
       REQUIRE(deserialize<ExprPtr>(L"α")->is<Variable>());
@@ -312,27 +312,32 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L"γ")->is<Variable>());
       REQUIRE(deserialize<ExprPtr>(L"λ")->is<Variable>());
       REQUIRE(deserialize<ExprPtr>(L"δ")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"a^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"α^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"β^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"b^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().conjugated());
-      REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().label() == L"b");
+      REQUIRE(deserialize<ExprPtr>(L"a꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"α꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"β꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"b꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"b꙳")->as<Variable>().conjugated());
+      REQUIRE(deserialize<ExprPtr>(L"b꙳")->as<Variable>().label() == L"b");
     }
 
     SECTION("Conjugated tensor") {
-      // a tensor label followed by ^* carries the elementwise-conjugation
-      // marker (same spelling the serializer emits for Tensor::conjugated())
-      auto tstar = deserialize<ExprPtr>(L"t^*{i_1;a_1}");
+      // a tensor label followed by ꙳ carries the K-conjugated state (the
+      // spelling the serializer emits for Tensor::kconjugated()); the state
+      // survives only where the parity leaves it standing, hence the
+      // spelled-out parity letter `N`
+      const auto tstar_str = L"t꙳{i_1;a_1}:N-N-N-N";
+      auto tstar = deserialize<ExprPtr>(tstar_str);
       REQUIRE(tstar->is<Tensor>());
       REQUIRE(tstar->as<Tensor>().kconjugated());
       REQUIRE(tstar->as<Tensor>().label() == L"t");
       {  // round-trip through the serializer
-        auto respelled = deserialize<ExprPtr>(serialize(tstar));
+        REQUIRE(serialize(tstar, {.annot_symm = true}) == tstar_str);
+        auto respelled =
+            deserialize<ExprPtr>(serialize(tstar, {.annot_symm = true}));
         REQUIRE(respelled->as<Tensor>().kconjugated());
         REQUIRE(*respelled == *tstar);
       }
-      // unstarred spelling parses without the marker
+      // an unmarked spelling parses without the state
       REQUIRE(!deserialize<ExprPtr>(L"t{i_1;a_1}")->as<Tensor>().kconjugated());
     }
 
@@ -374,14 +379,14 @@ TEST_CASE("serialization", "[serialization]") {
       auto conj_var = ex<Variable>(L"x");
       conj_var->as<Variable>().conjugate();
       auto pw_conj_var = ex<Power>(conj_var, rational{2});
-      const auto pw_conj_var_str = L"(x^*)^(2)";
+      const auto pw_conj_var_str = L"(x꙳)^(2)";
       REQUIRE(serialize(pw_conj_var) == pw_conj_var_str);
       REQUIRE(deserialize<ExprPtr>(pw_conj_var_str) == pw_conj_var);
 
-      // conjugated power with conjugated Variable base: ((x^*)^(2))^*
+      // conjugated power with conjugated Variable base: ((x꙳)^(2))^*
       auto pw_conj_var_conj = pw_conj_var->clone();
       pw_conj_var_conj->as<Power>().conjugate();
-      const auto pw_conj_var_conj_str = L"((x^*)^(2))^*";
+      const auto pw_conj_var_conj_str = L"((x꙳)^(2))^*";
       REQUIRE(serialize(pw_conj_var_conj) == pw_conj_var_conj_str);
       REQUIRE(deserialize<ExprPtr>(pw_conj_var_conj_str) == pw_conj_var_conj);
     }
@@ -700,7 +705,7 @@ TEST_CASE("serialization", "[serialization]") {
         L"1/2 (a + b) * c",
         L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
         L"+ T4{a_1;;x_2}:S-C-S * T5{;a_1;x_2}:S-S-S",
-        L"q1 * q2^* * q3",
+        L"q1 * q2꙳ * q3",
         L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
 
     for (const std::wstring& current : expressions) {

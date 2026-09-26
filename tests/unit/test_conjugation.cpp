@@ -20,6 +20,7 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -625,18 +626,49 @@ TEST_CASE("core_states", "[conjugation]") {
   }
 }
 
-TEST_CASE("conj_serialization_roundtrip", "[conjugation]") {
+TEST_CASE("mark_serialization_roundtrip", "[conjugation]") {
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
-
-  auto t = deserialize(L"g{i_1,i_2;a_1,a_2}:A-C-S");
-  REQUIRE(t->as<Tensor>().kconjugate() == 1);
-  auto rt = deserialize(serialize(t));
-  REQUIRE(rt->as<Tensor>().kconjugated());
-  REQUIRE(*rt == *t);
+  for (auto spelling : {L"t⁺{i_1;a_1}:N-N-N-N", L"t꙳{a_1;i_1}:N-N-N-N",
+                        L"t⁺꙳{i_1;a_1}:N-N-N-N"}) {
+    auto e = deserialize(spelling);
+    REQUIRE(e->is<Tensor>());
+    REQUIRE(e->as<Tensor>().label() == L"t");
+    REQUIRE(serialize(e, {.annot_symm = true}) == spelling);
+  }
+  // either mark order parses to one tensor
+  REQUIRE(*deserialize(L"t꙳⁺{i_1;a_1}:N-N-N-N") ==
+          *deserialize(L"t⁺꙳{i_1;a_1}:N-N-N-N"));
+  // a mark carrying a sign becomes a scalar factor
+  auto z = deserialize(L"z⁺{i_1;a_1}:N-A-N");
+  REQUIRE(z->is<Product>());
+  REQUIRE(z->as<Product>().scalar() == -1);
+  auto o = deserialize(L"o꙳{i_1;a_1}:N-N-N-O");
+  REQUIRE(o->is<Product>());
+  REQUIRE(o->as<Product>().scalar() == -1);
+  // variables
+  auto v = deserialize(L"x꙳");
+  REQUIRE(v->as<Variable>().conjugated());
+  REQUIRE(serialize(v) == L"x꙳");
+  // the caret spellings are errors
+  using io::serialization::SerializationError;
+  REQUIRE_THROWS_AS(deserialize(L"t^*{i_1;a_1}"), SerializationError);
+  REQUIRE_THROWS_AS(deserialize(L"t^T{i_1;a_1}"), SerializationError);
+  REQUIRE_THROWS_AS(deserialize(L"x^*"), SerializationError);
+  // marks on an operator name are errors, not asserts
+  REQUIRE_THROWS_AS(deserialize(L"ã꙳{a_1;i_1}"), SerializationError);
+  REQUIRE_THROWS_AS(deserialize(L"a⁺{i_1;a_1}"), SerializationError);
+  // LaTeX renders the states as superscripts, never as a raw mark
+  REQUIRE(to_latex(deserialize(L"t⁺{i_1;a_1}:N-N-N-N")) ==
+          L"{{t^{\\dagger}}^{{a_1}}_{{i_1}}}");
+  REQUIRE(to_latex(deserialize(L"t꙳{a_1;i_1}:N-N-N-N")) ==
+          L"{{t^{*}}^{{i_1}}_{{a_1}}}");
+  REQUIRE(to_latex(deserialize(L"t⁺꙳{i_1;a_1}:N-N-N-N")) ==
+          L"{{t^{\\dagger *}}^{{a_1}}_{{i_1}}}");
+  REQUIRE(to_latex(v) == L"{{x}^{*}}");
 }
 
 TEST_CASE("conjugation_parity_serialization", "[conjugation]") {
@@ -842,8 +874,8 @@ TEST_CASE("canonicalize_marked_nonsymm_network", "[conjugation]") {
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  auto e1 = deserialize(L"t^*{a_1;i_1}:N-N-N u{i_1;a_1}:N-N-N");
-  auto e2 = deserialize(L"t{a_1;i_1}:N-N-N u^*{i_1;a_1}:N-N-N");
+  auto e1 = deserialize(L"t꙳{a_1;i_1}:N-N-N u{i_1;a_1}:N-N-N");
+  auto e2 = deserialize(L"t{a_1;i_1}:N-N-N u꙳{i_1;a_1}:N-N-N");
   auto c1 = canonicalize(e1->clone());
   auto c2 = canonicalize(e2->clone());
   REQUIRE(*c1 != *c2);
@@ -1276,7 +1308,7 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     REQUIRE(dstar.kconjugate() == 1);
     auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
 
-    // -1 d^*{i;a} u{a;i}: the scalar the canonicalizer carries beside the
+    // -1 d꙳{i;a} u{a;i}: the scalar the canonicalizer carries beside the
     // marked spelling cancels the leaf's sign, so nothing is scaled at run
     // time; the tree is the bare contraction of the value orientation
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -1288,7 +1320,7 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     REQUIRE_FALSE(tree.left()->as_tensor().kconjugated());
     REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
 
-    // d^*{i;a} u{a;i} alone: one scale, by the product scalar, over the
+    // d꙳{i;a} u{a;i} alone: one scale, by the product scalar, over the
     // contraction, not one per marked factor
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree2 = binarize(ex<Product>(ExprPtrList{ex<Tensor>(dstar), u}));

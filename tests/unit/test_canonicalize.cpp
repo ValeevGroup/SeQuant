@@ -189,7 +189,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
                      particle_symmetric);
       canonicalize(input);
       REQUIRE_THAT(input,
-                   SimplifiesTo("p q1 q2^* Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                   SimplifiesTo("p q1 q2꙳ Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
                                 "t{i_2;a_3}:N-N-S t{i_1,i_3;a_1,a_2}:N-N-S"));
     }
     {  // Product containing adjoint of a Tensor

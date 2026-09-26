@@ -56,7 +56,7 @@ bool Variable::conjugated() const { return conjugated_; }
 
 std::wstring Variable::to_latex() const {
   std::wstring result = L"{" + io::latex::utf_to_string(label_) + L"}";
-  if (conjugated_) result = L"{" + result + L"^*}";
+  if (conjugated_) result = L"{" + result + L"^{*}}";
   return result;
 }
 
