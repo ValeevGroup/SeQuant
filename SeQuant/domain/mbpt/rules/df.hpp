@@ -29,13 +29,21 @@ namespace sequant::mbpt {
 /// \c k of the tensor is the index pair (bra[k], ket[k]), i.e. the pair that
 /// the decomposition assigns to the k-th rank-3 factor. Empty (default) =
 /// decompose every matching tensor.
+/// \param metric_label If non-empty, the factors are the RAW 3-center
+/// integrals and the inverse metric is an explicit leaf
+/// `metric_label{K_i;K_j}` between them:
+/// `g_{pq,rs} = sum_{KL} Z^K_{pq} (M^-1)_{KL} Z^L_{rs}` (each decomposed
+/// tensor draws two auxiliary indices). Empty (default) = the factors carry
+/// the folded metric (`M^-1/2 Z`, one auxiliary index per decomposed
+/// tensor).
 /// \return The density-fitted expression (potentially unchanged,
 /// if the target tensor was not contained in the given expression)
 ///
 [[nodiscard]] ExprPtr density_fit(
     ExprPtr const& expr, IndexSpace aux_space, std::wstring_view tensor_label,
     std::wstring_view factor_label,
-    std::function<bool(Tensor const&)> const& should_split = {});
+    std::function<bool(Tensor const&)> const& should_split = {},
+    std::wstring_view metric_label = {});
 
 }  // namespace sequant::mbpt
 

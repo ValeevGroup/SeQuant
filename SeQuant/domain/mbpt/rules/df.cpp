@@ -16,8 +16,16 @@
 
 namespace sequant::mbpt {
 
+/// \param aux_idx the auxiliary index of the first factor (and of the second
+/// one in the folded form)
+/// \param metric_label if non-empty, the factors are raw and the inverse
+/// metric `metric_label{aux_idx;aux_idx2}` sits between them
+/// \param aux_idx2 the auxiliary index of the second factor in the metric
+/// form (ignored otherwise)
 ExprPtr density_fit_impl(Tensor const& tnsr_in, Index const& aux_idx,
-                         std::wstring_view factor_label) {
+                         std::wstring_view factor_label,
+                         std::wstring_view metric_label = {},
+                         Index const& aux_idx2 = {}) {
   // Normalize to the VALUE orientation first: a marker-conjugated (folded)
   // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
   // layout would silently drop the conjugation (see sequant::value_oriented).
@@ -34,13 +42,26 @@ ExprPtr density_fit_impl(Tensor const& tnsr_in, Index const& aux_idx,
   // intermediate. The concrete BraKetSymmetry (Symm vs Conjugate) is derived
   // from the bra/ket indices' IndexSpace::field() (see sequant::base_field)
   // when the Tensor is built.
+  // metric form: the second factor carries its own auxiliary index and the
+  // (real symmetric, hence Hermitian) inverse metric sits between the two
+  const bool with_metric = !metric_label.empty();
+  const Index& aux_idx_2nd = with_metric ? aux_idx2 : aux_idx;
+  auto metric = [&]() -> ExprPtr {
+    return ex<Tensor>(metric_label, bra({aux_idx}), ket({aux_idx2}),
+                      Symmetry::Nonsymm, Hermiticity::Hermitian,
+                      ColumnSymmetry::Symm);
+  };
+  auto join = [&](ExprPtr const& a, ExprPtr const& b) -> ExprPtr {
+    return with_metric ? a * metric() * b : a * b;
+  };
+
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                        ket({ranges::front(tnsr.ket())}), aux({aux_idx}),
                        Symmetry::Nonsymm, Hermiticity::Hermitian,
                        ColumnSymmetry::Symm, tnsr.kramers_symmetry());
 
   auto t2 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
-                       ket({ranges::back(tnsr.ket())}), aux({aux_idx}),
+                       ket({ranges::back(tnsr.ket())}), aux({aux_idx_2nd}),
                        Symmetry::Nonsymm, Hermiticity::Hermitian,
                        ColumnSymmetry::Symm, tnsr.kramers_symmetry());
 
@@ -51,13 +72,13 @@ ExprPtr density_fit_impl(Tensor const& tnsr_in, Index const& aux_idx,
                          ColumnSymmetry::Symm, tnsr.kramers_symmetry());
 
     auto t4 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
-                         ket({ranges::back(tnsr.ket())}), aux({aux_idx}),
+                         ket({ranges::back(tnsr.ket())}), aux({aux_idx_2nd}),
                          Symmetry::Nonsymm, Hermiticity::Hermitian,
                          ColumnSymmetry::Symm, tnsr.kramers_symmetry());
-    return t1 * t2 - t3 * t4;
+    return join(t1, t2) - join(t3, t4);
   }
 
-  return t1 * t2;
+  return join(t1, t2);
 }
 
 namespace {
@@ -74,14 +95,18 @@ ExprPtr density_fit_rec(ExprPtr const& expr, IndexSpace const& aux_space,
                         std::wstring_view tensor_label,
                         std::wstring_view factor_label,
                         std::function<bool(Tensor const&)> const& should_split,
-                        std::size_t& aux_ix) {
+                        std::wstring_view metric_label, std::size_t& aux_ix) {
+  // auxiliary indices drawn per decomposed tensor: one (folded metric) or two
+  // (explicit metric leaf between raw factors)
+  const std::size_t n_aux = metric_label.empty() ? 1 : 2;
   auto process_tensor = [&](const Tensor& tensor,
                             std::size_t idx_ordinal) -> ExprPtr {
     if (tensor.label() == tensor_label && tensor.bra_net_rank() == 2 &&
         tensor.ket_net_rank() == 2 && tensor.aux_rank() == 0 &&
         (!should_split || should_split(tensor))) {
       return density_fit_impl(tensor, Index(aux_space, idx_ordinal),
-                              factor_label);
+                              factor_label, metric_label,
+                              Index(aux_space, idx_ordinal + 1));
     }
 
     return nullptr;
@@ -93,7 +118,7 @@ ExprPtr density_fit_rec(ExprPtr const& expr, IndexSpace const& aux_space,
     auto out = ex<Sum>(*expr | ranges::views::transform([&](auto&& x) {
       std::size_t aux_ix_summand = aux_ix_in;
       auto res = density_fit_rec(x, aux_space, tensor_label, factor_label,
-                                 should_split, aux_ix_summand);
+                                 should_split, metric_label, aux_ix_summand);
       aux_ix_max = std::max(aux_ix_max, aux_ix_summand);
       return res;
     }));
@@ -102,7 +127,7 @@ ExprPtr density_fit_rec(ExprPtr const& expr, IndexSpace const& aux_space,
   } else if (expr->is<Tensor>()) {
     if (auto factorized = process_tensor(expr->as<Tensor>(), aux_ix + 1);
         factorized) {
-      ++aux_ix;
+      aux_ix += n_aux;
       return factorized;
     }
     return expr;
@@ -115,7 +140,7 @@ ExprPtr density_fit_rec(ExprPtr const& expr, IndexSpace const& aux_space,
       if (f.is<Tensor>()) {
         if (auto factorized = process_tensor(f->as<Tensor>(), aux_ix + 1);
             factorized) {
-          ++aux_ix;
+          aux_ix += n_aux;
           result.append(1, std::move(factorized), Product::Flatten::Yes);
         } else {
           result.append(1, f, Product::Flatten::No);
@@ -126,7 +151,7 @@ ExprPtr density_fit_rec(ExprPtr const& expr, IndexSpace const& aux_space,
         // numbering
         result.append(1,
                       density_fit_rec(f, aux_space, tensor_label, factor_label,
-                                      should_split, aux_ix),
+                                      should_split, metric_label, aux_ix),
                       Product::Flatten::No);
       }
     return ex<Product>(std::move(result));
@@ -139,10 +164,11 @@ ExprPtr density_fit_rec(ExprPtr const& expr, IndexSpace const& aux_space,
 ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
                     std::wstring_view tensor_label,
                     std::wstring_view factor_label,
-                    std::function<bool(Tensor const&)> const& should_split) {
+                    std::function<bool(Tensor const&)> const& should_split,
+                    std::wstring_view metric_label) {
   std::size_t aux_ix = 0;
   return density_fit_rec(expr, aux_space, tensor_label, factor_label,
-                         should_split, aux_ix);
+                         should_split, metric_label, aux_ix);
 }
 
 }  // namespace sequant::mbpt

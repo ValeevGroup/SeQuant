@@ -1539,3 +1539,68 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(*gamma == *gamma_op);
 }
 }
+
+TEST_CASE("density_fit_metric_leaf", "[mbpt][df]") {
+  // density_fit with an explicit metric leaf: the factors are the RAW
+  // 3-centre integrals Z and the inverse metric is a leaf of its own,
+  //   g_{pq,rs} = Z^K_{pq} (M^-1)_{KL} Z^L_{rs}
+  using namespace sequant;
+  const IndexSpace aux_space =
+      get_default_context().index_space_registry()->retrieve(L"x");
+
+  SECTION("nonsymmetric") {
+    ExprPtr g = deserialize(L"g{i1,i2;a1,a2}");
+    ExprPtr r = mbpt::density_fit(g, aux_space, L"g", L"Z", {}, L"Minv");
+    REQUIRE(r->is<Product>());
+    const auto& prod = r->as<Product>();
+    REQUIRE(prod.factors().size() == 3);
+    const auto& z1 = prod.factor(0)->as<Tensor>();
+    const auto& m = prod.factor(1)->as<Tensor>();
+    const auto& z2 = prod.factor(2)->as<Tensor>();
+    CHECK(z1.label() == L"Z");
+    CHECK(m.label() == L"Minv");
+    CHECK(z2.label() == L"Z");
+    REQUIRE(m.bra_rank() == 1);
+    REQUIRE(m.ket_rank() == 1);
+    CHECK(m.aux_rank() == 0);
+    CHECK(ranges::front(m.bra()).space() == aux_space);
+    CHECK(ranges::front(m.ket()).space() == aux_space);
+    CHECK(ranges::front(m.bra()) != ranges::front(m.ket()));
+    REQUIRE(z1.aux_rank() == 1);
+    REQUIRE(z2.aux_rank() == 1);
+    CHECK(ranges::front(z1.aux()) == ranges::front(m.bra()));
+    CHECK(ranges::front(z2.aux()) == ranges::front(m.ket()));
+    CHECK(m.hermiticity() == Hermiticity::Hermitian);
+  }
+
+  SECTION("antisymmetric: two products, each with its own metric leaf") {
+    ExprPtr ga = deserialize(L"g{i1,i2;a1,a2}:A");
+    ExprPtr ra = mbpt::density_fit(ga, aux_space, L"g", L"Z", {}, L"Minv");
+    REQUIRE(ra->is<Sum>());
+    REQUIRE(ra->size() == 2);
+    for (const auto& term : *ra) {
+      REQUIRE(term->is<Product>());
+      CHECK(term->as<Product>().factors().size() == 3);
+    }
+  }
+
+  SECTION("two decomposed tensors of one term draw distinct aux labels") {
+    ExprPtr gg = deserialize(L"g{i1,i2;a1,a2} g{i3,i4;a3,a4}");
+    ExprPtr rr = mbpt::density_fit(gg, aux_space, L"g", L"Z", {}, L"Minv");
+    container::set<Index> auxs;
+    rr->visit(
+        [&auxs](const ExprPtr& e) {
+          if (e->is<Tensor>())
+            for (const auto& ix : e->as<Tensor>().aux()) auxs.insert(ix);
+        },
+        /* atoms_only = */ true);
+    CHECK(auxs.size() == 4);
+  }
+
+  SECTION("without a metric label the folded form is unchanged") {
+    ExprPtr g = deserialize(L"g{i1,i2;a1,a2}");
+    ExprPtr r = mbpt::density_fit(g, aux_space, L"g", L"B");
+    REQUIRE(r->is<Product>());
+    CHECK(r->as<Product>().factors().size() == 2);
+  }
+}
