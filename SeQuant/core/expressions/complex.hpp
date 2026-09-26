@@ -65,6 +65,12 @@ class RealPart : public Expr {
   ExprPtr canonicalize(CanonicalizeOptions opts =
                            CanonicalizeOptions::default_options()) override;
 
+  /// @copydoc canonicalize()
+  ExprPtr rapid_canonicalize(
+      CanonicalizeOptions opts =
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Rapid)) override;
+
   /// the wrapped expression is this node's only subexpression, so that
   /// Expr::visit(), index transforms and relabeling reach it
   ExprIterator begin_subexpr() override;
@@ -108,6 +114,12 @@ class ImagPart : public Expr {
   ///         wrapped expression instead of being handed to the caller
   ExprPtr canonicalize(CanonicalizeOptions opts =
                            CanonicalizeOptions::default_options()) override;
+
+  /// @copydoc canonicalize()
+  ExprPtr rapid_canonicalize(
+      CanonicalizeOptions opts =
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Rapid)) override;
 
   /// the wrapped expression is this node's only subexpression, so that
   /// Expr::visit(), index transforms and relabeling reach it

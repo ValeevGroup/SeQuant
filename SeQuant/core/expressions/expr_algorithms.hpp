@@ -296,7 +296,14 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// commuting. For an expression with open indices the head's bra and ket are
 /// exchanged, so a `ResultExpr` caller exchanges the head as well.
 ///
-/// Conjugation is an involution: `conjugate(conjugate(e))` equals `e`.
+/// The result is assembled with the Sum and Product constructors' default
+/// flattening, as kconjugate()'s is: a nested product is spliced into the
+/// rebuilt product and a factor's sign byproduct folds into its scalar, and
+/// a nested sum is spliced into the rebuilt sum.
+///
+/// Conjugation is an involution up to that flattening:
+/// `conjugate(conjugate(e))` equals `e` for an @p expr whose Products and
+/// Sums are already flat, and equals its flattened form otherwise.
 ///
 /// @param expr a c-number expression
 /// @return a new expression denoting `conj(expr)`
@@ -326,9 +333,15 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 ///
 /// @param expr an expression
 /// @return a new expression denoting `K expr K⁻¹`
-/// @throw sequant::Exception if @p expr is operator-valued and an operator
-///        in it acts on an index space that `K` does not close (only a
-///        real-field space is `K`-closed today)
+/// @throw sequant::Exception if @p expr is operator-valued and a normal
+///        operator in it acts on an index space that `K` does not close
+///        (only a real-field space, with a real-field proto-index closure,
+///        is `K`-closed today). The check covers `NormalOperator` and
+///        `NormalOperatorSequence`; two operator kinds are accepted without
+///        it: a non-normal-ordered `Operator<S>` (`FOperator`/`BOperator`),
+///        which the check does not reach, and an `mbpt::Operator`, whose
+///        K-conjugate is the operator itself -- complex conjugation acts
+///        through the coefficients of its tensor form.
 /// @sa conjugate(const ExprPtr&)
 [[nodiscard]] ExprPtr kconjugate(const ExprPtr& expr);
 
@@ -343,6 +356,11 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// conjugate is not present -- including self-conjugate (manifestly real)
 /// summands -- are left untouched, as are operator-valued summands (the
 /// fold applies to c-number content only).
+///
+/// A folded pair's Re/Im wrapper carries the pair's canonical
+/// representative, which may be the other member of the pair and has its
+/// dummy indices relabeled; that is what makes the fold independent of the
+/// order the pair was written in, up to a canonicalization of the result.
 ///
 /// @param[in] expr the sum to fold; returned unchanged if not a Sum
 /// @param[in] opts canonicalization options used to identify pairs (named

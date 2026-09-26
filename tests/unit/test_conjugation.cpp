@@ -67,7 +67,7 @@ TEST_CASE("conj_variable_marker_hash_reset", "[conjugation]") {
 }
 
 TEST_CASE("conjugate_free_function_total", "[conjugation]") {
-  // sequant::conjugate is the conjugate of the VALUE: the adjoint on c-number
+  // sequant::conjugate is the conjugate of the _value_: the adjoint on c-number
   // content, an involution on each node kind; operator-valued content, which
   // has no value, is rejected loudly
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
@@ -1534,6 +1534,18 @@ TEST_CASE("conjugate_is_the_value_conjugate", "[conjugation]") {
     auto ec = ex<Tensor>(L"h", bra{L"p_1"}, ket{L"p_2"}) *
               ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
     REQUIRE_THROWS_AS(kconjugate(ec), Exception);
+    // an index is K-closed only with its proto-index closure: a real-space
+    // index over a complex-space proto index is refused as well
+    const Index a1_over_real{idx(L"a_1", Field::Real).space(), 1,
+                             IndexList{idx(L"i_1", Field::Real)}};
+    const Index a1_over_complex{idx(L"a_1", Field::Real).space(), 1,
+                                IndexList{Index(L"i_1")}};
+    REQUIRE_NOTHROW(kconjugate(
+        ex<FNOperator>(cre({a1_over_real}), ann({idx(L"i_1", Field::Real)}))));
+    REQUIRE_THROWS_AS(
+        kconjugate(ex<FNOperator>(cre({a1_over_complex}),
+                                  ann({idx(L"i_1", Field::Real)}))),
+        Exception);
   }
 }
 

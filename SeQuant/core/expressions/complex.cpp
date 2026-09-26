@@ -22,6 +22,14 @@ ExprPtr RealPart::canonicalize(CanonicalizeOptions opts) {
   return {};
 }
 
+ExprPtr RealPart::rapid_canonicalize(CanonicalizeOptions opts) {
+  if (auto byproduct = inner_->rapid_canonicalize(opts);
+      byproduct && byproduct->is<Constant>())
+    inner_ = byproduct * inner_;
+  reset_hash_value();
+  return {};
+}
+
 ExprIterator RealPart::begin_subexpr() {
   // N.B. a mutable iterator into inner_ invalidates the memoized hash
   reset_hash_value();
@@ -70,6 +78,14 @@ ExprPtr ImagPart::canonicalize(CanonicalizeOptions opts) {
   // wrapper is not linear over a complex scalar, so the byproduct cannot be
   // hoisted out of it
   if (auto byproduct = inner_->canonicalize(opts);
+      byproduct && byproduct->is<Constant>())
+    inner_ = byproduct * inner_;
+  reset_hash_value();
+  return {};
+}
+
+ExprPtr ImagPart::rapid_canonicalize(CanonicalizeOptions opts) {
+  if (auto byproduct = inner_->rapid_canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
   reset_hash_value();

@@ -639,13 +639,20 @@ bool is_hermitian_network(ExprPtr const& expr, CanonicalizeOptions opts) {
 
 namespace {
 
+/// whether @p idx and every index of its proto-index closure lie in a
+/// `K`-closed space
+bool is_kclosed(const Index& idx) {
+  if (idx.space().field() != Field::Real) return false;
+  return ranges::all_of(idx.proto_indices(),
+                        [](const Index& p) { return is_kclosed(p); });
+}
+
 /// whether every index @p op acts on lies in a `K`-closed space, the
 /// condition for `K O K⁻¹` to be the same operator string
 template <Statistics S>
 bool acts_on_kclosed_spaces(const NormalOperator<S>& op) {
-  return ranges::all_of(op, [](const auto& o) {
-    return o.index().space().field() == Field::Real;
-  });
+  return ranges::all_of(op,
+                        [](const auto& o) { return is_kclosed(o.index()); });
 }
 
 /// @overload for a sequence of normal operators
