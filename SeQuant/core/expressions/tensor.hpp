@@ -1081,7 +1081,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool kconjugated() const { return kconjugated_; }
 
   /// @brief the adjoint: exchanges bra and ket, toggles the adjointed state,
-  /// normalizes (see normalize_states())
+  /// normalizes (see normalize_states()); over a real basis with both traits
+  /// indefinite the result is the K-conjugate with the slots in place
   /// @return the sign consumed; sequant::adjoint(const ExprPtr&) turns it
   ///         into a scalar factor
   [[nodiscard]] std::int8_t adjoint() override {
@@ -1242,8 +1243,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// against the parity (`T꙳ = ±T` clears it, see kconjugation_sign()). Over
   /// a real basis, or with no bra/ket slot, the two spellings of a value
   /// `T⁺{q;p}` and `T꙳{p;q}` are identified in favour of `꙳` (the coset
-  /// rule), which is what makes adjoint() exchange the slots and toggle `꙳`
-  /// there.
+  /// rule), which is what makes adjoint() leave the slots in place and toggle
+  /// `꙳` there.
   [[nodiscard]] std::int8_t normalize_states() {
     std::int8_t sign = 1;
     if (adjointed_) {
@@ -1251,9 +1252,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         adjointed_ = false;
         sign = static_cast<std::int8_t>(sign * *s);
       } else if (kconjugation_is_the_adjoint()) {
-        // coset rule: the same value, spelled with `꙳` and the slots in place
+        // coset rule: `T⁺{q;p}` and `T꙳{p;q}` are one value, so the `⁺` is
+        // traded for a `꙳` with the bundles exchanged back (a bra/ket-less
+        // tensor has nothing to exchange)
         adjointed_ = false;
         kconjugated_ = !kconjugated_;
+        if (bra_net_rank() != 0 || ket_net_rank() != 0) _swap_bra_ket();
       }
     }
     if (kconjugated_) {

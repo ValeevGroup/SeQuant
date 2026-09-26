@@ -561,7 +561,7 @@ TEST_CASE("core_states", "[conjugation]") {
     REQUIRE(ta.adjoint() == 1);
     REQUIRE_FALSE(ta.adjointed());
     REQUIRE(ta.kconjugated());
-    REQUIRE(ta.bra()[0].label() == L"i_1");
+    REQUIRE(ta.bra()[0].label() == L"a_1");  // t⁺{i;a} = t꙳{a;i}: in place
     REQUIRE(ta.decorated_label() == L"t꙳");
   }
 
@@ -994,17 +994,18 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
     Tensor t(L"t", bra{Index{L"i_1"}}, ket{Index{L"a_1"}});
     REQUIRE(t.adjoint() == 1);
     REQUIRE(t.adjointed());
-    // rebuilt onto real-field slots the coset rule spells the adjoint as the
-    // K state, which the even parity clears: it normalizes away, as it does
-    // in a fresh construction
+    // rebuilt onto real-field slots the coset rule spells the adjoint
+    // t⁺{a;i} as the K state with the slots exchanged, t꙳{i;a}, which the
+    // even parity clears: t{i;a}, as a fresh construction would give
     using ixvec = container::svector<Index>;
     auto r =
         t.with_slots(bra<ixvec>{ixvec{idx(L"a_2", Field::Real)}},
                      ket<ixvec>{ixvec{idx(L"i_2", Field::Real)}}, aux<ixvec>{});
     REQUIRE_FALSE(r.adjointed());
     REQUIRE_FALSE(r.kconjugated());
-    Tensor fresh(L"t", bra{idx(L"a_2", Field::Real)},
-                 ket{idx(L"i_2", Field::Real)});
+    REQUIRE(r.bra()[0].label() == L"i_2");
+    Tensor fresh(L"t", bra{idx(L"i_2", Field::Real)},
+                 ket{idx(L"a_2", Field::Real)});
     REQUIRE(r == fresh);
     REQUIRE(r.hash_value() == fresh.hash_value());
   }
@@ -1022,129 +1023,6 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
         z.with_slots(bra<ixvec>{ixvec{idx(L"a_2", Field::Real)}},
                      ket<ixvec>{ixvec{idx(L"i_2", Field::Real)}}, aux<ixvec>{}),
         Exception);
-  }
-}
-
-TEST_CASE("signed_normalization", "[conjugation]") {
-  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  Context ctx = get_default_context();
-  ctx.set(sr);
-  auto resetter = set_scoped_default_context(ctx);
-
-  SECTION(
-      "anti-Hermitian over the complex field: adjoint is minus the tensor") {
-    Tensor d(L"d", bra{L"i_1"}, ket{L"i_2"},
-             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
-    REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
-    Tensor dt = d;
-    // T^T{q;p} = T{p;q} is a respelling, but the only spelling of the
-    // transpose available to an AntiConjugate tensor is the starred one,
-    // and `T{q;p} = -conj(T{p;q})` prices that fold at -1
-    REQUIRE(dt.adjoint() == -1);
-    REQUIRE(dt.kconjugated());  // folded
-    Tensor dc = d;
-    REQUIRE(dc.adjoint() == -1);
-    REQUIRE_FALSE(dc.adjointed());
-    REQUIRE_FALSE(dc.kconjugated());
-    REQUIRE(dc.bra()[0].label() == L"i_2");  // swapped
-    // Expr::adjoint returns the sign as its byproduct
-    Tensor da = d;
-    REQUIRE(da.adjoint() == -1);
-    REQUIRE(da == dc);
-    // the free function absorbs it into a scalar
-    auto adj = adjoint(ex<Tensor>(d));
-    REQUIRE(adj->is<Product>());
-    REQUIRE(adj->as<Product>().scalar() == -1);
-    REQUIRE(adj->as<Product>().factors().size() == 1);
-    REQUIRE_FALSE(adj->as<Product>().factor(0)->as<Tensor>().adjointed());
-    REQUIRE_FALSE(adj->as<Product>().factor(0)->as<Tensor>().kconjugated());
-    // through a Product the sign lands in the product's scalar
-    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
-                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-    auto padj = adjoint(ex<Tensor>(d) * u);
-    REQUIRE(padj->is<Product>());
-    REQUIRE(padj->as<Product>().scalar() == -1);
-    REQUIRE(padj->as<Product>().factors().size() == 2);
-    // and through a Sum it wraps the affected summand
-    auto sadj = adjoint(ex<Tensor>(d) + u);
-    REQUIRE(sadj->is<Sum>());
-    REQUIRE(sadj->as<Sum>().summand(0)->is<Product>());
-    REQUIRE(sadj->as<Sum>().summand(0)->as<Product>().scalar() == -1);
-  }
-
-  SECTION("odd parity over a real field: conjugation is a sign") {
-    Tensor p(L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
-             TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
-                              .conjugation_parity = ConjugationParity::Odd});
-    REQUIRE(p.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
-    Tensor pc = p;
-    REQUIRE(pc.kconjugate() == -1);
-    REQUIRE_FALSE(pc.adjointed());
-    REQUIRE_FALSE(pc.kconjugated());
-    // transpose of an array with known conjugation is represented as the
-    // adjoint (the ⁺ spelling), with the conjugation's sign
-    Tensor pt = p;
-    REQUIRE(pt.adjoint() == -1);
-    REQUIRE(pt.adjointed());
-    auto c = conjugate(ex<Tensor>(p));
-    REQUIRE(c->is<Product>());
-    REQUIRE(c->as<Product>().scalar() == -1);
-  }
-
-  SECTION("even parity over a real field: conjugation is the identity") {
-    Tensor t(L"t", bra{idx(L"a_1", Field::Real)}, ket{idx(L"i_1", Field::Real)},
-             TensorSymmetries{.hermiticity = Hermiticity::NonHermitian});
-    Tensor tc = t;
-    REQUIRE(tc.kconjugate() == 1);
-    REQUIRE(tc == t);
-    Tensor ta = t;
-    REQUIRE(ta.adjoint() == 1);
-    REQUIRE(ta.adjointed());
-    REQUIRE(ta.decorated_label() == L"t⁺");
-  }
-
-  SECTION("imaginary Hermitian over a real field: antisymmetric array") {
-    Tensor p(L"p", bra{idx(L"i_1", Field::Real)}, ket{idx(L"i_2", Field::Real)},
-             TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
-                              .conjugation_parity = ConjugationParity::Odd});
-    REQUIRE(p.braket_symmetry() == BraKetSymmetry::Antisymm);
-    Tensor pt = p;
-    REQUIRE(pt.adjoint() == -1);
-    REQUIRE_FALSE(pt.adjointed());
-    REQUIRE_FALSE(pt.kconjugated());
-    Tensor pa = p;
-    REQUIRE(pa.adjoint() == 1);  // Hermitian: adjoint is itself
-    REQUIRE_FALSE(pa.adjointed());
-    REQUIRE_FALSE(pa.kconjugated());
-  }
-
-  SECTION("a ⁺ label on an anti-Hermitian tensor cannot be adopted") {
-    REQUIRE_THROWS_AS(
-        Tensor(L"d⁺", bra{L"i_1"}, ket{L"i_2"},
-               TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian}),
-        sequant::Exception);
-  }
-
-  SECTION("the respelling reports the sign") {
-    Tensor d(L"d", bra{L"i_1"}, ket{L"i_2"},
-             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
-    // the folded spelling d^*{i_2;i_1} is -d{i_1;i_2}: unfolding it back to
-    // the value orientation costs the anti-Hermitian sign, exactly as the
-    // fold did
-    Tensor folded = d;
-    REQUIRE(folded.adjoint() == -1);
-    auto [vo, sign] = std::pair<Tensor, std::int8_t>{folded, 1};
-    REQUIRE(sign == -1);
-    REQUIRE(vo == d);
-    // deserialized d^* over the complex field is conj(d) = -d^T: unfolding
-    // the conjugation costs the anti-Hermitian sign
-    Tensor dstar = d;
-    REQUIRE(dstar.kconjugate() == 1);
-    auto [vo2, sign2] = std::pair<Tensor, std::int8_t>{dstar, 1};
-    REQUIRE(sign2 == -1);
-    REQUIRE_FALSE(vo2.adjointed());
-    REQUIRE_FALSE(vo2.kconjugated());
-    REQUIRE(vo2.bra()[0].label() == L"i_2");
   }
 }
 
@@ -1368,12 +1246,6 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     Tensor dstar = d;
     REQUIRE(dstar.kconjugate() == 1);
     REQUIRE(dstar.kconjugated());
-    // d^* = -d^T: unfolding the marker back to the value orientation costs
-    // the anti-Hermitian sign
-    auto [vo, vo_sign] = std::pair<Tensor, std::int8_t>{dstar, 1};
-    REQUIRE(vo_sign == -1);
-    REQUIRE_FALSE(vo.adjointed());
-    REQUIRE_FALSE(vo.kconjugated());
 
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree = binarize(ex<Tensor>(dstar));

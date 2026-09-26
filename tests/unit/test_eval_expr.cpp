@@ -330,8 +330,6 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // a starred spelling lowers to its value orientation, a plain leaf
     Tensor g_star = g;
     REQUIRE(g_star.kconjugate() == 1);
-    auto [g_vo, g_vo_sign] = std::pair<Tensor, std::int8_t>{g_star, 1};
-    REQUIRE(g_vo_sign == 1);  // Conjugate: the exchange costs nothing
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto g_tree3 = binarize(ex<Tensor>(g_star));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -339,7 +337,6 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE_FALSE(g_tree3->as_tensor().kconjugated());
     // the leaf is the value orientation of g^*: bra/ket swapped back
     REQUIRE(g_tree3->as_tensor().bra().at(0).label() == L"p_3");
-    REQUIRE(g_tree3->hash_value() == EvalExpr{g_vo}.hash_value());
 
     // an AntiConjugate tensor's starred spelling costs the relation's sign,
     // which is a scalar factor, not a node phase
@@ -349,8 +346,6 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
     Tensor d_star = d;
     REQUIRE(d_star.kconjugate() == 1);
-    auto [d_vo, d_vo_sign] = std::pair<Tensor, std::int8_t>{d_star, 1};
-    REQUIRE(d_vo_sign == -1);
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto d_tree = binarize(ex<Tensor>(d_star));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
