@@ -1,5 +1,6 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
 
@@ -15,8 +16,8 @@ void v1() {
   isr.add_union(L"p", {L"i", L"a"});  // union of i and a
 
   // can access unions and intersections of base and composite spaces
-  assert(isr.unIon(L"i", L"a") == isr.retrieve(L"p"));
-  assert(isr.intersection(L"p", L"i") == isr.retrieve(L"i"));
+  SEQUANT_ASSERT(isr.unIon(L"i", L"a") == isr.retrieve(L"p"));
+  SEQUANT_ASSERT(isr.intersection(L"p", L"i") == isr.retrieve(L"i"));
 
   // to use the vocabulary defined by isr use it to make a Context object and
   // make it the default
@@ -29,7 +30,7 @@ void v1() {
   Index p1(L"p_1");
 
   // set theoretic operations on spaces
-  assert(i1.space().type().includes(a1.space().type()) == false);
+  SEQUANT_ASSERT(i1.space().type().includes(a1.space().type()) == false);
   // end-snippet-1
 }
 
@@ -45,10 +46,10 @@ void v2() {
   // set theoretic operations on spaces
   auto i1 = Index(L"i_1");
   auto a1 = Index(L"a_1");
-  assert(i1.space().attr().intersection(a1.space().attr()).type() ==
-         IndexSpace::Type::null);
-  assert(i1.space().attr().intersection(a1.space().attr()).qns() ==
-         mbpt::Spin::any);
+  SEQUANT_ASSERT(i1.space().attr().intersection(a1.space().attr()).type() ==
+                 IndexSpace::Type::null);
+  SEQUANT_ASSERT(i1.space().attr().intersection(a1.space().attr()).qns() ==
+                 mbpt::Spin::any);
   // end-snippet-2
 }
 

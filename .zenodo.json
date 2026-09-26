@@ -1,6 +1,6 @@
 {
   "title": "SeQuant: Symbolic Tensor Algebra in C++",
-  "description": "SeQuant is a framework for performing symbolic algebra of tensors over scalar and operator rings. In addition to symbolic manipulation it can numerically evaluate general tensor algebra expressions with an appropriate external tensor backend (TiledArray, BTAS, TAPP) or generate code for an external tensor backend (ITF, Julia, NumPy/Torch). Development of SeQuant has been supported by the US National Science Foundation (award 2217081) and the US Department of Energy (awards DE-SC0022327 and DE-SC0022263).",
+  "description": "SeQuant is a computer algebra system for performing symbolic algebra of tensors over scalar and operator rings, applied primarily in quantum chemistry and quantum many-body physics. In addition to symbolic manipulation it can numerically evaluate general tensor algebra expressions with an appropriate external tensor backend (TiledArray, BTAS, TAPP) or generate code for an external tensor backend (ITF, Julia, NumPy/Torch). Development of SeQuant has been supported by the US National Science Foundation (award 2217081) and the US Department of Energy (awards DE-SC0022327 and DE-SC0022263).",
   "license": {
     "id": "LGPL-3.0-only"
   },
@@ -45,6 +45,8 @@
   "keywords": [
     "tensor algebra",
     "symbolic computation",
+    "computer algebra system",
+    "quantum chemistry",
     "many-body theory",
     "second quantization",
     "C++"

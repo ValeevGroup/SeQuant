@@ -12,7 +12,7 @@ different sub-namespaces. E.g. :func:`sequant::io::latex::to_string` yields a La
 LaTeX
 =====
 
-The relevant function is :func:`sequant::io::latex::to_string`. SeQuant provides support for LaTeX conversion on most object types. If the shorthands
+The relevant function is :func:`sequant::io::latex::to_string`. SeQuant provides support for `LaTeX <https://en.wikipedia.org/wiki/LaTeX>`_ conversion on most object types. If the shorthands
 header is included, this functionality is also exposed as :func:`sequant::to_latex`.
 
 The produced LaTeX code is not self-contained. It needs to be embedded in a suitable math environment. Furthermore, it assumes that the
@@ -101,11 +101,17 @@ V1
                    | '_{' IndexList? '}^{' IndexList '}'                            | Meaning is _{<bra>}^{<ket>} (no aux)
    IndexList       Index ( ',' Index )?
    Index           IndexSpaceName '_'? Integer
-   IndexSpaceName                                                                    Name but no undersore allowed
-   SymmetrySpec    ':' ( [ASN] ( '-' [SCN] ( '-' [SN] )? )? )                        :<Symmetry>-<BraKetSymmetr>-<ColumnSymmetry>
+   IndexSpaceName                                                                    Name but no underscore allowed
+   SymmetrySpec    ':' ( [ASN] ( '-' [SCN] ( '-' [SN] )? )? )                        :<Symmetry>-<BraKetSymmetry>-<ColumnSymmetry>
    Variable        Name
    Name                                                                              Single word (may include Unicode chars)
    ==============  ===============================================================  ===========================================
+
+The single-letter codes in ``SymmetrySpec`` abbreviate the corresponding enumerators, one letter per field: ``[ASN]`` is the tensor's
+permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = Symm, ``N`` = Nonsymm); ``[SCN]`` is its
+:class:`BraKetSymmetry <sequant::BraKetSymmetry>` (``S`` = Symm, ``C`` = Conjugate, ``N`` = Nonsymm); and the final ``[SN]`` is its
+:class:`ColumnSymmetry <sequant::ColumnSymmetry>` (``S`` = Symm, ``N`` = Nonsymm — this field has no Conjugate case). A tensor's trailing
+``:A-C-S`` in the example below therefore reads "antisymmetric, conjugate bra-ket symmetric, symmetric column".
 
 :func:`sequant::io::serialization::from_string<ExprPtr>` will start at rule :code:`Expression`, whereas
 :func:`sequant::io::serialization::from_string<ResultExpr>` will start at :code:`Result`.
@@ -113,6 +119,9 @@ V1
 
 Examples
 """"""""
+
+The following parses a residual expression ``R1`` as a sum of four terms, the last one antisymmetric-bra-ket-symmetric-column (``:A-C-S``) and
+scaled by the constant ``1/2``:
 
 ::
 
