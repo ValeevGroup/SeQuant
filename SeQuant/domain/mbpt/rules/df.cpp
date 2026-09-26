@@ -166,7 +166,22 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
                     std::wstring_view factor_label,
                     std::function<bool(Tensor const&)> const& should_split,
                     std::wstring_view metric_label) {
+  // continue after the auxiliary indices already present in the expression:
+  // a second pass (e.g. raw factors with a metric leaf for some integrals,
+  // folded factors for the rest) must not reuse a label of the first
   std::size_t aux_ix = 0;
+  expr->visit(
+      [&aux_ix, &aux_space](const ExprPtr& e) {
+        if (!e->is<Tensor>()) return;
+        const auto& t = e->as<Tensor>();
+        auto scan = [&](const Index& ix) {
+          if (ix.space() == aux_space && ix.ordinal())
+            aux_ix = std::max<std::size_t>(aux_ix, *ix.ordinal());
+        };
+        for (const auto& ix : t.const_braket()) scan(ix);
+        for (const auto& ix : t.aux()) scan(ix);
+      },
+      /* atoms_only = */ true);
   return density_fit_rec(expr, aux_space, tensor_label, factor_label,
                          should_split, metric_label, aux_ix);
 }
