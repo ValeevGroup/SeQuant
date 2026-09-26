@@ -406,13 +406,17 @@ bool kramers_flip_slots(AbstractTensor& t) {
 bool kramers_union_index(const Index& idx, const IndexSpaceRegistry& isr) {
   const auto& sp = idx.space();
   if (isr.kramers_partner(sp)) return false;  // a flavoured index
-  // a flavoured (Kramers-partnered) subspace of the same type whose quantum
-  // numbers are a proper subset of this space's: sp is their union
+  // sp is the union of a Kramers-partnered pair of the same type: its quantum
+  // numbers are EXACTLY the union of the pair's (the pair differs from sp in
+  // the spin sector alone). A spin-free space of the same type that carries a
+  // trait bit no partnered pair has (an AO/PAO-like space without flavoured
+  // clones of its own) is not a union, even though a flavoured space's
+  // quantum numbers are a subset of its own.
   for (const auto& s : isr) {
     if (s.type() != sp.type()) continue;
-    if (!isr.kramers_partner(s)) continue;
-    if (s.qns() == sp.qns()) continue;
-    if (sp.qns().intersection(s.qns()) == s.qns()) return true;
+    const auto partner = isr.kramers_partner(s);
+    if (!partner) continue;
+    if ((s.qns() | partner->qns()) == sp.qns()) return true;
   }
   return false;
 }

@@ -1462,3 +1462,44 @@ TEST_CASE("canonicalize_options_equality", "[canonicalize][kramers][context]") {
   REQUIRE(CanonicalizeOptions::default_options().fold_kramers_eval_leaves ==
           CanonicalizeOptions::FoldKramersEvalLeaves::No);
 }
+
+TEST_CASE("kramers_union_index", "[canonicalize][kramers]") {
+  // a union index is the spin-free parent of a Kramers-partnered pair of the
+  // SAME type whose quantum numbers differ from the parent's in the spin
+  // sector only; a flavoured index is never a union; a spin-free space that
+  // carries a different trait bit than every flavoured pair (an AO/PAO-like
+  // space without partners of its own) is not a union either
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  mbpt::add_df_spaces(isr);
+  const auto spin_any = IndexSpace::QuantumNumbers{mbpt::Spin::any};
+  const auto a = isr->retrieve(L"a");
+  // a PAO-type space with the pao trait bit and its flavoured, partnered
+  // clones
+  const IndexSpace pao{L"μ̃", a.type(), spin_any | mbpt::LCAOQNS::pao};
+  const IndexSpace pao_up{
+      L"μ̃↑", a.type(),
+      IndexSpace::QuantumNumbers{mbpt::Spin::alpha} | mbpt::LCAOQNS::pao};
+  const IndexSpace pao_dn{
+      L"μ̃↓", a.type(),
+      IndexSpace::QuantumNumbers{mbpt::Spin::beta} | mbpt::LCAOQNS::pao};
+  isr->add(pao);
+  isr->add(pao_up);
+  isr->add(pao_dn);
+  isr->add_kramers_partners(pao_up, pao_dn);
+  // an AO-like space of the same type with the ao trait bit and NO
+  // flavoured clones
+  const IndexSpace ao{L"x", a.type(), spin_any | mbpt::LCAOQNS::ao};
+  isr->add(ao);
+
+  CHECK(kramers_union_index(Index(L"a_1", a), *isr));
+  CHECK_FALSE(kramers_union_index(Index(L"a↑_1", isr->retrieve(L"a↑")), *isr));
+  CHECK(kramers_union_index(Index(L"μ̃_1", pao), *isr));
+  CHECK_FALSE(kramers_union_index(Index(L"μ̃↑_1", pao_up), *isr));
+  CHECK_FALSE(kramers_union_index(Index(L"μ̃↓_1", pao_dn), *isr));
+  // no partnered pair differs from x in the spin sector alone
+  CHECK_FALSE(kramers_union_index(Index(L"x_1", ao), *isr));
+  // a space with no spin sector at all
+  CHECK_FALSE(kramers_union_index(Index(L"Κ_1", isr->retrieve(L"Κ")), *isr));
+}
