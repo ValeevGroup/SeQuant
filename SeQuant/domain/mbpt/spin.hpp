@@ -323,8 +323,6 @@ enum class TripletResidualKind {
 /// controls behavior of closed-shell triplet EOM spin-tracing
 struct ClosedShellEOMTripletSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  /// biorthogonalization of the singles projection
-  BiorthogonalizationMethod method = BiorthogonalizationMethod::V2;
   /// compact the residual to one representative slot permutation per
   /// tensor-network group via triplet_maxcoeff_compact (doubles: the -3c member
   /// of each {c,c,c,-3c} group, 135 terms for 2h2p; triples: one
@@ -345,8 +343,7 @@ struct ClosedShellEOMTripletSpintraceOptions {
 /// @brief Closed-shell triplet (M_S = 0) spin trace of EOM-CC equations
 /// @param expr spin-orbital EOM equation (from CC::eom_r or CC::eom_l) with
 ///        one or two external index groups (singles or doubles projection)
-/// @param options triplet spin-tracing options; `method` only affects the singles
-///  (doubles use the Kohn's paper combination)
+/// @param options triplet spin-tracing options
 /// @throw Exception for projection manifolds beyond doubles, or if the
 ///        equations contain amplitudes beyond doubles (triples coupling
 ///        T (x) E (x) E is not implemented)

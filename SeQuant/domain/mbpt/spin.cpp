@@ -2380,22 +2380,10 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   simplify(triplet);
 
   if (n_ext == 1) {
-    // metric of the T_{ai} kets is 2*delta -> the rank-1 biorthogonal
-    // for now I am calling v1/v2, but later I will just add a normalization
-    // factor 1/2
-    switch (options.method) {
-      case BiorthogonalizationMethod::V1:
-        triplet =
-            biorthogonal_transform_pre_nnsproject(triplet, ext_idxs, false);
-        break;
-      case BiorthogonalizationMethod::V2:
-        triplet =
-            biorthogonal_transform_pre_nnsproject(triplet, ext_idxs, true);
-        break;
-      default:
-        SEQUANT_ASSERT(false && "unreachable");
-        abort();
-    }
+    // the metric of the T_{ai} kets is 2*delta, so the rank-1 biorthogonal
+    // dual is T_{ai}/2; the NNS projector is trivial at rank 1
+    triplet = biorthogonal_transform_pre_nnsproject(
+        triplet, ext_idxs, /*factor_out_nns_projector=*/false);
   } else {  // n_ext == 2 or 3: one set of external permutation weights
     const bool te_only = options.residual == TripletResidualKind::BareTE;
     if (n_ext != 2 && te_only)

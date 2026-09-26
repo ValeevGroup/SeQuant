@@ -567,8 +567,7 @@ class compute_eomcc_closedshell_triplet {
 
       try {
         const auto tstart = std::chrono::high_resolution_clock::now();
-        auto st = closed_shell_EOM_triplet_spintrace(
-            eqvec[i], {.method = BiorthogonalizationMethod::V2});
+        auto st = closed_shell_EOM_triplet_spintrace(eqvec[i]);
         const auto tstop = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> dt = tstop - tstart;
         std::wcout << "R[" << i
@@ -600,9 +599,8 @@ class compute_eomcc_closedshell_triplet {
         ExprPtr compact;
         if (ext_groups.size() == 2 || ext_groups.size() == 3) {
           const auto cstart = std::chrono::high_resolution_clock::now();
-          compact = closed_shell_EOM_triplet_spintrace(
-              eqvec[i],
-              {.method = BiorthogonalizationMethod::V2, .compact = true});
+          compact =
+              closed_shell_EOM_triplet_spintrace(eqvec[i], {.compact = true});
           const auto cstop = std::chrono::high_resolution_clock::now();
           std::chrono::duration<double> cdt = cstop - cstart;
           std::wcout << "R[" << i
@@ -633,8 +631,7 @@ class compute_eomcc_closedshell_triplet {
           // te_only: drop the external pair-swap TE_ps (or we can say ET)->
           // residual = TE/4.
           auto te_a = closed_shell_EOM_triplet_spintrace(
-              eqvec[i], {.method = BiorthogonalizationMethod::V2,
-                         .residual = TripletResidualKind::BareTE});
+              eqvec[i], {.residual = TripletResidualKind::BareTE});
           simplify(te_a);
 
           std::wcout << "\n----- EFV experiment (TE-only) comparison R[" << i
