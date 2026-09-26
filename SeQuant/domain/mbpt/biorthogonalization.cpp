@@ -25,7 +25,6 @@
 #include <range/v3/view/transform.hpp>
 
 #include <algorithm>
-#include <iostream>
 #include <numeric>
 
 namespace sequant::mbpt {
@@ -636,6 +635,90 @@ ExprPtr WK_biorthogonalization_filter(
   return WK_biorthogonalization_filter_impl(expr, ext_idxs);
 }
 
+template <detail::index_group_range IdxGroups>
+ExprPtr biorthogonal_transform_pre_nnsproject_impl(
+    ExprPtr& expr, IdxGroups&& ext_idxs, bool factor_out_nns_projector) {
+  using ranges::views::transform;
+
+  // Remove leading S operator if present
+  for (auto& term : *expr) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+
+  auto bt = biorthogonal_transform_impl(
+      expr, ext_idxs, default_biorthogonalizer_pseudoinverse_threshold);
+
+  auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
+  ExprPtr S_tensor = make_symmetrizer(bra(kixs), ket(bixs));
+
+  if (factor_out_nns_projector) {
+    if (ext_idxs.size() > 1) {
+      bt = S_tensor * bt;
+    }
+    simplify(bt);
+
+    bt = S_maps(bt);
+    canonicalize(bt);
+    bt = WK_biorthogonalization_filter_impl(bt, ext_idxs);
+  }
+
+  bt = S_tensor * bt;
+  simplify(bt);
+
+  return bt;
+}
+
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    bool factor_out_nns_projector) {
+  return biorthogonal_transform_pre_nnsproject_impl(
+      expr, as_view_of_index_groups(ext_idxs), factor_out_nns_projector);
+}
+
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool factor_out_nns_projector) {
+  return biorthogonal_transform_pre_nnsproject_impl(expr, ext_idxs,
+                                                    factor_out_nns_projector);
+}
+
+namespace detail {
+
+std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
+                                         double threshold) {
+  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
+  auto normalized_pinv =
+      compute_biorthogonalizer_matrix(n_particles, threshold);
+  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * normalized_pinv;
+
+  auto num_perms = nns_matrix.rows();
+  std::vector<double> coeffs;
+  coeffs.reserve(num_perms);
+  for (std::size_t i = 0; i < num_perms; ++i) {
+    coeffs.push_back(nns_matrix(num_perms - 1, i));
+  }
+  return coeffs;
+}
+
+container::svector<size_t> compute_permuted_indices(
+    const container::svector<size_t>& indices, size_t perm_rank,
+    size_t n_particles) {
+  perm::Permutation perm_obj = perm::unrank(perm_rank, n_particles);
+
+  container::svector<size_t> permuted_indices(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    permuted_indices[i] = indices[perm_obj[i]];
+  }
+  return permuted_indices;
+}
+
+}  // namespace detail
+
 namespace {
 
 std::size_t product_network_hash(const ExprPtr& term) {
@@ -1056,87 +1139,7 @@ ExprPtr triplet_symbolic_reconstruct(
                                    triplet_weights_rational(n_particles, kind));
 }
 
-template <detail::index_group_range IdxGroups>
-ExprPtr biorthogonal_transform_pre_nnsproject_impl(
-    ExprPtr& expr, IdxGroups&& ext_idxs, bool factor_out_nns_projector) {
-  using ranges::views::transform;
-
-  // Remove leading S operator if present
-  for (auto& term : *expr) {
-    if (term->is<Product>())
-      term =
-          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
-  }
-
-  auto bt = biorthogonal_transform_impl(
-      expr, ext_idxs, default_biorthogonalizer_pseudoinverse_threshold);
-
-  auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
-  auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-  ExprPtr S_tensor = make_symmetrizer(bra(kixs), ket(bixs));
-
-  if (factor_out_nns_projector) {
-    if (ext_idxs.size() > 1) {
-      bt = S_tensor * bt;
-    }
-    simplify(bt);
-
-    bt = S_maps(bt);
-    canonicalize(bt);
-    bt = WK_biorthogonalization_filter_impl(bt, ext_idxs);
-  }
-
-  bt = S_tensor * bt;
-  simplify(bt);
-
-  return bt;
-}
-
-ExprPtr biorthogonal_transform_pre_nnsproject(
-    ExprPtr& expr,
-    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
-    bool factor_out_nns_projector) {
-  return biorthogonal_transform_pre_nnsproject_impl(
-      expr, as_view_of_index_groups(ext_idxs), factor_out_nns_projector);
-}
-
-ExprPtr biorthogonal_transform_pre_nnsproject(
-    ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    bool factor_out_nns_projector) {
-  return biorthogonal_transform_pre_nnsproject_impl(expr, ext_idxs,
-                                                    factor_out_nns_projector);
-}
-
 namespace detail {
-
-std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
-                                         double threshold) {
-  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
-  auto normalized_pinv =
-      compute_biorthogonalizer_matrix(n_particles, threshold);
-  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * normalized_pinv;
-
-  auto num_perms = nns_matrix.rows();
-  std::vector<double> coeffs;
-  coeffs.reserve(num_perms);
-  for (std::size_t i = 0; i < num_perms; ++i) {
-    coeffs.push_back(nns_matrix(num_perms - 1, i));
-  }
-  return coeffs;
-}
-
-container::svector<size_t> compute_permuted_indices(
-    const container::svector<size_t>& indices, size_t perm_rank,
-    size_t n_particles) {
-  perm::Permutation perm_obj = perm::unrank(perm_rank, n_particles);
-
-  container::svector<size_t> permuted_indices(n_particles);
-  for (size_t i = 0; i < n_particles; ++i) {
-    permuted_indices[i] = indices[perm_obj[i]];
-  }
-  return permuted_indices;
-}
 
 container::svector<size_t> compute_bra_ket_permuted_indices(
     size_t perm_index, size_t n_particles) {
