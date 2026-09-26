@@ -435,16 +435,24 @@ struct Transformer {
           }
           if (parity.has_value()) syms.conjugation_parity = *parity;
 
-          // a trailing adjoint mark in the name (`label⁺{...}`) is a value
-          // modifier like `^*` and `^T`; it is applied below rather than
-          // left to the Tensor constructor's own mark adoption, which cannot
-          // hand back the sign an anti-Hermitian tensor's adjoint carries
+          // a trailing adjoint mark in the name (`label⁺{...}`) and a `^*`
+          // are the two states; they are applied below rather than left to
+          // the Tensor constructor's own mark adoption, which cannot hand
+          // back the sign their normalization can carry
           std::wstring name = tensor.name;
-          ValueModifier modifier = static_cast<ValueModifier>(tensor.modifier);
+          bool adjointed = false;
           if (!name.empty() && name.back() == sequant::adjoint_label) {
             name.pop_back();
-            // `t⁺^*` composes to the transpose
-            modifier = ValueModifier::Adjoint * modifier;
+            adjointed = true;
+          }
+          // the grammar's codes: 1 `^*`, 2 `^T`
+          const bool kconjugated = tensor.modifier == 1;
+          if (tensor.modifier == 2) {
+            auto [offset, length] =
+                get_pos(tensor, position_cache.get(), begin.get());
+            throw SerializationError(
+                offset, length,
+                "a transposed tensor (^T) has no symbolic form");
           }
           ExprPtr t;
           try {
@@ -459,9 +467,9 @@ struct Transformer {
                 get_pos(tensor, position_cache.get(), begin.get());
             throw SerializationError(offset, length, e.what());
           }
-          if (modifier != ValueModifier::None) {
+          if (adjointed || kconjugated) {
             const auto sign =
-                t->template as<Tensor>().set_value_modifier(modifier);
+                t->template as<Tensor>().set_states(adjointed, kconjugated);
             // the normalization can consume a sign (an anti-Hermitian or
             // odd-parity tensor), which only a scalar factor can carry
             if (sign != 1) return ex<Product>(sign, ExprPtrList{std::move(t)});

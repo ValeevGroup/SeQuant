@@ -738,7 +738,7 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   Tensor t_adj = t;
   REQUIRE(t_adj.adjoint() == 1);
   REQUIRE(t_adj.label() == L"t");
-  REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
+  REQUIRE(t_adj.adjointed());
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node->op_type() == EvalOp::Adjoint);
@@ -1261,8 +1261,8 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     // Constant(-1), and the engine, contracting by index label, reads that
     // leaf in the requested layout.
     Tensor dstar = d(L"i_1", L"a_1")->as<Tensor>();
-    REQUIRE(dstar.conjugate() == 1);
-    REQUIRE(dstar.value_modifier() == ValueModifier::Conjugate);
+    REQUIRE(dstar.kconjugate() == 1);
+    REQUIRE(dstar.kconjugated());
 
     auto const layout = tidxs(L"i_1,a_1");
     auto const alone = eval_open(ex<Tensor>(dstar), layout);
@@ -1282,7 +1282,7 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     auto marked = eval_node(ex<Tensor>(dstar));
     REQUIRE(marked->op_type() == EvalOp::Product);
     REQUIRE(marked.left().leaf());
-    REQUIRE_FALSE(marked.left()->as_tensor().conjugated());
+    REQUIRE_FALSE(marked.left()->as_tensor().kconjugated());
     REQUIRE(marked.right()->is_constant());
     REQUIRE(marked.right()->as_constant().value<int>() == -1);
 
@@ -1310,12 +1310,12 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     // conjugate the served array a second time and return g{i_1;a_1}.
     Tensor gstar = g(L"i_1", L"a_1")->as<Tensor>();
     REQUIRE(gstar.braket_symmetry() == BraKetSymmetry::Conjugate);
-    REQUIRE(gstar.conjugate() == 1);
-    REQUIRE(gstar.value_modifier() == ValueModifier::Conjugate);
+    REQUIRE(gstar.kconjugate() == 1);
+    REQUIRE(gstar.kconjugated());
 
     auto marked = eval_node(ex<Tensor>(gstar));
     REQUIRE(marked.leaf());
-    REQUIRE_FALSE(marked->as_tensor().conjugated());
+    REQUIRE_FALSE(marked->as_tensor().kconjugated());
     REQUIRE(marked->as_tensor().bra()[0].label() == L"a_1");
 
     auto const got = eval_open(ex<Tensor>(gstar), tidxs(L"i_1,a_1"));

@@ -193,10 +193,10 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
 
   /// Canonicalizes the assignment of indices to bra and ket of a
   /// braket-foldable tensor (see braket_foldable()): a bare swap for
-  /// BraKetSymmetry::Symm/Antisymm, Tensor::transpose() (which records the
-  /// conjugation) for BraKetSymmetry::Conjugate/AntiConjugate
-  /// @param fold_conjugate if false, (anti)conjugate tensors are left
-  ///        untouched
+  /// BraKetSymmetry::Symm/Antisymm; a BraKetSymmetry::Conjugate/AntiConjugate
+  /// tensor's two orientations are two values, so it is left as written
+  /// @param fold_conjugate without effect: (anti)conjugate tensors are always
+  ///        left untouched
   /// @param fold_signed if false, a respelling that costs a sign (an
   ///        Antisymm or AntiConjugate tensor) is left untouched
   /// @return the sign the respelling contributed (+1 or -1): the tensor as it

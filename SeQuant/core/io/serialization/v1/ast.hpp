@@ -79,9 +79,9 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
 // represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
   std::wstring name;
-  // value modifier: 0 none, 1 `label^*{...}` (Conjugate), 2 `label^T{...}`
-  // (Transpose); numerically sequant::ValueModifier. A '⁺' adjoint mark is
-  // part of `name`; the conversion to Tensor composes it with this.
+  // 0 none, 1 `label^*{...}` (the K-conjugated state), 2 `label^T{...}`
+  // (refused by the conversion). A '⁺' adjoint mark is part of `name`; the
+  // conversion to Tensor reads both.
   std::uint8_t modifier = 0;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;

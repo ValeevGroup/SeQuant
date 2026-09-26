@@ -651,7 +651,7 @@ ExprPtr conjugate(const ExprPtr& expr) {
     auto r = expr->clone();
     // the conjugation of an odd-parity array over a real basis is a sign,
     // which a Tensor cannot hold
-    const auto sign = r->as<Tensor>().conjugate();
+    const auto sign = r->as<Tensor>().kconjugate();
     if (sign == 1) return r;
     return ex<Product>(sign, ExprPtrList{std::move(r)});
   }

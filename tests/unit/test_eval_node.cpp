@@ -200,7 +200,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
     // the g leaf stays as written, unmarked
     auto const gnode = node(node1, {L, L, L});
     auto const& gleaf = gnode.as_tensor();
-    REQUIRE_FALSE(gleaf.conjugated());
+    REQUIRE_FALSE(gleaf.kconjugated());
     REQUIRE_THAT(gleaf, EquivalentTo("g{i3,i4;a3,a4}:A-C-S"));
 
     // ...and the intermediates keep their value-oriented bra/ket splits

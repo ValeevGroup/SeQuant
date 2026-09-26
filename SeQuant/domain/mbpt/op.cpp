@@ -607,7 +607,7 @@ ExprPtr OpMaker<S>::operator()(
   }
 
   // Builds the operator's tensor for the given slots. A trailing adjoint mark
-  // on full_label is stripped and applied via set_value_modifier() ourselves,
+  // on full_label is stripped and applied via set_states() ourselves,
   // rather than left for the Tensor constructor's own mark adoption: that
   // throws when the mark's normalization would consume a sign (an
   // anti-Hermitian operator's adjoint), which no Tensor can hold but the
@@ -623,7 +623,7 @@ ExprPtr OpMaker<S>::operator()(
              std::forward<decltype(k)>(k), std::forward<decltype(a)>(a), symm,
              op_herm, column);
     if (!is_adjoint) return ex<Tensor>(std::move(t));
-    const auto sign = t.set_value_modifier(ValueModifier::Adjoint);
+    const auto sign = t.set_states(true, false);
     return sign == 1 ? ex<Tensor>(std::move(t))
                      : ex<Product>(sign, ExprPtrList{ex<Tensor>(std::move(t))});
   };

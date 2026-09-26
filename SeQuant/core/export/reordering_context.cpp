@@ -222,14 +222,11 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   Tensor reordered(tensor.label(), bra(), ket(), aux(std::move(indices)),
                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                    ColumnSymmetry::Nonsymm);
-  // the bits are copied verbatim onto a Nonsymm rebuild; a Conjugate bit that
-  // meant "swapped orientation" on a Hermitian source would mean elementwise
-  // conjugation here. Unreachable today (binarize refuses such a leaf);
-  // revisit with lazy-conj eval.
+  // the states are copied onto a Nonsymm rebuild; they are already
+  // normalized against the source's traits and the rebuild has none, so
+  // nothing is consumed here
   [[maybe_unused]] const auto sign =
-      reordered.set_value_modifier(tensor.value_modifier());
-  // the bits are already normalized against the source's symmetries and the
-  // rebuild is Nonsymm, so nothing is consumed here
+      reordered.set_states(tensor.adjointed(), tensor.kconjugated());
   SEQUANT_ASSERT(sign == 1);
   tensor = std::move(reordered);
 

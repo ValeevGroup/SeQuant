@@ -156,22 +156,12 @@ std::wstring to_string(Tensor const& tensor,
                        const SerializationOptions& options) {
   auto serialized =
       to_string(static_cast<const AbstractTensor&>(tensor), options);
-  // the modifier is spelled right after the label, in the form the
+  // the states are spelled right after the label, in the form the
   // deserializer grammar accepts, so the round-trip is lossless
-  switch (tensor.value_modifier()) {
-    case ValueModifier::Adjoint:
-      serialized.insert(tensor.label().size(),
-                        std::wstring(1, sequant::adjoint_label));
-      break;
-    case ValueModifier::Conjugate:
-      serialized.insert(tensor.label().size(), L"^*");
-      break;
-    case ValueModifier::Transpose:
-      serialized.insert(tensor.label().size(), L"^T");
-      break;
-    case ValueModifier::None:
-      break;
-  }
+  std::wstring marks;
+  if (tensor.adjointed()) marks.push_back(sequant::adjoint_label);
+  if (tensor.kconjugated()) marks += L"^*";
+  serialized.insert(tensor.label().size(), marks);
   return serialized;
 }
 

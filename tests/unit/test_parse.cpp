@@ -325,15 +325,15 @@ TEST_CASE("serialization", "[serialization]") {
       // marker (same spelling the serializer emits for Tensor::conjugated())
       auto tstar = deserialize<ExprPtr>(L"t^*{i_1;a_1}");
       REQUIRE(tstar->is<Tensor>());
-      REQUIRE(tstar->as<Tensor>().conjugated());
+      REQUIRE(tstar->as<Tensor>().kconjugated());
       REQUIRE(tstar->as<Tensor>().label() == L"t");
       {  // round-trip through the serializer
         auto respelled = deserialize<ExprPtr>(serialize(tstar));
-        REQUIRE(respelled->as<Tensor>().conjugated());
+        REQUIRE(respelled->as<Tensor>().kconjugated());
         REQUIRE(*respelled == *tstar);
       }
       // unstarred spelling parses without the marker
-      REQUIRE(!deserialize<ExprPtr>(L"t{i_1;a_1}")->as<Tensor>().conjugated());
+      REQUIRE(!deserialize<ExprPtr>(L"t{i_1;a_1}")->as<Tensor>().kconjugated());
     }
 
     SECTION("Power") {

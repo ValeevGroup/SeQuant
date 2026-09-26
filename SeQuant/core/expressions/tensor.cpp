@@ -27,35 +27,4 @@ ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   return TensorCanonicalizer::instance()->apply(*this);
 }
 
-ValueOriented value_oriented(Tensor const &t) {
-  switch (t.value_modifier()) {
-    case ValueModifier::None:
-    case ValueModifier::Adjoint:
-      // t⁺ names a distinct array whose slots are as written; every consumer
-      // treats the '⁺' spelling that way
-      return {t, 1};
-    case ValueModifier::Transpose: {
-      // T^T{q;p} = T{p;q}: a pure respelling (only a tensor without an
-      // exchange relation carries this state; the others normalize the
-      // transposition away)
-      Tensor r{t};
-      const auto sign = r.transpose();
-      return {std::move(r), sign};
-    }
-    case ValueModifier::Conjugate:
-      if (braket_conjugate_swap_sign(t.braket_symmetry())) {
-        // T^*{q;p} = s T{p;q}: transpose() folds into, and so clears, the
-        // conjugation bit, contributing the relation's sign
-        Tensor r{t};
-        const auto sign = r.transpose();
-        return {std::move(r), sign};
-      }
-      throw Exception(
-          "sequant::value_oriented: an elementwise-conjugated tensor without "
-          "an adjoint relation has no slot spelling of its value "
-          "(the conjugation cannot be consumed into slots)");
-  }
-  SEQUANT_UNREACHABLE;
-}
-
 }  // namespace sequant

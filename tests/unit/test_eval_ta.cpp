@@ -6485,7 +6485,7 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   EvalExpr const swapped_leaf{swapped->as<Tensor>()};
   EvalExpr const canon_leaf{canonical->as<Tensor>()};
   auto const is_conj = [](EvalExpr const& leaf) {
-    return leaf.expr()->as<Tensor>().conjugated();
+    return leaf.expr()->as<Tensor>().kconjugated();
   };
   REQUIRE_FALSE(is_conj(swapped_leaf));
   REQUIRE_FALSE(is_conj(canon_leaf));
@@ -6493,13 +6493,13 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
 
   // a STARRED spelling is served as its unmarked VALUE-orientation leaf
   auto conj_side = canonical->clone();
-  REQUIRE(conj_side->as<Tensor>().conjugate() == 1);
+  REQUIRE(conj_side->as<Tensor>().kconjugate() == 1);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(node.leaf());
   REQUIRE_FALSE(node->op_type().has_value());
-  REQUIRE_FALSE(node->expr()->as<Tensor>().conjugated());
+  REQUIRE_FALSE(node->expr()->as<Tensor>().kconjugated());
   auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
   auto const res = evaluate(node, node->annot(), yield, cache);
   auto const& got = res->get<ArrayToT>();

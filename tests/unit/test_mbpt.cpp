@@ -584,7 +584,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // returns Tensor * NormalOperator; the NormalOperator factor is
       // irrelevant here). Adjointing the tensor factor alone
       // (sequant::adjoint(ExprPtr), through Tensor::adjoint() and
-      // set_value_modifier()) shows the two cases Task 6 is about: a
+      // set_states()) shows the two cases Task 6 is about: a
       // NonHermitian tensor's adjoint stays a distinct, Adjoint-marked
       // array (as today); an anti-Hermitian one's adjoint mark normalizes
       // away a sign that no Tensor can hold, so it comes back unmarked with
@@ -613,7 +613,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
             {}, {}, Normalization::Implicit);
         auto x_adj = sequant::adjoint(ex<Tensor>(tensor_factor(x_base)));
         REQUIRE(x_adj->is<Tensor>());
-        REQUIRE(x_adj->as<Tensor>().value_modifier() == ValueModifier::Adjoint);
+        REQUIRE(x_adj->as<Tensor>().adjointed());
       }
 
       // anti-Hermitian: -1 times the unmarked, slot-swapped tensor.
@@ -629,7 +629,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         REQUIRE(zp.factors().size() == 1);
         REQUIRE(zp.factor(0)->is<Tensor>());
         const auto& zt = zp.factor(0)->as<Tensor>();
-        REQUIRE(zt.value_modifier() == ValueModifier::None);
+        REQUIRE_FALSE(zt.adjointed());
+        REQUIRE_FALSE(zt.kconjugated());
         REQUIRE(zt.label() == L"z");
         REQUIRE(zt.bra().at(0) == zt_base.ket().at(0));
         REQUIRE(zt.ket().at(0) == zt_base.bra().at(0));
@@ -642,7 +643,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // the adjoint mark (as here, an operator registered under an
       // already-marked name), full_label carries it too, and the two
       // ex<Tensor>(full_label, ...) sites strip that mark and apply it via
-      // set_value_modifier() themselves, rather than leave it for the
+      // set_states() themselves, rather than leave it for the
       // Tensor constructor's own mark adoption: that throws when the
       // mark's normalization would consume a sign (an anti-Hermitian
       // operator), which no Tensor can hold but the Product this returns
@@ -668,7 +669,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
             {}, {}, Normalization::Implicit);
         const auto& vt = tensor_factor(v);
         REQUIRE(vt.label() == L"v");
-        REQUIRE(vt.value_modifier() == ValueModifier::Adjoint);
+        REQUIRE(vt.adjointed());
       }
 
       // anti-Hermitian: the mark's normalization consumes a sign, so the
@@ -686,7 +687,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         REQUIRE(wp.scalar() == sequant::Constant::scalar_type(-1));
         const auto& wt = tensor_factor(w);
         REQUIRE(wt.label() == L"w");
-        REQUIRE(wt.value_modifier() == ValueModifier::None);
+        REQUIRE_FALSE(wt.adjointed());
+        REQUIRE_FALSE(wt.kconjugated());
       }
     }  // SECTION("OpMaker: a pre-marked operator name's sign vs. mark")
 

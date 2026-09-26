@@ -66,26 +66,6 @@ TEST_CASE("conj_variable_marker_hash_reset", "[conjugation]") {
   REQUIRE(v.hash_value() == h0);
 }
 
-TEST_CASE("conj_tensor_marker_roundtrip", "[conjugation]") {
-  // (A*)* = A bit-for-bit, hash included; the marker is pure elementwise
-  // conjugation: slots are untouched
-  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  Context ctx = get_default_context();
-  ctx.set(sr);
-  auto resetter = set_scoped_default_context(ctx);
-
-  auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm);
-  const auto h0 = t->hash_value();
-  auto tc = conjugate(t);
-  REQUIRE(tc->as<Tensor>().conjugated());
-  REQUIRE(tc->hash_value() != h0);
-  // slots untouched
-  REQUIRE(tc->as<Tensor>().bra()[0] == t->as<Tensor>().bra()[0]);
-  auto tcc = conjugate(tc);
-  REQUIRE(*tcc == *t);
-  REQUIRE(tcc->hash_value() == h0);
-}
-
 TEST_CASE("conjugate_free_function_total", "[conjugation]") {
   // sequant::conjugate dispatches over every scalar node kind and is an
   // involution on each; operator-valued content is rejected loudly
@@ -104,14 +84,14 @@ TEST_CASE("conjugate_free_function_total", "[conjugation]") {
   REQUIRE(p.factors().size() == 2);
   // factor ORDER preserved (contrast adjoint, which reverses)
   REQUIRE(p.factors()[0]->as<Tensor>().label() == L"A");
-  REQUIRE(p.factors()[0]->as<Tensor>().conjugated());
+  REQUIRE(p.factors()[0]->as<Tensor>().kconjugated());
   REQUIRE(p.factors()[1]->as<Tensor>().label() == L"B");
-  REQUIRE(p.factors()[1]->as<Tensor>().conjugated());
+  REQUIRE(p.factors()[1]->as<Tensor>().kconjugated());
   REQUIRE(*conjugate(pc) == *prod);
 
   auto sum = A->clone() + B->clone();
   auto sc = conjugate(sum);
-  for (const auto& s : *sc) REQUIRE(s->as<Tensor>().conjugated());
+  for (const auto& s : *sc) REQUIRE(s->as<Tensor>().kconjugated());
   REQUIRE(*conjugate(sc) == *sum);
 
   // Re/Im are real-valued: conj is the identity on them
@@ -277,7 +257,7 @@ TEST_CASE("conjugate_braket_fold_per_tensor", "[conjugation]") {
   DefaultTensorCanonicalizer::canonicalize_braket(B);
   // both spell the same slot order; exactly one carries the marker
   REQUIRE(A.bra()[0].label() == B.bra()[0].label());
-  REQUIRE(A.conjugated() != B.conjugated());
+  REQUIRE(A.kconjugated() != B.kconjugated());
 
   // full space tie (same-space named indices): label tie-break folds too
   Tensor C1(L"T", bra{L"p_1"}, ket{L"p_2"}, Symmetry::Nonsymm,
@@ -287,27 +267,29 @@ TEST_CASE("conjugate_braket_fold_per_tensor", "[conjugation]") {
   DefaultTensorCanonicalizer::canonicalize_braket(C1);
   DefaultTensorCanonicalizer::canonicalize_braket(C2);
   REQUIRE(C1.bra()[0].label() == C2.bra()[0].label());
-  REQUIRE(C1.conjugated() != C2.conjugated());
+  REQUIRE(C1.kconjugated() != C2.kconjugated());
 
   // identical bundles (diagonal): never swapped, never marked
   Tensor D(L"T", bra{L"p_1"}, ket{L"p_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
   DefaultTensorCanonicalizer::canonicalize_braket(D);
-  REQUIRE_FALSE(D.conjugated());
+  REQUIRE_FALSE(D.kconjugated());
 }
 
 TEST_CASE("with_slots_carries_attributes", "[conjugation]") {
   // Tensor::with_slots rebuilds the slots and carries label, symmetries,
-  // hermiticity, and the conjugation marker -- the sanctioned rebuild API
-  // for transforms (rebuilding through a plain ctor drops the marker)
+  // hermiticity, and the states -- the sanctioned rebuild API for transforms
+  // (rebuilding through a plain ctor drops the states)
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
   auto resetter = set_scoped_default_context(ctx);
 
-  Tensor t(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, Symmetry::Antisymm,
-           Hermiticity::Hermitian);
-  REQUIRE(t.conjugate() == 1);
+  Tensor t(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+           TensorSymmetries{.perm = Symmetry::Antisymm,
+                            .hermiticity = Hermiticity::Hermitian,
+                            .conjugation_parity = ConjugationParity::None});
+  REQUIRE(t.kconjugate() == 1);
   using ixvec = container::svector<Index>;
   auto r = t.with_slots(bra<ixvec>{ixvec{Index{L"i_3"}, Index{L"i_4"}}},
                         ket<ixvec>{ixvec{Index{L"a_3"}, Index{L"a_4"}}},
@@ -317,7 +299,7 @@ TEST_CASE("with_slots_carries_attributes", "[conjugation]") {
   REQUIRE(r.braket_symmetry() == t.braket_symmetry());
   REQUIRE(r.hermiticity() == t.hermiticity());
   REQUIRE(r.column_symmetry() == t.column_symmetry());
-  REQUIRE(r.conjugated());
+  REQUIRE(r.kconjugated());
   REQUIRE(r.bra()[0].label() == L"i_3");
 }
 
@@ -451,18 +433,23 @@ TEST_CASE("hermitian_network_recognition", "[conjugation]") {
   REQUIRE(is_hermitian_network(sum));
 }
 
-TEST_CASE("swap_bra_ket_carries_marker_and_aux", "[conjugation]") {
+TEST_CASE("swap_bra_ket_carries_states_and_aux", "[conjugation]") {
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  auto t = deserialize(L"C{a_1;i_1;p_5}:N-C-S");
-  REQUIRE(t->as<Tensor>().conjugate() == 1);
+  // _swap_bra_ket exchanges the slot bundles only: both states, and the aux
+  // slots, ride along
+  auto t = ex<Tensor>(
+      L"C", bra{L"a_1"}, ket{L"i_1"}, aux{L"p_5"},
+      TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  REQUIRE(t->as<Tensor>().set_states(true, true) == 1);
   auto sw = mbpt::swap_bra_ket(t);
   auto const& st = sw->as<Tensor>();
-  REQUIRE(st.conjugated());
+  REQUIRE(st.adjointed());
+  REQUIRE(st.kconjugated());
   REQUIRE(st.aux().size() == 1);
   REQUIRE(st.bra()[0].label() == L"i_1");
   REQUIRE(st.ket()[0].label() == L"a_1");
@@ -496,122 +483,138 @@ TEST_CASE("re_im_scalar_rules", "[conjugation]") {
   }
 }
 
-TEST_CASE("adjoint_conjugate_transpose_relations", "[conjugation]") {
-  // the Klein four-group {id, conj, transpose, adjoint}: each op is an
-  // involution, adjoint = transpose o conj = conj o transpose, and the
-  // modifier bits record exactly which group element was applied
+TEST_CASE("core_states", "[conjugation]") {
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  auto t0 = deserialize(L"t{a_1;i_1}:N-N-S");
-  auto& T0 = t0->as<Tensor>();
-
-  SECTION("involutions") {
-    for (auto op : {&Tensor::conjugate, &Tensor::transpose, &Tensor::adjoint}) {
-      Tensor t = T0;
-      REQUIRE((t.*op)() == 1);
-      REQUIRE(t != T0);
-      REQUIRE((t.*op)() == 1);
-      REQUIRE(t == T0);
-      REQUIRE(t.hash_value() == T0.hash_value());
-    }
+  SECTION("NonHermitian, parity None: both states are distinct atoms") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor ta = t;
+    REQUIRE(ta.adjoint() == 1);
+    REQUIRE(ta.adjointed());
+    REQUIRE_FALSE(ta.kconjugated());
+    REQUIRE(ta.bra()[0].label() == L"i_1");  // slots exchanged
+    REQUIRE(ta.decorated_label() == L"t⁺");
+    Tensor tk = t;
+    REQUIRE(tk.kconjugate() == 1);
+    REQUIRE(tk.kconjugated());
+    REQUIRE(tk.bra()[0].label() == L"a_1");  // slots in place
+    REQUIRE(tk.decorated_label() == L"t꙳");
+    Tensor tak = ta;
+    REQUIRE(tak.kconjugate() == 1);
+    REQUIRE(tak.decorated_label() == L"t⁺꙳");
+    // involutions, and the two commute
+    REQUIRE(tak.adjoint() == 1);
+    REQUIRE(tak.decorated_label() == L"t꙳");
+    REQUIRE(tak.kconjugate() == 1);
+    REQUIRE(tak == t);
+    // four distinct values: label, then states, order t < t⁺ < t꙳ < t⁺꙳
+    REQUIRE(t < ta);
+    REQUIRE(ta < tk);
+    REQUIRE(t.hash_value() != ta.hash_value());
+    REQUIRE(ta.hash_value() != tk.hash_value());
   }
 
-  SECTION("transpose swaps slots and sets the bit") {
-    Tensor t = T0;
-    REQUIRE(t.transpose() == 1);
-    REQUIRE(t.value_modifier() == ValueModifier::Transpose);
-    REQUIRE(t.bra()[0].label() == L"i_1");
-    REQUIRE(t.ket()[0].label() == L"a_1");
-    REQUIRE(serialize(ex<Tensor>(t), {.annot_symm = true}) ==
-            L"t^T{i_1;a_1}:N-N-S");
+  SECTION("Hermitian: the adjoint normalizes away, at +1") {
+    Tensor h(L"h", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+    REQUIRE(h.adjoint() == 1);
+    REQUIRE_FALSE(h.adjointed());
+    REQUIRE(h.bra()[0].label() == L"a_1");
   }
 
-  SECTION("adjoint = transpose o conjugate = conjugate o transpose") {
-    Tensor a = T0;
-    REQUIRE(a.adjoint() == 1);
-    Tensor tc = T0;
-    REQUIRE(tc.transpose() == 1);
-    REQUIRE(tc.conjugate() == 1);
-    Tensor ct = T0;
-    REQUIRE(ct.conjugate() == 1);
-    REQUIRE(ct.transpose() == 1);
-    REQUIRE(a == tc);
-    REQUIRE(a == ct);
-    REQUIRE(a.value_modifier() == ValueModifier::Adjoint);
-    Tensor ctt = T0;
-    REQUIRE(ctt.conjugate_transpose() == 1);
-    REQUIRE(a == ctt);
+  SECTION("AntiHermitian: the adjoint normalizes away, at -1") {
+    Tensor d(L"d", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+    REQUIRE(d.adjoint() == -1);
+    REQUIRE_FALSE(d.adjointed());
+    // a label mark that would carry -1 is refused
+    REQUIRE_THROWS_AS(
+        Tensor(L"d⁺", bra{L"i_1"}, ket{L"a_1"},
+               TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian}),
+        Exception);
   }
 
-  SECTION("conj(adjoint(t)) is the transpose") {
-    Tensor t = T0;
-    REQUIRE(t.adjoint() == 1);
-    REQUIRE(t.conjugate() == 1);
-    REQUIRE(t.value_modifier() == ValueModifier::Transpose);
-  }
-}
-
-TEST_CASE("value_modifier_normalization", "[conjugation]") {
-  // the bits are normalized against the braket symmetry: Symm clears both,
-  // Conjugate folds the transposition into the conjugation, Nonsymm keeps both
-  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  Context ctx = get_default_context();
-  ctx.set(sr);
-  auto resetter = set_scoped_default_context(ctx);
-
-  Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  // Symm is derivable only over a real basis
-  Tensor s(L"s", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
-           Symmetry::Nonsymm, BraKetSymmetry::Symm, ColumnSymmetry::Symm);
-
-  SECTION("Conjugate: transpose() is the starred swapped spelling") {
-    Tensor gt = g;
-    REQUIRE(gt.transpose() == 1);
-    REQUIRE(gt.value_modifier() == ValueModifier::Conjugate);
-    REQUIRE(gt.bra()[0].label() == L"a_1");
-    REQUIRE(serialize(ex<Tensor>(gt), {.annot_symm = true}) ==
-            L"g^*{a_1;i_1}:N-C-S");
-    // and adjoint() is a pure swap
-    Tensor ga = g;
-    REQUIRE(ga.adjoint() == 1);
-    REQUIRE(ga.value_modifier() == ValueModifier::None);
-    REQUIRE(ga.bra()[0].label() == L"a_1");
-    // transpose() again unfolds
-    REQUIRE(gt.transpose() == 1);
-    REQUIRE(gt == g);
+  SECTION("parity Even/Odd: the K state normalizes away") {
+    Tensor e(L"e", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::Even});
+    REQUIRE(e.kconjugate() == 1);
+    REQUIRE_FALSE(e.kconjugated());
+    Tensor o(L"o", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::Odd});
+    REQUIRE(o.kconjugate() == -1);
+    REQUIRE_FALSE(o.kconjugated());
+    REQUIRE_THROWS_AS(
+        Tensor(L"o꙳", bra{L"i_1"}, ket{L"a_1"},
+               TensorSymmetries{.conjugation_parity = ConjugationParity::Odd}),
+        Exception);
   }
 
-  SECTION("Symm: every modifier is the identity") {
-    Tensor sc = s;
-    REQUIRE(sc.conjugate() == 1);
-    REQUIRE(sc == s);
-    Tensor st = s;
-    REQUIRE(st.transpose() == 1);
-    REQUIRE(st.value_modifier() == ValueModifier::None);
-    REQUIRE(st.bra()[0].label() == L"a_1");  // slots did swap
+  SECTION("real basis, both traits indefinite: the adjoint is spelled as K") {
+    Tensor t(L"t", bra{idx(L"a_1", Field::Real)}, ket{idx(L"i_1", Field::Real)},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor ta = t;
+    REQUIRE(ta.adjoint() == 1);
+    REQUIRE_FALSE(ta.adjointed());
+    REQUIRE(ta.kconjugated());
+    REQUIRE(ta.bra()[0].label() == L"i_1");
+    REQUIRE(ta.decorated_label() == L"t꙳");
   }
 
-  SECTION("a ⁺ label on a Hermitian tensor normalizes away") {
-    Tensor g_adj(L"g⁺", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-                 BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-    Tensor g_swapped(L"g", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-                     BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-    REQUIRE(g_adj == g_swapped);
-    REQUIRE(g_adj.value_modifier() == ValueModifier::None);
+  SECTION("bra/ket-less: the adjoint is spelled as K") {
+    Tensor w(L"w", bra{}, ket{}, aux{L"p_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor wa = w;
+    REQUIRE(wa.adjoint() == 1);
+    REQUIRE_FALSE(wa.adjointed());
+    REQUIRE(wa.kconjugated());
+    // declared real (Hermitian): the conjugate is itself
+    Tensor r(L"r", bra{}, ket{}, aux{L"p_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+    REQUIRE(r.kconjugate() == 1);
+    REQUIRE_FALSE(r.kconjugated());
   }
 
-  SECTION("set_value_modifier normalizes too") {
-    Tensor gt = g;
-    REQUIRE(gt.set_value_modifier(ValueModifier::Transpose) == 1);
-    REQUIRE(gt.value_modifier() == ValueModifier::Conjugate);
-    Tensor sa = s;
-    REQUIRE(sa.set_value_modifier(ValueModifier::Adjoint) == 1);
-    REQUIRE(sa.value_modifier() == ValueModifier::None);
+  SECTION("marks in the label are adopted, in either order, at most once") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor a(L"t⁺꙳", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor b(L"t꙳⁺", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    REQUIRE(a == b);
+    REQUIRE(a.label() == L"t");
+    REQUIRE(a.adjointed());
+    REQUIRE(a.kconjugated());
+    REQUIRE_THROWS_AS(Tensor(L"t⁺⁺", bra{L"i_1"}, ket{L"a_1"}), Exception);
+    REQUIRE_THROWS_AS(Tensor(L"t꙳꙳", bra{L"i_1"}, ket{L"a_1"}), Exception);
+  }
+
+  SECTION("set_states does not touch the slots and normalizes") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    REQUIRE(t.set_states(true, true) == 1);
+    REQUIRE(t.bra()[0].label() == L"a_1");
+    REQUIRE(t.decorated_label() == L"t⁺꙳");
+    Tensor h(L"h", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+    REQUIRE(h.set_states(true, false) == -1);
+    REQUIRE_FALSE(h.adjointed());
+  }
+
+  SECTION("with_slots carries both states and re-normalizes") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    REQUIRE(t.set_states(true, true) == 1);
+    using ixvec = container::svector<Index>;
+    auto r = t.with_slots(bra<ixvec>{ixvec{Index{L"a_2"}}},
+                          ket<ixvec>{ixvec{Index{L"i_2"}}}, aux<ixvec>{});
+    REQUIRE(r.adjointed());
+    REQUIRE(r.kconjugated());
   }
 }
 
@@ -623,9 +626,9 @@ TEST_CASE("conj_serialization_roundtrip", "[conjugation]") {
   auto resetter = set_scoped_default_context(ctx);
 
   auto t = deserialize(L"g{i_1,i_2;a_1,a_2}:A-C-S");
-  REQUIRE(t->as<Tensor>().conjugate() == 1);
+  REQUIRE(t->as<Tensor>().kconjugate() == 1);
   auto rt = deserialize(serialize(t));
-  REQUIRE(rt->as<Tensor>().conjugated());
+  REQUIRE(rt->as<Tensor>().kconjugated());
   REQUIRE(*rt == *t);
 }
 
@@ -736,7 +739,7 @@ TEST_CASE("tn_slots_determinism", "[conjugation]") {
   };
   auto Cstar = [&](const wchar_t* ext) {
     auto t = C(ext);
-    REQUIRE(t->as<Tensor>().conjugate() == 1);
+    REQUIRE(t->as<Tensor>().kconjugate() == 1);
     return t;
   };
   auto md = [](ExprPtr e) {
@@ -768,7 +771,7 @@ TEST_CASE("conjugate_fold_skips_reserved", "[conjugation]") {
         if (node->is<Tensor>() &&
             node->as<Tensor>().label() == reserved::antisymm_label()) {
           found_A = true;
-          REQUIRE_FALSE(node->as<Tensor>().conjugated());
+          REQUIRE_FALSE(node->as<Tensor>().kconjugated());
           REQUIRE(node->as<Tensor>().bra()[0].space() == Index(L"i_1").space());
         }
       },
@@ -821,211 +824,6 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
   REQUIRE(ci[2].has_proto_indices());
 }
 
-TEST_CASE("value_modifier_encoding", "[conjugation]") {
-  // The adjoint mark is a value modifier, not a label character: a '⁺'
-  // arriving in a label is adopted into the bits, label() is bare, and
-  // decorated_label() reproduces that spelling for printing.
-  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  Context ctx = get_default_context();
-  ctx.set(sr);
-  ctx.set(AssertStrictBraKetSymmetry::No);
-  auto resetter = set_scoped_default_context(ctx);
-
-  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  REQUIRE(t.value_modifier() == ValueModifier::None);
-  REQUIRE(t.decorated_label() == L"t");
-
-  SECTION("adjoint() sets both bits and keeps the ⁺ spelling") {
-    Tensor ta = t;
-    REQUIRE(ta.adjoint() == 1);
-    REQUIRE(ta.label() == L"t");
-    REQUIRE(ta.value_modifier() == ValueModifier::Adjoint);
-    REQUIRE(ta.conjugated());
-    REQUIRE(ta.transposed());
-    REQUIRE(ta.decorated_label() == L"t⁺");
-    REQUIRE(to_latex(ta) == L"{t⁺^{{a_1}}_{{i_1}}}");
-    REQUIRE(serialize(ex<Tensor>(ta), {.annot_symm = true}) ==
-            L"t⁺{i_1;a_1}:N-N-N");
-  }
-
-  SECTION("a ⁺ in the label is adopted into the bits") {
-    Tensor from_label(L"t⁺", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-    Tensor ta = t;
-    REQUIRE(ta.adjoint() == 1);
-    REQUIRE(from_label.label() == L"t");
-    REQUIRE(from_label.value_modifier() == ValueModifier::Adjoint);
-    REQUIRE(from_label == ta);
-    REQUIRE(from_label.hash_value() == ta.hash_value());
-    // same through set_label
-    Tensor relabeled = t;
-    relabeled.set_label(L"t⁺");
-    REQUIRE(relabeled.label() == L"t");
-    REQUIRE(relabeled.value_modifier() == ValueModifier::Adjoint);
-
-    // a Hermitian tensor's adjoint is itself: the mark is dropped, no bits
-    Tensor g_adj(L"g⁺", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-                 BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-    REQUIRE(g_adj.label() == L"g");
-    REQUIRE(g_adj.value_modifier() == ValueModifier::None);
-    REQUIRE(g_adj.decorated_label() == L"g");
-  }
-
-  SECTION(
-      "every value modifier enters the hash the same way, on the bare "
-      "label") {
-    // t, t^*, t^T and t⁺ share one label; each modifier must still give the
-    // tensor a distinct hash, since a colliding pair would alias distinct
-    // values onto one cache slot.
-    Tensor t_star = t;
-    REQUIRE(t_star.conjugate() == 1);
-    Tensor t_transposed = t;
-    REQUIRE(t_transposed.transpose() == 1);
-    Tensor t_adj = t;
-    REQUIRE(t_adj.adjoint() == 1);
-
-    const auto h = t.hash_value();
-    const auto h_star = t_star.hash_value();
-    const auto h_transposed = t_transposed.hash_value();
-    const auto h_adj = t_adj.hash_value();
-    REQUIRE(h != h_star);
-    REQUIRE(h != h_transposed);
-    REQUIRE(h != h_adj);
-    REQUIRE(h_star != h_transposed);
-    REQUIRE(h_star != h_adj);
-    REQUIRE(h_transposed != h_adj);
-
-    // the same holds one level up, for the EvalExpr leaves binarize serves a
-    // marked tensor as (hash_terminal_tensor's invariant)
-    REQUIRE(EvalExpr{t_adj}.hash_value() != EvalExpr{t_star}.hash_value());
-  }
-
-  SECTION("deserializer: ⁺, ^* and ^T round-trip") {
-    for (auto spelling :
-         {L"t⁺{i_1;a_1}:N-N-N", L"t^*{a_1;i_1}:N-N-N", L"t^T{i_1;a_1}:N-N-N"}) {
-      auto e = deserialize(spelling);
-      REQUIRE(e->is<Tensor>());
-      REQUIRE(e->as<Tensor>().label() == L"t");
-      REQUIRE(serialize(e, {.annot_symm = true}) == spelling);
-    }
-    REQUIRE(deserialize(L"t^T{i_1;a_1}:N-N-N")->as<Tensor>().value_modifier() ==
-            ValueModifier::Transpose);
-    REQUIRE(to_latex(deserialize(L"t^T{i_1;a_1}:N-N-N")) ==
-            L"{{t^T}^{{a_1}}_{{i_1}}}");
-
-    // a hand-written ⁺ followed by ^* composes to the transpose
-    REQUIRE(
-        deserialize(L"t⁺^*{i_1;a_1}:N-N-N")->as<Tensor>().value_modifier() ==
-        ValueModifier::Transpose);
-
-    // a ⁺ on an anti-Hermitian tensor names minus the bare tensor: the sign
-    // goes to a Product, as it does for a ^* or ^T that costs one
-    auto z_adj = deserialize(L"z⁺{i_1;a_1}:N-A-N");
-    REQUIRE(z_adj->is<Product>());
-    REQUIRE(z_adj->as<Product>().scalar() == -1);
-    REQUIRE(*z_adj == *adjoint(deserialize(L"z{a_1;i_1}:N-A-N")));
-  }
-
-  SECTION("set_value_modifier copies bits without touching slots") {
-    Tensor ta = t;
-    REQUIRE(ta.adjoint() == 1);
-    Tensor rebuilt(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-                   BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-    REQUIRE(rebuilt.set_value_modifier(ta.value_modifier()) == 1);
-    REQUIRE(rebuilt == ta);
-    REQUIRE(rebuilt.hash_value() == ta.hash_value());
-  }
-
-  SECTION("with_slots carries both bits") {
-    Tensor ta = t;
-    REQUIRE(ta.adjoint() == 1);
-    using ixvec = container::svector<Index>;
-    auto w = ta.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
-                           ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{});
-    REQUIRE(w.value_modifier() == ValueModifier::Adjoint);
-
-    Tensor tt = t;
-    REQUIRE(tt.adjoint() == 1);
-    REQUIRE(tt.conjugate() == 1);
-    REQUIRE(tt.value_modifier() == ValueModifier::Transpose);
-    REQUIRE(tt.with_slots(bra<ixvec>{ixvec{Index{L"i_2"}}},
-                          ket<ixvec>{ixvec{Index{L"a_2"}}}, aux<ixvec>{})
-                .value_modifier() == ValueModifier::Transpose);
-  }
-
-  SECTION("ordering: t < t^* < t^T < t⁺, then by slots") {
-    Tensor tc = t;
-    REQUIRE(tc.conjugate() == 1);
-    Tensor ta = t;
-    REQUIRE(ta.adjoint() == 1);
-    Tensor tt = t;
-    REQUIRE(tt.adjoint() == 1);
-    REQUIRE(tt.conjugate() == 1);
-    REQUIRE(tt.value_modifier() == ValueModifier::Transpose);
-    REQUIRE(t < tc);
-    REQUIRE(tc < tt);
-    REQUIRE(tt < ta);
-
-    // slot tie-break: same label and modifier, different bra index
-    Tensor t2(L"t", bra{L"a_2"}, ket{L"i_1"}, Symmetry::Nonsymm,
-              BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-    REQUIRE(t < t2);
-  }
-}
-
-TEST_CASE("value_oriented_totality", "[conjugation]") {
-  // value_oriented() returns the spelling whose slot layout denotes the
-  // value directly, for every state that has one
-  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  Context ctx = get_default_context();
-  ctx.set(sr);
-  auto resetter = set_scoped_default_context(ctx);
-
-  Tensor g(L"g", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-  Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-
-  // Conjugate: the folded (starred + swapped) spelling unfolds back
-  Tensor folded = g;
-  REQUIRE(folded.transpose() == 1);
-  REQUIRE(folded.value_modifier() == ValueModifier::Conjugate);
-  {
-    auto [vo, sign] = value_oriented(folded);
-    REQUIRE(sign == 1);  // Conjugate: the fold and its undo are both free
-    REQUIRE(vo == g);
-  }
-  {
-    auto [vo, sign] = value_oriented(g);
-    REQUIRE(sign == 1);
-    REQUIRE(vo == g);
-  }
-
-  // Nonsymm transpose: a pure respelling
-  Tensor tt = t;
-  REQUIRE(tt.transpose() == 1);
-  {
-    auto [vo, sign] = value_oriented(tt);
-    REQUIRE(sign == 1);
-    REQUIRE(vo == t);
-  }
-
-  // Nonsymm adjoint: a distinct array, slots as written -- unchanged
-  Tensor ta = t;
-  REQUIRE(ta.adjoint() == 1);
-  {
-    auto [vo, sign] = value_oriented(ta);
-    REQUIRE(sign == 1);
-    REQUIRE(vo == ta);
-  }
-
-  // Nonsymm conjugate: no slot spelling -> refuse loudly
-  Tensor tc = t;
-  REQUIRE(tc.conjugate() == 1);
-  REQUIRE_THROWS_AS(value_oriented(tc), sequant::Exception);
-}
-
 TEST_CASE("canonicalize_marked_nonsymm_network", "[conjugation]") {
   // A Conjugate/Transpose modifier on a Nonsymm tensor is part of the
   // graph colouring in every canonicalization, so networks that differ
@@ -1044,39 +842,6 @@ TEST_CASE("canonicalize_marked_nonsymm_network", "[conjugation]") {
   REQUIRE(*c1 != *c2);
   REQUIRE(*canonicalize(c1->clone()) == *c1);
   REQUIRE(*canonicalize(c2->clone()) == *c2);
-}
-
-TEST_CASE("value_modifier_group", "[conjugation]") {
-  // ValueModifier is the direct product of its two Z2 factors, with `*` the
-  // group operation on all three types
-  using CM = ConjugateModifier;
-  using TM = TransposeModifier;
-  using VM = ValueModifier;
-  STATIC_REQUIRE(CM::Yes * CM::Yes == CM::No);
-  STATIC_REQUIRE(TM::Yes * TM::Yes == TM::No);
-  STATIC_REQUIRE(CM::No * TM::No == VM::None);
-  STATIC_REQUIRE(CM::Yes * TM::No == VM::Conjugate);
-  STATIC_REQUIRE(CM::No * TM::Yes == VM::Transpose);
-  STATIC_REQUIRE(CM::Yes * TM::Yes == VM::Adjoint);
-  STATIC_REQUIRE(TM::Yes * CM::Yes == VM::Adjoint);
-  STATIC_REQUIRE(VM::Adjoint * VM::Conjugate == VM::Transpose);
-  STATIC_REQUIRE(VM::Transpose * VM::Transpose == VM::None);
-  STATIC_REQUIRE(conjugate_modifier(VM::Adjoint) == CM::Yes);
-  STATIC_REQUIRE(transpose_modifier(VM::Conjugate) == TM::No);
-
-  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
-  Context ctx = get_default_context();
-  ctx.set(sr);
-  ctx.set(AssertStrictBraKetSymmetry::No);
-  auto resetter = set_scoped_default_context(ctx);
-
-  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  REQUIRE(t.adjoint() == 1);
-  REQUIRE(t.conjugate_modifier() == CM::Yes);
-  REQUIRE(t.transpose_modifier() == TM::Yes);
-  REQUIRE(t.value_modifier() ==
-          t.conjugate_modifier() * t.transpose_modifier());
 }
 
 TEST_CASE("conjugation_parity_trait", "[conjugation]") {
@@ -1224,42 +989,38 @@ TEST_CASE("conjugation_parity_trait", "[conjugation]") {
     REQUIRE(u.braket_symmetry() == BraKetSymmetry::Conjugate);
   }
 
-  SECTION("with_slots normalizes the modifier bits against the new field") {
-    // complex-field Hermitian (Conjugate): the starred spelling is a state of
-    // its own, the folded orientation
-    Tensor h(L"h", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
-             TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
-    REQUIRE(h.conjugate() == 1);
-    REQUIRE(h.value_modifier() == ValueModifier::Conjugate);
-    // rebuilt onto real-field slots the tensor is Symm, where a set bit
-    // denotes nothing: it normalizes away, as it does in a fresh construction
+  SECTION("with_slots normalizes the states against the new field") {
+    // complex-field NonHermitian: the adjoint is a state of its own
+    Tensor t(L"t", bra{Index{L"i_1"}}, ket{Index{L"a_1"}});
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+    // rebuilt onto real-field slots the coset rule spells the adjoint as the
+    // K state, which the even parity clears: it normalizes away, as it does
+    // in a fresh construction
     using ixvec = container::svector<Index>;
     auto r =
-        h.with_slots(bra<ixvec>{ixvec{idx(L"i_2", Field::Real)}},
-                     ket<ixvec>{ixvec{idx(L"a_2", Field::Real)}}, aux<ixvec>{});
-    REQUIRE(r.braket_symmetry() == BraKetSymmetry::Symm);
-    REQUIRE(r.value_modifier() == ValueModifier::None);
-    Tensor fresh(L"h", bra{idx(L"i_2", Field::Real)},
-                 ket{idx(L"a_2", Field::Real)},
-                 TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+        t.with_slots(bra<ixvec>{ixvec{idx(L"a_2", Field::Real)}},
+                     ket<ixvec>{ixvec{idx(L"i_2", Field::Real)}}, aux<ixvec>{});
+    REQUIRE_FALSE(r.adjointed());
+    REQUIRE_FALSE(r.kconjugated());
+    Tensor fresh(L"t", bra{idx(L"a_2", Field::Real)},
+                 ket{idx(L"i_2", Field::Real)});
     REQUIRE(r == fresh);
     REQUIRE(r.hash_value() == fresh.hash_value());
   }
 
   SECTION("with_slots refuses a rebuild whose normalization costs a sign") {
-    // complex-field anti-Hermitian of odd parity (AntiConjugate): the starred
-    // spelling is a state. Over a real field the odd parity makes
-    // conj(T) = -T, so the bit would be consumed at -1, which no Tensor can
-    // hold
+    // complex-field NonHermitian of odd parity: the adjoint is a state. Over
+    // a real field the coset rule spells it as the K state, which the odd
+    // parity consumes at -1, which no Tensor can hold
     Tensor z(L"z", bra{Index{L"i_1"}}, ket{Index{L"a_1"}},
-             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
-                              .conjugation_parity = ConjugationParity::Odd});
-    REQUIRE(z.conjugate() == 1);
-    REQUIRE(z.value_modifier() == ValueModifier::Conjugate);
+             TensorSymmetries{.conjugation_parity = ConjugationParity::Odd});
+    REQUIRE(z.adjoint() == 1);
+    REQUIRE(z.adjointed());
     using ixvec = container::svector<Index>;
     REQUIRE_THROWS_AS(
-        z.with_slots(bra<ixvec>{ixvec{idx(L"i_2", Field::Real)}},
-                     ket<ixvec>{ixvec{idx(L"a_2", Field::Real)}}, aux<ixvec>{}),
+        z.with_slots(bra<ixvec>{ixvec{idx(L"a_2", Field::Real)}},
+                     ket<ixvec>{ixvec{idx(L"i_2", Field::Real)}}, aux<ixvec>{}),
         Exception);
   }
 }
@@ -1279,11 +1040,12 @@ TEST_CASE("signed_normalization", "[conjugation]") {
     // T^T{q;p} = T{p;q} is a respelling, but the only spelling of the
     // transpose available to an AntiConjugate tensor is the starred one,
     // and `T{q;p} = -conj(T{p;q})` prices that fold at -1
-    REQUIRE(dt.transpose() == -1);
-    REQUIRE(dt.value_modifier() == ValueModifier::Conjugate);  // folded
+    REQUIRE(dt.adjoint() == -1);
+    REQUIRE(dt.kconjugated());  // folded
     Tensor dc = d;
-    REQUIRE(dc.conjugate_transpose() == -1);
-    REQUIRE(dc.value_modifier() == ValueModifier::None);
+    REQUIRE(dc.adjoint() == -1);
+    REQUIRE_FALSE(dc.adjointed());
+    REQUIRE_FALSE(dc.kconjugated());
     REQUIRE(dc.bra()[0].label() == L"i_2");  // swapped
     // Expr::adjoint returns the sign as its byproduct
     Tensor da = d;
@@ -1294,8 +1056,8 @@ TEST_CASE("signed_normalization", "[conjugation]") {
     REQUIRE(adj->is<Product>());
     REQUIRE(adj->as<Product>().scalar() == -1);
     REQUIRE(adj->as<Product>().factors().size() == 1);
-    REQUIRE(adj->as<Product>().factor(0)->as<Tensor>().value_modifier() ==
-            ValueModifier::None);
+    REQUIRE_FALSE(adj->as<Product>().factor(0)->as<Tensor>().adjointed());
+    REQUIRE_FALSE(adj->as<Product>().factor(0)->as<Tensor>().kconjugated());
     // through a Product the sign lands in the product's scalar
     auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
@@ -1316,13 +1078,14 @@ TEST_CASE("signed_normalization", "[conjugation]") {
                               .conjugation_parity = ConjugationParity::Odd});
     REQUIRE(p.conjugation_symmetry() == ConjugationSymmetry::Antisymm);
     Tensor pc = p;
-    REQUIRE(pc.conjugate() == -1);
-    REQUIRE(pc.value_modifier() == ValueModifier::None);
+    REQUIRE(pc.kconjugate() == -1);
+    REQUIRE_FALSE(pc.adjointed());
+    REQUIRE_FALSE(pc.kconjugated());
     // transpose of an array with known conjugation is represented as the
     // adjoint (the ⁺ spelling), with the conjugation's sign
     Tensor pt = p;
-    REQUIRE(pt.transpose() == -1);
-    REQUIRE(pt.value_modifier() == ValueModifier::Adjoint);
+    REQUIRE(pt.adjoint() == -1);
+    REQUIRE(pt.adjointed());
     auto c = conjugate(ex<Tensor>(p));
     REQUIRE(c->is<Product>());
     REQUIRE(c->as<Product>().scalar() == -1);
@@ -1332,11 +1095,11 @@ TEST_CASE("signed_normalization", "[conjugation]") {
     Tensor t(L"t", bra{idx(L"a_1", Field::Real)}, ket{idx(L"i_1", Field::Real)},
              TensorSymmetries{.hermiticity = Hermiticity::NonHermitian});
     Tensor tc = t;
-    REQUIRE(tc.conjugate() == 1);
+    REQUIRE(tc.kconjugate() == 1);
     REQUIRE(tc == t);
     Tensor ta = t;
-    REQUIRE(ta.conjugate_transpose() == 1);
-    REQUIRE(ta.value_modifier() == ValueModifier::Adjoint);
+    REQUIRE(ta.adjoint() == 1);
+    REQUIRE(ta.adjointed());
     REQUIRE(ta.decorated_label() == L"t⁺");
   }
 
@@ -1346,11 +1109,13 @@ TEST_CASE("signed_normalization", "[conjugation]") {
                               .conjugation_parity = ConjugationParity::Odd});
     REQUIRE(p.braket_symmetry() == BraKetSymmetry::Antisymm);
     Tensor pt = p;
-    REQUIRE(pt.transpose() == -1);
-    REQUIRE(pt.value_modifier() == ValueModifier::None);
+    REQUIRE(pt.adjoint() == -1);
+    REQUIRE_FALSE(pt.adjointed());
+    REQUIRE_FALSE(pt.kconjugated());
     Tensor pa = p;
-    REQUIRE(pa.conjugate_transpose() == 1);  // Hermitian: adjoint is itself
-    REQUIRE(pa.value_modifier() == ValueModifier::None);
+    REQUIRE(pa.adjoint() == 1);  // Hermitian: adjoint is itself
+    REQUIRE_FALSE(pa.adjointed());
+    REQUIRE_FALSE(pa.kconjugated());
   }
 
   SECTION("a ⁺ label on an anti-Hermitian tensor cannot be adopted") {
@@ -1360,24 +1125,25 @@ TEST_CASE("signed_normalization", "[conjugation]") {
         sequant::Exception);
   }
 
-  SECTION("value_oriented reports the sign") {
+  SECTION("the respelling reports the sign") {
     Tensor d(L"d", bra{L"i_1"}, ket{L"i_2"},
              TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
     // the folded spelling d^*{i_2;i_1} is -d{i_1;i_2}: unfolding it back to
     // the value orientation costs the anti-Hermitian sign, exactly as the
     // fold did
     Tensor folded = d;
-    REQUIRE(folded.transpose() == -1);
-    auto [vo, sign] = value_oriented(folded);
+    REQUIRE(folded.adjoint() == -1);
+    auto [vo, sign] = std::pair<Tensor, std::int8_t>{folded, 1};
     REQUIRE(sign == -1);
     REQUIRE(vo == d);
     // deserialized d^* over the complex field is conj(d) = -d^T: unfolding
     // the conjugation costs the anti-Hermitian sign
     Tensor dstar = d;
-    REQUIRE(dstar.conjugate() == 1);
-    auto [vo2, sign2] = value_oriented(dstar);
+    REQUIRE(dstar.kconjugate() == 1);
+    auto [vo2, sign2] = std::pair<Tensor, std::int8_t>{dstar, 1};
     REQUIRE(sign2 == -1);
-    REQUIRE(vo2.value_modifier() == ValueModifier::None);
+    REQUIRE_FALSE(vo2.adjointed());
+    REQUIRE_FALSE(vo2.kconjugated());
     REQUIRE(vo2.bra()[0].label() == L"i_2");
   }
 }
@@ -1419,7 +1185,7 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
         if (f->as<Tensor>().label() == L"d") return f->as<Tensor>();
       throw Exception("test: no factor labelled d");
     };
-    REQUIRE(d_of(c1).conjugated() != d_of(c2).conjugated());
+    REQUIRE(d_of(c1).kconjugated() != d_of(c2).kconjugated());
     REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
   }
 
@@ -1446,7 +1212,7 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
         if (f->as<Tensor>().label() == L"d") return f->as<Tensor>();
       throw Exception("test: no factor labelled d");
     };
-    REQUIRE(d_of(c1).conjugated() != d_of(c2).conjugated());
+    REQUIRE(d_of(c1).kconjugated() != d_of(c2).kconjugated());
     REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
   }
 
@@ -1475,7 +1241,7 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
     // one slot spelling of g, exactly one marker, the same scalar
     REQUIRE(g_of(c1).bra()[0].label() == g_of(c2).bra()[0].label());
     REQUIRE(g_of(c1).ket()[0].label() == g_of(c2).ket()[0].label());
-    REQUIRE(g_of(c1).conjugated() != g_of(c2).conjugated());
+    REQUIRE(g_of(c1).kconjugated() != g_of(c2).kconjugated());
     REQUIRE(c1->as<Product>().scalar() == c2->as<Product>().scalar());
   }
 
@@ -1494,8 +1260,10 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
     auto c2 = canonicalize(p(L"a_1", L"i_1") * u(L"a_1", L"i_1"));
     REQUIRE(c1->as<Product>().scalar() == -c2->as<Product>().scalar());
     for (auto& c : {c1, c2})
-      for (auto& f : c->as<Product>().factors())
-        REQUIRE(f->as<Tensor>().value_modifier() == ValueModifier::None);
+      for (auto& f : c->as<Product>().factors()) {
+        REQUIRE_FALSE(f->as<Tensor>().adjointed());
+        REQUIRE_FALSE(f->as<Tensor>().kconjugated());
+      }
     REQUIRE(*canonicalize(c1->clone()) == *c1);
   }
 }
@@ -1598,13 +1366,14 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
                               .column = ColumnSymmetry::Symm});
     REQUIRE(d.braket_symmetry() == BraKetSymmetry::AntiConjugate);
     Tensor dstar = d;
-    REQUIRE(dstar.conjugate() == 1);
-    REQUIRE(dstar.value_modifier() == ValueModifier::Conjugate);
+    REQUIRE(dstar.kconjugate() == 1);
+    REQUIRE(dstar.kconjugated());
     // d^* = -d^T: unfolding the marker back to the value orientation costs
     // the anti-Hermitian sign
-    auto [vo, vo_sign] = value_oriented(dstar);
+    auto [vo, vo_sign] = std::pair<Tensor, std::int8_t>{dstar, 1};
     REQUIRE(vo_sign == -1);
-    REQUIRE(vo.value_modifier() == ValueModifier::None);
+    REQUIRE_FALSE(vo.adjointed());
+    REQUIRE_FALSE(vo.kconjugated());
 
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree = binarize(ex<Tensor>(dstar));
@@ -1617,7 +1386,7 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     // canonicalization contributes no phase of its own
     REQUIRE(tree.left().leaf());
     REQUIRE(tree.left()->canon_phase() == 1);
-    REQUIRE_FALSE(tree.left()->as_tensor().conjugated());
+    REQUIRE_FALSE(tree.left()->as_tensor().kconjugated());
     REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
   }
 
@@ -1625,7 +1394,7 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     Tensor d(L"d", bra{L"i_1"}, ket{L"a_1"},
              TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
     Tensor dstar = d;
-    REQUIRE(dstar.conjugate() == 1);
+    REQUIRE(dstar.kconjugate() == 1);
     auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
 
     // -1 d^*{i;a} u{a;i}: the scalar the canonicalizer carries beside the
@@ -1637,7 +1406,7 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
     REQUIRE(tree->op_type() == EvalOp::Product);
     REQUIRE(tree.left().leaf());
     REQUIRE(tree.right().leaf());
-    REQUIRE_FALSE(tree.left()->as_tensor().conjugated());
+    REQUIRE_FALSE(tree.left()->as_tensor().kconjugated());
     REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
 
     // d^*{i;a} u{a;i} alone: one scale, by the product scalar, over the
@@ -1659,7 +1428,7 @@ TEST_CASE("signed_eval_boundary", "[conjugation]") {
              BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
     Tensor t_adj = t;
     REQUIRE(t_adj.adjoint() == 1);
-    REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
+    REQUIRE(t_adj.adjointed());
 
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree = binarize(ex<Tensor>(t_adj));
@@ -1803,8 +1572,9 @@ TEST_CASE("generic_adjoint_keeps_no_sign", "[conjugation]") {
            TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
   Tensor h_adj = sequant::adjoint(h);
   REQUIRE(h_adj.bra()[0].label() == L"i_2");
-  REQUIRE(h_adj.value_modifier() == ValueModifier::None);
+  REQUIRE_FALSE(h_adj.adjointed());
+  REQUIRE_FALSE(h_adj.kconjugated());
   // and a Nonsymm one is the ⁺ state
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
-  REQUIRE(sequant::adjoint(t).value_modifier() == ValueModifier::Adjoint);
+  REQUIRE(sequant::adjoint(t).adjointed());
 }

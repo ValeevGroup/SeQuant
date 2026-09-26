@@ -158,30 +158,6 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     sequant::wprintf(oss.str());
   }
 
-  // Bring every foldable (anti)conjugate tensor to its VALUE orientation
-  // before the graph is built: a marked spelling T^*{q;p} denotes the same
-  // value as T{p;q} up to the relation's sign, and the canonical form is a
-  // function of the value, so the graph must not see which of the two
-  // spellings the input used (else h{p;q} γ^*{p;q} and γ{p;q} h^*{p;q}, one
-  // value, would canonicalize to different marker placements). The marker
-  // re-emerges only from the graph-dictated bundle swap below and from the
-  // label fold after relabeling. Each unfold contributes its sign to the
-  // phase byproduct this returns, exactly as each refold does.
-  {
-    bool unfolded = false;
-    for (auto &tensor_ptr : tensors_) {
-      auto &tensor = *tensor_ptr;
-      if (!braket_conjugate_foldable(tensor)) continue;
-      Tensor &ct = *as_cnumber_tensor(tensor);
-      if (ct.conjugated()) {
-        // T^*{q;p} -> s T{p;q}: the value orientation
-        parity *= ct.transpose();
-        unfolded = true;
-      }
-    }
-    if (unfolded) have_edges_ = false;  // slots moved: rebuild the edges
-  }
-
   if (!have_edges_) {
     init_edges();
   }
@@ -467,19 +443,14 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     // Swap bra and ket bundles into the canonical (graph-dictated) order. The
     // verdict is transferred as-is; where the graph carries no orientation
     // information it is arbitrary but value-preserving up to the sign this
-    // records (for an (anti)conjugate tensor the swap toggles the conjugation
-    // marker, see below), and the pass after this loop settles those tensors
-    // deterministically.
+    // records, and the pass after this loop settles those tensors
+    // deterministically. An (anti)conjugate tensor's two orientations are two
+    // values (T{q;p} = s conj(T{p;q}) is not a respelling), so it stays as
+    // written.
     if (canonical_bra_ket_bundle_order[i][0] >
         canonical_bra_ket_bundle_order[i][1]) {
       const auto bksymm = braket_symmetry(tensor);
-      if (braket_conjugate_swap_sign(bksymm)) {
-        // respelling at the relation's sign: T{q;p} = s conj(T{p;q}),
-        // transpose() records the conjugation and returns s
-        Tensor *ct = as_cnumber_tensor(tensor);
-        SEQUANT_ASSERT(ct);
-        parity *= ct->transpose();
-      } else {
+      if (!braket_conjugate_swap_sign(bksymm)) {
         tensor._swap_bra_ket();  // Symm: +1, Antisymm: -1
         parity *= *braket_swap_sign(bksymm);
       }
@@ -491,9 +462,9 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   // recorded bundle position is a value-initialized sentinel, and identical
   // bra and ket bundles (diagonal trace T{p,q;p,q}) are automorphic. Their
   // verdict above was arbitrary; decide them by content instead
-  // (DefaultTensorCanonicalizer::canonicalize_braket unfolds a marked spelling
-  // first, orients a half-tensor by its bundle spaces and never swaps
-  // identical bundles), which is label-independent, so it is a fixed point
+  // (DefaultTensorCanonicalizer::canonicalize_braket orients a half-tensor by
+  // its bundle spaces and never swaps identical bundles), which is
+  // label-independent, so it is a fixed point
   // of the relabeling that follows.
   for (auto &tensor_ptr : tensors_) {
     AbstractTensor &tensor = *tensor_ptr;

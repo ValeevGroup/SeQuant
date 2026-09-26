@@ -279,7 +279,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           auto a = canonical_tensor(L"h{a_1;i_1}:N-C-S");
           auto b = canonical_tensor(L"h{i_1;a_1}:N-C-S");
           REQUIRE(same_slots(*a, *b));
-          REQUIRE(a->conjugated() != b->conjugated());
+          REQUIRE(a->kconjugated() != b->kconjugated());
         }
 
         // Half-tensors: the graph has no vertex for the empty bundle, so the
@@ -289,7 +289,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           auto b = canonical_tensor(L"h{;a_1}:N-C-S");
           INFO(toUtf8(to_latex(*a)) << " vs " << toUtf8(to_latex(*b)));
           REQUIRE(same_slots(*a, *b));
-          REQUIRE(a->conjugated() != b->conjugated());
+          REQUIRE(a->kconjugated() != b->kconjugated());
         }
 
         // Identical bra and ket bundles (a diagonal, hence real, block): the
@@ -297,7 +297,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
         // the spelling as written and unmarked.
         {
           auto d = canonical_tensor(L"h{p_1,p_2;p_1,p_2}:N-C-S");
-          REQUIRE(!d->conjugated());
+          REQUIRE(!d->kconjugated());
           REQUIRE(ranges::equal(d->bra(), d->ket()));
         }
 
@@ -307,8 +307,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV3) {
           auto a = canonical_tensor(L"h{a_1;i_1}:N-S-S");
           auto b = canonical_tensor(L"h{i_1;a_1}:N-S-S");
           REQUIRE(same_slots(*a, *b));
-          REQUIRE(!a->conjugated());
-          REQUIRE(!b->conjugated());
+          REQUIRE(!a->kconjugated());
+          REQUIRE(!b->kconjugated());
         }
       }
     }
