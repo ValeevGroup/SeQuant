@@ -664,6 +664,17 @@ TEST_CASE("expr", "[elements]") {
 
       Power pv(ex<Variable>(L"x"), rational{2, 1});
       REQUIRE(to_latex(pv) == L"{x}^{2}");
+
+      // a conjugated Power braces the power before its own superscript, so
+      // no group ends up carrying two of them, not even over a base that
+      // already has one
+      auto xc = ex<Variable>(L"x");
+      REQUIRE_NOTHROW(xc->adjoint());
+      REQUIRE(xc->to_latex() == L"{{x}^{*}}");
+      Power pvc(xc, rational{2, 1});
+      REQUIRE(to_latex(pvc) == L"{{x}^{*}}^{2}");
+      pvc.conjugate();
+      REQUIRE(to_latex(pvc) == L"{{{{x}^{*}}^{2}}^{*}}");
     }
 
     Product sp0{};

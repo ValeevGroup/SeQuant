@@ -509,12 +509,8 @@ struct Transformer {
       const io::serialization::v1::ast::Variable &variable) const {
     // a Variable has the one conjugated state, spelled by a trailing `꙳`
     auto [name, adjointed, kconjugated] = split_marks(variable);
-    if (adjointed) {
-      auto [offset, length] =
-          get_pos(variable, position_cache.get(), begin.get());
-      throw SerializationError(offset, length,
-                               "a variable name carries no adjoint mark");
-    }
+    if (adjointed)
+      throw_at(variable, "a variable name carries no adjoint mark");
     ExprPtr var = ex<Variable>(std::move(name));
     if (kconjugated) var->as<Variable>().conjugate();
     return var;

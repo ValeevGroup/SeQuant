@@ -23,6 +23,7 @@
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -661,6 +662,19 @@ TEST_CASE("mark_serialization_roundtrip", "[conjugation]") {
   // marks on an operator name are errors, not asserts
   REQUIRE_THROWS_AS(deserialize(L"ã꙳{a_1;i_1}"), SerializationError);
   REQUIRE_THROWS_AS(deserialize(L"a⁺{i_1;a_1}"), SerializationError);
+  // a repeated mark names no state
+  REQUIRE_THROWS_AS(deserialize(L"t⁺⁺{i_1;a_1}"), SerializationError);
+  REQUIRE_THROWS_AS(deserialize(L"x꙳꙳"), SerializationError);
+  // a variable has the one conjugated state, so an adjoint mark is an error
+  REQUIRE_THROWS_AS(deserialize(L"x⁺"), SerializationError);
+  // a mark on a reserved label constructs: δ is Hermitian by definition and
+  // Even, so the state normalizes away and the defining symmetries stand
+  auto k = deserialize(L"δ꙳{i_1;a_1}");
+  REQUIRE(k->is<Tensor>());
+  REQUIRE(k->as<Tensor>().label() == reserved::kronecker_label());
+  REQUIRE_FALSE(k->as<Tensor>().kconjugated());
+  REQUIRE(k->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(*k == *deserialize(L"δ{i_1;a_1}"));
   // LaTeX renders the states as superscripts, never as a raw mark
   REQUIRE(to_latex(deserialize(L"t⁺{i_1;a_1}:N-N-N-N")) ==
           L"{{t^{\\dagger}}^{{a_1}}_{{i_1}}}");
@@ -864,10 +878,10 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
 }
 
 TEST_CASE("canonicalize_marked_nonsymm_network", "[conjugation]") {
-  // A Conjugate/Transpose modifier on a Nonsymm tensor is part of the
-  // graph colouring in every canonicalization, so networks that differ
-  // only in which factor carries the mark stay distinguishable, and
-  // canonicalization is idempotent on them.
+  // The K-conjugated state of a Nonsymm tensor is part of the graph
+  // colouring in every canonicalization, so networks that differ only in
+  // which factor carries the mark stay distinguishable, and canonicalization
+  // is idempotent on them.
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
