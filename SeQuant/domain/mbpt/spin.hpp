@@ -258,6 +258,18 @@ enum class BiorthogonalizationMethod {
 };
 // clang-format on
 
+/// closed-shell triplet (M_S = 0) EOM residual variants
+enum class TripletResidualKind {
+  /// A combination of T and E operators with their permutations
+  /// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434)
+  /// (see triplet_combined_residual)
+  Combined,
+  /// EOM triplet doubles: the bare TE primitive only, i.e.
+  /// (1/4)*TE instead of (3*TE - TE_ps)/16; drops the pair-swap
+  /// TE_ps. Doubles only (for now).
+  BareTE
+};
+
 /// controls behavior of biorthogonal closed-shell spin-tracing
 struct ClosedShellCCSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
@@ -266,23 +278,20 @@ struct ClosedShellCCSpintraceOptions {
   /// (spin-free) basis and thus has an exponential cost;
   /// the default is to use closed_shell_spintrace, which is more efficient
   bool naive_spintrace = false;
-  /// EOM triplet only: compact the residual to one representative slot
+  /// EOM triplet residual: compact the residual to one representative slot
   /// permutation per tensor-network group via triplet_maxcoeff_compact
   /// (doubles: the -3c member of each {c,c,c,-3c} group, 135 terms for 2h2p;
   /// triples: one stabilizer-scaled member per 36 slot perms); the dropped
   /// terms are recovered on evaluation by triplet_nns_project (numerical) or
   /// triplet_symbolic_reconstruct (symbolic).
-  /// Combined with triplet_te_only it instead compacts the bare-TE residual,
-  /// whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the kept -2c
-  /// representative is expanded by triplet_te_nns_project ({1,-1/2,-1/2,0},
-  /// numerical) or triplet_symbolic_reconstruct with TeNnsReconstruction
-  /// (symbolic).
+  /// Combined with TripletResidualKind::BareTE it instead compacts the bare-TE
+  /// residual, whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the
+  /// kept -2c representative is expanded by triplet_te_nns_project
+  /// ({1,-1/2,-1/2,0}, numerical) or triplet_symbolic_reconstruct with
+  /// TeNnsReconstruction (symbolic).
   bool triplet_doubles_compact = false;
-  /// EOM triplet doubles experiment: build the residual from
-  /// the bare TE primitive only, i.e. return (1/4)*TE instead of the
-  /// two-channel paper combination (3*TE - TE_ps)/16. Drops the external
-  /// pair-swap TE_ps.
-  bool triplet_te_only = false;
+  /// EOM triplet residual: which residual variant to build
+  TripletResidualKind triplet_residual = TripletResidualKind::Combined;
 };
 
 // clang-format off

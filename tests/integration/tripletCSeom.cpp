@@ -634,7 +634,7 @@ class compute_eomcc_closedshell_triplet {
           // residual = TE/4.
           auto te_a = closed_shell_EOM_triplet_spintrace(
               eqvec[i], {.method = BiorthogonalizationMethod::V2,
-                         .triplet_te_only = true});
+                         .triplet_residual = TripletResidualKind::BareTE});
           simplify(te_a);
 
           std::wcout << "\n----- EFV experiment (TE-only) comparison R[" << i

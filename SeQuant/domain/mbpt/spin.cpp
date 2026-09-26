@@ -2397,21 +2397,22 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         abort();
     }
   } else {  // n_ext == 2 or 3: one set of external permutation weights
-    if (n_ext != 2 && options.triplet_te_only)
+    const bool te_only =
+        options.triplet_residual == TripletResidualKind::BareTE;
+    if (n_ext != 2 && te_only)
       throw Exception(
           "closed_shell_EOM_triplet_spintrace: te_only is a doubles-only "
           "experiment, not implemented beyond doubles");
     SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
                                [](const auto& g) { return g.size() == 2; }));
 
-    triplet =
-        triplet_combined_residual(triplet, ext_groups, options.triplet_te_only);
+    triplet = triplet_combined_residual(triplet, ext_groups, te_only);
     simplify(triplet);
     if (options.triplet_doubles_compact)
       triplet = triplet_maxcoeff_compact(
           triplet, ext_groups,
-          options.triplet_te_only ? TripletWeightKind::TeNnsReconstruction
-                                  : TripletWeightKind::NnsReconstruction);
+          te_only ? TripletWeightKind::TeNnsReconstruction
+                  : TripletWeightKind::NnsReconstruction);
   }
   simplify(triplet);
   return triplet;
