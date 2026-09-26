@@ -321,8 +321,7 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// holds no scalar) becomes a scalar factor here.
 ///
 /// The result is assembled with the Sum and Product constructors' default
-/// flattening, so its shape differs from conjugate()'s, which keeps the
-/// input's nesting:
+/// flattening, as conjugate()'s is:
 /// - a Product is rebuilt with that flattening, so a nested product is
 ///   spliced into it and a factor's sign byproduct folds into the product's
 ///   scalar;

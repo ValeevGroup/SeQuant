@@ -23,6 +23,7 @@ ExprPtr RealPart::canonicalize(CanonicalizeOptions opts) {
 }
 
 ExprPtr RealPart::rapid_canonicalize(CanonicalizeOptions opts) {
+  SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
   if (auto byproduct = inner_->rapid_canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
@@ -85,6 +86,7 @@ ExprPtr ImagPart::canonicalize(CanonicalizeOptions opts) {
 }
 
 ExprPtr ImagPart::rapid_canonicalize(CanonicalizeOptions opts) {
+  SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
   if (auto byproduct = inner_->rapid_canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;

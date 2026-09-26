@@ -55,7 +55,7 @@ TEST_CASE("conj_constant_involution", "[conjugation]") {
 
 TEST_CASE("conj_variable_marker_hash_reset", "[conjugation]") {
   // Variable::conjugate() must reset the memoized hash: compute the hash
-  // FIRST, then conjugate, then verify the hash actually changed and that
+  // _first_, then conjugate, then verify the hash actually changed and that
   // toggling back restores it
   auto v = Variable(L"x");
   const auto h0 = v.hash_value();  // memoize
@@ -757,7 +757,7 @@ TEST_CASE("tn_slots_determinism", "[conjugation]") {
   auto m2 = md(Cstar(L"a_2") * C(L"a_1"));  // factor order flipped
   REQUIRE(m1.hash_value() == m2.hash_value());
   REQUIRE(m1.graph->cmp(*m2.graph) == 0);
-  // the conj-swapped spelling is a DIFFERENT value and keeps its own slot
+  // the conj-swapped spelling is a _different_ value and keeps its own slot
   auto m3 = md(Cstar(L"a_1") * C(L"a_2"));
   REQUIRE(m3.hash_value() == m1.hash_value());  // one shared graph family
 }
@@ -788,7 +788,7 @@ TEST_CASE("conjugate_fold_skips_reserved", "[conjugation]") {
 
 TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
   // identically-marked summands merge; a marked and an unmarked spelling of
-  // DIFFERENT values do not
+  // _different_ values do not
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
@@ -810,7 +810,7 @@ TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
 
 TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
   // a proto-indexed (ToT) leaf's canon_indices puts occupieds first: the
-  // DECLARED default comparator (default_idxptr_slottype_lesscompare) orders
+  // _declared_ default comparator (default_idxptr_slottype_lesscompare) orders
   // by proto-index count before space -- the layout downstream
   // coefficient-shape detectors rely on
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
