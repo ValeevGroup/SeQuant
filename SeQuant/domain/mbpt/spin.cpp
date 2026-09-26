@@ -1822,8 +1822,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
       // Add spin labels to internal indices, expand antisymmetric tensors
       ExprPtr spin_expr_i = append_spin(spin_expr, i);
       spin_expr_i = expand_antisymm(spin_expr_i, true);
-      // std::wcout << "after expand_antisymm: " << to_latex_align(spin_expr_i,
-      // 0, 4) << '\n';
       expand(spin_expr_i);
       detail::reset_idx_tags(spin_expr_i);
       Sum i_result{};
@@ -1848,8 +1846,6 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
         e_result.append(std::make_shared<Sum>(i_result));
       }
     }  // loop over internal indices
-    // std::wcout << "e_result size after internal loop: " <<
-    // e_result.summands().size() << "\n";
     result.push_back(std::make_shared<Sum>(e_result));
   }  // loop over external indices
 
@@ -1859,15 +1855,7 @@ std::vector<ExprPtr> open_shell_spintrace_impl(
   }
   for (auto& expression : result) {
     detail::reset_idx_tags(expression);
-    // if (target_spin_case && *target_spin_case == 1) {
-    //   std::wcout << "before canon (sc=1): " << to_latex_align(expression)
-    //              << "\n";
-    // }
     canonicalize(expression);
-    // if (target_spin_case && *target_spin_case == 1) {
-    //   std::wcout << "after canon (sc=1): " << to_latex_align(expression)
-    //              << "\n";
-    // }
     rapid_simplify(expression);
   }
 
@@ -2442,8 +2430,6 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
                                   : TripletWeightKind::NnsReconstruction);
   }
   simplify(triplet);
-  std::wcout << "closed_shell_EOM_triplet_spintrace size: " << triplet->size()
-             << " terms\n";
   return triplet;
 }
 
