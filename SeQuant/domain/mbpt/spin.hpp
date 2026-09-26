@@ -283,12 +283,6 @@ struct ClosedShellCCSpintraceOptions {
   /// two-channel paper combination (3*TE - TE_ps)/16. Drops the external
   /// pair-swap TE_ps.
   bool triplet_te_only = false;
-  /// EOM triplet doubles experiment: emit a
-  /// single R amplitude per rank-2 channel instead of the s0*(R +/- R_swap)
-  /// column-swap pair in triplet_adapt_amplitudes. Uses ColumnSymmetry::Symm on
-  /// that lone R (production uses Nonsymm to keep R and R_swap distinct). Only
-  /// meaningful with triplet_te_only.
-  bool triplet_amp_no_swap = false;
 };
 
 // clang-format off
@@ -468,7 +462,7 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 spintrace_by_sector(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    bool triplet_R = false, bool amp_no_swap = false);
+    bool triplet_R = false);
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP

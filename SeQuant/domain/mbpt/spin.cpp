@@ -2238,9 +2238,8 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 
 namespace {
 
-ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
-                                 bool amp_no_swap = false) {
-  auto adapt_product = [amp_no_swap](const Product& p) -> ExprPtr {
+ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
+  auto adapt_product = [](const Product& p) -> ExprPtr {
     // sign of the M_S = 0 triplet coupling for a spin-labeled line:
     // T_{pq} = a_{pq}(alpha) - a_{pq}(beta)
     auto spin_line_sign = [](const Index& idx) {
@@ -2278,21 +2277,11 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
         const int s1 = spin_line_sign(t.bra().at(1));
         const bool same_spin = (s0 == s1);
 
-        // Production (R + R_swap): ColumnSymmetry::Nonsymm keeps R_{a1i1;a2i2}
-        // and R_{a2i2;a1i1} distinct. ter_only (amp_no_swap): single R only, so
-        // use default ColumnSymmetry::Symm and let canonicalization fix order.
-        const auto col_symm =
-            amp_no_swap ? ColumnSymmetry::Nonsymm : ColumnSymmetry::Nonsymm;
+        // ColumnSymmetry::Nonsymm keeps R_{a1i1;a2i2} and R_{a2i2;a1i1}
+        // distinct
         Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
-                      Symmetry::Nonsymm, t.braket_symmetry(), col_symm);
-
-        // EFV test: just TE (not TE_swap), emit a single R amplitude (no
-        // R_swap),
-        if (amp_no_swap) {
-          out->scale(s0);
-          out->append(1, ex<Tensor>(std::move(stored)), Product::Flatten::No);
-          continue;
-        }
+                      Symmetry::Nonsymm, t.braket_symmetry(),
+                      ColumnSymmetry::Nonsymm);
 
         // swap columns
         container::svector<Index> swapped_bra{t.bra().at(1), t.bra().at(0)};
@@ -2308,10 +2297,6 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled,
         out->append(1, ExprPtr(channel), Product::Flatten::No);
       } else if (rank == 3) {
         SEQUANT_ASSERT(t.symmetry() == Symmetry::Nonsymm);
-        if (amp_no_swap)
-          throw Exception(
-              "triplet_adapt_amplitudes: ter_only/amp_no_swap is a "
-              "doubles-only experiment, not implemented for triples");
         // R3 = sum over labels of r * T(c0) E(c1) E(c2) (T rides column 0).
         // In a fixed external spin sector the spin-orbital amplitude collects
         // all 6 column-pair permutations of R, each weighted by the spin sign
@@ -2379,8 +2364,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 
   // spintrace_by_sector already removed spin (with collision relabeling) from
   // each sector.
-  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true,
-                                     options.triplet_amp_no_swap);
+  auto sectors = spintrace_by_sector(expr, ext_groups, /*triplet_R=*/true);
   SEQUANT_ASSERT(sectors.size() == (std::size_t{1} << n_ext));
 
   // V_mu: weight every sector by the sign of the spin of external group 0
@@ -2413,10 +2397,10 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
         abort();
     }
   } else {  // n_ext == 2 or 3: one set of external permutation weights
-    if (n_ext != 2 && (options.triplet_te_only || options.triplet_amp_no_swap))
+    if (n_ext != 2 && options.triplet_te_only)
       throw Exception(
-          "closed_shell_EOM_triplet_spintrace: te_only/ter_only are "
-          "doubles-only experiments, not implemented beyond doubles");
+          "closed_shell_EOM_triplet_spintrace: te_only is a doubles-only "
+          "experiment, not implemented beyond doubles");
     SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
                                [](const auto& g) { return g.size() == 2; }));
 
@@ -2436,7 +2420,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    bool triplet_R, bool amp_no_swap) {
+    bool triplet_R) {
   ExprPtr work = expr->clone();
   if (has_tensor(work, reserved::antisymm_label())) {
     work = expand_A_op(work);
@@ -2465,7 +2449,7 @@ container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     detail::reset_idx_tags(sector);
     canonicalize(sector);
     simplify(sector);
-    if (triplet_R) sector = triplet_adapt_amplitudes(sector, amp_no_swap);
+    if (triplet_R) sector = triplet_adapt_amplitudes(sector);
     sector = remove_spin(sector, /*relabel_collisions=*/true);
     detail::reset_idx_tags(sector);
     canonicalize(sector);

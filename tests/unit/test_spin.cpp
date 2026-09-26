@@ -2411,9 +2411,6 @@ TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
   REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
       expr,
       {.method = BiorthogonalizationMethod::V2, .triplet_te_only = true}));
-  REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
-      expr,
-      {.method = BiorthogonalizationMethod::V2, .triplet_amp_no_swap = true}));
 }
 
 TEST_CASE("triplet_triples_reconstruct", "[spin][triplet]") {
