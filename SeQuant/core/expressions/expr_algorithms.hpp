@@ -311,10 +311,15 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// holds no scalar) becomes a scalar factor here.
 ///
 /// The result is assembled with the Sum and Product constructors' default
-/// flattening: a nested product is spliced into its parent, and a factor's
-/// (summand's) sign byproduct folds into the enclosing product's scalar
-/// rather than staying a nested `Product{-1, ...}`. conjugate() keeps the
-/// input's nesting instead.
+/// flattening, so its shape differs from conjugate()'s, which keeps the
+/// input's nesting:
+/// - a Product is rebuilt with that flattening, so a nested product is
+///   spliced into it and a factor's sign byproduct folds into the product's
+///   scalar;
+/// - a Sum is rebuilt with that flattening, so a nested sum is spliced in,
+///   but a summand whose K-conjugate carries a sign stays a
+///   `Product{-1, summand}` -- a Sum has no scalar to fold into, so the
+///   sign is carried by that summand's own scalar.
 ///
 /// @param expr an expression
 /// @return a new expression denoting `K expr K⁻¹`
