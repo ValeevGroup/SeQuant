@@ -58,6 +58,20 @@ class RealPart : public Expr {
   std::int8_t kconjugate() override { return 1; }  // Re(E) is real
   std::wstring to_latex() const override;
 
+  /// canonicalizes the wrapped expression in place
+  /// @return nullptr: `Re()` is not linear over a complex byproduct, so a
+  ///         byproduct of the inner canonicalization is folded back into the
+  ///         wrapped expression instead of being handed to the caller
+  ExprPtr canonicalize(CanonicalizeOptions opts =
+                           CanonicalizeOptions::default_options()) override;
+
+  /// the wrapped expression is this node's only subexpression, so that
+  /// Expr::visit(), index transforms and relabeling reach it
+  ExprIterator begin_subexpr() override;
+  ExprIterator end_subexpr() override;
+  ConstExprIterator begin_subexpr() const override;
+  ConstExprIterator end_subexpr() const override;
+
  private:
   ExprPtr inner_;
 
@@ -87,6 +101,20 @@ class ImagPart : public Expr {
   std::int8_t adjoint() override { return 1; }  // Im(E) is real, self-adjoint
   std::int8_t kconjugate() override { return 1; }  // Im(E) is real
   std::wstring to_latex() const override;
+
+  /// canonicalizes the wrapped expression in place
+  /// @return nullptr: `Im()` is not linear over a complex byproduct, so a
+  ///         byproduct of the inner canonicalization is folded back into the
+  ///         wrapped expression instead of being handed to the caller
+  ExprPtr canonicalize(CanonicalizeOptions opts =
+                           CanonicalizeOptions::default_options()) override;
+
+  /// the wrapped expression is this node's only subexpression, so that
+  /// Expr::visit(), index transforms and relabeling reach it
+  ExprIterator begin_subexpr() override;
+  ExprIterator end_subexpr() override;
+  ConstExprIterator begin_subexpr() const override;
+  ConstExprIterator end_subexpr() const override;
 
  private:
   ExprPtr inner_;

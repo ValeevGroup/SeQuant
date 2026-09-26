@@ -284,23 +284,26 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// @return Simplified expression
 [[nodiscard]] ResultExpr non_canon_simplify(ResultExpr&& expr);
 
-/// @brief the complex conjugate of a scalar-valued expression
+/// @brief the complex conjugate of the value of a c-number expression
 ///
-/// Total over the scalar expression kinds, applying the algebra of
-/// conjugation:
-/// - `Constant`, `Variable`, `Power`: value/marker conjugation
-/// - `Tensor`: the elementwise-conjugation marker is toggled (no slot
-///   motion; contrast adjoint())
-/// - `RealPart`/`ImagPart`: identity (both are real-valued)
-/// - `Sum`: summand-wise
-/// - `Product` (c-number): `(c A B)* = conj(c) A* B*` -- factor-wise, NO
-///   reversal (contrast Product::adjoint(), which reverses)
+/// `conj <p|O|q> = <q|O⁺|p>`, so on c-number content this is
+/// sequant::adjoint(const ExprPtr&), one implementation: every `Tensor` is
+/// adjointed (over a real basis the coset rule spells that adjoint as the
+/// `꙳` state with the slots in place), `Constant`, `Variable` and `Power`
+/// conjugate, `RealPart`/`ImagPart` are invariant, a `Sum` maps its
+/// summands, and a `Product` conjugates its scalar and reverses its factors
+/// -- a reversal that is not observable, the factors of a c-number product
+/// commuting. For an expression with open indices the head's bra and ket are
+/// exchanged, so a `ResultExpr` caller exchanges the head as well.
+///
 /// Conjugation is an involution: `conjugate(conjugate(e))` equals `e`.
 ///
-/// @param expr a scalar-valued expression
+/// @param expr a c-number expression
 /// @return a new expression denoting `conj(expr)`
-/// @throw sequant::Exception for operator-valued content (a normal-ordered
-///        operator string has no elementwise conjugation here)
+/// @throw sequant::Exception for operator-valued content, which has no value
+///        to conjugate; sequant::kconjugate() is the conjugation of an
+///        operator
+/// @sa kconjugate(const ExprPtr&)
 [[nodiscard]] ExprPtr conjugate(const ExprPtr& expr);
 
 /// @brief the K-conjugate of an expression, `K E K⁻¹`
@@ -323,6 +326,10 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 ///
 /// @param expr an expression
 /// @return a new expression denoting `K expr K⁻¹`
+/// @throw sequant::Exception if @p expr is operator-valued and an operator
+///        in it acts on an index space that `K` does not close (only a
+///        real-field space is `K`-closed today)
+/// @sa conjugate(const ExprPtr&)
 [[nodiscard]] ExprPtr kconjugate(const ExprPtr& expr);
 
 /// Folds complex-conjugate-related summand pairs of a sum, exactly.

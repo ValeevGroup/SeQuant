@@ -67,14 +67,15 @@ TEST_CASE("conj_variable_marker_hash_reset", "[conjugation]") {
 }
 
 TEST_CASE("conjugate_free_function_total", "[conjugation]") {
-  // sequant::conjugate dispatches over every scalar node kind and is an
-  // involution on each; operator-valued content is rejected loudly
+  // sequant::conjugate is the conjugate of the VALUE: the adjoint on c-number
+  // content, an involution on each node kind; operator-valued content, which
+  // has no value, is rejected loudly
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
   auto resetter = set_scoped_default_context(ctx);
 
-  // Sum + Product distribution: (c A B)* = conj(c) A* B*, NO reversal
+  // Sum + Product distribution: (c A B)* = conj(c) B⁺ A⁺
   auto A = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm);
   auto B = ex<Tensor>(L"B", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm);
   auto prod = ex<Constant>(i_unit) * A->clone() * B->clone();
@@ -82,21 +83,25 @@ TEST_CASE("conjugate_free_function_total", "[conjugation]") {
   const auto& p = pc->as<Product>();
   REQUIRE(p.scalar() == (C{0, -1}));
   REQUIRE(p.factors().size() == 2);
-  // factor ORDER preserved (contrast adjoint, which reverses)
-  REQUIRE(p.factors()[0]->as<Tensor>().label() == L"A");
-  REQUIRE(p.factors()[0]->as<Tensor>().kconjugated());
-  REQUIRE(p.factors()[1]->as<Tensor>().label() == L"B");
-  REQUIRE(p.factors()[1]->as<Tensor>().kconjugated());
+  // the factors are reversed, as the adjoint of a product reverses them
+  REQUIRE(p.factors()[0]->as<Tensor>().label() == L"B");
+  REQUIRE(p.factors()[0]->as<Tensor>().adjointed());
+  REQUIRE(p.factors()[1]->as<Tensor>().label() == L"A");
+  REQUIRE(p.factors()[1]->as<Tensor>().adjointed());
   REQUIRE(*conjugate(pc) == *prod);
 
   auto sum = A->clone() + B->clone();
   auto sc = conjugate(sum);
-  for (const auto& s : *sc) REQUIRE(s->as<Tensor>().kconjugated());
+  for (const auto& s : *sc) REQUIRE(s->as<Tensor>().adjointed());
   REQUIRE(*conjugate(sc) == *sum);
 
   // Re/Im are real-valued: conj is the identity on them
   auto re = real_part(A->clone() * B->clone());
   REQUIRE(*conjugate(re) == *re);
+
+  // an operator string carries no value: sequant::kconjugate is its conjugate
+  REQUIRE_THROWS_AS(conjugate(ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}))),
+                    Exception);
 }
 
 TEST_CASE("re_im_composition_table", "[conjugation]") {
@@ -421,9 +426,11 @@ TEST_CASE("hermitian_network_recognition", "[conjugation]") {
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
 
-  // closed |C|^2 network: C conj(C), fully contracted -> real
-  REQUIRE(is_hermitian_network(
-      deserialize(L"C{a_1;i_1}:N-C-S C^*{a_1;i_1}:N-C-S")));
+  // closed |C|^2 network: C conj(C), fully contracted -> real. The conjugate
+  // of a value is the adjoint, so the second factor is the ⁺ spelling
+  auto C = deserialize(L"C{a_1;i_1}:N-N-S");
+  REQUIRE(is_hermitian_network(C->clone() * conjugate(C->clone())));
+  REQUIRE(*conjugate(C->clone()) == *deserialize(L"C⁺{i_1;a_1}:N-N-S"));
   // closed C*C without the conjugation: a generically complex scalar
   REQUIRE_FALSE(
       is_hermitian_network(deserialize(L"C{a_1;i_1}:N-N-S C{a_1;i_1}:N-N-S")));
@@ -1449,4 +1456,98 @@ TEST_CASE("generic_adjoint_keeps_no_sign", "[conjugation]") {
   // and a Nonsymm one is the ⁺ state
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
   REQUIRE(sequant::adjoint(t).adjointed());
+}
+
+TEST_CASE("conjugate_is_the_value_conjugate", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  SECTION("a c-number tensor: the adjoint spelling") {
+    auto t = ex<Tensor>(
+        L"t", bra{L"a_1"}, ket{L"i_1"},
+        TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    auto c = conjugate(t);
+    REQUIRE(*c == *sequant::adjoint(t));
+    REQUIRE(c->as<Tensor>().adjointed());
+    REQUIRE(c->as<Tensor>().bra()[0].label() == L"i_1");
+    // Hermitian: the other orientation, no mark
+    auto h =
+        ex<Tensor>(L"h", bra{L"i_1"}, ket{L"a_1"},
+                   TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+    REQUIRE(
+        *conjugate(h) ==
+        *ex<Tensor>(L"h", bra{L"a_1"}, ket{L"i_1"},
+                    TensorSymmetries{.hermiticity = Hermiticity::Hermitian}));
+    // anti-Hermitian: minus the other orientation
+    auto d =
+        ex<Tensor>(L"d", bra{L"i_1"}, ket{L"a_1"},
+                   TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+    REQUIRE(conjugate(d)->is<Product>());
+    REQUIRE(conjugate(d)->as<Product>().scalar() == -1);
+  }
+  SECTION(
+      "over a real basis the spelling is the star with the slots in place") {
+    auto t = ex<Tensor>(
+        L"t", bra{idx(L"a_1", Field::Real)}, ket{idx(L"i_1", Field::Real)},
+        TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    auto c = conjugate(t);
+    REQUIRE(c->as<Tensor>().kconjugated());
+    REQUIRE_FALSE(c->as<Tensor>().adjointed());
+    REQUIRE(c->as<Tensor>().bra()[0].label() == L"a_1");
+    REQUIRE(*c == *kconjugate(t));
+  }
+  SECTION("a product: factorwise, the scalar conjugated") {
+    auto e = ex<Constant>(Constant::scalar_type{0, 1}) *
+             ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) * ex<Variable>(L"z");
+    auto c = conjugate(e);
+    REQUIRE(c->is<Product>());
+    REQUIRE(c->as<Product>().scalar() == Constant::scalar_type{0, -1});
+    // conjugate is the adjoint on c-number content, and Product::adjoint
+    // reverses the factors, so each factor is located by its kind
+    auto factor_of = [&c](auto pred) {
+      for (const auto& f : c->as<Product>().factors())
+        if (pred(f)) return f;
+      return ExprPtr{};
+    };
+    auto tf = factor_of([](const ExprPtr& f) { return f->is<Tensor>(); });
+    auto vf = factor_of([](const ExprPtr& f) { return f->is<Variable>(); });
+    REQUIRE(tf);
+    REQUIRE(vf);
+    REQUIRE(tf->as<Tensor>().adjointed());
+    REQUIRE(vf->as<Variable>().conjugated());
+  }
+  SECTION(
+      "operators have no value: conjugate throws, kconjugate is the "
+      "identity on the string") {
+    auto e = ex<Tensor>(L"h", bra{idx(L"p_1", Field::Real)},
+                        ket{idx(L"p_2", Field::Real)}) *
+             ex<FNOperator>(cre({idx(L"p_1", Field::Real)}),
+                            ann({idx(L"p_2", Field::Real)}));
+    REQUIRE_THROWS_AS(conjugate(e), Exception);
+    auto k = kconjugate(e);
+    REQUIRE(k->as<Product>().factor(1)->is<FNOperator>());
+    REQUIRE(*k->as<Product>().factor(1) == *e->as<Product>().factor(1));
+    // over a complex basis the string has no K-closure: refused
+    auto ec = ex<Tensor>(L"h", bra{L"p_1"}, ket{L"p_2"}) *
+              ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
+    REQUIRE_THROWS_AS(kconjugate(ec), Exception);
+  }
+}
+
+TEST_CASE("fold_conjugate_pairs_is_order_independent", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+  auto term = deserialize(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+  auto term_adj = deserialize(L"1/2 t{i_2;a_2}:N-C-S h{a_2;i_2}:N-C-S");
+  auto f1 = fold_conjugate_pairs(term->clone() + term_adj->clone());
+  auto f2 = fold_conjugate_pairs(term_adj->clone() + term->clone());
+  simplify(f1);
+  simplify(f2);
+  REQUIRE(*f1 == *f2);
 }

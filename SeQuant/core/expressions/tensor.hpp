@@ -1107,7 +1107,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   }
 
   /// @brief sets both states on a tensor whose slots already are the intended
-  /// ones (a rebuild, the deserializer, OpMaker), without exchanging them
+  /// ones (a rebuild, the deserializer, OpMaker): the states are assigned
+  /// rather than toggled, no exchange preceding them
+  /// @note the normalization that follows can still exchange the bundles,
+  ///       since over a real basis the coset rule trades a `⁺` for a `꙳`
+  ///       with the slots exchanged back
   /// @return the sign consumed by the normalization
   [[nodiscard]] std::int8_t set_states(bool adjointed, bool kconjugated) {
     adjointed_ = adjointed;
