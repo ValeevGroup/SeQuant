@@ -13,16 +13,20 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <map>
 #include <optional>
 #include <ranges>
 #include <set>
 #include <span>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -41,6 +45,13 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
+
+  /// maps the ASCII array name a tensor is exported under (export_label(),
+  /// which folds the core states into the label) to the decorated label it
+  /// came from. Two different originals under one exported name would be one
+  /// array in every label-keyed map downstream, so the preprocessing refuses
+  /// that; see preprocess().
+  std::map<std::wstring, std::wstring> foldedNames;
 };
 
 /// Visitor objects that will steer code generation while visiting a given
@@ -441,6 +452,20 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   bool storeExpr = false;
 
   if constexpr (std::is_same_v<ExprType, Tensor>) {
+    // The exported name must name one array: a tensor written `t_adj` and a
+    // `t⁺` that folds to `t_adj` would share every label-keyed map below, and
+    // the generated code would read one buffer under two readings.
+    {
+      const std::wstring decorated = expr.decorated_label();
+      const auto [it, inserted] =
+          result.foldedNames.try_emplace(export_label(expr), decorated);
+      if (!inserted && it->second != decorated)
+        throw Exception("preprocess: the exported array name \"" +
+                        toUtf8(it->first) + "\" comes from both \"" +
+                        toUtf8(it->second) + "\" and \"" + toUtf8(decorated) +
+                        "\"; rename one of the two tensors");
+    }
+
     // A marked tensor is an array of its own, and every map below (and in the
     // generators) keys on the label and the slots. Folding the marks into the
     // label, before the context gets to rewrite anything, is what makes `t`

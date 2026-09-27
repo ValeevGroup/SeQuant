@@ -1217,6 +1217,52 @@ TEST_CASE("full export of marked tensors", "[export]") {
   }
 }
 
+TEST_CASE("a folded name must come from one tensor", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // `t⁺` is exported as `t_adj`, so a tensor already written `t_adj` would
+  // share every label-keyed map with it and the generated code would read one
+  // buffer under two readings
+  const auto t_adj_written = ex<Tensor>(L"t_adj", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE_FALSE(t_adj_written->as<Tensor>().adjointed());
+  const auto t_marked = ex<Tensor>(L"t⁺", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE(t_marked->as<Tensor>().adjointed());
+  REQUIRE(export_label(t_marked->as<Tensor>()) ==
+          export_label(t_adj_written->as<Tensor>()));
+  const auto f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+
+  SECTION("the collision is refused") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_THROWS_AS(
+        export_expression(
+            to_export_tree(ResultExpr(R, t_adj_written * f + t_marked * f)),
+            gen, ctx),
+        Exception);
+  }
+
+  SECTION("distinct folded names are fine") {
+    const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(ResultExpr(R, t * f + t_marked * f)), gen, ctx));
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Declare tensor t_adj[i_1, a_2]"));
+  }
+
+  SECTION("one tensor used twice is not a collision") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(ResultExpr(R, t_marked * f + t_marked * f)), gen, ctx));
+  }
+}
+
 TEST_CASE("a context rewrite folds a tensor's marks into its label",
           "[export]") {
   using namespace sequant;
