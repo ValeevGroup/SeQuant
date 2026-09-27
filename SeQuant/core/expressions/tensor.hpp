@@ -120,11 +120,12 @@ struct TensorSymmetries {
 ///
 /// The parity is a property of the operator, so `꙳` normalizes against it in
 /// every basis (unlike the elementwise conjugation_symmetry(), which is read
-/// through the basis). A bra/ket-less tensor's adjoint is its conjugate, so
-/// there the hermiticity ("real", "imaginary", "unknown") normalizes `꙳` as
-/// well, ahead of the parity. Over a real basis, or with no bra/ket slot,
-/// `t⁺{q;p}` and `t꙳{p;q}` are two spellings of one value when both traits
-/// are indefinite; the coset rule keeps `꙳` (normalize_states()).
+/// through the basis). Over a real basis, and for a bra/ket-less tensor,
+/// `t⁺{q;p}` and `t꙳{p;q}` are two spellings of one value, so the coset rule
+/// identifies them (normalize_states()): a definite hermiticity consumes the
+/// mark at its sign, with the bundles exchanged, so there `kconjugate()`
+/// agrees with `conjugate()`; an indefinite one keeps `꙳`, the spelling with
+/// the slots as written.
 /// Elementwise conjugation of the value is the adjoint with the slots
 /// exchanged, in every basis; transposition is not a state.
 ///
@@ -1104,7 +1105,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// basis this is the elementwise conjugate of the array; over a complex
   /// basis it is a different operator's matrix and _not_ the conjugate of the
   /// values (that is adjoint() with the slots exchanged).
-  /// @return the sign consumed: −1 for an odd-parity array
+  /// @note where the conjugation is the adjoint (a real basis, or no bra/ket
+  ///       slots) a definite #Hermiticity consumes the mark and exchanges the
+  ///       bundles, so this leaves the slots in place only for a tensor whose
+  ///       hermiticity is indefinite
+  /// @return the sign consumed: −1 for an odd-parity array, or for an
+  ///         anti-Hermitian one whose conjugation is the adjoint
   [[nodiscard]] std::int8_t kconjugate() override {
     kconjugated_ = !kconjugated_;
     const auto sign = normalize_states();
@@ -1251,10 +1257,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @brief reduces the states against the traits and returns the sign it
   /// consumes: `⁺` against the hermiticity (`T⁺ = ±T` clears it), `꙳`
   /// against the parity (`T꙳ = ±T` clears it, see kconjugation_sign()). Over
-  /// a real basis, or with no bra/ket slot, the two spellings of a value
-  /// `T⁺{q;p}` and `T꙳{p;q}` are identified in favour of `꙳` (the coset
-  /// rule), which is what makes adjoint() leave the slots in place and toggle
-  /// `꙳` there.
+  /// a real basis, or with no bra/ket slot, `T⁺{q;p}` and `T꙳{p;q}` are two
+  /// spellings of one value (kconjugation_is_the_adjoint()), so the coset
+  /// rule identifies them: a definite hermiticity consumes the mark
+  /// altogether at its sign, with the bundles exchanged; an indefinite one
+  /// keeps `꙳`, which is what makes adjoint() leave the slots in place and
+  /// toggle `꙳` there.
   [[nodiscard]] std::int8_t normalize_states() {
     std::int8_t sign = 1;
     if (adjointed_) {
@@ -1267,6 +1275,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         // tensor has nothing to exchange)
         adjointed_ = false;
         kconjugated_ = !kconjugated_;
+        if (bra_net_rank() != 0 || ket_net_rank() != 0) _swap_bra_ket();
+      }
+    }
+    if (kconjugated_ && kconjugation_is_the_adjoint()) {
+      // the other direction of the coset rule: `T꙳{p;q}` is `T⁺{q;p}`, which
+      // a definite hermiticity reduces to `±T{q;p}` -- the mark is consumed
+      // and the bundles are exchanged (a bra/ket-less tensor has nothing to
+      // exchange). Ahead of the parity check, so a definite hermiticity wins
+      // where the parity is indefinite; there is no cycle with the `⁺` branch
+      // above, which trades `⁺` for `꙳` only where the hermiticity is not.
+      if (const auto s = adjoint_sign(hermiticity_)) {
+        kconjugated_ = false;
+        sign = static_cast<std::int8_t>(sign * *s);
         if (bra_net_rank() != 0 || ket_net_rank() != 0) _swap_bra_ket();
       }
     }
@@ -1287,17 +1308,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
            (bra_net_rank() == 0 && ket_net_rank() == 0);
   }
 
-  /// @return the sign `s` in `T꙳ = s T` if known. The parity states it in
-  ///         every basis (`K O K⁻¹ = ±O` is a property of the operator, not
-  ///         of the matrix; the elementwise conjugation_symmetry() is a
-  ///         different, basis-dependent observable). A tensor without bra/ket
-  ///         slots, whose adjoint is its conjugate, states it through the
-  ///         hermiticity first (a real array is declared Hermitian, an
-  ///         imaginary one AntiHermitian), through the parity where that is
-  ///         indefinite.
+  /// @return the sign `s` in `T꙳ = s T` that the parity states, if any. The
+  ///         parity states it in every basis (`K O K⁻¹ = ±O` is a property of
+  ///         the operator, not of the matrix; the elementwise
+  ///         conjugation_symmetry() is a different, basis-dependent
+  ///         observable). Where the hermiticity states a sign too -- over a
+  ///         real basis, or without bra/ket slots, where the conjugation is
+  ///         the adjoint -- normalize_states() applies that one first.
   std::optional<std::int8_t> kconjugation_sign() const {
-    if (bra_net_rank() == 0 && ket_net_rank() == 0)
-      if (const auto s = adjoint_sign(hermiticity_)) return s;
     switch (conjugation_parity_) {
       case ConjugationParity::Even:
         return std::int8_t{1};

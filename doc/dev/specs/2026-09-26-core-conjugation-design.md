@@ -198,6 +198,12 @@ eliminate `†` in favour of `*` there (`adjoint()` over a real basis exchanges
 the slots and toggles `*`), so that slots stay in place and real-basis
 expressions never show `⁺` where a star is meant.
 
+> **As built.** `normalize_states()` runs the identification in both
+> directions: where the hermiticity is definite it consumes the star at the
+> hermiticity's sign and exchanges the bundles instead (ahead of the parity),
+> so a real-basis `kconjugate` and `conjugate` of a Hermitian or
+> anti-Hermitian tensor produce one spelling.
+
 - `conjugate(ExprPtr)` is the complex conjugate of the value: on c-number
   content it is `adjoint(ExprPtr)` (one implementation; the head exchanged for
   an open expression), and it throws on operator-valued content, which has no

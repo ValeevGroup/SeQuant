@@ -677,6 +677,59 @@ TEST_CASE("core_states", "[conjugation]") {
     REQUIRE(r.adjointed());
     REQUIRE(r.kconjugated());
   }
+
+  SECTION("real basis, a definite hermiticity: the K state reduces") {
+    const Index p1 = idx(L"p_1", Field::Real);
+    const Index p2 = idx(L"p_2", Field::Real);
+    auto herm = [&](const Index& b, const Index& k) {
+      return ex<Tensor>(
+          L"h", bra{b}, ket{k},
+          TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                           .conjugation_parity = ConjugationParity::None});
+    };
+    // h꙳{p_1;p_2} = conj h{p_1;p_2} = h⁺{p_2;p_1} = h{p_2;p_1}
+    auto hk = kconjugate(herm(p1, p2));
+    REQUIRE(hk->is<Tensor>());
+    REQUIRE_FALSE(hk->as<Tensor>().kconjugated());
+    REQUIRE(*hk == *herm(p2, p1));
+    REQUIRE(*hk == *conjugate(herm(p1, p2)));
+    auto diff = herm(p2, p1) - kconjugate(herm(p1, p2));
+    simplify(diff);
+    REQUIRE(diff->is<Constant>());
+    REQUIRE(diff->as<Constant>().value() == 0);
+
+    // anti-Hermitian: d꙳{p_1;p_2} = -d{p_2;p_1}, the sign onto the Product
+    auto anti = [&](const Index& b, const Index& k) {
+      return ex<Tensor>(
+          L"d", bra{b}, ket{k},
+          TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                           .conjugation_parity = ConjugationParity::None});
+    };
+    auto dk = kconjugate(anti(p1, p2));
+    REQUIRE(dk->is<Product>());
+    REQUIRE(dk->as<Product>().scalar() == -1);
+    REQUIRE(dk->as<Product>().factors().size() == 1);
+    REQUIRE(*dk->as<Product>().factors()[0] == *anti(p2, p1));
+    auto asum = anti(p2, p1) + kconjugate(anti(p1, p2));
+    simplify(asum);
+    REQUIRE(asum->is<Constant>());
+    REQUIRE(asum->as<Constant>().value() == 0);
+
+    // an indefinite hermiticity keeps the mark, slots as written
+    Tensor t(L"t", bra{p1}, ket{p2},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    REQUIRE(t.kconjugate() == 1);
+    REQUIRE(t.kconjugated());
+    REQUIRE(t.bra()[0].label() == L"p_1");
+
+    // over a complex basis the conjugation is not the adjoint: mark kept
+    Tensor hc(L"h", bra{L"p_1"}, ket{L"p_2"},
+              TensorSymmetries{.hermiticity = Hermiticity::Hermitian,
+                               .conjugation_parity = ConjugationParity::None});
+    REQUIRE(hc.kconjugate() == 1);
+    REQUIRE(hc.kconjugated());
+    REQUIRE(hc.bra()[0].label() == L"p_1");
+  }
 }
 
 TEST_CASE("mark_serialization_roundtrip", "[conjugation]") {

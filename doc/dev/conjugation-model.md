@@ -68,13 +68,20 @@ annotation letter, `t꙳{a_1;i_1}:N-N-N-N`).
 ## The coset rule
 
 Over a real basis, or with no bra/ket slot, `t⁺{q;p}` and `t꙳{p;q}` are two
-spellings of one value. `normalize_states()` enters this branch on the
-hermiticity alone (a `⁺` the hermiticity does not clear) and trades it for a
-`꙳` with the bundles exchanged back; the parity then normalizes that star.
-So `adjoint()` on such a tensor leaves the slots in place: over real orbitals
-`adjoint(t{a;i})` is `t꙳{a;i}` for parity `None` and `t{a;i}` for the default
-parity (a K-even operator has a real matrix there); over complex orbitals it
-is `t⁺{i;a}`.
+spellings of one value, and `normalize_states()` identifies them in both
+directions. Where the hermiticity is indefinite (a `⁺` it does not clear) the
+`⁺` is traded for a `꙳` with the bundles exchanged back; the parity then
+normalizes that star. So `adjoint()` on such a tensor leaves the slots in
+place: over real orbitals `adjoint(t{a;i})` is `t꙳{a;i}` for parity `None` and
+`t{a;i}` for the default parity (a K-even operator has a real matrix there);
+over complex orbitals it is `t⁺{i;a}`.
+
+Where the hermiticity is definite it wins, ahead of the parity: a `꙳` is
+`t⁺{q;p}`, which the hermiticity reduces to `±t{q;p}`, so the mark is consumed
+at that sign and the bundles are exchanged. Over real orbitals
+`kconjugate(h{p_1;p_2})` of a Hermitian, parity-`None` `h` is `h{p_2;p_1}` and
+`kconjugate(d{p_1;p_2})` of an anti-Hermitian `d` is `−d{p_2;p_1}` — the same
+atoms `conjugate` produces, so one value has one spelling.
 
 ## Vocabulary
 
@@ -90,11 +97,11 @@ the free functions wrap a −1 as a scalar factor and rebuild `Sum`s and
 expression with open indices exchanges the head's bra and ket, so a
 `ResultExpr` caller must exchange the head itself. On scalars the three
 coincide. On c-number content over a real basis `conjugate` and `kconjugate`
-denote one value, and spell it alike only where the coset branch runs
-(hermiticity indefinite): for a Hermitian `h{i;a}` `conjugate` gives
-`h{a;i}` and `kconjugate` gives `h{i;a}`, equal through the declared
-symmetry. `fold_conjugate_pairs` and `is_hermitian_network` conjugate values
-through `adjoint`.
+denote one value and spell it alike: a definite hermiticity consumes the star
+and exchanges the bundles (for a Hermitian `h{i;a}` both give `h{a;i}`), an
+indefinite one keeps the star on the slots as written (both give `t꙳{a;i}`).
+`fold_conjugate_pairs` and `is_hermitian_network` conjugate values through
+`adjoint`.
 
 ## Spelling
 
