@@ -596,11 +596,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // returns Tensor * NormalOperator; the NormalOperator factor is
       // irrelevant here). Adjointing the tensor factor alone
       // (sequant::adjoint(ExprPtr), through Tensor::adjoint() and
-      // set_states()) shows the two cases Task 6 is about: a
-      // NonHermitian tensor's adjoint stays a distinct, Adjoint-marked
-      // array (as today); an anti-Hermitian one's adjoint mark normalizes
-      // away a sign that no Tensor can hold, so it comes back unmarked with
-      // swapped slots and a -1 Product scalar.
+      // set_states()) distinguishes two cases: a NonHermitian tensor's
+      // adjoint stays a distinct, Adjoint-marked array; an anti-Hermitian
+      // one's adjoint mark normalizes away a sign that no Tensor can hold,
+      // so it comes back unmarked with swapped slots and a -1 Product
+      // scalar.
       using namespace sequant::mbpt;
 
       OpRegistry registry;
@@ -609,8 +609,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto ctx_resetter = set_scoped_default_mbpt_context(
           {.csv = CSV::No, .op_registry = registry});
 
-      // NonHermitian: the adjoint tensor form is the Adjoint-marked tensor,
-      // as today.
+      // NonHermitian: the adjoint tensor form is the Adjoint-marked tensor.
       {
         auto x_base = OpMaker<Statistics::FermiDirac>(L"x", 1)(
             {}, {}, Normalization::Implicit);
