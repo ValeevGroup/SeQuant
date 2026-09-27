@@ -82,7 +82,7 @@ Adjoint and conjugation
 -----------------------
 
 :func:`adjoint() <sequant::adjoint>` returns the adjoint of an ``mbpt::Operator``, or of any expression built from operators:
-the operator's label gains a trailing ``⁺`` (``t`` becomes ``t⁺``, which its LaTeX form keeps as written, ``\hat{t⁺}``), its action on
+the operator's label gains a trailing ``⁺`` (``t`` becomes ``t⁺``, which its LaTeX form keeps as written, ``{\hat{t⁺}}``), its action on
 the quantum numbers is inverted, and its tensor form is the adjoint of the original's. In that tensor form the amplitude of a
 non-Hermitian operator is the adjointed tensor ``t⁺`` over complex orbitals; over real orbitals the same value is spelled ``t꙳`` with the
 slots in place. The integral of a Hermitian operator such as the Hamiltonian stays the same tensor with bra and ket exchanged.
@@ -100,7 +100,7 @@ The marks these operations leave in the output:
    ``t⁺``          the adjoint of ``t``: ``t⁺{q;p}`` is the complex conjugate of ``t{p;q}``                              ``t⁺{q;p}``      :math:`t^{\dagger}`
    ``t꙳``          the conjugated operator ``t``, slots in place; over real orbitals, the complex-conjugated array       ``t꙳{p;q}``      :math:`t^{*}`
    ``x꙳``          the complex conjugate of the variable ``x``                                                           ``x꙳``           :math:`x^{*}`
-   ``(x^(2))^*``   the complex conjugate of a power                                                                      ``(x^(2))^*``    :math:`{{x}^2}^{*}`
+   ``(x^(2))^*``   the complex conjugate of a power (a ``conjugated()`` flag spelled ``^*``, no mark)                   ``(x^(2))^*``    :math:`{{x}^{2}}^{*}`
    ==============  ===================================================================================================  ===============  ===========================
 
 A mark is part of the tensor's name: ``t``, ``t⁺`` and ``t꙳`` are three different arrays, and code generators name them

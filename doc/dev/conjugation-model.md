@@ -9,7 +9,7 @@ bra/ket-less tensors alike):
 | state        | mark | denotes                                                                  | via            |
 |--------------|------|--------------------------------------------------------------------------|----------------|
 | adjointed    | `⁺`  | `t⁺{q;p} = conj t{p;q}`, the matrix of `O†`                              | `adjoint()`    |
-| K-conjugated | `꙳`  | `t꙳{p;q} = <p|K O K⁻¹|q>`, the conjugated operator's matrix, slots in place | `kconjugate()` |
+| K-conjugated | `꙳`  | `t꙳{p;q} = ⟨p\|K O K⁻¹\|q⟩`, the conjugated operator's matrix, slots in place | `kconjugate()` |
 
 `K` is complex conjugation in the coordinate representation, the operation
 `ConjugationParity` is defined against; it is not time reversal
@@ -108,8 +108,8 @@ label with the states. The star is `꙳`, U+A673 (`sequant::conjugate_label`).
 | `Tensor`   | `⁺`   | `t⁺{…}`        | `{t^{\dagger}}`   | `t_adj`       |
 | `Tensor`   | `꙳`   | `t꙳{…}`        | `{t^{*}}`         | `t_conj`      |
 | `Tensor`   | `⁺꙳`  | `t⁺꙳{…}`       | `{t^{\dagger *}}` | `t_adj_conj`  |
-| `Variable` | `꙳`   | `x꙳`           | `{x^{*}}`         |               |
-| `Power`    | `꙳`   | `(x^(2))^*`    | `{{{x}^2}^{*}}`   |               |
+| `Variable` | `꙳`   | `x꙳`           | `{{x}^{*}}`       |               |
+| `Power`    | `conjugated()` flag, no mark | `(x^(2))^*` | `{{{x}^{2}}^{*}}` |    |
 
 The deserializer splits the marks off a tensor or variable name and applies
 them through `set_states()`, so a mark whose normalization carries −1 becomes
@@ -121,9 +121,11 @@ carries the `⁺` in its own label, which its LaTeX keeps as written
 
 ## The eval boundary
 
-`EvalExpr(Tensor)` block-canonicalizes a leaf with `fold_signed_braket` off:
-indices are reordered within each bundle, the `Symm` bra/ket swap is the only
-exchange, and a leaf keeps its as-written orientation. `binarize(Tensor)`
+`EvalExpr(Tensor)` block-canonicalizes a leaf with `fold_signed_braket` off
+(a tensor-of-tensors leaf, one with proto indices, goes through
+`TensorNetwork::canonicalize_slots` instead): indices are reordered within
+each bundle, the `Symm` bra/ket swap is the only exchange, and a leaf keeps
+its as-written orientation. `binarize(Tensor)`
 serves the states as IR ops over the bare leaf, which carries no sign:
 
 - `⁺`: `EvalOp::Adjoint` (permute bra/ket, then conjugate) over the bare
