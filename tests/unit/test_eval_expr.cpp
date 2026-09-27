@@ -672,8 +672,6 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 // C and C꙳ never share a cache slot.
 TEST_CASE("conjugate eval fold", "[eval_expr][conjugate-fold]") {
   using namespace sequant;
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
   auto ctx = set_scoped_default_context(
       Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
 
@@ -848,8 +846,6 @@ TEST_CASE("eval_expr_conjugation_marker_identity",
   // as S by one occurrence and as S^T* by the other (identical only for real
   // C). Regression for the Kramers-restricted CSV inter-pair overlap.
   using namespace sequant;
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   auto C = [](std::wstring_view ext) {
     return ex<Tensor>(L"C", bra{Index{ext}}, ket{Index{L"p_1"}},
