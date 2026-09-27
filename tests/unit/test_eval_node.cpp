@@ -91,12 +91,12 @@ TEST_CASE("eval_node", "[EvalNode]") {
   auto L = Npos::L;
   auto R = Npos::R;
 
-  // These sections exercise eval-node MECHANICS (tree shape, to_expr,
+  // These sections exercise eval-node mechanics (tree shape, to_expr,
   // costs); the tensors are abstract stand-ins, so declare them NonHermitian
-  // to keep the Conjugate braket-orientation fold (which rewrites a leaf to
-  // its swapped+starred spelling) out of the picture. The fold itself, and
-  // its interplay with product intermediates, is covered by the dedicated
-  // "conjugate-folded factor" section below.
+  // so that no bra/ket exchange or adjoint relation enters the picture. A
+  // Conjugate (Hermitian) factor's orientation, and its interplay with
+  // product intermediates, is covered by the dedicated "Conjugate factor
+  // keeps as-written orientation and partition" section below.
   auto parse_expr_antisymm = [](auto const& xpr) {
     return deserialize(xpr, {.def_perm_symm = Symmetry::Antisymm,
                              .def_braket_symm = Hermiticity::NonHermitian});

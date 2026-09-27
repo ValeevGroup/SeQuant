@@ -8,6 +8,7 @@
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -727,12 +728,12 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   const size_t nocc = 2, nvirt = 5;
   auto yield_ = rand_tensor_yield<BTensorC>{nocc, nvirt};
 
-  // A Nonsymm-braket tensor's adjoint() sets the Adjoint value modifier
-  // (spelled with '⁺') and swaps bra/ket; binarize lowers that to an
-  // EvalOp::Adjoint node, and evaluating it
-  // must conjugate-transpose the operand. With genuinely complex data the
+  // A non-Hermitian tensor's adjoint() swaps bra/ket and sets the adjointed
+  // state (spelled with a trailing '⁺'); binarize lowers that to an
+  // EvalOp::Adjoint node over the bare leaf, and evaluating it must
+  // conjugate-transpose the operand. With genuinely complex data the
   // conjugation is observable (a missing conj would leave imaginary parts
-  // unflipped — a pure transpose would still pass a norm-only check).
+  // unflipped; a pure transpose would still pass a norm-only check).
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
@@ -874,9 +875,10 @@ TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
 
 // A product that contracts every index of both operands is a bilinear dot,
 // sum_k L[k] R[k], with no conjugation: SeQuant spells a conjugated operand
-// explicitly (a Conjugate value modifier, an EvalOp::Adjoint node), so the
-// backend must not conjugate on its own. BTAS's btas::dot is dotc (BLAS zdotc,
-// the first operand conjugated), which is only observable on complex data.
+// explicitly (an adjointed or K-conjugated state, lowered to an
+// EvalOp::Adjoint node), so the backend must not conjugate on its own. BTAS's
+// btas::dot is dotc (BLAS zdotc, the first operand conjugated), which is only
+// observable on complex data.
 TEST_CASE("eval_dot_complex_btas", "[eval_btas]") {
   using namespace sequant;
   using C = std::complex<double>;
@@ -1141,15 +1143,15 @@ TEST_CASE("eval_btas_batched_over_aux", "[eval_btas][hyperindex]") {
 
 TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   using namespace sequant;
-  using BTensorC = btas::Tensor<std::complex<double>>;
+  using C = std::complex<double>;
+  using BTensorC = btas::Tensor<C>;
 
-  // The sign a value respelling costs must be applied exactly once, and as
-  // a scalar. A leaf that arrives marked -- d^*{i_1;a_1} for an
-  // anti-Hermitian d -- is lowered to its value orientation, with that sign
-  // in the enclosing product's scalar, or as a Constant(-1) node of its own
-  // for a bare leaf or a summand; an ancestor that takes the leaf's slot
-  // layout must add nothing, since a node's phase multiplies everything
-  // below it, the summand beside the marked one included.
+  // A leaf keeps its as-written orientation, and the states are served as IR
+  // ops over the bare leaf: '⁺' as the Adjoint node (permute and conjugate),
+  // a '꙳' over a real basis as the Adjoint node with an identity layout (a
+  // pure elementwise conjugation). A marked tensor never carries a sign;
+  // signs live in scalars. Symbolic canonicalization never exchanges a
+  // Conjugate tensor's bundles, so a network keeps its value through it.
   Context ctx = get_default_context();
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
@@ -1157,8 +1159,8 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   std::srand(2024);
   const size_t nocc = 2, nvirt = 3;
   auto rnd = []() {
-    return std::complex<double>(static_cast<double>(std::rand()) / RAND_MAX,
-                                static_cast<double>(std::rand()) / RAND_MAX);
+    return C(static_cast<double>(std::rand()) / RAND_MAX,
+             static_cast<double>(std::rand()) / RAND_MAX);
   };
 
   // d is anti-Hermitian: the two spellings are related exactly by
@@ -1168,60 +1170,40 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   BTensorC Dswapped{btas::Range{nvirt, nocc}};
   for (size_t i = 0; i < nocc; ++i)
     for (size_t a = 0; a < nvirt; ++a) Dswapped(a, i) = -std::conj(D(i, a));
-  BTensorC U{btas::Range{nvirt, nocc}};  // generic u{a_1;i_1}
+  BTensorC U{btas::Range{nvirt, nocc}};  // generic u{a_1;i_2}
   U.generate(rnd);
   BTensorC V{btas::Range{nocc, nvirt}};  // generic v{i_1;a_1}
   V.generate(rnd);
-  // g is Hermitian: g{a_1;i_1} = conj(g{i_1;a_1})
-  BTensorC G{btas::Range{nocc, nvirt}};
-  G.generate(rnd);
-  BTensorC Gswapped{btas::Range{nvirt, nocc}};
-  for (size_t i = 0; i < nocc; ++i)
-    for (size_t a = 0; a < nvirt; ++a) Gswapped(a, i) = std::conj(G(i, a));
 
   auto d = [](std::wstring_view b, std::wstring_view k) {
     return ex<Tensor>(
         L"d", bra{b}, ket{k},
         TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
   };
-  auto u = [] { return ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"}); };
   auto u2 = [] { return ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_2"}); };
   auto v = [] { return ex<Tensor>(L"v", bra{L"i_1"}, ket{L"a_1"}); };
-  auto g = [](std::wstring_view b, std::wstring_view k) {
-    return ex<Tensor>(L"g", bra{b}, ket{k},
-                      TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
-  };
 
   pinned_tensor_yield<BTensorC> yield;
   yield.put(d(L"i_1", L"a_1")->as<Tensor>(), D);
   yield.put(d(L"a_1", L"i_1")->as<Tensor>(), Dswapped);
-  yield.put(u()->as<Tensor>(), U);
+  yield.put(u2()->as<Tensor>(), U);
   yield.put(v()->as<Tensor>(), V);
-  yield.put(g(L"i_1", L"a_1")->as<Tensor>(), G);
-  yield.put(g(L"a_1", L"i_1")->as<Tensor>(), Gswapped);
 
-  // A node's canonicalization phase converts its own spelling to the
-  // canonical orientation the caches hold; the descent engine applies it on
-  // cache reads only and hands the root's value back unoriented, so applying
-  // the root's phase is the caller's job (the ordered executor's root combine
-  // does the same, see evaluate_ordered_schedule's own test).
+  // The engine returns the root's value in the requested layout; no node
+  // here has a canonicalization phase, since a leaf keeps its orientation
+  // and the networks are spelled in their canonical form.
   auto eval_open = [&yield](ExprPtr const& expr,
                             container::svector<long> const& layout) {
     auto node = eval_node(expr);
-    auto res = evaluate(node, layout, yield)->get<BTensorC>();
-    if (node->canon_phase() != 1)
-      btas::scal(std::complex<double>(node->canon_phase()), res);
-    return res;
+    REQUIRE(node->canon_phase() == 1);
+    return evaluate(node, layout, yield)->get<BTensorC>();
   };
 
   SECTION("a contraction keeps its value through canonicalization") {
     // r{i_1;i_2} = d{i_1;a_1} u{a_1;i_2}; an open contraction, so the check
-    // runs through btas::contract. A closed (scalar) network would go through
-    // btas::dot, which conjugates its first operand -- not a linear function
-    // of the operands, so two spellings of one expression legitimately differ
-    // there, and it cannot witness a sign.
+    // runs through btas::contract.
     BTensorC ref{btas::Range{nocc, nocc}};
-    ref.fill(std::complex<double>{0., 0.});
+    ref.fill(C{0., 0.});
     for (size_t i = 0; i < nocc; ++i)
       for (size_t j = 0; j < nocc; ++j)
         for (size_t a = 0; a < nvirt; ++a) ref(i, j) += D(i, a) * U(a, j);
@@ -1254,77 +1236,97 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
       }
   }
 
-  SECTION("a marked leaf evaluates to the value it denotes") {
-    // d^*{i_1;a_1} = conj(d{i_1;a_1}) and, through the anti-Hermitian
-    // relation, = -d{a_1;i_1}: a bra/ket exchange and a sign, no conjugation
-    // of an array. binarize lowers it to the value-orientation leaf times
-    // Constant(-1), and the engine, contracting by index label, reads that
-    // leaf in the requested layout.
-    Tensor dstar = d(L"i_1", L"a_1")->as<Tensor>();
-    REQUIRE(dstar.kconjugate() == 1);
-    REQUIRE(dstar.kconjugated());
+  // t{a_1;i_1} and its partner in a closed network; T(a, i) is t's array
+  BTensorC T{btas::Range{nvirt, nocc}};
+  T.generate(rnd);
+  BTensorC W{btas::Range{nocc, nvirt}};  // W(i, a)
+  W.generate(rnd);
+  // Σ_{a,i} conj(T(a, i)) W(i, a)
+  C ref_conj{0., 0.};
+  for (size_t a = 0; a < nvirt; ++a)
+    for (size_t i = 0; i < nocc; ++i) ref_conj += std::conj(T(a, i)) * W(i, a);
+  auto eval_closed = [](auto const& node, auto const& leaf_yield) {
+    REQUIRE(node->is_scalar());
+    REQUIRE(node->canon_phase() == 1);
+    auto res = evaluate(node, node->annot(), leaf_yield);
+    REQUIRE(res->template is<ResultScalar<C>>());
+    return res->template as<ResultScalar<C>>().value();
+  };
 
-    auto const layout = tidxs(L"i_1,a_1");
-    auto const alone = eval_open(ex<Tensor>(dstar), layout);
-    for (size_t i = 0; i < nocc; ++i)
-      for (size_t a = 0; a < nvirt; ++a) {
-        // -transpose(d{a_1;i_1}) == conj(D)
-        auto const expected = std::conj(D(i, a));
-        REQUIRE(expected == -Dswapped(a, i));
-        CHECK(alone(i, a).real() ==
-              Catch::Approx(expected.real()).margin(1e-12));
-        CHECK(alone(i, a).imag() ==
-              Catch::Approx(expected.imag()).margin(1e-12));
-      }
+  SECTION("a K-conjugated leaf over a real basis is the conjugate array") {
+    // over a real basis with complex data, t꙳{a_1;i_1} w{i_1;a_1} evaluates
+    // to Σ conj(T(a, i)) W(i, a): the K-conjugate of t is the elementwise
+    // conjugate of its array, served as an Adjoint node with an identity
+    // layout over the bare leaf
+    auto ridx = [](std::wstring_view label) {
+      Index i(label);
+      IndexSpace sp = i.space();
+      sp.field(Field::Real);
+      return Index(label, sp);
+    };
+    // parity None keeps the '꙳'; under the default Even it normalizes away
+    Tensor t(L"t", bra{ridx(L"a_1")}, ket{ridx(L"i_1")},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor w(L"w", bra{ridx(L"i_1")}, ket{ridx(L"a_1")});
+    REQUIRE(t.base_field() == Field::Real);
+    pinned_tensor_yield<BTensorC> ryield;
+    ryield.put(t, T);
+    ryield.put(w, W);
 
-    // the tree: a Product over the value-orientation leaf and Constant(-1),
-    // the sign being a scalar and not a node phase
-    auto marked = eval_node(ex<Tensor>(dstar));
-    REQUIRE(marked->op_type() == EvalOp::Product);
-    REQUIRE(marked.left().leaf());
-    REQUIRE_FALSE(marked.left()->as_tensor().kconjugated());
-    REQUIRE(marked.right()->is_constant());
-    REQUIRE(marked.right()->as_constant().value<int>() == -1);
+    // the conjugate of a matrix element over a real basis is the K-conjugate
+    // with the slots in place
+    auto tk = conjugate(ex<Tensor>(t));
+    REQUIRE(tk->is<Tensor>());
+    REQUIRE(tk->as<Tensor>().kconjugated());
+    REQUIRE_FALSE(tk->as<Tensor>().adjointed());
+    REQUIRE(tk->as<Tensor>().bra()[0].label() == L"a_1");
 
-    // and in a sum it carries that sign alone: the generic summand v keeps
-    // its own, whichever order the two are written in
-    auto const first = eval_open(ex<Tensor>(dstar) + v(), layout);
-    auto const second = eval_open(v() + ex<Tensor>(dstar), layout);
-    for (size_t i = 0; i < nocc; ++i)
-      for (size_t a = 0; a < nvirt; ++a) {
-        auto const expected = std::conj(D(i, a)) + V(i, a);
-        CHECK(first(i, a).real() ==
-              Catch::Approx(expected.real()).margin(1e-12));
-        CHECK(first(i, a).imag() ==
-              Catch::Approx(expected.imag()).margin(1e-12));
-        CHECK(second(i, a).real() ==
-              Catch::Approx(expected.real()).margin(1e-12));
-        CHECK(second(i, a).imag() ==
-              Catch::Approx(expected.imag()).margin(1e-12));
-      }
+    auto node = eval_node(tk * ex<Tensor>(w));
+    REQUIRE(node->op_type() == EvalOp::Product);
+    auto const& kn = node.left();
+    REQUIRE(kn->op_type() == EvalOp::Adjoint);
+    REQUIRE(kn.left().leaf());
+    REQUIRE_FALSE(kn.left()->as_tensor().kconjugated());
+    REQUIRE(kn->canon_indices() == kn.left()->canon_indices());
+    REQUIRE(kn->annot() == kn.left()->annot());
+
+    auto const got = eval_closed(node, ryield);
+    CHECK(got.real() == Catch::Approx(ref_conj.real()).margin(1e-12));
+    CHECK(got.imag() == Catch::Approx(ref_conj.imag()).margin(1e-12));
   }
 
-  SECTION("a marked Hermitian leaf evaluates to the conjugate array") {
-    // the mainstream case: g^*{i_1;a_1} = conj(g{i_1;a_1}) = g{a_1;i_1},
-    // an exchange with no sign. Lowering it to an adjoint instead would
-    // conjugate the served array a second time and return g{i_1;a_1}.
-    Tensor gstar = g(L"i_1", L"a_1")->as<Tensor>();
-    REQUIRE(gstar.braket_symmetry() == BraKetSymmetry::Conjugate);
-    REQUIRE(gstar.kconjugate() == 1);
-    REQUIRE(gstar.kconjugated());
+  SECTION("an adjointed leaf over a complex basis is the Adjoint node") {
+    // over a complex basis conjugate(t{a_1;i_1}) is t⁺{i_1;a_1}, the Adjoint
+    // node over the bare leaf: t⁺{i_1;a_1} w'{a_1;i_1} = Σ conj(T(a, i))
+    // W'(a, i), with W'(a, i) = W(i, a) so that the reference is the same
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+    Tensor w(L"w", bra{L"a_1"}, ket{L"i_1"});
+    REQUIRE(t.base_field() == Field::Complex);
+    BTensorC Wt{btas::Range{nvirt, nocc}};
+    for (size_t a = 0; a < nvirt; ++a)
+      for (size_t i = 0; i < nocc; ++i) Wt(a, i) = W(i, a);
+    pinned_tensor_yield<BTensorC> cyield;
+    cyield.put(t, T);
+    cyield.put(w, Wt);
 
-    auto marked = eval_node(ex<Tensor>(gstar));
-    REQUIRE(marked.leaf());
-    REQUIRE_FALSE(marked->as_tensor().kconjugated());
-    REQUIRE(marked->as_tensor().bra()[0].label() == L"a_1");
+    auto tadj = adjoint(ex<Tensor>(t));
+    REQUIRE(tadj->is<Tensor>());
+    REQUIRE(tadj->as<Tensor>().adjointed());
+    REQUIRE_FALSE(tadj->as<Tensor>().kconjugated());
+    REQUIRE(tadj->as<Tensor>().bra()[0].label() == L"i_1");
+    REQUIRE(*conjugate(ex<Tensor>(t)) == *tadj);
 
-    auto const got = eval_open(ex<Tensor>(gstar), tidxs(L"i_1,a_1"));
-    for (size_t i = 0; i < nocc; ++i)
-      for (size_t a = 0; a < nvirt; ++a) {
-        auto const expected = std::conj(G(i, a));
-        REQUIRE(expected == Gswapped(a, i));
-        CHECK(got(i, a).real() == Catch::Approx(expected.real()).margin(1e-12));
-        CHECK(got(i, a).imag() == Catch::Approx(expected.imag()).margin(1e-12));
-      }
+    auto node = eval_node(tadj * ex<Tensor>(w));
+    REQUIRE(node->op_type() == EvalOp::Product);
+    auto const& an = node.left();
+    REQUIRE(an->op_type() == EvalOp::Adjoint);
+    REQUIRE(an.left().leaf());
+    REQUIRE_FALSE(an.left()->as_tensor().adjointed());
+    REQUIRE(an.left()->as_tensor().bra()[0].label() == L"a_1");
+    REQUIRE(an->canon_indices() != an.left()->canon_indices());
+
+    auto const got = eval_closed(node, cyield);
+    CHECK(got.real() == Catch::Approx(ref_conj.real()).margin(1e-12));
+    CHECK(got.imag() == Catch::Approx(ref_conj.imag()).margin(1e-12));
   }
 }

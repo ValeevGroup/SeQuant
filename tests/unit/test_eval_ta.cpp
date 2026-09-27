@@ -6453,17 +6453,16 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
 }
 
 TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
-  // END-TO-END check of serving the conjugation marker at eval: a starred
-  // ToT spelling lowers to its unmarked VALUE-orientation leaf, times the
-  // exchange relation's sign when that is -1. For a Conjugate (Hermitian)
-  // tensor the sign is +1, so T^*{q;p} is served as the leaf T{p;q} itself:
-  // the marker denotes a bra/ket exchange, which the engine performs by
-  // index label, and not a conjugation of an array. (Folding fresh leaves
-  // onto one orientation-shared cache slot is the lazy-conj eval follow-up.)
+  // End-to-end check of the K-conjugated state on a ToT leaf at eval: the
+  // parity trait normalizes a '꙳' at the symbolic layer, and under the
+  // default Even parity it clears with the slots in place, so kconjugate() on
+  // a Hermitian ToT leaves the bare spelling behind. binarize then serves
+  // that spelling as a plain leaf (no Adjoint node), and the engine hands
+  // back the yielder's array for it unchanged.
   //
-  // Here: binarize a starred spelling, evaluate it against a yielder that
-  // only ever serves the unmarked operand's spelling, and require the result
-  // to be exactly what was served.
+  // Here: apply kconjugate() to a spelling, binarize it, evaluate it against
+  // a yielder that serves the bare spelling, and require the result to be
+  // exactly what was served.
   using namespace sequant;
   auto& world = TA::get_default_world();
   size_t const nocc = 2, nvirt = 3;
@@ -6480,8 +6479,9 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   auto const canonical =
       deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
 
-  // eval-boundary precondition: leaves are orientation-sensitive (no fold,
-  // no marker) -- the two orientations are distinct nodes
+  // eval-boundary precondition: leaves keep their orientation (a Conjugate
+  // tensor's bundles are never exchanged, no state) -- the two orientations
+  // are distinct nodes
   EvalExpr const swapped_leaf{swapped->as<Tensor>()};
   EvalExpr const canon_leaf{canonical->as<Tensor>()};
   auto const is_conj = [](EvalExpr const& leaf) {
@@ -6491,7 +6491,8 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   REQUIRE_FALSE(is_conj(canon_leaf));
   REQUIRE(swapped_leaf.hash_value() != canon_leaf.hash_value());
 
-  // a STARRED spelling is served as its unmarked VALUE-orientation leaf
+  // the '꙳' normalizes away (Even parity), leaving the bare spelling, which
+  // is served as a plain leaf
   auto conj_side = canonical->clone();
   REQUIRE(conj_side->as<Tensor>().kconjugate() == 1);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
