@@ -753,29 +753,49 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
     REQUIRE_FALSE(tree.left()->as_tensor().adjointed());
     REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
   }
-  SECTION("adjointed leaf rebuilt onto a real basis: still Adjoint") {
-    // index-mutating APIs do not re-normalize, so a '⁺' can stand over a
-    // real basis; the lowering is value-correct in every basis and must not
-    // assert
-    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
-    REQUIRE(t.adjoint() == 1);
-    REQUIRE(t.adjointed());
+  SECTION("adjointed leaf moved onto a real basis: it arrives normalized") {
+    // transform_indices re-normalizes the states over the new slots' field, so
+    // the lowering never sees a '⁺' over a real basis: the coset rule has
+    // already traded it for a '꙳' on the slots as written, which the parity
+    // keeps (None) or consumes (the default)
     container::map<Index, Index> to_real{
         {Index{L"a_1"}, idx(L"a_1", Field::Real)},
         {Index{L"i_1"}, idx(L"i_1", Field::Real)}};
-    REQUIRE(t.transform_indices(to_real));
-    t.reset_tags();  // transform_indices tags the replaced indices
-    REQUIRE(t.base_field() == Field::Real);
-    REQUIRE(t.adjointed());
+    auto moved_onto_real = [&to_real](ConjugationParity parity) {
+      Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+               TensorSymmetries{.conjugation_parity = parity});
+      REQUIRE(t.adjoint() == 1);
+      REQUIRE(t.adjointed());
+      REQUIRE(t.transform_indices(to_real));
+      t.reset_tags();  // transform_indices tags the replaced indices
+      REQUIRE(t.base_field() == Field::Real);
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE(t.bra()[0].label() == L"a_1");
+      return t;
+    };
+
+    // the default parity consumes the star: a stateless leaf, no Adjoint node
+    Tensor even = moved_onto_real(ConjugationParity::Even);
+    REQUIRE_FALSE(even.kconjugated());
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    auto tree = binarize(ex<Tensor>(t));
+    auto even_tree = binarize(ex<Tensor>(even));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(tree->op_type() == EvalOp::Adjoint);
-    REQUIRE(tree.left().leaf());
-    REQUIRE_FALSE(tree.left()->as_tensor().adjointed());
-    REQUIRE_FALSE(tree.left()->as_tensor().kconjugated());
-    REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
-    REQUIRE(tree->canon_indices() != tree.left()->canon_indices());
+    REQUIRE(even_tree.leaf());
+    REQUIRE_FALSE(even_tree->op_type().has_value());
+    REQUIRE(even_tree->as_tensor().bra()[0].label() == L"a_1");
+
+    // an indefinite parity keeps it: the Adjoint kernel with an identity layout
+    Tensor none = moved_onto_real(ConjugationParity::None);
+    REQUIRE(none.kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto none_tree = binarize(ex<Tensor>(none));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(none_tree->op_type() == EvalOp::Adjoint);
+    REQUIRE(none_tree.left().leaf());
+    REQUIRE_FALSE(none_tree.left()->as_tensor().adjointed());
+    REQUIRE_FALSE(none_tree.left()->as_tensor().kconjugated());
+    REQUIRE(none_tree.left()->as_tensor().bra()[0].label() == L"a_1");
+    REQUIRE(none_tree->canon_indices() == none_tree.left()->canon_indices());
   }
   SECTION(
       "K-conjugated leaf over a real basis: Adjoint with an identity "

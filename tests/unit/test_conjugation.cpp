@@ -1715,3 +1715,95 @@ TEST_CASE("fold_conjugate_pairs_is_order_independent", "[conjugation]") {
   simplify(f2);
   REQUIRE(*f1 == *f2);
 }
+
+TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
+  // A slot mutation can put a tensor on a basis of another field, where a set
+  // state denotes a different array: over a real basis the coset rule trades a
+  // `⁺` for a `꙳` with the bundles exchanged back, and the parity then keeps
+  // or consumes that star. transform_indices(), set_bra() and set_ket()
+  // therefore normalize the states again, and refuse a normalization that
+  // costs a sign.
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // `t⁺{i_1;a_1}`: NonHermitian over a complex basis, so the mark stands
+  auto adjointed_t = [](ConjugationParity parity) {
+    Tensor t(L"t", bra{Index{L"a_1"}}, ket{Index{L"i_1"}},
+             TensorSymmetries{.conjugation_parity = parity});
+    REQUIRE(t.base_field() == Field::Complex);
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+    REQUIRE(t.bra()[0].label() == L"i_1");
+    return t;
+  };
+  const container::map<Index, Index> to_real{
+      {Index{L"a_1"}, idx(L"a_1", Field::Real)},
+      {Index{L"i_1"}, idx(L"i_1", Field::Real)}};
+
+  SECTION("onto a real basis: the coset spelling, parity None keeps the star") {
+    auto t = adjointed_t(ConjugationParity::None);
+    REQUIRE(t.transform_indices(to_real));
+    t.reset_tags();  // transform_indices tags the replaced indices
+    REQUIRE(t.base_field() == Field::Real);
+    REQUIRE_FALSE(t.adjointed());
+    REQUIRE(t.kconjugated());
+    // the coset rule exchanged the bundles back, so the slots stand as written
+    REQUIRE(t.bra()[0].label() == L"a_1");
+    REQUIRE(t.ket()[0].label() == L"i_1");
+    REQUIRE(t.decorated_label() == L"t꙳");
+  }
+
+  SECTION("onto a real basis: the default parity consumes the star") {
+    auto t = adjointed_t(ConjugationParity::Even);
+    REQUIRE(t.transform_indices(to_real));
+    t.reset_tags();
+    REQUIRE(t.base_field() == Field::Real);
+    REQUIRE_FALSE(t.adjointed());
+    REQUIRE_FALSE(t.kconjugated());
+    REQUIRE(t.bra()[0].label() == L"a_1");
+    REQUIRE(t.decorated_label() == L"t");
+  }
+
+  SECTION("an odd-parity array is refused: the mutation would cost a sign") {
+    auto t = adjointed_t(ConjugationParity::Odd);
+    REQUIRE_THROWS_AS(t.transform_indices(to_real), Exception);
+    // the states and the slot order are restored, so the refused tensor is the
+    // adjointed spelling it was, on the mutated slots
+    REQUIRE(t.adjointed());
+    REQUIRE_FALSE(t.kconjugated());
+    REQUIRE(t.bra()[0].label() == L"i_1");
+  }
+
+  SECTION("a relabeling within one field leaves the states as they are") {
+    auto t = adjointed_t(ConjugationParity::None);
+    const container::map<Index, Index> rename{{Index{L"i_1"}, Index{L"i_2"}}};
+    REQUIRE(t.transform_indices(rename));
+    t.reset_tags();
+    REQUIRE(t.base_field() == Field::Complex);
+    REQUIRE(t.adjointed());
+    REQUIRE_FALSE(t.kconjugated());
+    REQUIRE(t.bra()[0].label() == L"i_2");
+  }
+
+  SECTION("set_bra and set_ket normalize the same way") {
+    auto t = adjointed_t(ConjugationParity::None);
+    t.set_bra({idx(L"i_1", Field::Real)});
+    // the bra alone is real, so the base field is still Complex: nothing moved
+    REQUIRE(t.base_field() == Field::Complex);
+    REQUIRE(t.adjointed());
+    t.set_ket({idx(L"a_1", Field::Real)});
+    REQUIRE(t.base_field() == Field::Real);
+    REQUIRE_FALSE(t.adjointed());
+    REQUIRE(t.kconjugated());
+    // the coset rule exchanged the bundles, so the real a_1 is now the bra
+    REQUIRE(t.bra()[0].label() == L"a_1");
+    REQUIRE(t.ket()[0].label() == L"i_1");
+
+    auto odd = adjointed_t(ConjugationParity::Odd);
+    odd.set_bra({idx(L"i_1", Field::Real)});
+    REQUIRE_THROWS_AS(odd.set_ket({idx(L"a_1", Field::Real)}), Exception);
+    REQUIRE(odd.adjointed());
+    REQUIRE(odd.bra()[0].label() == L"i_1");
+  }
+}

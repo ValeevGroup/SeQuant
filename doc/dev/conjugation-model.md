@@ -20,14 +20,19 @@ bra/ket-less tensors alike):
 ## Normalization by the traits
 
 Normalization against the traits runs at construction, in `set_states()`,
-`adjoint()`, `kconjugate()`, `set_label()` / `adopt_marks()`, and
-`with_slots()`, so a state set through one of those always denotes a genuinely
-distinct array. The slot-mutating APIs (`transform_indices`, `set_bra`,
-`set_ket`, `replace_indices`, `_swap_bra_ket`) do not re-normalize, which is
-harmless while the field is unchanged. The sign consumed is returned to the
-caller; `sequant::adjoint` / `kconjugate(const ExprPtr&)` turn it into a scalar
-factor, and a constructor or `with_slots()` refuses a mark whose normalization
-carries −1.
+`adjoint()`, `kconjugate()`, `set_label()` / `adopt_marks()`, `with_slots()`,
+and the slot-mutating `transform_indices()`, `set_bra()` and `set_ket()`, so a
+state set through any of those always denotes a genuinely distinct array. A
+slot mutation can put the tensor on a basis of another field, where the coset
+rule identifies `⁺` with `꙳` and a definite trait consumes the mark outright,
+so the states are normalized again there. `set_aux()` does not re-normalize
+(the aux slots are not part of `base_field()`), and neither do the
+`AbstractTensor` primitives `_swap_bra_ket()` and `_bra_mutable()` /
+`_ket_mutable()`, which normalization and the tensor-network machinery drive
+themselves. The sign consumed is returned to the caller; `sequant::adjoint` /
+`kconjugate(const ExprPtr&)` turn it into a scalar factor, while a
+constructor, `with_slots()` and a slot mutation refuse a mark whose
+normalization carries −1.
 
 | `Hermiticity`   | `t⁺`             | kept? | sign returned by `adjoint()` |
 |-----------------|------------------|-------|------------------------------|
