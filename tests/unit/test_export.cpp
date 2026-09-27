@@ -1095,3 +1095,107 @@ TEST_CASE("exported names of reordered marked tensors", "[export]") {
   REQUIRE(ctx.import_name(reordered_adjointed).value() == "TADJ");
   REQUIRE(ctx.import_name(reordered_kconjugated).value() == "TCONJ");
 }
+
+TEST_CASE("full export of marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+  const auto t_adj = ex<Tensor>(L"t⁺", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE(t_adj->as<Tensor>().adjointed());
+  const auto f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+  const ResultExpr result(R, t * f + t_adj * f);
+
+  SECTION("itf tells a marked tensor apart from its bare twin") {
+    // the reordering leaves these Nonsymm, aux-less tensors alone, so only the
+    // marks can keep the two arrays apart
+    for (bool rewriting : {true, false}) {
+      CAPTURE(rewriting);
+
+      ItfContext ctx;
+      configure_context_defaults(ctx);
+      ctx.enable_rewriting(rewriting);
+      ItfGenerator<ItfContext> gen;
+      export_expression(to_export_tree(result), gen, ctx);
+      const std::string code = gen.get_generated_code();
+      CAPTURE(code);
+
+      // two declarations under two names
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("tensor: t:ce["));
+      REQUIRE_THAT(code,
+                   Catch::Matchers::ContainsSubstring("tensor: t_adj:ce["));
+      // and two entries in the load-strategy bookkeeping
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t:ce["));
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("alloc t_adj:ce["));
+    }
+  }
+
+  SECTION("the text generator tells them apart as well") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("Declare tensor t[i_1, a_2]"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Declare tensor t_adj[i_1, a_2]"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Compute t_adj[i_1, a_2] += t[a_2, i_1]"));
+  }
+
+  SECTION("a K-conjugated terminal is imported under its own name") {
+    // over a complex basis a `꙳` is a leaf of its own, so both arrays are
+    // terminals and both are imported
+    const TensorSymmetries syms{.conjugation_parity = ConjugationParity::None};
+    const auto tp = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, syms);
+    const auto tc = ex<Tensor>(L"t꙳", bra{L"i_1"}, ket{L"a_2"}, syms);
+    REQUIRE(tc->as<Tensor>().kconjugated());
+
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R, tp * f + tc * f)), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("tensor: t:ce[jc], t:ce"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "tensor: t_conj:ce[jc], t_conj:ce"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t:ce[jc]"));
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("load t_conj:ce[jc]"));
+  }
+
+  SECTION("the integral remap does not see a marked integral") {
+    // the marks are folded into the label before any context rewrite, so the
+    // g->J/K remap no longer recognizes a marked integral and exports it
+    // under its own name
+    const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    const auto g_adj =
+        ex<Tensor>(L"g⁺", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    REQUIRE(g_adj->as<Tensor>().adjointed());
+    const auto t2 = ex<Tensor>(L"t2", bra{L"a_1", L"a_2"}, ket{L"i_2", L"a_3"});
+    const Tensor R2(L"R2", bra{L"i_1"}, ket{L"a_3"});
+
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_two_electron_integral_label(L"g");
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R2, g * t2 + g_adj * t2)), gen,
+                      ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    // the bare integral is still remapped
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("tensor: K:eecc["));
+    // the marked one is not
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("tensor: g_adj:ccee["));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("K_adj"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("J_adj"));
+  }
+}

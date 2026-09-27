@@ -9,6 +9,7 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -438,6 +439,22 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
       "This function currently only works for tensors and variables");
 
   bool storeExpr = false;
+
+  if constexpr (std::is_same_v<ExprType, Tensor>) {
+    // A marked tensor is an array of its own, and every map below (and in the
+    // generators) keys on the label and the slots. Folding the marks into the
+    // label, before the context gets to rewrite anything, is what makes `t`
+    // and `t⁺` two arrays under two names throughout the pipeline. It also
+    // keeps the backends' label matching (e.g. the ITF integral remap) from
+    // treating a marked tensor as the array its bare label names.
+    if (expr.adjointed() || expr.kconjugated()) {
+      expr.set_label(export_label(expr));
+      // clearing both states consumes no sign
+      [[maybe_unused]] const auto sign = expr.set_states(false, false);
+      SEQUANT_ASSERT(sign == 1);
+      storeExpr = true;
+    }
+  }
 
   // TODO: find a way to pass usage information to this call so that indices
   // of tensors that are only used as an intermediate can be more easily

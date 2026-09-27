@@ -223,9 +223,12 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   // the rebuild holds every index in an aux slot, so it states none of the
   // traits the core states are normalized against and cannot carry them: a
   // `⁺` set on a tensor without bra/ket slots is traded for a `꙳`, which the
-  // default parity then clears. The marks therefore move into the label,
-  // spelled as export_name() spells them, so that a reordered tensor is named
-  // exactly as the same tensor is named without reordering.
+  // default parity then clears. export_label() therefore moves the marks into
+  // the label, so that a reordered tensor is named exactly as the same tensor
+  // is named without reordering. A tensor that reaches here through the export
+  // preprocessing already carries a folded label and nothing is appended; a
+  // caller that rewrites a tensor on its own (the external-interface result
+  // tensors) relies on this.
   Tensor reordered(export_label(tensor), bra(), ket(), aux(std::move(indices)),
                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                    ColumnSymmetry::Nonsymm);
