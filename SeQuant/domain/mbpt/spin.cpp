@@ -69,8 +69,11 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   const auto label = mbpt::spinannotation_replacе(idx.space().base_key(), s);
   if (auto isr = get_default_context().index_space_registry()) {
     auto* space_ptr = isr->retrieve_ptr(label);
+    // the field is part of the match: a registered space of another field is a
+    // basis the source index is not over, so it falls through to the mint path
+    // below, which carries the source space's field
     if (space_ptr && space_ptr->type() == idx.space().type() &&
-        space_ptr->qns() == qns) {
+        space_ptr->qns() == qns && space_ptr->field() == idx.space().field()) {
       space = *space_ptr;
     }
   }

@@ -1948,6 +1948,28 @@ TEST_CASE("spin trace over a real basis", "[spin]") {
     }
   }
 
+  SECTION("a registered spin space of another field is not a match") {
+    // the registry lookup matches on the field too: this registry's
+    // spin-labeled spaces are complex, so an index over a locally real space of
+    // the same type and quantum numbers must not pick one of them up -- the
+    // mint path carries the source space's field instead
+    auto complex_isr = make_sr_spaces();
+    auto inner = set_scoped_default_context(
+        Context(get_default_context()).set(complex_isr));
+    const auto* registered_up = complex_isr->retrieve_ptr(L"i↑");
+    REQUIRE(registered_up);
+    REQUIRE(registered_up->field() == Field::Complex);
+
+    Index i(L"i_1");
+    IndexSpace real_space = i.space();
+    real_space.field(Field::Real);
+    const Index i_real(L"i_1", real_space);
+    REQUIRE(i_real.space().field() == Field::Real);
+    const Index i_real_alpha = make_spinalpha(i_real);
+    REQUIRE(i_real_alpha.space().base_key() == L"i↑");
+    REQUIRE(i_real_alpha.space().field() == Field::Real);
+  }
+
   SECTION("a spin-labeled index space keeps the source space's field") {
     const Index i(L"i_1");
     REQUIRE(i.space().field() == Field::Real);

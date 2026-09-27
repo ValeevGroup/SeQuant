@@ -214,7 +214,7 @@ ExprPtr Operator<QuantumNumbers, S>::clone() const {
 // indicates where the quasiparticle is going to and the second position
 // indicates where it comes from. for the case of adjoint operators, the adjoint
 // is represented by the symbol ⁺ and superscripting the quasi-particle numbers.
-// for example: hat{R⁺}^{1,2}} For operators in which one or more
+// for example: {{\hat{R}^{\dagger}}^{1,2}} For operators in which one or more
 // quasi-particles has only partial coverage in the particle_space or
 // hole_space, this notation is unsuitable, and we default to level printing of
 // the operator.
