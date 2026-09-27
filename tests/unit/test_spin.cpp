@@ -1928,6 +1928,26 @@ TEST_CASE("spin trace over a real basis", "[spin]") {
   auto resetter =
       set_scoped_default_context(Context(get_default_context()).set(isr));
 
+  SECTION("add_fermi_spin mints the spin spaces over the parent's field") {
+    // the registry's own spin-labeled spaces come from add_fermi_spin, which
+    // derives them from the parent space and so inherits its field
+    auto real_parent = make_sr_spaces(SpinConvention::None);
+    declare_real_basis(*real_parent);
+    for (const auto& sp : *real_parent)
+      REQUIRE(sp.field() == Field::Real);  // the parent registry is real
+    add_fermi_spin(*real_parent);
+    const auto* i_up = real_parent->retrieve_ptr(L"i↑");
+    const auto* i_down = real_parent->retrieve_ptr(L"i↓");
+    REQUIRE(i_up);
+    REQUIRE(i_down);
+    REQUIRE(i_up->field() == Field::Real);
+    REQUIRE(i_down->field() == Field::Real);
+    for (const auto& sp : *real_parent) {
+      CAPTURE(toUtf8(sp.base_key()));
+      REQUIRE(sp.field() == Field::Real);
+    }
+  }
+
   SECTION("a spin-labeled index space keeps the source space's field") {
     const Index i(L"i_1");
     REQUIRE(i.space().field() == Field::Real);
