@@ -82,24 +82,26 @@ Adjoint and conjugation
 -----------------------
 
 :func:`adjoint() <sequant::adjoint>` returns the adjoint of an ``mbpt::Operator``, or of any expression built from operators:
-the operator's label gains a trailing ``⁺`` (:math:`\hat{t}` becomes :math:`\hat{t}^{\dagger}`), its action on the quantum numbers is
-inverted, and its tensor form is the adjoint of the original's. In that tensor form the amplitude of a non-Hermitian operator is the
-adjointed tensor ``t⁺``; the integral of a Hermitian operator such as the Hamiltonian stays the same tensor with bra and ket exchanged.
+the operator's label gains a trailing ``⁺`` (``t`` becomes ``t⁺``, which its LaTeX form keeps as written, ``\hat{t⁺}``), its action on
+the quantum numbers is inverted, and its tensor form is the adjoint of the original's. In that tensor form the amplitude of a
+non-Hermitian operator is the adjointed tensor ``t⁺`` over complex orbitals; over real orbitals the same value is spelled ``t꙳`` with the
+slots in place. The integral of a Hermitian operator such as the Hamiltonian stays the same tensor with bra and ket exchanged.
 :func:`conjugate() <sequant::conjugate>` is the complex conjugate of a scalar or of a c-number expression (constants, variables,
-fully contracted tensor expressions); an operator has no value to conjugate, so on operator-valued expressions it throws.
+tensor expressions); an operator has no value to conjugate, so on operator-valued expressions it throws.
 
 The marks these operations leave in the output:
 
 .. table::
    :widths: auto
 
-   =========  ===================================================================================================  =============  ===========================
-   Mark       Meaning                                                                                              Serialized     LaTeX
-   =========  ===================================================================================================  =============  ===========================
-   ``t⁺``     the adjoint of ``t``: ``t⁺{q;p}`` is the complex conjugate of ``t{p;q}``                              ``t⁺{q;p}``    :math:`t^{\dagger}`
-   ``t꙳``     the conjugated operator ``t``, slots in place; over real orbitals, the complex-conjugated array       ``t꙳{p;q}``    :math:`t^{*}`
-   ``x꙳``     the complex conjugate of the scalar ``x``                                                             ``x꙳``         :math:`x^{*}`
-   =========  ===================================================================================================  =============  ===========================
+   ==============  ===================================================================================================  ===============  ===========================
+   Mark            Meaning                                                                                              Serialized       LaTeX
+   ==============  ===================================================================================================  ===============  ===========================
+   ``t⁺``          the adjoint of ``t``: ``t⁺{q;p}`` is the complex conjugate of ``t{p;q}``                              ``t⁺{q;p}``      :math:`t^{\dagger}`
+   ``t꙳``          the conjugated operator ``t``, slots in place; over real orbitals, the complex-conjugated array       ``t꙳{p;q}``      :math:`t^{*}`
+   ``x꙳``          the complex conjugate of the variable ``x``                                                           ``x꙳``           :math:`x^{*}`
+   ``(x^(2))^*``   the complex conjugate of a power                                                                      ``(x^(2))^*``    :math:`{{x}^2}^{*}`
+   ==============  ===================================================================================================  ===============  ===========================
 
 A mark is part of the tensor's name: ``t``, ``t⁺`` and ``t꙳`` are three different arrays, and code generators name them
 ``t``, ``t_adj`` and ``t_conj``. A mark that a tensor's declared symmetry makes redundant is not kept: ``t⁺`` of a Hermitian ``t`` is
