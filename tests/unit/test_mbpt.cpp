@@ -552,11 +552,13 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               simplify(adjoint(r_1_2.tensor_form())));
 
       // to_latex()
-      REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f⁺}}");
-      REQUIRE(to_latex(adjoint(t1).as<Expr>()) == L"{\\hat{t⁺}^{1}}");
+      REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f}^{\\dagger}}");
+      REQUIRE(to_latex(adjoint(t1).as<Expr>()) ==
+              L"{{\\hat{t}^{\\dagger}}^{1}}");
       REQUIRE(to_latex(adjoint(lambda2).as<Expr>()) ==
-              L"{\\hat{\\lambda⁺}^{2}}");
-      REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == L"{\\hat{R⁺}^{1,2}}");
+              L"{{\\hat{\\lambda}^{\\dagger}}^{2}}");
+      REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) ==
+              L"{{\\hat{R}^{\\dagger}}^{1,2}}");
 
       // adjoint(adjoint(op)) == op
       auto t1_adj = adjoint(t1);

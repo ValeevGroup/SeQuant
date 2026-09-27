@@ -82,7 +82,7 @@ Adjoint and conjugation
 -----------------------
 
 :func:`adjoint() <sequant::adjoint>` returns the adjoint of an ``mbpt::Operator``, or of any expression built from operators:
-the operator's label gains a trailing ``⁺`` (``t`` becomes ``t⁺``, which its LaTeX form keeps as written, ``{\hat{t⁺}}``), its action on
+the operator's label gains a trailing ``⁺`` (``t`` becomes ``t⁺``, whose LaTeX form prints the bare label with a dagger, braced so that a rank superscript attaches to the group: ``{{\hat{t}^{\dagger}}^{1}}``, or ``{\hat{f}^{\dagger}}`` where no rank is printed), its action on
 the quantum numbers is inverted, and its tensor form is the adjoint of the original's. In that tensor form the amplitude of a
 non-Hermitian operator is the adjointed tensor ``t⁺`` over complex orbitals; over real orbitals the same value is spelled ``t꙳`` with the
 slots in place. The integral of a Hermitian operator such as the Hamiltonian stays the same tensor with bra and ket exchanged.

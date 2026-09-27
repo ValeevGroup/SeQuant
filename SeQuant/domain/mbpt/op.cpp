@@ -339,19 +339,6 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   // find the `class` of Operator
   OpClass opclass = mbpt::to_op_class(base_lbl);
 
-  // labels like Â and Ŝ already have a hat, so skip wrapping in \hat{}.
-  // NOTE: for a general solution, we would need a way to normalize Unicode
-  // strings (using ICU, utf8proc, etc.) and check for the combining
-  // hat/circumflex (U+0302). See: https://unicode.org/reports/tr15/
-  const bool has_hat = base_lbl == reserved::antisymm_label() ||
-                       base_lbl == reserved::symm_label();
-
-  // now start building the output
-  std::wstring label = io::latex::utf_to_string(op.label());
-  auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
-
-  auto op_qns = op();  // operator action i.e. quantum number change
-
   // special handling for general operators
   // - Ops like f and g does not need ranks, it is implied
   // - Ops like A, S, θ are general, but need rank information
@@ -361,6 +348,30 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     return opclass == OpClass::Gen && label != reserved::antisymm_label() &&
            label != reserved::symm_label() && label != L"θ";
   };
+
+  // labels like Â and Ŝ already have a hat, so skip wrapping in \hat{}.
+  // NOTE: for a general solution, we would need a way to normalize Unicode
+  // strings (using ICU, utf8proc, etc.) and check for the combining
+  // hat/circumflex (U+0302). See: https://unicode.org/reports/tr15/
+  const bool has_hat = base_lbl == reserved::antisymm_label() ||
+                       base_lbl == reserved::symm_label();
+
+  // now start building the output. The adjoint mark is not LaTeX, so the
+  // adjoint prints as a dagger superscript on the hatted bare label.
+  std::wstring decorated_label(op.label());
+  if (is_adjoint) decorated_label.pop_back();
+  std::wstring label = io::latex::utf_to_string(decorated_label);
+  std::wstring base = has_hat ? label : L"\\hat{" + label + L"}";
+  if (is_adjoint) {
+    base += L"^{\\dagger}";
+    // where a rank sub/superscript follows, the hat-and-dagger is braced as a
+    // group of its own, so that the rank attaches to the group instead of
+    // forming a second superscript on the same base
+    if (!skip_rank_info(base_lbl)) base = L"{" + base + L"}";
+  }
+  std::wstring result = L"{" + base;
+
+  auto op_qns = op();  // operator action i.e. quantum number change
 
   // batch index handling
   const auto has_batching = op.batch_ordinals();

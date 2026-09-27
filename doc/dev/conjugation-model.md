@@ -123,8 +123,10 @@ them through `set_states()`, so a mark whose normalization carries −1 becomes
 `Product{−1, ·}`; a repeated mark, a `⁺` on a variable name and any mark on an
 operator name are `SerializationError`s, and `^*`/`^T` are not grammar on
 tensor and variable names (`^*` is the `Power` spelling). An `mbpt::Operator`
-carries the `⁺` in its own label, which its LaTeX keeps as written
-(`{\hat{t⁺}}`); the tensor form's amplitude prints as `{t^{\dagger}}`.
+carries the `⁺` in its own label, whose LaTeX prints the bare label with a
+dagger, braced so that a rank superscript attaches to the group
+(`{{\hat{t}^{\dagger}}^{1}}`, or `{\hat{f}^{\dagger}}` where no rank is
+printed); the tensor form's amplitude prints as `{t^{\dagger}}`.
 
 ## The eval boundary
 
