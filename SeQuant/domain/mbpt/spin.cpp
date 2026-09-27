@@ -78,7 +78,10 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   if (!space) {
     space = IndexSpace{label, idx.space().type(), qns,
                        // N.B. assume size does not depend on spin
-                       idx.space().approximate_size()};
+                       idx.space().approximate_size(),
+                       // the spin label does not change the basis, so the
+                       // source space's field carries over
+                       idx.space().field()};
   }
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);

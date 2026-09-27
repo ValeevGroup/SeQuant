@@ -1914,3 +1914,85 @@ SECTION("ResultExpr") {
   }
 }
 }
+
+TEST_CASE("spin trace over a real basis", "[spin]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  // A spin-free registry whose every space is declared real. The spin-labeled
+  // spaces the trace needs are not registered here, so
+  // make_index_with_spincase constructs them and must carry the source space's
+  // field over.
+  auto isr = make_sr_spaces(SpinConvention::None);
+  declare_real_basis(*isr);
+  auto resetter =
+      set_scoped_default_context(Context(get_default_context()).set(isr));
+
+  SECTION("a spin-labeled index space keeps the source space's field") {
+    const Index i(L"i_1");
+    REQUIRE(i.space().field() == Field::Real);
+    REQUIRE_FALSE(isr->retrieve_ptr(L"i↑"));  // the fallback is taken
+    const Index i_alpha = make_spinalpha(i);
+    REQUIRE(i_alpha.space().base_key() == L"i↑");
+    REQUIRE(i_alpha.space().field() == Field::Real);
+    const Index i_beta = make_spinbeta(i);
+    REQUIRE(i_beta.space().base_key() == L"i↓");
+    REQUIRE(i_beta.space().field() == Field::Real);
+    REQUIRE(make_spinfree(i_alpha).space().field() == Field::Real);
+  }
+
+  SECTION("every index of the traced expression stays real") {
+    const auto expr =
+        ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}, particle_symmetric) *
+        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, particle_symmetric);
+    const auto result =
+        spintrace(expr, {}, /* assume_spin_free_spaces */ false);
+    REQUIRE(result);
+    result->visit(
+        [](const ExprPtr& e) {
+          if (!e.is<Tensor>()) return;
+          for (const Index& ix : e->as<Tensor>().const_indices())
+            REQUIRE(ix.space().field() == Field::Real);
+        },
+        true);
+  }
+
+  SECTION("an adjointed amplitude is traced in its coset spelling") {
+    // Over a real basis the coset rule trades the '⁺' for a '꙳' on the slots
+    // as written, which the parity then keeps (None) or consumes (Even). The
+    // trace carries that spelling through, and no bare '⁺' comes back out.
+    auto traced_amplitudes = [](ConjugationParity parity) {
+      Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+               TensorSymmetries{.conjugation_parity = parity,
+                                .column = ColumnSymmetry::Symm});
+      REQUIRE(t.adjoint() == 1);
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE(t.kconjugated() == (parity == ConjugationParity::None));
+      const auto result = spintrace(
+          ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}, particle_symmetric) *
+          ex<Tensor>(t));
+      REQUIRE(result);
+      container::svector<Tensor> amplitudes;
+      result->visit(
+          [&amplitudes](const ExprPtr& e) {
+            if (e.is<Tensor>() && e->as<Tensor>().label() == L"t")
+              amplitudes.push_back(e->as<Tensor>());
+          },
+          true);
+      REQUIRE(!amplitudes.empty());
+      return amplitudes;
+    };
+    for (auto&& t : traced_amplitudes(ConjugationParity::None)) {
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE(t.kconjugated());
+      for (const Index& ix : t.const_indices())
+        REQUIRE(ix.space().field() == Field::Real);
+    }
+    for (auto&& t : traced_amplitudes(ConjugationParity::Even)) {
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE_FALSE(t.kconjugated());
+      for (const Index& ix : t.const_indices())
+        REQUIRE(ix.space().field() == Field::Real);
+    }
+  }
+}
