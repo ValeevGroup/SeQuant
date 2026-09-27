@@ -345,6 +345,11 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   if (tnsr.adjointed() || tnsr.kconjugated())
     hash::combine(h, static_cast<std::uint8_t>((tnsr.adjointed() ? 1 : 0) |
                                                (tnsr.kconjugated() ? 2 : 0)));
+  // Over a real basis an Odd-parity array is imaginary while the Even one is
+  // real, so the two must not share a cache slot. Even and None add nothing,
+  // so the default keys stay.
+  if (tnsr.conjugation_symmetry() == ConjugationSymmetry::AntiSymm)
+    hash::combine(h, static_cast<std::uint8_t>(tnsr.conjugation_symmetry()));
   return h;
 }
 }  // namespace

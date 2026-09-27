@@ -808,6 +808,25 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
     REQUIRE(b->as_tensor().kconjugated());
     REQUIRE(a->hash_value() != b->hash_value());
   }
+  SECTION("the parity keys an imaginary leaf apart over a real basis") {
+    // Over a real basis an Odd-parity array is imaginary while the Even one is
+    // real, so the two are different arrays and the leaf hash separates them.
+    // Even and None both leave the hash alone, so they key alike.
+    Index i = idx(L"i_1", Field::Real), j = idx(L"i_2", Field::Real);
+    auto leaf_hash = [&i, &j](ConjugationParity parity) {
+      Tensor p(L"p", bra{i}, ket{j},
+               TensorSymmetries{.conjugation_parity = parity});
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      auto tree = binarize(ex<Tensor>(p));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      REQUIRE(tree.leaf());
+      return tree->hash_value();
+    };
+    REQUIRE(leaf_hash(ConjugationParity::Even) !=
+            leaf_hash(ConjugationParity::Odd));
+    REQUIRE(leaf_hash(ConjugationParity::Even) ==
+            leaf_hash(ConjugationParity::None));
+  }
 }
 
 // The cases below build eval trees straight from expressions: the head layout
