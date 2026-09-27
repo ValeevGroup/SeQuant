@@ -1044,3 +1044,54 @@ TEST_CASE("exported names of marked tensors", "[export]") {
   REQUIRE(gen.represent(ta, ctx) == "t_adj[i_1, a_1]");
   REQUIRE(gen.represent(tk, ctx) == "t_conj[a_1, i_1]");
 }
+
+TEST_CASE("exported names of reordered marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  ItfGenerator<ItfContext> gen;
+
+  // the array name that the generator produces, without the index-space tags
+  auto array_name = [&](const Tensor &tensor) {
+    const std::string name = gen.get_name(tensor, ctx);
+    return name.substr(0, name.find(':'));
+  };
+
+  const Tensor t(
+      L"t", bra{L"i_1", L"a_1"}, ket{L"i_2", L"a_2"},
+      TensorSymmetries{.perm = Symmetry::Symm,
+                       .conjugation_parity = ConjugationParity::None});
+
+  Tensor adjointed = t;
+  REQUIRE(adjointed.adjoint() == 1);
+  REQUIRE(adjointed.adjointed());
+  REQUIRE(array_name(adjointed) == "t_adj");
+
+  Tensor kconjugated = t;
+  REQUIRE(kconjugated.kconjugate() == 1);
+  REQUIRE(kconjugated.kconjugated());
+  REQUIRE(array_name(kconjugated) == "t_conj");
+
+  // the index reordering must leave the array name of a marked tensor alone
+  Tensor reordered = t;
+  REQUIRE(ctx.rewrite(reordered));
+  REQUIRE(array_name(reordered) == "t");
+
+  Tensor reordered_adjointed = adjointed;
+  REQUIRE(ctx.rewrite(reordered_adjointed));
+  REQUIRE(array_name(reordered_adjointed) == "t_adj");
+
+  Tensor reordered_kconjugated = kconjugated;
+  REQUIRE(ctx.rewrite(reordered_kconjugated));
+  REQUIRE(array_name(reordered_kconjugated) == "t_conj");
+
+  // the import-name map tells the marked arrays apart from the bare one
+  ctx.set_import_name(reordered, "T");
+  ctx.set_import_name(reordered_adjointed, "TADJ");
+  ctx.set_import_name(reordered_kconjugated, "TCONJ");
+  REQUIRE(ctx.import_name(reordered).value() == "T");
+  REQUIRE(ctx.import_name(reordered_adjointed).value() == "TADJ");
+  REQUIRE(ctx.import_name(reordered_kconjugated).value() == "TCONJ");
+}

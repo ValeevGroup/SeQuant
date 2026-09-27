@@ -1,5 +1,6 @@
 #include <SeQuant/core/export/reordering_context.hpp>
 
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
@@ -219,15 +220,15 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
     std::stable_sort(aux_begin, indices.end(), comparator);
   }
 
-  Tensor reordered(tensor.label(), bra(), ket(), aux(std::move(indices)),
+  // the rebuild holds every index in an aux slot, so it states none of the
+  // traits the core states are normalized against and cannot carry them: a
+  // `⁺` set on a tensor without bra/ket slots is traded for a `꙳`, which the
+  // default parity then clears. The marks therefore move into the label,
+  // spelled as export_name() spells them, so that a reordered tensor is named
+  // exactly as the same tensor is named without reordering.
+  Tensor reordered(export_label(tensor), bra(), ket(), aux(std::move(indices)),
                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                    ColumnSymmetry::Nonsymm);
-  // the states are copied onto a Nonsymm rebuild; they are already
-  // normalized against the source's traits and the rebuild has none, so
-  // nothing is consumed here
-  [[maybe_unused]] const auto sign =
-      reordered.set_states(tensor.adjointed(), tensor.kconjugated());
-  SEQUANT_ASSERT(sign == 1);
   tensor = std::move(reordered);
 
   return true;
