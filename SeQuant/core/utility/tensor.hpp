@@ -6,10 +6,23 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <vector>
 
 namespace sequant {
+
+namespace detail {
+/// @return the tensor's two core states as one number,
+///         `adjointed | kconjugated << 1`
+/// @note the block comparators' key right after the label: `t`, `t⁺`, `t꙳` and
+///       `t⁺꙳` name four different arrays over the same slots, so they are
+///       four different blocks, ordered `t < t⁺ < t꙳ < t⁺꙳`
+inline std::uint8_t tensor_states_code(const Tensor &t) {
+  return static_cast<std::uint8_t>((t.adjointed() ? 1 : 0) |
+                                   (t.kconjugated() ? 2 : 0));
+}
+}  // namespace detail
 
 /// Comparator template that compares tensor blocks (slots). This means that it
 /// takes only the spaces of indices into account but not their concrete
@@ -19,6 +32,9 @@ namespace sequant {
 /// will lead to t{a1,i1} comparing equal to e.g. t{;a1,i1;}. The assumption
 /// here is that the bra/ket/aux is not important at the level where tensor
 /// blocks are relevant (e.g. during numerical evaluation).
+/// The bare label alone does not name the array: the two core states are
+/// compared right after it (detail::tensor_states_code()), so a marked and an
+/// unmarked tensor over the same slots are different blocks.
 template <template <class> class Comparator, template <class> class Selector,
           bool fallback>
 struct TensorBlockComparator {
@@ -26,6 +42,13 @@ struct TensorBlockComparator {
     if (lhs.label() != rhs.label()) {
       Comparator<decltype(lhs.label())> cmp;
       return cmp(lhs.label(), rhs.label());
+    }
+
+    const std::uint8_t lhs_states = detail::tensor_states_code(lhs);
+    const std::uint8_t rhs_states = detail::tensor_states_code(rhs);
+    if (lhs_states != rhs_states) {
+      Comparator<std::uint8_t> cmp;
+      return cmp(lhs_states, rhs_states);
     }
 
     if (lhs.num_slots() != rhs.num_slots()) {
@@ -84,6 +107,9 @@ using TensorBlockLessThanComparator =
 /// Similar to TensorBlockComparator but in case of tensors that compare equal
 /// based on their tensor blocks (slots), they are compared on if and where they
 /// have specific indices (compared the usual way, including ordinals).
+/// The core states are seen through TensorBlockComparator, which this one
+/// consults first, so a marked and an unmarked tensor never reach the
+/// index-specific tie-break.
 template <template <class> class Comparator, template <class> class Selector,
           bool fallback>
 struct IndexSpecificTensorBlockComparator {
