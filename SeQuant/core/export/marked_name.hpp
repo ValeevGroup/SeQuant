@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EXPORT_MARKED_NAME_HPP
 
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <string>
@@ -24,6 +25,22 @@ inline std::wstring export_label(const Tensor &tensor) {
 /// @return export_label() as UTF-8
 inline std::string export_name(const Tensor &tensor) {
   return toUtf8(export_label(tensor));
+}
+
+/// @brief renames @p tensor to export_label() and clears its core states, so
+///        that a marked tensor is an array of its own wherever the export
+///        machinery keys on a label: the block-keyed maps (declarations,
+///        reference counts, load strategies, import names) and the backends'
+///        own label matching, such as the ITF two-electron integral remap.
+///        A tensor with neither state set is left untouched.
+/// @note clearing both states consumes no sign, so the tensor still denotes
+///       the value it denoted
+inline void fold_marks_into_label(Tensor &tensor) {
+  if (!tensor.adjointed() && !tensor.kconjugated()) return;
+
+  tensor.set_label(export_label(tensor));
+  [[maybe_unused]] const auto sign = tensor.set_states(false, false);
+  SEQUANT_ASSERT(sign == 1);
 }
 
 }  // namespace sequant

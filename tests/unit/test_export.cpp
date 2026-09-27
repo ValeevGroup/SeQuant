@@ -1199,3 +1199,39 @@ TEST_CASE("full export of marked tensors", "[export]") {
     REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("J_adj"));
   }
 }
+
+TEST_CASE("a context rewrite folds a tensor's marks into its label",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  ctx.set_two_electron_integral_label(L"g");
+
+  // a plain Nonsymm, aux-less tensor gives the reordering nothing to do, so
+  // only the fold can report a change
+  Tensor bare(L"t", bra{L"i_1"}, ket{L"a_1"});
+  REQUIRE_FALSE(ctx.rewrite(bare));
+  REQUIRE(bare.label() == L"t");
+
+  Tensor marked(L"t⁺", bra{L"i_1"}, ket{L"a_1"});
+  REQUIRE(marked.adjointed());
+  REQUIRE(ctx.rewrite(marked));
+  REQUIRE(marked.label() == L"t_adj");
+  REQUIRE_FALSE(marked.adjointed());
+  REQUIRE_FALSE(marked.kconjugated());
+  REQUIRE_THAT(marked, EquivalentTo("t_adj{i_1;a_1}"));
+
+  // the fold precedes the two-electron integral remap, which matches on the
+  // bare label
+  Tensor bare_integral(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  REQUIRE(ctx.rewrite(bare_integral));
+  REQUIRE((bare_integral.label() == L"J" || bare_integral.label() == L"K"));
+
+  Tensor marked_integral(L"g⁺", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  REQUIRE(marked_integral.adjointed());
+  REQUIRE(ctx.rewrite(marked_integral));
+  REQUIRE(marked_integral.label() == L"g_adj");
+  REQUIRE_FALSE(marked_integral.adjointed());
+}

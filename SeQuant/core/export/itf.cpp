@@ -106,7 +106,11 @@ void ItfContext::set_import_name(const Variable &variable, std::string name) {
 }
 
 bool ItfContext::rewrite(Tensor &tensor) const {
-  bool modified = false;
+  // the remap below matches on the bare label, so the marks are folded into
+  // the label first: a marked integral is an array of its own and is not a
+  // J/K integral
+  bool modified = tensor.adjointed() || tensor.kconjugated();
+  fold_marks_into_label(tensor);
 
   auto num_indices = std::distance(tensor.const_indices().begin(),
                                    tensor.const_indices().end());

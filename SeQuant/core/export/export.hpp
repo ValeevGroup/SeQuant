@@ -448,10 +448,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     // keeps the backends' label matching (e.g. the ITF integral remap) from
     // treating a marked tensor as the array its bare label names.
     if (expr.adjointed() || expr.kconjugated()) {
-      expr.set_label(export_label(expr));
-      // clearing both states consumes no sign
-      [[maybe_unused]] const auto sign = expr.set_states(false, false);
-      SEQUANT_ASSERT(sign == 1);
+      fold_marks_into_label(expr);
       storeExpr = true;
     }
   }

@@ -98,8 +98,14 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   using std::ranges::begin;
   using std::ranges::end;
 
+  // a marked tensor is an array of its own; folding the marks into the label
+  // names it apart from its bare twin for every caller of this API, whether or
+  // not the reordering below fires and whether or not rewriting is enabled
+  const bool folded = tensor.adjointed() || tensor.kconjugated();
+  fold_marks_into_label(tensor);
+
   if (!m_rewrite) {
-    return false;
+    return folded;
   }
 
   auto comparator = [this](const Index &lhs, const Index &rhs) {
@@ -149,7 +155,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
 
   if (!sort_bra && !sort_ket && !swap_braket && !prioritize_aux &&
       !sort_particles) {
-    return false;
+    return folded;
   }
 
   container::svector<Index> indices;
@@ -220,16 +226,11 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
     std::stable_sort(aux_begin, indices.end(), comparator);
   }
 
-  // the rebuild holds every index in an aux slot, so it states none of the
-  // traits the core states are normalized against and cannot carry them: a
-  // `⁺` set on a tensor without bra/ket slots is traded for a `꙳`, which the
-  // default parity then clears. export_label() therefore moves the marks into
-  // the label, so that a reordered tensor is named exactly as the same tensor
-  // is named without reordering. A tensor that reaches here through the export
-  // preprocessing already carries a folded label and nothing is appended; a
-  // caller that rewrites a tensor on its own (the external-interface result
-  // tensors) relies on this.
-  Tensor reordered(export_label(tensor), bra(), ket(), aux(std::move(indices)),
+  // the rebuild carries the label alone: it holds every index in an aux slot,
+  // so it states none of the traits the core states are normalized against and
+  // could not carry a state anyway. The fold above already moved any mark into
+  // the label, which is why the rebuild loses nothing.
+  Tensor reordered(tensor.label(), bra(), ket(), aux(std::move(indices)),
                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                    ColumnSymmetry::Nonsymm);
   tensor = std::move(reordered);
