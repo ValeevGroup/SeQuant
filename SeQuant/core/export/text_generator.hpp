@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -87,7 +88,7 @@ class TextGenerator : public Generator<Context> {
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
-    std::string representation = toUtf8(tensor.decorated_label()) + "[";
+    std::string representation = export_name(tensor) + "[";
 
     using namespace std::literals;
     representation += tensor.const_indices() |

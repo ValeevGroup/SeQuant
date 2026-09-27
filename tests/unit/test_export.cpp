@@ -1028,3 +1028,19 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
   }
 }
+
+TEST_CASE("exported names of marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  Tensor ta = t;
+  REQUIRE(ta.adjoint() == 1);
+  Tensor tk = t;
+  REQUIRE(tk.kconjugate() == 1);
+  TextGenerator<TextGeneratorContext> gen;
+  TextGeneratorContext ctx;
+  REQUIRE(gen.represent(t, ctx) == "t[a_1, i_1]");
+  REQUIRE(gen.represent(ta, ctx) == "t_adj[i_1, a_1]");
+  REQUIRE(gen.represent(tk, ctx) == "t_conj[a_1, i_1]");
+}

@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/export/utils.hpp>
@@ -158,9 +159,8 @@ class ItfGenerator : public Generator<Context> {
   }
 
   std::string get_name(const Tensor &tensor, const Context &ctx) const {
-    // the adjoint mark is part of the generated array name: `t` and `t⁺` are
-    // different arrays
-    std::string name = toUtf8(tensor.decorated_label());
+    // a marked tensor is a different array: its name carries the suffixes
+    std::string name = export_name(tensor);
 
     if (tensor.num_indices() > 0) {
       name += ":";
