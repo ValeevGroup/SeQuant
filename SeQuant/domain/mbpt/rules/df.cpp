@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/operations.hpp>
@@ -20,9 +21,14 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
-  // the factors below are built from tnsr's indices alone: a tensor carrying
-  // either core state names a different array and is not factorized here
-  SEQUANT_ASSERT(!tnsr.adjointed() && !tnsr.kconjugated());
+  // the factors below are built from tnsr's indices alone, so a tensor
+  // carrying either core state names a different array; refusing it is part
+  // of the rule's contract and must hold in every build type
+  if (tnsr.adjointed() || tnsr.kconjugated())
+    throw Exception(
+        "density_fit: a tensor carrying the adjointed or K-conjugated state "
+        "names a different array and is not factorized by this rule; apply the "
+        "rule before conjugating, or register the conjugated factor");
 
   // The 3-center DF factor (pq|X) is a matrix element of a (real, symmetric)
   // Coulomb metric and is therefore Hermitian in its p<->q (bra<->ket) pair --

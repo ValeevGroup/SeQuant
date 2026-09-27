@@ -1461,6 +1461,33 @@ SECTION("rules") {
     }
   }
 
+  SECTION("df and thc refuse a marked tensor") {
+    // both rules rebuild their factors from the tensor's indices alone, so a
+    // tensor carrying a core state names a different array and is refused;
+    // the refusal is a throw, so it holds in every build type
+    using namespace sequant;
+
+    auto isr = get_default_context().index_space_registry();
+    IndexSpace occ = isr->retrieve(L"i");
+    occ.field(Field::Real);
+    IndexSpace uocc = isr->retrieve(L"a");
+    uocc.field(Field::Real);
+
+    // over real orbitals with an indefinite hermiticity and parity None the
+    // K-conjugated state is kept: a complex-valued integral over a real basis
+    Tensor g(L"g", bra{Index(L"i_1", occ), Index(L"i_2", occ)},
+             ket{Index(L"a_1", uocc), Index(L"a_2", uocc)},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    auto gk = kconjugate(ex<Tensor>(g));
+    REQUIRE(gk->is<Tensor>());
+    REQUIRE(gk->as<Tensor>().kconjugated());
+
+    const IndexSpace aux_space = isr->retrieve(L"x");
+    REQUIRE_THROWS_AS(mbpt::density_fit(gk, aux_space, L"g", L"B"), Exception);
+    REQUIRE_THROWS_AS(
+        mbpt::tensor_hypercontract(gk, aux_space, L"g", L"B", L"C"), Exception);
+  }
+
   SECTION("csv: an odd-parity adjointed tensor onto a real basis") {
     // csv_transform_impl rebuilds the transformed tensor on the csv basis's
     // slots and carries the source's two core states onto it. Where the csv
