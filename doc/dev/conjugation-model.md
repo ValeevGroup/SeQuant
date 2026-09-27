@@ -19,12 +19,15 @@ bra/ket-less tensors alike):
 
 ## Normalization by the traits
 
-After every mutation (construction from a marked label, `adjoint()`,
-`kconjugate()`, `set_states()`, `with_slots()`) each state is normalized
-against its trait, so a set state always denotes a genuinely distinct array.
-The sign consumed is returned to the caller; `sequant::adjoint` /
-`kconjugate(const ExprPtr&)` turn it into a scalar factor, and a constructor
-or `with_slots()` refuses a mark whose normalization carries −1.
+Normalization against the traits runs at construction, in `set_states()`,
+`adjoint()`, `kconjugate()`, `set_label()` / `adopt_marks()`, and
+`with_slots()`, so a state set through one of those always denotes a genuinely
+distinct array. The slot-mutating APIs (`transform_indices`, `set_bra`,
+`set_ket`, `replace_indices`, `_swap_bra_ket`) do not re-normalize, which is
+harmless while the field is unchanged. The sign consumed is returned to the
+caller; `sequant::adjoint` / `kconjugate(const ExprPtr&)` turn it into a scalar
+factor, and a constructor or `with_slots()` refuses a mark whose normalization
+carries −1.
 
 | `Hermiticity`   | `t⁺`             | kept? | sign returned by `adjoint()` |
 |-----------------|------------------|-------|------------------------------|

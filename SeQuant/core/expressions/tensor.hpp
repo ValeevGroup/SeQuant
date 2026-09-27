@@ -103,8 +103,12 @@ struct TensorSymmetries {
 /// | adjointed    | `⁺`  | `t⁺{q;p} = conj t{p;q}`, the matrix of `O†` | adjoint()    |
 /// | K-conjugated | `꙳`  | `t꙳{p;q} = <p|K O K⁻¹|q>`, slots in place   | kconjugate() |
 ///
-/// Each state is normalized against its trait after every mutation, so a set
-/// state always denotes a genuinely distinct array:
+/// Normalization against the traits runs at construction, in set_states(),
+/// adjoint(), kconjugate(), set_label()/adopt_marks(), and with_slots(), so a
+/// state set through one of those always denotes a genuinely distinct array.
+/// The slot-mutating APIs -- transform_indices(), set_bra(), set_ket(),
+/// replace_indices(), _swap_bra_ket() -- do not re-normalize, which is
+/// harmless while the field is unchanged:
 ///
 /// | #Hermiticity    | `t⁺`             | kept? | sign returned by adjoint() |
 /// |-----------------|------------------|-------|----------------------------|
