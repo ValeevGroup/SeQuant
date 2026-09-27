@@ -6453,16 +6453,12 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
 }
 
 TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
-  // End-to-end check of the K-conjugated state on a ToT leaf at eval: the
-  // parity trait normalizes a '꙳' at the symbolic layer, and under the
-  // default Even parity it clears with the slots in place, so kconjugate() on
-  // a Hermitian ToT leaves the bare spelling behind. binarize then serves
-  // that spelling as a plain leaf (no Adjoint node), and the engine hands
-  // back the yielder's array for it unchanged.
-  //
-  // Here: apply kconjugate() to a spelling, binarize it, evaluate it against
-  // a yielder that serves the bare spelling, and require the result to be
-  // exactly what was served.
+  // End-to-end check of the K-conjugated state on a ToT leaf at eval. Over a
+  // real basis with an indefinite hermiticity and parity None a '꙳' is kept
+  // symbolically and denotes the elementwise conjugate of the bare array, so
+  // binarize serves it as an EvalOp::Adjoint node with an identity layout over
+  // the bare leaf (no bundle exchange). The engine must hand back the
+  // elementwise conjugate of what the yielder serves for that bare leaf.
   using namespace sequant;
   auto& world = TA::get_default_world();
   size_t const nocc = 2, nvirt = 3;
@@ -6470,7 +6466,7 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
                                                                  nvirt};
   using ArrayToT = typename decltype(yield)::array_tot_type;
 
-  // braket symmetry pinned explicitly (:C): the test's premise is a
+  // braket symmetry pinned explicitly (:C): the two orientations below are a
   // Conjugate (Hermitian) ToT leaf, independent of the ambient deserializer
   // defaults (which become conservative NonHermitian with the
   // default-tensor-symmetry rework, PR #596)
@@ -6491,37 +6487,73 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   REQUIRE_FALSE(is_conj(canon_leaf));
   REQUIRE(swapped_leaf.hash_value() != canon_leaf.hash_value());
 
-  // the '꙳' normalizes away (Even parity), leaving the bare spelling, which
-  // is served as a plain leaf
-  auto conj_side = canonical->clone();
+  // the same slot layout over a real basis, with parity None and an
+  // indefinite hermiticity: there the '꙳' is kept and is a pure conjugation
+  auto rsp = [](std::wstring_view label) {
+    IndexSpace sp = Index(label).space();
+    sp.field(Field::Real);
+    return sp;
+  };
+  const Index i2(rsp(L"i_2"), 2);
+  const Index i3(rsp(L"i_3"), 3);
+  const Index a3(rsp(L"a_3"), 3, container::vector<Index>{i2, i3});
+  const Index a4(rsp(L"a_4"), 4, container::vector<Index>{i2, i3});
+  auto const real_canonical =
+      ex<Tensor>(L"t", bra{a3, a4}, ket{i2, i3},
+                 TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                  .conjugation_parity = ConjugationParity::None,
+                                  .column = ColumnSymmetry::Symm});
+  REQUIRE(real_canonical->as<Tensor>().base_field() == Field::Real);
+
+  auto conj_side = real_canonical->clone();
   REQUIRE(conj_side->as<Tensor>().kconjugate() == 1);
+  REQUIRE(conj_side->as<Tensor>().kconjugated());
+  // the slots stay in place: the conjugation is not the bundle exchange
+  REQUIRE(conj_side->as<Tensor>().bra()[0].label() == L"a_3");
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE(node.leaf());
-  REQUIRE_FALSE(node->op_type().has_value());
-  REQUIRE_FALSE(node->expr()->as<Tensor>().kconjugated());
+  REQUIRE_FALSE(node.leaf());
+  REQUIRE(node->op_type() == EvalOp::Adjoint);
+  REQUIRE(node.left().leaf());
+  REQUIRE_FALSE(node.left()->expr()->as<Tensor>().kconjugated());
+  // identity layout: the Adjoint node is laid out by its operand's own indices
+  REQUIRE(node->canon_indices() == node.left()->canon_indices());
+  REQUIRE(node->annot() == node.left()->annot());
+
+  // the array served for the bare leaf, read before the evaluation so that a
+  // kernel writing into it could not fake the comparison
+  auto const& served =
+      yield(node.left()->expr()->as<Tensor>())->get<ArrayToT>();
+  std::vector<std::complex<double>> served_values;
+  for (auto it = served.begin(); it != served.end(); ++it) {
+    auto const& souter = it->get();
+    for (std::size_t o = 0; o < souter.size(); ++o) {
+      auto const& sinner = souter[o];
+      for (std::size_t k = 0; k < sinner.size(); ++k)
+        served_values.push_back(sinner[k]);
+    }
+  }
+  REQUIRE_FALSE(served_values.empty());
+
   auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
   auto const res = evaluate(node, node->annot(), yield, cache);
   auto const& got = res->get<ArrayToT>();
-  auto const& served = yield(node->expr()->as<Tensor>())->get<ArrayToT>();
 
-  auto it_s = served.begin();
-  auto it_g = got.begin();
-  for (; it_s != served.end(); ++it_s, ++it_g) {
-    auto const& souter = it_s->get();
+  std::size_t n = 0;
+  for (auto it_g = got.begin(); it_g != got.end(); ++it_g) {
     auto const& gouter = it_g->get();
-    REQUIRE(souter.size() == gouter.size());
-    for (std::size_t o = 0; o < souter.size(); ++o) {
-      auto const& sinner = souter[o];
+    for (std::size_t o = 0; o < gouter.size(); ++o) {
       auto const& ginner = gouter[o];
-      if (sinner.empty()) continue;
-      for (std::size_t k = 0; k < sinner.size(); ++k) {
-        CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
-        CHECK(ginner[k].imag() == Catch::Approx(sinner[k].imag()));
+      for (std::size_t k = 0; k < ginner.size(); ++k) {
+        REQUIRE(n < served_values.size());
+        auto const expected = std::conj(served_values[n++]);
+        CHECK(ginner[k].real() == Catch::Approx(expected.real()));
+        CHECK(ginner[k].imag() == Catch::Approx(expected.imag()));
       }
     }
   }
+  REQUIRE(n == served_values.size());
 }
 
 // ---------------------------------------------------------------------------
