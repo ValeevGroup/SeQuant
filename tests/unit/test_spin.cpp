@@ -245,6 +245,44 @@ TEST_CASE("spin", "[spin]") {
                               "t{a3,a1,a2;i1,i2,i3} - t{a3,a2,a1;i1,i2,i3}"));
   }
 
+  SECTION("Tensor: expand_antisymm carries the core states") {
+    // expand_antisymm rebuilds each term on permuted slots with the source's
+    // traits and carries its two core states. The source is NonHermitian
+    // with an indefinite conjugation parity over complex slots, so neither
+    // state normalizes away and both must survive the rebuild.
+    constexpr TensorSymmetries antisymm_stateful{
+        .perm = Symmetry::Antisymm,
+        .hermiticity = Hermiticity::NonHermitian,
+        .conjugation_parity = ConjugationParity::None};
+
+    // one body: the single rebuilt tensor
+    Tensor t1(L"t", bra{L"a_1"}, ket{L"i_1"}, antisymm_stateful);
+    REQUIRE(t1.set_states(true, true) == 1);
+    auto result1 = expand_antisymm(t1);
+    REQUIRE(result1->is<Tensor>());
+    REQUIRE(result1->as<Tensor>().symmetry() == Symmetry::Nonsymm);
+    REQUIRE(result1->as<Tensor>().adjointed());
+    REQUIRE(result1->as<Tensor>().kconjugated());
+
+    // two bodies: every term of the expansion
+    Tensor t2(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+              antisymm_stateful);
+    REQUIRE(t2.set_states(true, true) == 1);
+    auto result2 = expand_antisymm(t2);
+    REQUIRE(result2->is<Sum>());
+    REQUIRE(result2->as<Sum>().summands().size() == 2);
+    for (auto&& summand : result2->as<Sum>().summands()) {
+      REQUIRE(summand->is<Product>());
+      const auto& factors = summand->as<Product>().factors();
+      REQUIRE(factors.size() == 1);
+      REQUIRE(factors[0]->is<Tensor>());
+      const auto& t = factors[0]->as<Tensor>();
+      REQUIRE(t.symmetry() == Symmetry::Nonsymm);
+      REQUIRE(t.adjointed());
+      REQUIRE(t.kconjugated());
+    }
+  }
+
   SECTION("Constant") {
     auto exprPtr = ex<Constant>(rational{1, 4});
     auto result = spintrace(exprPtr);

@@ -15,6 +15,7 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
+#include <SeQuant/domain/mbpt/rules/csv.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
@@ -691,6 +692,51 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
         REQUIRE_FALSE(wt.kconjugated());
       }
     }  // SECTION("OpMaker: a pre-marked operator name's sign vs. mark")
+
+    SECTION("anti-Hermitian operator: adjoint tensor form carries the sign") {
+      // mbpt::Operator::adjoint() rebuilds the tensor form through
+      // sequant::adjoint(ExprPtr), which adjoints the operator's tensor. For
+      // an anti-Hermitian operator the adjointed state normalizes away
+      // against the Hermiticity and consumes a -1; a Tensor carries the two
+      // core states but no sign, so the -1 lands on the enclosing Product.
+      using namespace sequant::mbpt;
+      using op_t = mbpt::Operator<mbpt::qns_t>;
+
+      OpRegistry registry;
+      registry.add(L"z", OpClass::Gen, Hermiticity::AntiHermitian);
+      auto ctx_resetter = set_scoped_default_mbpt_context(
+          {.csv = CSV::No, .op_registry = registry});
+
+      // pulls the Tensor factor out of OpMaker's Tensor * NormalOperator
+      auto tensor_factor = [](const ExprPtr& e) -> const Tensor& {
+        if (e->is<Tensor>()) return e->as<Tensor>();
+        REQUIRE(e->is<Product>());
+        for (auto&& f : e->as<Product>().factors())
+          if (f->is<Tensor>()) return f->as<Tensor>();
+        throw Exception("adjoint tensor form test: no Tensor factor found");
+      };
+
+      auto z = ex<op_t>(
+          []() -> std::wstring_view { return L"z"; },
+          []() -> ExprPtr {
+            return OpMaker<Statistics::FermiDirac>(L"z", 1)(
+                {}, {}, Normalization::Implicit);
+          },
+          [](mbpt::qns_t& qns) { qns = combine(general_type_qns(1), qns); });
+
+      auto z_adj = sequant::adjoint(z);
+      REQUIRE(z_adj->as<op_t>().label() == L"z⁺");
+
+      auto tform = z_adj->as<op_t>().tensor_form();
+      REQUIRE(tform->is<Product>());
+      REQUIRE(tform->as<Product>().scalar() ==
+              sequant::Constant::scalar_type(-1));
+      const auto& zt = tensor_factor(tform);
+      REQUIRE(zt.label() == L"z");
+      REQUIRE_FALSE(zt.adjointed());
+      REQUIRE_FALSE(zt.kconjugated());
+    }  // SECTION("anti-Hermitian operator: adjoint tensor form carries the
+       // sign")
 
     SECTION("screen") {
       using namespace sequant::mbpt;
@@ -1428,6 +1474,46 @@ SECTION("rules") {
 
       REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
     }
+  }
+
+  SECTION("csv: an odd-parity adjointed tensor onto a real basis") {
+    // csv_transform_impl rebuilds the transformed tensor on the csv basis's
+    // slots and carries the source's two core states onto it. Where the csv
+    // basis is real the normalization trades the adjointed state for the
+    // K-conjugated one with the bundles exchanged back, and an odd
+    // conjugation parity then clears that state for a -1: a Tensor holds no
+    // sign, so it goes to the returned Product's scalar.
+    using namespace sequant;
+
+    auto isr = get_default_context().index_space_registry();
+    IndexSpace csv_basis = isr->retrieve(L"a");
+    csv_basis.field(Field::Real);
+
+    const Index i1(L"i_1");
+    Tensor f(L"f", bra{Index(L"a_1", {i1})}, ket{Index(L"a_2", {i1})},
+             TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
+                              .conjugation_parity = ConjugationParity::Odd});
+    // over the source's complex slots the adjointed state is kept as is
+    REQUIRE(f.set_states(true, false) == 1);
+    REQUIRE(f.adjointed());
+
+    auto transformed = mbpt::csv_transform(
+        ex<Tensor>(f), csv_basis, L"C", container::svector<std::wstring>{L"f"});
+    REQUIRE(transformed);
+    REQUIRE(transformed->is<Product>());
+    const auto& prod = transformed->as<Product>();
+    REQUIRE(prod.scalar() == Constant::scalar_type(-1));
+
+    std::size_t nf = 0;
+    for (auto&& factor : prod.factors()) {
+      REQUIRE(factor->is<Tensor>());
+      const auto& t = factor->as<Tensor>();
+      if (t.label() != L"f") continue;
+      ++nf;
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE_FALSE(t.kconjugated());
+    }
+    REQUIRE(nf == 1);
   }
 }  // SECTION("rules")
 

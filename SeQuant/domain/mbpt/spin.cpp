@@ -441,8 +441,9 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     syms.perm = Symmetry::Nonsymm;
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
                       syms);
-    // slot-rebuilding transform: carry the states onto the same symmetries,
-    // which consumes no relation
+    // the rebuild keeps the source's traits and its slots' field, so its two
+    // core states carry over as they stand: the normalization is the identity
+    // here and consumes no sign, which a Tensor could not hold anyway
     [[maybe_unused]] const auto sign =
         new_tensor.set_states(tensor.adjointed(), tensor.kconjugated());
     SEQUANT_ASSERT(sign == 1);
@@ -479,8 +480,9 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
       syms.perm = Symmetry::Nonsymm;
       auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
                                tensor.aux(), syms);
-      // slot-rebuilding transform: carry the states onto the same symmetries,
-      // which consumes no relation
+      // the permuted slots are the source's own, over the same field and
+      // with the same traits, so its two core states carry over as they
+      // stand: the normalization is the identity here and consumes no sign
       [[maybe_unused]] const auto sign =
           new_tensor.set_states(tensor.adjointed(), tensor.kconjugated());
       SEQUANT_ASSERT(sign == 1);
