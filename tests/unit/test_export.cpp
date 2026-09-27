@@ -1261,6 +1261,20 @@ TEST_CASE("a folded name must come from one tensor", "[export]") {
     REQUIRE_NOTHROW(export_expression(
         to_export_tree(ResultExpr(R, t_marked * f + t_marked * f)), gen, ctx));
   }
+
+  SECTION("the guard spans every tree of one export") {
+    // the declarations of all trees are merged into one global block, so two
+    // trees are as much a collision as two factors of one tree
+    const Tensor S(L"S", bra{L"i_1"}, ket{L"a_1"});
+    std::vector<ExpressionGroup<>> groups;
+    groups.emplace_back();
+    groups.back().add(to_export_tree(ResultExpr(R, t_adj_written * f)));
+    groups.back().add(to_export_tree(ResultExpr(S, t_marked * f)));
+
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_THROWS_AS(export_groups<>(std::move(groups), gen, ctx), Exception);
+  }
 }
 
 TEST_CASE("a context rewrite folds a tensor's marks into its label",

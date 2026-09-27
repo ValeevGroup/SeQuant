@@ -45,14 +45,15 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
-
-  /// maps the ASCII array name a tensor is exported under (export_label(),
-  /// which folds the core states into the label) to the decorated label it
-  /// came from. Two different originals under one exported name would be one
-  /// array in every label-keyed map downstream, so the preprocessing refuses
-  /// that; see preprocess().
-  std::map<std::wstring, std::wstring> foldedNames;
 };
+
+/// Maps the ASCII array name a tensor is exported under (export_label(), which
+/// folds the core states into the label) to the decorated label it came from.
+/// One registry spans a whole export_groups() call, because declarations are
+/// merged across its trees: two different originals under one exported name
+/// would be one declared array whichever trees they appear in, so the
+/// preprocessing refuses that; see preprocess().
+using FoldedNameRegistry = std::map<std::wstring, std::wstring>;
 
 /// Visitor objects that will steer code generation while visiting a given
 /// expression/evaluation tree by triggering the corresponding callbacks in the
@@ -444,7 +445,7 @@ bool rename(Variable &variable, PreprocessResult &result);
 /// Preprocesses the given expression
 template <typename ExprType, typename Node>
 void preprocess(ExprType expr, ExportContext &ctx, Node &node,
-                PreprocessResult &result) {
+                PreprocessResult &result, FoldedNameRegistry &folded_names) {
   static_assert(
       std::is_same_v<ExprType, Tensor> || std::is_same_v<ExprType, Variable>,
       "This function currently only works for tensors and variables");
@@ -458,7 +459,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     {
       const std::wstring decorated = expr.decorated_label();
       const auto [it, inserted] =
-          result.foldedNames.try_emplace(export_label(expr), decorated);
+          folded_names.try_emplace(export_label(expr), decorated);
       if (!inserted && it->second != decorated)
         throw Exception("preprocess: the exported array name \"" +
                         toUtf8(it->first) + "\" comes from both \"" +
@@ -643,8 +644,11 @@ template <typename T>
 class PreprocessVisitor {
  public:
   PreprocessVisitor(PreprocessResult &result, ExportContext &ctx,
-                    PrunableScalars prunable)
-      : m_result(result), m_ctx(ctx), m_prunable(prunable) {}
+                    PrunableScalars prunable, FoldedNameRegistry &folded_names)
+      : m_result(result),
+        m_ctx(ctx),
+        m_prunable(prunable),
+        m_folded_names(folded_names) {}
 
   void operator()(ExportNode<T> &tree, TreeTraversal context) {
     // Note the context for leaf nodes is always TreeTraversal::Any
@@ -720,13 +724,16 @@ class PreprocessVisitor {
 
   void preprocess_node_content(ExportNode<T> &node) {
     if (node->is_tensor()) {
-      preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result);
+      preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result,
+                         m_folded_names);
     } else if (node->is_variable()) {
-      preprocess<Variable>(node->as_variable(), m_ctx, node, m_result);
+      preprocess<Variable>(node->as_variable(), m_ctx, node, m_result,
+                           m_folded_names);
     } else if (node->is_power()) {
       const Power &pw = node->as_power();
       if (pw.base()->is<Variable>()) {
-        preprocess<Variable>(pw.base()->as<Variable>(), m_ctx, node, m_result);
+        preprocess<Variable>(pw.base()->as<Variable>(), m_ctx, node, m_result,
+                             m_folded_names);
       }
     }
   }
@@ -828,13 +835,15 @@ class PreprocessVisitor {
   PreprocessResult &m_result;
   ExportContext &m_ctx;
   PrunableScalars m_prunable;
+  FoldedNameRegistry &m_folded_names;
 };
 
 /// Uses the PreprocessVisitor to perform preprocessing and, if desired, also
 /// logs the tree before and after preprocessing
 template <typename T>
 void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
-                              ExportContext &ctx, PrunableScalars prunable) {
+                              ExportContext &ctx, PrunableScalars prunable,
+                              FoldedNameRegistry &folded_names) {
   if (Logger::instance().export_equations) {
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
@@ -846,7 +855,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
               << "\n";
   }
 
-  detail::PreprocessVisitor<T> preprocessor(result, ctx, prunable);
+  detail::PreprocessVisitor<T> preprocessor(result, ctx, prunable,
+                                            folded_names);
   tree.visit(preprocessor, TreeTraversal::PreAndPostOrder);
 
   if (Logger::instance().export_equations) {
@@ -1038,8 +1048,11 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
   generator.begin_export(ctx);
 
-  // First step: preprocessing of all expressions
+  // First step: preprocessing of all expressions. The folded-name registry is
+  // shared by every tree of this call, since the declarations the trees ask for
+  // are merged below.
   container::svector<detail::PreprocessResult> pp_results;
+  detail::FoldedNameRegistry folded_names;
   for (ExpressionGroup<T> &current_group : groups) {
     pp_results.reserve(pp_results.size() + size(groups));
 
@@ -1049,7 +1062,8 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
       ctx.set_current_expression_id(current_tree->id());
 
       detail::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx,
-                                       generator.prunable_scalars());
+                                       generator.prunable_scalars(),
+                                       folded_names);
 
       ctx.clear_current_expression_id();
     }
