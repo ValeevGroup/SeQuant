@@ -270,7 +270,7 @@ class pinned_tensor_yield {
 
  public:
   void put(sequant::Tensor const& tnsr, Tensor_t data) {
-    auto success = label_to_tnsr_.emplace(
+    [[maybe_unused]] auto success = label_to_tnsr_.emplace(
         tensor_to_key(tnsr),
         sequant::eval_result<sequant::ResultTensorBTAS<Tensor_t>>(
             std::move(data)));
