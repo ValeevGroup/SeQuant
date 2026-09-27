@@ -1767,12 +1767,18 @@ TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
 
   SECTION("an odd-parity array is refused: the mutation would cost a sign") {
     auto t = adjointed_t(ConjugationParity::Odd);
+    const Tensor before = t;
     REQUIRE_THROWS_AS(t.transform_indices(to_real), Exception);
-    // the states and the slot order are restored, so the refused tensor is the
-    // adjointed spelling it was, on the mutated slots
+    // the refused mutation leaves the tensor as the call found it, down to the
+    // slots' field, which Index equality does not see
+    REQUIRE(t.base_field() == Field::Complex);
+    REQUIRE(t.decorated_label() == L"t⁺");
     REQUIRE(t.adjointed());
     REQUIRE_FALSE(t.kconjugated());
     REQUIRE(t.bra()[0].label() == L"i_1");
+    REQUIRE(t.braket_symmetry() == before.braket_symmetry());
+    REQUIRE(t.conjugation_symmetry() == before.conjugation_symmetry());
+    REQUIRE(t.hash_value() == before.hash_value());
   }
 
   SECTION("a relabeling within one field leaves the states as they are") {
@@ -1802,8 +1808,39 @@ TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
 
     auto odd = adjointed_t(ConjugationParity::Odd);
     odd.set_bra({idx(L"i_1", Field::Real)});
+    REQUIRE(odd.base_field() == Field::Complex);
     REQUIRE_THROWS_AS(odd.set_ket({idx(L"a_1", Field::Real)}), Exception);
+    // the refused setter puts the complex ket back
+    REQUIRE(odd.base_field() == Field::Complex);
+    REQUIRE(odd.decorated_label() == L"t⁺");
     REQUIRE(odd.adjointed());
     REQUIRE(odd.bra()[0].label() == L"i_1");
+    REQUIRE(odd.ket()[0].space().field() == Field::Complex);
+  }
+
+  SECTION("a moved tensor is the tensor a fresh construction gives") {
+    // the exchange symmetry is derived from the traits and the slots' field, so
+    // a mutation that moves the tensor onto another basis derives it again: a
+    // Hermitian, even-parity array is Conjugate over a complex basis and Symm
+    // over a real one
+    const TensorSymmetries hermitian{.hermiticity = Hermiticity::Hermitian};
+    Tensor moved(L"g", bra{Index{L"i_1"}}, ket{Index{L"a_1"}}, hermitian);
+    REQUIRE(moved.braket_symmetry() == BraKetSymmetry::Conjugate);
+    const container::map<Index, Index> g_to_real{
+        {Index{L"i_1"}, idx(L"i_1", Field::Real)},
+        {Index{L"a_1"}, idx(L"a_1", Field::Real)}};
+    REQUIRE(moved.transform_indices(g_to_real));
+    moved.reset_tags();
+
+    const Tensor fresh(L"g", bra{idx(L"i_1", Field::Real)},
+                       ket{idx(L"a_1", Field::Real)}, hermitian);
+    REQUIRE(moved.base_field() == Field::Real);
+    REQUIRE(moved.braket_symmetry() == fresh.braket_symmetry());
+    REQUIRE(moved.braket_symmetry() == BraKetSymmetry::Symm);
+    REQUIRE(moved.conjugation_symmetry() == fresh.conjugation_symmetry());
+    REQUIRE(moved.hermiticity() == fresh.hermiticity());
+    REQUIRE(moved.conjugation_parity() == fresh.conjugation_parity());
+    REQUIRE(moved.hash_value() == fresh.hash_value());
+    REQUIRE(moved == fresh);
   }
 }
