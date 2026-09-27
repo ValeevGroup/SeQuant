@@ -1245,12 +1245,24 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   C ref_conj{0., 0.};
   for (size_t a = 0; a < nvirt; ++a)
     for (size_t i = 0; i < nocc; ++i) ref_conj += std::conj(T(a, i)) * W(i, a);
-  auto eval_closed = [](auto const& node, auto const& leaf_yield) {
+  // the root is checked against the reference without a cache, then twice
+  // through one shared cache, so that a cache-slot collision between the
+  // bare leaf and its marked spelling (t and t꙳, or an Adjoint node and its
+  // operand) would surface on the second read
+  auto check_closed = [&ref_conj](auto const& node, auto const& leaf_yield) {
     REQUIRE(node->is_scalar());
     REQUIRE(node->canon_phase() == 1);
-    auto res = evaluate(node, node->annot(), leaf_yield);
-    REQUIRE(res->template is<ResultScalar<C>>());
-    return res->template as<ResultScalar<C>>().value();
+    auto check = [&ref_conj](ResultPtr const& res) {
+      REQUIRE(res->template is<ResultScalar<C>>());
+      auto const got = res->template as<ResultScalar<C>>().value();
+      CHECK(got.real() == Catch::Approx(ref_conj.real()).margin(1e-12));
+      CHECK(got.imag() == Catch::Approx(ref_conj.imag()).margin(1e-12));
+    };
+    check(evaluate(node, node->annot(), leaf_yield));
+    auto cache =
+        cache_manager(std::array{node}, [](auto const&) { return false; });
+    check(evaluate(node, node->annot(), leaf_yield, cache));
+    check(evaluate(node, node->annot(), leaf_yield, cache));
   };
 
   SECTION("a K-conjugated leaf over a real basis is the conjugate array") {
@@ -1290,9 +1302,7 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     REQUIRE(kn->canon_indices() == kn.left()->canon_indices());
     REQUIRE(kn->annot() == kn.left()->annot());
 
-    auto const got = eval_closed(node, ryield);
-    CHECK(got.real() == Catch::Approx(ref_conj.real()).margin(1e-12));
-    CHECK(got.imag() == Catch::Approx(ref_conj.imag()).margin(1e-12));
+    check_closed(node, ryield);
   }
 
   SECTION("an adjointed leaf over a complex basis is the Adjoint node") {
@@ -1325,8 +1335,6 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     REQUIRE(an.left()->as_tensor().bra()[0].label() == L"a_1");
     REQUIRE(an->canon_indices() != an.left()->canon_indices());
 
-    auto const got = eval_closed(node, cyield);
-    CHECK(got.real() == Catch::Approx(ref_conj.real()).margin(1e-12));
-    CHECK(got.imag() == Catch::Approx(ref_conj.imag()).margin(1e-12));
+    check_closed(node, cyield);
   }
 }
