@@ -1171,9 +1171,9 @@ TEST_CASE("full export of marked tensors", "[export]") {
   }
 
   SECTION("the integral remap does not see a marked integral") {
-    // the marks are folded into the label before any context rewrite, so the
-    // g->J/K remap no longer recognizes a marked integral and exports it
-    // under its own name
+    // the marks are folded into the label before any context rewrite, so a
+    // marked integral reaches the g->J/K remap under its own name and is not
+    // recognized by it
     const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
     const auto g_adj =
         ex<Tensor>(L"g⁺", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});

@@ -2237,7 +2237,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
 TEST_CASE("braket orientation is part of the value", "[elements]") {
   using namespace sequant;
-  // The Hermitian identity h{q;p} = conj(h{p;q}) relates two DIFFERENT
+  // The Hermitian identity h{q;p} = conj(h{p;q}) relates two distinct
   // arrays, so canonicalization, which is a function of the value, keeps the
   // two orientations apart: a Hermitian 3-cycle and its reverse (which is its
   // conjugate) get two canonical forms. A kept ꙳ state (parity None, the

@@ -1194,7 +1194,7 @@ TEST_CASE("canonicalize_signed_braket", "[conjugation]") {
       for (auto& f : c->as<Product>().factors())
         REQUIRE_FALSE(f->as<Tensor>().kconjugated());
     REQUIRE(*c1 != *c2);
-    // the pair is still a conjugate pair of the VALUE: s + (-s*) = 2i Im(s)
+    // the pair is still a conjugate pair of the value: s + (-s*) = 2i Im(s)
     auto folded = fold_conjugate_pairs(e1->clone() + e2->clone());
     INFO(toUtf8(to_latex(folded)));
     REQUIRE_FALSE(folded->is<Sum>());
