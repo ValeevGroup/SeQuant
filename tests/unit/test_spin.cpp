@@ -1925,8 +1925,8 @@ TEST_CASE("spin trace over a real basis", "[spin]") {
   // field over.
   auto isr = make_sr_spaces(SpinConvention::None);
   declare_real_basis(*isr);
-  auto resetter =
-      set_scoped_default_context(Context(get_default_context()).set(isr));
+  auto resetter = set_scoped_default_context(
+      sequant::Context(get_default_context()).set(isr));
 
   SECTION("add_fermi_spin mints the spin spaces over the parent's field") {
     // the registry's own spin-labeled spaces come from add_fermi_spin, which
@@ -1955,7 +1955,7 @@ TEST_CASE("spin trace over a real basis", "[spin]") {
     // mint path carries the source space's field instead
     auto complex_isr = make_sr_spaces();
     auto inner = set_scoped_default_context(
-        Context(get_default_context()).set(complex_isr));
+        sequant::Context(get_default_context()).set(complex_isr));
     const auto* registered_up = complex_isr->retrieve_ptr(L"i↑");
     REQUIRE(registered_up);
     REQUIRE(registered_up->field() == Field::Complex);
