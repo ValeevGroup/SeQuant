@@ -52,6 +52,9 @@ class ItfContext : public ReorderingContext {
 
   /// @returns The name under which the given tensor shall be imported. If none
   /// is obtained, the tensor will not be imported.
+  /// @note the lookup is keyed on the tensor's marks folded into its label
+  ///       (fold_marks_into_label()), which is the name the rest of the
+  ///       pipeline sees, so a marked tensor and its bare one are told apart
   virtual std::optional<std::string> import_name(const Tensor &tensor) const;
   /// @returns The name under which the given variable shall be imported. If
   /// none is obtained, the variable will not be imported.
@@ -65,6 +68,8 @@ class ItfContext : public ReorderingContext {
   virtual void set_tag(const IndexSpace &space, std::string tag);
 
   /// Sets the name under which the given tensor is to be exported
+  /// @note keyed as import_name() looks it up, so the name may be registered
+  ///       on a marked tensor as written
   virtual void set_import_name(const Tensor &tensor, std::string name);
   /// Sets the name under which the given variable is to be exported
   virtual void set_import_name(const Variable &variable, std::string name);

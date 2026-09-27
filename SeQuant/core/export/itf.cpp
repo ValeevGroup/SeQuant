@@ -70,7 +70,12 @@ std::string ItfContext::get_tag(const IndexSpace &space) const {
 }
 
 std::optional<std::string> ItfContext::import_name(const Tensor &tensor) const {
-  auto it = m_tensor_imports.find(tensor);
+  // the map is keyed the way the pipeline looks it up: every rewrite folds a
+  // tensor's marks into its label before the name is asked for
+  Tensor key = tensor;
+  fold_marks_into_label(key);
+
+  auto it = m_tensor_imports.find(key);
 
   if (it == m_tensor_imports.end()) {
     return {};
@@ -99,7 +104,12 @@ void ItfContext::set_tag(const IndexSpace &space, std::string tag) {
 }
 
 void ItfContext::set_import_name(const Tensor &tensor, std::string name) {
-  m_tensor_imports[tensor] = std::move(name);
+  // keyed on the folded label, as import_name() looks it up: a marked tensor
+  // is an array of its own and keeps its own import name
+  Tensor key = tensor;
+  fold_marks_into_label(key);
+
+  m_tensor_imports[std::move(key)] = std::move(name);
 }
 
 void ItfContext::set_import_name(const Variable &variable, std::string name) {

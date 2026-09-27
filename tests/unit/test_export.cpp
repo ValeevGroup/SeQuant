@@ -1146,6 +1146,23 @@ TEST_CASE("full export of marked tensors", "[export]") {
                            "Compute t_adj[i_1, a_2] += t[a_2, i_1]"));
   }
 
+  SECTION("an import name set on the marked tensor as written is honoured") {
+    // the name is registered on the tensor that still carries its `⁺`, before
+    // any rewrite; the map is keyed on the folded label, which is the name the
+    // rest of the pipeline looks up
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_import_name(t_adj->as<Tensor>(), "TADJ");
+    REQUIRE(ctx.import_name(t_adj->as<Tensor>()).value() == "TADJ");
+
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R, t_adj * f)), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("TADJ"));
+  }
+
   SECTION("a K-conjugated terminal is imported under its own name") {
     // over a complex basis a `꙳` is a leaf of its own, so both arrays are
     // terminals and both are imported
