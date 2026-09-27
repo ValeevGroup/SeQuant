@@ -1,4 +1,5 @@
 #include <SeQuant/core/export/itf.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
