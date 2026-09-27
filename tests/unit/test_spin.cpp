@@ -258,6 +258,8 @@ TEST_CASE("spin", "[spin]") {
     // one body: the single rebuilt tensor
     Tensor t1(L"t", bra{L"a_1"}, ket{L"i_1"}, antisymm_stateful);
     REQUIRE(t1.set_states(true, true) == 1);
+    REQUIRE(t1.adjointed());
+    REQUIRE(t1.kconjugated());
     auto result1 = expand_antisymm(t1);
     REQUIRE(result1->is<Tensor>());
     REQUIRE(result1->as<Tensor>().symmetry() == Symmetry::Nonsymm);
@@ -268,6 +270,8 @@ TEST_CASE("spin", "[spin]") {
     Tensor t2(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
               antisymm_stateful);
     REQUIRE(t2.set_states(true, true) == 1);
+    REQUIRE(t2.adjointed());
+    REQUIRE(t2.kconjugated());
     auto result2 = expand_antisymm(t2);
     REQUIRE(result2->is<Sum>());
     REQUIRE(result2->as<Sum>().summands().size() == 2);

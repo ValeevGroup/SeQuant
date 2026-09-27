@@ -28,6 +28,9 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
+  // the factors below are built from tnsr's indices alone: a tensor carrying
+  // either core state names a different array and is not factorized here
+  SEQUANT_ASSERT(!tnsr.adjointed() && !tnsr.kconjugated());
 
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
                        aux({aux_idx_1}), particle_symmetric);

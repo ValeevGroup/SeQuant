@@ -27,6 +27,7 @@
 
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -36,6 +37,16 @@
 #include "SeQuant/core/utility/debug.hpp"
 
 namespace {
+/// @return the Tensor factor of an OpMaker tensor form, which is either a bare
+///         Tensor or a `Tensor * NormalOperator` Product
+const sequant::Tensor& tensor_factor(const sequant::ExprPtr& e) {
+  if (e->is<sequant::Tensor>()) return e->as<sequant::Tensor>();
+  REQUIRE(e->is<sequant::Product>());
+  for (auto&& f : e->as<sequant::Product>().factors())
+    if (f->is<sequant::Tensor>()) return f->as<sequant::Tensor>();
+  throw sequant::Exception("tensor form has no Tensor factor");
+}
+
 /// Returns an RAII guard that, while alive, pins the (de)excitation amplitude
 /// operators (t, λ, R, L) Hermitian in the default MBPT context. The
 /// field/hermiticity model makes these operators bra<->ket *nonsymmetric* by
@@ -598,15 +609,6 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto ctx_resetter = set_scoped_default_mbpt_context(
           {.csv = CSV::No, .op_registry = registry});
 
-      // pulls the Tensor factor out of OpMaker's Tensor * NormalOperator
-      auto tensor_factor = [](const ExprPtr& e) -> const Tensor& {
-        if (e->is<Tensor>()) return e->as<Tensor>();
-        REQUIRE(e->is<Product>());
-        for (auto&& f : e->as<Product>().factors())
-          if (f->is<Tensor>()) return f->as<Tensor>();
-        throw Exception("adjoint tensor form test: no Tensor factor found");
-      };
-
       // NonHermitian: the adjoint tensor form is the Adjoint-marked tensor,
       // as today.
       {
@@ -650,14 +652,6 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       // operator), which no Tensor can hold but the Product this returns
       // instead can.
       using namespace sequant::mbpt;
-
-      auto tensor_factor = [](const ExprPtr& e) -> const Tensor& {
-        if (e->is<Tensor>()) return e->as<Tensor>();
-        REQUIRE(e->is<Product>());
-        for (auto&& f : e->as<Product>().factors())
-          if (f->is<Tensor>()) return f->as<Tensor>();
-        throw Exception("adjoint tensor form test: no Tensor factor found");
-      };
 
       // NonHermitian: the mark just becomes the Adjoint bits, no sign --
       // matching the Tensor constructor's own mark adoption, unchanged.
@@ -707,15 +701,6 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto ctx_resetter = set_scoped_default_mbpt_context(
           {.csv = CSV::No, .op_registry = registry});
 
-      // pulls the Tensor factor out of OpMaker's Tensor * NormalOperator
-      auto tensor_factor = [](const ExprPtr& e) -> const Tensor& {
-        if (e->is<Tensor>()) return e->as<Tensor>();
-        REQUIRE(e->is<Product>());
-        for (auto&& f : e->as<Product>().factors())
-          if (f->is<Tensor>()) return f->as<Tensor>();
-        throw Exception("adjoint tensor form test: no Tensor factor found");
-      };
-
       auto z = ex<op_t>(
           []() -> std::wstring_view { return L"z"; },
           []() -> ExprPtr {
@@ -725,6 +710,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
           [](mbpt::qns_t& qns) { qns = combine(general_type_qns(1), qns); });
 
       auto z_adj = sequant::adjoint(z);
+      REQUIRE(z_adj->is<op_t>());
       REQUIRE(z_adj->as<op_t>().label() == L"z⁺");
 
       auto tform = z_adj->as<op_t>().tensor_form();
@@ -1490,7 +1476,9 @@ SECTION("rules") {
     csv_basis.field(Field::Real);
 
     const Index i1(L"i_1");
-    Tensor f(L"f", bra{Index(L"a_1", {i1})}, ket{Index(L"a_2", {i1})},
+    const Index src_bra(L"a_1", {i1});
+    const Index src_ket(L"a_2", {i1});
+    Tensor f(L"f", bra{src_bra}, ket{src_ket},
              TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
                               .conjugation_parity = ConjugationParity::Odd});
     // over the source's complex slots the adjointed state is kept as is
@@ -1504,16 +1492,33 @@ SECTION("rules") {
     const auto& prod = transformed->as<Product>();
     REQUIRE(prod.scalar() == Constant::scalar_type(-1));
 
-    std::size_t nf = 0;
+    // each C factor straddles one of the source's complex slots and the csv
+    // index that replaced it
+    std::optional<Index> x_from_bra, x_from_ket;
+    const Tensor* xf = nullptr;
     for (auto&& factor : prod.factors()) {
       REQUIRE(factor->is<Tensor>());
       const auto& t = factor->as<Tensor>();
-      if (t.label() != L"f") continue;
-      ++nf;
-      REQUIRE_FALSE(t.adjointed());
-      REQUIRE_FALSE(t.kconjugated());
+      if (t.label() == L"f") {
+        REQUIRE(xf == nullptr);
+        xf = &t;
+        REQUIRE_FALSE(t.adjointed());
+        REQUIRE_FALSE(t.kconjugated());
+      } else {
+        REQUIRE(t.label() == L"C");
+        if (t.bra().at(0) == src_bra) x_from_bra = t.ket().at(0);
+        if (t.ket().at(0) == src_ket) x_from_ket = t.bra().at(0);
+      }
     }
-    REQUIRE(nf == 1);
+    REQUIRE(xf != nullptr);
+    REQUIRE(x_from_bra.has_value());
+    REQUIRE(x_from_ket.has_value());
+    REQUIRE(x_from_bra != x_from_ket);
+    // the coset rule exchanged the bundles along with the sign: the csv index
+    // that replaced the source's ket slot sits in the rebuilt tensor's bra,
+    // and the one that replaced its bra slot in the ket
+    REQUIRE(xf->bra().at(0) == *x_from_ket);
+    REQUIRE(xf->ket().at(0) == *x_from_bra);
   }
 }  // SECTION("rules")
 

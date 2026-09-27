@@ -104,6 +104,10 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   // the adjointed state for the K-conjugated one -- exchanging the bundles
   // back -- and clear that one against an odd conjugation parity, consuming a
   // sign. A Tensor holds no sign, so it goes to this Product's scalar.
+  // N.B. carrying a state across a change of field presumes the coefficient
+  // tensors are real: each C straddles a complex source index and a real csv
+  // index and enters the product unconjugated, so it commutes with the
+  // conjugation the state denotes.
   const auto states_sign =
       xtnsr->as<Tensor>().set_states(tnsr.adjointed(), tnsr.kconjugated());
   result.prepend(states_sign, std::move(xtnsr));
