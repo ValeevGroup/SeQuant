@@ -242,6 +242,22 @@ granularities, not just whole terms:
 > retrieval, `apply_canon_transform` charges a transform that only aliases its
 > source nothing (`Result::is_buffer_alias()`), which is what keeps the peak
 > accounting truthful for the flat TiledArray backend's lazy view.
+>
+> Symbolic common-subexpression elimination is the one consumer that carries a
+> term of its own. `SubexpressionHasher` and `SubexpressionEqualityComparator`
+> (`eval_node_compare.hpp`) take the slot identity and add the node's
+> `canon_transform().conj`, so a uniformly conjugated product is not the
+> intermediate of its unconjugated twin, and `SubexpressionPhases` records the
+> defining occurrence's phase, so that a use is the intermediate times the
+> product of the two phases. The value cache keeps the identity this section
+> contracts for: it hoists the conjugation and serves one array to both
+> spellings. The two identities differ because an intermediate is defined by
+> the spelling it denotes and then used by name: a cache applies the transform
+> on retrieval, while a generated program has no spelling for a conjugated
+> intermediate and no generator emits one. The cost is a missed reuse between
+> conjugated twins in exported code, never a wrong value. So the bullet above
+> reads: the cache keys and the intermediate hashes span conj variants with no
+> separate machinery; the symbolic rewrite carries the one bit named here.
 
 ## Symbolic-surface audit -> eval obligations
 

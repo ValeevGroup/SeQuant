@@ -1301,6 +1301,7 @@ TEST_CASE("a marked leaf reaches the generator as the array it denotes",
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("r_conj[a_1, i_1]"));
     REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" r["));
   }
+
   SECTION("an adjointed and K-conjugated leaf is named _adj_conj") {
     // over a complex basis the leaf stores t꙳ (an array of its own) under the
     // adjoint channel's {conj, braket_swap}, and denotes t⁺꙳
