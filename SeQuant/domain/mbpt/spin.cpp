@@ -165,6 +165,7 @@ template <typename Container, typename TraceFunction, typename... Args>
     }
 
     // Found a new index pairing
+    idxPairings.push_back(currentPairing);
 
     ExprPtr expression = expr.expression().clone();
 

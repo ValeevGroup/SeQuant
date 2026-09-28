@@ -1845,38 +1845,43 @@ SECTION("ResultExpr") {
   SECTION("permuted results with mixed spaces") {
     // each result R{P(bra);ket} must match tracing the nonsymmetric
     // R{P(bra);ket} = g{P(bra);ket}, whose sign comes from canonicalizing g
-    // instead; for 3 bra indices the permutations do not alternate in sign
+    // instead; for 3 bra indices the permutations do not alternate in sign.
+    // Permutations that pair the same bra and ket spaces yield one result.
     auto csv = [](const auto& indices) {
       return join_strings<std::wstring>(indices, L",", [](const Index& idx) {
         return std::wstring(idx.full_label());
       });
     };
 
-    for (std::wstring symm : {L"A", L"S"}) {
-      CAPTURE(toUtf8(symm));
-      const ResultExpr input = deserialize<ResultExpr>(
-          L"R{a1,u1,i1;i2,u2,a2}:" + symm + L" = g{a1,u1,i1;i2,u2,a2}:" + symm);
-      auto reference = [&](const ResultExpr& result) {
-        const std::wstring slots = csv(result.bra()) + L";" + csv(result.ket());
-        return deserialize<ResultExpr>(L"R{" + slots + L"}:N = g{" + slots +
-                                       L"}:" + symm);
-      };
-
-      for (bool closed_shell : {true, false}) {
-        CAPTURE(closed_shell);
-        auto trace = [&](const ResultExpr& expr) {
-          return closed_shell ? closed_shell_spintrace(expr.clone())
-                              : spintrace(expr.clone());
+    const std::vector<std::pair<std::wstring, std::size_t>> slots_and_counts = {
+        {L"a1,u1,i1;i2,u2,a2", 6}, {L"a1,a2,u1;i1,i2,u2", 2}};
+    for (const auto& [slots, count] : slots_and_counts)
+      for (std::wstring symm : {L"A", L"S"}) {
+        CAPTURE(toUtf8(slots), toUtf8(symm));
+        const ResultExpr input = deserialize<ResultExpr>(
+            L"R{" + slots + L"}:" + symm + L" = g{" + slots + L"}:" + symm);
+        auto reference = [&](const ResultExpr& result) {
+          const std::wstring result_slots =
+              csv(result.bra()) + L";" + csv(result.ket());
+          return deserialize<ResultExpr>(L"R{" + result_slots + L"}:N = g{" +
+                                         result_slots + L"}:" + symm);
         };
-        const auto actual = trace(input);
-        REQUIRE(actual.size() > 1);
-        for (const ResultExpr& result : actual) {
-          const auto expected = trace(reference(result));
-          REQUIRE(expected.size() == 1);
-          REQUIRE_THAT(result, EquivalentTo(expected.front()));
+
+        for (bool closed_shell : {true, false}) {
+          CAPTURE(closed_shell);
+          auto trace = [&](const ResultExpr& expr) {
+            return closed_shell ? closed_shell_spintrace(expr.clone())
+                                : spintrace(expr.clone());
+          };
+          const auto actual = trace(input);
+          REQUIRE(actual.size() == count);
+          for (const ResultExpr& result : actual) {
+            const auto expected = trace(reference(result));
+            REQUIRE(expected.size() == 1);
+            REQUIRE_THAT(result, EquivalentTo(expected.front()));
+          }
         }
       }
-    }
   }
 
   REQUIRE(inputs.size() == expected_outputs.size());
