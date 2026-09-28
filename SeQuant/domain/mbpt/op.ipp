@@ -164,13 +164,14 @@ void Operator<QuantumNumbers, S>::adjoint() {
   // fresh dummy indices; otherwise using this adjoint operator more than once
   // would yield tensors that have the same indices.
   auto base_tensor_form = this->tensor_form_generator_;
+  const auto adjoint_dN = sequant::adjoint(dN);
   *this = Operator{
       [=]() -> std::wstring_view { return lbl; },  // label_generator
       [=]() -> ExprPtr {
         return sequant::adjoint(base_tensor_form());  // tensor_form_generator
       },
       [=](qnc_t& qn) {
-        qn += sequant::adjoint(dN);
+        qn += adjoint_dN;
         return qn;  // qn_action
       }};
   this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
