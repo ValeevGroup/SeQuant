@@ -48,7 +48,7 @@ struct ColumnGroup {
 /// objects that actually should have different colors (i.e. this is more than a
 /// hash function). It is intended to be used to determine the vertex colors in
 /// a colored graph representing a tensor network.
-class VertexPainterImpl {
+class VertexPainter {
  public:
   using Color = tensor_network::VertexColor;
   using NamedIndexSet = tensor_network::NamedIndexSet;
@@ -67,9 +67,9 @@ class VertexPainterImpl {
   /// vertex color so that same-space named indices bound to different loops
   /// become distinguishable. A null (default) or empty map leaves coloring
   /// byte-identical to space-only named coloring.
-  VertexPainterImpl(const NamedIndexSet &named_indices,
-                    bool distinct_named_indices = true,
-                    const NamedIndexColorMap *named_index_colors = nullptr);
+  VertexPainter(const NamedIndexSet &named_indices,
+                bool distinct_named_indices = true,
+                const NamedIndexColorMap *named_index_colors = nullptr);
 
   const ColorMap &used_colors() const;
 
@@ -183,12 +183,6 @@ class VertexPainterImpl {
   bool may_have_same_color(const VertexData &data, const ColumnGroup &group);
   bool may_have_same_color(const VertexData &data, const Index &idx);
   bool may_have_same_color(const VertexData &data, const ProtoBundle &bundle);
-};
-
-template <typename TN>
-class VertexPainter : public VertexPainterImpl {
- public:
-  using VertexPainterImpl::VertexPainterImpl;
 };
 
 }  // namespace sequant
