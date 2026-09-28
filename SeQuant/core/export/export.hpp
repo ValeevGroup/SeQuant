@@ -256,8 +256,7 @@ class GenerationVisitor {
         break;
       case EvalOp::RealPart:
       case EvalOp::ImagPart:
-        throw std::runtime_error(
-            "export of Re/Im eval nodes is not implemented yet");
+        throw Exception("export: a Re/Im eval node has no exported form");
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:
