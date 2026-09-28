@@ -1507,10 +1507,9 @@ TEST_CASE("dryrun axis_batches tiles the axis space extent",
 TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
           "[dryrun-result][pre-sized]") {
   // The runtime External-mode scatter builds its destination from the node's
-  // OWN (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
-  // its space's FULL extent (a structural fact queryable immediately via
-  // size_in_bytes()). Replaces the old carrier-widening
-  // pre_sized_zeros_over_mode: no block partial, no carrier.
+  // own (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
+  // its space's full extent, a structural fact queryable immediately via
+  // size_in_bytes(); neither a block partial nor a carrier takes part in it.
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   Index i1{L"i_1"}, a3{L"a_3"};
@@ -1730,23 +1729,16 @@ TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
 TEST_CASE(
     "dryrun external-mode scatter replay models the sliced footprint (D3.1)",
     "[dryrun-extmode][eval]") {
-  // D3.1 regression: the runtime External-mode scatter branch in
-  // make_batched_custom_evaluator (eval.hpp) calls, on the first block,
-  // part->pre_sized_zeros_over_mode(dest_mode, carrier_full, carrier_mode),
-  // then dest->write_into_slice(...) for every block. Before this task the
-  // dry-run Result classes did not override pre_sized_zeros_over_mode, so
-  // the replay hit the base class's `throw
-  // detail::unimplemented_method("pre_sized_zeros_over_mode")` the moment an
-  // External mode was stamped -- the witness could not measure external
-  // batching at all (as-built design
-  // doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 4.2).
-  // This test drives the SAME scatter branch the TA
-  // regression `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp)
-  // exercises, on the dry-run backend: a small forest carrying the occupied
-  // index ONLY as a protoindex of a composite PNO leg (canonicalization
-  // promotes it to a plain outer canon index, so index_position locates it
-  // directly -- no proto-aware locator needed, exactly as that TA test
-  // documents).
+  // The runtime External-mode scatter branch in make_batched_custom_evaluator
+  // (eval.hpp) builds its destination once via BackendArrayOps::make_zeros and
+  // then calls dest->write_into_slice(...) for every block; the dry-run Result
+  // classes model both, so the witness measures external batching. This test
+  // drives that same scatter branch the TA regression
+  // `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp) exercises, on
+  // the dry-run backend: a small forest carrying the occupied index only as a
+  // protoindex of a composite PNO leg (canonicalization promotes it to a plain
+  // outer canon index, so index_position locates it directly -- no proto-aware
+  // locator needed, exactly as that TA test documents).
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
@@ -1834,22 +1826,19 @@ TEST_CASE(
     what = e.what();
   }
 
-  // GREEN (after D3.1): the replay completes. RED (before D3.1): this threw
-  // std::logic_error(".. pre_sized_zeros_over_mode ..") the first time the
-  // scatter branch called part->pre_sized_zeros_over_mode() on a dry-run
-  // Result that did not override it.
+  // the replay completes: the scatter branch finds every Result method it
+  // needs modeled on the dry-run backend
   INFO("evaluate() threw: " << what);
   REQUIRE_FALSE(threw);
   REQUIRE(result);
 
-  // The assembled result's mode-th index is widened back to the FULL
-  // (unsliced) extent: the scattered result reconstructs the same modeled
-  // size as the unbatched reference. (The per-block modeled size's
-  // ~block/extent scaling -- the sliced footprint the scatter buys per
-  // block -- is asserted directly against the cost model by the two
-  // pre_sized_zeros_over_mode unit tests above; this end-to-end replay
-  // additionally confirms the runtime genuinely reassembles them via the
-  // scatter branch rather than, say, silently no-op'ing.)
+  // The assembled result's mode-th index spans the full (unsliced) extent:
+  // the scattered result reconstructs the same modeled size as the unbatched
+  // reference. (The per-block modeled size's ~block/extent scaling -- the
+  // sliced footprint the scatter buys per block -- is asserted directly
+  // against the cost model by the two make_zeros unit tests above; this
+  // end-to-end replay additionally confirms the runtime genuinely reassembles
+  // them via the scatter branch rather than, say, silently no-op'ing.)
   CHECK(result->size_in_bytes() == ref_bytes);
 
   // The scatter genuinely fired over the occ: > 1 block (occ extent 10,

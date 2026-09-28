@@ -716,8 +716,10 @@ template <meta::can_evaluate Node>
 /// application converts either way. Shared by \c evaluate_impl (through its
 /// \c apply_phase lambda) and the ordered executor's \c
 /// detail::compute_cell, so both convert identically -- including the \c
-/// MultByPhase trace event, whose \c note_working_set call is what puts the
-/// transient second buffer on the peak monitor.
+/// MultByPhase trace event, whose \c note_working_set call is what puts a
+/// materializing transform's transient second buffer on the peak monitor (a
+/// transform that only aliases its source allocates nothing and is charged
+/// nothing, see Result::is_buffer_alias()).
 ///
 /// A trivial transform (the overwhelming majority) returns \p res untouched,
 /// with no event and no allocation.

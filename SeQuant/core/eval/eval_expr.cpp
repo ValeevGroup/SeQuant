@@ -528,21 +528,16 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
 }  // namespace
 
 /// Prefix slot hashes of a range of summand hashes: element i is the hash of
-/// summands 0..i IN ORDER, i.e. the slot of the sum node that combines them
-/// (the left fold's i-th intermediate). Order-sensitive on purpose: a sum
-/// hands up its FIRST summand's layout (the others are permuted into it at
-/// evaluation), so A + B and B + A are different slots -- while relabeled
-/// copies of the same ordered sum (isomorphic summands, hence isomorphic
-/// leading layouts) share one. Computed eagerly and sequentially: a lazily
-/// sliced prefix view evaluated by random access saw only the summands
-/// BEFORE the last one, so A + B and A + C shared a slot (fixed 2026-09-03).
+/// summands 0..i taken as a multiset, i.e. the slot of the sum node that
+/// combines them (the left fold's i-th intermediate). Order-independent: a
+/// Sum of the same summands written in another order is the same value. The
+/// layout a Sum hands up (its first summand's, see binarize(Sum)) is kept
+/// apart by the layout fingerprint every tensor-valued node folds into its
+/// hash, so two orders that lay their result out differently still get
+/// distinct slots. Computed eagerly and sequentially so that every prefix
+/// covers all the summands up to and including its own.
 template <typename Rng>
 container::svector<size_t> imed_hashes(Rng const& rng) {
-  // prefix hashes over the summands as a MULTISET (order-independent): a Sum
-  // of the same summands in another order is the same value. The layout a
-  // Sum hands up (its first summand's, see binarize(Sum)) is separated by the
-  // layout fingerprint every tensor-valued node folds into its hash, so two
-  // orders that lay their result out differently still get distinct slots.
   container::svector<size_t> result;
   container::svector<size_t> prefix;
   for (auto&& h : rng) {
@@ -597,7 +592,7 @@ void collect_tensor_factors(EvalExprNode const& node,  //
 
   if (auto op = node->op_type();
       node->is_tensor() && (!op || *op == EvalOp::Sum)) {
-    // Leaf tensors enter in their DENOTED spelling (transform re-materialized
+    // Leaf tensors enter in their denoted spelling (transform re-materialized
     // syntactically); a Sum-rooted subtree contributes its result tensor.
     auto e = (!op && node->expr()->is<Tensor>()) ? node->denoted_expr()
                                                  : node->expr();
@@ -662,7 +657,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       !ranges::empty(summands) && ranges::all_of(summands, [](auto&& n) {
         return hoistable(n->canon_transform());
       });
-  // a summand's phase (its hand-up is the DENOTED value) hoists the same
+  // a summand's phase (its hand-up is the denoted value) hoists the same
   // way: uniform -> a whole-node phase; mixed -> no transform of the
   // unsigned sum (A - B vs A + B), so the negated summands salt the slot
   auto const negated = [](auto&& n) { return n->canon_phase() == -1; };

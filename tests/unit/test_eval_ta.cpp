@@ -5143,14 +5143,13 @@ TEST_CASE("batched_scratch_no_seed_external", "[eval][batched-external]") {
 }
 
 TEST_CASE("batched_scratch_tot_presize_scatter", "[eval][batched-external]") {
-  // Task 6 (Part B): the ToT ResultTensorOfTensorTA::pre_sized_zeros_over_mode
-  // must produce a destination that the ToT scatter primitives
-  // (write_into_slice -> write_array_into_mode) reassemble EXACTLY. This is the
-  // ToT analog of the flat pre-size Task 5 added; CSV/PNO-CCSD residuals carry
-  // ToT tiles, so the external-mode scatter needs a ToT pre-size. Here we drive
-  // the exact runtime sequence: pre-size from the FIRST block partial (widening
-  // its OUTER mode to the carrier's FULL tiling), then write_into_slice
-  // every disjoint block. The reassembled ToT must equal the original.
+  // The ToT scatter primitives (write_into_slice -> write_array_into_mode)
+  // must reassemble a full-extent destination exactly. CSV/PNO-CCSD residuals
+  // carry ToT tiles, so the external-mode scatter needs a nested destination
+  // as well as a flat one. The runtime sequence is driven here directly:
+  // build the zero destination over the carrier's whole outer tiling, then
+  // write_into_slice every disjoint block. The reassembled ToT must equal the
+  // original.
   using sequant::eval_result;
   using sequant::ResultTensorOfTensorTA;
   using sequant::slice_array_over_mode;

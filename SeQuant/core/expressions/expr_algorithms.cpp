@@ -457,8 +457,8 @@ enum class ConjPairEmission {
 
 // Merge Re/Im-wrapped c-number summands related by the conjugate identity
 // (Re(x*) == Re(x), Im(x*) == -Im(x)): for a fully contracted c-number
-// network the adjoint IS the conjugate, so wrappers created by different
-// simplify passes -- or emitted by the pair fold itself -- may hold
+// network the adjoint coincides with the conjugate, so wrappers created by
+// different simplify passes -- or emitted by the pair fold itself -- may hold
 // conjugate-related inners. Bucket them by a canonical representative and
 // accumulate scalars; exact cancellations drop out.
 template <typename SummandRange>
@@ -567,9 +567,9 @@ ExprPtr fold_conjugate_pairs_impl(
   // Pre-merge Re/Im-wrapped summands related by the conjugate identity
   // (Re(x*) == Re(x), Im(x*) == -Im(x)). Wrapped summands are
   // self-conjugate, so the pair fold below leaves them untouched -- but
-  // wrappers created by DIFFERENT simplify passes may hold conjugate-related
-  // inners (for a fully contracted c-number network the adjoint IS the
-  // conjugate), e.g. +c Re(X) and -c Re(X^+) must cancel.
+  // wrappers created by separate simplify passes may hold conjugate-related
+  // inners (for a fully contracted c-number network the adjoint coincides
+  // with the conjugate), e.g. +c Re(X) and -c Re(X^+) must cancel.
   auto summands_v =
       merge_wrapped_summands(expr->as<Sum>().summands(), opts, conjugate_op);
   auto const& summands = summands_v;
