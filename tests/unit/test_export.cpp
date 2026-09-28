@@ -1125,9 +1125,10 @@ TEST_CASE("full export of marked tensors", "[export]") {
       REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("tensor: t:ce["));
       REQUIRE_THAT(code,
                    Catch::Matchers::ContainsSubstring("tensor: t_adj:ce["));
-      // and two entries in the load-strategy bookkeeping
+      // and two terminals in the load-strategy bookkeeping: the marked array
+      // is one the host code supplies, not one the generated code builds
       REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t:ce["));
-      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("alloc t_adj:ce["));
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t_adj:ce["));
     }
   }
 
@@ -1142,8 +1143,11 @@ TEST_CASE("full export of marked tensors", "[export]") {
         code, Catch::Matchers::ContainsSubstring("Declare tensor t[i_1, a_2]"));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
                            "Declare tensor t_adj[i_1, a_2]"));
-    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
-                           "Compute t_adj[i_1, a_2] += t[a_2, i_1]"));
+    // the marked array is contracted under its own name, in the slot order
+    // the `⁺` denotes
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring(
+                     "Compute R[i_1, a_1] += t_adj[i_1, a_2] f[a_2, a_1]"));
   }
 
   SECTION("an import name set on the marked tensor as written is honoured") {
@@ -1214,6 +1218,54 @@ TEST_CASE("full export of marked tensors", "[export]") {
                  Catch::Matchers::ContainsSubstring("tensor: g_adj:ccee["));
     REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("K_adj"));
     REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("J_adj"));
+  }
+}
+
+TEST_CASE("a marked leaf reaches the generator as the array it denotes",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  auto generate = [](const ResultExpr &result) {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    return gen.get_generated_code();
+  };
+
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+
+  SECTION("an adjointed leaf is named _adj") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+
+    const std::string code = generate(ResultExpr(R, ex<Tensor>(t) * f));
+    CAPTURE(code);
+
+    // the `⁺` is spelled by the array name, over the slots it denotes
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("t_adj[i_1, a_1]"));
+    // and the array the leaf stores is nowhere in the generated code
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" t["));
+  }
+
+  SECTION("a K-conjugated leaf is named _conj") {
+    // over this complex basis a `꙳` whose parity leaves it unresolved names
+    // an array of its own, which the leaf stores as written
+    const TensorSymmetries no_parity{.conjugation_parity =
+                                         ConjugationParity::None};
+    Tensor r(L"r", bra{L"a_1"}, ket{L"i_1"}, no_parity);
+    REQUIRE(r.kconjugate() == 1);
+    REQUIRE(r.kconjugated());
+
+    // the dummy pairs r's bra with a ket, as the network requires
+    const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"a_1"});
+    const std::string code = generate(ResultExpr(R, ex<Tensor>(r) * w));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("r_conj[a_1, i_1]"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" r["));
   }
 }
 

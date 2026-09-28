@@ -224,12 +224,15 @@ class GenerationVisitor {
     }
   }
 
-  /// scalar leaves store the UNMARKED spelling (the conj bit rides the
-  /// node's CanonTransform); re-materialize the marker for code generation.
-  /// Tensor leaves keep the documented transpose-only (real-field) export
-  /// limitation.
+  /// @return the spelling @p node denotes, for a scalar-valued node: a scalar
+  ///         leaf stores the unmarked spelling and carries the conjugation in
+  ///         its CanonTransform, so the marker is re-materialized here and the
+  ///         generators wrap it. A tensor-valued node needs no such treatment:
+  ///         its denoted spelling is materialized on the node itself before
+  ///         preprocessing (see PreprocessVisitor::preprocess_node_content),
+  ///         which is what makes a marked array a name of its own.
   template <typename Node>
-  static ExprPtr denoted_expr(Node const &node) {
+  static ExprPtr denoted_scalar(Node const &node) {
     ExprPtr e = node->expr();
     if (node->canon_transform().conj &&
         (e->template is<Variable>() || e->template is<Power>())) {
@@ -250,9 +253,10 @@ class GenerationVisitor {
     container::svector<ExprPtr> expressions;
     switch (node->op_type().value()) {
       case EvalOp::Product:
-        expressions.push_back(ex<Product>(
-            ExprPtrList{denoted_expr(node.left()), denoted_expr(node.right())},
-            Product::Flatten::No));
+        expressions.push_back(
+            ex<Product>(ExprPtrList{denoted_scalar(node.left()),
+                                    denoted_scalar(node.right())},
+                        Product::Flatten::No));
         break;
       case EvalOp::RealPart:
       case EvalOp::ImagPart:
@@ -264,14 +268,14 @@ class GenerationVisitor {
             // computation that should be exported.
             return;
           case ComputeSelection::Left:
-            expressions.push_back(denoted_expr(node.left()));
+            expressions.push_back(denoted_scalar(node.left()));
             break;
           case ComputeSelection::Right:
-            expressions.push_back(denoted_expr(node.right()));
+            expressions.push_back(denoted_scalar(node.right()));
             break;
           case ComputeSelection::Both:
-            expressions.push_back(denoted_expr(node.left()));
-            expressions.push_back(denoted_expr(node.right()));
+            expressions.push_back(denoted_scalar(node.left()));
+            expressions.push_back(denoted_scalar(node.right()));
             break;
         }
         break;
@@ -336,8 +340,8 @@ class GenerationVisitor {
     }
 
     // Drop used leaf elements
-    drop(*denoted_expr(node.right()));
-    drop(*denoted_expr(node.left()));
+    drop(*denoted_scalar(node.right()));
+    drop(*denoted_scalar(node.left()));
   }
 
  private:
@@ -725,6 +729,16 @@ class PreprocessVisitor {
   }
 
   void preprocess_node_content(ExportNode<T> &node) {
+    // The node stores the array a provider serves; the value it denotes adds
+    // its transform's states. Export names arrays, so the denoted spelling is
+    // what the label-keyed maps and the generators must see: preprocess folds
+    // its marks into the name (fold_marks_into_label), naming a ⁺ leaf's
+    // array t_adj and a ꙳ leaf's array t_conj. A leaf whose state already
+    // named an array of its own stores that state and is left alone, as is
+    // every node whose transform carries no conjugation.
+    if (node->is_tensor() && node->canon_transform().conj)
+      node->set_expr(node->denoted_expr());
+
     if (node->is_tensor()) {
       preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result,
                          m_folded_names);
