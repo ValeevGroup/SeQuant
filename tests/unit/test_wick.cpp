@@ -253,6 +253,25 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       REQUIRE_THAT(connected_contractions, EquivalentTo(full_contractions));
     }
 
+    // connections of an expression input are processed by compute(); a later
+    // call replaces the earlier one
+    {
+      const auto expr = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_2"}) *
+                        ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"})) *
+                        ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}) *
+                        ex<FNOperator>(cre({L"i_3"}), ann({L"i_4"}));
+      auto contractions = [&expr](bool connect, bool twice) {
+        auto wick = FWickTheorem{expr};
+        wick.full_contractions(false);
+        if (connect) wick.set_nop_connections({{0, 1}});
+        if (twice) wick.set_nop_connections({{0, 1}});
+        return wick.compute();
+      };
+      const auto connected = contractions(true, false);
+      REQUIRE_THAT(connected, !EquivalentTo(contractions(false, false)));
+      REQUIRE_THAT(contractions(true, true), EquivalentTo(connected));
+    }
+
     // general string of creators/annihilators, from Nick Mayhall
     {
       // sequence of individual ops

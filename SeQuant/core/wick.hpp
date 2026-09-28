@@ -510,8 +510,8 @@ class WickTheorem {
 
   /// validates the pairs of normal operator indices in @p op_index_pairs
   /// and, once the input is resolved, records them in @p mask as a reverse
-  /// bitmask (0 = pair listed, 1 = not listed); until then, caches them in
-  /// @p cache
+  /// bitmask (0 = pair listed, 1 = not listed); until then, replaces the
+  /// contents of @p cache with them
   /// @param caller name of the public setter, used in exception messages
   /// @return the number of pairs recorded in @p mask, or std::nullopt if
   /// @p op_index_pairs were cached
@@ -528,9 +528,9 @@ class WickTheorem {
                       "(arg): arg contains duplicates");
     }
 
-    // process now if input is resolved, or is a deferred call from
-    // compute_nopseq (already cached list)
-    if (expr_input_ == nullptr || !cache.empty()) {
+    // process now if input is resolved; compute_nopseq replays the cached
+    // list once it is
+    if (input_) {
       // N.B. op_index_pairs is cache itself when called from compute_nopseq
       const std::size_t npairs = op_index_pairs.size();
       for (const auto &opidx_pair : op_index_pairs) {
@@ -562,6 +562,7 @@ class WickTheorem {
       cache.clear();
       return npairs;
     } else {
+      cache.clear();
       ranges::for_each(op_index_pairs, [&cache](const auto &idxpair) {
         cache.push_back(idxpair);
       });
