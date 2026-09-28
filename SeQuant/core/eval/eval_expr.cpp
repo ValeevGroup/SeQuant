@@ -852,29 +852,42 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     bool const hoist_conj = static_cast<bool>(prefix_conj[i + 1]);
     auto const& uncontracted_idxs = ltr_uncontr_idxs.imed[i];
     if (left->is_scalar() && right->is_scalar()) {
-      // scalar * scalar
+      // scalar * scalar: no network is flattened here, so each child is
+      // opaque and hands up the value it denotes. The slot hash leaves out a
+      // child's phase (never salted) and, in a hoisted prefix, its
+      // conjugation, so this node's transform carries both: the phases
+      // multiply, and the conjugation the strip assumed hoisted lands here.
       return {EvalOp::Product,
               ResultType::Scalar,
               detail::make_variable(),
               {},
-              CanonTransform{},
+              CanonTransform{.phase = static_cast<std::int8_t>(
+                                 left->canon_phase() * right->canon_phase()),
+                             .conj = hoist_conj},
               h,
               nullptr};
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
+      auto const& sc = left->is_tensor() ? right : left;
       // this node inherits tl's transform and spells its placeholder from the
       // orientation tl denotes, so the placeholder is itself already a denoted
-      // spelling
+      // spelling. The scalar child is opaque (a scalar-valued product hands
+      // up its denoted value), so its phase multiplies in; its conjugation is
+      // either salted into the hash or, in a hoisted prefix, the one tl's
+      // transform already carries.
       auto const t = tl->denoted_expr()->as<Tensor>();
       hash::combine(h, EvalExpr::layout_fingerprint_of(tl->canon_indices()));
+      CanonTransform transform = tl->canon_transform();
+      transform.phase =
+          static_cast<std::int8_t>(transform.phase * sc->canon_phase());
       return {
           EvalOp::Product,     //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
                                             aux(t.aux())),  //
           tl->canon_indices(),                              //
-          tl->canon_transform(),                            //
+          transform,                                        //
           h,
           nullptr};
     } else {

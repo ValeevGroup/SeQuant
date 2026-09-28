@@ -1003,6 +1003,116 @@ TEST_CASE("eval_leaf_phase_reaches_the_value_btas", "[eval_btas]") {
   }
 }
 
+// A product whose last combination is scalar-valued (scalar * scalar) has
+// opaque children: nothing is flattened, so each child hands up the value it
+// denotes, and the node's transform must carry what the slot hash leaves out
+// of its children -- their phases and the conjugation a hoisted prefix
+// strips. Two spellings that share the slot are read through one cache, so
+// the second read surfaces a transform the node failed to record.
+TEST_CASE("eval_scalar_product_node_carries_its_children_transform_btas",
+          "[eval_btas]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+
+  SECTION("a uniformly conjugated scalar pair hoists onto the bare slot") {
+    auto x = ex<Variable>(L"x"), y = ex<Variable>(L"y");
+    auto xs = x->clone(), ys = y->clone();
+    xs->as<Variable>().conjugate();
+    ys->as<Variable>().conjugate();
+    auto n_conj = eval_node(xs * ys);
+    auto n_bare = eval_node(x * y);
+    REQUIRE(n_conj->is_scalar());
+    REQUIRE(n_conj->hash_value() == n_bare->hash_value());
+    REQUIRE(n_conj->canon_transform() == CanonTransform{.conj = true});
+    REQUIRE(n_bare->canon_transform().trivial());
+
+    auto yield = [](auto const& n) -> ResultPtr {
+      REQUIRE(n->is_variable());
+      return eval_result<ResultScalar<C>>(
+          n->as_variable().label() == L"x" ? C(1, 2) : C(3, -1));
+    };
+    auto scalar_of = [](ResultPtr const& res) {
+      REQUIRE(res->is<ResultScalar<C>>());
+      return res->as<ResultScalar<C>>().value();
+    };
+    auto close_to = [](C got, C ref) {
+      CHECK(got.real() == Catch::Approx(ref.real()).margin(1e-12));
+      CHECK(got.imag() == Catch::Approx(ref.imag()).margin(1e-12));
+    };
+    C const xy = C(1, 2) * C(3, -1);
+    auto cache = cache_manager(std::array{n_conj, n_bare});
+    close_to(scalar_of(evaluate(n_conj, n_conj->annot(), yield, cache)),
+             std::conj(xy));
+    // the bare spelling reads the slot the conjugated one filled
+    close_to(scalar_of(evaluate(n_bare, n_bare->annot(), yield, cache)), xy);
+    close_to(scalar_of(evaluate(n_bare, n_bare->annot(), yield)), xy);
+  }
+
+  SECTION("a scalar-valued product child's phase reaches the node") {
+    using BTensorD = btas::Tensor<double>;
+    const std::size_t nocc = 2, nvirt = 3;
+    std::srand(13);
+    auto rnd = [](std::vector<std::size_t> const& extents) {
+      BTensorD r{btas::Range{extents}};
+      r.generate(
+          []() { return static_cast<double>(std::rand()) / RAND_MAX - 0.5; });
+      return r;
+    };
+    auto t = [](std::wstring_view b0, std::wstring_view b1) {
+      return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                        ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    };
+    auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+    auto y = ex<Variable>(L"y");
+    // (t v) y, with t in the two slot orders the antisymmetry relates
+    auto p_w = eval_node(ex<Product>(ExprPtrList{t(L"a_1", L"i_3"), v, y},
+                                     Product::Flatten::No));
+    auto p_c = eval_node(ex<Product>(ExprPtrList{t(L"i_3", L"a_1"), v, y},
+                                     Product::Flatten::No));
+    REQUIRE(p_w->is_scalar());
+    REQUIRE(p_w.left()->is_scalar());
+    // the inner products share a slot with opposite phases ...
+    REQUIRE(p_w.left()->hash_value() == p_c.left()->hash_value());
+    REQUIRE(p_w.left()->canon_phase() == -1);
+    REQUIRE(p_c.left()->canon_phase() == 1);
+    // ... and so do the outer nodes, whose transform carries that phase
+    REQUIRE(p_w->hash_value() == p_c->hash_value());
+    REQUIRE(p_w->canon_phase() == -1);
+    REQUIRE(p_c->canon_phase() == 1);
+
+    // T is the provider's array for the stored spelling t{i_3,a_1;i_1,i_2}
+    BTensorD T = rnd({nocc, nvirt, nocc, nocc});
+    BTensorD V = rnd({nocc, nocc, nvirt, nocc});  // v{i_1,i_2;a_1,i_3}
+    pinned_tensor_yield<BTensorD> tensors;
+    tensors.put(p_c.left().left()->as_tensor(), T);
+    tensors.put(v->as<Tensor>(), V);
+    auto yield = [&tensors](auto const& n) -> ResultPtr {
+      if (n->is_variable()) return eval_result<ResultScalar<double>>(2.0);
+      return tensors(n);
+    };
+    double ref_c = 0.;
+    for (std::size_t k = 0; k < nocc; ++k)
+      for (std::size_t a = 0; a < nvirt; ++a)
+        for (std::size_t i = 0; i < nocc; ++i)
+          for (std::size_t j = 0; j < nocc; ++j)
+            ref_c += T(k, a, i, j) * V(i, j, a, k);
+    ref_c *= 2.0;
+    auto scalar_of = [](ResultPtr const& res) {
+      REQUIRE(res->is<ResultScalar<double>>());
+      return res->as<ResultScalar<double>>().value();
+    };
+    auto cache = cache_manager(std::array{p_w, p_c});
+    CHECK(scalar_of(evaluate(p_w, p_w->annot(), yield, cache)) ==
+          Catch::Approx(-ref_c).margin(1e-12));
+    // the canonical spelling reads the slot the as-written one filled
+    CHECK(scalar_of(evaluate(p_c, p_c->annot(), yield, cache)) ==
+          Catch::Approx(ref_c).margin(1e-12));
+    CHECK(scalar_of(evaluate(p_c, p_c->annot(), yield)) ==
+          Catch::Approx(ref_c).margin(1e-12));
+  }
+}
+
 // The cell table holds a value in its canonical orientation while every
 // reader wants the node's own, and the conversion is the node's whole
 // CanonTransform: a node that carries a hoisted elementwise conjugation
