@@ -515,19 +515,17 @@ container::svector<ExprPtr> merge_wrapped_summands(
       continue;
     }
     auto ci = canonicalize(wi.inner->clone(), opts);
-    ExprPtr conj_inner;
-    if (conjugate_op) {
-      conj_inner = conjugate_op(wi.inner);
-    } else {
-      conj_inner = wi.inner->clone();
-      // the adjoint may consume a sign (an antisymmetric respelling): keep it
-      // on the expression so the two spellings stay value-equal
-      if (auto const sign = conj_inner->adjoint(); sign != 1)
-        conj_inner = ex<Constant>(sign) * conj_inner;
-    }
+    ExprPtr conj_inner =
+        conjugate_op ? conjugate_op(wi.inner) : sequant::adjoint(wi.inner);
     auto cc = canonicalize(conj_inner->clone(), opts);
-    // the representative is the smaller of the two canonical spellings in the
-    // expression order, the same choice the pair fold below makes
+    // the representative is the smaller of the two canonical spellings under
+    // Expr::operator<, the criterion fold_conjugate_pairs_impl's
+    // `representative` uses: a min over the pair, so it does not depend on the
+    // order the sum was written in. When the adjoint hands up a -1 the
+    // representative may carry that scalar inside `rep`, and emission spells
+    // the summand as e.g. -2 Re[d]; that is value-correct (an anti-Hermitian d
+    // with d⁺ = d꙳ has Re d = 0), and hoisting a real scalar out of `ci` and
+    // `cc` here is the change to make if a cleaner spelling is wanted
     bool use_conj = *cc < *ci;
     ExprPtr rep = use_conj ? cc : ci;
     auto sc = wi.scalar;
