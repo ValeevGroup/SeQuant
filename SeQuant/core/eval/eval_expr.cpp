@@ -613,8 +613,8 @@ inline size_t salted_hash(EvalExprNode const& n) {
 ///         network, so the enclosing node is the only place its phase can
 ///         land.
 template <typename Rng>
-std::int8_t collect_tensor_factors(EvalExprNode const& node,  //
-                                   Rng& collect) {
+[[nodiscard]] std::int8_t collect_tensor_factors(EvalExprNode const& node,  //
+                                                 Rng& collect) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
