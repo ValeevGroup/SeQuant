@@ -536,15 +536,17 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
     if (child.leaf()) {
       ResultPtr whole =
           fetch_leaf_traced<EvalTrace>(child, leaf_evaluator, cache);
-      // Recorded in the canonical orientation, the registry's convention
-      // (see CellRegistry's own doc); a no-op if the leaf is not a value of
-      // the table, in which case the whole leaf below is this leg's value.
-      resolver.record_leaf(
-          key, apply_canon_transform<EvalTrace>(child, whole, cache));
+      // A provider serves the array the leaf stores, which is already the
+      // canonical orientation the registry keeps (see CellRegistry's own
+      // doc), so it is recorded as fetched; a no-op if the leaf is not a
+      // value of the table, in which case the whole leaf below is this leg's
+      // value. Either way the leg's value is the leaf's own orientation, one
+      // conversion away.
+      resolver.record_leaf(key, whole);
       note_fresh_build(child, cache);
       if (auto v = resolver.fetch(key, ctx))
         return apply_canon_transform<EvalTrace>(child, std::move(*v), cache);
-      return whole;
+      return apply_canon_transform<EvalTrace>(child, std::move(whole), cache);
     }
     // A transient of this production tree: computed in place from its own
     // operands. Its result is this leg's value directly -- a transient has no

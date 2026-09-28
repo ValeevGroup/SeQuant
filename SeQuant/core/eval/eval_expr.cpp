@@ -218,10 +218,12 @@ CanonTransform decode_leaf_states(Tensor& t) {
 
 /// Respells a leaf tensor as the block-canonical array a provider serves and
 /// returns the retrieval transform: the state channels (decode_leaf_states)
-/// composed with the block canonicalization's phase. A bra<->ket exchange
-/// that costs a sign is not folded (`fold_signed_braket = false`): the
-/// provider is asked for the canonical spelling and a leaf's phase is a
-/// cache-orientation round trip.
+/// composed with the block canonicalization's phase. The whole transform is
+/// applied to the provider's array on retrieval, so the written spelling's
+/// value -- sign and all -- is what the engine hands up. A bra<->ket exchange
+/// that costs a sign is not folded (`fold_signed_braket = false`), so the two
+/// orientations of such a tensor are separate spellings, each asked of the
+/// provider as written.
 CanonTransform normalize_leaf(Tensor& t) {
   const CanonTransform tr = decode_leaf_states(t);
   const auto block_byproduct =

@@ -717,10 +717,11 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
     size_t hwmark = log::bytes(cache, post).value;
     // An alias allocated nothing and shares the source's buffer: charge it
     // 0 allocated bytes and count that one buffer once (mem_result stays the
-    // value's logical size). NB this covers the cache store path's round
-    // trip, where the node's transform is applied twice -- once into the
-    // canonical orientation to store, once back out -- and the second
-    // application composes to the identity: still an alias, still no copy.
+    // value's logical size). NB this covers a computed node's cache store
+    // path, a round trip where the node's transform is applied twice -- once
+    // into the canonical orientation to store, once back out -- and the
+    // second application composes to the identity: still an alias, still no
+    // copy.
     bool const lazy = post->is_buffer_alias();
     if (!cache.alive(nd) && !lazy) hwmark += log::bytes(res).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
@@ -1018,8 +1019,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// evaluator itself on a leaf operand's first touch, before recording it as
 /// that leaf's cell -- so both account for it the same way.
 ///
-/// \return the leaf's own oriented result, whole (never sliced: the declared
-///         slice of a read is applied by \c CellReadResolver::fetch).
+/// \return the array the leaf's stored spelling names, whole (never sliced:
+///         the declared slice of a read is applied by \c
+///         CellReadResolver::fetch). That is the canonical orientation; the
+///         caller converts it to the leaf's own with the node's transform.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
           typename N, bool FHC>
   requires meta::leaf_node_evaluator<Node, F>
@@ -1050,9 +1053,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
 /// \details The single choke point every freshly computed node passes
 /// through -- leaves, custom-eval subtrees and ordinary contractions alike --
 /// so the per-node build coverage the visualizer joins onto the IR DAG is
-/// complete. Shared by \c evaluate_impl's \c finish_phase_b and by the
-/// ordered executor's \c detail::compute_cell (ordered_executor.hpp), so
-/// both report their builds the same way without re-entering that engine.
+/// complete. Shared by \c evaluate_impl (through \c finish_phase_b, and
+/// directly on its leaf path) and by the ordered executor's \c
+/// detail::compute_cell (ordered_executor.hpp), so both report their builds
+/// the same way without re-entering that engine.
 template <meta::can_evaluate Node, typename N, bool FHC>
 void note_fresh_build(Node const& node, CacheManager<N, FHC>& cache) {
   // Diagnostic (SEQUANT_UT_BUILD_METER): count actual builds at this single
@@ -1062,8 +1066,8 @@ void note_fresh_build(Node const& node, CacheManager<N, FHC>& cache) {
                                eval::BuildMeter::enabled()
                                    ? log::label(node, cache.batch_context())
                                    : std::string{});
-  // Per-op build event: finish_phase_b is the single choke point every
-  // freshly computed node passes through -- leaves, custom-eval subtrees, and
+  // Per-op build event: this is the single choke point every freshly
+  // computed node passes through -- leaves, custom-eval subtrees, and
   // standard contractions -- so this counts every build (cached or not),
   // giving the schedule visualizer full per-node recompute coverage (the
   // cache Store/ Access/Release events above cover only cached nodes). Keyed
@@ -1256,15 +1260,27 @@ ResultPtr evaluate_impl(Node const& node,         //
         // --- Leaf. ---
         if (f.nd().leaf()) {
           // The full leaf (traced and cached full), via the shared leaf
-          // fetch (fetch_leaf_traced, above).
+          // fetch (fetch_leaf_traced, above). A provider is asked for the
+          // array the leaf stores, which is already the canonical
+          // orientation the cache holds -- unlike a computed node, whose
+          // operands reach it in their own orientation -- so the leaf is
+          // stored as fetched and its transform converts once on the way
+          // out, exactly as the Enter-stage cache hit converts.
           ResultPtr result =
               fetch_leaf_traced<EvalTrace>(f.nd(), leaf_evaluator, cache);
+          note_fresh_build(f.nd(), cache);
           // Store the full leaf under its canonical key (a block slice would
           // corrupt the cache), then return it sliced to the current block: a
           // freshly built leaf's lifetime is top, so every enclosing carried
           // batch loop is unbaked and is sliced here (hops == batch_context
           // size). On the off path (empty batch_context) this is a no-op.
-          ResultPtr stored = finish_phase_b(f, std::move(result));
+          if (f.store_after) {
+            result = cache.store_and_access(f.nd(), std::move(result));
+            if constexpr (detail::trace(EvalTrace))
+              log::cache(f.nd(), cache,
+                         log::label(f.nd(), cache.batch_context()));
+          }
+          ResultPtr stored = apply_phase(f.nd(), std::move(result));
           finalize(slice_to_use(stored, f.nd(), cache.batch_context().size()));
           break;
         }

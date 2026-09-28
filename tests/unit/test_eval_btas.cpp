@@ -765,12 +765,12 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
 
 // A real-field odd-parity Hermitian tensor is antisymmetric under the whole
 // bra<->ket exchange, p{a;i} = -p{i;a}. At the eval boundary a flat leaf keeps
-// such a signed orientation as written: a leaf's phase is a cache-orientation
-// round trip, and the engine takes the yielder's array for the leaf's spelling
-// as the leaf's value, so a swap that costs a sign has no channel to the
-// value. The two orientations are therefore distinct leaves, each with phase
-// +1, and a sum that uses both evaluates to the denoted value, with and
-// without a cache. (The orientations differ in space because the pinned
+// such a signed orientation as written: the leaf canonicalizer does not trade
+// a bra<->ket exchange for a sign (fold_signed_braket is false), so the
+// provider is asked for the spelling as written and the leaf's transform
+// carries no phase. The two orientations are therefore distinct leaves, each
+// with phase +1, and a sum that uses both evaluates to the denoted value, with
+// and without a cache. (The orientations differ in space because the pinned
 // yielder keys leaves by label and slot spaces only.)
 TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
   using namespace sequant;
@@ -870,6 +870,122 @@ TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
     auto cache =
         cache_manager(std::array{node}, [](auto const&) { return false; });
     check(evaluate(node, node->annot(), yield, cache)->get<BTensorD>());
+  }
+}
+
+// A flat leaf whose written slot order is not the block-canonical one is
+// stored under the canonical spelling and carries the canonicalization's sign
+// in its CanonTransform. That sign reaches the value: a leaf's transform is
+// applied once on the way out of the retrieval, so the engine hands up the
+// written spelling's value, phase and all, and the two spellings share one
+// provider array and one cache slot while denoting values that differ by the
+// sign. (t{a_1,i_3;i_1,i_2} is Antisymm with symmetric columns, so sorting its
+// bra costs one transposition.)
+TEST_CASE("eval_leaf_phase_reaches_the_value_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  const std::size_t nocc = 2, nvirt = 3;
+  std::srand(7);
+  auto rnd = [](std::vector<std::size_t> const& extents) {
+    BTensorD r{btas::Range{extents}};
+    r.generate(
+        []() { return static_cast<double>(std::rand()) / RAND_MAX - 0.5; });
+    return r;
+  };
+  auto isr = get_default_context().index_space_registry();
+  auto extents_of = [&isr, nocc, nvirt](Tensor const& tn) {
+    std::vector<std::size_t> e;
+    for (auto const& ix : tn.const_braket_indices())
+      e.push_back(ix.space() == isr->retrieve(L"i") ? nocc : nvirt);
+    return e;
+  };
+
+  auto t = [](std::wstring_view b0, std::wstring_view b1) {
+    return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                      ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto t_as_written = t(L"a_1", L"i_3");
+  auto t_canon = t(L"i_3", L"a_1");
+  auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+  auto u = ex<Tensor>(L"u", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_1"});
+
+  auto leaf = eval_node(t_as_written);
+  auto leaf_canon = eval_node(t_canon);
+  REQUIRE(leaf.leaf());
+  // one slot, two phases: the stored spelling is the canonical one
+  REQUIRE(leaf->hash_value() == leaf_canon->hash_value());
+  REQUIRE(leaf->canon_phase() == -1);
+  REQUIRE(leaf_canon->canon_phase() == 1);
+  REQUIRE(leaf->as_tensor().bra()[0].label() == L"i_3");
+  REQUIRE(leaf->as_tensor().bra()[1].label() == L"a_1");
+  REQUIRE(leaf->as_tensor().ket()[0].label() == L"i_1");
+  REQUIRE(leaf->as_tensor().ket()[1].label() == L"i_2");
+  REQUIRE(leaf->annot() == leaf_canon->annot());
+
+  // T is the provider's array for the stored spelling t{i_3,a_1;i_1,i_2},
+  // laid out (i_3, a_1, i_1, i_2)
+  BTensorD T = rnd(extents_of(leaf->as_tensor()));
+  BTensorD V = rnd({nocc, nocc, nvirt, nocc});  // v{i_1,i_2;a_1,i_3}
+  BTensorD U = rnd({nocc, nocc, nocc, nvirt});  // u{i_1,i_2;i_3,a_1}
+  pinned_tensor_yield<BTensorD> yield;
+  yield.put(leaf->as_tensor(), T);
+  yield.put(v->as<Tensor>(), V);
+  yield.put(u->as<Tensor>(), U);
+
+  auto scalar_of = [](ResultPtr const& res) {
+    REQUIRE(res->is<ResultScalar<double>>());
+    return res->as<ResultScalar<double>>().value();
+  };
+  // each network is checked with no cache and then twice through one shared
+  // CacheManager, so that the second read of a slot both spellings share
+  // would surface a conversion applied the wrong number of times
+  auto check_scalar = [&scalar_of](auto const& node, auto const& leaf_yield,
+                                   double ref) {
+    auto check = [&scalar_of, ref](ResultPtr const& res) {
+      CHECK(scalar_of(res) == Catch::Approx(ref).margin(1e-12));
+    };
+    check(evaluate(node, node->annot(), leaf_yield));
+    auto cache =
+        cache_manager(std::array{node}, [](auto const&) { return false; });
+    check(evaluate(node, node->annot(), leaf_yield, cache));
+    check(evaluate(node, node->annot(), leaf_yield, cache));
+  };
+
+  SECTION("the leaf alone is the stored array times its phase") {
+    auto const got = evaluate(leaf, leaf->annot(), yield)->get<BTensorD>();
+    REQUIRE(got.range() == T.range());
+    for (std::size_t k = 0; k < nocc; ++k)
+      for (std::size_t a = 0; a < nvirt; ++a)
+        for (std::size_t i = 0; i < nocc; ++i)
+          for (std::size_t j = 0; j < nocc; ++j)
+            CHECK(got(k, a, i, j) ==
+                  Catch::Approx(-T(k, a, i, j)).margin(1e-12));
+  }
+
+  // Σ over all four slots; the as-written spelling contributes -T
+  double ref_v = 0., ref_u = 0.;
+  for (std::size_t k = 0; k < nocc; ++k)
+    for (std::size_t a = 0; a < nvirt; ++a)
+      for (std::size_t i = 0; i < nocc; ++i)
+        for (std::size_t j = 0; j < nocc; ++j) {
+          ref_v += -T(k, a, i, j) * V(i, j, a, k);
+          ref_u += T(k, a, i, j) * U(i, j, k, a);
+        }
+
+  SECTION("a closed product carries the leaf's phase") {
+    auto node = eval_node(t_as_written * v);
+    REQUIRE(node->is_scalar());
+    check_scalar(node, yield, ref_v);
+  }
+
+  SECTION("both spellings in one sum, one leaf slot, two phases") {
+    auto node = eval_node(t_as_written * v + t_canon * u);
+    REQUIRE(node->is_scalar());
+    REQUIRE(node.left().left()->hash_value() ==
+            node.right().left()->hash_value());
+    check_scalar(node, yield, ref_v + ref_u);
   }
 }
 
