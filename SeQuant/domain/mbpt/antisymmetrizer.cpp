@@ -145,16 +145,8 @@ antisymm_element::gen_antisymm_unique(std::vector<T> ordered_indices) {
   result.push_back({1, ordered_indices});
 
   int parity = 0;  // even permutations produce positive and odd negative
-  [[maybe_unused]] int counter = 0;
 
-  bool do_next_perm = true;
-
-  while (do_next_perm) {
-    do_next_perm =
-        next_permutation_parity(parity, begin(numbers), end(numbers));
-    if (!do_next_perm) {
-      break;
-    }
+  while (next_permutation_parity(parity, begin(numbers), end(numbers))) {
     auto is_canonical_sign =
         [this, &parity](const auto& indices) -> std::pair<bool, bool> {
       for (auto& group :
@@ -180,7 +172,6 @@ antisymm_element::gen_antisymm_unique(std::vector<T> ordered_indices) {
         result.push_back({-1, return_vec});
       }
     }
-    counter += 1;
   }
   return result;
 }
