@@ -539,8 +539,8 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
       // Recorded in the canonical orientation, the registry's convention
       // (see CellRegistry's own doc); a no-op if the leaf is not a value of
       // the table, in which case the whole leaf below is this leg's value.
-      resolver.record_leaf(key,
-                           apply_canon_transform<EvalTrace>(child, whole, cache));
+      resolver.record_leaf(
+          key, apply_canon_transform<EvalTrace>(child, whole, cache));
       note_fresh_build(child, cache);
       if (auto v = resolver.fetch(key, ctx))
         return apply_canon_transform<EvalTrace>(child, std::move(*v), cache);

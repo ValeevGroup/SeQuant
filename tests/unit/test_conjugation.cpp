@@ -1933,7 +1933,7 @@ TEST_CASE("has_tensor_sees_through_re_im", "[conjugation]") {
   auto resetter = set_scoped_default_context(ctx);
   auto t = deserialize(L"t{a_1;i_1}:N-C-S");
   auto f = deserialize(L"f{i_1;a_1}:N-C-S");
-  f->as<Tensor>().conjugate();  // f^*
+  REQUIRE(f->as<Tensor>().kconjugate() == 1);  // f꙳
   auto summand = ex<Constant>(2) * real_part(t->clone() * f->clone());
   INFO("summand = " << toUtf8(to_latex(summand)));
   REQUIRE(has_tensor(summand, L"f"));

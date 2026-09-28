@@ -729,11 +729,11 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   auto yield_ = rand_tensor_yield<BTensorC>{nocc, nvirt};
 
   // A non-Hermitian tensor's adjoint() swaps bra/ket and sets the adjointed
-  // state (spelled with a trailing '⁺'); binarize lowers that to an
-  // EvalOp::Adjoint node over the bare leaf, and evaluating it must
-  // conjugate-transpose the operand. With genuinely complex data the
-  // conjugation is observable (a missing conj would leave imaginary parts
-  // unflipped; a pure transpose would still pass a norm-only check).
+  // state (spelled with a trailing '⁺'); binarize lowers that to a leaf whose
+  // CanonTransform conjugate-transposes the operand on retrieval. With
+  // genuinely complex data the conjugation is observable (a missing conj
+  // would leave imaginary parts unflipped; a pure transpose would still pass
+  // a norm-only check).
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
@@ -742,10 +742,10 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   REQUIRE(t_adj.adjointed());
 
   auto node = eval_node(ex<Tensor>(t_adj));
-  REQUIRE(node->op_type() == EvalOp::Adjoint);
+  REQUIRE(node.leaf());
 
   // operand tensor (bare 't{a_1;i_1}'): shape [nvirt, nocc], indexed (a, i)
-  auto const& src = yield_(node.left()->as_tensor())->get<BTensorC>();
+  auto const& src = yield_(node->as_tensor())->get<BTensorC>();
   REQUIRE(src.extent(0) == nvirt);
   REQUIRE(src.extent(1) == nocc);
 
@@ -875,8 +875,9 @@ TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
 
 // A product that contracts every index of both operands is a bilinear dot,
 // sum_k L[k] R[k], with no conjugation: SeQuant spells a conjugated operand
-// explicitly (an adjointed or K-conjugated state, lowered to an
-// EvalOp::Adjoint node), so the backend must not conjugate on its own. BTAS's
+// explicitly (an adjointed or K-conjugated state, lowered to a leaf whose
+// CanonTransform conjugates), so the backend must not conjugate on its own.
+// BTAS's
 // btas::dot is dotc (BLAS zdotc, the first operand conjugated), which is only
 // observable on complex data.
 TEST_CASE("eval_dot_complex_btas", "[eval_btas]") {
@@ -1296,18 +1297,16 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     auto node = eval_node(tk * ex<Tensor>(w));
     REQUIRE(node->op_type() == EvalOp::Product);
     auto const& kn = node.left();
-    REQUIRE(kn->op_type() == EvalOp::Adjoint);
-    REQUIRE(kn.left().leaf());
-    REQUIRE_FALSE(kn.left()->as_tensor().kconjugated());
-    REQUIRE(kn->canon_indices() == kn.left()->canon_indices());
-    REQUIRE(kn->annot() == kn.left()->annot());
+    REQUIRE(kn.leaf());
+    REQUIRE_FALSE(kn->as_tensor().kconjugated());
+    REQUIRE(kn->canon_transform().conj);
 
     check_closed(node, ryield);
   }
 
-  SECTION("an adjointed leaf over a complex basis is the Adjoint node") {
-    // over a complex basis conjugate(t{a_1;i_1}) is t⁺{i_1;a_1}, the Adjoint
-    // node over the bare leaf: t⁺{i_1;a_1} w'{a_1;i_1} = Σ conj(T(a, i))
+  SECTION("an adjointed leaf over a complex basis rides the transform") {
+    // over a complex basis conjugate(t{a_1;i_1}) is t⁺{i_1;a_1}, a leaf whose
+    // transform conjugate-transposes: t⁺{i_1;a_1} w'{a_1;i_1} = Σ conj(T(a, i))
     // W'(a, i), with W'(a, i) = W(i, a) so that the reference is the same
     Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
     Tensor w(L"w", bra{L"a_1"}, ket{L"i_1"});
@@ -1329,11 +1328,11 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     auto node = eval_node(tadj * ex<Tensor>(w));
     REQUIRE(node->op_type() == EvalOp::Product);
     auto const& an = node.left();
-    REQUIRE(an->op_type() == EvalOp::Adjoint);
-    REQUIRE(an.left().leaf());
-    REQUIRE_FALSE(an.left()->as_tensor().adjointed());
-    REQUIRE(an.left()->as_tensor().bra()[0].label() == L"a_1");
-    REQUIRE(an->canon_indices() != an.left()->canon_indices());
+    REQUIRE(an.leaf());
+    REQUIRE_FALSE(an->as_tensor().adjointed());
+    REQUIRE(an->as_tensor().bra()[0].label() == L"a_1");
+    REQUIRE(an->canon_transform().conj);
+    REQUIRE(an->canon_transform().braket_swap);
 
     check_closed(node, cyield);
   }

@@ -905,8 +905,7 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   // - Determine this phase change by determining the parity of index
   //   permutations required to arrive at canonical form; with
   //   options.apply_slot_order the same permutations are applied to the
-  //   tensors (below, after the orientation byproduct is detected), so the
-  //   phase and the spelling come from ONE sort.
+  //   tensors (below), so the phase and the spelling come from ONE sort.
   metadata.phase = 1;
   // tensor ordinal -> {bra, ket} from-permutations to the canonical slot
   // order (empty = identity or not an (anti)symmetric bundle)

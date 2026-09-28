@@ -23,8 +23,8 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/optimize/options.hpp>
-#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -47,12 +47,10 @@
 #include <vector>
 
 // Force compile-instantiation of the complex tensor-of-tensors Result so its
-// adjoint() override (`result(annot) = arr(annot).conj()`, relying on TA's
-// recursive conj for nested tiles) is type-checked. No TA eval test constructs
-// a complex ToT adjoint, and Result::adjoint() is private (reachable only
-// through the EvalOp::Adjoint IR node, which now serves the '+' spelling
-// alone); the ta_tot_conj_complex test below runtime-checks the underlying TA
-// conj while this instantiation compile-checks the override.
+// apply_transform() override (`result(annot) = arr(annot).conj()`, relying on
+// TA's recursive conj for nested tiles) is type-checked; the
+// ta_tot_conj_complex test below runtime-checks the underlying TA conj while
+// this instantiation compile-checks the override.
 template class sequant::ResultTensorOfTensorTA<
     TA::DistArray<TA::Tensor<TA::Tensor<std::complex<double>>>>>;
 
@@ -150,14 +148,14 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
            mo[2].str();
   };
 
-  // PR-2 contract: leaves are stored/served in their CANONICAL spelling, so
-  // normalize the orientation (and drop any fold marker) before keying --
-  // this makes literal test spellings and ctor-canonicalized leaves agree
+  // leaves are stored and served in their CANONICAL spelling, so normalize
+  // the orientation (and drop any state) before keying -- this makes literal
+  // test spellings and ctor-canonicalized leaves agree
   auto canon = tnsr.clone();
   {
     auto& ct = canon->as<sequant::Tensor>();
-    sequant::TensorBlockCanonicalizer{}.apply(ct);
-    if (ct.conjugated()) ct.conjugate();
+    sequant::TensorBlockCanonicalizer{/*fold_signed_braket=*/false}.apply(ct);
+    [[maybe_unused]] auto const sign = ct.set_states(false, false);
   }
   NestedTensorIndices oixs{canon->as<sequant::Tensor>()};
   if (oixs.inner.empty()) {
@@ -6570,8 +6568,7 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
 
   // the array served for the bare leaf, read before the evaluation so that a
   // kernel writing into it could not fake the comparison
-  auto const& served =
-      yield(node->expr()->as<Tensor>())->get<ArrayToT>();
+  auto const& served = yield(node->expr()->as<Tensor>())->get<ArrayToT>();
   std::vector<std::complex<double>> served_values;
   for (auto it = served.begin(); it != served.end(); ++it) {
     auto const& souter = it->get();
@@ -6627,12 +6624,12 @@ TEST_CASE("ta_tot_adjoint_end_to_end", "[eval]") {
   auto const canonical =
       deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
 
-  // PR-2 transform model: both orientations share ONE canonical slot; the
-  // non-canonical spelling carries the fold map in its CanonTransform
+  // both orientations share ONE canonical slot; the non-canonical spelling
+  // carries the fold map in its CanonTransform
   EvalExpr const swapped_leaf{swapped->as<Tensor>()};
   EvalExpr const canon_leaf{canonical->as<Tensor>()};
   auto const is_conj = [](EvalExpr const& leaf) {
-    return leaf.expr()->as<Tensor>().conjugated();
+    return leaf.expr()->as<Tensor>().kconjugated();
   };
   REQUIRE_FALSE(is_conj(swapped_leaf));
   REQUIRE_FALSE(is_conj(canon_leaf));

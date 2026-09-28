@@ -481,12 +481,12 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
   const size_t nocc = 2, nvirt = 5;
   auto yield_ = rand_tensor_yield<TAPPTensorC>{nocc, nvirt};
 
-  // A Nonsymm-braket tensor's adjoint() sets the Adjoint value modifier
-  // (spelled with '⁺') and swaps bra/ket; binarize lowers that to an
-  // EvalOp::Adjoint node, and evaluating it must conjugate-transpose the
-  // operand. With genuinely complex data the conjugation is observable (a
-  // missing conj would leave imaginary parts unflipped — a pure transpose
-  // would still pass a norm-only check).
+  // A Nonsymm-braket tensor's adjoint() sets the adjointed state (spelled
+  // with '⁺') and swaps bra/ket; binarize lowers that to a leaf whose
+  // CanonTransform conjugate-transposes the operand on retrieval. With
+  // genuinely complex data the conjugation is observable (a missing conj
+  // would leave imaginary parts unflipped — a pure transpose would still pass
+  // a norm-only check).
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
@@ -495,10 +495,10 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
   REQUIRE(t_adj.adjointed());
 
   auto node = eval_node(ex<Tensor>(t_adj));
-  REQUIRE(node->op_type() == EvalOp::Adjoint);
+  REQUIRE(node.leaf());
 
   // operand tensor (bare 't{a_1;i_1}'): shape [nvirt, nocc], indexed (a, i)
-  auto const& src = yield_(node.left()->as_tensor())->get<TAPPTensorC>();
+  auto const& src = yield_(node->as_tensor())->get<TAPPTensorC>();
   REQUIRE(src.extents()[0] == static_cast<int64_t>(nvirt));
   REQUIRE(src.extents()[1] == static_cast<int64_t>(nocc));
 

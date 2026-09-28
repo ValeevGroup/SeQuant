@@ -539,7 +539,6 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   }
 }
 
-
 EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
 
 EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }

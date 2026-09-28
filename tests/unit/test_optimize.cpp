@@ -4548,7 +4548,8 @@ TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
   REQUIRE(flat->as<Product>().size() == 3);
 
   SECTION("RealPart") {
-    auto opt = optimize(ex<RealPart>(flat->clone()), /*reorder_sum=*/false);
+    auto opt = optimize(ex<RealPart>(flat->clone()),
+                        OptimizeOptions{.reorder = ReorderSum::NoReorder});
     REQUIRE(opt->is<RealPart>());
     auto const& inner = opt->as<RealPart>().inner();
     REQUIRE(inner->is<Product>());
@@ -4556,7 +4557,8 @@ TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
   }
 
   SECTION("ImagPart") {
-    auto opt = optimize(ex<ImagPart>(flat->clone()), /*reorder_sum=*/false);
+    auto opt = optimize(ex<ImagPart>(flat->clone()),
+                        OptimizeOptions{.reorder = ReorderSum::NoReorder});
     REQUIRE(opt->is<ImagPart>());
     auto const& inner = opt->as<ImagPart>().inner();
     REQUIRE(inner->is<Product>());
@@ -4565,7 +4567,7 @@ TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
 
   SECTION("wrapped summand inside a Sum") {
     auto sum = ex<Sum>(ExprPtrList{ex<RealPart>(flat->clone()), flat->clone()});
-    auto opt = optimize(sum, /*reorder_sum=*/false);
+    auto opt = optimize(sum, OptimizeOptions{.reorder = ReorderSum::NoReorder});
     REQUIRE(opt->is<Sum>());
     auto const& s0 = opt->as<Sum>().summand(0);
     REQUIRE(s0->is<RealPart>());

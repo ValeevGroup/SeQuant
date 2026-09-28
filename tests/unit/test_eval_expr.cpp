@@ -10,6 +10,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
@@ -412,16 +413,16 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_adj_star}.hash_value());
     REQUIRE(EvalExpr{t_adj}.hash_value() != EvalExpr{t_adj_star}.hash_value());
 
-    // both states: Adjoint over the '꙳' leaf, which is its own array
+    // both states: the '꙳' leaf is its own array and the adjoint channel
+    // rides its transform
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto both = binarize(ex<Tensor>(t_adj_star));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(both->op_type() == EvalOp::Adjoint);
-    REQUIRE(both.left().leaf());
-    REQUIRE_FALSE(both.left()->as_tensor().adjointed());
-    REQUIRE(both.left()->as_tensor().kconjugated());
-    REQUIRE(both.left()->as_tensor().bra().at(0).label() == L"a_1");
-    REQUIRE(both.left()->hash_value() == t_star_tree->hash_value());
+    REQUIRE(both.leaf());
+    REQUIRE_FALSE(both->as_tensor().adjointed());
+    REQUIRE(both->as_tensor().kconjugated());
+    REQUIRE(both->as_tensor().bra().at(0).label() == L"a_1");
+    REQUIRE(both->hash_value() == t_star_tree->hash_value());
   }
   SECTION("Adjoint op in a binarized term") {
     // Regression: a tensor leaf can carry the Adjoint modifier without having
@@ -763,17 +764,16 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
   using namespace sequant;
   auto ctx = set_scoped_default_context(
       Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
-  SECTION("adjointed leaf: Adjoint over the bare leaf") {
+  SECTION("adjointed leaf: the bare leaf plus a transform") {
     Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
     REQUIRE(t.adjoint() == 1);
     REQUIRE(t.adjointed());
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree = binarize(ex<Tensor>(t));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(tree->op_type() == EvalOp::Adjoint);
-    REQUIRE(tree.left().leaf());
-    REQUIRE_FALSE(tree.left()->as_tensor().adjointed());
-    REQUIRE(tree.left()->as_tensor().bra()[0].label() == L"a_1");
+    REQUIRE(tree.leaf());
+    REQUIRE_FALSE(tree->as_tensor().adjointed());
+    REQUIRE(tree->as_tensor().bra()[0].label() == L"a_1");
   }
   SECTION("adjointed leaf moved onto a real basis: it arrives normalized") {
     // transform_indices re-normalizes the states over the new slots' field, so
@@ -796,7 +796,7 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
       return t;
     };
 
-    // the default parity consumes the star: a stateless leaf, no Adjoint node
+    // the default parity consumes the star: a stateless leaf, no transform
     Tensor even = moved_onto_real(ConjugationParity::Even);
     REQUIRE_FALSE(even.kconjugated());
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -806,22 +806,18 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
     REQUIRE_FALSE(even_tree->op_type().has_value());
     REQUIRE(even_tree->as_tensor().bra()[0].label() == L"a_1");
 
-    // an indefinite parity keeps it: the Adjoint kernel with an identity layout
+    // an indefinite parity keeps it: the conjugation rides the transform
     Tensor none = moved_onto_real(ConjugationParity::None);
     REQUIRE(none.kconjugated());
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto none_tree = binarize(ex<Tensor>(none));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(none_tree->op_type() == EvalOp::Adjoint);
-    REQUIRE(none_tree.left().leaf());
-    REQUIRE_FALSE(none_tree.left()->as_tensor().adjointed());
-    REQUIRE_FALSE(none_tree.left()->as_tensor().kconjugated());
-    REQUIRE(none_tree.left()->as_tensor().bra()[0].label() == L"a_1");
-    REQUIRE(none_tree->canon_indices() == none_tree.left()->canon_indices());
+    REQUIRE(none_tree.leaf());
+    REQUIRE_FALSE(none_tree->as_tensor().adjointed());
+    REQUIRE_FALSE(none_tree->as_tensor().kconjugated());
+    REQUIRE(none_tree->as_tensor().bra()[0].label() == L"a_1");
   }
-  SECTION(
-      "K-conjugated leaf over a real basis: Adjoint with an identity "
-      "layout") {
+  SECTION("K-conjugated leaf over a real basis: a conjugating transform") {
     Index a = idx(L"a_1", Field::Real), i = idx(L"i_1", Field::Real);
     Tensor t(L"t", bra{a}, ket{i},
              TensorSymmetries{.conjugation_parity = ConjugationParity::None});
@@ -830,10 +826,8 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto tree = binarize(ex<Tensor>(t));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(tree->op_type() == EvalOp::Adjoint);
-    REQUIRE(tree.left().leaf());
-    REQUIRE_FALSE(tree.left()->as_tensor().kconjugated());
-    REQUIRE(tree->canon_indices() == tree.left()->canon_indices());
+    REQUIRE(tree.leaf());
+    REQUIRE_FALSE(tree->as_tensor().kconjugated());
   }
   SECTION("K-conjugated leaf over a complex basis: its own array") {
     Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
@@ -944,7 +938,7 @@ TEST_CASE("eval_expr_conjugation_marker_identity",
   auto D = binarize(N(L"a_1", L"p_1") * Nadj);
   auto E = binarize(N(L"a_1", L"p_1") * N(L"p_1", L"a_2"));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE(D.right()->op_type() == EvalOp::Adjoint);
+  REQUIRE(D.right().leaf());
   REQUIRE(D->hash_value() != E->hash_value());
 }
 
@@ -1091,7 +1085,7 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
   auto ct = deserialize(L"C{a_1<i_1>;i_1}:N-C-S")->as<Tensor>();
   REQUIRE(ranges::any_of(ct.const_indices(), &Index::has_proto_indices));
   Tensor ct_star = ct;
-  ct_star.conjugate();
+  REQUIRE(ct_star.kconjugate() == 1);
   EvalExpr ec{ct}, ecs{ct_star};
   REQUIRE(ec.hash_value() == ecs.hash_value());  // one slot
   REQUIRE(compose(ec.canon_transform(), ecs.canon_transform()).conj);
@@ -1159,6 +1153,9 @@ TEST_CASE("conjugated_scalar_leaves", "[EvalExpr][conj-transform]") {
   REQUIRE(EvalExpr{pw}.canon_transform().trivial());
 }
 
+// these cases drive binarize(ExprPtr) on purpose: the head layout they
+// assert is exactly the one that overload derives from the source factors
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
 TEST_CASE("re_im_eval_nodes", "[EvalExpr][re-im]") {
   using namespace sequant;
   TensorCanonicalizer::register_instance(
@@ -1333,6 +1330,7 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   REQUIRE(abc->hash_value() != abd->hash_value());
 }
 
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 TEST_CASE("denoted_expr_is_the_parent_network_spelling",
           "[eval_expr][denoted]") {
   // the denoted spelling re-materializes the transform syntactically: the
@@ -1346,13 +1344,13 @@ TEST_CASE("denoted_expr_is_the_parent_network_spelling",
   if (e.canon_transform().braket_swap) {
     REQUIRE(e.canon_transform().conj);
     auto w_marked = w;
-    w_marked.conjugate();
+    REQUIRE(w_marked.kconjugate() == 1);
     REQUIRE(e.denoted_expr()->as<Tensor>() == w_marked);
   }
   // the marked spelling of the canonical orientation: stored unmarked +
   // {conj}; denoted = as written, marked
   auto s = deserialize(L"F{i_1;i_2}:N-C-S")->as<Tensor>();
-  s.conjugate();
+  REQUIRE(s.kconjugate() == 1);
   EvalExpr es{s};
   REQUIRE(es.canon_transform().conj);
   REQUIRE(es.denoted_expr()->as<Tensor>() == s);

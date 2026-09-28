@@ -885,7 +885,6 @@ class ResultTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr apply_transform(
       CanonTransform t, std::array<std::any, 2> const& ann) const override {
-
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
     detail::log_ta(post_annot, " = apply_transform(", pre_annot, ") (view)\n");
@@ -916,8 +915,8 @@ class ResultTensorTA final : public Result {
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
     ArrayT::wait_for_lazy_cleanup(t.world());
     ::sequant::detail::note_wait();
-    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, o,
-                         ann);
+    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
+                         oarr, ann);
     log_ta_tensor_host_memory_use();
   }
 

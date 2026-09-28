@@ -505,7 +505,10 @@ container::svector<ExprPtr> merge_wrapped_summands(
       conj_inner = conjugate_op(wi.inner);
     } else {
       conj_inner = wi.inner->clone();
-      conj_inner->adjoint();
+      // the adjoint may consume a sign (an antisymmetric respelling): keep it
+      // on the expression so the two spellings stay value-equal
+      if (auto const sign = conj_inner->adjoint(); sign != 1)
+        conj_inner = ex<Constant>(sign) * conj_inner;
     }
     auto cc = canonicalize(conj_inner->clone(), opts);
     // deterministic representative: the smaller hash of the two spellings
