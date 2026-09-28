@@ -496,21 +496,29 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node.leaf());
+  REQUIRE(node->canon_transform().conj);
+  REQUIRE(node->canon_transform().braket_swap);
 
-  // operand tensor (bare 't{a_1;i_1}'): shape [nvirt, nocc], indexed (a, i)
+  // the provider is asked for the bare array 't{a_1;i_1}': shape
+  // [nvirt, nocc], indexed (a, i)
   auto const& src = yield_(node->as_tensor())->get<TAPPTensorC>();
+  REQUIRE_FALSE(node->as_tensor().adjointed());
   REQUIRE(src.extents()[0] == static_cast<int64_t>(nvirt));
   REQUIRE(src.extents()[1] == static_cast<int64_t>(nocc));
 
-  // adjoint result: shape [nocc, nvirt], indexed (i, a) == conj(src(a, i))
-  auto const adj = evaluate(node, tidxs(t_adj), yield_)->get<TAPPTensorC>();
-  REQUIRE(adj.extents()[0] == static_cast<int64_t>(nocc));
-  REQUIRE(adj.extents()[1] == static_cast<int64_t>(nvirt));
+  // the transform is applied on retrieval and permutes nothing
+  // (apply_canon_transform passes the node's own annot twice), so the served
+  // buffer's modes keep their own labels: the requested layout is the stored
+  // array's and the value is elementwise conj(src)
+  auto const adj =
+      evaluate(node, tidxs(L"a_1,i_1"), yield_)->get<TAPPTensorC>();
+  REQUIRE(adj.extents()[0] == static_cast<int64_t>(nvirt));
+  REQUIRE(adj.extents()[1] == static_cast<int64_t>(nocc));
 
-  for (size_t i = 0; i < nocc; ++i)
-    for (size_t a = 0; a < nvirt; ++a) {
+  for (size_t a = 0; a < nvirt; ++a)
+    for (size_t i = 0; i < nocc; ++i) {
       auto const expected = std::conj(src(a, i));
-      auto const got = adj(i, a);
+      auto const got = adj(a, i);
       CHECK(got.real() == Catch::Approx(expected.real()).margin(1e-12));
       CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
     }

@@ -743,21 +743,28 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node.leaf());
+  REQUIRE(node->canon_transform().conj);
+  REQUIRE(node->canon_transform().braket_swap);
 
-  // operand tensor (bare 't{a_1;i_1}'): shape [nvirt, nocc], indexed (a, i)
+  // the provider is asked for the bare array 't{a_1;i_1}': shape
+  // [nvirt, nocc], indexed (a, i)
   auto const& src = yield_(node->as_tensor())->get<BTensorC>();
+  REQUIRE_FALSE(node->as_tensor().adjointed());
   REQUIRE(src.extent(0) == nvirt);
   REQUIRE(src.extent(1) == nocc);
 
-  // adjoint result: shape [nocc, nvirt], indexed (i, a) == conj(src(a, i))
-  auto const adj = evaluate(node, tidxs(t_adj), yield_)->get<BTensorC>();
-  REQUIRE(adj.extent(0) == nocc);
-  REQUIRE(adj.extent(1) == nvirt);
+  // the transform is applied on retrieval and permutes nothing
+  // (apply_canon_transform passes the node's own annot twice), so the served
+  // buffer's modes keep their own labels: the requested layout is the stored
+  // array's and the value is elementwise conj(src)
+  auto const adj = evaluate(node, tidxs(L"a_1,i_1"), yield_)->get<BTensorC>();
+  REQUIRE(adj.extent(0) == nvirt);
+  REQUIRE(adj.extent(1) == nocc);
 
-  for (size_t i = 0; i < nocc; ++i)
-    for (size_t a = 0; a < nvirt; ++a) {
+  for (size_t a = 0; a < nvirt; ++a)
+    for (size_t i = 0; i < nocc; ++i) {
       auto const expected = std::conj(src(a, i));
-      auto const got = adj(i, a);
+      auto const got = adj(a, i);
       CHECK(got.real() == Catch::Approx(expected.real()).margin(1e-12));
       CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
     }
@@ -1263,12 +1270,14 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   using C = std::complex<double>;
   using BTensorC = btas::Tensor<C>;
 
-  // A leaf keeps its as-written orientation, and the states are served as IR
-  // ops over the bare leaf: '⁺' as the Adjoint node (permute and conjugate),
-  // a '꙳' over a real basis as the Adjoint node with an identity layout (a
-  // pure elementwise conjugation). A marked tensor never carries a sign;
-  // signs live in scalars. Symbolic canonicalization never exchanges a
-  // Conjugate tensor's bundles, so a network keeps its value through it.
+  // A leaf keeps its as-written orientation, and the states ride the leaf's
+  // retrieval transform over the bare array: '⁺' as {conj, braket_swap} (the
+  // adjoint of the stored array -- the bundles are exchanged in the leaf's
+  // spelling, the modes keep their own labels), a '꙳' over a real basis as
+  // {conj} alone (a pure elementwise conjugation, identity layout). A stated
+  // tensor never carries a sign; signs live in scalars. Symbolic
+  // canonicalization never exchanges a Conjugate tensor's bundles, so a
+  // network keeps its value through it.
   Context ctx = get_default_context();
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
@@ -1364,8 +1373,8 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     for (size_t i = 0; i < nocc; ++i) ref_conj += std::conj(T(a, i)) * W(i, a);
   // the root is checked against the reference without a cache, then twice
   // through one shared cache, so that a cache-slot collision between the
-  // bare leaf and its marked spelling (t and t꙳, or an Adjoint node and its
-  // operand) would surface on the second read
+  // bare leaf and its stated spelling (t and t꙳ over a real basis, or t and
+  // t⁺ -- each pair shares one slot) would surface on the second read
   auto check_closed = [&ref_conj](auto const& node, auto const& leaf_yield) {
     REQUIRE(node->is_scalar());
     REQUIRE(node->canon_phase() == 1);
@@ -1385,8 +1394,8 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   SECTION("a K-conjugated leaf over a real basis is the conjugate array") {
     // over a real basis with complex data, t꙳{a_1;i_1} w{i_1;a_1} evaluates
     // to Σ conj(T(a, i)) W(i, a): the K-conjugate of t is the elementwise
-    // conjugate of its array, served as an Adjoint node with an identity
-    // layout over the bare leaf
+    // conjugate of its array, served by a {conj} transform over the bare
+    // leaf, which permutes nothing
     auto ridx = [](std::wstring_view label) {
       Index i(label);
       IndexSpace sp = i.space();
@@ -1414,8 +1423,8 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     REQUIRE(node->op_type() == EvalOp::Product);
     auto const& kn = node.left();
     REQUIRE(kn.leaf());
+    REQUIRE(kn->canon_transform() == CanonTransform{.conj = true});
     REQUIRE_FALSE(kn->as_tensor().kconjugated());
-    REQUIRE(kn->canon_transform().conj);
 
     check_closed(node, ryield);
   }
