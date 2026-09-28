@@ -804,9 +804,11 @@ TEST_CASE("conjugation_parity_serialization", "[conjugation]") {
   REQUIRE(serialize(d, {.annot_symm = true}) == L"d{i_1;i_2}:N-A-N");
   auto p = deserialize(L"p{i_1;i_2}:N-H-N-O");
   REQUIRE(p->as<Tensor>().conjugation_parity() == ConjugationParity::Odd);
-  // over the default complex field a Hermitian tensor's observable braket
-  // symmetry is Conjugate, spelled 'C'; the parity letter survives
-  REQUIRE(serialize(p, {.annot_symm = true}) == L"p{i_1;i_2}:N-C-N-O");
+  // whatever the observable braket symmetry the traits derive (Conjugate, over
+  // the default complex field), the definite hermiticity is spelled with its
+  // trait letter; the parity letter survives
+  REQUIRE(p->as<Tensor>().braket_symmetry() == BraKetSymmetry::Conjugate);
+  REQUIRE(serialize(p, {.annot_symm = true}) == L"p{i_1;i_2}:N-H-N-O");
   // an unsigned braket letter (Nonsymm) together with an explicit Even
   // parity back-fills NonHermitian; re-serializing drops the parity letter
   // again since Even is never spelled out
@@ -850,12 +852,12 @@ TEST_CASE("conjugation_parity_serialization_real_field", "[conjugation]") {
   REQUIRE(rt->as<Tensor>().braket_symmetry() == BraKetSymmetry::Antisymm);
 
   // the fourth letter is emitted only when the parser could not back-fill the
-  // parity from the bra/ket letter. Over a real field a pinned Conjugate *is*
-  // what parity None spells, so `:A-C-S` needs no `-N` and round-trips
-  // verbatim; the trait letters back-fill Even, so `:N-A-N` needs nothing
-  // either while an Odd parity under `H` still spells itself out
+  // parity from the bra/ket letter. The trait letters back-fill Even, so
+  // `:N-A-N` needs nothing while an Odd parity under `H` spells itself out;
+  // a pinned `C` over a real field stands for the traits Hermitian and None,
+  // which is what the re-spelling names, the parity included
   REQUIRE(serialize(deserialize(L"t{i_1;i_2}:A-C-S"), {.annot_symm = true}) ==
-          L"t{i_1;i_2}:A-C-S");
+          L"t{i_1;i_2}:A-H-S-N");
   REQUIRE(serialize(deserialize(L"d{i_1;i_2}:N-A-N"), {.annot_symm = true}) ==
           L"d{i_1;i_2}:N-A-N");
   REQUIRE(serialize(deserialize(L"p{i_1;i_2}:N-H-N-O"), {.annot_symm = true}) ==
@@ -867,9 +869,57 @@ TEST_CASE("conjugation_parity_serialization_real_field", "[conjugation]") {
                            TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
                                             .column = ColumnSymmetry::Symm});
   REQUIRE(pinned->as<Tensor>().conjugation_parity() == ConjugationParity::None);
-  REQUIRE(serialize(pinned, {.annot_symm = true}) == L"c{i_1;i_2}:N-C-S");
+  REQUIRE(serialize(pinned, {.annot_symm = true}) == L"c{i_1;i_2}:N-H-S-N");
   REQUIRE(*deserialize(serialize(pinned, {.annot_symm = true})) == *pinned);
   REQUIRE(*deserialize(str) == *t);
+}
+
+TEST_CASE("hermiticity_trait_serialization", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  Index i1 = idx(L"i_1", Field::Real);
+  Index i2 = idx(L"i_2", Field::Real);
+
+  // over a real basis the exchange symmetry a definite hermiticity derives is
+  // a plain (anti)symmetry, yet the letter spelled is the trait's, so the
+  // spelling says what the tensor is rather than how its basis reads it
+  auto h = ex<Tensor>(L"h", bra{i1}, ket{i2},
+                      TensorSymmetries{.hermiticity = Hermiticity::Hermitian});
+  REQUIRE(h->as<Tensor>().braket_symmetry() == BraKetSymmetry::Symm);
+  REQUIRE(serialize(h, {.annot_symm = true}) == L"h{i_1;i_2}:N-H-N");
+  auto d =
+      ex<Tensor>(L"d", bra{i1}, ket{i2},
+                 TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+  REQUIRE(d->as<Tensor>().braket_symmetry() == BraKetSymmetry::Antisymm);
+  REQUIRE(serialize(d, {.annot_symm = true}) == L"d{i_1;i_2}:N-A-N");
+
+  // an exchange symmetry pinned at construction is a spelling of the traits
+  // that derive it, so it too comes back as the trait letter
+  auto pinned = ex<Tensor>(L"h", bra{i1}, ket{i2},
+                           TensorSymmetries{.braket = BraKetSymmetry::Symm});
+  REQUIRE(pinned->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(serialize(pinned, {.annot_symm = true}) == L"h{i_1;i_2}:N-H-N");
+  REQUIRE(*pinned == *h);
+
+  // the trait letter is field-agnostic, so the spelling reads back over a
+  // basis of either field: over the real one it reproduces the tensor, over
+  // the complex one the same traits derive the exchange symmetry that basis
+  // states (Conjugate). The exchange symmetry itself has no such spelling:
+  // `S` names a relation a complex basis does not have.
+  {
+    auto real_basis = tests::scoped_real_basis();
+    REQUIRE(*deserialize(L"h{i_1;i_2}:N-H-N") == *h);
+    REQUIRE(*deserialize(L"d{i_1;i_2}:N-A-N") == *d);
+  }
+  auto over_complex = deserialize(L"h{i_1;i_2}:N-H-N");
+  REQUIRE(over_complex->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(over_complex->as<Tensor>().braket_symmetry() ==
+          BraKetSymmetry::Conjugate);
+  using io::serialization::SerializationError;
+  REQUIRE_THROWS_AS(deserialize(L"h{i_1;i_2}:N-S-N"), SerializationError);
 }
 
 TEST_CASE("conj_power_roundtrip", "[conjugation]") {

@@ -156,19 +156,17 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
     return default_symmetry;
   }
 
-  // The v1 serialized form historically encodes BraKetSymmetry directly:
+  // The letter is either a pinned exchange symmetry or a hermiticity trait.
   // 'C' / 'S' / 'N' are concrete BraKetSymmetry::{Conjugate, Symm, Nonsymm}
-  // values, not Hermiticity traits — Tensor's hermiticity_ is back-filled
-  // from the BraKetSymmetry via to_hermiticity at construction. Round-tripping
-  // through Hermiticity here would corrupt that encoding: 'C' field-resolved
-  // against Real-field indices would silently flip to Symm, and 'N' would
-  // round-trip as NonHermitian losing the AntiHermitian preimage.
-  //
-  // The explicit Hermiticity letters 'H' (Hermitian) and 'A' (AntiHermitian)
-  // are the *new* abstract-trait spellings that intentionally defer to
-  // field resolution at Tensor construction time; use those when serializing
-  // tensors whose adjoint symmetry should be expressed independently of the
-  // computation's scalar field.
+  // values, from which Tensor back-fills the traits that derive them; 'H'
+  // (Hermitian) and 'A' (AntiHermitian) name the field-agnostic trait itself
+  // and leave the exchange symmetry to be derived from it, the parity and the
+  // indices' basis at Tensor construction. The two are kept apart: reading a
+  // pin as a trait instead would resolve 'C' against Real-field indices to
+  // Symm and lose the AntiHermitian preimage of 'N'. The serializer spells a
+  // definite hermiticity with its trait letter (see serialize_symm), so a pin
+  // letter reaches here from hand-written input or from an exchange symmetry
+  // the traits do not derive.
   switch (c) {
     case 'C':
     case 'c':

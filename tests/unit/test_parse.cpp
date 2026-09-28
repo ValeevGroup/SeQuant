@@ -695,23 +695,36 @@ TEST_CASE("serialization", "[serialization]") {
     // the `S` braket letters below are derivable only over a real basis
     auto real_basis = tests::scoped_real_basis();
 
-    std::vector<std::wstring> expressions = {
-        L"t{a_1,a_2;a_3,a_4}:N-C-S",
-        L"42",
-        L"1/2",
-        L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S",
-        L"a + b - 4 specialVariable",
-        L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
-        L"1/2 (a + b) * c",
-        L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
-        L"+ T4{a_1;;x_2}:S-C-S * T5{;a_1;x_2}:S-S-S",
-        L"q1 * q2꙳ * q3",
-        L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
+    // {spelling, what serializing what it parses to gives back}: a definite
+    // hermiticity is spelled with its trait letter, so the pinned `C` and `S`
+    // braket letters come back as `H`, together with the fourth letter where
+    // the traits they stand for include a parity other than Even
+    std::vector<std::pair<std::wstring, std::wstring>> expressions = {
+        {L"t{a_1,a_2;a_3,a_4}:N-C-S", L"t{a_1,a_2;a_3,a_4}:N-H-S-N"},
+        {L"42", L"42"},
+        {L"1/2", L"1/2"},
+        {L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S",
+         L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S"},
+        {L"a + b - 4 specialVariable", L"a + b - 4 specialVariable"},
+        {L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
+         L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-H-S-N"},
+        {L"1/2 (a + b) * c", L"1/2 (a + b) * c"},
+        {L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
+         L"+ T4{a_1;;x_2}:S-C-S * T5{;a_1;x_2}:S-S-S",
+         L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
+         L"+ T4{a_1;;x_2}:S-H-S-N * T5{;a_1;x_2}:S-H-S"},
+        {L"q1 * q2꙳ * q3", L"q1 * q2꙳ * q3"},
+        {L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}", L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"}};
 
-    for (const std::wstring& current : expressions) {
+    for (const auto& [current, serialized] : expressions) {
       ExprPtr expression = deserialize<ExprPtr>(current);
 
-      REQUIRE(serialize(expression, {.annot_symm = true}) == current);
+      REQUIRE(serialize(expression, {.annot_symm = true}) == serialized);
+
+      // what the serializer emits is a fixed point of the round-trip
+      ExprPtr respelled = deserialize<ExprPtr>(serialized);
+      REQUIRE(*respelled == *expression);
+      REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
     }
 
     SECTION("result_expressions") {
