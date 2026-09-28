@@ -872,9 +872,11 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
   using namespace sequant;
   // The channel table of the leaf decoder, one block per arm.
 
-  // A Hermitian core has no state to decode: its two orientations are two
-  // values, neither is respelled into the other, and no transform serves
-  // either. The annotation is what tells their modes apart.
+  // A Hermitian core has no state to decode: its two orientations are stored
+  // as written and no transform serves either. They share one slot, because
+  // one provider array serves both -- a leaf's slot identity is label-blind,
+  // and it is the annotation that wires each mode to its contraction
+  // partner. The spellings they denote differ, and so do the annotations.
   Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
            BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
   Tensor g_swapped = g;
@@ -887,6 +889,9 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
   REQUIRE(eg.canon_transform().trivial());
   REQUIRE(egs.canon_transform().trivial());
   REQUIRE(egs.as_tensor().bra()[0].label() == L"p_3");  // stored as written
+  REQUIRE(eg.hash_value() == egs.hash_value());         // one slot
+  REQUIRE_FALSE(eg.denoted_expr()->as<Tensor>() ==
+                egs.denoted_expr()->as<Tensor>());
   REQUIRE(eg.indices_annot() != egs.indices_annot());
 
   // '⁺' over a NonHermitian core: the bare array plus {conj, swap}

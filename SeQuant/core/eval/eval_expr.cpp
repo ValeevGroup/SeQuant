@@ -452,7 +452,9 @@ ExprPtr EvalExpr::denoted_expr() const {
   if (!op_type_.has_value())
     if (const auto tr = canon_transform(); tr.conj) {
       // the '⁺' channel came with the bundle exchange, the '꙳' channel
-      // leaves the slots in place
+      // leaves the slots in place -- and the latter is produced by the
+      // real-basis arm of the decoder alone
+      SEQUANT_ASSERT(tr.braket_swap || t.base_field() == Field::Real);
       [[maybe_unused]] const auto sign =
           tr.braket_swap ? t.adjoint() : t.kconjugate();
       SEQUANT_ASSERT(sign == 1);
@@ -687,11 +689,10 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
-      // partition from the DENOTED orientation: a leaf summand re-materializes
-      // the states the decoder took off, while a summand that is itself an
-      // internal node hands back the placeholder it already carries
+      // partition from the spelling the summand denotes: a leaf re-materializes
+      // the states the decoder took off, while an internal node's placeholder
+      // is already its denoted spelling
       auto const t = left.denoted_expr()->as<Tensor>();
-      SEQUANT_ASSERT(!left.op_type().has_value() || t == left.as_tensor());
       // The placeholder is what an enclosing tensor network sees for this
       // (opaque) node, so spell its slots -- within each bra/ket/aux group --
       // in the node's canonical index order, i.e. the order the value is laid
@@ -861,12 +862,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
-      auto const t = tl->denoted_expr()->as<Tensor>();  // denoted orientation
-      // this node inherits tl's transform, and its placeholder is spelled from
-      // the denoted orientation, so it is denoted as built: were tl already an
-      // internal node, denoted_expr() would have handed its placeholder back
-      // untouched
-      SEQUANT_ASSERT(!tl->op_type().has_value() || t == tl->as_tensor());
+      // this node inherits tl's transform and spells its placeholder from the
+      // orientation tl denotes, so the placeholder is itself already a denoted
+      // spelling
+      auto const t = tl->denoted_expr()->as<Tensor>();
       hash::combine(h, EvalExpr::layout_fingerprint_of(tl->canon_indices()));
       return {
           EvalOp::Product,     //
@@ -996,8 +995,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
-    SEQUANT_ASSERT(!left->is_tensor() || !left->op_type().has_value() ||
-                   left->denoted_expr()->as<Tensor>() == left->as_tensor());
+    // the wrapped node's placeholder is already its denoted spelling
     auto expr = left->is_tensor()
                     ? detail::make_tensor(left->denoted_expr()->as<Tensor>(),
                                           false, opts)

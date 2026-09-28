@@ -294,15 +294,18 @@ class EvalExpr {
   ///
   [[nodiscard]] CanonTransform canon_transform() const noexcept;
 
-  /// \return For a tensor-valued node: its DENOTED spelling -- the stored
-  /// canonical spelling with the transform re-materialized syntactically:
-  /// bra<->ket swapped back when braket_swap is set and the conj bit spelled
-  /// as the conjugation marker. This is the spelling the PARENT network is
-  /// built from (the marker colors its graph); for a Hermitian leaf written
-  /// in the non-canonical orientation it is C^*{swapped}, which equals the
-  /// as-written value only through the Hermiticity the network does not use
-  /// -- an identity convention, not a value statement. The phase, a scalar,
-  /// is not spelled. \pre is_tensor()
+  /// \return For a tensor-valued node: the spelling it denotes, i.e. the
+  /// spelling an enclosing network is built from, whose states color that
+  /// network's graph. On a leaf this inverts the state decoding of the leaf
+  /// constructor: a `{conj, braket_swap}` transform is the adjoint channel,
+  /// so the stored array is spelled through Tensor::adjoint() (bundles
+  /// exchanged, `⁺` set); a bare `{conj}` is the real-basis K-conjugation,
+  /// so it is spelled through Tensor::kconjugate() (`꙳` set, slots in
+  /// place); and a leaf whose state named an array of its own already
+  /// carries it. On an internal node this is the identity: such a node's
+  /// placeholder is built in the spelling it denotes and holds no state,
+  /// even where it inherits a child's transform. The phase, a scalar, is
+  /// not spelled. \pre is_tensor()
   [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///
