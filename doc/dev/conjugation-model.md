@@ -141,22 +141,45 @@ printed); the tensor form's amplitude prints as `{t^{\dagger}}`.
 
 ## The eval boundary
 
-`EvalExpr(Tensor)` block-canonicalizes a leaf with `fold_signed_braket` off
-(a tensor-of-tensors leaf, one with proto indices, goes through
-`TensorNetwork::canonicalize_slots` instead): indices are reordered within
-each bundle, the `Symm` bra/ket swap is the only exchange, and a leaf keeps
-its as-written orientation. `binarize(Tensor)`
-serves the states as IR ops over the bare leaf, which carries no sign:
+`EvalExpr(Tensor)` respells a leaf as the array a provider serves and records
+what maps that array to the value the leaf denotes: a `CanonTransform`
+`{phase, conj, braket_swap}`, applied on retrieval and excluded from the leaf's
+own slot hash. `decode_leaf_states` is exhaustive over the two states in three
+cases:
 
-- `⁺`: `EvalOp::Adjoint` (permute bra/ket, then conjugate) over the bare
-  array, in every basis; a `꙳` under it stays on the operand leaf.
-- `꙳` over a real basis: the Adjoint kernel with an identity layout, the
-  elementwise conjugate of the bare array.
-- `꙳` over a complex basis: a plain leaf the yielder serves as its own array.
+- `⁺`: `t⁺{q;p}` is `conj t{p;q}`, so the array is the bare `t` -- the
+  bundles are exchanged back and the state cleared, which costs no sign -- and
+  the transform is `{conj, braket_swap}`.
+- `꙳` over a real basis: the elementwise conjugate of the same array with
+  the slots in place, so the array is the bare `t` and the transform is
+  `{conj}` over the identity layout.
+- `꙳` over a complex basis: the matrix of another operator, an array of its
+  own, so the state stays on the stored spelling and the transform is trivial.
 
-The leaf hash keys an array by label, slot layout and states, not by the
-traits; an Adjoint node hashes the bare leaf salted by the op. The Adjoint op
-is the only conjugation the IR performs.
+`t⁺꙳` over a complex basis composes the first case with the third: the
+array is `t꙳`, the transform `{conj, braket_swap}`. The decoded spelling is
+then block-canonicalized with `fold_signed_braket` off (a tensor-of-tensors
+leaf, one with proto indices, goes through
+`TensorNetwork::canonicalize_slots` instead) -- indices are reordered within
+each bundle, the `Symm` bra/ket swap is the only exchange, and a leaf keeps its
+as-written orientation -- and that sign composes into the same transform, which
+is applied once on the way out of the leaf fetch. `denoted_expr()` inverts the
+decoding, respelling the stored array as written. `binarize(Tensor)` is
+therefore a plain leaf in every case.
+
+A transform hoists out of a product or a sum exactly when it is a pure
+conjugation (`hoistable`: `conj` without `braket_swap`), because elementwise
+conjugation distributes over contraction and addition while a bra/ket exchange
+respells the node's own result. A transform carrying an exchange salts the
+parent's hash instead, so the adjoint of a contraction keeps a slot of its own.
+
+The leaf hash keys an array by bare label, slot layout, the states left on the
+stored spelling and an `AntiSymm` conjugation symmetry, not by the other
+traits. It is label-blind, so a flat Hermitian tensor's two orientations share
+one slot and each node's annotations carry the wiring; a tensor-of-tensors
+leaf's hash is its canonical labeling, which colours a `Conjugate` tensor's
+bundles apart, so the same Hermitian pair hashes apart there -- a missed cache
+hit, never a wrong value.
 
 ## Export and mbpt
 
@@ -179,8 +202,9 @@ change lands on the term's scalar.
 ## What a user meets
 
 - `t꙳` on a default-parity tensor is `t`; declare `ConjugationParity::None`
-  to keep it. A marked tensor is a separate array, named `t_adj` / `t_conj`
-  by the exporters and served by the yielder as described above.
+  to keep it. A marked tensor is an array of its own to the exporters, named
+  `t_adj` / `t_conj`; at evaluation its states decode into the retrieval
+  transform as described above.
 - Over real orbitals `adjoint` and `conjugate` spell a star with the slots in
   place; over complex orbitals, `t⁺` with bra and ket exchanged.
 - The canonicalizer keeps the orientation of a Hermitian (`Conjugate`)

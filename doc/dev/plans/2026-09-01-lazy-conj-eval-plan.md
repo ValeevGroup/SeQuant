@@ -302,6 +302,20 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
 
 - [ ] **Step 5: Commit** — `eval: flat leaf boundary folds to canonical spelling + CanonTransform (all four channels)`
 
+> **As built on the core model (2026-09-28).** Three channels, not four, and
+> no fold. The flat branch of `EvalExpr(Tensor)` calls `normalize_leaf`, which
+> runs `decode_leaf_states` -- `⁺` gives `{conj, braket_swap}` over the
+> bare array, `꙳` over a real basis gives `{conj}` over the same array,
+> and `꙳` over a complex basis names an array of its own, keeping its
+> state on the stored spelling -- and then block-canonicalizes with
+> `fold_signed_braket = false`, composing the byproduct sign into the
+> transform. A `꙳` on a default-parity tensor never reaches the boundary:
+> the core spelling normalizes it away, so there is no `Symm`-marker case. The
+> `fold_conjugate_braket` flag of Step 3's sketch does not exist, and the two
+> orientations of a `Conjugate` tensor are two slots by design. The stored
+> spelling is the array a provider serves; `denoted_expr()` inverts the
+> decoding.
+
 ---
 
 ### Task 5: ToT-leaf boundary — fold ON, `conjugated_tensors` consumed
@@ -346,6 +360,17 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
 
 - [ ] **Step 4: Run — green.  Step 5: Commit** — `eval: ToT leaf boundary consumes conjugated_tensors into the transform`
 
+> **As built on the core model (2026-09-28).** The tensor-of-tensors branch
+> runs the same `normalize_leaf` as the flat branch before it builds the
+> single-tensor `TensorNetwork`, and takes only `md.phase` from
+> `canonicalize_slots`: no `conjugated_tensors` report is consumed, and
+> `fold_conjugate_braket` is not an option of `canonicalize_slots` on the core
+> model. The slot hash is the canonical labeling, which colours a `Conjugate`
+> tensor's bundles apart, so a Hermitian tensor-of-tensors pair hashes apart
+> where its flat counterpart shares a slot -- a missed cache hit, never a
+> wrong value, because each spelling is served through its own annotations and
+> transform.
+
 ---
 
 ### Task 6: `binarize(Tensor)` collapses; gates and Adjoint channels deleted
@@ -373,6 +398,14 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
   transforms) with the justification recorded in the commit message.
 
 - [ ] **Step 4: Commit** — `eval: binarize(Tensor) = plain leaf; Adjoint IR channels and PR-1 gates removed`
+
+> **As built on the core model (2026-09-28).** `binarize(Tensor)` is
+> `return EvalExprNode{EvalExpr{t}};`. Neither `make_adjoint_node` nor the two
+> `std::logic_error` gates exists on the core model -- nothing there gates a
+> marked leaf -- so the collapse removes no throw. The IR-shape cases are
+> written against leaf nodes and their `canon_transform()`, and the two
+> tensor-of-tensors end-to-end cases are one,
+> `ta_tot_kconjugation_end_to_end`.
 
 ---
 
@@ -537,9 +570,10 @@ TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
   to `!canon_transform().trivial()`.
 
 - [ ] **Step 3:** Full suite (`'~[long-tests]'`) — including the PR-1
-  eval-cache identity regressions (`eval_expr_conjugation_marker_identity`,
-  `conjugate eval fold`, `ta_tot_adjoint_end_to_end` — the latter re-blessed
-  to the transform model in Task 6). Long tests too: run once with no filter.
+  eval-cache identity regressions (`eval_expr_conjugation_state_identity`,
+  `conjugate eval fold`, `ta_tot_kconjugation_end_to_end` — the latter
+  re-blessed to the transform model in Task 6). Long tests too: run once with
+  no filter.
 
 - [ ] **Step 4: Commit** — `eval: retrieval through apply_canon_transform; EvalOp::Adjoint retired`
 

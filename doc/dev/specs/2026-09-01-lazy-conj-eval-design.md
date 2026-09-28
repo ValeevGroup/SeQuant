@@ -67,6 +67,49 @@ correct for its surviving (symbolic, slot-rebuilding) consumers — the
 mbpt rules; the eval-layer call sites are replaced by transform-based
 logic.
 
+> **As built on the core model (2026-09-28).** The elementwise mark is a core
+> state of `Tensor` (`⁺` adjointed, `꙳` K-conjugated; see
+> `doc/dev/specs/2026-09-26-core-conjugation-design.md`), so the boundary
+> decodes states instead of folding spellings. `decode_leaf_states`
+> (`SeQuant/core/eval/eval_expr.cpp`) is exhaustive over the two states in
+> three cases:
+>
+> - `⁺`: `t⁺{q;p}` is `conj t{p;q}`, so the array is the bare `t`;
+>   `Tensor::adjoint()` exchanges the bundles back and clears the state, and
+>   the transform is `{conj, braket_swap}`. A kept `⁺` is `NonHermitian`,
+>   so this consumes no sign.
+> - `꙳` over a real basis: the elementwise conjugate of the same array
+>   with the slots in place, so the array is the bare `t` and the transform is
+>   `{conj}` over the identity layout.
+> - `꙳` over a complex basis: the matrix of another operator, an array of
+>   its own. The state stays on the stored spelling, `hash_terminal_tensor`
+>   keys it apart from the bare leaf, and the transform stays trivial.
+>
+> `t⁺꙳` over a complex basis composes the first case with the third:
+> the array is `t꙳` and the transform is `{conj, braket_swap}`. A
+> `꙳` on a default-parity tensor never reaches the boundary at all --
+> the core spelling normalizes it away, so the old _Symm markers are dropped_
+> case has no eval-side counterpart.
+>
+> `normalize_leaf` then block-canonicalizes the decoded spelling with
+> `fold_signed_braket = false` and composes the byproduct sign into the same
+> transform. Two invariants follow.
+>
+> - The decoding is invertible on a leaf: `denoted_expr()` respells the stored
+>   array as written, up to the free (sign-free) block reordering the
+>   canonicalizer performed -- `{conj, braket_swap}` through
+>   `Tensor::adjoint()`, a bare `{conj}` through `Tensor::kconjugate()`, and a
+>   leaf whose state named an array of its own already carries it.
+> - The two orientations of a `Conjugate` tensor are two values, hence two
+>   spellings and two slots, each asked of the provider as written.
+>
+> F1, F3 and F4 are therefore dissolved by the _absence_ of the fold rather
+> than by re-enabling it: there is no `fold_conjugate_braket` flag left to
+> keep consistent across gating points, and the eval boundary runs the same
+> `fold_signed_braket = false` setting the rest of canonicalization uses. The
+> whole transform -- the phase included -- is applied once on the way out of
+> the leaf fetch, so a leaf's block-canonicalization sign reaches the value.
+
 ## Cache/CSE identity and the hash contract
 
 Identity splits in two; this is the load-bearing invariant.
@@ -137,6 +180,62 @@ granularities, not just whole terms:
   groupings (a cost-model credit for conj-related cached intermediates)
   is a stretch goal within this PR, exercised by the mixed-product
   test below.
+
+> **As built on the core model (2026-09-28).** The slot rule reads: _a leaf's
+> slot hash is the hash of the array it stores_. `hash_terminal_tensor` keys
+> that array by its bare label, its slot layout (each slot's space type and
+> quantum numbers, and a proto-carrying slot's proto labels), the state byte
+> when a state is set, and the conjugation symmetry when it is `AntiSymm` --
+> over a real basis an odd-parity array is imaginary where an even-parity one
+> is real, so the two must not share a slot, while `Symm` and `NonSymm` add
+> no term.
+>
+> - A state byte reaches the slot hash only where the decoder left it on the
+>   stored spelling, i.e. for a `꙳` over a complex basis, which is an
+>   array of its own. The two states the decoder takes off (`⁺`, and
+>   `꙳` over a real basis) are gone from the spelling before it is
+>   hashed and live in the transform, so there is no marker salt to move out
+>   of the hash.
+> - The slot hash is _label-blind_: index labels do not enter it (a proto
+>   index's label does, as part of the slot's own identity). A flat Hermitian
+>   tensor's two orientations therefore share one slot -- one provider array,
+>   with each node's annotations carrying the wiring and its transform the
+>   orientation.
+> - A tensor-of-tensors leaf takes its slot hash from
+>   `TensorNetwork::canonicalize_slots` instead, and that hash is the
+>   canonical labeling, which colours a `Conjugate` tensor's bundles apart. A
+>   Hermitian tensor-of-tensors pair hashes _apart_ where its flat counterpart
+>   shares a slot. The asymmetry is accepted: each spelling is served through
+>   its own annotations and transform, so the cost is a missed cache hit,
+>   never a wrong value.
+>
+> Hoisting is the predicate `hoistable(tr)`
+> (`SeQuant/core/eval/canon_transform.hpp`): a transform hoists out of a
+> product or a sum exactly when it is a pure conjugation, `conj &&
+> !braket_swap`. Elementwise conjugation distributes over contraction and
+> addition, while a bra<->ket exchange respells the node's own result -- the
+> partition its placeholder is built from -- so a transform carrying one
+> salts the parent's hash instead. Hence the decision this settles: _the
+> adjoint of a contraction gets its own slot_. Over a complex basis every
+> factor of the adjoint of `X·Y` decodes to `{conj, braket_swap}`, the
+> prefix run does not hoist, and the adjointed network keeps a slot of its
+> own; the value is right (the node's network is built from the denoted
+> spellings, so it computes the adjointed contraction directly) and the cost
+> is a missed hit. Over a real basis, where conjugation takes the
+> K-conjugation channel, every factor decodes to `{conj}` and the
+> uniform-conj rule this section contracts for applies unchanged, per prefix
+> -- the shape the Kramers-tracing reuse needs.
+>
+> Two further terms enter identity, both shared with the phase machinery.
+> Every tensor-valued node folds a renaming-invariant _layout fingerprint_
+> into its hash, so hash equality implies layout equality and no cached buffer
+> is served under another node's mode order. A sum's prefix hashes
+> (`imed_hashes`) are unordered, so a sum written in another order is one
+> value; the layout a sum hands up (its first summand's, kept on the
+> placeholder by `keep_order`) is what the fingerprint keeps apart. On
+> retrieval, `apply_canon_transform` charges a transform that only aliases its
+> source nothing (`Result::is_buffer_alias()`), which is what keeps the peak
+> accounting truthful for the flat TiledArray backend's lazy view.
 
 ## Symbolic-surface audit -> eval obligations
 
@@ -278,6 +377,34 @@ the play-by-play.
 - **Test-fixture contract**: yield keys and stored arrays are
   canonical-spelling shaped; literal spellings are served through the
   leaf's transform (the fixture caches the transformed variant).
+
+> **As built on the core model (2026-09-28).** Item by item:
+>
+> - _Marker composition is syntactic and slot-free_ is superseded by the state
+>   decoder: composition happens in `decode_leaf_states`, over the core states,
+>   and what it yields is the transform while the respelled tensor is the
+>   array. What survives of the bullet is its conclusion -- an orientation
+>   delta is never invented at the boundary.
+> - _ToT leaves carry array-faithful Nested indices_ stands; the
+>   `conjugated_tensors` consumer named under _Consequences_ above does not.
+>   The tensor-of-tensors branch runs the same decoder as the flat branch
+>   before it builds the network, and takes only the phase from
+>   `canonicalize_slots`' metadata.
+> - _Export_: a tensor leaf's denoted spelling is materialized once, on the
+>   node, in `PreprocessVisitor::preprocess_node_content`, before any
+>   label-keyed map or generator sees it; `fold_marks_into_label` then names a
+>   `⁺` leaf's array `t_adj` and a `꙳` leaf's array `t_conj`. A
+>   marked array is a terminal the host supplies -- the generated code loads
+>   it -- so the transpose-only real-field limitation is retired. A scalar
+>   leaf keeps its re-materialization at the point of use (`denoted_scalar`),
+>   which is the path a pruned scalar prefactor takes as well.
+> - _Evaluation invariant_ holds as stated, with the leaf's arithmetic fixed
+>   at two sites. A leaf is stored as fetched -- a provider already serves the
+>   canonical orientation, unlike a computed node whose operands reach it in
+>   their own -- and its whole transform converts once on the way out. A
+>   production is converted by the whole transform rather than by its phase
+>   alone, so a hoisted conjugation reaches a cell, a cache slot and a hoist
+>   slot in the orientation each of them holds.
 
 ## Status note (2026-09-02): MPQC integration
 

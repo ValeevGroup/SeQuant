@@ -387,12 +387,14 @@ Parser rules:
   that `static_equal` distinguishes never share a cache slot.
 
 > **As built.** `hash_terminal_tensor` keys a leaf by the bare label, the
-> slot layout and the two states, and by none of the traits: the
-> conjugation-symmetry term would separate only one label declared with two
-> parities (a user inconsistency) and moved a CSE tie-break in the NEVPT2 ITF
-> fixtures for no value change, so it is left out and the fixtures stand.
-> Reversible: add the term and regenerate. The cost if wrong is a cache
-> collision between two same-label leaves of different declared parity.
+> slot layout, the two states and the conjugation symmetry when it is
+> `AntiSymm` (E-I4), and by none of the other traits. The `AntiSymm` term is
+> the one that carries value information: over a real basis an odd-parity
+> array is imaginary where an even-parity one is real, so two same-label
+> leaves of different declared parity must not share a cache slot. `Symm` and
+> `NonSymm` add no term, so every other leaf keeps its hash. The term arrived
+> in a follow-up batch after the final review, and the ITF fixtures are
+> unchanged by it.
 - Vertex painter: the tensor core's colour includes the two states and the
   conjugation symmetry when it differs from the even-parity default (as
   today); the array-level `Conjugate`/`Transpose` colour terms go. Bra and ket bundles of a `Conjugate`/`AntiConjugate` tensor are always
@@ -548,8 +550,9 @@ the `K`-parity.
    (`C{a;b}` and `C{b;a}` get different hashes), as on master.
 5. `^T` and `^*` are input errors; the marks are the states.
 6. The eval leaf hash includes the conjugation symmetry.
-   *As built:* the leaf hash carries the two states and not the conjugation
-   symmetry (section 5).
+   *As built:* the leaf hash carries the two states and the `AntiSymm`
+   conjugation symmetry (section 5); `Symm` and `NonSymm` add no term, and
+   the ITF fixtures are unchanged by it.
 7. `TensorBlockCanonicalizer(bool fold_conjugate_braket, bool
    fold_signed_braket)` becomes `TensorBlockCanonicalizer(bool
    fold_signed_braket)`; `CreateGraphOptions`/`CanonicalizeSlotsOptions` lose
