@@ -683,6 +683,30 @@ template <meta::can_evaluate Node>
   return left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
 }
 
+/// \brief A node's whole CanonTransform applied to \p res, with none of the
+///        trace or peak bookkeeping \c apply_canon_transform carries.
+///
+/// \details The conversion the storage sites perform: a cell, a cache slot
+/// and a hoist slot hold the canonical orientation of a value while a
+/// production hands up the node's own oriented one, and the transform (phase,
+/// elementwise conjugation, bra<->ket relabeling) is an involution, so one
+/// application converts either way. The reading side goes through \c
+/// apply_canon_transform instead, where the transient second buffer belongs on
+/// the peak monitor.
+///
+/// A null \p res passes through untouched and is never dereferenced -- a
+/// missing result is diagnosed where it is read -- and so does a trivial
+/// transform, with no allocation.
+template <meta::can_evaluate Node>
+[[nodiscard]] ResultPtr convert_canon_orientation(Node const& nd,
+                                                  ResultPtr res) {
+  auto const tr = nd->canon_transform();
+  if (!res || tr.trivial()) return res;
+  std::array<std::any, 2> const ann{std::any{nd->annot()},
+                                    std::any{nd->annot()}};
+  return res->apply_transform(tr, ann);
+}
+
 /// \brief Apply a result's node CanonTransform, with the trace event and peak
 ///        accounting that conversion carries.
 ///
@@ -2401,12 +2425,11 @@ template <Trace EvalTrace = Trace::Default, typename F,
             // re-entry into this batched evaluator). `sliced_leaf` slices the
             // enclosing loops d carries (up to its home level); the loops it
             // does not carry pass through unsliced (built full over its deeper
-            // / invariant modes). Store under the same canonical-phase
+            // / invariant modes). Store under the same canonical-orientation
             // convention the batched member store uses.
             ResultPtr built = evaluate_impl<EvalTrace>(d, sliced_leaf);
-            if (auto const ph = d->canon_phase(); ph != 1)
-              built = built->mult_by_phase(ph);
-            (void)target->store_and_access(d, std::move(built));
+            (void)target->store_and_access(
+                d, convert_canon_orientation(d, std::move(built)));
           }
         };
 
@@ -2742,11 +2765,8 @@ template <Trace EvalTrace = Trace::Default, typename F,
           trigger_result = std::move(acc[m]);
           continue;
         }
-        ResultPtr v = std::move(acc[m]);
-        if (auto const tr = (*mem)->canon_transform(); !tr.trivial())
-          v = v->apply_transform(
-              tr, {std::any{(*mem)->annot()}, std::any{(*mem)->annot()}});
-        (void)cache.store_and_access(*mem, std::move(v));
+        (void)cache.store_and_access(
+            *mem, convert_canon_orientation(*mem, std::move(acc[m])));
       }
     }
     if (log::printing()) {

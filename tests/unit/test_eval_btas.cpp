@@ -3,11 +3,17 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
+#include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -30,6 +36,7 @@
 
 #include <cmath>
 #include <complex>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -993,6 +1000,145 @@ TEST_CASE("eval_leaf_phase_reaches_the_value_btas", "[eval_btas]") {
     REQUIRE(node.left().left()->hash_value() ==
             node.right().left()->hash_value());
     check_scalar(node, yield, ref_v + ref_u);
+  }
+}
+
+// The cell table holds a value in its canonical orientation while every
+// reader wants the node's own, and the conversion is the node's whole
+// CanonTransform: a node that carries a hoisted elementwise conjugation
+// (t꙳ g꙳ over a real basis, whose two factors are both hoistable, so the
+// intermediate carries {conj} and shares the unconjugated t g slot) must come
+// back out of the table conjugated. Two roots sharing that intermediate make
+// it a cell of its own rather than a transient of one production tree, which
+// is what puts the store side's conversion on the path.
+TEST_CASE("eval_ordered_conj_node_is_converted_whole_btas",
+          "[eval_btas][ordered]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+  using BTensorC = btas::Tensor<C>;
+
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const std::size_t nocc = 2, nvirt = 3;
+  std::srand(11);
+  auto rnd = [](std::vector<std::size_t> const& extents) {
+    BTensorC r{btas::Range{extents}};
+    r.generate([]() {
+      return C(static_cast<double>(std::rand()) / RAND_MAX - 0.5,
+               static_cast<double>(std::rand()) / RAND_MAX - 0.5);
+    });
+    return r;
+  };
+  // an Index whose space carries a real field (the default field is Complex)
+  auto ridx = [](std::wstring_view label) {
+    Index i(label);
+    IndexSpace sp = i.space();
+    sp.field(Field::Real);
+    return Index(label, sp);
+  };
+  // parity None keeps the '꙳' over a real basis; the default Even consumes it
+  auto starred = [&ridx](std::wstring_view lbl, std::wstring_view b,
+                         std::wstring_view k) {
+    Tensor t(lbl, bra{ridx(b)}, ket{ridx(k)},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    REQUIRE(t.kconjugate() == 1);
+    REQUIRE(t.kconjugated());
+    return ex<Tensor>(std::move(t));
+  };
+  auto bare = [&ridx](std::wstring_view lbl, std::wstring_view b,
+                      std::wstring_view k) {
+    return ex<Tensor>(lbl, bra{ridx(b)}, ket{ridx(k)});
+  };
+
+  auto const t_ = starred(L"t", L"a_1", L"i_1");
+  auto const g_ = starred(L"g", L"i_1", L"a_2");
+  auto const v_ = bare(L"v", L"a_2", L"a_1");
+  auto const u_ = bare(L"u", L"a_2", L"a_1");
+
+  auto root1 = eval_node(t_->clone() * g_->clone() * v_->clone());
+  auto root2 = eval_node(t_->clone() * g_->clone() * u_->clone());
+  using NodeT = decltype(root1);
+  REQUIRE(root1->is_scalar());
+  REQUIRE(root2->is_scalar());
+  // the two-factor prefix hoists the conj; v and u break the three-factor one
+  REQUIRE_FALSE(root1->canon_transform().conj);
+  REQUIRE_FALSE(root2->canon_transform().conj);
+  auto const& imed = root1.left();
+  REQUIRE(imed->is_tensor());
+  REQUIRE(imed->canon_transform() == CanonTransform{.conj = true});
+  // one cell, shared by both roots
+  REQUIRE(imed->hash_value() == root2.left()->hash_value());
+
+  // the stored (bare) spellings the provider is asked for
+  auto const& tl = imed.left();
+  auto const& gl = imed.right();
+  REQUIRE(tl.leaf());
+  REQUIRE(gl.leaf());
+  REQUIRE(tl->canon_transform() == CanonTransform{.conj = true});
+  REQUIRE(gl->canon_transform() == CanonTransform{.conj = true});
+  REQUIRE_FALSE(tl->as_tensor().kconjugated());
+  REQUIRE_FALSE(gl->as_tensor().kconjugated());
+  REQUIRE(tl->as_tensor().bra()[0].label() == L"a_1");
+  REQUIRE(tl->as_tensor().ket()[0].label() == L"i_1");
+  REQUIRE(gl->as_tensor().bra()[0].label() == L"i_1");
+  REQUIRE(gl->as_tensor().ket()[0].label() == L"a_2");
+
+  BTensorC T = rnd({nvirt, nocc});   // t{a_1;i_1}: T(a1, i)
+  BTensorC G = rnd({nocc, nvirt});   // g{i_1;a_2}: G(i, a2)
+  BTensorC V = rnd({nvirt, nvirt});  // v{a_2;a_1}: V(a2, a1)
+  BTensorC U = rnd({nvirt, nvirt});  // u{a_2;a_1}: U(a2, a1)
+  pinned_tensor_yield<BTensorC> yield;
+  yield.put(tl->as_tensor(), T);
+  yield.put(gl->as_tensor(), G);
+  yield.put(v_->as<Tensor>(), V);
+  yield.put(u_->as<Tensor>(), U);
+
+  // A(a1, a2) = Σ_i conj(T(a1, i)) conj(G(i, a2)); the roots close it
+  C ref1{0., 0.}, ref2{0., 0.};
+  for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+    for (std::size_t a2 = 0; a2 < nvirt; ++a2) {
+      C a{0., 0.};
+      for (std::size_t i = 0; i < nocc; ++i)
+        a += std::conj(T(a1, i)) * std::conj(G(i, a2));
+      ref1 += a * V(a2, a1);
+      ref2 += a * U(a2, a1);
+    }
+
+  auto scalar_of = [](ResultPtr const& res) {
+    REQUIRE(res->is<ResultScalar<C>>());
+    return res->as<ResultScalar<C>>().value();
+  };
+  auto close_to = [](C got, C ref) {
+    CHECK(got.real() == Catch::Approx(ref.real()).margin(1e-12));
+    CHECK(got.imag() == Catch::Approx(ref.imag()).margin(1e-12));
+  };
+
+  SECTION("the tree-walking engine agrees with the hand reference") {
+    close_to(scalar_of(evaluate(root1, root1->annot(), yield)), ref1);
+    close_to(scalar_of(evaluate(root2, root2->annot(), yield)), ref2);
+  }
+
+  SECTION("the ordered executor reads the shared conj node back conjugated") {
+    BatchPolicy const policy;
+    eval::dryrun::SizeRegime const regime;
+    eval::dryrun::CostModel const cm{regime};
+    auto const block_of = [](Index const&) -> std::size_t { return 1; };
+    std::function<std::size_t(Index const&)> const target =
+        [](Index const&) -> std::size_t { return 1; };
+
+    container::svector<NodeT> const roots{root1, root2};
+    auto const rich = eval::compute_dag_boulevard(roots, cm, block_of);
+    auto const legality = eval::analyze_legality(rich, roots, policy);
+    auto const ordered =
+        eval::build_ordered_schedule(rich, legality, policy, {});
+    auto cache = CacheManager<NodeT>::empty();
+    // one schedule over both roots: the forest form sums them, so the
+    // reference is ref1 + ref2
+    auto const got = eval::evaluate_ordered_schedule(
+        roots, ordered, rich, EvalExprBTAS::annot_t{}, yield, cache, target);
+    close_to(scalar_of(got), ref1 + ref2);
   }
 }
 
