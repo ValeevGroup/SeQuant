@@ -20,6 +20,7 @@
 #include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/scope.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 
@@ -1003,6 +1004,30 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         }
       }
     }  // SECTION("idempotency")
+
+    SECTION("label-specific canonicalizer") {
+      auto Q = [](std::initializer_list<std::wstring_view> b,
+                  std::initializer_list<std::wstring_view> k) {
+        return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
+      };
+      auto canonicalized = [&Q] {
+        TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                        {.method = CanonicalizationMethod::Complete});
+        return std::dynamic_pointer_cast<Expr>(tn.tensors().at(0));
+      };
+
+      // the default canonicalizer sorts the bra and the ket of Q
+      REQUIRE(*canonicalized() == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+
+      // one registered for label Q is used instead; the null canonicalizer
+      // leaves the ket alone, only the graph-based pass reorders the bra
+      TensorCanonicalizer::register_instance(
+          std::make_shared<NullTensorCanonicalizer>(), L"Q");
+      auto deregister = sequant::detail::make_scope_exit(
+          [] { TensorCanonicalizer::deregister_instance(L"Q"); });
+      REQUIRE(*canonicalized() == *Q({L"i_1", L"i_2"}, {L"a_2", L"a_1"}));
+    }
 
   }  // SECTION("canonicalizer")
 
