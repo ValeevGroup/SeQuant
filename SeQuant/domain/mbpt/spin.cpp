@@ -137,8 +137,10 @@ template <typename Container, typename TraceFunction, typename... Args>
 
   int parity = 0;
   do {
-    const int currentSign = parity == 0 ? initialSign : -initialSign;
-    SEQUANT_ASSERT(currentSign == get_phase(permIndices) * initialSign);
+    const int permutationSign = parity == 0 ? initialSign : -initialSign;
+    SEQUANT_ASSERT(permutationSign == get_phase(permIndices) * initialSign);
+    const int currentSign =
+        expr.symmetry() == Symmetry::Antisymm ? permutationSign : 1;
 
     container::set<std::pair<IndexSpace, IndexSpace>> currentPairing;
 
