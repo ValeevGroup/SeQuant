@@ -461,6 +461,9 @@ ExprPtr EvalExpr::denoted_expr() const {
     }
     return expr_;
   }
+  // the two branches above and below are the whole domain: a node's result is
+  // a scalar or a tensor, and a tensor-valued node spells one
+  SEQUANT_ASSERT(is_tensor());
   auto t = expr_->as<Tensor>();
   // Only a leaf's spelling names a user tensor whose states the decoder took
   // off; an internal node's placeholder is built in the denoted orientation
