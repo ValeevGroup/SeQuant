@@ -114,7 +114,6 @@ template <typename Container, typename TraceFunction, typename... Args>
   SEQUANT_ASSERT(expr.symmetry() == Symmetry::Antisymm ||
                  expr.symmetry() == Symmetry::Symm);
 
-  // TODO: Do we have to track the sign?
   const bool permuteBra = expr.bra().size() >= expr.ket().size();
   auto permIndices = permuteBra ? expr.bra() : expr.ket();
   const std::size_t unchangedSize =
@@ -125,7 +124,6 @@ template <typename Container, typename TraceFunction, typename... Args>
   };
 
   const int initialSign = bubble_sort_parity(permIndices, std::less<Index>{});
-  const auto originalIndices = permIndices;
 
   container::svector<container::set<std::pair<IndexSpace, IndexSpace>>>
       idxPairings;
