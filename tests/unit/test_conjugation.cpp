@@ -1976,4 +1976,9 @@ TEST_CASE("has_tensor_sees_through_re_im", "[conjugation]") {
   auto im = ex<Constant>(Constant::scalar_type(0, 2)) *
             imaginary_part(t->clone() * f->clone());
   REQUIRE(has_tensor(im, L"f"));
+  // a factor that is itself a Product is descended into
+  auto nested =
+      ex<Product>(ExprPtrList{t->clone() * f->clone()}, Product::Flatten::No);
+  REQUIRE(has_tensor(nested, L"f"));
+  REQUIRE_FALSE(has_tensor(nested, L"g"));
 }

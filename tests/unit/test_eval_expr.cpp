@@ -317,11 +317,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                             {.def_braket_symm = BraKetSymmetry::Nonsymm});
     REQUIRE(expr->is<Product>());
 
-    bool has_marker_leaf = false;
+    bool has_adjointed_leaf = false;
     for (auto const& factor : expr->as<Product>().factors())
-      has_marker_leaf |=
+      has_adjointed_leaf |=
           factor->is<Tensor>() && factor->as<Tensor>().adjointed();
-    REQUIRE(has_marker_leaf);
+    REQUIRE(has_adjointed_leaf);
 
     // binarize() must not throw on this term:
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -754,7 +754,7 @@ TEST_CASE("no eval op performs a conjugation", "[eval_expr]") {
 // the deprecated binarize(ExprPtr) is used on purpose.
 SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
 TEST_CASE("eval_expr_conjugation_state_identity",
-          "[EvalExpr][conjugate-fold]") {
+          "[EvalExpr][conjugate-state]") {
   // The Gram overlap of a Hermitian C is spelled with the adjoint (a
   // Conjugate tensor's bundles are not interchangeable, so a ket-ket
   // contraction is not a spelling of it): C{a_1;p} C⁺{p;a_2} and
