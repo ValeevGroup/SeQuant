@@ -1269,6 +1269,63 @@ TEST_CASE("a marked leaf reaches the generator as the array it denotes",
   }
 }
 
+TEST_CASE("a reordered leaf's canonicalization sign reaches the coefficient",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  auto generate = [](const ResultExpr &result) {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    return gen.get_generated_code();
+  };
+
+  // the block canonicalizer stores the mixed-space bra of an antisymmetric
+  // tensor in slot order, i_3,a_1, with the reorder's sign on the leaf's
+  // transform; the generated code names the stored array and must carry the
+  // sign, which no spelling does
+  auto t = [](std::wstring_view b0, std::wstring_view b1) {
+    return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                      ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  const auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+  const auto u = ex<Tensor>(L"u", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_1"});
+
+  SECTION("as an operand of a product") {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto const leaf = binarize(t(L"a_1", L"i_3"));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(leaf->canon_phase() == -1);
+    REQUIRE(leaf->as_tensor().bra()[0].label() == L"i_3");
+
+    const std::string code =
+        generate(ResultExpr(Variable(L"E"), t(L"a_1", L"i_3") * v));
+    CAPTURE(code);
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("-1 t[i_3, a_1, i_1, i_2]"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("t[a_1"));
+
+    // the spelling already in slot order carries no sign
+    const std::string canon =
+        generate(ResultExpr(Variable(L"E"), t(L"i_3", L"a_1") * u));
+    CAPTURE(canon);
+    REQUIRE_THAT(canon,
+                 Catch::Matchers::ContainsSubstring(" t[i_3, a_1, i_1, i_2]"));
+    REQUIRE_THAT(canon, !Catch::Matchers::ContainsSubstring("-1"));
+  }
+
+  SECTION("as a summand") {
+    const Tensor R(L"R", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"});
+    const std::string code =
+        generate(ResultExpr(R, t(L"a_1", L"i_3") + t(L"i_3", L"a_1")));
+    CAPTURE(code);
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("-1 t[i_3, a_1, i_1, i_2]"));
+  }
+}
+
 TEST_CASE("a pruned scalar prefactor keeps its conjugation", "[export]") {
   using namespace sequant;
   auto resetter = to_export_context();

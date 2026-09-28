@@ -79,6 +79,32 @@ ExprPtr denoted_scalar(Node const &node) {
   return e;
 }
 
+/// @return the sign @p node contributes to the computation that consumes it
+///         as an operand. A leaf's stored spelling is the array the generator
+///         names, and the sign the block canonicalizer took off that spelling
+///         (an antisymmetric bundle reordered into slot order) is the one part
+///         of the leaf's transform no spelling carries, so it reaches the
+///         emitted term as a scalar. An internal node contributes none: its
+///         phase relates the value it computes to the slot a cache would hold
+///         it in, and the export computes every node from what its operands
+///         denote, so the sign the node's own operands carried is already in
+///         its emitted computation.
+template <typename Node>
+Constant::scalar_type operand_sign(Node const &node) {
+  return node.leaf() ? Constant::scalar_type(node->canon_phase())
+                     : Constant::scalar_type(1);
+}
+
+/// @return the spelling @p node denotes as an operand of a summation, i.e.
+///         denoted_scalar() scaled by operand_sign()
+template <typename Node>
+ExprPtr signed_operand(Node const &node) {
+  ExprPtr e = denoted_scalar(node);
+  if (auto const sign = operand_sign(node); sign != 1)
+    return ex<Product>(sign, ExprPtrList{std::move(e)}, Product::Flatten::No);
+  return e;
+}
+
 /// Visitor objects that will steer code generation while visiting a given
 /// expression/evaluation tree by triggering the corresponding callbacks in the
 /// provided Generator objects.
@@ -255,12 +281,16 @@ class GenerationVisitor {
     // Assemble the expression that should be evaluated
     container::svector<ExprPtr> expressions;
     switch (node->op_type().value()) {
-      case EvalOp::Product:
-        expressions.push_back(
-            ex<Product>(ExprPtrList{denoted_scalar(node.left()),
-                                    denoted_scalar(node.right())},
-                        Product::Flatten::No));
+      case EvalOp::Product: {
+        // a leaf operand's canonicalization sign scales the term
+        auto prod = ex<Product>(ExprPtrList{denoted_scalar(node.left()),
+                                            denoted_scalar(node.right())},
+                                Product::Flatten::No);
+        prod->as<Product>().scale(operand_sign(node.left()) *
+                                  operand_sign(node.right()));
+        expressions.push_back(std::move(prod));
         break;
+      }
       case EvalOp::RealPart:
       case EvalOp::ImagPart:
         throw Exception("export: a Re/Im eval node has no exported form");
@@ -271,14 +301,14 @@ class GenerationVisitor {
             // computation that should be exported.
             return;
           case ComputeSelection::Left:
-            expressions.push_back(denoted_scalar(node.left()));
+            expressions.push_back(signed_operand(node.left()));
             break;
           case ComputeSelection::Right:
-            expressions.push_back(denoted_scalar(node.right()));
+            expressions.push_back(signed_operand(node.right()));
             break;
           case ComputeSelection::Both:
-            expressions.push_back(denoted_scalar(node.left()));
-            expressions.push_back(denoted_scalar(node.right()));
+            expressions.push_back(signed_operand(node.left()));
+            expressions.push_back(signed_operand(node.right()));
             break;
         }
         break;
