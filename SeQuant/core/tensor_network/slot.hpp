@@ -3,20 +3,6 @@
 
 namespace sequant {
 
-/// types of index slots that a tensor can have
-
-/// @note the order orchestrated to produce intuitively "canonical" layout of
-/// named indices of tensor networks
-/// @sa TensorNetworkV3
-enum class TensorIndexSlotType {
-  /// bra tensor vector index slot
-  Bra = 0,
-  /// ket tensor vector index slot
-  Ket = 1,
-  /// tensor aux index slot
-  Aux = 2,
-};
-
 /// types of slots that can host an index
 
 /// @note the order orchestrated to produce intuitively "canonical" layout of
