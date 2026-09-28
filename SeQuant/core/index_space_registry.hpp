@@ -1451,8 +1451,9 @@ class IndexSpaceRegistry {
     for (auto&& space : *spaces_) {
       for (auto&& [qn, t] : qn2type) {
         if (space.type() == t && space.qns() == qn) {
-          [[maybe_unused]] auto [it, found] = qn2type_found.try_emplace(qn, t);
-          SEQUANT_ASSERT(!found);
+          [[maybe_unused]] auto [it, inserted] =
+              qn2type_found.try_emplace(qn, t);
+          SEQUANT_ASSERT(inserted);
           // found all? return
           if (qn2type_found.size() == qn2type.size()) {
             return;
