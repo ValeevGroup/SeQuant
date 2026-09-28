@@ -1010,23 +1010,36 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                   std::initializer_list<std::wstring_view> k) {
         return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
       };
+      // canonical form of Q{i_2,i_1;a_1,a_2} and the phase relating the two
       auto canonicalized = [&Q] {
         TN tn({Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                        {.method = CanonicalizationMethod::Complete});
-        return std::dynamic_pointer_cast<Expr>(tn.tensors().at(0));
+        const auto byproduct =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                            {.method = CanonicalizationMethod::Complete});
+        const int phase =
+            byproduct ? byproduct->as<Constant>().value<int>() : 1;
+        return std::make_pair(
+            std::dynamic_pointer_cast<Expr>(tn.tensors().at(0)), phase);
       };
 
       // the default canonicalizer sorts the bra and the ket of Q
-      REQUIRE(*canonicalized() == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+      {
+        const auto [tensor, phase] = canonicalized();
+        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+        REQUIRE(phase == -1);
+      }
 
-      // one registered for label Q is used instead; the null canonicalizer
-      // leaves the ket alone, only the graph-based pass reorders the bra
+      // one registered for label Q is used instead; with the null
+      // canonicalizer the graph-based pass alone determines the slot order
       TensorCanonicalizer::register_instance(
           std::make_shared<NullTensorCanonicalizer>(), L"Q");
       auto deregister = sequant::detail::make_scope_exit(
           [] { TensorCanonicalizer::deregister_instance(L"Q"); });
-      REQUIRE(*canonicalized() == *Q({L"i_1", L"i_2"}, {L"a_2", L"a_1"}));
+      {
+        const auto [tensor, phase] = canonicalized();
+        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_2", L"a_1"}));
+        REQUIRE(phase == 1);
+      }
     }
 
   }  // SECTION("canonicalizer")
