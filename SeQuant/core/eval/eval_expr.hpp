@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -250,6 +251,39 @@ class EvalExpr {
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
   ///
+  /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
+  ///        canonical slot each result mode holds, and how the proto bundles
+  ///        of the (nested / CSV) modes refer back to those slots.
+  ///
+  /// \details Two nodes may share an evaluation-cache slot only if the value
+  ///          stored for one is, mode for mode, the value the other denotes.
+  ///          The node hash and the graph comparison deliberately identify
+  ///          nodes across index RENAMINGS (that is what makes common
+  ///          subexpressions shareable) and across bra<->ket orientation, and
+  ///          CanonTransform carries the leftover phase / conjugation /
+  ///          bra-ket swap. What none of them carries is a PERMUTATION of the
+  ///          result modes, so a shared slot whose two users order their modes
+  ///          differently hands one of them transposed data -- silently, since
+  ///          annotations are just labels (measured on h2o tpns=0 PNS-CCD,
+  ///          2026-09-03: a nested CSV intermediate whose two pair-basis inner
+  ///          modes were transposed shifted the correlation energy by 2.2e-6).
+  ///
+  ///          The fingerprint numbers the indices by first occurrence in
+  ///          canon_indices() order and hashes (space, id, proto ids) per
+  ///          mode, so it is invariant under a consistent renaming but changes
+  ///          under any reordering of the modes or of a proto bundle.
+  ///
+  /// \return the layout fingerprint (computed once, then memoized)
+  ///
+  [[nodiscard]] std::size_t layout_fingerprint() const noexcept;
+
+  /// the layout fingerprint of a result carrying @p modes (see
+  /// layout_fingerprint()); binarize folds it into the node id of every
+  /// tensor-valued internal node it builds
+  [[nodiscard]] static std::size_t layout_fingerprint_of(
+      index_vector const& modes) noexcept;
+
+  ///
   /// \return The canonicalization phase (+1 or -1).
   ///
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
@@ -455,6 +489,11 @@ class EvalExpr {
   ExprPtr expr_;
 
   index_vector canon_indices_;
+  mutable std::optional<std::size_t> layout_fingerprint_;
+
+  /// folds layout_fingerprint() into hash_value_ for a tensor-valued node;
+  /// called once canon_indices_ is final (see the definition)
+  void fold_layout_into_hash() noexcept;
 
   CanonTransform canon_transform_{};
 

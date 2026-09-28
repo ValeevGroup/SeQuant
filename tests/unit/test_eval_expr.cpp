@@ -1290,8 +1290,9 @@ TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
 }
 
 TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
-  // a sum's slot must depend on ALL its summands (order-insensitively):
-  // A + B and A + C are different values, A + B and B + A the same one
+  // a sum's slot depends on ALL its summands: A + B and A + C are different
+  // values; A + B and B + A are one value (the summand hash multiset is
+  // order-blind) unless the leading summand's LAYOUT differs
   using namespace sequant;
   auto sum_of = [](std::wstring_view a, std::wstring_view b) {
     return binarize(ex<Sum>(ExprPtrList{deserialize(a), deserialize(b)}));
@@ -1301,9 +1302,9 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   auto const ba = sum_of(L"g{i_1;a_1}", L"f{i_1;a_1}");
   auto const ab2 = sum_of(L"f{i_2;a_2}", L"g{i_2;a_2}");
   REQUIRE(ab->hash_value() != ac->hash_value());
-  // order-sensitive: a sum's layout is its first summand's, so B + A is a
-  // different slot; a relabeled copy of the same ordered sum shares it
-  REQUIRE(ab->hash_value() != ba->hash_value());
+  // same summands, same layout, another order: one slot; a relabeled copy of
+  // the same sum shares it too
+  REQUIRE(ab->hash_value() == ba->hash_value());
   REQUIRE(ab->hash_value() == ab2->hash_value());
   // the result layout is the FIRST summand's: the same summands in another
   // order with a different leading layout are a different slot (the cached

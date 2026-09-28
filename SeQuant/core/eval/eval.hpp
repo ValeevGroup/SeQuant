@@ -715,13 +715,20 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 
   if constexpr (detail::trace(EvalTrace)) {
     size_t hwmark = log::bytes(cache, post).value;
-    if (!cache.alive(nd)) hwmark += log::bytes(res).value;
+    // An alias allocated nothing and shares the source's buffer: charge it
+    // 0 allocated bytes and count that one buffer once (mem_result stays the
+    // value's logical size). NB this covers the cache store path's round
+    // trip, where the node's transform is applied twice -- once into the
+    // canonical orientation to store, once back out -- and the second
+    // application composes to the identity: still an alias, still no copy.
+    bool const lazy = post->is_buffer_alias();
+    if (!cache.alive(nd) && !lazy) hwmark += log::bytes(res).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
     auto stat = log::EvalStat{
         .mode = log::EvalMode::MultByPhase,
         .time = time,
         .mem_result = log::bytes(post),
-        .mem_alloc = log::bytes(post),
+        .mem_alloc = lazy ? log::Bytes{0} : log::bytes(post),
         .mem_hwmark = {cache.note_working_set(hwmark, nd->hash_value())}};
     log::eval(stat,
               std::format("[{}{}{}] {}", int(tr.phase), tr.conj ? "*" : "",
@@ -1464,7 +1471,11 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
   for (auto&& n : nodes) {
     if (!result) {
-      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
+      // The first summand's value may alias a cache entry or a leaf served by
+      // the leaf evaluator (a memoized amplitude, integral, ...); the
+      // add_inplace below mutates the accumulator, so it must be a private
+      // deep copy (Result::clone).
+      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache)->clone();
       continue;
     }
 
