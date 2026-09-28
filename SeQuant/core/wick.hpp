@@ -495,8 +495,8 @@ class WickTheorem {
   /// (0 = must connect, 1 = not required or already satisfied)
   container::svector<std::bitset<max_input_size>> nop_connections_;
   std::size_t nop_nconnections_total_ =
-      0;  // # of total (bidirectional) connections in nop_connections_ (i.e.
-          // not double counting 1->2 and 2->1)
+      0;  // # of pairs given to set_nop_connections (a pair and its reverse
+          // count separately); only compared against 0
   container::svector<std::pair<size_t, size_t>>
       nop_connections_input_;  // only used to cache input to
                                // set_nop_connections_
