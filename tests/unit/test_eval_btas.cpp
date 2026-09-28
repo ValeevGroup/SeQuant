@@ -1113,6 +1113,86 @@ TEST_CASE("eval_scalar_product_node_carries_its_children_transform_btas",
   }
 }
 
+// A scalar-valued factor is opaque to the network an enclosing product
+// canonicalizes: it contributes no spelling, so that network's
+// canonicalization phase knows nothing of it and its own phase reaches the
+// enclosing node's transform instead. A closed sum of antisymmetric
+// contractions, written in the two orientations its antisymmetry relates,
+// therefore leads two products that share a slot and whose values differ by
+// a sign.
+TEST_CASE("eval_scalar_sum_factor_phase_reaches_the_product_btas",
+          "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+  const std::size_t nocc = 2, nvirt = 3;
+
+  auto t = [](std::wstring_view b0, std::wstring_view b1, std::wstring_view k0,
+              std::wstring_view k1) {
+    return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                      ket{Index{k0}, Index{k1}}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto const v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+  auto const w = ex<Tensor>(L"w", bra{L"i_4", L"i_5"}, ket{L"a_2", L"i_6"});
+  auto const A = ex<Tensor>(L"A", bra{L"i_7"}, ket{L"a_3"});
+  auto const B = ex<Tensor>(L"B", bra{L"a_3"}, ket{L"i_8"});
+  auto closed = [](ExprPtr const& l, ExprPtr const& r) {
+    return ex<Product>(ExprPtrList{l, r}, Product::Flatten::No);
+  };
+  // the summands as written carry the antisymmetric reorder's sign; the same
+  // sum spelled in slot order carries none
+  auto sum = [&](bool as_written) {
+    return ex<Sum>(
+        ExprPtrList{closed(as_written ? t(L"a_1", L"i_3", L"i_1", L"i_2")
+                                      : t(L"i_3", L"a_1", L"i_1", L"i_2"),
+                           v),
+                    closed(as_written ? t(L"a_2", L"i_6", L"i_4", L"i_5")
+                                      : t(L"i_6", L"a_2", L"i_4", L"i_5"),
+                           w)});
+  };
+  auto const p_w = eval_node(
+      ex<Product>(ExprPtrList{sum(true), A, B}, Product::Flatten::No));
+  auto const p_c = eval_node(
+      ex<Product>(ExprPtrList{sum(false), A, B}, Product::Flatten::No));
+
+  // the scalar sums share a slot and hoist opposite phases ...
+  auto const& s_w = p_w.left().left();
+  auto const& s_c = p_c.left().left();
+  REQUIRE(s_w->op_type() == EvalOp::Sum);
+  REQUIRE(s_w->is_scalar());
+  REQUIRE(s_w->hash_value() == s_c->hash_value());
+  REQUIRE(s_w->canon_phase() == -1);
+  REQUIRE(s_c->canon_phase() == 1);
+  // ... and so do the products that multiply them by a tensor network whose
+  // own canonicalization is blind to them
+  REQUIRE(p_w->hash_value() == p_c->hash_value());
+  REQUIRE(p_w->canon_phase() == -1);
+  REQUIRE(p_c->canon_phase() == 1);
+
+  std::srand(19);
+  rand_tensor_yield<BTensorD> yield{nocc, nvirt};
+  auto const free_w = evaluate(p_w, p_w->annot(), yield)->get<BTensorD>();
+  auto const free_c = evaluate(p_c, p_c->annot(), yield)->get<BTensorD>();
+  REQUIRE(free_w.rank() == 2);
+  REQUIRE(free_w.extent(0) == nocc);
+  REQUIRE(free_w.extent(1) == nocc);
+  // the two spellings are each other's negative
+  for (std::size_t i = 0; i < nocc; ++i)
+    for (std::size_t j = 0; j < nocc; ++j)
+      REQUIRE(free_w(i, j) == Catch::Approx(-free_c(i, j)).margin(1e-12));
+  REQUIRE(std::abs(free_w(0, 0)) > 1e-8);
+
+  // both read through one cache, in either order, keep their cache-free value
+  auto cache = cache_manager(std::array{p_w, p_c});
+  auto const got_w = evaluate(p_w, p_w->annot(), yield, cache)->get<BTensorD>();
+  auto const got_c = evaluate(p_c, p_c->annot(), yield, cache)->get<BTensorD>();
+  for (std::size_t i = 0; i < nocc; ++i)
+    for (std::size_t j = 0; j < nocc; ++j) {
+      CHECK(got_w(i, j) == Catch::Approx(free_w(i, j)).margin(1e-12));
+      CHECK(got_c(i, j) == Catch::Approx(free_c(i, j)).margin(1e-12));
+    }
+}
+
 // The default simplify() folds conjugate pairs of scalar-valued summands
 // only, so a tensor-valued sum with a conjugate pair reaches the evaluator as
 // the sum it was written as, whose adjointed summand is a network of leaves

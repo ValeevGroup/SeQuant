@@ -599,9 +599,19 @@ inline size_t salted_hash(EvalExprNode const& n) {
   return h;
 }
 
+/// \return the product of the phases of the scalar-valued nodes this walk
+///         steps over, which the enclosing product's transform carries. A
+///         collected factor hands its phase up on its ExprWithHash, and a
+///         Product child's own phase needs no term of its own (its
+///         sub-network is part of the flattened one, so its reorder sign is
+///         inside that network's canonicalization phase), but a
+///         scalar-valued child -- a closed Sum, a Re/Im projection, a scalar
+///         leaf -- is opaque here: it contributes neither a spelling nor a
+///         network, so the enclosing node is the only place its phase can
+///         land.
 template <typename Rng>
-void collect_tensor_factors(EvalExprNode const& node,  //
-                            Rng& collect) {
+std::int8_t collect_tensor_factors(EvalExprNode const& node,  //
+                                   Rng& collect) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
@@ -616,10 +626,16 @@ void collect_tensor_factors(EvalExprNode const& node,  //
     collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
                                       .hash = salted_hash(node),
                                       .phase = node->canon_phase()});
+    return 1;
   } else if (node->op_type() == EvalOp::Product && !node.leaf()) {
-    collect_tensor_factors(node.left(), collect);
-    collect_tensor_factors(node.right(), collect);
+    // left before right: the collected order is part of the network's
+    // identity, so the two walks are sequenced rather than left to the
+    // evaluation order of a product expression
+    auto const lhs = collect_tensor_factors(node.left(), collect);
+    auto const rhs = collect_tensor_factors(node.right(), collect);
+    return static_cast<std::int8_t>(lhs * rhs);
   }
+  return node->canon_phase();
 }
 
 namespace {
@@ -907,8 +923,12 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
-      collect_tensor_factors(left, subfacs);
-      collect_tensor_factors(right, subfacs);
+      // the walk also hands up the phase of every scalar-valued child it
+      // steps over, which nothing in the flattened network carries
+      auto const lhs_scalar_phase = collect_tensor_factors(left, subfacs);
+      auto const rhs_scalar_phase = collect_tensor_factors(right, subfacs);
+      auto const scalar_phase =
+          static_cast<std::int8_t>(lhs_scalar_phase * rhs_scalar_phase);
       // A hoisted prefix's factors are spelled with the '꙳' the hoist takes
       // over, so the flattened network hashes onto the unconjugated product's
       // slot. The hoist takes over that one state: an adjoint state names a
@@ -969,8 +989,11 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // flattened one, so its reorder sign is inside canon.phase already;
       // multiplying it again makes two spellings of one slot disagree by a
       // sign whenever the child's canonical phase is -1 (a cache-only
-      // symptom: the slot serves -R to one of them).
-      std::int8_t factor_phase = 1;
+      // symptom: the slot serves -R to one of them). A scalar-valued child
+      // is opaque to the network the other way around -- it contributes no
+      // spelling, so canon.phase knows nothing of it -- and the phase the
+      // walk hands up for those seeds the product here.
+      std::int8_t factor_phase = scalar_phase;
       for (auto const& f : subfacs)
         factor_phase = static_cast<std::int8_t>(factor_phase * f.phase);
       CanonTransform const transform{
