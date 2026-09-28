@@ -183,48 +183,51 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
 }
 
 namespace {
-/// Normalizes a leaf tensor's SPELLING channels into transform bits:
-/// strips a '⁺' adjoint label (adjoint = conj ∘ swap) and converts the
-/// elementwise-conjugation marker to a PURE {conj} bit (slots untouched;
-/// orientation deltas belong to the canonicalizer fold alone). Symm markers
-/// are value-redundant and dropped. Returns the accumulated transform.
-CanonTransform normalize_leaf_spelling(Tensor& t) {
+/// Decodes a leaf tensor's core states into its retrieval transform,
+/// respelling @p t as the array a leaf provider serves.
+///
+/// Three cases, exhaustive over the two states (see the state table in
+/// expressions/tensor.hpp):
+///   - adjointed (`⁺`): `t⁺{q;p} = conj t{p;q}`, so the array is the bare
+///     `t`; Tensor::adjoint() exchanges the bundles back and clears the
+///     state, and the transform is `{conj, braket_swap}`. A kept `⁺` is
+///     NonHermitian, so the normalization consumes no sign;
+///   - K-conjugated (`꙳`) over a real basis: the elementwise conjugate of the
+///     same array with the slots in place, so the array is the bare `t` and
+///     the transform is `{conj}` over the identity layout;
+///   - K-conjugated over a complex basis: the matrix of another operator, an
+///     array of its own. The state stays on the stored spelling and
+///     hash_terminal_tensor keys it apart from the bare leaf.
+/// `t⁺꙳` over a complex basis composes the first with the third: the array is
+/// `t꙳` and the transform is `{conj, braket_swap}`.
+CanonTransform decode_leaf_states(Tensor& t) {
   CanonTransform tr{};
   if (t.adjointed()) {
-    const auto sign = t.adjoint();  // exchanges the bundles back, clears '⁺'
-    tr = compose(tr, {.phase = sign, .conj = true, .braket_swap = true});
+    [[maybe_unused]] const auto sign = t.adjoint();
+    SEQUANT_ASSERT(sign == 1);
+    SEQUANT_ASSERT(!t.adjointed());
+    tr = compose(tr, {.conj = true, .braket_swap = true});
   }
-  if (t.kconjugated()) {
-    if (t.braket_symmetry() != BraKetSymmetry::Symm)
-      tr = compose(tr, {.conj = true});
-    const auto sign = t.set_states(false, false);  // unmarked spelling stored
-    tr = compose(tr, {.phase = sign});
+  if (t.kconjugated() && t.base_field() == Field::Real) {
+    [[maybe_unused]] const auto sign = t.set_states(false, false);
+    SEQUANT_ASSERT(sign == 1);
+    tr = compose(tr, {.conj = true});
   }
   return tr;
 }
 
-/// Respells a leaf tensor IN PLACE as its canonical block form and returns
-/// the retrieval transform, composing the channels in this order (their
-/// inverse, in reverse order, is EvalExpr::denoted_expr):
-///   1. spelling channels (normalize_leaf_spelling): adjoint label,
-///      conjugation marker -> {conj, swap} / {conj} bits;
-///   2. block canonicalization WITH the braket fold: the antisymmetric
-///      reorder phase multiplies in; a braket-fold marker (the fold swapped
-///      a Conjugate tensor INTO its canonical orientation) becomes
-///      {conj, swap}, the canonical slots are kept.
-/// The stored spelling is unmarked and block-canonical: what a leaf
-/// provider serves.
+/// Respells a leaf tensor as the block-canonical array a provider serves and
+/// returns the retrieval transform: the state channels (decode_leaf_states)
+/// composed with the block canonicalization's phase. A bra<->ket exchange
+/// that costs a sign is not folded (`fold_signed_braket = false`): the
+/// provider is asked for the canonical spelling and a leaf's phase is a
+/// cache-orientation round trip.
 CanonTransform normalize_leaf(Tensor& t) {
-  auto tr = normalize_leaf_spelling(t);
+  const CanonTransform tr = decode_leaf_states(t);
   const auto block_byproduct =
       TensorBlockCanonicalizer{/*fold_signed_braket=*/false}.apply(t);
-  tr = compose(tr,
-               {.phase = static_cast<std::int8_t>(block_byproduct ? -1 : 1)});
-  if (t.kconjugated()) {
-    const auto sign = t.set_states(false, false);
-    tr = compose(tr, {.phase = sign, .conj = true, .braket_swap = true});
-  }
-  return tr;
+  return compose(tr,
+                 {.phase = static_cast<std::int8_t>(block_byproduct ? -1 : 1)});
 }
 }  // namespace
 
@@ -233,9 +236,11 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
-  // the stored spelling is canonical (unmarked, block-canonical); every
-  // spelling channel becomes a CanonTransform byproduct applied on
-  // retrieval, so every route to one canonical spelling lands on one slot
+  // the stored spelling is the array a leaf provider serves: block-canonical,
+  // with the core states decoded into a CanonTransform applied on retrieval.
+  // A K-conjugated leaf over a complex basis is the exception the decoder
+  // names: its state stays on the stored spelling, that being an array of its
+  // own. Every route to one stored spelling lands on one slot.
   canon_transform_ = normalize_leaf(expr_->as<Tensor>());
   if (is_tot(tnsr)) {
     // slot identity: the canonical labeling of the block-canonical spelling.
@@ -441,21 +446,17 @@ std::int8_t EvalExpr::canon_phase() const noexcept {
 ExprPtr EvalExpr::denoted_expr() const {
   SEQUANT_ASSERT(is_tensor());
   auto t = expr_->as<Tensor>();
-  auto const tr = canon_transform_;
-  // Re-materialize the transform syntactically: the slot swap, and the conj
-  // bit spelled as the marker WHETHER OR NOT it came with the swap: a
-  // Hermitian leaf written in its non-canonical orientation denotes as
-  // C^*{swapped} -- value-equivalent to the as-written spelling only up to
-  // the Hermiticity the parent network does not see -- because the marker
-  // COLORS the parent's graph, which is what keeps mixed products such as
-  // C.C^* and C.C identity-distinct and their canonical layouts right.
-  // (Spelling the swapped Hermitian leaf unmarked was tried on 2026-09-03:
-  // it broke a PNS-CCD residual in iteration 2 -- a cached intermediate
-  // served in the wrong layout -- while the unit suites stayed green.)
-  if (tr.braket_swap) static_cast<AbstractTensor&>(t)._swap_bra_ket();
-  if (tr.conj) {
-    [[maybe_unused]] auto const sign = t.kconjugate();
-  }
+  // Only a leaf's spelling names a user tensor whose states the decoder took
+  // off; an internal node's placeholder is built in the denoted orientation
+  // (see binarize(Product)'s scalar branch) and carries no state.
+  if (!op_type_.has_value())
+    if (const auto tr = canon_transform(); tr.conj) {
+      // the '⁺' channel came with the bundle exchange, the '꙳' channel
+      // leaves the slots in place
+      [[maybe_unused]] const auto sign =
+          tr.braket_swap ? t.adjoint() : t.kconjugate();
+      SEQUANT_ASSERT(sign == 1);
+    }
   return ex<Tensor>(std::move(t));
 }
 
@@ -622,10 +623,9 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
 EvalExprNode binarize(Tensor const& t) {
-  // Both core states ('⁺' adjointed, '꙳' K-conjugated) and the block
-  // orientation are normalized by the EvalExpr leaf ctor into the canonical
-  // unmarked spelling plus a CanonTransform served on retrieval -- a tensor
-  // leaf is always just a leaf.
+  // The leaf constructor decodes every core state either into a
+  // CanonTransform applied on retrieval or onto the array a provider serves
+  // (see decode_leaf_states), so a tensor leaf is a leaf.
   return EvalExprNode{EvalExpr{t}};
 }
 
@@ -687,9 +687,11 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                                        EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
-      // partition from the DENOTED orientation (stored canonical slots,
-      // re-swapped per the child transform)
+      // partition from the DENOTED orientation: a leaf summand re-materializes
+      // the states the decoder took off, while a summand that is itself an
+      // internal node hands back the placeholder it already carries
       auto const t = left.denoted_expr()->as<Tensor>();
+      SEQUANT_ASSERT(!left.op_type().has_value() || t == left.as_tensor());
       // The placeholder is what an enclosing tensor network sees for this
       // (opaque) node, so spell its slots -- within each bra/ket/aux group --
       // in the node's canonical index order, i.e. the order the value is laid
@@ -860,6 +862,11 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const t = tl->denoted_expr()->as<Tensor>();  // denoted orientation
+      // this node inherits tl's transform, and its placeholder is spelled from
+      // the denoted orientation, so it is denoted as built: were tl already an
+      // internal node, denoted_expr() would have handed its placeholder back
+      // untouched
+      SEQUANT_ASSERT(!tl->op_type().has_value() || t == tl->as_tensor());
       hash::combine(h, EvalExpr::layout_fingerprint_of(tl->canon_indices()));
       return {
           EvalOp::Product,     //
@@ -989,6 +996,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
+    SEQUANT_ASSERT(!left->is_tensor() || !left->op_type().has_value() ||
+                   left->denoted_expr()->as<Tensor>() == left->as_tensor());
     auto expr = left->is_tensor()
                     ? detail::make_tensor(left->denoted_expr()->as<Tensor>(),
                                           false, opts)
