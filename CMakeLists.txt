@@ -400,10 +400,6 @@ set(SeQuant_symb_src
         SeQuant/core/tensor_network/vertex.hpp
         SeQuant/core/tensor_network/vertex_painter.cpp
         SeQuant/core/tensor_network/vertex_painter.hpp
-        SeQuant/core/tensor_network/v1.cpp
-        SeQuant/core/tensor_network/v1.hpp
-        SeQuant/core/tensor_network/v2.cpp
-        SeQuant/core/tensor_network/v2.hpp
         SeQuant/core/tensor_network/v3.cpp
         SeQuant/core/tensor_network/v3.hpp
         SeQuant/core/tree_index.cpp
@@ -574,13 +570,6 @@ set(SeQuant_eval_tapp_src
 set(SeQuant_core_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-)
-
-#### disable unity_build for v2:
-set_source_files_properties(
-        SeQuant/core/tensor_network/v2.cpp
-        SeQuant/core/tensor_network/v2.hpp
-        PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
 ### optional prereqs

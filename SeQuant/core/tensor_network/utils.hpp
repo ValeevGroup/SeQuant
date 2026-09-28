@@ -1,6 +1,5 @@
 //
-// Created to resolve duplicate symbol issues between tensor_network_v2 and
-// tensor_network_v3 Contains shared utility functions and structs
+// Utility functions and structs used by the tensor network implementation
 
 #ifndef SEQUANT_TENSOR_NETWORK_UTILITIES_HPP
 #define SEQUANT_TENSOR_NETWORK_UTILITIES_HPP

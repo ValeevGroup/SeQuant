@@ -1064,9 +1064,6 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // create vertices for bra and ket slot bundles of any symmetry
-    // N.B. TNV1/TNV2 created such vertices for symmetric/anstisymmetric
-    // bra/ket also but did not create index slots. Here we create them
-    // even for asymmetric bra/ket
     {
       for (auto s : {Origin::Bra, Origin::Ket}) {
         const bool bra = s == Origin::Bra;
@@ -1098,8 +1095,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       }
     }
 
-    // - Create vertex for every index slot, regardless of symmetry (V1 and V2
-    // only created slots for antisymmetric/symmetric tensors)
+    // - Create vertex for every index slot, regardless of symmetry
     for (auto &slot_type : {SlotType::Bra, SlotType::Ket}) {
       const auto is_bra = slot_type == SlotType::Bra;
       const auto vertex_type =
