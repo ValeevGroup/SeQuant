@@ -165,8 +165,7 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
   // pin as a trait instead would resolve 'C' against Real-field indices to
   // Symm and lose the AntiHermitian preimage of 'N'. The serializer spells a
   // definite hermiticity with its trait letter (see serialize_symm), so a pin
-  // letter reaches here from hand-written input or from an exchange symmetry
-  // the traits do not derive.
+  // letter reaches here only from hand-written or older input.
   switch (c) {
     case 'C':
     case 'c':

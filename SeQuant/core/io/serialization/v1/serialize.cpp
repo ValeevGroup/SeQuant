@@ -9,8 +9,6 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cstddef>
-#include <cstdint>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -80,8 +78,9 @@ std::wstring serialize_symm(BraKetSymmetry symm, Hermiticity hermiticity,
       break;
   }
 
-  // an indefinite hermiticity derives Nonsymm; anything else here is an
-  // exchange symmetry pinned by the caller, which keeps its own letter
+  // an indefinite hermiticity derives Nonsymm in every basis, so `N` is the
+  // only letter a tensor reaches here with; the pin letters stay for a tensor
+  // kind that spells an exchange symmetry its traits do not derive
   switch (symm) {
     case BraKetSymmetry::Conjugate:
       return L"C";
@@ -357,9 +356,8 @@ std::wstring to_string(AbstractTensor const& tensor,
     // back-fills from the bra/ket letter is not the one this tensor carries.
     // A definite hermiticity is spelled with its trait letter (H/A), which
     // says nothing about the parity, so the parser leaves it at the Tensor
-    // default; a pinned exchange symmetry keeps its own letter (S/C/N), from
-    // which to_conjugation_parity() recovers the parity against the same base
-    // field.
+    // default; with an indefinite hermiticity the exchange letter is what the
+    // parser reads the parity from, against the same base field.
     const ConjugationParity implied_parity =
         hermiticity == Hermiticity::NonHermitian
             ? to_conjugation_parity(braket_symmetry, tensor._base_field())

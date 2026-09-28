@@ -237,6 +237,10 @@ First few:
 
    st.print_table(term_rows, max_rows=5)
 
+The bra/ket annotations in this transcript predate the trait spelling of the
+second letter: a fresh capture prints ``:N-H-S`` where the transcript shows
+``:N-C-S``.
+
 ::
 
     begin_line | end_line | expr
