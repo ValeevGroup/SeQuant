@@ -87,14 +87,7 @@ TEST_CASE(
   bool const collapse_sums =
       std::getenv("SEQUANT_DOT_COLLAPSE_SUMS") != nullptr;
 
-  auto ctx0 = get_default_context().clone();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   // The reference size regime (the same numbers the dry-run fixtures use), so
   // the unbatched factorization is the one a real run of that size picks.

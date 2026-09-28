@@ -391,14 +391,7 @@ bool is_df_batchable(Index const& ix) {
 TEST_CASE("is_valid accepts a CSV proto-indexed residual",
           "[utilities][is_valid][csv]") {
   using namespace sequant;
-  auto ctx0 = get_default_context().clone();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -432,14 +425,7 @@ TEST_CASE("is_valid accepts a CSV proto-indexed residual",
 TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
           "[optimize][batch][term_batch_axes]") {
   using namespace sequant;
-  auto ctx0 = get_default_context().clone();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -529,14 +515,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
 TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
           "[optimize][batch][r1-offbyone]") {
   using namespace sequant;
-  auto ctx0 = get_default_context().clone();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto prod =
       deserialize<ExprPtr>("f{μ̃_1094;i_1}:N-S-S * C{a_1<i_1>;μ̃_1094}:N-S-S");
@@ -602,14 +581,7 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
 TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
           "[.][ordered-key-c60-m]") {
   using namespace sequant;
-  auto ctx0 = get_default_context().clone();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -662,14 +634,7 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
 TEST_CASE("C60 residual peak per summand under the recommended batching",
           "[.][occ-driver-scan]") {
   using namespace sequant;
-  auto ctx0 = get_default_context().clone();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -765,14 +730,7 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
 TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
           "[.][roofline-4pao]") {
   using namespace sequant;
-  auto ctx0 = get_default_context().clone();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx0.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -838,14 +796,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   // Augment the default mbpt registry with PAO (mu~) and DF-aux (K) so the
   // post-transform fixture deserializes; raise the dummy-ordinal ceiling for
   // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -1925,14 +1876,7 @@ TEST_CASE(
     "dryrun eval backend replays the post-transform giant term through the "
     "real batched runtime",
     "[dryrun-eval]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2269,14 +2213,7 @@ TEST_CASE(
     "dryrun perf-first never forms the 4-PAO AO integral and peaks on the "
     "genuine 4-PNO W node (C60 giant)",
     "[dryrun-objective]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2603,14 +2540,7 @@ TEST_CASE(
 TEST_CASE(
     "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
     "[.][dryrun-extmode][blocked-layers-1-2]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2729,7 +2659,7 @@ TEST_CASE(
   // Flag ON: External stamped, and ONLY on an external occ (space "i") -- the
   // chosen seed modes -- never on a contracted DF-aux/PAO mode (emit follows
   // selection). BOTH external occ (i_1 and i_2) must be stamped (joint seed).
-  auto occ_space = isr->retrieve(L"i");
+  auto occ_space = get_default_context().index_space_registry()->retrieve(L"i");
   std::set<std::wstring> external_labels;
   for (auto const& axs : ax_on)
     for (auto const& e : axs.axes)
@@ -2759,14 +2689,7 @@ TEST_CASE(
 TEST_CASE(
     "dryrun external-occ slicing shrinks the PPL W footprint (P1 sizing gate)",
     "[.][dryrun-occ-sizing]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2958,14 +2881,7 @@ TEST_CASE(
     "dryrun external occ is recognized as a batchable mode (P1 recognition "
     "gate)",
     "[.][dryrun-occ-recognize]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3130,14 +3046,7 @@ TEST_CASE(
 //   ./tests/unit/unit_tests-sequant "[dryrun-c60-batchability-audit]"
 TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
           "[.][dryrun-c60-batchability-audit]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3477,14 +3386,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3764,14 +3666,7 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
 // alive cached bytes and is confounded by batched-inner scratch -- see the
 // [dryrun-objective] INTERPRETATION notes).
 TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3958,14 +3853,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
 // is not pricing the runtime recompute").
 TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
           "[.][dryrun-water-frag]") {
-  auto ctx = get_default_context().clone();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  sequant::tests::declare_real_basis(*isr);  // the residual is real
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
