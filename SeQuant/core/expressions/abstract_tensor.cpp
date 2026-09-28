@@ -13,9 +13,9 @@ namespace sequant {
 
 void reset_tags(const ExprPtr& expr) {
   expr->visit(
-      [](ExprPtr& current) {
+      [](const ExprPtr& current) {
         if (current.is<AbstractTensor>()) {
-          reset_tags(current.as<AbstractTensor>());
+          reset_tags(current->as<AbstractTensor>());
         }
       },
       /* atoms_only = */ true);

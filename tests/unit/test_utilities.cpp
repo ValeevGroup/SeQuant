@@ -124,6 +124,14 @@ TEST_CASE("reset_tags", "[utilities]") {
 
   reset_tags(expr);
   REQUIRE_FALSE(tensor.bra().at(0).tag().has_value());
+
+  // a tensor that is the whole expression
+  ExprPtr lone = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+  REQUIRE(lone->as<Tensor>().transform_indices(replacements));
+  REQUIRE(lone->as<Tensor>().bra().at(0).tag().has_value());
+
+  reset_tags(lone);
+  REQUIRE_FALSE(lone->as<Tensor>().bra().at(0).tag().has_value());
 }
 
 TEST_CASE("adjoint_label", "[utilities]") {
