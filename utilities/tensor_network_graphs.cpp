@@ -45,6 +45,7 @@ void print_help() {
   std::wcout << "  --perm      Also print the canonicalize permutation\n";
   std::wcout << "  --no-named  Treat all indices as unnamed (even if they are "
                 "external)\n";
+  std::wcout << "  --v3        Accepted for compatibility; has no effect\n";
 }
 
 int main(int argc, char **argv) {
@@ -76,6 +77,8 @@ int main(int argc, char **argv) {
       continue;
     } else if (current == L"--perm") {
       print_perm = true;
+      continue;
+    } else if (current == L"--v3") {
       continue;
     }
 
