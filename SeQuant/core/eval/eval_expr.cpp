@@ -571,6 +571,9 @@ struct ExprWithHash {
   /// spelling in the network cannot carry (an index reorder), see
   /// collect_tensor_factors
   std::int8_t phase = 1;
+  /// whether the factor's transform conjugates, which is what an enclosing
+  /// hoist takes over from it (see binarize(Product))
+  bool conj = false;
 };
 
 void all_indices(IndexSet& result, ExprPtr const& expr) {
@@ -628,7 +631,8 @@ template <typename Rng>
     // slot spelling outright: the phase rides along for the product fold.
     collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
                                       .hash = salted_hash(node),
-                                      .phase = node->canon_phase()});
+                                      .phase = node->canon_phase(),
+                                      .conj = node->canon_transform().conj});
     return 1;
   } else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     // left before right: the collected order is part of the network's
@@ -932,16 +936,18 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       auto const rhs_scalar_phase = collect_tensor_factors(right, subfacs);
       auto const scalar_phase =
           static_cast<std::int8_t>(lhs_scalar_phase * rhs_scalar_phase);
-      // A hoisted prefix's factors are spelled with the '꙳' the hoist takes
-      // over, so the flattened network hashes onto the unconjugated product's
-      // slot. The hoist takes over that one state: an adjoint state names a
-      // different array, so it is passed through rather than cleared.
+      // Each factor of a hoisted prefix carries a conjugating transform, and
+      // this node's hoist takes it over: the '꙳' that transform put on the
+      // factor's spelling comes off, so the flattened network hashes onto the
+      // unconjugated product's slot. The hoist takes over that one state: an
+      // adjoint state names a different array, so it is passed through rather
+      // than cleared.
       // Clearing the star consumes no sign: a kept '꙳' has parity None.
       // Mixed marks stay in the TN, where the marker coloring keeps e.g.
       // C·C꙳ identity-distinct from C·C.
       if (hoist_conj)
         for (auto& f : subfacs)
-          if (f.expr->is<Tensor>() && f.expr->as<Tensor>().kconjugated()) {
+          if (f.conj && f.expr->is<Tensor>()) {
             auto& t = f.expr->as<Tensor>();
             [[maybe_unused]] auto const sign =
                 t.set_states(t.adjointed(), false);
