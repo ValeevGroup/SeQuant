@@ -36,6 +36,15 @@ struct CanonTransform {
   friend constexpr bool operator==(CanonTransform, CanonTransform) = default;
 };
 
+/// @return whether @p tr hoists out of a product or a sum node: elementwise
+/// conjugation distributes over contraction and addition
+/// (`(A·B)꙳ = A꙳·B꙳`, `(Σ T)꙳ = Σ T꙳`), while a bra<->ket exchange respells
+/// the node's own result -- the partition its placeholder is built from --
+/// so a transform carrying one salts the parent's hash instead
+[[nodiscard]] constexpr bool hoistable(CanonTransform tr) noexcept {
+  return tr.conj && !tr.braket_swap;
+}
+
 /// composition of two transforms: phases multiply, conj/swap compose as Z2
 [[nodiscard]] constexpr CanonTransform compose(CanonTransform a,
                                                CanonTransform b) noexcept {

@@ -989,46 +989,59 @@ TEST_CASE("leaf_slot_identity_is_the_stored_array",
 
 TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
   using namespace sequant;
-  auto A = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  auto B = ex<Tensor>(L"B", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+  // over a real basis with an indefinite parity the conjugate of a matrix
+  // element is the K-conjugate with the slots in place, so every factor
+  // decodes to {conj} and the conjugation is a whole-node transform
+  auto rx = [](std::wstring_view l) { return idx(l, Field::Real); };
+  auto rt = [&rx](std::wstring_view lbl, std::wstring_view b,
+                  std::wstring_view k) {
+    return ex<Tensor>(
+        lbl, bra{rx(b)}, ket{rx(k)},
+        TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  };
 
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  auto AB = binarize(A->clone() * B->clone());
-  auto ABc = binarize(conjugate(A->clone() * B->clone()));
+  auto AB = binarize(rt(L"A", L"i_1", L"a_1") * rt(L"B", L"a_1", L"i_2"));
+  auto ABc =
+      binarize(conjugate(rt(L"A", L"i_1", L"a_1") * rt(L"B", L"a_1", L"i_2")));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  // uniform conj HOISTS: one slot, root transform conj
-  REQUIRE(AB->hash_value() == ABc->hash_value());
-  REQUIRE(ABc->canon_transform().conj);
+  REQUIRE(AB->hash_value() == ABc->hash_value());  // uniform {conj} hoists
+  REQUIRE(ABc->canon_transform() == CanonTransform{.conj = true});
   REQUIRE_FALSE(AB->canon_transform().conj);
 
-  // mixed conj SALTS: C·D^* keeps its own identity vs C·D
-  auto Cx = ex<Tensor>(L"C", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-                       BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  auto Dx = ex<Tensor>(L"D", bra{L"a_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
-                       BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  // mixed marks salt
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  auto CD = binarize(Cx->clone() * Dx->clone());
-  auto CDc = binarize(Cx->clone() * conjugate(Dx->clone()));
+  auto CD = binarize(rt(L"C", L"i_1", L"a_1") * rt(L"D", L"a_1", L"i_2"));
+  auto CDc =
+      binarize(rt(L"C", L"i_1", L"a_1") * conjugate(rt(L"D", L"a_1", L"i_2")));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(CD->hash_value() != CDc->hash_value());
 
-  // sum level: a uniformly conjugated SUM of products (the
-  // \mathcal{T}-partner shape) hoists onto the unconjugated sum's slot with a
-  // conj transform
-  auto D = ex<Tensor>(L"D", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  auto E = ex<Tensor>(L"E", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  auto sum = D->clone() + E->clone();
+  // a uniformly conjugated sum of products hoists the same way
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  auto S = binarize(sum);
-  auto Sc = binarize(conjugate(sum));
+  auto S = binarize(rt(L"D", L"i_1", L"a_1") + rt(L"E", L"i_1", L"a_1"));
+  auto Sc =
+      binarize(conjugate(rt(L"D", L"i_1", L"a_1") + rt(L"E", L"i_1", L"a_1")));
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(S->hash_value() == Sc->hash_value());
   REQUIRE(Sc->canon_transform().conj);
-  REQUIRE_FALSE(S->canon_transform().conj);
+
+  SECTION("the adjoint of a contraction gets its own slot") {
+    // over a complex basis the conjugate is the adjoint: every factor's
+    // transform carries the bundle exchange, which respells the node's own
+    // result, so the conjugation is not hoisted and the adjointed network
+    // keeps its own slot
+    auto X = ex<Tensor>(L"X", bra{L"i_1"}, ket{L"a_1"});
+    auto Y = ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_2"});
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto XY = binarize(X->clone() * Y->clone());
+    auto XYc = binarize(conjugate(X->clone() * Y->clone()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(XY->hash_value() != XYc->hash_value());
+    REQUIRE_FALSE(XYc->canon_transform().conj);
+  }
 }
 
 TEST_CASE("conjugated_scalar_leaves", "[EvalExpr][conj-transform]") {

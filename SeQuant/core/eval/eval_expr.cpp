@@ -651,12 +651,14 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   SEQUANT_ASSERT(all_tensors | all_scalars);
 
-  // uniform-conj hoisting: a sum whose EVERY summand carries conj equals
-  // conj of the unconjugated sum -- strip the conj salts so the slot hash
-  // matches, and record {conj} on the sum nodes
+  // uniform-conj hoisting: a sum whose EVERY summand carries a hoistable
+  // transform equals conj of the unconjugated sum -- strip the conj salts so
+  // the slot hash matches, and record {conj} on the sum nodes. A summand
+  // whose transform also exchanges the bundles is not hoistable (see
+  // hoistable) and keeps the sum's summands mixed.
   bool const hoist_conj =
       !ranges::empty(summands) && ranges::all_of(summands, [](auto&& n) {
-        return n->canon_transform().conj;
+        return hoistable(n->canon_transform());
       });
   // a summand's phase (its hand-up is the DENOTED value) hoists the same
   // way: uniform -> a whole-node phase; mixed -> no transform of the
@@ -800,18 +802,20 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       | ranges::to_vector;
 
   // PREFIX-uniform conj hoisting (design spec): the left-fold combines
-  // factor prefixes, and a prefix that is uniformly conjugated equals the
-  // conj of its unconjugated counterpart -- its node hoists {conj} and its
-  // factors' conj salts are stripped, so e.g. the (A^*·B^*) intermediate of
-  // A^*·B^*·C is a cache hit on the A·B slot. A broken prefix keeps the
-  // salts (mixed marks stay identity-distinct).
+  // factor prefixes, and a prefix whose every factor carries a hoistable
+  // transform equals the conj of its unconjugated counterpart -- its node
+  // hoists {conj} and its factors' conj salts are stripped, so e.g. the
+  // (A꙳·B꙳) intermediate of A꙳·B꙳·C is a cache hit on the A·B slot. A
+  // broken prefix keeps the salts (mixed marks stay identity-distinct), and
+  // a factor whose transform also exchanges the bundles breaks the run (see
+  // hoistable).
   std::vector<char> prefix_conj;
   prefix_conj.reserve(ranges::size(factors) + 1);
   prefix_conj.push_back(false);  // 0-factor prefix
   {
     bool run = !ranges::empty(factors);
     for (auto const& n : factors) {
-      run = run && n->canon_transform().conj;
+      run = run && hoistable(n->canon_transform());
       prefix_conj.push_back(run);
     }
   }
@@ -881,17 +885,17 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       container::svector<ExprWithHash> subfacs;
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
-      // Uniform-conj hoisting (design spec): when EVERY tensor factor's
-      // denoted spelling is conjugated, the conjugation is a whole-node
-      // transform -- strip the markers (the TN then hashes onto the
-      // unconjugated product's slot) and record {conj} on this node. Mixed
-      // marks stay in the TN, where the marker coloring keeps e.g. C·C^*
-      // identity-distinct from C·C. (Sum-level hoisting: T7 follow-up.)
+      // A hoisted prefix's factors are spelled with the '꙳' the hoist takes
+      // over, so the flattened network hashes onto the unconjugated product's
+      // slot. Clearing the state consumes no sign: a kept '꙳' has parity
+      // None. Mixed marks stay in the TN, where the marker coloring keeps
+      // e.g. C·C꙳ identity-distinct from C·C.
       if (hoist_conj)
         for (auto& f : subfacs)
           if (f.expr->is<Tensor>() && f.expr->as<Tensor>().kconjugated()) {
             [[maybe_unused]] auto const sign =
-                f.expr->as<Tensor>().kconjugate();
+                f.expr->as<Tensor>().set_states(false, false);
+            SEQUANT_ASSERT(sign == 1);
           }
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
       IndexGroups<IndexVec> const target_indices = [&ts, &uncontracted_idxs]() {
@@ -1005,7 +1009,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
 
     // a REAL scalar commutes with conj, so a conj-hoisted subtree hoists
     // through the wrap too (\mathcal{T}-partner terms carry real prefactors)
-    bool const wrap_hoist = left->canon_transform().conj &&
+    bool const wrap_hoist = hoistable(left->canon_transform()) &&
                             right->is_constant() &&
                             right->as_constant().value().imag() == 0;
     auto h = left->hash_value();
