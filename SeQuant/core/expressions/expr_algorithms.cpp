@@ -13,6 +13,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
@@ -574,13 +575,24 @@ ExprPtr fold_conjugate_pairs_impl(
       merge_wrapped_summands(expr->as<Sum>().summands(), opts, conjugate_op);
   auto const& summands = summands_v;
   const std::size_t n = summands.size();
-  // the fold applies to c-number summands only: Re/Im of operator-valued
-  // content is out of scope here (the operator analogue -- anti-Hermitian
-  // splitting -- comes with the time-reversal work), and an operator
-  // string's adjoint reverses the operators, which is not this fold's
-  // elementwise conjugation
+  // the fold applies to scalar-valued summands only. Re/Im of
+  // operator-valued content is out of scope here (the operator analogue --
+  // anti-Hermitian splitting -- comes with the time-reversal work), and an
+  // operator string's adjoint reverses the operators, which is not this
+  // fold's elementwise conjugation. A tensor-valued summand (one with
+  // external indices) stays out for two reasons: the pairing below compares
+  // canonical forms, which identify a summand with its conjugate as a value
+  // only when there are no externals to line up (the adjoint of R{a;i} is
+  // R{i;a}, a different tensor, so 2 Re would not be the sum's value), and
+  // Re/Im are evaluated and exported for scalar results only.
   std::vector<bool> eligible(n);
-  for (std::size_t i = 0; i != n; ++i) eligible[i] = summands[i]->is_cnumber();
+  for (std::size_t i = 0; i != n; ++i) {
+    eligible[i] = summands[i]->is_cnumber();
+    if (eligible[i]) {
+      auto const ext = get_unique_indices(summands[i]);
+      eligible[i] = ext.bra.empty() && ext.ket.empty() && ext.aux.empty();
+    }
+  }
   std::vector<ExprPtr> canon(n), canon_conj(n), canon_negconj(n);
   container::map<std::size_t, container::svector<std::size_t>> buckets;
   for (std::size_t i = 0; i != n; ++i) {
@@ -707,7 +719,9 @@ ExprPtr& simplify(ExprPtr& expr, SimplifyOptions opts) {
   // canonicalization already merges such pairs. The fold applies only to
   // fully c-number content: an expression still carrying operators is an
   // intermediate of a derivation (Wick consumes it next, and the Wick
-  // engine does not ingest RealPart/ImagPart wrappers). The fold runs after
+  // engine does not ingest RealPart/ImagPart wrappers). Within that, the
+  // fold itself pairs scalar-valued summands only, so a tensor-valued sum
+  // (a residual) passes through unfolded. The fold runs after
   // the canonicalize pass (so trivially-cancelling spellings are already
   // merged); its own pre-pass canonicalizes existing wrappers' inners, so
   // conjugate-related wrappers from earlier simplify passes merge exactly.

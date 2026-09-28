@@ -1060,14 +1060,14 @@ TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
   REQUIRE(sum->is<Product>());
   REQUIRE(sum->as<Product>().scalar() == (C{2, 0}));
 
-  // a marked and an unmarked spelling are a conjugate pair, which the
-  // default simplify folds: t + t꙳ = 2 Re[t], on the unmarked representative
+  // a marked and an unmarked spelling are a conjugate pair, but a
+  // tensor-valued one: the default simplify folds scalar-valued pairs only
+  // (Re/Im evaluate and export scalar results), so t + t꙳ stays as written
   auto mixed = t->clone() + tstar->clone();
   simplify(mixed);
-  auto expected = ex<Constant>(2) * real_part(t->clone());
-  canonicalize(expected);
-  REQUIRE(mixed->is<Product>());
-  REQUIRE(*mixed == *expected);
+  REQUIRE(mixed->is<Sum>());
+  REQUIRE(mixed->as<Sum>().summands().size() == 2);
+  for (auto const& sm : *mixed) REQUIRE(sm->is<Tensor>());
 }
 
 TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
@@ -1808,6 +1808,59 @@ TEST_CASE("conjugate_is_the_value_conjugate", "[conjugation]") {
         kconjugate(ex<FNOperator>(cre({a1_over_complex}),
                                   ann({idx(L"i_1", Field::Real)}))),
         Exception);
+  }
+}
+
+TEST_CASE("fold_conjugate_pairs_is_scalar_only", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+  REQUIRE(Index{L"a_1"}.space().field() == Field::Complex);
+
+  // a tensor-valued conjugate pair: Re/Im nodes evaluate and export scalar
+  // results only, and the adjoint of a tensor-valued summand is another
+  // tensor (R{a;i} against R{i;a}), so the pair is left as written
+  auto A = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"p_1"}) *
+           ex<Tensor>(L"v", bra{L"p_1"}, ket{L"i_1"});
+  auto sum = A->clone() + conjugate(A->clone());
+  auto const no_wrapper = [](ExprPtr const& e) {
+    bool wrapped = e->is<RealPart>() || e->is<ImagPart>();
+    e->visit(
+        [&](ExprPtr const& n) {
+          if (n->is<RealPart>() || n->is<ImagPart>()) wrapped = true;
+        },
+        /*atoms_only=*/false);
+    return !wrapped;
+  };
+
+  SECTION("the fold leaves it") {
+    auto folded = fold_conjugate_pairs(sum->clone());
+    REQUIRE(folded->is<Sum>());
+    REQUIRE(folded->as<Sum>().summands().size() == 2);
+    REQUIRE(no_wrapper(folded));
+  }
+
+  SECTION("the default simplify leaves it, and it binarizes") {
+    auto simplified = sum->clone();
+    simplify(simplified);
+    REQUIRE(simplified->is<Sum>());
+    REQUIRE(simplified->as<Sum>().summands().size() == 2);
+    REQUIRE(no_wrapper(simplified));
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(simplified);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(node->op_type() == EvalOp::Sum);
+    REQUIRE(node->is_tensor());
+  }
+
+  SECTION("a scalar pair still folds") {
+    auto w = ex<Tensor>(L"w", bra{L"i_1"}, ket{L"a_1"});
+    auto closed = A->clone() * w;
+    auto folded = fold_conjugate_pairs(closed->clone() + conjugate(closed));
+    REQUIRE_FALSE(no_wrapper(folded));
   }
 }
 

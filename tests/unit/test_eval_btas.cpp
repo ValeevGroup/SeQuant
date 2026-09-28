@@ -1113,6 +1113,65 @@ TEST_CASE("eval_scalar_product_node_carries_its_children_transform_btas",
   }
 }
 
+// The default simplify() folds conjugate pairs of scalar-valued summands
+// only, so a tensor-valued sum with a conjugate pair reaches the evaluator as
+// the sum it was written as, whose adjointed summand is a network of leaves
+// stored bare under the adjoint channel.
+TEST_CASE("eval_tensor_valued_conjugate_pair_btas", "[eval_btas]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+  using BTensorC = btas::Tensor<C>;
+
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+  REQUIRE(Index{L"a_1"}.space().field() == Field::Complex);
+
+  const std::size_t nocc = 2, nvirt = 3;
+  std::srand(17);
+  auto rnd = [](std::vector<std::size_t> const& extents) {
+    BTensorC r{btas::Range{extents}};
+    r.generate([]() {
+      return C(static_cast<double>(std::rand()) / RAND_MAX - 0.5,
+               static_cast<double>(std::rand()) / RAND_MAX - 0.5);
+    });
+    return r;
+  };
+
+  auto const u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"a_2"});
+  auto const v = ex<Tensor>(L"v", bra{L"a_2"}, ket{L"i_1"});
+  auto sum = u * v + conjugate(u * v);
+  simplify(sum);
+  REQUIRE(sum->is<Sum>());
+  REQUIRE(sum->as<Sum>().summands().size() == 2);
+
+  auto node = eval_node(sum);
+  REQUIRE(node->op_type() == EvalOp::Sum);
+  REQUIRE(node->is_tensor());
+
+  BTensorC U = rnd({nvirt, nvirt});  // u{a_1;a_2}: U(a1, a2)
+  BTensorC V = rnd({nvirt, nocc});   // v{a_2;i_1}: V(a2, i)
+  pinned_tensor_yield<BTensorC> yield;
+  yield.put(u->as<Tensor>(), U);
+  yield.put(v->as<Tensor>(), V);
+
+  auto const got =
+      evaluate(node, tidxs(std::vector<Index>{Index{L"a_1"}, Index{L"i_1"}}),
+               yield)
+          ->get<BTensorC>();
+  REQUIRE(got.rank() == 2);
+  REQUIRE(got.extent(0) == nvirt);
+  REQUIRE(got.extent(1) == nocc);
+  for (std::size_t a = 0; a < nvirt; ++a)
+    for (std::size_t i = 0; i < nocc; ++i) {
+      C x{0., 0.};
+      for (std::size_t b = 0; b < nvirt; ++b) x += U(a, b) * V(b, i);
+      C const ref = x + std::conj(x);
+      CHECK(got(a, i).real() == Catch::Approx(ref.real()).margin(1e-12));
+      CHECK(got(a, i).imag() == Catch::Approx(0.).margin(1e-12));
+    }
+}
+
 // The cell table holds a value in its canonical orientation while every
 // reader wants the node's own, and the conversion is the node's whole
 // CanonTransform: a node that carries a hoisted elementwise conjugation
