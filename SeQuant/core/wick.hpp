@@ -38,6 +38,7 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace sequant {
@@ -521,9 +522,9 @@ class WickTheorem {
       const IndexPairContainer &op_index_pairs,
       container::svector<std::bitset<max_input_size>> &mask,
       container::svector<std::pair<size_t, size_t>> &cache,
-      const std::string &caller) {
+      std::string_view caller) {
     if (has_duplicates(op_index_pairs)) {
-      throw Exception("WickTheorem::" + caller +
+      throw Exception("WickTheorem::" + std::string(caller) +
                       "(arg): arg contains duplicates");
     }
 
@@ -538,12 +539,12 @@ class WickTheorem {
                 IndexPairContainer>::first_type>;
         if (static_cast<std::size_t>(opidx_pair.first) >= input_->size() ||
             static_cast<std::size_t>(opidx_pair.second) >= input_->size()) {
-          throw Exception("WickTheorem::" + caller +
+          throw Exception("WickTheorem::" + std::string(caller) +
                           ": nop index out of range");
         }
         if constexpr (signed_indices) {
           if (opidx_pair.first < 0 || opidx_pair.second < 0) {
-            throw Exception("WickTheorem::" + caller +
+            throw Exception("WickTheorem::" + std::string(caller) +
                             ": nop index out of range");
           }
         }
