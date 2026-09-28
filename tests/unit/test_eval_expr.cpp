@@ -753,7 +753,7 @@ TEST_CASE("no eval op performs a conjugation", "[eval_expr]") {
 // is irrelevant to what they check (slot identity, transforms, phases), so
 // the deprecated binarize(ExprPtr) is used on purpose.
 SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-TEST_CASE("eval_expr_conjugation_marker_identity",
+TEST_CASE("eval_expr_conjugation_state_identity",
           "[EvalExpr][conjugate-fold]") {
   // The Gram overlap of a Hermitian C is spelled with the adjoint (a
   // Conjugate tensor's bundles are not interchangeable, so a ket-ket
