@@ -5,8 +5,10 @@
 #include <catch2/matchers/catch_matchers_templated.hpp>
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
@@ -19,6 +21,7 @@
 #include <cassert>
 #include <concepts>
 #include <cstdlib>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -26,6 +29,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace sequant::tests {
 /// Shared particle-symmetric symmetry pack for the MBPT test TUs, which must
@@ -36,6 +40,27 @@ namespace sequant::tests {
 /// cannot collide with a library symbol.
 inline constexpr TensorSymmetries particle_symmetric{.column =
                                                          ColumnSymmetry::Symm};
+
+/// Declares every space of @p isr real (Field::Real). Over a real basis the
+/// bra/ket exchange of a Hermitian tensor is a plain swap, so an explicit
+/// BraKetSymmetry::Symm/Antisymm (the `S` braket letter) is derivable there
+/// and refused over the default complex basis; see Tensor::resolve_symmetries.
+inline void declare_real_basis(IndexSpaceRegistry &isr) {
+  std::vector<std::wstring> keys;
+  for (const auto &s : isr) keys.push_back(s.base_key());
+  for (const auto &k : keys)
+    if (auto *sp = isr.retrieve_ptr(k)) sp->field(Field::Real);
+}
+
+/// Installs, for the lifetime of the returned resetter, a default Context
+/// whose index space registry is a clone of the current one with every space
+/// declared real (see declare_real_basis()).
+[[nodiscard]] inline auto scoped_real_basis() {
+  auto isr = std::make_shared<IndexSpaceRegistry>(
+      get_default_context().index_space_registry()->clone());
+  declare_real_basis(*isr);
+  return set_scoped_default_context(Context(get_default_context()).set(isr));
+}
 
 /// Sets environment variable @p name to @p value for the lifetime of this
 /// object and restores its previous state (value or absence) on destruction,

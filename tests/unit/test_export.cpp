@@ -316,6 +316,9 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   using CurrentCtx = CurrentGen::Context;
 
   auto resetter = to_export_context();
+  // the generated code is real arithmetic: the test tensors live over a real
+  // basis, where the `S` braket letter is derivable
+  auto real_basis = tests::scoped_real_basis();
 
   REQUIRE(Index(L"i_1") < Index(L"a_1"));
 
@@ -406,6 +409,8 @@ TEST_CASE("export", "[export]") {
   auto resetter = to_export_context();
 
   SECTION("reordering_context") {
+    // the `S` braket letters below are derivable only over a real basis
+    auto real_basis = tests::scoped_real_basis();
     REQUIRE(Index(L"i_1").space().approximate_size() >
             Index(L"u_1").space().approximate_size());
     REQUIRE(Index(L"a_1").space().approximate_size() >

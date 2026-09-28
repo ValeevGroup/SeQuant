@@ -446,9 +446,19 @@ struct Transformer {
             // `t⁺^*` composes to the transpose
             modifier = ValueModifier::Adjoint * modifier;
           }
-          auto t = ex<Tensor>(std::move(name), bra(std::move(braIndices)),
-                              ket(std::move(ketIndices)),
-                              aux(std::move(auxiliaries)), syms);
+          ExprPtr t;
+          try {
+            t = ex<Tensor>(std::move(name), bra(std::move(braIndices)),
+                           ket(std::move(ketIndices)),
+                           aux(std::move(auxiliaries)), syms);
+          } catch (const Exception &e) {
+            // a symmetry the tensor cannot have (an exchange symmetry the
+            // traits do not derive over the indices' basis, a contradicting
+            // column symmetry): report it at the tensor
+            auto [offset, length] =
+                get_pos(tensor, position_cache.get(), begin.get());
+            throw SerializationError(offset, length, e.what());
+          }
           if (modifier != ValueModifier::None) {
             const auto sign =
                 t->template as<Tensor>().set_value_modifier(modifier);

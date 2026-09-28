@@ -8,6 +8,8 @@
 // LegalitySchedule + the RichSchedule into an OrderedSchedule for the
 // NON-SPLIT case.
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
@@ -426,6 +428,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1613,6 +1618,9 @@ OrderedSchedFixture orderedsched_water20_fixture() {
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1773,6 +1781,9 @@ OrderedSchedFixture orderedsched_cross_iteration_fixture() {
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =

@@ -21,6 +21,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstdlib>
@@ -182,6 +184,7 @@ TEST_CASE(
   sequant::mbpt::add_pao_spaces(
       isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -793,6 +796,7 @@ TEST_CASE(
     sequant::mbpt::add_pao_spaces(
         isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
     sequant::mbpt::add_df_spaces(isr);
+    sequant::tests::declare_real_basis(*isr);  // the residual is real
     auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
     auto const body =

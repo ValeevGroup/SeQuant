@@ -716,8 +716,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
   // bra<->ket-swap (Symm braket_symmetry) produce different head bra_rank,
   // which breaks downstream code (e.g. mpqc's jacobi_update) that assumes a
   // conventional 2:2 (vir,vir;occ,occ) layout for a CCSD T2 residual head.
-  // Bug is independent of scalar Field — fires under both Conjugate and Symm
-  // whenever the canonical orientation puts an external on the "wrong" side.
+  // Over a real basis (where the Symm pin is derivable) the bug fires under
+  // both the Hermitian and the Symm spelling whenever the canonical
+  // orientation puts an external on the "wrong" side.
   SECTION("eval-graph head bra/ket split is positional, not external-aware") {
     using sequant::deserialize;
     using sequant::EvalExprTA;
@@ -729,8 +730,13 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     // per side under Conjugate). Disable the policy for this scope; we are
     // probing the eval-graph head's bra/ket layout, not the canonicalizer's
     // covariance assumptions.
+    // The `S` braket letter pins a plain bra/ket exchange, which is derivable
+    // only over a real basis, so the scope also declares every space real.
+    auto real_isr = std::make_shared<sequant::IndexSpaceRegistry>(
+        sequant::get_default_context().index_space_registry()->clone());
+    sequant::tests::declare_real_basis(*real_isr);
     auto ctx_resetter = sequant::set_scoped_default_context(
-        sequant::Context{sequant::get_default_context()}.set(
+        sequant::Context{sequant::get_default_context()}.set(real_isr).set(
             sequant::AssertStrictBraKetSymmetry::No));
 
     auto report = [](sequant::ExprPtr const& e, std::string const& label) {

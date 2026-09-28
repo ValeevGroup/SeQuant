@@ -44,6 +44,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -91,6 +93,7 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  sequant::tests::declare_real_basis(*isr);  // the residual is real
   auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
 
   // The reference size regime (the same numbers the dry-run fixtures use), so

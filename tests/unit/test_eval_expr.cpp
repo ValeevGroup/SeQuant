@@ -165,6 +165,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(root_expr.as<Variable>().label() == L"E");
 
     // The binarized tree shall respect the indexing of the ResultExpr
+    // (the result's `S` braket letter is derivable only over a real basis)
+    auto real_basis = sequant::tests::scoped_real_basis();
     res = deserialize<ResultExpr>(
         L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -375,15 +377,19 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // conj(t) has no slot spelling and no Adjoint-served equivalent, so
     // binarize must refuse loudly instead of serving the wrong value
     // (lazy-conj eval is the follow-up).
-    Tensor s(L"s", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-             BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm);
-    Tensor s_star = s;
-    REQUIRE(s_star.conjugate() == 1);
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    auto s_tree = binarize(ex<Tensor>(s_star));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(s_tree.leaf());
-    REQUIRE_FALSE(s_tree->as_tensor().conjugated());
+    {
+      // Symm is derivable only over a real basis
+      auto real_basis = sequant::tests::scoped_real_basis();
+      Tensor s(L"s", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+               BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm);
+      Tensor s_star = s;
+      REQUIRE(s_star.conjugate() == 1);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      auto s_tree = binarize(ex<Tensor>(s_star));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      REQUIRE(s_tree.leaf());
+      REQUIRE_FALSE(s_tree->as_tensor().conjugated());
+    }
 
     Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
              BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);

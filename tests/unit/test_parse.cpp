@@ -210,7 +210,14 @@ TEST_CASE("serialization", "[serialization]") {
     SECTION("Tensor with symmetry annotation") {
       auto expr1 = deserialize<ExprPtr>(L"t{a1;i1}:A");
       auto expr2 = deserialize<ExprPtr>(L"t{a1;i1}:S-C");
-      auto expr3 = deserialize<ExprPtr>(L"t{a1;i1}:N-S-N");
+      // the `S` braket letter is derivable only over a real basis
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"t{a1;i1}:N-S-N"),
+                        io::serialization::SerializationError);
+      ExprPtr expr3;
+      {
+        auto real_basis = tests::scoped_real_basis();
+        expr3 = deserialize<ExprPtr>(L"t{a1;i1}:N-S-N");
+      }
       auto expr4 = deserialize<ExprPtr>(L"t{a1;i1}:N-H-N");
       auto expr5 = deserialize<ExprPtr>(L"t{a1;i1}:N-A-N");
       auto expr6 = deserialize<ExprPtr>(L"t{a1;i1}:N-N-N");
@@ -679,6 +686,9 @@ TEST_CASE("serialization", "[serialization]") {
 
   SECTION("serialize") {
     using namespace sequant;
+
+    // the `S` braket letters below are derivable only over a real basis
+    auto real_basis = tests::scoped_real_basis();
 
     std::vector<std::wstring> expressions = {
         L"t{a_1,a_2;a_3,a_4}:N-C-S",

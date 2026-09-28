@@ -41,8 +41,10 @@ void Power::flatten(ExprPtr& expr) {
 
   // b^1 = b and conjugate if needed
   if (pw.exponent_ == 1) {
-    auto lifted = pw.base_->clone();
-    if (pw.conjugated_) lifted->adjoint();
+    // sequant::adjoint(const ExprPtr&) clones and keeps the sign the base's
+    // adjoint may carry as a scalar factor
+    auto lifted =
+        pw.conjugated_ ? sequant::adjoint(pw.base_) : pw.base_->clone();
     expr = std::move(lifted);
     return;
   }

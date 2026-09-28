@@ -578,12 +578,12 @@ TEST_CASE("expr", "[elements]") {
     {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
       Power pv(ex<Variable>(L"z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
-      pv.adjoint();
+      REQUIRE(pv.adjoint() == 1);
       REQUIRE(pv.conjugated());
       REQUIRE(!pv.base()->as<Variable>().conjugated());
       REQUIRE(pv.exponent() == rational{1, 2});
       // double adjoint is identity
-      pv.adjoint();
+      REQUIRE(pv.adjoint() == 1);
       REQUIRE(!pv.conjugated());
 
       using scalar_type = Constant::scalar_type;
@@ -596,7 +596,7 @@ TEST_CASE("expr", "[elements]") {
       // (1+i)^{2} = 2i; ((1+i)^{2})* = -2i
       auto one_plus_i = ex<Constant>(scalar_type{1, 1});  // (1+i)
       auto square = ex<Power>(one_plus_i, 2);             // (1+i)^{2}
-      square->as<Power>().adjoint();
+      REQUIRE(square->as<Power>().adjoint() == 1);
       REQUIRE(square->as<Power>().conjugated());
       Power::flatten(square);
       REQUIRE(square->is<Constant>());
@@ -1313,6 +1313,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(expr, EquivalentTo("R1{a1;i1} = 2 t{a1,i1}:A"));
     }
     SECTION("braket-symmetry") {
+      // the `S` braket letter is derivable only over a real basis
+      auto real_basis = sequant::tests::scoped_real_basis();
       auto expr = deserialize<ResultExpr>(
           "R1{a1;i1} = f{a1;i1}:A-S-S + f{i1;a1}:A-S-S");
 

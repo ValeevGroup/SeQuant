@@ -94,26 +94,35 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t3.column_symmetry() == ColumnSymmetry::Nonsymm);
     REQUIRE(t3.label() == L"N");
 
-    REQUIRE_NOTHROW(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                           ket{Index{L"i_3"}, Index{L"i_4"}},
-                           aux{Index{L"i_5"}}, Symmetry::Nonsymm,
-                           BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm));
-    auto t4 = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                     ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
-                     Symmetry::Nonsymm, BraKetSymmetry::Symm,
-                     ColumnSymmetry::Nonsymm);
-    REQUIRE(t4);
-    REQUIRE(t4.bra_rank() == 2);
-    REQUIRE(t4.ket_rank() == 2);
-    REQUIRE(t4.aux_rank() == 1);
-    REQUIRE(t4.rank() == 2);
-    REQUIRE(ranges::size(t4.const_braketaux()) == 5);
-    REQUIRE(ranges::size(t4.const_slots()) == 5);
-    REQUIRE(t4.num_slots() == 5);
-    REQUIRE(t4.symmetry() == Symmetry::Nonsymm);
-    REQUIRE(t4.braket_symmetry() == BraKetSymmetry::Symm);
-    REQUIRE(t4.column_symmetry() == ColumnSymmetry::Nonsymm);
-    REQUIRE(t4.label() == L"g");
+    // an explicit Symm bra/ket exchange is derivable only over a real basis
+    REQUIRE_THROWS_AS(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
+                             ket{Index{L"i_3"}, Index{L"i_4"}},
+                             aux{Index{L"i_5"}}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm),
+                      Exception);
+    {
+      auto real_basis = scoped_real_basis();
+      REQUIRE_NOTHROW(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
+                             ket{Index{L"i_3"}, Index{L"i_4"}},
+                             aux{Index{L"i_5"}}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm));
+      auto t4 = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
+                       ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
+                       Symmetry::Nonsymm, BraKetSymmetry::Symm,
+                       ColumnSymmetry::Nonsymm);
+      REQUIRE(t4);
+      REQUIRE(t4.bra_rank() == 2);
+      REQUIRE(t4.ket_rank() == 2);
+      REQUIRE(t4.aux_rank() == 1);
+      REQUIRE(t4.rank() == 2);
+      REQUIRE(ranges::size(t4.const_braketaux()) == 5);
+      REQUIRE(ranges::size(t4.const_slots()) == 5);
+      REQUIRE(t4.num_slots() == 5);
+      REQUIRE(t4.symmetry() == Symmetry::Nonsymm);
+      REQUIRE(t4.braket_symmetry() == BraKetSymmetry::Symm);
+      REQUIRE(t4.column_symmetry() == ColumnSymmetry::Nonsymm);
+      REQUIRE(t4.label() == L"g");
+    }
 
     SECTION("null indices") {
       // null indices ok in asymmetric bra or ket
@@ -585,10 +594,18 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
   }
 
   SECTION("legacy BraKetSymmetry ctor back-fills Hermiticity") {
-    auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
-                    BraKetSymmetry::Symm);
-    REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
-    REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    // Symm is what a Hermitian tensor derives over a real basis; over the
+    // default complex basis, where the exchange conjugates, it is refused
+    REQUIRE_THROWS_AS(Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Symm),
+                      Exception);
+    {
+      auto real_basis = scoped_real_basis();
+      auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Symm);
+      REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
+      REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    }
     auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
                     BraKetSymmetry::Nonsymm);
     REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
@@ -624,12 +641,16 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
 
   SECTION("braket and hermiticity must agree when both are given") {
     // the two spell the same underlying trait, so a contradicting pair is a
-    // caller error rather than something to silently resolve one way
-    REQUIRE_THROWS_AS(
-        Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm,
-                                .hermiticity = Hermiticity::NonHermitian}),
-        Exception);
+    // caller error rather than something to silently resolve one way (over a
+    // real basis, where Symm by itself is derivable)
+    {
+      auto real_basis = scoped_real_basis();
+      REQUIRE_THROWS_AS(
+          Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
+                 TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                                  .hermiticity = Hermiticity::NonHermitian}),
+          Exception);
+    }
     // AntiHermitian over the default (complex) field derives AntiConjugate;
     // pinning it alongside its correctly-derived braket symmetry stays legal
     REQUIRE_NOTHROW(
@@ -717,11 +738,16 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
 
   SECTION("ctor rejects contradicting symmetries") {
     // braket symmetry, like column symmetry below, is a defining property of a
-    // reserved (anti)symmetrizer, not a free parameter
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm}),
-        Exception);
+    // reserved (anti)symmetrizer, not a free parameter (over a real basis,
+    // where Symm by itself is derivable)
+    {
+      auto real_basis = scoped_real_basis();
+      REQUIRE_THROWS_AS(
+          Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.braket = BraKetSymmetry::Symm}),
+          Exception);
+    }
     REQUIRE_THROWS_AS(
         Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                TensorSymmetries{.column = ColumnSymmetry::Nonsymm}),

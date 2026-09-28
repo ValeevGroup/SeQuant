@@ -467,6 +467,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1074,6 +1077,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1582,6 +1588,9 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1939,6 +1948,9 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -2141,6 +2153,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -2340,6 +2355,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -2625,6 +2643,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -3190,6 +3211,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -3384,6 +3408,9 @@ TEST_CASE("w20 peak composition: tier-A/tier-B decomposition at realized peak",
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4118,6 +4145,8 @@ TEST_CASE(
   auto ctx0 = sequant::get_default_context().clone();
   ctx0.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx0));
+  // X and P are real arrays (Symm), derivable only over a real basis
+  auto real_basis = sequant::tests::scoped_real_basis();
 
   sequant::eval::dryrun::SizeRegime regime;
   regime.space_extent = {{L"i", 8}, {L"a", 4}};
@@ -4247,6 +4276,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4384,6 +4416,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4704,6 +4739,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -4898,6 +4936,9 @@ TEST_CASE(
   REQUIRE(isr != nullptr);
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+  // derivable only over a real basis
+  sequant::tests::declare_real_basis(*isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -5200,6 +5241,9 @@ TEST_CASE("ordered executor computes cells through apply_one_op only",
     REQUIRE(isr != nullptr);
     sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
     sequant::mbpt::add_df_spaces(isr);
+    // the CSV-CCSD residual's tensors carry explicit bra/ket exchange pins,
+    // derivable only over a real basis
+    sequant::tests::declare_real_basis(*isr);
     auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
     auto const body =

@@ -1099,6 +1099,9 @@ TEST_CASE("optimize", "[optimize]") {
     };
 
     SECTION("standard") {
+      // the bra-ket-symmetric case's `S` letter is derivable only over a real
+      // basis
+      auto real_basis = sequant::tests::scoped_real_basis();
       for (bool force_hash_collisions : {false, true}) {
         CAPTURE(force_hash_collisions);
 
