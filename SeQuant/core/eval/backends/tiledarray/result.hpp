@@ -827,11 +827,18 @@ class ResultTensorTA final : public Result {
 
     if (a.this_annot.empty()) {
       SEQUANT_ASSERT(other.is<this_type>());
-      numeric_type d =
-          TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
-      ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
+      auto const& od = static_cast<this_type const&>(other);
+      // a full contraction reduces the two TA expressions, which carry the
+      // pending transforms, so neither operand's lazy view is materialized
+      numeric_type const d =
+          with_expr(a.lannot, [&](auto&& le) -> numeric_type {
+            return od.with_expr(a.rannot, [&](auto&& re) -> numeric_type {
+              return TA::dot(le, re);
+            });
+          });
+      ArrayT::wait_for_lazy_cleanup(raw<ArrayT>().world());
       ::sequant::detail::note_wait();
-      ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
+      ArrayT::wait_for_lazy_cleanup(od.template raw<ArrayT>().world());
       ::sequant::detail::note_wait();
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
