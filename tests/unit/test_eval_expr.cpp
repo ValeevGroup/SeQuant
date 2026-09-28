@@ -14,6 +14,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -304,7 +305,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(both->as_tensor().bra().at(0).label() == L"a_1");
     REQUIRE(both->hash_value() == t_star_tree->hash_value());
   }
-  SECTION("Adjoint op in a binarized term") {
+  SECTION("an adjointed leaf in a binarized term") {
     // Regression: a tensor leaf can carry the '⁺' state without having been
     // produced by Tensor::adjoint() — e.g. when built from a label string
     // ending in '⁺' (the constructor adopts the mark into the bits).
@@ -709,6 +710,45 @@ TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
   }
 }
 
+TEST_CASE("no eval op performs a conjugation", "[eval_expr]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+  // The IR's conjugation-bearing ops are the projections Re and Im, which are
+  // not invertible and so cannot ride in a CanonTransform. Every invertible
+  // conjugation channel does ride there: an adjointed factor lowers to a leaf
+  // over the bare array carrying {conj, braket_swap}, not to an op of its own.
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  Tensor t_adj = t;
+  REQUIRE(t_adj.adjoint() == 1);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node =
+      binarize(ex<Tensor>(t_adj) * ex<Tensor>(L"w", bra{L"a_1"}, ket{L"i_1"}));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node->op_type() == EvalOp::Product);
+  std::size_t leaves = 0;
+  std::size_t conjugating_leaves = 0;
+  node.visit([&leaves, &conjugating_leaves](auto const& n) {
+    if (n.leaf()) {
+      ++leaves;
+      if (n->canon_transform().conj) {
+        ++conjugating_leaves;
+        // the adjoint channel: a bra-ket exchange over an array the provider
+        // serves unconjugated
+        REQUIRE(n->canon_transform().braket_swap);
+        REQUIRE_FALSE(n->as_tensor().adjointed());
+        REQUIRE_FALSE(n->as_tensor().kconjugated());
+      }
+      return;
+    }
+    REQUIRE((n->op_type() == EvalOp::Product || n->op_type() == EvalOp::Sum ||
+             n->op_type() == EvalOp::RealPart ||
+             n->op_type() == EvalOp::ImagPart));
+  });
+  REQUIRE(leaves == 2);  // no sentinel child
+  REQUIRE(conjugating_leaves == 1);
+}
+
 // The cases below build eval trees straight from expressions: the head layout
 // is irrelevant to what they check (slot identity, transforms, phases), so
 // the deprecated binarize(ExprPtr) is used on purpose.
@@ -769,7 +809,7 @@ TEST_CASE("eval_expr_conjugation_marker_identity",
   REQUIRE(slot_A == slot_B);
 
   // a genuinely different tensor is kept apart: for a non-Hermitian C the
-  // '⁺' stays, and C{a_1;p} C⁺{p;a_2} (an Adjoint node inside the product)
+  // '⁺' stays, and C{a_1;p} C⁺{p;a_2} (an adjointed leaf inside the product)
   // is not C{a_1;p} C{p;a_2}
   auto N = [](std::wstring_view b, std::wstring_view k) {
     return ex<Tensor>(L"C", bra{Index{b}}, ket{Index{k}},
