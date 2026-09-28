@@ -163,6 +163,8 @@ TEST_CASE("has_duplicates", "[utilities]") {
       has_duplicates(std::vector<std::pair<int, int>>{{0, 1}, {1, 2}, {0, 1}}));
   REQUIRE_FALSE(
       has_duplicates(std::vector<std::pair<int, int>>{{0, 1}, {1, 0}}));
+  // sentinel type differs from iterator type
+  REQUIRE_FALSE(has_duplicates(std::views::iota(0) | std::views::take(3)));
 }
 
 TEST_CASE("find_position", "[utilities]") {

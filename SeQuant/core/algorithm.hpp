@@ -117,7 +117,7 @@ template <std::ranges::forward_range Range>
 bool has_duplicates(const Range& rng) {
   const auto the_end = std::ranges::end(rng);
   for (auto it = std::ranges::begin(rng); it != the_end; ++it) {
-    if (std::find(std::next(it), the_end, *it) != the_end) return true;
+    if (std::ranges::find(std::next(it), the_end, *it) != the_end) return true;
   }
   return false;
 }
