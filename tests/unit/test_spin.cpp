@@ -15,6 +15,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -1842,11 +1843,36 @@ SECTION("ResultExpr") {
   };
 
   SECTION("rank-3 with mixed spaces") {
-    // permutations of 3 bra indices do not alternate in sign
+    // permutations of 3 bra indices do not alternate in sign; each result
+    // R{P(bra);ket} must match tracing the nonsymmetric R{P(bra);ket} =
+    // g{P(bra);ket}:A, whose sign comes from canonicalizing g instead
     const ResultExpr input = deserialize<ResultExpr>(
         L"R{a1,u1,i1;i2,u2,a2}:A = g{a1,u1,i1;i2,u2,a2}:A");
-    REQUIRE_NOTHROW(closed_shell_spintrace(input.clone()));
-    REQUIRE_NOTHROW(spintrace(input.clone()));
+    auto csv = [](const auto& indices) {
+      return join_strings<std::wstring>(indices, L",", [](const Index& idx) {
+        return std::wstring(idx.full_label());
+      });
+    };
+    auto reference = [&](const ResultExpr& result) {
+      const std::wstring slots = csv(result.bra()) + L";" + csv(result.ket());
+      return deserialize<ResultExpr>(L"R{" + slots + L"}:N = g{" + slots +
+                                     L"}:A");
+    };
+
+    for (bool closed_shell : {true, false}) {
+      CAPTURE(closed_shell);
+      auto trace = [&](const ResultExpr& expr) {
+        return closed_shell ? closed_shell_spintrace(expr.clone())
+                            : spintrace(expr.clone());
+      };
+      const auto actual = trace(input);
+      REQUIRE(actual.size() > 1);
+      for (const ResultExpr& result : actual) {
+        const auto expected = trace(reference(result));
+        REQUIRE(expected.size() == 1);
+        REQUIRE_THAT(result, EquivalentTo(expected.front()));
+      }
+    }
   }
 
   REQUIRE(inputs.size() == expected_outputs.size());
