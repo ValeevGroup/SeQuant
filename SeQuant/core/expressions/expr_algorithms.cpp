@@ -10,10 +10,12 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/range/primitives.hpp>
 
 #include <iostream>
@@ -491,6 +493,7 @@ ExprPtr fold_conjugate_pairs_impl(
   // greedy first-match pairing via the hash buckets, verified structurally
   std::vector<bool> consumed(n, false);
   std::vector<int8_t> fold(n, 0);  // 0 = keep as-is, +1 = 2Re, -1 = 2iIm
+  std::vector<std::size_t> partner(n, n);  // the other member of the pair
   auto probe = [&](std::size_t i, ExprPtr const& key) -> std::size_t {
     auto it = buckets.find(key->hash_value());
     if (it == buckets.end()) return n;
@@ -505,28 +508,41 @@ ExprPtr fold_conjugate_pairs_impl(
       continue;  // self-conjugate (manifestly real): leave untouched
     if (auto j = probe(i, canon_conj[i]); j != n) {
       fold[i] = +1;
+      partner[i] = j;
       consumed[j] = true;
       continue;
     }
     if (emission == ConjPairEmission::ReIm) {
       if (auto j = probe(i, canon_negconj[i]); j != n) {
         fold[i] = -1;
+        partner[i] = j;
         consumed[j] = true;
       }
     }
   }
+
+  // the representative a folded pair's Re/Im wrapper carries: the smaller of
+  // the pair's two canonical forms. Both denote the same wrapped value
+  // (`Re s = Re s*` and `Im s = Im(-s*)`), so picking by the expression order
+  // is what makes the fold independent of the order the pair was written in
+  auto representative = [&](std::size_t i) {
+    SEQUANT_ASSERT(partner[i] != n);
+    auto const& a = canon[i];
+    auto const& b = canon[partner[i]];
+    return (*b < *a ? b : a)->clone();
+  };
 
   auto result = std::make_shared<Sum>();
   for (std::size_t i = 0; i != n; ++i) {
     if (consumed[i]) continue;
     if (fold[i] == +1) {
       result->append(emission == ConjPairEmission::ReIm
-                         ? ex<Constant>(2) * real_part(summands[i]->clone())
+                         ? ex<Constant>(2) * real_part(representative(i))
                          : ex<Constant>(2) * summands[i]->clone());
     } else if (fold[i] == -1) {
       // s + (-s*) = s - s* = 2i Im(s)
       result->append(ex<Constant>(Constant::scalar_type(0, 2)) *
-                     imaginary_part(summands[i]->clone()));
+                     imaginary_part(representative(i)));
     } else {
       result->append(summands[i]->clone());
     }
@@ -621,56 +637,78 @@ bool is_hermitian_network(ExprPtr const& expr, CanonicalizeOptions opts) {
   return lhs->hash_value() == rhs->hash_value() && *lhs == *rhs;
 }
 
+namespace {
+
+/// whether @p idx and every index of its proto-index closure lie in a
+/// `K`-closed space
+bool is_kclosed(const Index& idx) {
+  if (idx.space().field() != Field::Real) return false;
+  return ranges::all_of(idx.proto_indices(),
+                        [](const Index& p) { return is_kclosed(p); });
+}
+
+/// whether every index @p op acts on lies in a `K`-closed space, the
+/// condition for `K O K⁻¹` to be the same operator string
+template <Statistics S>
+bool acts_on_kclosed_spaces(const NormalOperator<S>& op) {
+  return ranges::all_of(op,
+                        [](const auto& o) { return is_kclosed(o.index()); });
+}
+
+/// @overload for a sequence of normal operators
+template <Statistics S>
+bool acts_on_kclosed_spaces(const NormalOperatorSequence<S>& seq) {
+  return ranges::all_of(
+      seq, [](const auto& op) { return acts_on_kclosed_spaces(op); });
+}
+
+/// @throw Exception if an operator in @p expr acts on an index space that
+///        `K` does not close, so that `K E K⁻¹` has no spelling in the
+///        indices at hand
+void assert_kclosed_operators(const ExprPtr& expr) {
+  std::as_const(*expr).visit(
+      [](const ExprPtr& atom) {
+        const bool closed =
+            atom->is<FNOperator>()
+                ? acts_on_kclosed_spaces(atom->as<FNOperator>())
+            : atom->is<BNOperator>()
+                ? acts_on_kclosed_spaces(atom->as<BNOperator>())
+            : atom->is<FNOperatorSeq>()
+                ? acts_on_kclosed_spaces(atom->as<FNOperatorSeq>())
+            : atom->is<BNOperatorSeq>()
+                ? acts_on_kclosed_spaces(atom->as<BNOperatorSeq>())
+                : true;
+        if (!closed)
+          throw Exception(
+              "sequant::kconjugate: an operator over a complex basis has no "
+              "K-closed index space");
+      },
+      /*atoms_only=*/true);
+}
+
+}  // namespace
+
+ExprPtr kconjugate(const ExprPtr& expr) {
+  SEQUANT_ASSERT(expr);
+  // K acts on the basis the operators are written in, so an operator string
+  // is reproduced only where every index space is K-closed
+  if (!expr->is_cnumber()) assert_kclosed_operators(expr);
+  auto result = expr->clone();
+  const auto sign = result->kconjugate();
+  if (sign == 1) return result;
+  return ex<Product>(sign, ExprPtrList{std::move(result)});
+}
+
 ExprPtr conjugate(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr);
-  auto conj_scalar = [](const auto& z) {
-    using Z = std::decay_t<decltype(z)>;
-    return Z{z.real(), -z.imag()};
-  };
-  if (expr->is<Constant>())
-    return ex<Constant>(conj_scalar(expr->as<Constant>().value()));
-  if (expr->is<Variable>()) {
-    auto r = expr->clone();
-    r->as<Variable>().conjugate();
-    return r;
-  }
-  if (expr->is<Power>()) {
-    auto r = expr->clone();
-    r->as<Power>().conjugate();
-    return r;
-  }
-  if (expr->is<Tensor>()) {
-    auto r = expr->clone();
-    // the conjugation of an odd-parity array over a real basis is a sign,
-    // which a Tensor cannot hold
-    const auto sign = r->as<Tensor>().conjugate();
-    if (sign == 1) return r;
-    return ex<Product>(sign, ExprPtrList{std::move(r)});
-  }
-  // Re/Im are real-valued by convention: conj is the identity
-  if (expr->is<RealPart>() || expr->is<ImagPart>()) return expr->clone();
-  if (expr->is<Sum>()) {
-    auto r = std::make_shared<Sum>();
-    for (const auto& s : *expr) r->append(conjugate(s));
-    return r;
-  }
-  if (expr->is<Product>()) {
-    // conjugation distributes over a c-number product WITHOUT factor
-    // reversal: (c A B)* = conj(c) A* B* (contrast adjoint, which reverses);
-    // the factor recursion rejects operator-valued content
-    const auto& p = expr->as<Product>();
-    auto r = std::make_shared<Product>();
-    r->scale(conj_scalar(p.scalar()));
-    // Flatten::No preserves the input's factor structure 1:1 (conjugation
-    // is clone+mark; Product::clone appends with Flatten::No for the same
-    // reason): nesting appears in the result only where the input was
-    // already nested
-    for (const auto& f : p) r->append(1, conjugate(f), Product::Flatten::No);
-    return r;
-  }
-  throw Exception(
-      "sequant::conjugate: unsupported expression kind (operator-valued "
-      "content has no elementwise conjugation here)");
+  // the complex conjugate of a value: for a matrix element
+  // conj <p|O|q> = <q|O⁺|p>, so on c-number content this is the adjoint (a
+  // Product's factors commute, so the adjoint's reversal is not observable)
+  if (!expr->is_cnumber())
+    throw Exception(
+        "sequant::conjugate: an operator has no value to conjugate; "
+        "sequant::kconjugate is the conjugation of an operator");
+  return sequant::adjoint(expr);
 }
 
 }  // namespace sequant

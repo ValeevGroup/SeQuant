@@ -20,14 +20,8 @@ namespace sequant::mbpt {
 /// AOs, etc.)
 /// @param tnsr a Tensor object
 /// @param csv_basis the basis in terms of which the CSVs are expanded
-ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
+ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
                            std::wstring_view coeff_tensor_label) {
-  // Normalize to the VALUE orientation first: a marker-conjugated (folded)
-  // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
-  // layout would silently drop the conjugation (see sequant::value_oriented).
-  // The respelling can contribute a sign (an anti-Hermitian or odd-parity
-  // tensor), which the rebuilt expression carries.
-  auto const [tnsr, vo_sign] = value_oriented(tnsr_in);
   using ranges::views::transform;
   using sequant::reserved::overlap_label;
 
@@ -105,13 +99,18 @@ ExprPtr csv_transform_impl(Tensor const& tnsr_in, const IndexSpace& csv_basis,
 
   auto xtnsr = ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), tnsr.aux(),
                           tnsr.symmetries());
-  // the value-oriented source's bits are copied onto the same symmetries,
-  // which consumes no relation
-  [[maybe_unused]] const auto modifier_sign =
-      xtnsr->as<Tensor>().set_value_modifier(tnsr.value_modifier());
-  SEQUANT_ASSERT(modifier_sign == 1);
-  result.prepend(1, std::move(xtnsr));
-  result.scale(vo_sign);  // the value respelling's sign
+  // the source's traits and its two core states ride onto the csv slots.
+  // Where those slots are over a different field the normalization can trade
+  // the adjointed state for the K-conjugated one -- exchanging the bundles
+  // back -- and clear that one against an odd conjugation parity, consuming a
+  // sign. A Tensor holds no sign, so it goes to this Product's scalar.
+  // N.B. carrying a state across a change of field presumes the coefficient
+  // tensors are real: each C straddles a complex source index and a real csv
+  // index and enters the product unconjugated, so it commutes with the
+  // conjugation the state denotes.
+  const auto states_sign =
+      xtnsr->as<Tensor>().set_states(tnsr.adjointed(), tnsr.kconjugated());
+  result.prepend(states_sign, std::move(xtnsr));
 
   return ex<Product>(std::move(result));
 }

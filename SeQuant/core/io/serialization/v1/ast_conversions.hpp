@@ -156,19 +156,16 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
     return default_symmetry;
   }
 
-  // The v1 serialized form historically encodes BraKetSymmetry directly:
+  // The letter is either a pinned exchange symmetry or a hermiticity trait.
   // 'C' / 'S' / 'N' are concrete BraKetSymmetry::{Conjugate, Symm, Nonsymm}
-  // values, not Hermiticity traits — Tensor's hermiticity_ is back-filled
-  // from the BraKetSymmetry via to_hermiticity at construction. Round-tripping
-  // through Hermiticity here would corrupt that encoding: 'C' field-resolved
-  // against Real-field indices would silently flip to Symm, and 'N' would
-  // round-trip as NonHermitian losing the AntiHermitian preimage.
-  //
-  // The explicit Hermiticity letters 'H' (Hermitian) and 'A' (AntiHermitian)
-  // are the *new* abstract-trait spellings that intentionally defer to
-  // field resolution at Tensor construction time; use those when serializing
-  // tensors whose adjoint symmetry should be expressed independently of the
-  // computation's scalar field.
+  // values, from which Tensor back-fills the traits that derive them; 'H'
+  // (Hermitian) and 'A' (AntiHermitian) name the field-agnostic trait itself
+  // and leave the exchange symmetry to be derived from it, the parity and the
+  // indices' basis at Tensor construction. The two are kept apart: reading a
+  // pin as a trait instead would resolve 'C' against Real-field indices to
+  // Symm and lose the AntiHermitian preimage of 'N'. The serializer spells a
+  // definite hermiticity with its trait letter (see serialize_symm), so a pin
+  // letter reaches here only from hand-written or older input.
   switch (c) {
     case 'C':
     case 'c':
@@ -311,6 +308,46 @@ struct Transformer {
                                       default_symms.get());
   }
 
+  /// reports @p message at the source range @p node came from
+  template <typename AST>
+  [[noreturn]] void throw_at(const AST &node, std::string message) const {
+    auto [offset, length] = get_pos(node, position_cache.get(), begin.get());
+    throw SerializationError(offset, length, std::move(message));
+  }
+
+  /// splits the trailing state marks off the name of @p node ; the marks may
+  /// come in either order, at most one of each
+  /// @return the bare name, whether it was adjointed, whether it was
+  ///         K-conjugated
+  template <typename AST>
+  std::tuple<std::wstring, bool, bool> split_marks(const AST &node) const {
+    std::wstring name = node.name;
+    bool adjointed = false;
+    bool kconjugated = false;
+    while (!name.empty()) {
+      const wchar_t c = name.back();
+      if (c == sequant::adjoint_label) {
+        if (adjointed) throw_at(node, "repeated adjoint mark in the name");
+        adjointed = true;
+      } else if (c == sequant::conjugate_label) {
+        if (kconjugated)
+          throw_at(node, "repeated conjugation mark in the name");
+        kconjugated = true;
+      } else {
+        break;
+      }
+      name.pop_back();
+    }
+    return {std::move(name), adjointed, kconjugated};
+  }
+
+  /// refuses a state on a name that admits none
+  template <typename AST>
+  void refuse_marks(const AST &node, bool adjointed, bool kconjugated) const {
+    if (adjointed || kconjugated)
+      throw_at(node, "an operator name carries no adjoint or conjugation mark");
+  }
+
   ExprPtr operator()(const io::serialization::v1::ast::Tensor &tensor) const {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
@@ -319,13 +356,19 @@ struct Transformer {
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
 
+    // the two core states are spelled as trailing marks of the name; they are
+    // split off here and applied after construction rather than left to the
+    // Tensor constructor's own mark adoption, which cannot hand back the sign
+    // their normalization can carry
+    auto [name, adjointed, kconjugated] = split_marks(tensor);
+
     // create NormalOperator or Tensor
     decltype(ranges::begin(FNOperator::labels())) fit;
-    if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
+    if ((fit = ranges::find(FNOperator::labels(), name)) !=
         ranges::end(FNOperator::labels())) {
-      // operator-valued tensors cannot carry the elementwise-conjugation
-      // marker (their bra<->ket swap exchanges creators and annihilators)
-      SEQUANT_ASSERT(tensor.modifier == 0);
+      // an operator-valued tensor carries neither state: its bra<->ket swap
+      // exchanges creators and annihilators
+      refuse_marks(tensor, adjointed, kconjugated);
       SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
       SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
                      ((tensor.symmetry.value().perm_symm ==
@@ -341,9 +384,9 @@ struct Transformer {
                             ann(std::move(braIndices)), vac);
     }
     decltype(ranges::begin(BNOperator::labels())) bit;
-    if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
+    if ((bit = ranges::find(BNOperator::labels(), name)) !=
         ranges::end(BNOperator::labels())) {
-      SEQUANT_ASSERT(tensor.modifier == 0);
+      refuse_marks(tensor, adjointed, kconjugated);
       SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
       SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
                      ((tensor.symmetry.value().perm_symm ==
@@ -386,16 +429,15 @@ struct Transformer {
     // Force the defining symmetries of the reserved (anti)symmetrization
     // operators; see sequant::{anti,}symmetrizer_symmetries.
     const bool is_reserved_symmetrizer =
-        tensor.name == reserved::antisymm_label() ||
-        tensor.name == reserved::symm_label();
+        name == reserved::antisymm_label() || name == reserved::symm_label();
     // Â antisymmetrizes within bra and within ket, Ŝ only across the
     // {bra,ket} particle columns (i.e. it is perm-Nonsymm). Supply the
     // defining value only when none was spelled out, so that a contradicting
     // explicit spec reaches the Tensor ctor and is rejected there rather than
     // silently overwritten here.
     if (is_reserved_symmetrizer && !perm_symm_specified)
-      perm_symm = tensor.name == reserved::antisymm_label() ? Symmetry::Antisymm
-                                                            : Symmetry::Nonsymm;
+      perm_symm = name == reserved::antisymm_label() ? Symmetry::Antisymm
+                                                     : Symmetry::Nonsymm;
     // (anti)symmetrization operators act on indistinguishable particles, hence
     // are always column symmetric; supply that rather than passing the
     // Context's column default through, which the Tensor ctor would reject as
@@ -414,8 +456,8 @@ struct Transformer {
     // that a deserialized s/δ equals the one make_overlap()/make_kronecker()
     // builds (they participate in the tensor hash, so a mismatch would keep
     // otherwise-equal terms from merging)
-    if ((tensor.name == reserved::overlap_label() ||
-         tensor.name == reserved::kronecker_label()) &&
+    if ((name == reserved::overlap_label() ||
+         name == reserved::kronecker_label()) &&
         !braket_symm_specified)
       braket_symm = Hermiticity::Hermitian;
 
@@ -435,20 +477,9 @@ struct Transformer {
           }
           if (parity.has_value()) syms.conjugation_parity = *parity;
 
-          // a trailing adjoint mark in the name (`label⁺{...}`) is a value
-          // modifier like `^*` and `^T`; it is applied below rather than
-          // left to the Tensor constructor's own mark adoption, which cannot
-          // hand back the sign an anti-Hermitian tensor's adjoint carries
-          std::wstring name = tensor.name;
-          ValueModifier modifier = static_cast<ValueModifier>(tensor.modifier);
-          if (!name.empty() && name.back() == sequant::adjoint_label) {
-            name.pop_back();
-            // `t⁺^*` composes to the transpose
-            modifier = ValueModifier::Adjoint * modifier;
-          }
           ExprPtr t;
           try {
-            t = ex<Tensor>(std::move(name), bra(std::move(braIndices)),
+            t = ex<Tensor>(name, bra(std::move(braIndices)),
                            ket(std::move(ketIndices)),
                            aux(std::move(auxiliaries)), syms);
           } catch (const Exception &e) {
@@ -459,9 +490,9 @@ struct Transformer {
                 get_pos(tensor, position_cache.get(), begin.get());
             throw SerializationError(offset, length, e.what());
           }
-          if (modifier != ValueModifier::None) {
+          if (adjointed || kconjugated) {
             const auto sign =
-                t->template as<Tensor>().set_value_modifier(modifier);
+                t->template as<Tensor>().set_states(adjointed, kconjugated);
             // the normalization can consume a sign (an anti-Hermitian or
             // odd-parity tensor), which only a scalar factor can carry
             if (sign != 1) return ex<Product>(sign, ExprPtrList{std::move(t)});
@@ -473,12 +504,12 @@ struct Transformer {
 
   ExprPtr operator()(
       const io::serialization::v1::ast::Variable &variable) const {
-    ExprPtr var = ex<Variable>(variable.name);
-
-    if (variable.conjugated) {
-      var->as<Variable>().conjugate();
-    }
-
+    // a Variable has the one conjugated state, spelled by a trailing `꙳`
+    auto [name, adjointed, kconjugated] = split_marks(variable);
+    if (adjointed)
+      throw_at(variable, "a variable name carries no adjoint mark");
+    ExprPtr var = ex<Variable>(std::move(name));
+    if (kconjugated) var->as<Variable>().conjugate();
     return var;
   }
 

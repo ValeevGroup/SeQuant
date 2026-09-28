@@ -1,6 +1,7 @@
 #include <SeQuant/core/expressions/complex.hpp>
 
 #include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/expr_operators.hpp>
 
 namespace sequant {
 
@@ -8,6 +9,45 @@ ExprPtr RealPart::clone() const { return ex<RealPart>(inner_->clone()); }
 
 std::wstring RealPart::to_latex() const {
   return L"\\Re\\left[" + inner_->to_latex() + L"\\right]";
+}
+
+ExprPtr RealPart::canonicalize(CanonicalizeOptions opts) {
+  // a Constant byproduct multiplies the wrapped expression back: the
+  // wrapper is not linear over a complex scalar, so the byproduct cannot be
+  // hoisted out of it
+  if (auto byproduct = inner_->canonicalize(opts);
+      byproduct && byproduct->is<Constant>())
+    inner_ = byproduct * inner_;
+  reset_hash_value();
+  return {};
+}
+
+ExprPtr RealPart::rapid_canonicalize(CanonicalizeOptions opts) {
+  SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
+  if (auto byproduct = inner_->rapid_canonicalize(opts);
+      byproduct && byproduct->is<Constant>())
+    inner_ = byproduct * inner_;
+  reset_hash_value();
+  return {};
+}
+
+ExprIterator RealPart::begin_subexpr() {
+  // N.B. a mutable iterator into inner_ invalidates the memoized hash
+  reset_hash_value();
+  return ExprIterator{&inner_};
+}
+
+ExprIterator RealPart::end_subexpr() {
+  reset_hash_value();
+  return ExprIterator{&inner_ + 1};
+}
+
+ConstExprIterator RealPart::begin_subexpr() const {
+  return ConstExprIterator{&inner_};
+}
+
+ConstExprIterator RealPart::end_subexpr() const {
+  return ConstExprIterator{&inner_ + 1};
 }
 
 Expr::hash_type RealPart::memoizing_hash() const {
@@ -32,6 +72,45 @@ ExprPtr ImagPart::clone() const { return ex<ImagPart>(inner_->clone()); }
 
 std::wstring ImagPart::to_latex() const {
   return L"\\Im\\left[" + inner_->to_latex() + L"\\right]";
+}
+
+ExprPtr ImagPart::canonicalize(CanonicalizeOptions opts) {
+  // a Constant byproduct multiplies the wrapped expression back: the
+  // wrapper is not linear over a complex scalar, so the byproduct cannot be
+  // hoisted out of it
+  if (auto byproduct = inner_->canonicalize(opts);
+      byproduct && byproduct->is<Constant>())
+    inner_ = byproduct * inner_;
+  reset_hash_value();
+  return {};
+}
+
+ExprPtr ImagPart::rapid_canonicalize(CanonicalizeOptions opts) {
+  SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
+  if (auto byproduct = inner_->rapid_canonicalize(opts);
+      byproduct && byproduct->is<Constant>())
+    inner_ = byproduct * inner_;
+  reset_hash_value();
+  return {};
+}
+
+ExprIterator ImagPart::begin_subexpr() {
+  // N.B. a mutable iterator into inner_ invalidates the memoized hash
+  reset_hash_value();
+  return ExprIterator{&inner_};
+}
+
+ExprIterator ImagPart::end_subexpr() {
+  reset_hash_value();
+  return ExprIterator{&inner_ + 1};
+}
+
+ConstExprIterator ImagPart::begin_subexpr() const {
+  return ConstExprIterator{&inner_};
+}
+
+ConstExprIterator ImagPart::end_subexpr() const {
+  return ConstExprIterator{&inner_ + 1};
 }
 
 Expr::hash_type ImagPart::memoizing_hash() const {

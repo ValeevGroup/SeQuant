@@ -1028,3 +1028,287 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
   }
 }
+
+TEST_CASE("exported names of marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  Tensor ta = t;
+  REQUIRE(ta.adjoint() == 1);
+  Tensor tk = t;
+  REQUIRE(tk.kconjugate() == 1);
+  TextGenerator<TextGeneratorContext> gen;
+  TextGeneratorContext ctx;
+  REQUIRE(gen.represent(t, ctx) == "t[a_1, i_1]");
+  REQUIRE(gen.represent(ta, ctx) == "t_adj[i_1, a_1]");
+  REQUIRE(gen.represent(tk, ctx) == "t_conj[a_1, i_1]");
+}
+
+TEST_CASE("exported names of reordered marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  ItfGenerator<ItfContext> gen;
+
+  // the array name that the generator produces, without the index-space tags
+  auto array_name = [&](const Tensor &tensor) {
+    const std::string name = gen.get_name(tensor, ctx);
+    return name.substr(0, name.find(':'));
+  };
+
+  const Tensor t(
+      L"t", bra{L"i_1", L"a_1"}, ket{L"i_2", L"a_2"},
+      TensorSymmetries{.perm = Symmetry::Symm,
+                       .conjugation_parity = ConjugationParity::None});
+
+  Tensor adjointed = t;
+  REQUIRE(adjointed.adjoint() == 1);
+  REQUIRE(adjointed.adjointed());
+  REQUIRE(array_name(adjointed) == "t_adj");
+
+  Tensor kconjugated = t;
+  REQUIRE(kconjugated.kconjugate() == 1);
+  REQUIRE(kconjugated.kconjugated());
+  REQUIRE(array_name(kconjugated) == "t_conj");
+
+  // the index reordering must leave the array name of a marked tensor alone
+  Tensor reordered = t;
+  REQUIRE(ctx.rewrite(reordered));
+  REQUIRE(array_name(reordered) == "t");
+
+  Tensor reordered_adjointed = adjointed;
+  REQUIRE(ctx.rewrite(reordered_adjointed));
+  REQUIRE(array_name(reordered_adjointed) == "t_adj");
+
+  Tensor reordered_kconjugated = kconjugated;
+  REQUIRE(ctx.rewrite(reordered_kconjugated));
+  REQUIRE(array_name(reordered_kconjugated) == "t_conj");
+
+  // the import-name map tells the marked arrays apart from the bare one
+  ctx.set_import_name(reordered, "T");
+  ctx.set_import_name(reordered_adjointed, "TADJ");
+  ctx.set_import_name(reordered_kconjugated, "TCONJ");
+  REQUIRE(ctx.import_name(reordered).value() == "T");
+  REQUIRE(ctx.import_name(reordered_adjointed).value() == "TADJ");
+  REQUIRE(ctx.import_name(reordered_kconjugated).value() == "TCONJ");
+}
+
+TEST_CASE("full export of marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+  const auto t_adj = ex<Tensor>(L"t⁺", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE(t_adj->as<Tensor>().adjointed());
+  const auto f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+  const ResultExpr result(R, t * f + t_adj * f);
+
+  SECTION("itf tells a marked tensor apart from its bare twin") {
+    // the reordering leaves these Nonsymm, aux-less tensors alone, so only the
+    // marks can keep the two arrays apart
+    for (bool rewriting : {true, false}) {
+      CAPTURE(rewriting);
+
+      ItfContext ctx;
+      configure_context_defaults(ctx);
+      ctx.enable_rewriting(rewriting);
+      ItfGenerator<ItfContext> gen;
+      export_expression(to_export_tree(result), gen, ctx);
+      const std::string code = gen.get_generated_code();
+      CAPTURE(code);
+
+      // two declarations under two names
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("tensor: t:ce["));
+      REQUIRE_THAT(code,
+                   Catch::Matchers::ContainsSubstring("tensor: t_adj:ce["));
+      // and two entries in the load-strategy bookkeeping
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t:ce["));
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("alloc t_adj:ce["));
+    }
+  }
+
+  SECTION("the text generator tells them apart as well") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("Declare tensor t[i_1, a_2]"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Declare tensor t_adj[i_1, a_2]"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Compute t_adj[i_1, a_2] += t[a_2, i_1]"));
+  }
+
+  SECTION("an import name set on the marked tensor as written is honoured") {
+    // the name is registered on the tensor that still carries its `⁺`, before
+    // any rewrite; the map is keyed on the folded label, which is the name the
+    // rest of the pipeline looks up
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_import_name(t_adj->as<Tensor>(), "TADJ");
+    REQUIRE(ctx.import_name(t_adj->as<Tensor>()).value() == "TADJ");
+
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R, t_adj * f)), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("TADJ"));
+  }
+
+  SECTION("a K-conjugated terminal is imported under its own name") {
+    // over a complex basis a `꙳` is a leaf of its own, so both arrays are
+    // terminals and both are imported
+    const TensorSymmetries syms{.conjugation_parity = ConjugationParity::None};
+    const auto tp = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, syms);
+    const auto tc = ex<Tensor>(L"t꙳", bra{L"i_1"}, ket{L"a_2"}, syms);
+    REQUIRE(tc->as<Tensor>().kconjugated());
+
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R, tp * f + tc * f)), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("tensor: t:ce[jc], t:ce"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "tensor: t_conj:ce[jc], t_conj:ce"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t:ce[jc]"));
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("load t_conj:ce[jc]"));
+  }
+
+  SECTION("the integral remap does not see a marked integral") {
+    // the marks are folded into the label before any context rewrite, so a
+    // marked integral reaches the g->J/K remap under its own name and is not
+    // recognized by it
+    const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    const auto g_adj =
+        ex<Tensor>(L"g⁺", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    REQUIRE(g_adj->as<Tensor>().adjointed());
+    const auto t2 = ex<Tensor>(L"t2", bra{L"a_1", L"a_2"}, ket{L"i_2", L"a_3"});
+    const Tensor R2(L"R2", bra{L"i_1"}, ket{L"a_3"});
+
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_two_electron_integral_label(L"g");
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R2, g * t2 + g_adj * t2)), gen,
+                      ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    // the bare integral is still remapped
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("tensor: K:eecc["));
+    // the marked one is not
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("tensor: g_adj:ccee["));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("K_adj"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("J_adj"));
+  }
+}
+
+TEST_CASE("a folded name must come from one tensor", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // `t⁺` is exported as `t_adj`, so a tensor already written `t_adj` would
+  // share every label-keyed map with it and the generated code would read one
+  // buffer under two readings
+  const auto t_adj_written = ex<Tensor>(L"t_adj", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE_FALSE(t_adj_written->as<Tensor>().adjointed());
+  const auto t_marked = ex<Tensor>(L"t⁺", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE(t_marked->as<Tensor>().adjointed());
+  REQUIRE(export_label(t_marked->as<Tensor>()) ==
+          export_label(t_adj_written->as<Tensor>()));
+  const auto f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+
+  SECTION("the collision is refused") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_THROWS_AS(
+        export_expression(
+            to_export_tree(ResultExpr(R, t_adj_written * f + t_marked * f)),
+            gen, ctx),
+        Exception);
+  }
+
+  SECTION("distinct folded names are fine") {
+    const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(ResultExpr(R, t * f + t_marked * f)), gen, ctx));
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Declare tensor t_adj[i_1, a_2]"));
+  }
+
+  SECTION("one tensor used twice is not a collision") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(ResultExpr(R, t_marked * f + t_marked * f)), gen, ctx));
+  }
+
+  SECTION("the guard spans every tree of one export") {
+    // the declarations of all trees are merged into one global block, so two
+    // trees are as much a collision as two factors of one tree
+    const Tensor S(L"S", bra{L"i_1"}, ket{L"a_1"});
+    std::vector<ExpressionGroup<>> groups;
+    groups.emplace_back();
+    groups.back().add(to_export_tree(ResultExpr(R, t_adj_written * f)));
+    groups.back().add(to_export_tree(ResultExpr(S, t_marked * f)));
+
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_THROWS_AS(export_groups<>(std::move(groups), gen, ctx), Exception);
+  }
+}
+
+TEST_CASE("a context rewrite folds a tensor's marks into its label",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  ctx.set_two_electron_integral_label(L"g");
+
+  // a plain Nonsymm, aux-less tensor gives the reordering nothing to do, so
+  // only the fold can report a change
+  Tensor bare(L"t", bra{L"i_1"}, ket{L"a_1"});
+  REQUIRE_FALSE(ctx.rewrite(bare));
+  REQUIRE(bare.label() == L"t");
+
+  Tensor marked(L"t⁺", bra{L"i_1"}, ket{L"a_1"});
+  REQUIRE(marked.adjointed());
+  REQUIRE(ctx.rewrite(marked));
+  REQUIRE(marked.label() == L"t_adj");
+  REQUIRE_FALSE(marked.adjointed());
+  REQUIRE_FALSE(marked.kconjugated());
+  REQUIRE_THAT(marked, EquivalentTo("t_adj{i_1;a_1}"));
+
+  // the fold precedes the two-electron integral remap, which matches on the
+  // bare label
+  Tensor bare_integral(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  REQUIRE(ctx.rewrite(bare_integral));
+  REQUIRE((bare_integral.label() == L"J" || bare_integral.label() == L"K"));
+
+  Tensor marked_integral(L"g⁺", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  REQUIRE(marked_integral.adjointed());
+  REQUIRE(ctx.rewrite(marked_integral));
+  REQUIRE(marked_integral.label() == L"g_adj");
+  REQUIRE_FALSE(marked_integral.adjointed());
+}

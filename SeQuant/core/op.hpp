@@ -380,6 +380,11 @@ class Operator : public container::svector<Op<S>>, public Expr {
     return 1;
   }
 
+  /// @brief K-conjugate of an operator string is the string itself: complex
+  /// conjugation acts through the coefficients that multiply it
+  /// @return +1
+  [[nodiscard]] std::int8_t kconjugate() override { return 1; }
+
   /// @return the string representation of @c this in LaTeX format
   std::wstring to_latex() const override {
     std::wstring result;
@@ -725,6 +730,10 @@ class NormalOperator : public Operator<S>,
     ncreators_ = nannihilators();
     return 1;
   }
+
+  /// @brief K-conjugate of an operator string is the string itself
+  /// @return +1
+  [[nodiscard]] std::int8_t kconjugate() override { return 1; }
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
@@ -1074,6 +1083,10 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     reset_hash_value();
     return 1;
   }
+
+  /// @brief K-conjugate of an operator string is the string itself
+  /// @return +1
+  [[nodiscard]] std::int8_t kconjugate() override { return 1; }
 
   std::wstring to_latex() const override {
     std::wstring result;

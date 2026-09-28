@@ -158,30 +158,6 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     sequant::wprintf(oss.str());
   }
 
-  // Bring every foldable (anti)conjugate tensor to its VALUE orientation
-  // before the graph is built: a marked spelling T^*{q;p} denotes the same
-  // value as T{p;q} up to the relation's sign, and the canonical form is a
-  // function of the value, so the graph must not see which of the two
-  // spellings the input used (else h{p;q} γ^*{p;q} and γ{p;q} h^*{p;q}, one
-  // value, would canonicalize to different marker placements). The marker
-  // re-emerges only from the graph-dictated bundle swap below and from the
-  // label fold after relabeling. Each unfold contributes its sign to the
-  // phase byproduct this returns, exactly as each refold does.
-  {
-    bool unfolded = false;
-    for (auto &tensor_ptr : tensors_) {
-      auto &tensor = *tensor_ptr;
-      if (!braket_conjugate_foldable(tensor)) continue;
-      Tensor &ct = *as_cnumber_tensor(tensor);
-      if (ct.conjugated()) {
-        // T^*{q;p} -> s T{p;q}: the value orientation
-        parity *= ct.transpose();
-        unfolded = true;
-      }
-    }
-    if (unfolded) have_edges_ = false;  // slots moved: rebuild the edges
-  }
-
   if (!have_edges_) {
     init_edges();
   }
@@ -295,12 +271,11 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
         const std::size_t tensor_ord = tensor_count - 1;
         const AbstractTensor &tensor = *tensors_[tensor_ord];
         // Record the verdict for every tensor whose bundles the graph above
-        // coloured interchangeably; the signed states are among them because
-        // this function passes fold_signed_braket. The verdict is acted on
-        // below only where braket_foldable() holds, i.e. only where the
-        // respelling's sign is taken into the phase byproduct.
-        const auto bksymm = braket_symmetry(tensor);
-        if (bksymm != BraKetSymmetry::Nonsymm) {
+        // coloured interchangeably, i.e. every braket_foldable() one; the
+        // signed states are among them because this function passes
+        // fold_signed_braket and takes the respelling's sign into the phase
+        // byproduct.
+        if (braket_foldable(tensor)) {
           canonical_bra_ket_bundle_order[tensor_ord][bra ? 0 : 1] =
               canonize_perm[vertex];
         }
@@ -457,32 +432,23 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     };
     if (column_symmetry(tensor) == ColumnSymmetry::Symm) permute_slots();
 
-    // lastly permute bra with ket bundles, if needed; reserved bookkeeping
-    // operators ((anti)symmetrizer, transposition) keep their orientation --
-    // it defines/extracts the external indices -- and operator-valued
-    // Conjugate "tensors" must not reorient (creators<->annihilators); both
-    // exclusions live in braket_foldable()
+    // lastly permute bra with ket bundles, if needed; only a tensor whose
+    // bra<->ket exchange is a respelling qualifies, which excludes the
+    // reserved bookkeeping operators ((anti)symmetrizer, transposition),
+    // whose orientation defines/extracts the external indices, as well as the
+    // (anti)conjugate symmetries, whose two orientations are two values
     if (!braket_foldable(tensor)) continue;
 
     // Swap bra and ket bundles into the canonical (graph-dictated) order. The
     // verdict is transferred as-is; where the graph carries no orientation
     // information it is arbitrary but value-preserving up to the sign this
-    // records (for an (anti)conjugate tensor the swap toggles the conjugation
-    // marker, see below), and the pass after this loop settles those tensors
+    // records, and the pass after this loop settles those tensors
     // deterministically.
     if (canonical_bra_ket_bundle_order[i][0] >
         canonical_bra_ket_bundle_order[i][1]) {
-      const auto bksymm = braket_symmetry(tensor);
-      if (braket_conjugate_swap_sign(bksymm)) {
-        // respelling at the relation's sign: T{q;p} = s conj(T{p;q}),
-        // transpose() records the conjugation and returns s
-        Tensor *ct = as_cnumber_tensor(tensor);
-        SEQUANT_ASSERT(ct);
-        parity *= ct->transpose();
-      } else {
-        tensor._swap_bra_ket();  // Symm: +1, Antisymm: -1
-        parity *= *braket_swap_sign(bksymm);
-      }
+      const auto swap_sign = *braket_swap_sign(braket_symmetry(tensor));
+      tensor._swap_bra_ket();  // Symm: +1, Antisymm: -1
+      parity *= swap_sign;
     }
   }
 
@@ -491,9 +457,9 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   // recorded bundle position is a value-initialized sentinel, and identical
   // bra and ket bundles (diagonal trace T{p,q;p,q}) are automorphic. Their
   // verdict above was arbitrary; decide them by content instead
-  // (DefaultTensorCanonicalizer::canonicalize_braket unfolds a marked spelling
-  // first, orients a half-tensor by its bundle spaces and never swaps
-  // identical bundles), which is label-independent, so it is a fixed point
+  // (DefaultTensorCanonicalizer::canonicalize_braket orients a half-tensor by
+  // its bundle spaces and never swaps identical bundles), which is
+  // label-independent, so it is a fixed point
   // of the relabeling that follows.
   for (auto &tensor_ptr : tensors_) {
     AbstractTensor &tensor = *tensor_ptr;
@@ -706,25 +672,6 @@ ExprPtr TensorNetworkV3::canonicalize(
 
     apply_index_replacements(tensors_, idxrepl, true);
 
-    // Re-apply the per-tensor braket orientation fold now that indices carry
-    // their FINAL labels. This pass is needed only because of (anti)conjugate
-    // braket symmetry: for Symm/Antisymm the orientation decision is purely
-    // space-colored and hence label-independent, so relabeling can never
-    // flip it (which is why no refold existed before Conjugate folding). For
-    // (anti)conjugate, a full space tie must still be broken -- the two
-    // orientations denote conjugate values and one spelling has to win -- and
-    // that tie-break is on the index LABELS, so a decision taken on
-    // pre-relabel labels need not be a fixed point of the relabeled
-    // expression. The fold is convergent (it decides on the VALUE
-    // orientation), so this pass makes the whole canonicalization
-    // idempotent. Whatever sign it respells at joins the byproduct.
-    int refold_parity = 1;
-    for (auto &tensor_ptr : tensors_) {
-      refold_parity *=
-          DefaultTensorCanonicalizer::canonicalize_braket(*tensor_ptr);
-    }
-    if (refold_parity < 0) byproduct *= ex<Constant>(-1);
-
     byproduct *= canonicalize_individual_tensors(named_indices);
 
     // We assume that re-indexing did not change the canonical order of tensors
@@ -811,7 +758,6 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
       {.named_indices = &named_indices,
        .named_index_colors = named_index_colors,
        .distinct_named_indices = false,
-       .fold_conjugate_braket = options.fold_conjugate_braket,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
@@ -891,12 +837,11 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
             slot_type = IndexSlotType::TensorAux;
           } else if (symm == BraKetSymmetry::Symm ||
                      edge_it->vertex(0).getOrigin() == Origin::Bra) {
-            // Note: we must not distinguis bra and ket indices in case braket
-            // symmetry is present Technically, this should (to some degree)
-            // also apply to BraKetSymmetry::Conjugate but this TN
-            // implementation currently doesn't exploit conjugate braket
-            // symmetry (as it is not entirely clear how to handle the required
-            // complex conjugation)
+            // Note: we must not distinguish bra and ket indices in case
+            // braket symmetry is present. BraKetSymmetry::Conjugate is not
+            // among them by design: its two orientations are two values
+            // (T{q;p} = conj(T{p;q})), so its bra and ket slots stay
+            // distinct.
             slot_type = IndexSlotType::TensorBra;
           } else {
             SEQUANT_ASSERT(edge_it->vertex(0).getOrigin() == Origin::Ket);
@@ -1133,23 +1078,15 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // 2-index columns
     const std::size_t num_paired_cols =
         std::max(bra_rank(tensor), ket_rank(tensor));
-    // Symm and foldable-(anti)conjugate bra/ket both fold onto one canonical
-    // orientation (for (anti)conjugate the fold carries the
-    // elementwise-conjugation marker), so both get symmetric bra/ket bundle
-    // colors; the (anti)conjugate fold is a VALUE identity
-    // (T{q;p} = s conj(T{p;q})) and hence applies only to c-number tensors --
-    // for an operator-valued "tensor" (e.g. NormalOperator) reorienting bra
-    // and ket would exchange creators and annihilators (see
-    // braket_foldable()). A signed state (Antisymm/AntiConjugate) folds only
-    // where the caller can record the sign, see fold_signed_braket.
+    // A tensor whose bra<->ket exchange is a respelling (see
+    // braket_foldable()) gets symmetric bra/ket bundle colors, so that the
+    // two orientations share one graph; Antisymm, whose respelling costs a
+    // sign, only where the caller can record it (see fold_signed_braket).
     const auto tensor_bksymm = braket_symmetry(tensor);
     const bool is_braket_symm =
         braket_foldable(tensor) &&
-        (options.fold_conjugate_braket ||
-         !braket_conjugate_swap_sign(tensor_bksymm)) &&
         (options.fold_signed_braket ||
-         (braket_swap_sign(tensor_bksymm).value_or(1) == 1 &&
-          braket_conjugate_swap_sign(tensor_bksymm).value_or(1) == 1));
+         braket_swap_sign(tensor_bksymm).value_or(1) == 1);
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
@@ -1427,14 +1364,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
               if (!orientation_free) {
                 // if the bundles are interchangeable (a foldable braket
-                // symmetry), the canonical braket orientation fold
-                // (canonicalize_braket / canonicalize_graph) may spell the
-                // tensor bra<->ket swapped (for an (anti)conjugate braket
-                // symmetry carrying the conjugation on the tensor), so a
-                // dummy may legally connect bra-bra or ket-ket. This relaxes
-                // for the signed states too, and independently of
+                // symmetry: Symm or Antisymm), the canonical braket
+                // orientation fold (canonicalize_braket /
+                // canonicalize_graph) may spell the tensor bra<->ket
+                // swapped, so a dummy may legally connect bra-bra or
+                // ket-ket. This relaxes for Antisymm independently of
                 // fold_signed_braket: the per-tensor canonicalize_braket
-                // folds them whatever options a graph is built with, so a
+                // folds it whatever options a graph is built with, so a
                 // bra-bra dummy edge is reachable on the slots path as well.
                 orientation_free =
                     braket_foldable(*tensors_[vertex.getTerminalIndex()]);

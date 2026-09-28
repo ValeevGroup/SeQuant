@@ -450,13 +450,13 @@ TEST_CASE("tensor", "[elements]") {
     auto f1 = Tensor(L"F", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"});
     REQUIRE_NOTHROW(f1.adjoint());
     // F is now non-Hermitian by default (braket Nonsymm), so its adjoint is
-    // marked with the conjugation superscript
-    REQUIRE(to_latex(f1) == L"{F⁺^{{i_1}{i_2}}_{{i_3}{i_4}}}");
+    // typeset with the dagger superscript
+    REQUIRE(to_latex(f1) == L"{{F^{\\dagger}}^{{i_1}{i_2}}_{{i_3}{i_4}}}");
 
     auto t1 = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
                      BraKetSymmetry::Nonsymm);
     REQUIRE_NOTHROW(t1.adjoint());
-    REQUIRE(to_latex(t1) == L"{t⁺^{{a_1}}_{{i_1}}}");
+    REQUIRE(to_latex(t1) == L"{{t^{\\dagger}}^{{a_1}}_{{i_1}}}");
     REQUIRE(t1.adjoint() == 1);
     REQUIRE(to_latex(t1) == L"{t^{{i_1}}_{{a_1}}}");
 
@@ -464,7 +464,7 @@ TEST_CASE("tensor", "[elements]") {
               ex<FNOperator>(cre{L"i_1"}, ann{L"i_2"});
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
-            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{F⁺^{{i_1}}_{{i_2}}}}");
+            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{{F^{\\dagger}}^{{i_1}}_{{i_2}}}}");
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
@@ -798,96 +798,99 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
 TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
   using namespace sequant;
 
-  // Tensor::conjugated_ mirrors Variable/Power: a first-class elementwise
-  // complex-conjugation marker (no slot reordering), rendered ^* on the label
+  // for a tensor of indefinite parity the K-conjugated state is a first-class
+  // atom (no slot reordering), spelled after the label
 
-  auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
-                  BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  auto t =
+      Tensor(L"t", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
+                              .conjugation_parity = ConjugationParity::None,
+                              .column = ColumnSymmetry::Symm});
 
   SECTION("toggle, identity, ordering") {
-    REQUIRE(!t.conjugated());
+    REQUIRE(!t.kconjugated());
     const auto h0 = t.hash_value();
     const auto latex0 = t.to_latex();
 
     Tensor tc{t};
-    REQUIRE(tc.conjugate() == 1);
-    REQUIRE(tc.conjugated());
+    REQUIRE(tc.kconjugate() == 1);
+    REQUIRE(tc.kconjugated());
     REQUIRE(tc.hash_value() != h0);  // conj is first-class identity
     REQUIRE(!(t == tc));             // not equal to the bare tensor
     REQUIRE(t < tc);                 // T orders before conj(T)
-    REQUIRE(tc.to_latex().find(L"^*") != std::wstring::npos);
-    REQUIRE(latex0.find(L"^*") == std::wstring::npos);
+    REQUIRE(tc.to_latex().find(L"^{*}") != std::wstring::npos);
+    REQUIRE(latex0.find(L"^{*}") == std::wstring::npos);
 
     // toggling back restores everything bit-for-bit
-    REQUIRE(tc.conjugate() == 1);
-    REQUIRE(!tc.conjugated());
+    REQUIRE(tc.kconjugate() == 1);
+    REQUIRE(!tc.kconjugated());
     REQUIRE(tc.hash_value() == h0);
     REQUIRE(t == tc);
   }
 
-  SECTION("clone preserves the marker") {
+  SECTION("clone preserves the state") {
     Tensor tc{t};
-    REQUIRE(tc.conjugate() == 1);
+    REQUIRE(tc.kconjugate() == 1);
     auto cloned = tc.clone();
-    REQUIRE(cloned->as<Tensor>().conjugated());
+    REQUIRE(cloned->as<Tensor>().kconjugated());
     REQUIRE(cloned->as<Tensor>() == tc);
   }
 
-  SECTION("serialization spells label^*") {
+  SECTION("serialization spells label꙳") {
     Tensor tc{t};
-    REQUIRE(tc.conjugate() == 1);
+    REQUIRE(tc.kconjugate() == 1);
     auto s = serialize(tc);
-    REQUIRE(s.find(L"t^*{") == 0);  // marker directly after the label
-    REQUIRE(serialize(Tensor{t}).find(L"^*") == std::wstring::npos);
+    REQUIRE(s.find(L"t꙳{") == 0);  // mark directly after the label
+    REQUIRE(serialize(Tensor{t}).find(L"꙳") == std::wstring::npos);
   }
 
-  SECTION("adjoint commutes with the marker for Conjugate braket symmetry") {
+  SECTION("adjoint commutes with the K state for Conjugate braket symmetry") {
     // for BraKetSymmetry::Conjugate, adjoint() is a pure bra<->ket swap (the
-    // conj is carried by the symmetry relation itself), so it must leave the
-    // marker alone
+    // adjointed state normalizes away), so it must leave the K state alone
     Tensor tc{t};
-    REQUIRE(tc.conjugate() == 1);
+    REQUIRE(tc.kconjugate() == 1);
     REQUIRE(tc.adjoint() == 1);
-    REQUIRE(tc.conjugated());
+    REQUIRE(tc.kconjugated());
     REQUIRE(tc.bra().at(0).label() == L"a_1");  // swapped
   }
 
-  SECTION(
-      "adjoint and the marker compose as transpose∘conj (Klein four-group)") {
-    // adjoint = transpose∘conj = conj∘transpose in _value_, so conjugate() and
-    // adjoint() commute on the spelling too. For Conjugate braket symmetry
-    // adjoint() is a pure bra<->ket swap and leaves the conjugation bit
-    // alone; for Nonsymm, adjoint() toggles both modifier bits, so
-    // conj(adjoint(u)) is the plain transpose u^T (value_modifier() ==
-    // ValueModifier::Transpose), a state distinct from both u^* and u⁺.
+  SECTION("adjoint and the K state commute (Klein four-group)") {
+    // the two states commute, so kconjugate() and adjoint() commute on the
+    // spelling too. For Conjugate braket symmetry adjoint() is a pure
+    // bra<->ket swap and leaves the K state alone; for Nonsymm, adjoint()
+    // sets the adjointed state, so kconjugate(adjoint(u)) is u⁺꙳, a state
+    // distinct from both u꙳ and u⁺.
     for (auto bks : {BraKetSymmetry::Conjugate, BraKetSymmetry::Nonsymm}) {
-      auto u = Tensor(L"u", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm, bks,
-                      ColumnSymmetry::Nonsymm);
+      auto u =
+          Tensor(L"u", bra{L"i_1"}, ket{L"a_1"},
+                 TensorSymmetries{.braket = bks,
+                                  .conjugation_parity = ConjugationParity::None,
+                                  .column = ColumnSymmetry::Nonsymm});
       // conj then adjoint
       Tensor ca{u};
-      REQUIRE(ca.conjugate() == 1);
+      REQUIRE(ca.kconjugate() == 1);
       REQUIRE(ca.adjoint() == 1);
       // adjoint then conj
       Tensor ac{u};
       REQUIRE(ac.adjoint() == 1);
-      REQUIRE(ac.conjugate() == 1);
-      REQUIRE(ca == ac);  // the marker commutes with adjoint()
+      REQUIRE(ac.kconjugate() == 1);
+      REQUIRE(ca == ac);  // the K state commutes with adjoint()
       REQUIRE(ca.bra().at(0).label() == L"a_1");  // swapped
       if (bks == BraKetSymmetry::Conjugate) {
-        REQUIRE(ca.value_modifier() == ValueModifier::Conjugate);
+        REQUIRE(ca.kconjugated());
+        REQUIRE_FALSE(ca.adjointed());
       } else {
-        REQUIRE(ca.value_modifier() == ValueModifier::Transpose);
-        REQUIRE_FALSE(ca.conjugated());
-        REQUIRE(ca.transposed());
+        REQUIRE(ca.kconjugated());
+        REQUIRE(ca.adjointed());
         REQUIRE(ca.label() == L"u");
-        REQUIRE(ca.decorated_label() == L"u");  // no ⁺: this is not the adjoint
+        REQUIRE(ca.decorated_label() == L"u⁺꙳");
       }
-      // adjoint is an involution that leaves the marker as it found it
+      // adjoint is an involution that leaves the K state as it found it
       REQUIRE(ca.adjoint() == 1);
-      REQUIRE(ca.conjugated());
+      REQUIRE(ca.kconjugated());
       REQUIRE(ca.bra().at(0).label() == L"i_1");
       Tensor uc{u};
-      REQUIRE(uc.conjugate() == 1);
+      REQUIRE(uc.kconjugate() == 1);
       REQUIRE(ca == uc);
     }
   }

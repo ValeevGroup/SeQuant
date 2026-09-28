@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/operations.hpp>
@@ -21,19 +22,21 @@ namespace {
 constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 }  // namespace
 
-ExprPtr tensor_hypercontract_impl(Tensor const& tnsr_in, Index const& aux_idx_1,
+ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
                                   Index const& aux_idx_2,
                                   std::wstring_view factor_label,
                                   std::wstring_view aux_label) {
-  // Normalize to the VALUE orientation first: a marker-conjugated (folded)
-  // tensor spells conj(bra<->ket-swapped); rebuilding from its raw slot
-  // layout would silently drop the conjugation (see sequant::value_oriented).
-  // The respelling can contribute a sign (an anti-Hermitian or odd-parity
-  // tensor), which the rebuilt expression carries.
-  auto const [tnsr, vo_sign] = value_oriented(tnsr_in);
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
+  // the factors below are built from tnsr's indices alone, so a tensor
+  // carrying either core state names a different array; refusing it is part
+  // of the rule's contract and must hold in every build type
+  if (tnsr.adjointed() || tnsr.kconjugated())
+    throw Exception(
+        "tensor_hypercontract: a tensor carrying the adjointed or K-conjugated "
+        "state names a different array and is not factorized by this rule; "
+        "apply the rule before conjugating, or register the conjugated factor");
 
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
                        aux({aux_idx_1}), particle_symmetric);
@@ -53,12 +56,10 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr_in, Index const& aux_idx_1,
                           aux({aux_idx_2}), particle_symmetric);
 
     ExprPtr result = (t1 * t2 * z * t3 * t4) - (t1a * t2 * z * t3a * t4);
-    if (vo_sign != 1) return ex<Product>(vo_sign, ExprPtrList{result});
     return result;
   }
 
   ExprPtr result = t1 * t2 * z * t3 * t4;
-  if (vo_sign != 1) return ex<Product>(vo_sign, ExprPtrList{result});
   return result;
 }
 

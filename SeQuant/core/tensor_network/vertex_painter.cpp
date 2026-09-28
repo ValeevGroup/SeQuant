@@ -45,21 +45,19 @@ std::size_t VertexPainterImpl::to_hash_value(
                  hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
   auto result = to_hash_value(hashes);
-  // Every value modifier is part of a tensor's value identity (T^* != T and
-  // T^T != T for a Nonsymm tensor; Conjugate-symmetry tensors are
-  // value-oriented before canonicalize() builds its graph, and are coloured
-  // as-is by canonicalize_slots). Perturb only marked tensors: bliss's
-  // canonical labeling depends on colour values and hash::combine is not
-  // order-preserving, so folding even a "no modifier" value into every
-  // colour would re-spell every marker-free network.
-  // Without the modifier in the core-vertex color, an uncolored graph for
-  // C{x;m} and C^*{y;m} is automorphic: nothing but the modifier bit
-  // distinguishes the two vertices, so a canonical labeling is free to swap
-  // them, and C * C^* would collide with C^* * C under one shared hash and
-  // graph.
-  if (ct && ct->value_modifier() != ValueModifier::None)
-    hash::combine(result,
-                  hash::value(static_cast<std::uint8_t>(ct->value_modifier())));
+  // Both states are part of a tensor's value identity (t⁺ != t and t꙳ != t
+  // where they are kept). Perturb only marked tensors: bliss's canonical
+  // labeling depends on colour values and hash::combine is not
+  // order-preserving, so folding even a "no state" value into every colour
+  // would re-spell every mark-free network.
+  // Without the states in the core-vertex color, an uncolored graph for
+  // C{x;m} and C꙳{y;m} is automorphic: nothing but the state distinguishes
+  // the two vertices, so a canonical labeling is free to swap them, and
+  // C * C꙳ would collide with C꙳ * C under one shared hash and graph.
+  if (ct && (ct->adjointed() || ct->kconjugated()))
+    hash::combine(
+        result, hash::value(static_cast<std::uint8_t>(
+                    (ct->adjointed() ? 1 : 0) | (ct->kconjugated() ? 2 : 0))));
   // a conjugation symmetry other than the one parity Even would give over this
   // tensor enters the shade: Even tensors add nothing in any field,
   // complex-field tensors, whose parity is unobservable, colour alike as they

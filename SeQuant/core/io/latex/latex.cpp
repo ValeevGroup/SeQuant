@@ -63,8 +63,9 @@ std::wstring to_string(const Power& power) {
   } else {
     result = base->to_latex() + L"^" + to_string(exp);
   }
-  if (power.conjugated())
-    result = L"{" + result + std::wstring(conjugate_label) + L"}";
+  // the power is braced before the superscript, so that a base that already
+  // carries one does not leave a group with two
+  if (power.conjugated()) result = L"{{" + result + L"}^{*}}";
   return result;
 }
 

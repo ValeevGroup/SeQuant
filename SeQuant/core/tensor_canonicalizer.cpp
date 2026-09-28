@@ -350,59 +350,29 @@ bool braket_orientation_pinned(const AbstractTensor& t) {
          lbl == reserved::transposition_label();
 }
 
-bool braket_conjugate_foldable(const AbstractTensor& t) {
-  // the fold records a conjugation, which only a c-number Tensor can carry
-  return braket_conjugate_swap_sign(t._braket_symmetry()).has_value() &&
-         t._is_cnumber() && !braket_orientation_pinned(t) &&
-         as_cnumber_tensor(t) != nullptr;
-}
-
 bool braket_foldable(const AbstractTensor& t) {
-  return braket_swap_sign(t._braket_symmetry()).has_value() ||
-         braket_conjugate_foldable(t);
+  return braket_swap_sign(t._braket_symmetry()).has_value() &&
+         !braket_orientation_pinned(t);
 }
 
 std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
-                                                            bool fold_conjugate,
                                                             bool fold_signed) {
   if (!braket_foldable(t)) {
     return 1;
   }
   const auto bks = t._braket_symmetry();
-  const auto conjugate_sign = braket_conjugate_swap_sign(bks);
-  if (conjugate_sign && !fold_conjugate) {
-    return 1;
-  }
-  if (!fold_signed && (bks == BraKetSymmetry::Antisymm ||
-                       bks == BraKetSymmetry::AntiConjugate)) {
+  if (!fold_signed && bks == BraKetSymmetry::Antisymm) {
     return 1;
   }
 
   // the sign every respelling below contributes, for the caller to record
   std::int8_t sign = 1;
 
-  // Normalize to the _value_ orientation first: a (Anti)Conjugate tensor's
-  // starred spelling T^*{q;p} is the unstarred T{p;q} up to the relation's
-  // sign, i.e. the value has two spellings, and deciding on the current one is
-  // not convergent. Unfold (transpose() toggles the conjugation bit off, at
-  // the relation's sign), then decide -- one canonical spelling per value.
-  Tensor* ct = conjugate_sign ? as_cnumber_tensor(t) : nullptr;
-  SEQUANT_ASSERT(!conjugate_sign || ct);
-  if (ct && ct->conjugated()) {
-    sign = static_cast<std::int8_t>(sign * ct->transpose());
-  }
-
-  // bra<->ket exchange is a symmetry for braket-foldable tensors, so pick a
-  // canonical orientation: a plain respelling for Symm/Antisymm braket
-  // symmetry, and combined with the elementwise-conjugation marker for
-  // Conjugate/AntiConjugate braket symmetry (the value identity
-  // T{q;p} = s conj(T{p;q})). The choice is governed by the
+  // bra<->ket exchange is a symmetry for Symm/Antisymm tensors, so pick a
+  // canonical orientation, a plain respelling. The choice is governed by the
   // canonical "colors" of the bra and ket bundles -- i.e. their index spaces,
   // not the index labels -- so the result is label-independent. Bundles with
-  // identical spaces (e.g. g{p,q;r,s}) compare equal and are left untouched
-  // for Symm/Antisymm; for (Anti)Conjugate a full space tie is broken on the
-  // index labels (below), because the two orientations denote DIFFERENT
-  // (conjugate) values that must nevertheless land on one canonical spelling.
+  // identical spaces (e.g. g{p,q;r,s}) compare equal and are left untouched.
   const TensorBlockIndexComparer cmp;
   auto space_less = [&cmp](const Index& a, const Index& b) {
     return cmp.compare_spaces(a, b) < 0;
@@ -431,33 +401,12 @@ std::int8_t DefaultTensorCanonicalizer::canonicalize_braket(AbstractTensor& t,
       ket_spaces.end(), [&cmp](const Index& a, const Index& b) {
         return cmp.compare_spaces(a, b) <=> 0;
       });
-  bool swap = space_order < 0;
-
-  // Full space tie, (Anti)Conjugate braket symmetry: break on the index
-  // labels, keeping the label-lexicographically SMALLER bundle in the bra, so
-  // label-ascending spellings (e.g. g{p_1,p_2;p_3,p_4}) remain canonical as
-  // written. Identical bundles (diagonal T{p,q;p,q}) compare equal and never
-  // swap. (Symm/Antisymm ties stay untouched: both orientations are spellings
-  // of one array there, so no conjugation marker has to be placed and the
-  // sign of a tie-breaking swap would buy nothing.)
-  if (space_order == 0 && conjugate_sign.has_value()) {
-    std::vector<Index> bra_full(bra_spaces), ket_full(ket_spaces);
-    ranges::sort(bra_full, std::less<Index>{});
-    ranges::sort(ket_full, std::less<Index>{});
-    swap =
-        ranges::lexicographical_compare(ket_full, bra_full, std::less<Index>{});
-  }
+  const bool swap = space_order < 0;
 
   if (swap) {
-    if (ct) {
-      // T{q;p} = s conj(T{p;q}): transpose() sets the conjugation bit and
-      // returns s (+1 for Conjugate, -1 for AntiConjugate)
-      sign = static_cast<std::int8_t>(sign * ct->transpose());
-    } else {
-      t._swap_bra_ket();
-      // Symm: +1, Antisymm: -1
-      sign = static_cast<std::int8_t>(sign * *braket_swap_sign(bks));
-    }
+    t._swap_bra_ket();
+    // Symm: +1, Antisymm: -1
+    sign = static_cast<std::int8_t>(sign * *braket_swap_sign(bks));
   }
   return sign;
 }
@@ -482,8 +431,7 @@ using suitable_call_operator =
 ExprPtr TensorBlockCanonicalizer::apply(AbstractTensor& t) const {
   tag_indices(t);
 
-  const auto braket_sign =
-      canonicalize_braket(t, fold_conjugate_braket_, fold_signed_braket_);
+  const auto braket_sign = canonicalize_braket(t, fold_signed_braket_);
 
   auto result = DefaultTensorCanonicalizer::apply(t, TensorBlockIndexComparer{},
                                                   TensorBlockIndexComparer{});

@@ -78,6 +78,9 @@ class Constant : public Expr {
   /// @brief adjoint of a Constant is its complex conjugate
   [[nodiscard]] virtual std::int8_t adjoint() override;
 
+  /// @brief K-conjugate of a Constant is its complex conjugate
+  [[nodiscard]] std::int8_t kconjugate() override;
+
   Constant &operator*=(const Expr &that);
 
   Constant &operator+=(const Expr &that);

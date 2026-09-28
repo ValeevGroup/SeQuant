@@ -84,16 +84,21 @@ auto word_components = x3::unicode::alnum
                        | x3::unicode::char_(L'¹') | x3::unicode::char_(L'²') | x3::unicode::char_(L'³')
                        // Arrow block
                        | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned);
+// the two core states are spelled as trailing marks of the name: `t⁺`,
+// `t꙳`, `t⁺꙳` (either order). `⁺` is a Superscript-block character and
+// thus already a word component; `꙳` is not, hence the explicit trailer
+auto mark             = x3::unicode::char_(L'⁺') | x3::unicode::char_(L'꙳');
 // A name begins with a letter, then can container letters, digits and
 // underscores, but can not end with an underscore (to not confuse the parser
 // with tensors á la t_{…}^{…}.
 auto name_def         = x3::lexeme[
                             x3::unicode::alpha >> -( *(word_components >> &word_components) >> (word_components - '_') )
+                                              >> *mark
                         ];
 
 auto number_def       = x3::double_ >> -('/' >> x3::double_);
 
-auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(true))];
+auto variable_def     = x3::lexeme[name];
 
 auto index_name       = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻') | x3::unicode::char_(L'̃')
                           | x3::unicode::char_(L'↑') | x3::unicode::char_(L'↓')
@@ -116,14 +121,8 @@ auto symmetry_spec_def= x3::lexeme[
                          ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper) >> -('-' >> x3::upper)
                         ];
 
-// the suffix spellings are sequant::conjugate_label ("^*") and
-// sequant::transpose_label ("^T"); the grammar spells them out character by
-// character
 auto tensor_def       = x3::lexeme[
-                            name >> (  x3::lit('^') >> '*' >> x3::attr(std::uint8_t{1})
-                                     | x3::lit('^') >> 'T' >> x3::attr(std::uint8_t{2})
-                                     | x3::attr(std::uint8_t{0}))
-                                 >> x3::skip[index_groups] >> -(symmetry_spec)
+                            name >> x3::skip[index_groups] >> -(symmetry_spec)
                         ];
 
 // TODO(power): per comments on PR #513, promote `^` to a binary operator (with higher precedence than *) and then reject unsupported cases while traversing the AST.

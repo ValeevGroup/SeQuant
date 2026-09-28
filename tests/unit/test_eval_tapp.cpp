@@ -492,7 +492,7 @@ TEST_CASE("eval_adjoint_complex_tapp", "[eval_tapp]") {
   Tensor t_adj = t;
   REQUIRE(t_adj.adjoint() == 1);
   REQUIRE(t_adj.label() == L"t");
-  REQUIRE(t_adj.value_modifier() == ValueModifier::Adjoint);
+  REQUIRE(t_adj.adjointed());
 
   auto node = eval_node(ex<Tensor>(t_adj));
   REQUIRE(node->op_type() == EvalOp::Adjoint);

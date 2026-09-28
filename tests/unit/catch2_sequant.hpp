@@ -12,8 +12,11 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>
 
 #include <dtl/dtl.hpp>
 
@@ -60,6 +63,28 @@ inline void declare_real_basis(IndexSpaceRegistry &isr) {
       get_default_context().index_space_registry()->clone());
   declare_real_basis(*isr);
   return set_scoped_default_context(Context(get_default_context()).set(isr));
+}
+
+/// Installs, for the lifetime of the returned resetter, the default Context the
+/// CSV-CCSD residuals under tests/unit/data are read against: a clone of the
+/// current one whose registry also holds the PAO and density-fitting spaces
+/// those residuals' indices name, with every space declared real -- their
+/// tensors carry explicit bra/ket exchange pins, derivable only over a real
+/// basis -- and with dummy indices numbered from 1000000, past the ordinals the
+/// data spells out.
+/// @sa declare_real_basis
+[[nodiscard]] inline auto scoped_csv_ccsd_context() {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  if (!isr)
+    throw Exception(
+        "scoped_csv_ccsd_context(): the default Context has no mutable index "
+        "space registry");
+  mbpt::add_pao_spaces(isr, mbpt::Spin::any);
+  mbpt::add_df_spaces(isr);
+  declare_real_basis(*isr);
+  return set_scoped_default_context(std::move(ctx));
 }
 
 /// Sets environment variable @p name to @p value for the lifetime of this

@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -331,7 +332,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
-    std::string representation = toUtf8(tensor.decorated_label());
+    std::string representation = export_name(tensor);
 
     representation += "_";
     representation += ctx.get_tags(tensor);

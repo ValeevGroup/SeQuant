@@ -6453,17 +6453,12 @@ TEST_CASE("shape_provider_denest_to_flat", "[shape-provider]") {
 }
 
 TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
-  // END-TO-END check of serving the conjugation marker at eval: a starred
-  // ToT spelling lowers to its unmarked VALUE-orientation leaf, times the
-  // exchange relation's sign when that is -1. For a Conjugate (Hermitian)
-  // tensor the sign is +1, so T^*{q;p} is served as the leaf T{p;q} itself:
-  // the marker denotes a bra/ket exchange, which the engine performs by
-  // index label, and not a conjugation of an array. (Folding fresh leaves
-  // onto one orientation-shared cache slot is the lazy-conj eval follow-up.)
-  //
-  // Here: binarize a starred spelling, evaluate it against a yielder that
-  // only ever serves the unmarked operand's spelling, and require the result
-  // to be exactly what was served.
+  // End-to-end check of the K-conjugated state on a ToT leaf at eval. Over a
+  // real basis with an indefinite hermiticity and parity None a '꙳' is kept
+  // symbolically and denotes the elementwise conjugate of the bare array, so
+  // binarize serves it as an EvalOp::Adjoint node with an identity layout over
+  // the bare leaf (no bundle exchange). The engine must hand back the
+  // elementwise conjugate of what the yielder serves for that bare leaf.
   using namespace sequant;
   auto& world = TA::get_default_world();
   size_t const nocc = 2, nvirt = 3;
@@ -6471,7 +6466,7 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
                                                                  nvirt};
   using ArrayToT = typename decltype(yield)::array_tot_type;
 
-  // braket symmetry pinned explicitly (:C): the test's premise is a
+  // braket symmetry pinned explicitly (:C): the two orientations below are a
   // Conjugate (Hermitian) ToT leaf, independent of the ambient deserializer
   // defaults (which become conservative NonHermitian with the
   // default-tensor-symmetry rework, PR #596)
@@ -6480,47 +6475,85 @@ TEST_CASE("ta_tot_conjugation_marker_end_to_end", "[eval]") {
   auto const canonical =
       deserialize<sequant::ExprPtr>(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}:N-C-S");
 
-  // eval-boundary precondition: leaves are orientation-sensitive (no fold,
-  // no marker) -- the two orientations are distinct nodes
+  // eval-boundary precondition: leaves keep their orientation (a Conjugate
+  // tensor's bundles are never exchanged, no state) -- the two orientations
+  // are distinct nodes
   EvalExpr const swapped_leaf{swapped->as<Tensor>()};
   EvalExpr const canon_leaf{canonical->as<Tensor>()};
   auto const is_conj = [](EvalExpr const& leaf) {
-    return leaf.expr()->as<Tensor>().conjugated();
+    return leaf.expr()->as<Tensor>().kconjugated();
   };
   REQUIRE_FALSE(is_conj(swapped_leaf));
   REQUIRE_FALSE(is_conj(canon_leaf));
   REQUIRE(swapped_leaf.hash_value() != canon_leaf.hash_value());
 
-  // a STARRED spelling is served as its unmarked VALUE-orientation leaf
-  auto conj_side = canonical->clone();
-  REQUIRE(conj_side->as<Tensor>().conjugate() == 1);
+  // the same slot layout over a real basis, with parity None and an
+  // indefinite hermiticity: there the '꙳' is kept and is a pure conjugation
+  auto rsp = [](std::wstring_view label) {
+    IndexSpace sp = Index(label).space();
+    sp.field(Field::Real);
+    return sp;
+  };
+  const Index i2(rsp(L"i_2"), 2);
+  const Index i3(rsp(L"i_3"), 3);
+  const Index a3(rsp(L"a_3"), 3, container::vector<Index>{i2, i3});
+  const Index a4(rsp(L"a_4"), 4, container::vector<Index>{i2, i3});
+  auto const real_canonical =
+      ex<Tensor>(L"t", bra{a3, a4}, ket{i2, i3},
+                 TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                  .conjugation_parity = ConjugationParity::None,
+                                  .column = ColumnSymmetry::Symm});
+  REQUIRE(real_canonical->as<Tensor>().base_field() == Field::Real);
+
+  auto conj_side = real_canonical->clone();
+  REQUIRE(conj_side->as<Tensor>().kconjugate() == 1);
+  REQUIRE(conj_side->as<Tensor>().kconjugated());
+  // the slots stay in place: the conjugation is not the bundle exchange
+  REQUIRE(conj_side->as<Tensor>().bra()[0].label() == L"a_3");
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto const node = binarize<EvalExprTA>(conj_side);
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-  REQUIRE(node.leaf());
-  REQUIRE_FALSE(node->op_type().has_value());
-  REQUIRE_FALSE(node->expr()->as<Tensor>().conjugated());
+  REQUIRE_FALSE(node.leaf());
+  REQUIRE(node->op_type() == EvalOp::Adjoint);
+  REQUIRE(node.left().leaf());
+  REQUIRE_FALSE(node.left()->expr()->as<Tensor>().kconjugated());
+  // identity layout: the Adjoint node is laid out by its operand's own indices
+  REQUIRE(node->canon_indices() == node.left()->canon_indices());
+  REQUIRE(node->annot() == node.left()->annot());
+
+  // the array served for the bare leaf, read before the evaluation so that a
+  // kernel writing into it could not fake the comparison
+  auto const& served =
+      yield(node.left()->expr()->as<Tensor>())->get<ArrayToT>();
+  std::vector<std::complex<double>> served_values;
+  for (auto it = served.begin(); it != served.end(); ++it) {
+    auto const& souter = it->get();
+    for (std::size_t o = 0; o < souter.size(); ++o) {
+      auto const& sinner = souter[o];
+      for (std::size_t k = 0; k < sinner.size(); ++k)
+        served_values.push_back(sinner[k]);
+    }
+  }
+  REQUIRE_FALSE(served_values.empty());
+
   auto cache = CacheManager<FullBinaryNode<EvalExprTA>>::empty();
   auto const res = evaluate(node, node->annot(), yield, cache);
   auto const& got = res->get<ArrayToT>();
-  auto const& served = yield(node->expr()->as<Tensor>())->get<ArrayToT>();
 
-  auto it_s = served.begin();
-  auto it_g = got.begin();
-  for (; it_s != served.end(); ++it_s, ++it_g) {
-    auto const& souter = it_s->get();
+  std::size_t n = 0;
+  for (auto it_g = got.begin(); it_g != got.end(); ++it_g) {
     auto const& gouter = it_g->get();
-    REQUIRE(souter.size() == gouter.size());
-    for (std::size_t o = 0; o < souter.size(); ++o) {
-      auto const& sinner = souter[o];
+    for (std::size_t o = 0; o < gouter.size(); ++o) {
       auto const& ginner = gouter[o];
-      if (sinner.empty()) continue;
-      for (std::size_t k = 0; k < sinner.size(); ++k) {
-        CHECK(ginner[k].real() == Catch::Approx(sinner[k].real()));
-        CHECK(ginner[k].imag() == Catch::Approx(sinner[k].imag()));
+      for (std::size_t k = 0; k < ginner.size(); ++k) {
+        REQUIRE(n < served_values.size());
+        auto const expected = std::conj(served_values[n++]);
+        CHECK(ginner[k].real() == Catch::Approx(expected.real()));
+        CHECK(ginner[k].imag() == Catch::Approx(expected.imag()));
       }
     }
   }
+  REQUIRE(n == served_values.size());
 }
 
 // ---------------------------------------------------------------------------

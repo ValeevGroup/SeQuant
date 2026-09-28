@@ -14,18 +14,15 @@
 #include <memory>
 #include <optional>
 #include <ranges>
-#include <string_view>
 
 namespace sequant {
 
-/// @brief the wchar used for labeling adjoints, i.e. the superscript + sign
-static const wchar_t adjoint_label = L'\u207A';
-/// @brief the suffix spelling an elementwise conjugation of a labelled object
-/// (Tensor with ValueModifier::Conjugate, Variable, Power), e.g. `t^*`
-static constexpr std::wstring_view conjugate_label = L"^*";
-/// @brief the suffix spelling a bra<->ket transposition of a Tensor
-/// (ValueModifier::Transpose), e.g. `t^T`
-static constexpr std::wstring_view transpose_label = L"^T";
+/// the trailing label mark of the adjointed state, `t⁺{...}`
+inline constexpr wchar_t adjoint_label = L'⁺';
+/// the trailing label mark of the K-conjugated state, `t꙳{...}`, and of a
+/// conjugated Variable, `x꙳` (U+A673 SLAVONIC ASTERISK: Unicode has no
+/// spacing superscript asterisk; LaTeX renders it as `^{*}`)
+inline constexpr wchar_t conjugate_label = L'꙳';
 
 /// @brief Base expression class
 
@@ -239,6 +236,15 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// Tensor); like canonicalize()'s byproduct it must be applied by the
   /// caller, see sequant::adjoint(const ExprPtr&)
   [[nodiscard]] virtual std::int8_t adjoint() = 0;
+
+  /// @brief complex conjugation of the represented operator, `K O K⁻¹`, with
+  /// `K` complex conjugation in the coordinate representation: on a scalar
+  /// the complex conjugate, on a Tensor the K-conjugated state (see
+  /// Tensor::kconjugate), on an operator string the identity (the
+  /// conjugation acts through the coefficients). Not the conjugate of a
+  /// matrix element's value, which is adjoint() with the slots exchanged.
+  /// @return the sign to apply, as for adjoint()
+  [[nodiscard]] virtual std::int8_t kconjugate() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the

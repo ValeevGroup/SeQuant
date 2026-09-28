@@ -131,6 +131,8 @@ std::int8_t Power::adjoint() {
   return 1;
 }
 
+std::int8_t Power::kconjugate() { return adjoint(); }
+
 Power& Power::operator*=(const Expr& that) {
   // b^e1 *= b^e2  ->  b^(e1+e2)
   if (that.is<Power>()) {

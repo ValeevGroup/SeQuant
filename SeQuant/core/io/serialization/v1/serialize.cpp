@@ -9,8 +9,6 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cstddef>
-#include <cstdint>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -66,19 +64,36 @@ std::wstring serialize_symm(Symmetry symm, const SerializationOptions&) {
 
 std::wstring serialize_symm(BraKetSymmetry symm, Hermiticity hermiticity,
                             const SerializationOptions&) {
+  // a definite hermiticity is the trait the observable exchange symmetry is
+  // derived from, so it is spelled with its own letter and resolved back
+  // against the parity and the indices' field when the tensor is rebuilt (see
+  // to_string(const AbstractTensor&)); this keeps the spelling of a real-basis
+  // tensor readable over a complex one too
+  switch (hermiticity) {
+    case Hermiticity::Hermitian:
+      return L"H";
+    case Hermiticity::AntiHermitian:
+      return L"A";
+    case Hermiticity::NonHermitian:
+      break;
+  }
+
+  // an indefinite hermiticity derives Nonsymm in every basis, so `N` is the
+  // only letter a tensor reaches here with; the pin letters stay for a tensor
+  // kind that spells an exchange symmetry its traits do not derive
   switch (symm) {
     case BraKetSymmetry::Conjugate:
       return L"C";
     case BraKetSymmetry::Symm:
       return L"S";
-    case BraKetSymmetry::Antisymm:
-    case BraKetSymmetry::AntiConjugate:
-      // the observable has no letter of its own: it is spelled through the
-      // hermiticity trait letter, resolved back with the parity and the field
-      // (see to_string(const AbstractTensor&))
-      return hermiticity == Hermiticity::AntiHermitian ? L"A" : L"H";
     case BraKetSymmetry::Nonsymm:
       return L"N";
+    case BraKetSymmetry::Antisymm:
+    case BraKetSymmetry::AntiConjugate:
+      // only a definite hermiticity derives a signed exchange
+      throw Exception(
+          "io::serialization::v1: a signed bra/ket exchange symmetry with an "
+          "indefinite hermiticity has no spelling");
   }
 
   SEQUANT_UNREACHABLE;
@@ -156,22 +171,9 @@ std::wstring to_string(Tensor const& tensor,
                        const SerializationOptions& options) {
   auto serialized =
       to_string(static_cast<const AbstractTensor&>(tensor), options);
-  // the modifier is spelled right after the label, in the form the
+  // the states are spelled as marks trailing the label, the form the
   // deserializer grammar accepts, so the round-trip is lossless
-  switch (tensor.value_modifier()) {
-    case ValueModifier::Adjoint:
-      serialized.insert(tensor.label().size(),
-                        std::wstring(1, sequant::adjoint_label));
-      break;
-    case ValueModifier::Conjugate:
-      serialized.insert(tensor.label().size(), std::wstring(conjugate_label));
-      break;
-    case ValueModifier::Transpose:
-      serialized.insert(tensor.label().size(), std::wstring(transpose_label));
-      break;
-    case ValueModifier::None:
-      break;
-  }
+  serialized.replace(0, tensor.label().size(), tensor.decorated_label());
   return serialized;
 }
 
@@ -181,8 +183,9 @@ std::wstring to_string(const Constant& constant,
 }
 
 std::wstring to_string(const Variable& variable, const SerializationOptions&) {
-  return std::wstring(variable.label()) +
-         (variable.conjugated() ? std::wstring(conjugate_label) : L"");
+  std::wstring serialized(variable.label());
+  if (variable.conjugated()) serialized.push_back(sequant::conjugate_label);
+  return serialized;
 }
 
 std::wstring to_string(const Power& power,
@@ -199,8 +202,7 @@ std::wstring to_string(const Power& power,
   core += L"^(";
   core += serialize_scalar(Constant::scalar_type{power.exponent()}, options);
   core += L")";
-  if (power.conjugated())
-    return L"(" + std::move(core) + L")" + std::wstring(conjugate_label);
+  if (power.conjugated()) return L"(" + std::move(core) + L")^*";
   return core;
 }
 
@@ -345,29 +347,21 @@ std::wstring to_string(AbstractTensor const& tensor,
   if (options.annot_symm) {
     serialized += L":" + details::serialize_symm(tensor._symmetry(), options);
     const auto braket_symmetry = tensor._braket_symmetry();
-    serialized += L"-" + details::serialize_symm(
-                             braket_symmetry, tensor._hermiticity(), options);
+    const auto hermiticity = tensor._hermiticity();
+    serialized +=
+        L"-" + details::serialize_symm(braket_symmetry, hermiticity, options);
     serialized +=
         L"-" + details::serialize_symm(tensor._column_symmetry(), options);
     // the fourth letter is optional: emitted only when the parity the parser
     // back-fills from the bra/ket letter is not the one this tensor carries.
-    // An observable letter (S/C/N) spells a BraKetSymmetry, from which
-    // to_conjugation_parity() recovers the parity against the same base
-    // field. The two signed states -- the ones whose swap relation carries a
-    // minus, Antisymm and AntiConjugate -- have no letter of their own and
-    // are spelled through the hermiticity trait (H/A), which leaves the
-    // parity at its default, Even. So every annotated string produced before
-    // this trait existed is unchanged.
-    const auto negative = [](std::optional<std::int8_t> sign) {
-      return sign.has_value() && *sign == -1;
-    };
-    const bool spelled_as_trait =
-        negative(braket_swap_sign(braket_symmetry)) ||
-        negative(braket_conjugate_swap_sign(braket_symmetry));
+    // A definite hermiticity is spelled with its trait letter (H/A), which
+    // says nothing about the parity, so the parser leaves it at the Tensor
+    // default; with an indefinite hermiticity the exchange letter is what the
+    // parser reads the parity from, against the same base field.
     const ConjugationParity implied_parity =
-        spelled_as_trait
-            ? ConjugationParity::Even
-            : to_conjugation_parity(braket_symmetry, tensor._base_field());
+        hermiticity == Hermiticity::NonHermitian
+            ? to_conjugation_parity(braket_symmetry, tensor._base_field())
+            : Tensor::Defaults::conjugation_parity;
     if (tensor._conjugation_parity() != implied_parity) {
       serialized +=
           L"-" + details::serialize_symm(tensor._conjugation_parity(), options);

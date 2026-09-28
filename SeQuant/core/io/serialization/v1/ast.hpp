@@ -12,7 +12,6 @@
 #include <boost/spirit/home/x3/support/ast/position_tagged.hpp>
 #include <boost/variant.hpp>
 
-#include <cstdint>
 #include <string>
 #include <variant>
 #include <vector>
@@ -44,14 +43,13 @@ struct Number : boost::spirit::x3::position_tagged {
 };
 
 struct Variable : boost::spirit::x3::position_tagged {
+  /// the name as written, a trailing conjugation mark included
   std::wstring name;
-  bool conjugated;
 
-  Variable(std::wstring name = {}, bool conjugated = false)
-      : name(std::move(name)), conjugated(conjugated) {}
-
-  // Required to use as a container
-  using value_type = decltype(name)::value_type;
+  /// @note not explicit, and the struct is not a fusion sequence: the
+  ///       variable rule's attribute is the bare name, which x3 assigns
+  ///       through this conversion
+  Variable(std::wstring name = {}) : name(std::move(name)) {}
 };
 
 struct IndexGroups : boost::spirit::x3::position_tagged {
@@ -78,18 +76,15 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
 
 // represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
+  /// the name as written, trailing state marks (`⁺`, `꙳`) included; the
+  /// conversion to Tensor splits them off
   std::wstring name;
-  // value modifier: 0 none, 1 `label^*{...}` (Conjugate), 2 `label^T{...}`
-  // (Transpose); numerically sequant::ValueModifier. A '⁺' adjoint mark is
-  // part of `name`; the conversion to Tensor composes it with this.
-  std::uint8_t modifier = 0;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;
 
-  Tensor(std::wstring name = {}, std::uint8_t modifier = 0,
-         IndexGroups indices = {}, boost::optional<SymmetrySpec> symmetry = {})
+  Tensor(std::wstring name = {}, IndexGroups indices = {},
+         boost::optional<SymmetrySpec> symmetry = {})
       : name(std::move(name)),
-        modifier(modifier),
         indices(std::move(indices)),
         symmetry(std::move(symmetry)) {}
 };
@@ -160,15 +155,13 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Index, label,
                           protoLabels);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Number,
                           numerator, denominator);
-BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Variable, name,
-                          conjugated);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
                           ket, auxiliaries, reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
                           perm_symm, braket_symm, column_symm,
                           conjugation_parity);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
-                          modifier, indices, symmetry);
+                          indices, symmetry);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,
                           exponent, conjugated);
 

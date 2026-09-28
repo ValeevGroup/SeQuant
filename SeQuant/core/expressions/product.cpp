@@ -234,6 +234,20 @@ std::int8_t Product::adjoint() {
   return 1;
 }
 
+std::int8_t Product::kconjugate() {
+  auto conj_scalar = conj(scalar());
+  using namespace ranges;
+  // K keeps the factor order, so this also serves CProduct and NCProduct
+  auto conj_factors = factors() | views::transform([](auto &&expr) {
+                        return ::sequant::kconjugate(expr);
+                      });
+  // a factor whose K-conjugate carries a sign arrives from the free function
+  // wrapped in Product{-1, factor}, which the ctor flattens into the scalar
+  *this = Product(conj_scalar, ranges::begin(conj_factors),
+                  ranges::end(conj_factors));
+  return 1;
+}
+
 ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
   return this->canonicalize_impl(opt);
 }
