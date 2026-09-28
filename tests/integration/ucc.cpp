@@ -63,16 +63,27 @@ struct TermCounts {
   std::size_t nterms;  ///< expected number of terms
 };
 
-// Regression pins, not independent references
+// Regression pins, not independent references.
+//
+// The energy (R = 0) is a real scalar, so its conjugate pairs are carried as
+// Re wrappers, one per pair; the residuals carry none. Each energy pin below
+// decomposes as (Re wrappers) + (self-conjugate terms), with the count that
+// writing every pair out would give in parentheses:
+//   BCH       rank 2:  14 =   6 +  8   (2*  6 +  8 =   20)
+//   BCH       rank 3:  41 =  33 +  8   (2* 33 +  8 =   74)
+//   BCH       rank 4: 184 = 123 + 61   (2*123 + 61 =  307)
+//   Bernoulli rank 2:   3 =   3 +  0   (2*  3 +  0 =    6)
+//   Bernoulli rank 3:  23 =  23 +  0   (2* 23 +  0 =   46)
+//   Bernoulli rank 4: 112 =  91 + 21   (2* 91 + 21 =  203)
 constexpr std::array<TermCounts, 18> pins = {{
     // clang-format off
     // expansion,        N, rank, R, terms
-    {Hbar::BCH,          2, 2,    0,   20}, {Hbar::BCH,       2, 2, 1,   44}, {Hbar::BCH,       2, 2, 2,   42},
-    {Hbar::BCH,          2, 3,    0,   74}, {Hbar::BCH,       2, 3, 1,  219}, {Hbar::BCH,       2, 3, 2,  267},
-    {Hbar::BCH,          2, 4,    0,  307}, {Hbar::BCH,       2, 4, 1, 1100}, {Hbar::BCH,       2, 4, 2, 1433},
-    {Hbar::Bernoulli,    2, 2,    0,    6}, {Hbar::Bernoulli, 2, 2, 1,   32}, {Hbar::Bernoulli, 2, 2, 2,   38},
-    {Hbar::Bernoulli,    2, 3,    0,   46}, {Hbar::Bernoulli, 2, 3, 1,  141}, {Hbar::Bernoulli, 2, 3, 2,  191},
-    {Hbar::Bernoulli,    2, 4,    0,  203}, {Hbar::Bernoulli, 2, 4, 1,  722}, {Hbar::Bernoulli, 2, 4, 2, 1044},
+    {Hbar::BCH,          2, 2,    0,   14}, {Hbar::BCH,       2, 2, 1,   44}, {Hbar::BCH,       2, 2, 2,   42},
+    {Hbar::BCH,          2, 3,    0,   41}, {Hbar::BCH,       2, 3, 1,  219}, {Hbar::BCH,       2, 3, 2,  267},
+    {Hbar::BCH,          2, 4,    0,  184}, {Hbar::BCH,       2, 4, 1, 1100}, {Hbar::BCH,       2, 4, 2, 1433},
+    {Hbar::Bernoulli,    2, 2,    0,    3}, {Hbar::Bernoulli, 2, 2, 1,   32}, {Hbar::Bernoulli, 2, 2, 2,   38},
+    {Hbar::Bernoulli,    2, 3,    0,   23}, {Hbar::Bernoulli, 2, 3, 1,  141}, {Hbar::Bernoulli, 2, 3, 2,  191},
+    {Hbar::Bernoulli,    2, 4,    0,  112}, {Hbar::Bernoulli, 2, 4, 1,  722}, {Hbar::Bernoulli, 2, 4, 2, 1044},
     // clang-format on
 }};
 
