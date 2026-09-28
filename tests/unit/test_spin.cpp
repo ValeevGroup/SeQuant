@@ -2520,6 +2520,45 @@ TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
   REQUIRE(diff->size() == 0);
 }
 
+TEST_CASE("triplet_combined_residual_product", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  auto P = [](const wchar_t* s) {
+    return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
+  };
+
+  // a single-Product input
+  const ExprPtr V = P(L"R{i_1,i_2;a_3,a_4} * g{a_3,a_4;i_3,a_2} * t{i_3;a_1}");
+  const ExprPtr V_ps =
+      P(L"R{i_2,i_1;a_3,a_4} * g{a_3,a_4;i_3,a_1} * t{i_3;a_2}");
+
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")}, {Index(L"i_2"), Index(L"a_2")}};
+
+  auto require_equal = [](ExprPtr lhs, ExprPtr rhs) {
+    ExprPtr diff = lhs - rhs;
+    canonicalize(diff);
+    simplify(diff);
+    REQUIRE(diff->size() == 0);
+  };
+
+  SECTION("combined") {
+    require_equal(
+        triplet_combined_residual(V, ext_idxs),
+        ex<Constant>(ratio(3, 16)) * V - ex<Constant>(ratio(1, 16)) * V_ps);
+  }
+
+  SECTION("bare_te") {
+    require_equal(triplet_combined_residual(V, ext_idxs, /*te_only=*/true),
+                  ex<Constant>(ratio(1, 4)) * V);
+  }
+}
+
 TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
