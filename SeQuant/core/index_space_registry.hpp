@@ -1406,7 +1406,7 @@ class IndexSpaceRegistry {
   /// @return the IndexSpace registered under @p space_key
   /// @throw Exception if @p space_key is not registered; its message is
   /// @p message_prefix followed by the key
-  template <typename S>
+  template <basic_string_convertible S>
   const IndexSpace& retrieve_or_throw(const S& space_key,
                                       std::string_view message_prefix) const {
     const auto* ptr = this->retrieve_ptr(space_key);
