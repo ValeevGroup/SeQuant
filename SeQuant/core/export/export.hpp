@@ -60,15 +60,19 @@ using FoldedNameRegistry = std::map<std::wstring, std::wstring>;
 ///         its CanonTransform, so the marker is re-materialized here, both
 ///         where a scalar prefactor is pruned out of the tree
 ///         (prune_scalar_factor) and where a scalar is handed to a generator
-///         (GenerationVisitor::process_computation), which wraps it. A
-///         tensor-valued node needs no such treatment: its denoted spelling
-///         is materialized on the node itself before preprocessing (see
+///         (GenerationVisitor::process_computation), which wraps it. Only a
+///         leaf: an internal node's placeholder holds what the emitted
+///         computation puts in it, which is built from its operands' denoted
+///         spellings and so is already the denoted value; conjugating it
+///         again would conjugate twice. A tensor-valued node needs no such
+///         treatment: its denoted spelling is materialized on the node itself
+///         before preprocessing (see
 ///         PreprocessVisitor::preprocess_node_content), which is what makes a
 ///         marked array a name of its own.
 template <typename Node>
 ExprPtr denoted_scalar(Node const &node) {
   ExprPtr e = node->expr();
-  if (node->canon_transform().conj &&
+  if (node.leaf() && node->canon_transform().conj &&
       (e->template is<Variable>() || e->template is<Power>())) {
     e = e->clone();
     if (e->template is<Variable>())
@@ -372,9 +376,11 @@ class GenerationVisitor {
       drop(*iter);
     }
 
-    // Drop used leaf elements
-    drop(*denoted_scalar(node.right()));
-    drop(*denoted_scalar(node.left()));
+    // Drop used leaf elements, under the spelling load_or_create registered
+    // them with: that is the stored one, which for a conjugated scalar leaf
+    // is not the one it denotes
+    drop(*node.right()->expr());
+    drop(*node.left()->expr());
   }
 
  private:

@@ -1221,6 +1221,40 @@ TEST_CASE("full export of marked tensors", "[export]") {
   }
 }
 
+TEST_CASE("a conjugated scalar leaf is loaded and dropped as it is stored",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // a scalar leaf stores the unmarked spelling and keeps the conjugation on
+  // its transform, and a generator that does not prune variables loads and
+  // drops that stored spelling: the denoted one is a different key
+  auto x = ex<Variable>(L"x");
+  auto y = ex<Variable>(L"y");
+  x->as<Variable>().conjugate();
+  y->as<Variable>().conjugate();
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"i_1"});
+  const Tensor R(L"R", bra{L"a_1"}, ket{L"i_1"});
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  REQUIRE((ItfGenerator<ItfContext>{}.prunable_scalars() &
+           PrunableScalars::Variables) == PrunableScalars::None);
+  ItfGenerator<ItfContext> gen;
+  export_expression(
+      to_export_tree(ResultExpr(
+          R, ex<Product>(ExprPtrList{x, y, f, w}, Product::Flatten::No))),
+      gen, ctx);
+  const std::string code = gen.get_generated_code();
+  CAPTURE(code);
+
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load x[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load y[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop y[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop x[]"));
+}
+
 TEST_CASE("a marked leaf reaches the generator as the array it denotes",
           "[export]") {
   using namespace sequant;
