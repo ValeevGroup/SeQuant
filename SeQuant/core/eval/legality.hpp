@@ -142,9 +142,8 @@ struct LegalitySchedule {
 /// the operand values' own (separately-analyzed) build-sites, not to this
 /// one. Concretely, the union of
 ///   - \p node's own \c canon_indices() (its result/free indices), and
-///   - \p node's own \c contracted_indices(node) (see eval_expr.hpp; empty for
-///   a
-///     leaf or a non-product node),
+///   - \p node's own \c contracted_indices(node) (see eval_expr.hpp;
+///     empty for a leaf or a non-product node),
 /// filtered to the batchable subset. The result is de-duplicated by \c Index
 /// identity (space + ordinal + proto-indices); order follows first
 /// discovery (carried indices, then contracted indices).
