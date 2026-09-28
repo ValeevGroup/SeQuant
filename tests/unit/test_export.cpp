@@ -1269,6 +1269,68 @@ TEST_CASE("a marked leaf reaches the generator as the array it denotes",
   }
 }
 
+TEST_CASE("a pruned scalar prefactor keeps its conjugation", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // the text generator prunes every scalar it can
+  REQUIRE(TextGenerator<TextGeneratorContext>{}.prunable_scalars() ==
+          PrunableScalars::All);
+
+  auto generate = [](const ResultExpr &result) {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    return gen.get_generated_code();
+  };
+
+  const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+
+  // a scalar leaf stores the unmarked spelling, its conjugation riding the
+  // node's transform
+  auto conjugated_power = []() {
+    auto p = ex<Power>(L"x", rational(2));
+    p->as<Power>().conjugate();
+    return p;
+  };
+
+  SECTION("pruned out of the tree") {
+    // two tensor factors leave the product a subtree to hold the pruned
+    // scalar, so the prefactor is taken out of the tree
+    const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+    const std::string code =
+        generate(ResultExpr(R, conjugated_power() * t * f));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x^2)"));
+  }
+
+  SECTION("kept in the tree") {
+    // one tensor factor: pruning the scalar would make the tree vanish, so it
+    // reaches the generator through the computation instead
+    const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+    const std::string code = generate(ResultExpr(R, conjugated_power() * t));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x^2)"));
+  }
+
+  SECTION("a conjugated power base is spelled as written") {
+    // the base's own marker is part of the stored spelling, not of the
+    // transform, and survives the pruning unchanged
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    const auto p = ex<Power>(std::move(x), rational(2));
+
+    const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+    const std::string code = generate(ResultExpr(R, p * t * f));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x)^2"));
+  }
+}
+
 TEST_CASE("a folded name must come from one tensor", "[export]") {
   using namespace sequant;
   auto resetter = to_export_context();

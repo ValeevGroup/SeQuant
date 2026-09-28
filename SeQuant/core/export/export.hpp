@@ -55,6 +55,30 @@ struct PreprocessResult {
 /// preprocessing refuses that; see preprocess().
 using FoldedNameRegistry = std::map<std::wstring, std::wstring>;
 
+/// @return the spelling @p node denotes, for a scalar-valued node: a scalar
+///         leaf stores the unmarked spelling and carries the conjugation in
+///         its CanonTransform, so the marker is re-materialized here, both
+///         where a scalar prefactor is pruned out of the tree
+///         (prune_scalar_factor) and where a scalar is handed to a generator
+///         (GenerationVisitor::process_computation), which wraps it. A
+///         tensor-valued node needs no such treatment: its denoted spelling
+///         is materialized on the node itself before preprocessing (see
+///         PreprocessVisitor::preprocess_node_content), which is what makes a
+///         marked array a name of its own.
+template <typename Node>
+ExprPtr denoted_scalar(Node const &node) {
+  ExprPtr e = node->expr();
+  if (node->canon_transform().conj &&
+      (e->template is<Variable>() || e->template is<Power>())) {
+    e = e->clone();
+    if (e->template is<Variable>())
+      e->template as<Variable>().conjugate();
+    else
+      e->template as<Power>().conjugate();
+  }
+  return e;
+}
+
 /// Visitor objects that will steer code generation while visiting a given
 /// expression/evaluation tree by triggering the corresponding callbacks in the
 /// provided Generator objects.
@@ -224,27 +248,6 @@ class GenerationVisitor {
     }
   }
 
-  /// @return the spelling @p node denotes, for a scalar-valued node: a scalar
-  ///         leaf stores the unmarked spelling and carries the conjugation in
-  ///         its CanonTransform, so the marker is re-materialized here and the
-  ///         generators wrap it. A tensor-valued node needs no such treatment:
-  ///         its denoted spelling is materialized on the node itself before
-  ///         preprocessing (see PreprocessVisitor::preprocess_node_content),
-  ///         which is what makes a marked array a name of its own.
-  template <typename Node>
-  static ExprPtr denoted_scalar(Node const &node) {
-    ExprPtr e = node->expr();
-    if (node->canon_transform().conj &&
-        (e->template is<Variable>() || e->template is<Power>())) {
-      e = e->clone();
-      if (e->template is<Variable>())
-        e->template as<Variable>().conjugate();
-      else
-        e->template as<Power>().conjugate();
-    }
-    return e;
-  }
-
   void process_computation(const ExportNode<NodeData> &node) {
     SEQUANT_ASSERT(!node.leaf());
     SEQUANT_ASSERT(node->op_type().has_value());
@@ -374,7 +377,10 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
   ExprPtr parentFactor =
       iter == result.scalarFactors.end() ? nullptr : iter->second;
 
-  ExprPtr factor = node->expr();
+  // the pruned prefactor is multiplied into the result wherever the tree it
+  // came out of is computed, so it must carry the conjugation the node's
+  // transform holds
+  ExprPtr factor = denoted_scalar(node);
 
   SEQUANT_ASSERT(factor);
   SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>() ||
