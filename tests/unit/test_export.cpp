@@ -1267,6 +1267,27 @@ TEST_CASE("a marked leaf reaches the generator as the array it denotes",
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("r_conj[a_1, i_1]"));
     REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" r["));
   }
+  SECTION("an adjointed and K-conjugated leaf is named _adj_conj") {
+    // over a complex basis the leaf stores t꙳ (an array of its own) under the
+    // adjoint channel's {conj, braket_swap}, and denotes t⁺꙳
+    const TensorSymmetries no_parity{.conjugation_parity =
+                                         ConjugationParity::None};
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, no_parity);
+    REQUIRE(t.kconjugate() == 1);
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+    REQUIRE(t.kconjugated());
+
+    const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"i_1"});
+    const Tensor R2(L"R", bra{L"a_2"}, ket{L"a_1"});
+    const std::string code = generate(ResultExpr(R2, ex<Tensor>(t) * w));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("t_adj_conj[i_1, a_1]"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" t["));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" t_conj["));
+  }
 }
 
 TEST_CASE("a reordered leaf's canonicalization sign reaches the coefficient",

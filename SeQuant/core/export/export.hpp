@@ -773,13 +773,14 @@ class PreprocessVisitor {
     // leaf needs this -- an internal node's placeholder is built in the
     // spelling it denotes -- and a leaf whose state already named an array of
     // its own (a ꙳ over a complex basis) stores that state, which its
-    // transform then does not carry. The transform stays on the node: no
-    // export reader consumes it once the spelling carries it.
+    // transform then does not carry. The transform stays on the node: the
+    // one export reader left once the spelling carries the states is
+    // operand_sign(), for the phase no spelling carries.
     if (node.leaf() && node->is_tensor() && node->canon_transform().conj) {
-      // the states a leaf's transform carries are the ones its construction
-      // took off the stored spelling, so that spelling is unmarked here
-      SEQUANT_ASSERT(!node->as_tensor().adjointed() &&
-                     !node->as_tensor().kconjugated());
+      // the '⁺' is the state a leaf's construction always takes off the
+      // stored spelling; a '꙳' over a complex basis stays on it (t⁺꙳ stores
+      // t꙳ under {conj, braket_swap}), so only the former is asserted absent
+      SEQUANT_ASSERT(!node->as_tensor().adjointed());
       node->set_expr(node->denoted_expr());
     }
 
