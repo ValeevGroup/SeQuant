@@ -651,7 +651,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
 
   SEQUANT_ASSERT(all_tensors | all_scalars);
 
-  // uniform-conj hoisting: a sum whose EVERY summand carries a hoistable
+  // uniform-conj hoisting: a sum all of whose summands carry a hoistable
   // transform equals conj of the unconjugated sum -- strip the conj salts so
   // the slot hash matches, and record {conj} on the sum nodes. A summand
   // whose transform also exchanges the bundles is not hoistable (see
@@ -801,7 +801,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         })  //
       | ranges::to_vector;
 
-  // PREFIX-uniform conj hoisting (design spec): the left-fold combines
+  // prefix-uniform conj hoisting: the left-fold combines
   // factor prefixes, and a prefix whose every factor carries a hoistable
   // transform equals the conj of its unconjugated counterpart -- its node
   // hoists {conj} and its factors' conj salts are stripped, so e.g. the
@@ -887,14 +887,17 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       collect_tensor_factors(right, subfacs);
       // A hoisted prefix's factors are spelled with the '꙳' the hoist takes
       // over, so the flattened network hashes onto the unconjugated product's
-      // slot. Clearing the state consumes no sign: a kept '꙳' has parity
-      // None. Mixed marks stay in the TN, where the marker coloring keeps
-      // e.g. C·C꙳ identity-distinct from C·C.
+      // slot. The hoist takes over that one state: an adjoint state names a
+      // different array, so it is passed through rather than cleared.
+      // Clearing the star consumes no sign: a kept '꙳' has parity None.
+      // Mixed marks stay in the TN, where the marker coloring keeps e.g.
+      // C·C꙳ identity-distinct from C·C.
       if (hoist_conj)
         for (auto& f : subfacs)
           if (f.expr->is<Tensor>() && f.expr->as<Tensor>().kconjugated()) {
+            auto& t = f.expr->as<Tensor>();
             [[maybe_unused]] auto const sign =
-                f.expr->as<Tensor>().set_states(false, false);
+                t.set_states(t.adjointed(), false);
             SEQUANT_ASSERT(sign == 1);
           }
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });

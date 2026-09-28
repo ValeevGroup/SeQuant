@@ -1019,7 +1019,7 @@ TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
   REQUIRE(CD->hash_value() != CDc->hash_value());
 
-  // a uniformly conjugated sum of products hoists the same way
+  // a uniformly conjugated sum hoists the same way
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
   auto S = binarize(rt(L"D", L"i_1", L"a_1") + rt(L"E", L"i_1", L"a_1"));
   auto Sc =
@@ -1041,6 +1041,14 @@ TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(XY->hash_value() != XYc->hash_value());
     REQUIRE_FALSE(XYc->canon_transform().conj);
+
+    // the sum site reads the same rule: the adjoint of a sum salts
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto SXY = binarize(X->clone() + Y->clone());
+    auto SXYc = binarize(conjugate(X->clone() + Y->clone()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(SXY->hash_value() != SXYc->hash_value());
+    REQUIRE_FALSE(SXYc->canon_transform().conj);
   }
 }
 
