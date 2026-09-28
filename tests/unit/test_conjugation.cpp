@@ -477,6 +477,34 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
     }
   }
 
+  SECTION("a real scalar inside a wrapper merges with one outside") {
+    // Re(c X) = c Re(X) for real c, so the two spellings are one summand
+    auto x = deserialize(L"h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+    auto a = ex<RealPart>(ex<Constant>(2) * x->clone());  // Re(2 X)
+    auto b = ex<Constant>(-2) * real_part(x->clone());    // -2 Re(X)
+    auto folded = fold_conjugate_pairs(a + b);
+    simplify(folded);
+    REQUIRE(folded->is<Constant>());
+    REQUIRE(folded->as<Constant>().value() == 0);
+  }
+
+  SECTION("a wrapper on the adjoint spelling is the same summand") {
+    // Re(x*) = Re(x), so wrappers on the two spellings share a representative
+    // and opposite scalars cancel
+    auto d =
+        ex<Tensor>(L"d", bra{L"i_1"}, ket{L"a_1"},
+                   TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                                    .column = ColumnSymmetry::Symm});
+    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
+    auto x = d * u;
+    auto folded =
+        fold_conjugate_pairs(real_part(x->clone()) +
+                             ex<Constant>(-1) * real_part(adjoint(x->clone())));
+    simplify(folded);
+    REQUIRE(folded->is<Constant>());
+    REQUIRE(folded->as<Constant>().value() == 0);
+  }
+
   SECTION("opt-in fold in simplify, complex field") {
     auto sum = term->clone() + term_adj->clone();
     auto folded = sum->clone();
@@ -1017,8 +1045,8 @@ TEST_CASE("conjugate_fold_skips_reserved", "[conjugation]") {
 }
 
 TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
-  // identically-marked summands merge; a marked and an unmarked spelling of
-  // _different_ values do not
+  // identically-marked summands merge into one; a marked and an unmarked
+  // spelling are the two members of a conjugate pair
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
@@ -1032,10 +1060,14 @@ TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
   REQUIRE(sum->is<Product>());
   REQUIRE(sum->as<Product>().scalar() == (C{2, 0}));
 
+  // a marked and an unmarked spelling are a conjugate pair, which the
+  // default simplify folds: t + t꙳ = 2 Re[t], on the unmarked representative
   auto mixed = t->clone() + tstar->clone();
   simplify(mixed);
-  REQUIRE(mixed->is<Sum>());
-  REQUIRE(mixed->as<Sum>().summands().size() == 2);
+  auto expected = ex<Constant>(2) * real_part(t->clone());
+  canonicalize(expected);
+  REQUIRE(mixed->is<Product>());
+  REQUIRE(*mixed == *expected);
 }
 
 TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {

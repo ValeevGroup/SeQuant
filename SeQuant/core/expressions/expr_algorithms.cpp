@@ -470,20 +470,35 @@ container::svector<ExprPtr> merge_wrapped_summands(
     Constant::scalar_type scalar = 1;
     ExprPtr inner;
   };
-  auto classify = [](ExprPtr const& sm) -> WrapInfo {
-    if (sm->is<RealPart>()) return {1, 1, sm->as<RealPart>().inner()};
-    if (sm->is<ImagPart>()) return {2, 1, sm->as<ImagPart>().inner()};
-    if (sm->is<Product>()) {
-      auto const& p = sm->as<Product>();
-      if (p.factors().size() == 1) {
-        auto const& f = p.factor(0);
-        if (f->is<RealPart>())
-          return {1, p.scalar(), f->as<RealPart>().inner()};
-        if (f->is<ImagPart>())
-          return {2, p.scalar(), f->as<ImagPart>().inner()};
+  // Re and Im are real-linear (Re(c X) = c Re(X), Im(c X) = c Im(X) for a
+  // real c), so a real scalar belongs with the summand's scalar rather than
+  // inside the wrapper: the two spellings then share one representative
+  auto hoist_real_scalar = [](ExprPtr& e) -> Constant::scalar_type {
+    if (!e->is<Product>()) return 1;
+    auto const& p = e->as<Product>();
+    auto const c = p.scalar();
+    if (c.imag() != 0 || c.real() == 1) return 1;
+    e = detail::strip_scalar(p);
+    return c;
+  };
+  auto classify = [&hoist_real_scalar](ExprPtr const& sm) -> WrapInfo {
+    auto info = [&sm]() -> WrapInfo {
+      if (sm->is<RealPart>()) return {1, 1, sm->as<RealPart>().inner()};
+      if (sm->is<ImagPart>()) return {2, 1, sm->as<ImagPart>().inner()};
+      if (sm->is<Product>()) {
+        auto const& p = sm->as<Product>();
+        if (p.factors().size() == 1) {
+          auto const& f = p.factor(0);
+          if (f->is<RealPart>())
+            return {1, p.scalar(), f->as<RealPart>().inner()};
+          if (f->is<ImagPart>())
+            return {2, p.scalar(), f->as<ImagPart>().inner()};
+        }
       }
-    }
-    return {};
+      return {};
+    }();
+    if (info.kind != 0) info.scalar *= hoist_real_scalar(info.inner);
+    return info;
   };
   container::svector<ExprPtr> out;
   struct Bucket {
@@ -511,8 +526,9 @@ container::svector<ExprPtr> merge_wrapped_summands(
         conj_inner = ex<Constant>(sign) * conj_inner;
     }
     auto cc = canonicalize(conj_inner->clone(), opts);
-    // deterministic representative: the smaller hash of the two spellings
-    bool use_conj = cc->hash_value() < ci->hash_value();
+    // the representative is the smaller of the two canonical spellings in the
+    // expression order, the same choice the pair fold below makes
+    bool use_conj = *cc < *ci;
     ExprPtr rep = use_conj ? cc : ci;
     auto sc = wi.scalar;
     if (use_conj && wi.kind == 2) sc = -sc;  // Im(x*) = -Im(x)
