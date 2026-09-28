@@ -105,7 +105,7 @@ TEST_CASE("bubble_sort_parity", "[utilities]") {
   REQUIRE(bubble_sort_parity(even) == +1);
   REQUIRE(as_ints(even) == std::vector<int>{1, 2, 3});
 
-  auto descending = make({3, 1, 2});
+  auto descending = make({1, 2, 3});
   REQUIRE(bubble_sort_parity(descending, std::greater<>{}) == -1);
   REQUIRE(as_ints(descending) == std::vector<int>{3, 2, 1});
 }
