@@ -130,6 +130,7 @@ enum class TripletWeightKind {
 /// Supporting a new rank means adding weights to the CombinedResidual case
 /// of the triplet weight table
 ///
+/// \pre \p V is a Product or a Sum of Products
 /// \param V The sector-summed triplet primitive
 /// \param ext_idxs A vector of external index groups (must have 2 or 3 groups)
 /// \param te_only Assemble the bare-TE weights instead (n = 2 only)

@@ -1036,19 +1036,8 @@ ExprPtr triplet_combined_residual(
                            : TripletWeightKind::CombinedResidual);
   SEQUANT_ASSERT(weights.size() == slot_perm_count(n_particles));
 
-  if (V->is<Sum>()) return triplet_weighted_perm_sum(V, ext_idxs, weights);
-
-  const auto [b, k] = external_bra_ket(ext_idxs);
-  Sum out;
-  for (std::size_t p = 0; p != weights.size(); ++p) {
-    const auto& w = weights[p];
-    if (w == 0) continue;
-    const auto map = slot_perm_replacements(b, k, p);
-    out.append(map.empty() ? ex<Constant>(w) * V : transform_expr(V, map, w));
-  }
-  auto result = ex<Sum>(out);
-  simplify(result);
-  return result;
+  return triplet_weighted_perm_sum(V->is<Sum>() ? V : ex<Sum>(ExprPtrList{V}),
+                                   ext_idxs, weights);
 }
 
 ExprPtr triplet_maxcoeff_compact(
