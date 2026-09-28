@@ -279,11 +279,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // slot
     REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_star}.hash_value());
 
-    // nor t and t⁺, nor t and t⁺꙳
+    // t and t⁺ share the bare array's slot: '⁺' decodes to {conj,
+    // braket_swap} over the unmarked spelling, one provider array for both
     Tensor t_adj = t;
     REQUIRE(t_adj.adjoint() == 1);
     REQUIRE(t_adj.adjointed());
-    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_adj}.hash_value());
+    REQUIRE(EvalExpr{t}.hash_value() == EvalExpr{t_adj}.hash_value());
     Tensor t_adj_star = t;
     REQUIRE(t_adj_star.adjoint() == 1);
     REQUIRE(t_adj_star.kconjugate() == 1);
@@ -945,6 +946,45 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
   REQUIRE_FALSE(eca.as_tensor().adjointed());
   REQUIRE(eca.canon_transform().conj);
   REQUIRE(eca.canon_transform().braket_swap);
+}
+
+// The hash contract stated directly: a leaf's slot hash is the hash of the
+// array it stores -- label, slots, the state byte of the stored spelling, and
+// the AntiSymm conjugation-symmetry term, nothing else (hash_terminal_tensor).
+// leaf_transform_channels above exercises the same channels through
+// binarize(); this pins the contract at EvalExpr construction directly.
+TEST_CASE("leaf_slot_identity_is_the_stored_array",
+          "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+  auto hash_of = [](Tensor const& t) { return EvalExpr{t}.hash_value(); };
+
+  // the two transform cases share the bare array's slot
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  Tensor t_adj = t;
+  REQUIRE(t_adj.adjoint() == 1);
+  REQUIRE(hash_of(t_adj) == hash_of(t));
+
+  Index ra = idx(L"a_1", Field::Real), ri = idx(L"i_1", Field::Real);
+  Tensor r(L"r", bra{ra}, ket{ri},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  Tensor rk = r;
+  REQUIRE(rk.kconjugate() == 1);
+  REQUIRE(hash_of(rk) == hash_of(r));
+
+  // the complex-basis K-conjugate is its own array
+  Tensor c(L"c", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  Tensor ck = c;
+  REQUIRE(ck.kconjugate() == 1);
+  REQUIRE(hash_of(ck) != hash_of(c));
+
+  // the two orientations of a Conjugate (Hermitian) tensor sharing one
+  // provider array's slot is pinned by leaf_transform_channels above.
+
+  // an Odd-parity real-basis array keying apart from the Even one is pinned
+  // by "the parity keys an imaginary leaf apart over a real basis" above.
 }
 
 TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
