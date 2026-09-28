@@ -570,9 +570,10 @@ TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
   to `!canon_transform().trivial()`.
 
 - [ ] **Step 3:** Full suite (`'~[long-tests]'`) — including the PR-1
-  eval-cache identity regressions (`eval_expr_conjugation_state_identity`,
-  `conjugate eval fold`, `ta_tot_kconjugation_end_to_end` — the latter
-  re-blessed to the transform model in Task 6). Long tests too: run once with
+  eval-cache identity regressions (`eval_expr_conjugation_state_identity` and
+  `ta_tot_kconjugation_end_to_end`, the latter re-blessed to the transform
+  model in Task 6; the `conjugate eval fold` case named here asserts the fold
+  and is deleted). Long tests too: run once with
   no filter.
 
 - [ ] **Step 4: Commit** — `eval: retrieval through apply_canon_transform; EvalOp::Adjoint retired`

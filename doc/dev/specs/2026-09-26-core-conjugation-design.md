@@ -391,8 +391,9 @@ Parser rules:
 > `AntiSymm` (E-I4), and by none of the other traits. The `AntiSymm` term is
 > the one that carries value information: over a real basis an odd-parity
 > array is imaginary where an even-parity one is real, so two same-label
-> leaves of different declared parity must not share a cache slot. `Symm` and
-> `NonSymm` add no term, so every other leaf keeps its hash. The term arrived
+> leaves of the parities this term separates do not share a cache slot.
+> `Symm` and `NonSymm` add no term, so every other leaf keeps its hash and a
+> `Symm`/`NonSymm` pair of the same label still shares one. The term arrived
 > in a follow-up batch after the final review, and the ITF fixtures are
 > unchanged by it.
 - Vertex painter: the tensor core's colour includes the two states and the
@@ -551,8 +552,9 @@ the `K`-parity.
 5. `^T` and `^*` are input errors; the marks are the states.
 6. The eval leaf hash includes the conjugation symmetry.
    *As built:* the leaf hash carries the two states and the `AntiSymm`
-   conjugation symmetry (section 5); `Symm` and `NonSymm` add no term, and
-   the ITF fixtures are unchanged by it.
+   conjugation symmetry (section 5); `Symm` and `NonSymm` add no term, so the
+   term separates only the parities it names, and the ITF fixtures are
+   unchanged by it.
 7. `TensorBlockCanonicalizer(bool fold_conjugate_braket, bool
    fold_signed_braket)` becomes `TensorBlockCanonicalizer(bool
    fold_signed_braket)`; `CreateGraphOptions`/`CanonicalizeSlotsOptions` lose

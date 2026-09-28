@@ -158,12 +158,13 @@ cases:
 
 `t⁺꙳` over a complex basis composes the first case with the third: the
 array is `t꙳`, the transform `{conj, braket_swap}`. The decoded spelling is
-then block-canonicalized with `fold_signed_braket` off (a tensor-of-tensors
-leaf, one with proto indices, goes through
-`TensorNetwork::canonicalize_slots` instead) -- indices are reordered within
-each bundle, the `Symm` bra/ket swap is the only exchange, and a leaf keeps its
-as-written orientation -- and that sign composes into the same transform, which
-is applied once on the way out of the leaf fetch. `denoted_expr()` inverts the
+then block-canonicalized with `fold_signed_braket` off -- indices are
+reordered within each bundle, the `Symm` bra/ket swap is the only exchange, and
+a leaf keeps its as-written orientation -- and that sign composes into the same
+transform, which is applied once on the way out of the leaf fetch. A
+tensor-of-tensors leaf, one with proto indices, runs that same normalization
+and then, in addition, takes its slot hash and a further phase from
+`TensorNetwork::canonicalize_slots`. `denoted_expr()` inverts the
 decoding, respelling the stored array as written. `binarize(Tensor)` is
 therefore a plain leaf in every case.
 

@@ -105,10 +105,14 @@ logic.
 >
 > F1, F3 and F4 are therefore dissolved by the _absence_ of the fold rather
 > than by re-enabling it: there is no `fold_conjugate_braket` flag left to
-> keep consistent across gating points, and the eval boundary runs the same
-> `fold_signed_braket = false` setting the rest of canonicalization uses. The
-> whole transform -- the phase included -- is applied once on the way out of
-> the leaf fetch, so a leaf's block-canonicalization sign reaches the value.
+> keep consistent across gating points, and the one remaining setting is
+> stated at the boundary itself. `TensorBlockCanonicalizer` folds a signed
+> bra<->ket exchange by default, and `canonicalize_graph` asks for that; the
+> eval leaf boundary is the site that passes `false` explicitly, which is the
+> setting the report-only `canonicalize_slots` path -- the one the
+> tensor-of-tensors branch also uses -- leaves in place. The whole transform
+> -- the phase included -- is applied once on the way out of the leaf fetch,
+> so a leaf's block-canonicalization sign reaches the value.
 
 ## Cache/CSE identity and the hash contract
 
@@ -197,10 +201,12 @@ granularities, not just whole terms:
 >   hashed and live in the transform, so there is no marker salt to move out
 >   of the hash.
 > - The slot hash is _label-blind_: index labels do not enter it (a proto
->   index's label does, as part of the slot's own identity). A flat Hermitian
->   tensor's two orientations therefore share one slot -- one provider array,
->   with each node's annotations carrying the wiring and its transform the
->   orientation.
+>   index's label does, as part of the slot's own identity). Where a flat
+>   Hermitian tensor's two orientations present the same sequence of slot
+>   spaces and quantum numbers -- `g{p_1,p_2;p_3,p_4}` over one space, not
+>   `f{i;a}` against `f{a;i}`, which differ in that sequence and hash apart --
+>   they therefore share one slot: one provider array, with each node's
+>   annotations carrying the wiring and its transform the orientation.
 > - A tensor-of-tensors leaf takes its slot hash from
 >   `TensorNetwork::canonicalize_slots` instead, and that hash is the
 >   canonical labeling, which colours a `Conjugate` tensor's bundles apart. A
