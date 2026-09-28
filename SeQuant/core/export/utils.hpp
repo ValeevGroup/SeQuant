@@ -10,8 +10,25 @@
 #include <SeQuant/core/expressions/power.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace sequant::detail {
+
+/// How sanitize_identifier treats non-ASCII characters
+enum class NonAsciiPolicy {
+  /// Keep them as they are (for languages accepting Unicode identifiers)
+  Keep,
+  /// Replace each by `u` followed by its code point in hex (e.g. `u3b3`)
+  Escape,
+};
+
+/// Turns a label into a valid identifier: ASCII characters other than
+/// alphanumerics and `_` are replaced by `_`, and a leading digit is prefixed
+/// with `_`.
+/// @param label The label to sanitize
+/// @param policy What to do with non-ASCII characters
+/// @return The UTF-8 encoded identifier
+std::string sanitize_identifier(std::wstring_view label, NonAsciiPolicy policy);
 
 /// Formats a Power exponent for export framework
 /// @param exponent the rational exponent

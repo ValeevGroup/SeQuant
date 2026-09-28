@@ -37,12 +37,14 @@ def test_section():
     R1_vo += 42 * np.einsum('ai->ai', A_vo, optimize=True)
     del A_vo
     np.save('R1_vo.npy', R1_vo)
+    del R1_vo
 
     R2_vvoo = np.zeros((nvirt, nvirt, nocc, nocc), order='F')
     A_vo = np.load('A_vo.npy')
     R2_vvoo += np.einsum('ai,bc->abic', A_vo, A_vo, optimize=True)
     del A_vo
     np.save('R2_vvoo.npy', R2_vvoo)
+    del R2_vvoo
 
 
 =================================================

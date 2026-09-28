@@ -23,6 +23,7 @@ x = np.load('x.npy')
 e += np.conj(2**2) * x
 del x
 np.save('e.npy', e)
+del e
 
 =================================================
 Julia (TensorOperations)

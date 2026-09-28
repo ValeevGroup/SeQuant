@@ -151,6 +151,7 @@ I_vvvv += np.einsum('abx,cdx->abcd', I_vvx, I2_vvx, optimize=True)
 del I2_vvx
 del I_vvx
 np.save('I_vvvv.npy', I_vvvv)
+del I_vvvv
 
 =================================================
 PyTorch (einsum)
@@ -176,5 +177,6 @@ I_vvvv += torch.einsum('abx,cdx->abcd', I_vvx, I2_vvx)
 del I2_vvx
 del I_vvx
 torch.save(I_vvvv, 'I_vvvv.pt')
+del I_vvvv
 
 =================================================

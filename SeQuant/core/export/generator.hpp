@@ -112,7 +112,9 @@ class Generator {
   virtual void destroy(const Tensor &tensor, const Context &ctx) = 0;
   /// Semantic callback for persisting the given tensor. Persisting means that
   /// the current value of the tensor is stored in some way that makes its value
-  /// available at a later time.
+  /// available at a later time, after which the tensor is unloaded (no separate
+  /// call to unload follows). Any later use of the tensor is preceded by a call
+  /// to load.
   virtual void persist(const Tensor &tensor, const Context &ctx) = 0;
 
   /// Semantic callback for creating the given variable. This is expected to
@@ -136,7 +138,9 @@ class Generator {
   virtual void destroy(const Variable &variable, const Context &ctx) = 0;
   /// Semantic callback for persisting the given variable. Persisting means that
   /// the current value of the variable is stored in some way that makes its
-  /// value available at a later time.
+  /// value available at a later time, after which the variable is unloaded (no
+  /// separate call to unload follows). Any later use of the variable is
+  /// preceded by a call to load.
   virtual void persist(const Variable &tensor, const Context &ctx) = 0;
 
   /// Semantic callback for encoding the computation of the given expression.
