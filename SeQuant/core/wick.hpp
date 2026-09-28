@@ -512,8 +512,8 @@ class WickTheorem {
   /// bitmask (0 = pair listed, 1 = not listed); until then, caches them in
   /// @p cache
   /// @param caller name of the public setter, used in exception messages
-  /// @return the number of pairs that were in @p cache before it was
-  /// consumed, or std::nullopt if @p op_index_pairs were cached
+  /// @return the number of pairs recorded in @p mask, or std::nullopt if
+  /// @p op_index_pairs were cached
   /// @throw Exception if @p op_index_pairs contains duplicates or out-of-range
   /// indices
   template <typename IndexPairContainer>
@@ -530,6 +530,8 @@ class WickTheorem {
     // process now if input is resolved, or is a deferred call from
     // compute_nopseq (already cached list)
     if (expr_input_ == nullptr || !cache.empty()) {
+      // N.B. op_index_pairs is cache itself when called from compute_nopseq
+      const std::size_t npairs = op_index_pairs.size();
       for (const auto &opidx_pair : op_index_pairs) {
         constexpr bool signed_indices =
             std::is_signed_v<typename std::ranges::range_value_t<
@@ -546,7 +548,7 @@ class WickTheorem {
           }
         }
       }
-      if (op_index_pairs.size() != 0ul) {
+      if (npairs != 0ul) {
         mask.resize(input_->size());
         for (auto &v : mask) {
           v.set();
@@ -556,9 +558,8 @@ class WickTheorem {
           mask[opidx_pair.second].reset(opidx_pair.first);
         }
       }
-      const auto ncached = cache.size();
       cache.clear();
-      return ncached;
+      return npairs;
     } else {
       ranges::for_each(op_index_pairs, [&cache](const auto &idxpair) {
         cache.push_back(idxpair);

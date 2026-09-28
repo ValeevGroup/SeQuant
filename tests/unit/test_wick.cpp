@@ -239,6 +239,20 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       }
     }
 
+    // requested connections exclude the uncontracted term also when the
+    // operators are given directly rather than as an expression
+    {
+      auto opseq1 = ex<FNOperatorSeq>(FNOperator(cre(), ann({L"i_1"})),
+                                      FNOperator(cre({L"i_2"}), ann()));
+      auto full_contractions = FWickTheorem{opseq1}.compute();
+      REQUIRE_FALSE(full_contractions->is<Constant>());
+      auto connected_contractions = FWickTheorem{opseq1}
+                                        .full_contractions(false)
+                                        .set_nop_connections({{0, 1}})
+                                        .compute();
+      REQUIRE_THAT(connected_contractions, EquivalentTo(full_contractions));
+    }
+
     // general string of creators/annihilators, from Nick Mayhall
     {
       // sequence of individual ops
