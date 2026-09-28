@@ -10,9 +10,12 @@
 #include <SeQuant/external/bliss/graph.hh>
 #include <SeQuant/external/bliss/utils.hh>
 
+#include <cstdint>
 #include <cstdio>
 #include <initializer_list>
 #include <memory>
+#include <optional>
+#include <sstream>
 
 constexpr const bool use_colors = true;
 
@@ -159,5 +162,36 @@ TEST_CASE("bliss", "[elements]") {
     }
 
     REQUIRE(cg1->cmp(*cg2) == 0);
+  }
+
+  SECTION("dot output") {
+    // path v0 -- v1 -- v2, with v0 and v1 in subgraph 0
+    bliss::Graph g;
+    for (int v = 0; v != 3; ++v) g.add_vertex(0);
+    g.add_edge(0, 1);
+    g.add_edge(1, 2);
+
+    std::wostringstream oss;
+    g.write_dot(oss, {.labels = {L"a", L"b", L"c"},
+                      .texlabels = {L"$a$", L"$b$", L"$c$"},
+                      .display_colors = false,
+                      .vertex_to_subgraph =
+                          [](std::size_t v) -> std::optional<std::uint64_t> {
+                        if (v < 2) return 0;
+                        return std::nullopt;
+                      }});
+    // vertices outside any subgraph come first; an edge is emitted once, from
+    // the vertex whose subgraph (or, within one subgraph, ordinal) is lower
+    REQUIRE(oss.str() ==
+            L"graph g {\n"
+            L"node [ style=filled, penwidth=2, margin=0];\n"
+            L"v2 [ label=\"c\", texlbl=\"$c$:0\"];\n"
+            L"v2 -- v1\n"
+            L"subgraph cluster0 {\n"
+            L"v0 [ label=\"a\", texlbl=\"$a$:0\"];\n"
+            L"v0 -- v1\n"
+            L"v1 [ label=\"b\", texlbl=\"$b$:0\"];\n"
+            L"}\n"
+            L"}\n");
   }
 }
