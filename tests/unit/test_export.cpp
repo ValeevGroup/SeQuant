@@ -1444,6 +1444,65 @@ TEST_CASE("a pruned scalar prefactor keeps its conjugation", "[export]") {
   }
 }
 
+TEST_CASE("a bare conjugated variable is spelled conj(...)", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  auto registry = get_default_context().index_space_registry();
+  const IndexSpace occ = registry->retrieve("i");
+  const IndexSpace virt = registry->retrieve("a");
+
+  // a conjugated variable's label is the unconjugated one, so the conjugation
+  // reaches the generated code only through the wrapping
+  auto conjugated_variable = []() {
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    return x;
+  };
+  REQUIRE(conjugated_variable()->as<Variable>().label() == L"x");
+
+  const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+  const ResultExpr result(R, conjugated_variable() * t * f);
+
+  SECTION("text") {
+    TextGeneratorContext ctx;
+    configure_context_defaults(ctx);
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x)"));
+  }
+
+  SECTION("Julia") {
+    JuliaTensorOperationsGeneratorContext ctx;
+    configure_context_defaults(ctx);
+    JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x)"));
+  }
+
+  SECTION("Python einsum") {
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    NumPyEinsumGenerator gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.conj(x)"));
+  }
+}
+
 TEST_CASE("a folded name must come from one tensor", "[export]") {
   using namespace sequant;
   auto resetter = to_export_context();

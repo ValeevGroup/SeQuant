@@ -127,9 +127,6 @@ class TextGenerator : public Generator<Context> {
   std::string represent(const Power &power, const Context &ctx) const override {
     const ExprPtr &base = power.base();
     std::string base_str = stringify(*base, ctx);
-    if (base->is<Variable>() && base->as<Variable>().conjugated()) {
-      base_str = wrap_conj(std::move(base_str));
-    }
     auto s = detail::format_power_base(base, std::move(base_str)) + "^" +
              detail::format_power_exponent(power.exponent(),
                                            /*double_slash*/ false);
@@ -335,7 +332,12 @@ class TextGenerator : public Generator<Context> {
     if (expr.is<Tensor>()) {
       return represent(expr.as<Tensor>(), ctx);
     } else if (expr.is<Variable>()) {
-      return represent(expr.as<Variable>(), ctx);
+      const Variable &variable = expr.as<Variable>();
+      std::string repr = represent(variable, ctx);
+      // represent() names the variable; in a value position its conjugation
+      // has to be spelled out, because the name does not carry it
+      if (variable.conjugated()) repr = wrap_conj(std::move(repr));
+      return repr;
     } else if (expr.is<Constant>()) {
       return represent(expr.as<Constant>(), ctx);
     } else if (expr.is<Power>()) {
