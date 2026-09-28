@@ -735,15 +735,23 @@ class PreprocessVisitor {
   }
 
   void preprocess_node_content(ExportNode<T> &node) {
-    // The node stores the array a provider serves; the value it denotes adds
-    // its transform's states. Export names arrays, so the denoted spelling is
-    // what the label-keyed maps and the generators must see: preprocess folds
-    // its marks into the name (fold_marks_into_label), naming a ⁺ leaf's
-    // array t_adj and a ꙳ leaf's array t_conj. A leaf whose state already
-    // named an array of its own stores that state and is left alone, as is
-    // every node whose transform carries no conjugation.
-    if (node->is_tensor() && node->canon_transform().conj)
+    // A tensor leaf stores the array a provider serves; the value it denotes
+    // adds its transform's states. Export names arrays, so the denoted
+    // spelling is what the label-keyed maps and the generators must see:
+    // preprocess folds its marks into the name (fold_marks_into_label),
+    // naming a ⁺ leaf's array t_adj and a ꙳ leaf's array t_conj. Only a
+    // leaf needs this -- an internal node's placeholder is built in the
+    // spelling it denotes -- and a leaf whose state already named an array of
+    // its own (a ꙳ over a complex basis) stores that state, which its
+    // transform then does not carry. The transform stays on the node: no
+    // export reader consumes it once the spelling carries it.
+    if (node.leaf() && node->is_tensor() && node->canon_transform().conj) {
+      // the states a leaf's transform carries are the ones its construction
+      // took off the stored spelling, so that spelling is unmarked here
+      SEQUANT_ASSERT(!node->as_tensor().adjointed() &&
+                     !node->as_tensor().kconjugated());
       node->set_expr(node->denoted_expr());
+    }
 
     if (node->is_tensor()) {
       preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result,
