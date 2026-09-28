@@ -354,6 +354,84 @@
 					"min_index_id": 1
 				}
 			}
+		},
+		{
+			"id": "opt_replay",
+			"kind": "optimize",
+			"inputs": [
+				"traced.en",
+				"biorth"
+			],
+			"options": {
+				"replay": {
+					"volatile": [
+						"T\\d",
+						{
+							"expr": "T1s{a1;i1}",
+							"tensor_equality_mode": "block"
+						}
+					],
+					"weight": 10
+				}
+			}
+		},
+		{
+			"id": "treeify_replay",
+			"kind": "to_export_tree",
+			"inputs": "opt_replay"
+		},
+		{
+			"kind": "export",
+			"inputs": "treeify_replay",
+			"options": {
+				"language": "itf",
+				"optimize": true,
+				"output": "nevpt2_v2_replay.itfaa",
+				"grouping": {
+					"Init": "persistent",
+					"Energy0": "ecc0.volatile",
+					"Energy": "ecc.volatile",
+					"Residual": "res.volatile"
+				},
+				"relative_order": [
+					"ecc0",
+					"ecc",
+					"res1_i1",
+					"res1_s0",
+					"res2_s1_singles",
+					"res1_s1",
+					"res2_p0",
+					"res2_p2",
+					"res2_i2",
+					"res2_p1",
+					"res2_s1",
+					"res2_s2"
+				],
+				"imports": {
+					"R2{a1;i1}": "R2:ec"
+				},
+				"meta": {
+					"index_spaces": {
+						"a": {
+							"name": "External",
+							"tag": "e"
+						},
+						"u": {
+							"name": "Active",
+							"tag": "a"
+						},
+						"i": {
+							"name": "Closed",
+							"tag": "c"
+						},
+						"F": {
+							"name": "BasisMp2Fit",
+							"tag": "F"
+						}
+					},
+					"min_index_id": 1
+				}
+			}
 		}
 	]
 }
