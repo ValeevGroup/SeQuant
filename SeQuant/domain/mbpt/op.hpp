@@ -269,7 +269,8 @@ class QuantumNumberChange
   }
 
   QuantumNumberChange& operator+=(const QuantumNumberChange& other) {
-    for (std::size_t c = 0; c != size(); ++c) this->operator[](c) += other[c];
+    const auto n = size();
+    for (std::size_t c = 0; c != n; ++c) this->operator[](c) += other[c];
     return *this;
   }
 

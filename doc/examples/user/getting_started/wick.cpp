@@ -2,6 +2,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
 
 int main() {
@@ -20,10 +21,10 @@ int main() {
              << std::endl;
   // end-snippet-1
 
-  assert(FWickTheorem{ap3 * ap4 * cp1 * cp2}
-             .full_contractions(false)
-             .compute()
-             ->size() == 7);
+  SEQUANT_ASSERT(FWickTheorem{ap3 * ap4 * cp1 * cp2}
+                     .full_contractions(false)
+                     .compute()
+                     ->size() == 7);
 
   // start-snippet-2
   auto nop1 = ex<FNOperator>(cre(p1, p2), ann(p3, p4));
@@ -43,8 +44,9 @@ int main() {
       << std::endl;
   // end-snippet-2
 
-  assert(FWickTheorem{nop1 * nop2}.full_contractions(false).compute()->size() ==
-         3);
+  SEQUANT_ASSERT(
+      FWickTheorem{nop1 * nop2}.full_contractions(false).compute()->size() ==
+      3);
 
   // start-snippet-3
   auto nop3 = ex<BNOperator>(cre({p1, p2}), ann({p3, p4}));
@@ -56,8 +58,9 @@ int main() {
       << std::endl;
   // end-snippet-3
 
-  assert(BWickTheorem{nop3 * nop4}.full_contractions(false).compute()->size() ==
-         7);
+  SEQUANT_ASSERT(
+      BWickTheorem{nop3 * nop4}.full_contractions(false).compute()->size() ==
+      7);
 
   return 0;
 }

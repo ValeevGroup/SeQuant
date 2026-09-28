@@ -3,10 +3,12 @@
 Driver File v1
 ==============
 
-The top-level entry in the JSON file specifies what action SeQuant should take. At the moment, only code-generation into the ITF format is supported.
+The ``code_generation`` top-level entry in the JSON file specifies what action SeQuant should take (the ``index_spaces`` entry described below is
+the file's other required top-level entry). At the moment, only code-generation into the ITF (Integrated Tensor Framework) format is supported.
 Hence, every driver file currently has to start like this:
 
 .. code-block:: json
+
    {
        "code_generation": {
            "output_format": "itf",
@@ -33,11 +35,11 @@ Every result has these mandatory fields:
 Additionally, the following *processing options* may be given. All of them may also be specified as part of the :code:`default_options` block in which
 case those values are used, unless explicitly overwritten.
 
-* :code:`density_fitting`: Whether to perform the density-fitting decomposition of the two-electron integral
+* :code:`density_fitting`: Whether to perform the `density-fitting <https://en.wikipedia.org/wiki/Resolution_of_the_identity>`_ decomposition of the two-electron integral
 * :code:`term_by_term`: Whether to split sums into individual summands for processing and code-generation. This yields to more readable but less
   performant code.
-* :code:`optimize`: Whether to factorize the equations into a series of binary contractions
-* :code:`subexpression_elimination`: Whether to eliminate common subexpressions (only possible when factorizing into binary contractions)
+* :code:`optimize`: Whether to factorize the equations into a series of binary `tensor contractions <https://en.wikipedia.org/wiki/Tensor_contraction>`_
+* :code:`subexpression_elimination`: Whether to eliminate `common subexpressions <https://en.wikipedia.org/wiki/Common_subexpression_elimination>`_ (only possible when factorizing into binary contractions)
 * :code:`expand_symmetrizer`: Whether to explicitly expand (write out) symmetrization operators
 * :code:`spintracing`: What kind of spintracing to perform (if any). Possible options are
 
@@ -99,7 +101,7 @@ Example
                            "spintracing": "rigorous"
                        }
                    ]
-               },
+               }
            ]
        },
        "index_spaces": [

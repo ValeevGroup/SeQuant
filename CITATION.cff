@@ -8,11 +8,13 @@ license: LGPL-3.0
 repository-code: https://github.com/ValeevGroup/SeQuant
 url: https://valeevgroup.github.io/SeQuant
 abstract: >-
-  SeQuant is a framework for performing symbolic algebra of tensors over
-  scalar and operator rings. In addition to symbolic manipulation it can
-  numerically evaluate general tensor algebra expressions with an
-  appropriate external tensor backend (TiledArray, BTAS, TAPP) or
-  generate code for an external tensor backend (ITF, Julia, NumPy/Torch)
+  SeQuant is a computer algebra system for performing symbolic algebra of
+  tensors over scalar and operator rings, applied primarily in quantum
+  chemistry and quantum many-body physics. In addition to symbolic
+  manipulation it can numerically evaluate general tensor algebra
+  expressions with an appropriate external tensor backend (TiledArray,
+  BTAS, TAPP) or generate code for an external tensor backend (ITF, Julia,
+  NumPy/Torch)
 authors:
   - family-names: Valeyev
     given-names: Eduard
