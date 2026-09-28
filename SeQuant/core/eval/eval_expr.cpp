@@ -446,7 +446,21 @@ std::int8_t EvalExpr::canon_phase() const noexcept {
 }
 
 ExprPtr EvalExpr::denoted_expr() const {
-  SEQUANT_ASSERT(is_tensor());
+  if (is_scalar()) {
+    // a scalar leaf stores the unmarked spelling with the conjugation on its
+    // transform (see the Variable and Power constructors); a Constant and an
+    // internal placeholder carry nothing to re-materialize
+    if (!op_type_.has_value() && canon_transform().conj &&
+        (is_variable() || is_power())) {
+      auto e = expr_->clone();
+      if (e->is<Variable>())
+        e->as<Variable>().conjugate();
+      else
+        e->as<Power>().conjugate();
+      return e;
+    }
+    return expr_;
+  }
   auto t = expr_->as<Tensor>();
   // Only a leaf's spelling names a user tensor whose states the decoder took
   // off; an internal node's placeholder is built in the denoted orientation

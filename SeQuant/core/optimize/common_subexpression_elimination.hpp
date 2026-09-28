@@ -33,8 +33,8 @@ class SubexpressionIdentifier {
       : intermediate_hashs(
             SubexpressionHashCollector<TreeNode, force_hash_collisions>{}
                 .bucket_count(),  // use default bucket count
-            TreeNodeHasher<TreeNode, force_hash_collisions>{},
-            TreeNodeEqualityComparator<TreeNode>(std::move(indices))) {}
+            SubexpressionHasher<TreeNode, force_hash_collisions>{},
+            SubexpressionEqualityComparator<TreeNode>(std::move(indices))) {}
 
   bool operator()(const TreeNode &tree) {
     using std::ranges::end;
@@ -155,6 +155,7 @@ class SubexpressionReplacer {
     std::optional<TreeNode> intermediate_definition;
     if (label_it == end(cse_names)) {
       cse_names.emplace(tree, label);
+      cse_phases.emplace(tree, tree->canon_phase());
       // Store tree as the way to compute the current CSE (under the
       // designated name and with canonical indexing)
       // Since tree node objects are immutable, we have to disassemble
@@ -171,8 +172,14 @@ class SubexpressionReplacer {
       intermediate_definition = expr_to_tree(intermediate);
     }
 
-    if (tree->canon_phase() != 1) {
-      expr *= ex<Constant>(tree->canon_phase());
+    // the intermediate is the value its defining occurrence denotes
+    // (to_expr), and every occurrence sharing the slot denotes the slot's
+    // value times its own phase, so a use is the intermediate times the
+    // product of the two phases
+    if (auto const phase =
+            static_cast<std::int8_t>(tree->canon_phase() * cse_phases.at(tree));
+        phase != 1) {
+      expr *= ex<Constant>(phase);
     }
 
     if (tree.root()) {
@@ -217,6 +224,7 @@ class SubexpressionReplacer {
       &subexpressions;
   const Transformer &expr_to_tree;
   SubexpressionNames<TreeNode, force_hash_collisions> cse_names;
+  SubexpressionPhases<TreeNode, force_hash_collisions> cse_phases;
   std::size_t name_counter = 1;
   const LabelGenerator &label_gen;
   std::vector<std::size_t> cse_definition_indices;

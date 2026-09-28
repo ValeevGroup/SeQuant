@@ -9,6 +9,7 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
@@ -1208,6 +1209,111 @@ TEST_CASE("optimize", "[optimize]") {
         opt::eliminate_common_subexpressions(expressions, binarizer, opts);
 
         REQUIRE(collect_as_expr(expressions) == expected);
+      }
+    }
+  }
+
+  SECTION("CSE definitions and uses denote what was written") {
+    auto ctx_resetter = set_scoped_default_context(
+        Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+    auto binarizer = [](auto&& expr) {
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      return binarize(expr);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    };
+    auto has_state = [](ExprPtr const& e, auto&& pred) {
+      bool found = false;
+      e->visit(
+          [&](ExprPtr const& n) {
+            if (n->is<Tensor>() && pred(n->as<Tensor>())) found = true;
+          },
+          /*atoms_only=*/true);
+      return found;
+    };
+
+    SECTION("an adjointed leaf keeps its state in the definition") {
+      Tensor t(L"t", bra{L"a_2"}, ket{L"i_1"});
+      REQUIRE(t.adjoint() == 1);
+      auto const f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+      auto const g = ex<Tensor>(L"g", bra{L"a_1"}, ket{L"a_3"});
+      auto const h = ex<Tensor>(L"h", bra{L"a_1"}, ket{L"a_3"});
+      auto term = [&t, &f](ExprPtr const& last) {
+        return ex<Product>(ExprPtrList{ex<Tensor>(t), f, last},
+                           Product::Flatten::No);
+      };
+      std::vector<EvalNode<EvalExpr>> trees{
+          binarizer(
+              ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_3"}), term(g))),
+          binarizer(
+              ResultExpr(Tensor(L"S", bra{L"i_1"}, ket{L"a_3"}), term(h)))};
+      auto const defs = opt::eliminate_common_subexpressions(trees, binarizer);
+      REQUIRE(defs.size() == 1);
+      auto const def = to_expr(trees[defs.front()]);
+      CAPTURE(def->to_latex());
+      REQUIRE(has_state(def, [](Tensor const& x) { return x.adjointed(); }));
+    }
+
+    SECTION("a conjugated network is not the intermediate of its twin") {
+      // over a real basis a uniformly K-conjugated product hoists its
+      // conjugation and shares its twin's slot, but an intermediate is
+      // defined by the spelling it denotes and used by name, so the two are
+      // two intermediates
+      auto rx = [](std::wstring_view label) {
+        Index const ix{label};
+        IndexSpace sp = ix.space();
+        sp.field(Field::Real);
+        return Index(label, sp);
+      };
+      auto rt = [&rx](std::wstring_view lbl, std::wstring_view b,
+                      std::wstring_view k) {
+        return ex<Tensor>(
+            lbl, bra{rx(b)}, ket{rx(k)},
+            TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+      };
+      auto AB = [&rt]() {
+        return rt(L"A", L"i_1", L"a_1") * rt(L"B", L"a_1", L"i_2");
+      };
+      auto const g = rt(L"g", L"i_2", L"i_3");
+      auto const h = rt(L"h", L"i_2", L"i_3");
+      Tensor const R(L"R", bra{rx(L"i_1")}, ket{rx(L"i_3")});
+      Tensor const S(L"S", bra{rx(L"i_1")}, ket{rx(L"i_3")});
+      auto term = [](ExprPtr const& ab, ExprPtr const& last) {
+        return ex<Product>(ExprPtrList{ab, last}, Product::Flatten::No);
+      };
+
+      {
+        std::vector<EvalNode<EvalExpr>> trees{
+            binarizer(ResultExpr(R, term(conjugate(AB()), g))),
+            binarizer(ResultExpr(S, term(AB(), h)))};
+        // the twins share the slot ...
+        REQUIRE(trees[0].left()->hash_value() == trees[1].left()->hash_value());
+        REQUIRE(trees[0].left()->canon_transform().conj);
+        REQUIRE_FALSE(trees[1].left()->canon_transform().conj);
+        // ... and no intermediate
+        auto const defs =
+            opt::eliminate_common_subexpressions(trees, binarizer);
+        REQUIRE(defs.empty());
+        REQUIRE(trees.size() == 2);
+        REQUIRE(has_state(to_expr(trees[0]),
+                          [](Tensor const& x) { return x.kconjugated(); }));
+        REQUIRE_FALSE(has_state(to_expr(trees[1]), [](Tensor const& x) {
+          return x.kconjugated();
+        }));
+      }
+      {
+        // two conjugated occurrences do share one, defined conjugated
+        std::vector<EvalNode<EvalExpr>> trees{
+            binarizer(ResultExpr(R, term(conjugate(AB()), g))),
+            binarizer(ResultExpr(S, term(conjugate(AB()), h)))};
+        auto const defs =
+            opt::eliminate_common_subexpressions(trees, binarizer);
+        REQUIRE(defs.size() == 1);
+        auto const def = to_expr(trees[defs.front()]);
+        CAPTURE(def->to_latex());
+        REQUIRE(def->is<Product>());
+        REQUIRE(def->as<Product>().size() == 2);
+        for (auto const& fac : def->as<Product>())
+          REQUIRE(fac->as<Tensor>().kconjugated());
       }
     }
   }

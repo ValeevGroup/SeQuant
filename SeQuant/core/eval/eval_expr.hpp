@@ -294,18 +294,19 @@ class EvalExpr {
   ///
   [[nodiscard]] CanonTransform canon_transform() const noexcept;
 
-  /// \return For a tensor-valued node: the spelling it denotes, i.e. the
-  /// spelling an enclosing network is built from, whose states color that
-  /// network's graph. On a leaf this inverts the state decoding of the leaf
-  /// constructor: a `{conj, braket_swap}` transform is the adjoint channel,
-  /// so the stored array is spelled through Tensor::adjoint() (bundles
-  /// exchanged, `⁺` set); a bare `{conj}` is the real-basis K-conjugation,
-  /// so it is spelled through Tensor::kconjugate() (`꙳` set, slots in
-  /// place); and a leaf whose state named an array of its own already
-  /// carries it. On an internal node this is the identity: such a node's
+  /// \return The spelling this node denotes, i.e. the spelling an enclosing
+  /// network is built from, whose states color that network's graph. On a
+  /// tensor leaf this inverts the state decoding of the leaf constructor: a
+  /// `{conj, braket_swap}` transform is the adjoint channel, so the stored
+  /// array is spelled through Tensor::adjoint() (bundles exchanged, `⁺`
+  /// set); a bare `{conj}` is the real-basis K-conjugation, so it is spelled
+  /// through Tensor::kconjugate() (`꙳` set, slots in place); and a leaf
+  /// whose state named an array of its own already carries it. On a Variable
+  /// or Power leaf it puts the conjugation marker the constructor took off
+  /// back on. On an internal node this is the identity: such a node's
   /// placeholder is built in the spelling it denotes and holds no state,
   /// even where it inherits a child's transform. The phase, a scalar, is
-  /// not spelled. \pre is_tensor()
+  /// not spelled (see to_expr for the value a leaf denotes).
   [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///
@@ -754,26 +755,53 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
 }
 
 ///
-/// Converts an `EvalExpr` to `ExprPtr`.
+/// Converts an `EvalExpr` to `ExprPtr`: the expression the tree denotes.
+///
+/// A leaf stores the array a provider serves, with the states and the
+/// canonicalization sign the leaf constructor took off on its transform, so
+/// the leaf's contribution is its denoted spelling (EvalExpr::denoted_expr:
+/// `t⁺{i;a}` for the leaf storing `t{a;i}` under `{conj, braket_swap}`, `x꙳`
+/// for a Variable under `{conj}`) times its phase. An internal node's
+/// transform is not spelled: its placeholder is already the denoted spelling,
+/// and the value the tree denotes is the product or sum of what its leaves
+/// denote.
 ///
 ExprPtr to_expr(meta::eval_node auto const& node) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
-  if (node.leaf()) return evxpr.expr();
+  if (node.leaf()) {
+    ExprPtr e = evxpr.denoted_expr();
+    if (evxpr.canon_phase() == 1) return e;
+    return ex<Product>(evxpr.canon_phase(), ExprPtrList{std::move(e)},
+                       Product::Flatten::No);
+  }
 
   if (op == EvalOp::Product) {
     auto prod = Product{};
 
-    ExprPtr lexpr = to_expr(node.left());
-    ExprPtr rexpr = to_expr(node.right());
-
-    prod.append(1, lexpr, Product::Flatten::No);
-    prod.append(1, rexpr, Product::Flatten::No);
+    // a leaf child's phase scales this product rather than nesting a signed
+    // one-factor product as an operand
+    auto append = [&prod](auto const& child) {
+      if (child.leaf()) {
+        prod.scale(child->canon_phase());
+        prod.append(1, child->denoted_expr(), Product::Flatten::No);
+      } else {
+        prod.append(1, to_expr(child), Product::Flatten::No);
+      }
+    };
+    append(node.left());
+    append(node.right());
 
     SEQUANT_ASSERT(!prod.empty());
 
-    if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
+    if (prod.size() == 1 && prod.factor(0)->is<Product>()) {
+      // a product of one product (the other operand was a Constant) is that
+      // product, with both scalars
+      auto const& inner = prod.factor(0)->as<Product>();
+      return ex<Product>(Product{prod.scalar() * inner.scalar(), inner.begin(),
+                                 inner.end(), Product::Flatten::No});
+    } else if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
       return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
                                  prod.factor(0)->end(), Product::Flatten::No});
     } else {

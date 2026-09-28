@@ -313,6 +313,14 @@ TEST_CASE("eval_node", "[EvalNode]") {
 
     auto const p2 = parse_expr_antisymm(L"1/4 * g_{i2,i1}^{a1,a2}");
     REQUIRE(linearize_eval_node(eval_node(p2))->to_latex() == p2->to_latex());
+
+    // a marked leaf stores the bare array and linearizes to what it denotes
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+    REQUIRE(t.adjoint() == 1);
+    auto const p3 = ex<Tensor>(t) * parse_expr_antisymm(L"f_{a1}^{i1}");
+    auto const n3 = eval_node(p3);
+    REQUIRE_FALSE(n3.left()->as_tensor().adjointed());
+    REQUIRE(linearize_eval_node(n3)->to_latex() == p3->to_latex());
   }
 
   SECTION("single node") {

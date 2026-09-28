@@ -1381,3 +1381,81 @@ TEST_CASE("tot_leaf_annotation_is_slot_faithful", "[eval_expr][tot]") {
   REQUIRE(labels(EvalExpr{c_bra}) == L{L"i_1", L"i_2", L"a_1", L"a_2"});
   REQUIRE(EvalExpr{c_ket}.indices_annot() == "i_1,i_2,a_1;a_2i_1i_2");
 }
+
+// The symbolic spelling of an eval tree is the expression it denotes: a leaf
+// stores the bare array with its states and its canonicalization sign on the
+// transform, and to_expr puts both back.
+TEST_CASE("to_expr_denotes_the_leaf", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+
+  SECTION("an adjointed leaf") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(t));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    // the leaf stores the bare array under the adjoint channel ...
+    REQUIRE_FALSE(node->as_tensor().adjointed());
+    REQUIRE(node->canon_transform() ==
+            CanonTransform{.conj = true, .braket_swap = true});
+    // ... and denotes the spelling as written
+    REQUIRE(*to_expr(node) == t);
+  }
+
+  SECTION("a K-conjugated leaf over a real basis") {
+    auto rx = [](std::wstring_view l) { return idx(l, Field::Real); };
+    auto r = ex<Tensor>(
+        L"r", bra{rx(L"a_1")}, ket{rx(L"i_1")},
+        TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    auto rc = conjugate(r);
+    REQUIRE(rc->as<Tensor>().kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(rc);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(node->as_tensor().kconjugated());
+    REQUIRE(node->canon_transform() == CanonTransform{.conj = true});
+    REQUIRE(*to_expr(node) == *rc);
+  }
+
+  SECTION("a conjugated scalar leaf") {
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(x);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(node->as_variable().conjugated());
+    REQUIRE(*to_expr(node) == *x);
+  }
+
+  SECTION("a leaf reordered with a sign") {
+    // the block canonicalizer stores the mixed-space bra as i_3,a_1 with the
+    // antisymmetric reorder's sign on the transform
+    auto t = ex<Tensor>(L"t", bra{Index{L"a_1"}, Index{L"i_3"}},
+                        ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto leaf = binarize(t);
+    auto prod = binarize(t * v);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(leaf->canon_phase() == -1);
+    auto const stored = leaf->as_tensor();
+    REQUIRE(stored.bra()[0].label() == L"i_3");
+
+    auto e = to_expr(leaf);
+    REQUIRE(e->is<Product>());
+    REQUIRE(e->as<Product>().scalar() == -1);
+    REQUIRE(e->as<Product>().size() == 1);
+    REQUIRE(*e->as<Product>().factor(0) == stored);
+
+    auto pe = to_expr(prod);
+    REQUIRE(pe->is<Product>());
+    REQUIRE(pe->as<Product>().scalar() == -1);
+    REQUIRE(pe->as<Product>().size() == 2);
+    REQUIRE(*pe->as<Product>().factor(0) == stored);
+    REQUIRE(*pe->as<Product>().factor(1) == *v);
+  }
+}

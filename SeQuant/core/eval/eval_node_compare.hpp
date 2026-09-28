@@ -8,6 +8,7 @@
 
 #include <compare>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <unordered_map>
 #include <utility>
@@ -320,29 +321,93 @@ struct TreeNodeEqualityComparator {
   IndexSpecificTensorBlockEqualComparator block_comparator_;
 };
 
+/// \brief The identity of a symbolic common subexpression: the slot identity
+///        (TreeNodeHasher) plus the conjugation the node's transform carries.
+///
+/// \details A uniformly conjugated product or sum hashes onto its
+/// unconjugated twin's slot (the hoisted conjugation is stripped from the
+/// slot hash and applied on retrieval), which is right for a value cache.
+/// A symbolic intermediate is different: it is defined by the spelling it
+/// denotes (to_expr) and used by name, and no generator applies a conjugation
+/// to an intermediate it computed, so the conjugated node and its twin are
+/// two intermediates here. The phase stays outside the identity, as in the
+/// slot identity: it is a scalar the use multiplies in. A bra<->ket exchange
+/// already salts the slot hash and needs no term.
+template <typename TreeNode, bool force_hash_collisions = false>
+struct SubexpressionHasher {
+  using is_transparent = void;
+
+  std::size_t operator()(const TreeNode *node) const { return (*this)(*node); }
+
+  std::size_t operator()(const TreeNode &node) const {
+    if constexpr (force_hash_collisions) {
+      return 0;
+    }
+    std::size_t h = TreeNodeHasher<TreeNode, force_hash_collisions>{}(node);
+    if (node->canon_transform().conj) hash::combine(h, std::size_t{1});
+    return h;
+  }
+};
+
+/// Equality for SubexpressionHasher: the slot equality with the conjugation
+/// bit compared as well
+template <typename TreeNode>
+struct SubexpressionEqualityComparator {
+  using is_transparent = void;
+
+  SubexpressionEqualityComparator() = default;
+  SubexpressionEqualityComparator(std::vector<Index> indices)
+      : slot_(std::move(indices)) {}
+
+  bool operator()(const TreeNode *lhs, const TreeNode *rhs) const {
+    return (*this)(*lhs, *rhs);
+  }
+  bool operator()(const TreeNode &lhs, const TreeNode *rhs) const {
+    return (*this)(lhs, *rhs);
+  }
+  bool operator()(const TreeNode *lhs, const TreeNode &rhs) const {
+    return (*this)(*lhs, rhs);
+  }
+  bool operator()(const TreeNode &lhs, const TreeNode &rhs) const {
+    return lhs->canon_transform().conj == rhs->canon_transform().conj &&
+           slot_(lhs, rhs);
+  }
+
+ private:
+  TreeNodeEqualityComparator<TreeNode> slot_;
+};
+
 /// A map between (sub)tree hashes and how often they have been found
 /// This is identical to SubexpressionUsageCounts except that we store node
 /// pointers here (lower memory footprint but higher risk of dangling pointers)
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionHashCollector =
     std::unordered_map<const TreeNode *, std::size_t,
-                       TreeNodeHasher<TreeNode, force_hash_collisions>,
-                       TreeNodeEqualityComparator<TreeNode>>;
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
 
 /// A map between (sub)trees and how often they have been found
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionUsageCounts =
     std::unordered_map<TreeNode, std::size_t,
-                       TreeNodeHasher<TreeNode, force_hash_collisions>,
-                       TreeNodeEqualityComparator<TreeNode>>;
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
 
 /// A map between (sub)trees and the name chosen to represent the associated
 /// intermediate
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionNames =
     std::unordered_map<TreeNode, std::wstring,
-                       TreeNodeHasher<TreeNode, force_hash_collisions>,
-                       TreeNodeEqualityComparator<TreeNode>>;
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
+
+/// A map between (sub)trees and the phase of the occurrence that defines the
+/// associated intermediate (see SubexpressionReplacer)
+template <typename TreeNode, bool force_hash_collisions = false>
+using SubexpressionPhases =
+    std::unordered_map<TreeNode, std::int8_t,
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
 
 }  // namespace sequant
 
