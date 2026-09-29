@@ -1547,8 +1547,7 @@ TEST_CASE(
     REQUIRE(table.unresolved.empty());
   }
 
-  // Per-instance override, not the environment: eval::strict_fill_once()
-  // latches SEQUANT_UT_STRICT_FILL_ONCE on its first call in the process.
+  // Per-instance override; see [block-skip]'s note on the env latch.
   ordered_cache.set_strict_fill_once(true);
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
@@ -4338,8 +4337,7 @@ TEST_CASE(
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_array_ops(&aops);
 
-  // Per-instance override, not the environment: eval::strict_fill_once()
-  // latches SEQUANT_UT_STRICT_FILL_ONCE on its first call in the process.
+  // Per-instance override; see [block-skip]'s note on the env latch.
   ordered_cache.set_strict_fill_once(true);
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
@@ -4624,8 +4622,7 @@ TEST_CASE(
 
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_array_ops(&aops);
-  // Per-instance override, not the environment: eval::strict_fill_once()
-  // latches SEQUANT_UT_STRICT_FILL_ONCE on its first call in the process.
+  // Per-instance override; see [block-skip]'s note on the env latch.
   ordered_cache.set_strict_fill_once(true);
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
@@ -5032,8 +5029,7 @@ TEST_CASE(
   std::ostringstream sink;
   auto* const prev_stream = logger.eval.stream;
   logger.eval.stream = &sink;
-  // Per-instance override, not the environment: eval::strict_fill_once()
-  // latches SEQUANT_UT_STRICT_FILL_ONCE on its first call in the process.
+  // Per-instance override; see [block-skip]'s note on the env latch.
   ordered_cache.set_strict_fill_once(true);
   REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
       forest, ordered, rich, layout, yield, ordered_cache, target, {},
