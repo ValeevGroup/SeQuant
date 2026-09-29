@@ -89,10 +89,9 @@ struct SimplifyOptions : public CanonicalizeOptions {
   /// engaged only when the default context's registry contains a
   /// complex-field base space (in a real field conjugation is trivial and
   /// plain canonicalization already merges such pairs).
-  /// @note default is No for now: consumers that predate RealPart/ImagPart
-  ///       (tensor-network construction, evaluation) ingests the folded
-  ///       nodes via EvalOp::RealPart/ImagPart, so the fold is on by
-  ///       default.
+  /// @note the default is Yes: the evaluation engine ingests the folded
+  ///       nodes through EvalOp::RealPart/ImagPart. Pass No where a consumer
+  ///       needs the conjugate pair left standing.
   FoldConjugatePairs fold_conjugate_pairs = FoldConjugatePairs::Yes;
 
   // the base overloads are hidden by the FoldConjugatePairs overload below
