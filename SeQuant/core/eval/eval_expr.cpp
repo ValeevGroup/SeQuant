@@ -621,9 +621,11 @@ template <typename Rng>
   if (auto op = node->op_type();
       node->is_tensor() && (!op || *op == EvalOp::Sum)) {
     // Leaf tensors enter in their denoted spelling (transform re-materialized
-    // syntactically); a Sum-rooted subtree contributes its result tensor.
-    auto e = (!op && node->expr()->is<Tensor>()) ? node->denoted_expr()
-                                                 : node->expr();
+    // syntactically); a Sum-rooted subtree contributes its result tensor,
+    // which denoted_expr() hands over as a fresh Tensor too -- the collected
+    // factor is respelled in place by the caller's conj strip, and the node
+    // still owns its placeholder.
+    auto e = node->denoted_expr();
     // The spelling carries the factor's conj / bra-ket swap but not its
     // reorder phase (a sign is not a spelling), and a Sum root enters in its
     // slot spelling outright: the phase rides along for the product fold.
