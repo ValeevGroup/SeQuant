@@ -68,7 +68,7 @@ inline void declare_real_basis(IndexSpaceRegistry &isr) {
 /// declared real (see declare_real_basis()).
 [[nodiscard]] inline auto scoped_real_basis() {
   auto isr = std::make_shared<IndexSpaceRegistry>(
-      get_default_context().index_space_registry()->clone());
+      *get_default_context().index_space_registry());
   declare_real_basis(*isr);
   return set_scoped_default_context(Context(get_default_context()).set(isr));
 }
@@ -82,16 +82,17 @@ inline void declare_real_basis(IndexSpaceRegistry &isr) {
 /// data spells out.
 /// @sa declare_real_basis
 [[nodiscard]] inline auto scoped_csv_ccsd_context() {
-  auto ctx = get_default_context().clone();
+  auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  if (!isr)
+  if (!ctx.index_space_registry())
     throw Exception(
-        "scoped_csv_ccsd_context(): the default Context has no mutable index "
-        "space registry");
+        "scoped_csv_ccsd_context(): the default Context has no index space "
+        "registry");
+  auto isr = std::make_shared<IndexSpaceRegistry>(*ctx.index_space_registry());
   mbpt::add_pao_spaces(isr, mbpt::Spin::any);
   mbpt::add_df_spaces(isr);
   declare_real_basis(*isr);
+  ctx.set(isr);
   return set_scoped_default_context(std::move(ctx));
 }
 

@@ -72,7 +72,7 @@ template <typename T, typename... Ts>
                     a->size_in_bytes();
                   }) {
       // Smart-pointer-like operand: tolerate null so callers (e.g. the
-      // EvalOp::Adjoint dispatcher, which leaves `right` unevaluated) can
+      // former unary-op dispatchers) can
       // pass an empty ResultPtr without an external guard.
       return a ? a->size_in_bytes() : size_t{0};
     } else if constexpr (requires { a->size_in_bytes(); })
@@ -170,10 +170,9 @@ enum struct EvalMode {
            : node->is_tensor()   ? EvalMode::Tensor
                                  : EvalMode::Unknown;
   } else {
-    return node->is_product()   ? EvalMode::Product
-           : node->is_sum()     ? EvalMode::Sum
-           : node->is_adjoint() ? EvalMode::Permute
-                                : EvalMode::Unknown;
+    return node->is_product() ? EvalMode::Product
+           : node->is_sum()   ? EvalMode::Sum
+                              : EvalMode::Unknown;
   }
 }
 
@@ -620,7 +619,7 @@ template <typename Node>
 // through here at all -- it computes each cell from its own table reads (\c
 // eval::detail::compute_cell, ordered_executor.hpp), sharing this file's
 // per-op kernels (apply_one_op_traced, sum_in_place_traced, fetch_leaf_traced,
-// apply_canon_phase, try_custom_eval, note_fresh_build) rather than this
+// apply_canon_transform, try_custom_eval, note_fresh_build) rather than this
 // stack machine.
 
 /// \brief The single-op compute kernel.
@@ -640,11 +639,12 @@ template <typename Node>
 template <meta::can_evaluate Node>
 [[nodiscard]] ResultPtr apply_one_op(Node const& node, ResultPtr const& left,
                                      ResultPtr const& right) {
-  if (node->op_type() == EvalOp::Adjoint) {
-    // Unary: only the left operand; the right child is the Constant(1)
-    // sentinel.
-    std::array<std::any, 2> const adj_ann{node.left()->annot(), node->annot()};
-    return left->adjoint(adj_ann);
+  if (node->op_type() == EvalOp::RealPart ||
+      node->op_type() == EvalOp::ImagPart) {
+    // Unary Re/Im over the left operand; the right child is the Constant{1}
+    // sentinel that keeps FullBinaryNode's two-children invariant.
+    return node->op_type() == EvalOp::RealPart ? left->real_part()
+                                               : left->imag_part();
   }
   std::array<std::any, 3> const ann{node.left()->annot(), node.right()->annot(),
                                     node->annot()};
@@ -655,43 +655,83 @@ template <meta::can_evaluate Node>
   return left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
 }
 
-/// \brief Multiply a result by its node's canonicalization phase, with the
-///        trace event and peak accounting that conversion carries.
+/// \brief A node's whole CanonTransform applied to \p res, with none of the
+///        trace or peak bookkeeping \c apply_canon_transform carries.
+///
+/// \details The conversion the storage sites perform: a cell, a cache slot
+/// and a hoist slot hold the canonical orientation of a value while a
+/// production hands up the node's own oriented one, and the transform (phase,
+/// elementwise conjugation, bra<->ket relabeling) is an involution, so one
+/// application converts either way. The reading side goes through \c
+/// apply_canon_transform instead, where the transient second buffer belongs on
+/// the peak monitor.
+///
+/// A null \p res passes through untouched and is never dereferenced -- a
+/// missing result is diagnosed where it is read -- and so does a trivial
+/// transform, with no allocation.
+template <meta::can_evaluate Node>
+[[nodiscard]] ResultPtr convert_canon_orientation(Node const& nd,
+                                                  ResultPtr res) {
+  auto const tr = nd->canon_transform();
+  if (!res || tr.trivial()) return res;
+  std::array<std::any, 2> const ann{std::any{nd->annot()},
+                                    std::any{nd->annot()}};
+  return res->apply_transform(tr, ann);
+}
+
+/// \brief Apply a result's node CanonTransform, with the trace event and peak
+///        accounting that conversion carries.
 ///
 /// \details A cell/cache holds the canonical orientation of a value while
-/// every consumer wants the node's own oriented one; the phase is an
-/// involution, so one multiply converts either way. Shared by
-/// \c evaluate_impl (through its \c apply_phase lambda) and the ordered
-/// executor's \c detail::compute_cell, so both convert identically --
-/// including the \c MultByPhase trace event, whose \c note_working_set call
-/// is what puts the transient second buffer on the peak monitor.
+/// every consumer wants the node's own oriented one; the transform (phase,
+/// elementwise conjugation, bra<->ket relabeling) is an involution, so one
+/// application converts either way. Shared by \c evaluate_impl (through its
+/// \c apply_phase lambda) and the ordered executor's \c
+/// detail::compute_cell, so both convert identically -- including the \c
+/// MultByPhase trace event, whose \c note_working_set call is what puts a
+/// materializing transform's transient second buffer on the peak monitor (a
+/// transform that only aliases its source allocates nothing and is charged
+/// nothing, see Result::is_buffer_alias()).
 ///
-/// A phase of 1 (the overwhelming majority) returns \p res untouched, with
-/// no event and no allocation.
+/// A trivial transform (the overwhelming majority) returns \p res untouched,
+/// with no event and no allocation.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
           bool FHC>
-[[nodiscard]] ResultPtr apply_canon_phase(Node const& nd, ResultPtr res,
-                                          CacheManager<N, FHC>& cache) {
-  auto phase = nd->canon_phase();
-  if (phase == 1) return res;
+[[nodiscard]] ResultPtr apply_canon_transform(Node const& nd, ResultPtr res,
+                                              CacheManager<N, FHC>& cache) {
+  auto const tr = nd->canon_transform();
+  if (tr.trivial()) return res;
 
   ResultPtr post;
   auto const _ph0 = std::chrono::steady_clock::now();
-  auto time =
-      detail::timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
+  auto time = detail::timed_eval_inplace([&]() {
+    std::array<std::any, 2> const ann{std::any{nd->annot()},
+                                      std::any{nd->annot()}};
+    post = res->apply_transform(tr, ann);
+  });
   eval::EvalImplTimeline::note_phase(_ph0);
 
   if constexpr (detail::trace(EvalTrace)) {
     size_t hwmark = log::bytes(cache, post).value;
-    if (!cache.alive(nd)) hwmark += log::bytes(res).value;
+    // An alias allocated nothing and shares the source's buffer: charge it
+    // 0 allocated bytes and count that one buffer once (mem_result stays the
+    // value's logical size). NB this covers a computed node's cache store
+    // path, a round trip where the node's transform is applied twice -- once
+    // into the canonical orientation to store, once back out -- and the
+    // second application composes to the identity: still an alias, still no
+    // copy.
+    bool const lazy = post->is_buffer_alias();
+    if (!cache.alive(nd) && !lazy) hwmark += log::bytes(res).value;
     hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
     auto stat = log::EvalStat{
         .mode = log::EvalMode::MultByPhase,
         .time = time,
         .mem_result = log::bytes(post),
-        .mem_alloc = log::bytes(post),
+        .mem_alloc = lazy ? log::Bytes{0} : log::bytes(post),
         .mem_hwmark = {cache.note_working_set(hwmark, nd->hash_value())}};
-    log::eval(stat, std::format("{} * {}", phase, nd->label()),
+    log::eval(stat,
+              std::format("[{}{}{}] {}", int(tr.phase), tr.conj ? "*" : "",
+                          tr.braket_swap ? "^T" : "", nd->label()),
               log::slice_home_annot(nd, cache.batch_context()));
   }
   return post;
@@ -726,13 +766,14 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
                                             ResultPtr const& right,
                                             CacheManager<N, FHC>& cache) {
   // The contraction annotation triple the shaped-product hook receives. A
-  // unary (Adjoint) node never reaches the hook, and its right child is the
-  // Constant(1) sentinel, so the triple is only built for a binary op.
+  // unary (Re/Im) node never reaches the hook, and its right child is the
+  // Constant{1} sentinel, so the triple is only built for a binary op.
+  bool const unary = node->op_type() == EvalOp::RealPart ||
+                     node->op_type() == EvalOp::ImagPart;
   std::array<std::any, 3> const ann =
-      node->op_type() == EvalOp::Adjoint
-          ? std::array<std::any, 3>{}
-          : std::array<std::any, 3>{node.left()->annot(), node.right()->annot(),
-                                    node->annot()};
+      unary ? std::array<std::any, 3>{}
+            : std::array<std::any, 3>{node.left()->annot(),
+                                      node.right()->annot(), node->annot()};
   ResultPtr result;
   log::Duration time{};
   if (node->op_type() != EvalOp::Product) {
@@ -976,8 +1017,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename N,
 /// evaluator itself on a leaf operand's first touch, before recording it as
 /// that leaf's cell -- so both account for it the same way.
 ///
-/// \return the leaf's own oriented result, whole (never sliced: the declared
-///         slice of a read is applied by \c CellReadResolver::fetch).
+/// \return the array the leaf's stored spelling names, whole (never sliced:
+///         the declared slice of a read is applied by \c
+///         CellReadResolver::fetch). That is the canonical orientation; the
+///         caller converts it to the leaf's own with the node's transform.
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
           typename N, bool FHC>
   requires meta::leaf_node_evaluator<Node, F>
@@ -1008,9 +1051,10 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F,
 /// \details The single choke point every freshly computed node passes
 /// through -- leaves, custom-eval subtrees and ordinary contractions alike --
 /// so the per-node build coverage the visualizer joins onto the IR DAG is
-/// complete. Shared by \c evaluate_impl's \c finish_phase_b and by the
-/// ordered executor's \c detail::compute_cell (ordered_executor.hpp), so
-/// both report their builds the same way without re-entering that engine.
+/// complete. Shared by \c evaluate_impl (through \c finish_phase_b, and
+/// directly on its leaf path) and by the ordered executor's \c
+/// detail::compute_cell (ordered_executor.hpp), so both report their builds
+/// the same way without re-entering that engine.
 template <meta::can_evaluate Node, typename N, bool FHC>
 void note_fresh_build(Node const& node, CacheManager<N, FHC>& cache) {
   // Diagnostic (SEQUANT_UT_BUILD_METER): count actual builds at this single
@@ -1020,8 +1064,8 @@ void note_fresh_build(Node const& node, CacheManager<N, FHC>& cache) {
                                eval::BuildMeter::enabled()
                                    ? log::label(node, cache.batch_context())
                                    : std::string{});
-  // Per-op build event: finish_phase_b is the single choke point every
-  // freshly computed node passes through -- leaves, custom-eval subtrees, and
+  // Per-op build event: this is the single choke point every freshly
+  // computed node passes through -- leaves, custom-eval subtrees, and
   // standard contractions -- so this counts every build (cached or not),
   // giving the schedule visualizer full per-node recompute coverage (the
   // cache Store/ Access/Release events above cover only cached nodes). Keyed
@@ -1082,11 +1126,11 @@ ResultPtr evaluate_impl(Node const& node,         //
   // computes every cell itself (detail::compute_cell, ordered_executor.hpp),
   // so an ordered run must leave this counter at zero -- see OrderedOpCounts.
   ++eval::detail::ordered_op_counts_slot().probes;
-  // Multiply a (possibly cached) result by its node's canonicalization phase
-  // (apply_canon_phase, above -- shared with the ordered executor's own
+  // Apply a (possibly cached) result's node canonicalization transform
+  // (apply_canon_transform, above -- shared with the ordered executor's own
   // compute_cell).
   auto apply_phase = [&cache](auto const& nd, ResultPtr res) -> ResultPtr {
-    return apply_canon_phase<EvalTrace>(nd, std::move(res), cache);
+    return apply_canon_transform<EvalTrace>(nd, std::move(res), cache);
   };
 
   // Slice-on-use: slice a value fetched at the Enter stage to the current batch
@@ -1130,7 +1174,7 @@ ResultPtr evaluate_impl(Node const& node,         //
   // marks a Checked node that exists in the cache map but has not been stored
   // yet, so its computed result must be cached (this replaces the recursive
   // wrapper's `evaluate<..., Unchecked>` re-entry).
-  enum class Stage { Enter, NeedLeft, NeedRight, NeedLeftAdj };
+  enum class Stage { Enter, NeedLeft, NeedRight };
   struct Frame {
     // Non-owning pointer into the tree being evaluated (which outlives this
     // call): a Node member would deep-copy the whole subtree into every frame
@@ -1214,54 +1258,35 @@ ResultPtr evaluate_impl(Node const& node,         //
         // --- Leaf. ---
         if (f.nd().leaf()) {
           // The full leaf (traced and cached full), via the shared leaf
-          // fetch (fetch_leaf_traced, above).
+          // fetch (fetch_leaf_traced, above). A provider is asked for the
+          // array the leaf stores, which is already the canonical
+          // orientation the cache holds -- unlike a computed node, whose
+          // operands reach it in their own orientation -- so the leaf is
+          // stored as fetched and its transform converts once on the way
+          // out, exactly as the Enter-stage cache hit converts.
           ResultPtr result =
               fetch_leaf_traced<EvalTrace>(f.nd(), leaf_evaluator, cache);
+          note_fresh_build(f.nd(), cache);
           // Store the full leaf under its canonical key (a block slice would
           // corrupt the cache), then return it sliced to the current block: a
           // freshly built leaf's lifetime is top, so every enclosing carried
           // batch loop is unbaked and is sliced here (hops == batch_context
           // size). On the off path (empty batch_context) this is a no-op.
-          ResultPtr stored = finish_phase_b(f, std::move(result));
+          if (f.store_after) {
+            result = cache.store_and_access(f.nd(), std::move(result));
+            if constexpr (detail::trace(EvalTrace))
+              log::cache(f.nd(), cache,
+                         log::label(f.nd(), cache.batch_context()));
+          }
+          ResultPtr stored = apply_phase(f.nd(), std::move(result));
           finalize(slice_to_use(stored, f.nd(), cache.batch_context().size()));
           break;
         }
 
         // --- Internal node: request the left operand (always Checked). The
         //     stage must advance before the push (push may grow the deque). ---
-        f.stage = (f.nd()->op_type() == EvalOp::Adjoint) ? Stage::NeedLeftAdj
-                                                         : Stage::NeedLeft;
+        f.stage = Stage::NeedLeft;
         stk.push_back(Frame{.node_p = &f.nd().left(), .checked = true});
-        break;
-      }
-
-      case Stage::NeedLeftAdj: {
-        // Unary IR op (Adjoint): only the left operand is evaluated; the right
-        // child is the Constant(1) sentinel kept to preserve FullBinaryNode's
-        // invariant, and is intentionally never pushed.
-        f.left = std::move(ret);
-        SEQUANT_ASSERT(f.left);
-        ResultPtr result;
-        auto time = detail::timed_eval_inplace(
-            [&]() { result = apply_one_op(f.nd(), f.left, f.right); });
-
-        if constexpr (detail::trace(EvalTrace)) {
-          // `right` is null here (see log::bytes() null tolerance).
-          size_t hwmark = log::bytes(cache, result).value;
-          if (!cache.chain_holds(f.left)) hwmark += log::bytes(f.left).value;
-          hwmark += cache.parent() ? cache.parent()->chain_residency() : 0;
-          log::eval(log::EvalStat{.mode = log::eval_mode(f.nd()),
-                                  .time = time,
-                                  .mem_result = log::bytes(result),
-                                  .mem_alloc = log::bytes(result),
-                                  .mem_hwmark = {cache.note_working_set(
-                                      hwmark, f.nd()->hash_value())},
-                                  .mem_left = log::bytes(f.left),
-                                  .mem_right = log::bytes(f.right)},
-                    log::label(f.nd(), cache.batch_context()));
-        }
-        log::release_after_op();
-        finalize(finish_phase_b(f, std::move(result)));
         break;
       }
 
@@ -1460,7 +1485,11 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
   for (auto&& n : nodes) {
     if (!result) {
-      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache);
+      // The first summand's value may alias a cache entry or a leaf served by
+      // the leaf evaluator (a memoized amplitude, integral, ...); the
+      // add_inplace below mutates the accumulator, so it must be a private
+      // deep copy (Result::clone).
+      result = evaluate<EvalTrace>(n, layout, leaf_evaluator, cache)->clone();
       continue;
     }
 
@@ -1520,7 +1549,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
   });
 
   static_assert(std::is_default_constructible_v<annot_type>);
-  return evaluate(nodes, annot_type{}, leaf_evaluator, cache);
+  return evaluate<EvalTrace>(nodes, annot_type{}, leaf_evaluator, cache);
 }
 
 ///
@@ -1670,8 +1699,11 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   auto const& n0 = detail::node0(detail::arg0(std::forward<Args>(args)...));
 
   ResultPtr result;
-  auto time = detail::timed_eval_inplace(
-      [&]() { result = pre->antisymmetrize(n0->as_tensor().bra_rank()); });
+  auto time = detail::timed_eval_inplace([&]() {
+    result = pre->antisymmetrize((n0->canon_transform().braket_swap
+                                      ? n0->as_tensor().ket_rank()
+                                      : n0->as_tensor().bra_rank()));
+  });
 
   // logging
   if constexpr (detail::trace(EvalTrace)) {
@@ -2367,12 +2399,11 @@ template <Trace EvalTrace = Trace::Default, typename F,
             // re-entry into this batched evaluator). `sliced_leaf` slices the
             // enclosing loops d carries (up to its home level); the loops it
             // does not carry pass through unsliced (built full over its deeper
-            // / invariant modes). Store under the same canonical-phase
+            // / invariant modes). Store under the same canonical-orientation
             // convention the batched member store uses.
             ResultPtr built = evaluate_impl<EvalTrace>(d, sliced_leaf);
-            if (auto const ph = d->canon_phase(); ph != 1)
-              built = built->mult_by_phase(ph);
-            (void)target->store_and_access(d, std::move(built));
+            (void)target->store_and_access(
+                d, convert_canon_orientation(d, std::move(built)));
           }
         };
 
@@ -2708,10 +2739,8 @@ template <Trace EvalTrace = Trace::Default, typename F,
           trigger_result = std::move(acc[m]);
           continue;
         }
-        ResultPtr v = std::move(acc[m]);
-        if (auto const ph = (*mem)->canon_phase(); ph != 1)
-          v = v->mult_by_phase(ph);
-        (void)cache.store_and_access(*mem, std::move(v));
+        (void)cache.store_and_access(
+            *mem, convert_canon_orientation(*mem, std::move(acc[m])));
       }
     }
     if (log::printing()) {

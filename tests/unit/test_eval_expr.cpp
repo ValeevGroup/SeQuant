@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/complex.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -13,6 +14,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -44,6 +46,16 @@ EvalExpr result_expr(EvalExpr const& left, EvalExpr const& right, EvalOp op) {
 }
 
 }  // namespace sequant
+
+namespace {
+/// an Index whose space carries the given field (the default field is Complex)
+sequant::Index idx(std::wstring_view label, sequant::Field field) {
+  sequant::Index i(label);
+  sequant::IndexSpace sp = i.space();
+  sp.field(field);
+  return sequant::Index(label, sp);
+}
+}  // namespace
 
 TEST_CASE("eval_expr", "[EvalExpr]") {
   using namespace std::string_literals;
@@ -158,14 +170,20 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // The binarized tree shall respect the label of the ResultExpr
     ResultExpr res =
         deserialize<ResultExpr>(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"E");
 
     // The binarized tree shall respect the indexing of the ResultExpr
+    // (the result's `S` braket letter is derivable only over a real basis)
+    auto real_basis = sequant::tests::scoped_real_basis();
     res = deserialize<ResultExpr>(
         L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
@@ -176,7 +194,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // tree
     res = deserialize<ResultExpr>(
         L"Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
@@ -185,12 +205,16 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // The name-respecting property shall also hold for terminals
     res = deserialize<ResultExpr>(L"Other = Var");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"Other");
 
     res = deserialize<ResultExpr>(L"Amplitude{i1;a1} = t{a1;i1}");
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     // the deserialized ResultExpr's Amplitude picks up the Context's column
     // symmetry (Symm), so the programmatic reference must request it too --
@@ -210,7 +234,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       auto res = deserialize<ResultExpr>(
           std::wstring{L"Result{a3;i1,i2} = "} + std::wstring{expr_str},
           {.def_perm_symm = Symmetry::Antisymm});
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto root = binarize(res);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
       auto const& tensor_operand =
           root.left()->is_tensor() ? root.left() : root.right();
       // Sanity: this contraction must exercise phase=-1, else the CHECK
@@ -224,102 +250,78 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
         L"R{a2;i1,i3} g{i3,a3;i2,a2} λ");  // Variable scalar
   }
 
-  SECTION("Adjoint op") {
-    // A Nonsymm-braket tensor's adjoint() relabels its label with U+207A '⁺'
-    // (Tensor::adjoint() at expressions/tensor.cpp:25-41). When that leaf
-    // reaches binarize, the resulting eval-tree should expose the adjoint as
-    // a first-class IR op (EvalOp::Adjoint) holding the bare-label tensor as
-    // its single operand — not as a leaf with the marker still in the label.
-    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-             BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-    REQUIRE(t.label() == L"t");
+  SECTION("K-conjugated non-Hermitian leaves over a complex basis") {
+    // The parity trait normalizes a '꙳' basis-independently: under Even it
+    // clears, under None it stays. A kept '꙳' over a complex basis is a
+    // different operator's matrix, its own array: a plain leaf whose hash
+    // differs from the unmarked twin's.
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
+                              .conjugation_parity = ConjugationParity::None});
+    REQUIRE(t.base_field() == Field::Complex);
+
+    // Even parity: the star leaves nothing behind, the leaf is the bare one
+    Tensor e(L"t", bra{L"a_1"}, ket{L"i_1"});
+    Tensor e_star = e;
+    REQUIRE(e_star.kconjugate() == 1);
+    REQUIRE_FALSE(e_star.kconjugated());
+    REQUIRE(EvalExpr{e}.hash_value() == EvalExpr{e_star}.hash_value());
+
+    Tensor t_star = t;
+    REQUIRE(t_star.kconjugate() == 1);
+    REQUIRE(t_star.kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto t_star_tree = binarize(ex<Tensor>(t_star));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(t_star_tree.leaf());
+    REQUIRE(t_star_tree->as_tensor().kconjugated());
+
+    // a directly-constructed EvalExpr must not alias t and t꙳ onto one cache
+    // slot
+    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_star}.hash_value());
+
+    // t and t⁺ share the bare array's slot: '⁺' decodes to {conj,
+    // braket_swap} over the unmarked spelling, one provider array for both
     Tensor t_adj = t;
-    (void)t_adj.adjoint();
-    REQUIRE(t_adj.label() == L"t⁺");
-    REQUIRE(t_adj.bra().at(0).label() == L"i_1");
-    REQUIRE(t_adj.ket().at(0).label() == L"a_1");
+    REQUIRE(t_adj.adjoint() == 1);
+    REQUIRE(t_adj.adjointed());
+    REQUIRE(EvalExpr{t}.hash_value() == EvalExpr{t_adj}.hash_value());
+    Tensor t_adj_star = t;
+    REQUIRE(t_adj_star.adjoint() == 1);
+    REQUIRE(t_adj_star.kconjugate() == 1);
+    REQUIRE(t_adj_star.adjointed());
+    REQUIRE(t_adj_star.kconjugated());
+    REQUIRE(EvalExpr{t}.hash_value() != EvalExpr{t_adj_star}.hash_value());
+    REQUIRE(EvalExpr{t_adj}.hash_value() != EvalExpr{t_adj_star}.hash_value());
 
+    // both states: the '꙳' leaf is its own array and the adjoint channel
+    // rides its transform
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    auto tree = binarize(ex<Tensor>(t_adj));
+    auto both = binarize(ex<Tensor>(t_adj_star));
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-
-    // The tree should NOT be a leaf — the adjoint marker on the leaf label is
-    // a structural property the IR should surface as a unary op.
-    REQUIRE_FALSE(tree.leaf());
-    REQUIRE(tree->op_type() == EvalOp::Adjoint);
-    REQUIRE(tree->is_tensor());  // adjoint of a tensor is still a tensor
-
-    // Left child: the bare-label leaf with the marker stripped and bra/ket
-    // swapped back to the operand's natural orientation.
-    REQUIRE(tree.left().leaf());
-    REQUIRE(tree.left()->is_tensor());
-    REQUIRE(tree.left()->as_tensor().label() == L"t");
-    REQUIRE(tree.left()->as_tensor().bra().at(0).label() == L"a_1");
-    REQUIRE(tree.left()->as_tensor().ket().at(0).label() == L"i_1");
-
-    // Right child: a Constant(1) sentinel — present so the full-binary-tree
-    // invariant holds (every non-leaf has both children); ignored by
-    // evaluate's Adjoint-case dispatch.
-    REQUIRE(tree.right().leaf());
-    REQUIRE(tree.right()->is_constant());
-    REQUIRE(tree.right()->as_constant().value() == Constant::scalar_type{1});
-
-    // The Adjoint node's canon_indices are the *original* (marker-bearing)
-    // tensor's index order — that's what a downstream Sum/Product parent
-    // sees as the operand's slot order.
-    auto const& adj_canon = tree->canon_indices();
-    REQUIRE(adj_canon.size() == 2);
-    REQUIRE(adj_canon[0].label() == L"i_1");
-    REQUIRE(adj_canon[1].label() == L"a_1");
-
-    // The bare-leaf operand's canon_indices are the swapped order.
-    auto const& bare_canon = tree.left()->canon_indices();
-    REQUIRE(bare_canon.size() == 2);
-    REQUIRE(bare_canon[0].label() == L"a_1");
-    REQUIRE(bare_canon[1].label() == L"i_1");
-
-    // Hash uniqueness: Adjoint(t) and the bare t leaf must have distinct
-    // hashes (else cache collisions). And Adjoint(Adjoint(t)) ≡ t.
-    auto bare_leaf = ex<Tensor>(t);
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    auto bare_tree = binarize(bare_leaf);
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(bare_tree.leaf());
-    REQUIRE(bare_tree->hash_value() != tree->hash_value());
-
-    // Hermitian (BraKetSymmetry::Conjugate/Symm) tensors don't carry the
-    // marker — Tensor::adjoint() guards the relabel on Nonsymm only — so
-    // binarize gives a plain leaf (no Adjoint op).
-    Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
-             BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
-    Tensor g_adj = g;
-    (void)g_adj.adjoint();
-    REQUIRE(g_adj.label() == L"g");  // no marker added for Conjugate
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-    auto g_tree = binarize(ex<Tensor>(g_adj));
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
-    REQUIRE(g_tree.leaf());  // no Adjoint wrapper
+    REQUIRE(both.leaf());
+    REQUIRE_FALSE(both->as_tensor().adjointed());
+    REQUIRE(both->as_tensor().kconjugated());
+    REQUIRE(both->as_tensor().bra().at(0).label() == L"a_1");
+    REQUIRE(both->hash_value() == t_star_tree->hash_value());
   }
-
-  SECTION("Adjoint op in a binarized term") {
-    // Regression: a tensor leaf can carry the adjoint marker U+207A '⁺' in its
-    // label without having been produced by Tensor::adjoint() — e.g. when built
-    // directly from a label string that already ends in '⁺'. Adjointness is
-    // tracked solely by this label marker, so such a leaf is a valid adjoint.
+  SECTION("an adjointed leaf in a binarized term") {
+    // Regression: a tensor leaf can carry the '⁺' state without having been
+    // produced by Tensor::adjoint() — e.g. when built from a label string
+    // ending in '⁺' (the constructor adopts the mark into the bits).
     //
-    // binarize() keys off the '⁺' label to surface the marker-bearing leaf as
-    // EvalOp::Adjoint (see the "Adjoint op" section above), stripping the
-    // marker via Tensor::adjoint(). That path must tolerate a leaf that never
-    // went through Tensor::adjoint().
+    // The leaf ctor keys off that state to strip it into the bare spelling
+    // plus a {conj, braket_swap} transform, and that path must tolerate a
+    // leaf that never went through Tensor::adjoint().
     auto expr = deserialize(L"1/2 g{i_1,i_2;a_1,a_2} t⁺{a_1;i_1} t{a_2;i_2}",
                             {.def_braket_symm = BraKetSymmetry::Nonsymm});
     REQUIRE(expr->is<Product>());
 
-    bool has_marker_leaf = false;
+    bool has_adjointed_leaf = false;
     for (auto const& factor : expr->as<Product>().factors())
-      has_marker_leaf |=
-          factor->is<Tensor>() && factor->as<Tensor>().label() == L"t⁺";
-    REQUIRE(has_marker_leaf);
+      has_adjointed_leaf |=
+          factor->is<Tensor>() && factor->as<Tensor>().adjointed();
+    REQUIRE(has_adjointed_leaf);
 
     // binarize() must not throw on this term:
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
@@ -561,6 +563,271 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 }
 
+TEST_CASE("leaf lowering of the core states", "[eval_expr]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+  SECTION("adjointed leaf: {conj, braket_swap} over the bare array") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});  // NonHermitian by default
+    Tensor t_adj = t;
+    REQUIRE(t_adj.adjoint() == 1);
+    REQUIRE(t_adj.adjointed());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Tensor>(t_adj));
+    auto bare = binarize(ex<Tensor>(t));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(tree.leaf());
+    REQUIRE_FALSE(tree->as_tensor().adjointed());  // the bare array
+    REQUIRE(tree->as_tensor().bra()[0].label() == L"a_1");
+    REQUIRE(tree->canon_transform().conj);
+    REQUIRE(tree->canon_transform().braket_swap);
+    REQUIRE(tree->hash_value() == bare->hash_value());  // one slot
+    REQUIRE(bare->canon_transform().trivial());
+    // the decoder is an involution on a leaf: the denoted spelling is what
+    // was written
+    REQUIRE(*tree->denoted_expr() == t_adj);
+  }
+  SECTION("adjointed leaf moved onto a real basis: it arrives normalized") {
+    // transform_indices re-normalizes the states over the new slots' field, so
+    // the decoder never sees a '⁺' over a real basis: the coset rule has
+    // already traded it for a '꙳' on the slots as written, which the parity
+    // keeps (None) or consumes (the default)
+    container::map<Index, Index> to_real{
+        {Index{L"a_1"}, idx(L"a_1", Field::Real)},
+        {Index{L"i_1"}, idx(L"i_1", Field::Real)}};
+    auto moved_onto_real = [&to_real](ConjugationParity parity) {
+      Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+               TensorSymmetries{.conjugation_parity = parity});
+      REQUIRE(t.adjoint() == 1);
+      REQUIRE(t.adjointed());
+      REQUIRE(t.transform_indices(to_real));
+      t.reset_tags();  // transform_indices tags the replaced indices
+      REQUIRE(t.base_field() == Field::Real);
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE(t.bra()[0].label() == L"a_1");
+      return t;
+    };
+
+    // the default parity consumes the star: a stateless leaf, no transform
+    Tensor even = moved_onto_real(ConjugationParity::Even);
+    REQUIRE_FALSE(even.kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto even_tree = binarize(ex<Tensor>(even));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(even_tree.leaf());
+    REQUIRE_FALSE(even_tree->op_type().has_value());
+    REQUIRE(even_tree->canon_transform().trivial());
+    REQUIRE(even_tree->as_tensor().bra()[0].label() == L"a_1");
+
+    // an indefinite parity keeps it: the conjugation rides the transform,
+    // over the identity layout
+    Tensor none = moved_onto_real(ConjugationParity::None);
+    REQUIRE(none.kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto none_tree = binarize(ex<Tensor>(none));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(none_tree.leaf());
+    REQUIRE(none_tree->canon_transform().conj);
+    REQUIRE_FALSE(none_tree->canon_transform().braket_swap);
+    REQUIRE_FALSE(none_tree->as_tensor().adjointed());
+    REQUIRE_FALSE(none_tree->as_tensor().kconjugated());
+    REQUIRE(none_tree->as_tensor().bra()[0].label() == L"a_1");
+  }
+  SECTION("K-conjugated leaf over a real basis: {conj}, identity layout") {
+    // a real-basis '꙳' survives only where the hermiticity is indefinite:
+    // a definite one reduces it through the coset rule
+    Index a = idx(L"a_1", Field::Real), i = idx(L"i_1", Field::Real);
+    Tensor t(L"t", bra{a}, ket{i},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor tk = t;
+    REQUIRE(tk.kconjugate() == 1);
+    REQUIRE(tk.kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Tensor>(tk));
+    auto bare = binarize(ex<Tensor>(t));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(tree.leaf());
+    REQUIRE_FALSE(tree->as_tensor().kconjugated());
+    REQUIRE(tree->canon_transform() == CanonTransform{.conj = true});
+    REQUIRE(tree->hash_value() == bare->hash_value());
+    REQUIRE(tree->canon_indices() == bare->canon_indices());  // identity layout
+    REQUIRE(*tree->denoted_expr() == tk);
+  }
+  SECTION("K-conjugated leaf over a complex basis: its own array") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor tk = t;
+    REQUIRE(tk.kconjugate() == 1);
+    REQUIRE(tk.kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto a = binarize(ex<Tensor>(t)), b = binarize(ex<Tensor>(tk));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(b.leaf());
+    REQUIRE(b->as_tensor().kconjugated());    // the state stays on the array
+    REQUIRE(b->canon_transform().trivial());  // no transform serves it
+    REQUIRE(a->hash_value() != b->hash_value());
+    REQUIRE(*b->denoted_expr() == tk);
+  }
+  SECTION("adjointed and K-conjugated over a complex basis compose") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    Tensor tk = t;
+    REQUIRE(tk.kconjugate() == 1);
+    Tensor both = tk;
+    REQUIRE(both.adjoint() == 1);
+    REQUIRE(both.adjointed());
+    REQUIRE(both.kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto tree = binarize(ex<Tensor>(both)), star = binarize(ex<Tensor>(tk));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(tree.leaf());
+    // the array is t꙳, the transform the adjoint channel
+    REQUIRE(tree->as_tensor().kconjugated());
+    REQUIRE_FALSE(tree->as_tensor().adjointed());
+    REQUIRE(tree->canon_transform().conj);
+    REQUIRE(tree->canon_transform().braket_swap);
+    REQUIRE(tree->hash_value() == star->hash_value());
+    REQUIRE(*tree->denoted_expr() == both);
+  }
+  SECTION("the parity keys an imaginary leaf apart over a real basis") {
+    // Over a real basis an Odd-parity array is imaginary while the Even one is
+    // real, so the two are different arrays and the leaf hash separates them.
+    // Even and None both leave the hash alone, so they key alike.
+    Index i = idx(L"i_1", Field::Real), j = idx(L"i_2", Field::Real);
+    auto leaf_hash = [&i, &j](ConjugationParity parity) {
+      Tensor p(L"p", bra{i}, ket{j},
+               TensorSymmetries{.conjugation_parity = parity});
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      auto tree = binarize(ex<Tensor>(p));
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+      REQUIRE(tree.leaf());
+      return tree->hash_value();
+    };
+    REQUIRE(leaf_hash(ConjugationParity::Even) !=
+            leaf_hash(ConjugationParity::Odd));
+    REQUIRE(leaf_hash(ConjugationParity::Even) ==
+            leaf_hash(ConjugationParity::None));
+  }
+}
+
+TEST_CASE("no eval op performs a conjugation", "[eval_expr]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+  // The IR's conjugation-bearing ops are the projections Re and Im, which are
+  // not invertible and so cannot ride in a CanonTransform. Every invertible
+  // conjugation channel does ride there: an adjointed factor lowers to a leaf
+  // over the bare array carrying {conj, braket_swap}, not to an op of its own.
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  Tensor t_adj = t;
+  REQUIRE(t_adj.adjoint() == 1);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node =
+      binarize(ex<Tensor>(t_adj) * ex<Tensor>(L"w", bra{L"a_1"}, ket{L"i_1"}));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node->op_type() == EvalOp::Product);
+  std::size_t leaves = 0;
+  std::size_t conjugating_leaves = 0;
+  node.visit([&leaves, &conjugating_leaves](auto const& n) {
+    if (n.leaf()) {
+      ++leaves;
+      if (n->canon_transform().conj) {
+        ++conjugating_leaves;
+        // the adjoint channel: a bra-ket exchange over an array the provider
+        // serves unconjugated
+        REQUIRE(n->canon_transform().braket_swap);
+        REQUIRE_FALSE(n->as_tensor().adjointed());
+        REQUIRE_FALSE(n->as_tensor().kconjugated());
+      }
+      return;
+    }
+    REQUIRE((n->op_type() == EvalOp::Product || n->op_type() == EvalOp::Sum ||
+             n->op_type() == EvalOp::RealPart ||
+             n->op_type() == EvalOp::ImagPart));
+  });
+  REQUIRE(leaves == 2);  // no sentinel child
+  REQUIRE(conjugating_leaves == 1);
+}
+
+// The cases below build eval trees straight from expressions: the head layout
+// is irrelevant to what they check (slot identity, transforms, phases), so
+// the deprecated binarize(ExprPtr) is used on purpose.
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+TEST_CASE("eval_expr_conjugation_state_identity",
+          "[EvalExpr][conjugate-state]") {
+  // The Gram overlap of a Hermitian C is spelled with the adjoint (a
+  // Conjugate tensor's bundles are not interchangeable, so a ket-ket
+  // contraction is not a spelling of it): C{a_1;p} C⁺{p;a_2} and
+  // C⁺{p;a_1} C{a_2;p} are one tensor S up to the named relabeling
+  // a_1 <-> a_2 (its slots are "index of the unconjugated factor" and "index
+  // of the conjugated factor"), so they may share one eval-node hash and
+  // cache slot -- but only if their canonical layouts put the unconjugated
+  // factor's index in the same slot. Were the two spellings the same coloured
+  // graph with an automorphism exchanging the factors, bliss would pin the
+  // slot order by the index labels alone, and the same buffer would be read
+  // as S by one occurrence and as S^T* by the other (identical only for real
+  // C). Regression for the Kramers-restricted CSV inter-pair overlap.
+  using namespace sequant;
+
+  auto C = [](std::wstring_view ext) {
+    return ex<Tensor>(L"C", bra{Index{ext}}, ket{Index{L"p_1"}},
+                      Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                      ColumnSymmetry::Symm);
+  };
+  // the adjoint of a Hermitian C is the bra/ket exchange, no state left
+  auto Cadj = [&C](std::wstring_view ext) {
+    auto t = C(ext);
+    REQUIRE(t->as<Tensor>().adjoint() == 1);
+    REQUIRE_FALSE(t->as<Tensor>().adjointed());
+    REQUIRE(t->as<Tensor>().bra()[0].label() == L"p_1");
+    return t;
+  };
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto A = binarize(C(L"a_1") * Cadj(L"a_2"));  // S(a_1, a_2)
+  auto B = binarize(Cadj(L"a_1") * C(L"a_2"));  // S(a_2, a_1)
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(!A.leaf());
+  REQUIRE(!B.leaf());
+  REQUIRE(A->canon_indices().size() == 2);
+  REQUIRE(B->canon_indices().size() == 2);
+
+  // slot of the unconjugated factor's index in the canonical layout
+  auto unconj_slot = [](auto const& node, Index const& unconj_idx) {
+    auto const& ci = node->canon_indices();
+    return std::distance(ci.begin(),
+                         std::find(ci.begin(), ci.end(), unconj_idx));
+  };
+  auto const slot_A = unconj_slot(A, Index{L"a_1"});
+  auto const slot_B = unconj_slot(B, Index{L"a_2"});
+  REQUIRE(slot_A < 2);
+  REQUIRE(slot_B < 2);
+
+  // same value up to relabeling: one identity ...
+  REQUIRE(A->hash_value() == B->hash_value());
+  // ... and a layout that agrees on which slot is the unconjugated one
+  REQUIRE(slot_A == slot_B);
+
+  // a genuinely different tensor is kept apart: for a non-Hermitian C the
+  // '⁺' stays, and C{a_1;p} C⁺{p;a_2} (an adjointed leaf inside the product)
+  // is not C{a_1;p} C{p;a_2}
+  auto N = [](std::wstring_view b, std::wstring_view k) {
+    return ex<Tensor>(L"C", bra{Index{b}}, ket{Index{k}},
+                      TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
+                                       .column = ColumnSymmetry::Symm});
+  };
+  auto Nadj = N(L"a_2", L"p_1");
+  REQUIRE(Nadj->as<Tensor>().adjoint() == 1);
+  REQUIRE(Nadj->as<Tensor>().adjointed());
+  REQUIRE(Nadj->as<Tensor>().bra()[0].label() == L"p_1");
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto D = binarize(N(L"a_1", L"p_1") * Nadj);
+  auto E = binarize(N(L"a_1", L"p_1") * N(L"p_1", L"a_2"));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(D.right().leaf());
+  REQUIRE(D->hash_value() != E->hash_value());
+}
+
 TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
   using namespace sequant;
   auto const tnsr =
@@ -574,6 +841,8 @@ TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
   REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
   REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
 }
+
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
 
 // Task 5 (multiroot-single-dag-eval): binarize(Sum const&, ...)'s make_sum
 // lambda used to capture its prefix-hash range (imed_hashes(hvals)) as a
@@ -603,4 +872,592 @@ TEST_CASE("Sum-node hash is sensitive to every summand",
   CHECK(first_a->hash_value() != first_b->hash_value());
   // (a*b)+c and c+(a*b) are the same multiset of summands -> same hash.
   CHECK(last_a->hash_value() == first_a->hash_value());
+}
+
+TEST_CASE("canon_transform_algebra", "[EvalExpr][conj-transform]") {
+  using sequant::CanonTransform;
+  CanonTransform id{};
+  REQUIRE(id.trivial());
+  REQUIRE(id.phase == 1);
+  REQUIRE_FALSE(id.conj);
+  REQUIRE_FALSE(id.braket_swap);
+
+  CanonTransform c{.phase = 1, .conj = true, .braket_swap = false};
+  CanonTransform s{.phase = -1, .conj = false, .braket_swap = true};
+  REQUIRE_FALSE(c.trivial());
+
+  // composition: phases multiply, conj/swap are Z2 (xor)
+  auto cs = compose(c, s);
+  REQUIRE(cs.phase == -1);
+  REQUIRE(cs.conj);
+  REQUIRE(cs.braket_swap);
+  REQUIRE(compose(c, c).trivial());  // involution
+  // structural salt: conj/swap enter, phase does NOT (hoistable)
+  REQUIRE(CanonTransform{.phase = -1}.structural_salt() ==
+          CanonTransform{}.structural_salt());
+  REQUIRE(c.structural_salt() != CanonTransform{}.structural_salt());
+  REQUIRE(c.structural_salt() != s.structural_salt());
+  REQUIRE(c.structural_salt() != cs.structural_salt());
+}
+
+TEST_CASE("eval_expr_carries_canon_transform", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  Tensor t(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  EvalExpr ee{t};
+  REQUIRE(ee.canon_transform().trivial());
+  REQUIRE(ee.canon_phase() == ee.canon_transform().phase);  // compat accessor
+}
+
+TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  // The channel table of the leaf decoder, one block per arm.
+
+  // A Hermitian core has no state to decode: its two orientations are stored
+  // as written and no transform serves either. They share one slot, because
+  // one provider array serves both -- a leaf's slot identity is label-blind,
+  // and it is the annotation that wires each mode to its contraction
+  // partner. The spellings they denote differ, and so do the annotations.
+  Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+  Tensor g_swapped = g;
+  REQUIRE(g_swapped.kconjugate() == 1);  // the Even parity consumes the star
+  REQUIRE_FALSE(g_swapped.kconjugated());
+  REQUIRE(g_swapped.adjoint() == 1);  // a Hermitian core: a bundle exchange
+  REQUIRE_FALSE(g_swapped.adjointed());
+  REQUIRE(g_swapped.bra()[0].label() == L"p_3");
+  EvalExpr eg{g}, egs{g_swapped};
+  REQUIRE(eg.canon_transform().trivial());
+  REQUIRE(egs.canon_transform().trivial());
+  REQUIRE(egs.as_tensor().bra()[0].label() == L"p_3");  // stored as written
+  REQUIRE(eg.hash_value() == egs.hash_value());         // one slot
+  REQUIRE_FALSE(eg.denoted_expr()->as<Tensor>() ==
+                egs.denoted_expr()->as<Tensor>());
+  REQUIRE(eg.indices_annot() != egs.indices_annot());
+
+  // '⁺' over a NonHermitian core: the bare array plus {conj, swap}
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+  Tensor t_adj = t;
+  REQUIRE(t_adj.adjoint() == 1);
+  EvalExpr et{t}, eta{t_adj};
+  REQUIRE(et.hash_value() == eta.hash_value());
+  REQUIRE(eta.canon_transform().conj);
+  REQUIRE(eta.canon_transform().braket_swap);
+  REQUIRE(eta.as_tensor().decorated_label() == L"t");  // bare spelling
+
+  // '⁺' over a kept '꙳': an indefinite parity leaves the star on the array
+  // over a complex basis, and the adjoint channel rides the transform
+  Tensor n(L"n", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  REQUIRE(n.base_field() == Field::Complex);
+  Tensor n_star = n;
+  REQUIRE(n_star.kconjugate() == 1);
+  REQUIRE(n_star.kconjugated());
+  Tensor n_adj_star = n_star;
+  REQUIRE(n_adj_star.adjoint() == 1);
+  REQUIRE(n_adj_star.adjointed());
+  EvalExpr en{n}, ens{n_star}, enas{n_adj_star};
+  REQUIRE(ens.hash_value() != en.hash_value());    // an array of its own
+  REQUIRE(enas.hash_value() == ens.hash_value());  // served from that array
+  REQUIRE(ens.canon_transform().trivial());
+  REQUIRE(enas.as_tensor().kconjugated());
+  REQUIRE_FALSE(enas.as_tensor().adjointed());
+  REQUIRE(enas.canon_transform().conj);
+  REQUIRE(enas.canon_transform().braket_swap);
+
+  // an Even-parity star is consumed by the trait, so the decoder never meets
+  // it: the starred spelling is the plain one
+  Tensor s(L"s", bra{L"i_1"}, ket{L"a_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::Even});
+  Tensor s_star = s;
+  REQUIRE(s_star.kconjugate() == 1);
+  REQUIRE_FALSE(s_star.kconjugated());
+  REQUIRE(EvalExpr{s_star}.canon_transform() == EvalExpr{s}.canon_transform());
+
+  // ToT: the same decoder runs before canonicalize_slots
+  auto ct = deserialize(L"C{a_1<i_1>;i_1}:N-N-S")->as<Tensor>();
+  REQUIRE(ranges::any_of(ct.const_indices(), &Index::has_proto_indices));
+  Tensor ct_adj = ct;
+  REQUIRE(ct_adj.adjoint() == 1);
+  REQUIRE(ct_adj.adjointed());
+  EvalExpr ec{ct}, eca{ct_adj};
+  REQUIRE(ec.hash_value() == eca.hash_value());  // one slot
+  REQUIRE_FALSE(eca.as_tensor().adjointed());
+  REQUIRE(eca.canon_transform().conj);
+  REQUIRE(eca.canon_transform().braket_swap);
+}
+
+// The hash contract stated directly: a leaf's slot hash is the hash of the
+// array it stores -- label, slots, the state byte of the stored spelling, and
+// the AntiSymm conjugation-symmetry term, nothing else (hash_terminal_tensor).
+// leaf_transform_channels above exercises the same channels through
+// binarize(); this pins the contract at EvalExpr construction directly.
+TEST_CASE("leaf_slot_identity_is_the_stored_array",
+          "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+  auto hash_of = [](Tensor const& t) { return EvalExpr{t}.hash_value(); };
+
+  // the two transform cases share the bare array's slot
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+  Tensor t_adj = t;
+  REQUIRE(t_adj.adjoint() == 1);
+  REQUIRE(hash_of(t_adj) == hash_of(t));
+
+  Index ra = idx(L"a_1", Field::Real), ri = idx(L"i_1", Field::Real);
+  Tensor r(L"r", bra{ra}, ket{ri},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  Tensor rk = r;
+  REQUIRE(rk.kconjugate() == 1);
+  REQUIRE(hash_of(rk) == hash_of(r));
+
+  // the complex-basis K-conjugate is its own array
+  Tensor c(L"c", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  Tensor ck = c;
+  REQUIRE(ck.kconjugate() == 1);
+  REQUIRE(hash_of(ck) != hash_of(c));
+
+  // the two orientations of a Conjugate (Hermitian) tensor sharing one
+  // provider array's slot is pinned by leaf_transform_channels above.
+
+  // an Odd-parity real-basis array keying apart from the Even one is pinned
+  // by "the parity keys an imaginary leaf apart over a real basis" above.
+}
+
+TEST_CASE("conj_hoisting_structural_identity", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+  // over a real basis with an indefinite parity the conjugate of a matrix
+  // element is the K-conjugate with the slots in place, so every factor
+  // decodes to {conj} and the conjugation is a whole-node transform
+  auto rx = [](std::wstring_view l) { return idx(l, Field::Real); };
+  auto rt = [&rx](std::wstring_view lbl, std::wstring_view b,
+                  std::wstring_view k) {
+    return ex<Tensor>(
+        lbl, bra{rx(b)}, ket{rx(k)},
+        TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  };
+
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto AB = binarize(rt(L"A", L"i_1", L"a_1") * rt(L"B", L"a_1", L"i_2"));
+  auto ABc =
+      binarize(conjugate(rt(L"A", L"i_1", L"a_1") * rt(L"B", L"a_1", L"i_2")));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(AB->hash_value() == ABc->hash_value());  // uniform {conj} hoists
+  REQUIRE(ABc->canon_transform() == CanonTransform{.conj = true});
+  REQUIRE_FALSE(AB->canon_transform().conj);
+
+  // mixed marks salt
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto CD = binarize(rt(L"C", L"i_1", L"a_1") * rt(L"D", L"a_1", L"i_2"));
+  auto CDc =
+      binarize(rt(L"C", L"i_1", L"a_1") * conjugate(rt(L"D", L"a_1", L"i_2")));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(CD->hash_value() != CDc->hash_value());
+
+  // a uniformly conjugated sum hoists the same way
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto S = binarize(rt(L"D", L"i_1", L"a_1") + rt(L"E", L"i_1", L"a_1"));
+  auto Sc =
+      binarize(conjugate(rt(L"D", L"i_1", L"a_1") + rt(L"E", L"i_1", L"a_1")));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(S->hash_value() == Sc->hash_value());
+  REQUIRE(Sc->canon_transform().conj);
+
+  SECTION("the adjoint of a contraction gets its own slot") {
+    // over a complex basis the conjugate is the adjoint: every factor's
+    // transform carries the bundle exchange, which respells the node's own
+    // result, so the conjugation is not hoisted and the adjointed network
+    // keeps its own slot
+    auto X = ex<Tensor>(L"X", bra{L"i_1"}, ket{L"a_1"});
+    auto Y = ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_2"});
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto XY = binarize(X->clone() * Y->clone());
+    auto XYc = binarize(conjugate(X->clone() * Y->clone()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(XY->hash_value() != XYc->hash_value());
+    REQUIRE_FALSE(XYc->canon_transform().conj);
+
+    // the sum site reads the same rule: the adjoint of a sum salts
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto SXY = binarize(X->clone() + Y->clone());
+    auto SXYc = binarize(conjugate(X->clone() + Y->clone()));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(SXY->hash_value() != SXYc->hash_value());
+    REQUIRE_FALSE(SXYc->canon_transform().conj);
+  }
+}
+
+TEST_CASE("conjugated_scalar_leaves", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  Variable x{L"x"};
+  Variable xs = x;
+  xs.conjugate();
+  REQUIRE(EvalExpr{x}.hash_value() == EvalExpr{xs}.hash_value());
+  REQUIRE(EvalExpr{xs}.canon_transform().conj);
+  REQUIRE(EvalExpr{x}.canon_transform().trivial());
+
+  // conj(b^n) = conj(b)^n for integer n: the marker rides the transform
+  auto pw = Power{ex<Variable>(L"y"), 2};
+  auto pws = pw;
+  pws.conjugate();
+  REQUIRE(EvalExpr{pw}.hash_value() == EvalExpr{pws}.hash_value());
+  REQUIRE(EvalExpr{pws}.canon_transform().conj);
+  REQUIRE(EvalExpr{pw}.canon_transform().trivial());
+}
+
+// these cases drive binarize(ExprPtr) on purpose: the head layout they
+// assert is exactly the one that overload derives from the source factors
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+TEST_CASE("re_im_eval_nodes", "[EvalExpr][re-im]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(
+      Context(get_default_context())
+          .set_tensor_canonicalizer(
+              L"", std::make_shared<DefaultTensorCanonicalizer>()));
+
+  // The fold emission shape: Constant(2) * RealPart(s), s a
+  // closed-contraction scalar network.
+  auto g = deserialize(L"g{i_1;a_1}:N");
+  auto t = deserialize(L"t{a_1;i_1}:N");
+  auto s_expr = g->clone() * t->clone();
+
+  auto two_re = ex<Constant>(2) * real_part(s_expr->clone());
+  auto node = binarize(two_re);
+
+  // locate the RealPart unary node in the scalar-wrapped root
+  auto const& re = node.left()->op_type() ? node.left() : node.right();
+  REQUIRE(re->op_type() == EvalOp::RealPart);
+  REQUIRE(re->result_type() == ResultType::Scalar);
+  REQUIRE_FALSE(re->is_primary());
+  // Constant{1} sentinel right child; inner subtree on the left
+  REQUIRE(re.right()->is_constant());
+  REQUIRE(re.left()->is_product());
+
+  // the inner subtree occupies the SAME slot as an independent binarize of s
+  auto inner_alone = binarize(s_expr->clone());
+  REQUIRE(re.left()->hash_value() == inner_alone->hash_value());
+
+  // Re, Im, and the bare inner all hash to distinct slots
+  auto two_im = ex<Constant>(2) * imaginary_part(s_expr->clone());
+  auto node_im = binarize(two_im);
+  auto const& im = node_im.left()->op_type() ? node_im.left() : node_im.right();
+  REQUIRE(im->op_type() == EvalOp::ImagPart);
+  REQUIRE(re->hash_value() != im->hash_value());
+  REQUIRE(re->hash_value() != inner_alone->hash_value());
+  REQUIRE(im->hash_value() != inner_alone->hash_value());
+}
+
+TEST_CASE("tot_leaf_canonical_spelling_and_phase", "[eval_expr][tot][phase]") {
+  // A tensor-of-tensors leaf is block-canonicalized IN PLACE like a flat
+  // leaf: the stored spelling (what a leaf provider serves) and
+  // canon_indices() carry the canonical slot order, the antisymmetric
+  // reorder phase is the retrieval transform's byproduct, and the two
+  // spellings share one slot. (HSeOH PNS sign regression, 2026-09-02: the
+  // phase was recorded against an un-reordered spelling.)
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↓_1");
+  const Index a2(L"a↑_2", {i1, i2}), a3(L"a↑_3", {i1, i2});
+  auto mk = [&](Index const& x, Index const& y) {
+    return Tensor(L"t", bra{x, y}, ket{i1, i2}, Symmetry::Antisymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  EvalExpr e23{mk(a2, a3)}, e32{mk(a3, a2)};
+  // both store the canonical spelling ...
+  REQUIRE(e23.as_tensor().bra()[0].label() == e32.as_tensor().bra()[0].label());
+  auto const& ci = e32.canon_indices();
+  auto pos = [&](std::wstring_view l) {
+    return std::find_if(ci.begin(), ci.end(),
+                        [&](Index const& ix) { return ix.label() == l; }) -
+           ci.begin();
+  };
+  REQUIRE(pos(e32.as_tensor().bra()[0].label()) <
+          pos(e32.as_tensor().bra()[1].label()));
+  // ... share one slot, and differ by the reorder phase only
+  REQUIRE(e23.hash_value() == e32.hash_value());
+  REQUIRE(e23.canon_transform().phase * e32.canon_transform().phase == -1);
+  REQUIRE_FALSE(e23.canon_transform().conj);
+  REQUIRE_FALSE(e32.canon_transform().conj);
+  // a MIXED-flavor bundle is stored space-major (up before down: the named
+  // canonical order), whichever way it was written -- the raw canonical
+  // vertex order sorts colors by their hash, which a provider cannot follow
+  const Index b3(L"a↓_3", {i1, i2});
+  EvalExpr eud{mk(a2, b3)}, edu{mk(b3, a2)};
+  REQUIRE(eud.as_tensor().bra()[0].label() == L"a↑_2");
+  REQUIRE(edu.as_tensor().bra()[0].label() == L"a↑_2");
+  REQUIRE(eud.hash_value() == edu.hash_value());
+  REQUIRE(eud.canon_transform().phase * edu.canon_transform().phase == -1);
+}
+
+TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
+  // Products and sums that differ only by the slot order of an antisymmetric
+  // ToT leaf: the leaf's reorder parity is a child TRANSFORM (its hash is
+  // phase-blind), so the parents occupy ONE slot. A product carries the
+  // parity in its own transform (phases hoist multiplicatively); a sum
+  // hoists a uniform parity and salts a mixed one -- otherwise one slot
+  // would hold sign-different values for the two spellings.
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↓_1");
+  const Index a2(L"a↑_2", {i1, i2}), a3(L"a↑_3", {i1, i2});
+  auto t = [&](Index const& x, Index const& y) {
+    return ex<Tensor>(L"t", bra{x, y}, ket{i1, i2}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto g = [&](std::wstring_view lbl) {
+    return ex<Tensor>(lbl, bra{i1, i2}, ket{a2, a3}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto prod = [&](std::wstring_view lbl, Index const& x, Index const& y) {
+    return ex<Product>(ExprPtrList{g(lbl), t(x, y)});
+  };
+
+  auto p23 = binarize(prod(L"g", a2, a3));
+  auto p32 = binarize(prod(L"g", a3, a2));
+  // the leaves share a slot and differ by the reorder parity ...
+  REQUIRE(p23.right()->hash_value() == p32.right()->hash_value());
+  REQUIRE(p23.right()->canon_phase() * p32.right()->canon_phase() == -1);
+  // ... and so do the products, the parity hoisted into their transforms
+  REQUIRE(p23->hash_value() == p32->hash_value());
+  REQUIRE(p23->canon_phase() * p32->canon_phase() == -1);
+
+  auto sum = [&](ExprPtr a, ExprPtr b) {
+    return binarize(ex<Sum>(ExprPtrList{std::move(a), std::move(b)}));
+  };
+  auto s23 = sum(prod(L"g", a2, a3), prod(L"h", a2, a3));
+  auto s32 = sum(prod(L"g", a3, a2), prod(L"h", a3, a2));
+  auto s_mixed = sum(prod(L"g", a2, a3), prod(L"h", a3, a2));
+  // uniform parity: one slot, the parity hoisted
+  REQUIRE(s23->hash_value() == s32->hash_value());
+  REQUIRE(s23->canon_phase() * s32->canon_phase() == -1);
+  // mixed parity: not a whole-node transform -> its own slot
+  REQUIRE(s_mixed->hash_value() != s23->hash_value());
+  REQUIRE(s_mixed->canon_phase() == 1);
+}
+
+TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
+  // a sum's slot depends on ALL its summands: A + B and A + C are different
+  // values; A + B and B + A are one value (the summand hash multiset is
+  // order-blind) unless the leading summand's LAYOUT differs
+  using namespace sequant;
+  auto sum_of = [](std::wstring_view a, std::wstring_view b) {
+    return binarize(ex<Sum>(ExprPtrList{deserialize(a), deserialize(b)}));
+  };
+  auto const ab = sum_of(L"f{i_1;a_1}", L"g{i_1;a_1}");
+  auto const ac = sum_of(L"f{i_1;a_1}", L"h{i_1;a_1}");
+  auto const ba = sum_of(L"g{i_1;a_1}", L"f{i_1;a_1}");
+  auto const ab2 = sum_of(L"f{i_2;a_2}", L"g{i_2;a_2}");
+  REQUIRE(ab->hash_value() != ac->hash_value());
+  // same summands, same layout, another order: one slot; a relabeled copy of
+  // the same sum shares it too
+  REQUIRE(ab->hash_value() == ba->hash_value());
+  REQUIRE(ab->hash_value() == ab2->hash_value());
+  // the result layout is the FIRST summand's: the same summands in another
+  // order with a different leading layout are a different slot (the cached
+  // array would be served in the wrong mode order otherwise)
+  // (NonHermitian f keeps its written orientation, so the two leaves have
+  // different layouts)
+  auto const nonherm = [](std::wstring_view spec) {
+    return deserialize<ExprPtr>(spec,
+                                {.def_braket_symm = Hermiticity::NonHermitian});
+  };
+  auto const tf = binarize(
+      ex<Sum>(ExprPtrList{nonherm(L"t{a_1;i_1}"), nonherm(L"f{i_1;a_1}")}));
+  auto const ft = binarize(
+      ex<Sum>(ExprPtrList{nonherm(L"f{i_1;a_1}"), nonherm(L"t{a_1;i_1}")}));
+  REQUIRE(tf->canon_indices().front() != ft->canon_indices().front());
+  REQUIRE(tf->hash_value() != ft->hash_value());
+  // three summands: the LAST one must count too
+  auto const abc = binarize(ex<Sum>(ExprPtrList{deserialize(L"f{i_1;a_1}"),
+                                                deserialize(L"g{i_1;a_1}"),
+                                                deserialize(L"h{i_1;a_1}")}));
+  auto const abd = binarize(ex<Sum>(ExprPtrList{deserialize(L"f{i_1;a_1}"),
+                                                deserialize(L"g{i_1;a_1}"),
+                                                deserialize(L"k{i_1;a_1}")}));
+  REQUIRE(abc->hash_value() != abd->hash_value());
+}
+
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+TEST_CASE("denoted_expr_is_the_parent_network_spelling",
+          "[eval_expr][denoted]") {
+  // the denoted spelling is the leaf decoder's inverse: the {conj, swap}
+  // channel is re-materialized as the '⁺' state of the stored array, a bare
+  // {conj} as its '꙳'. The parent network sees the spelling as written, and
+  // its states color the graph.
+  using namespace sequant;
+
+  // '⁺' over a NonHermitian core: stored bare + {conj, swap}; denoted is the
+  // adjoint of the stored spelling
+  Tensor w(L"F", bra{L"i_2"}, ket{L"a_1"});  // NonHermitian by default
+  REQUIRE(w.adjoint() == 1);
+  REQUIRE(w.adjointed());
+  EvalExpr e{w};
+  REQUIRE(e.canon_transform().conj);
+  REQUIRE(e.canon_transform().braket_swap);
+  REQUIRE_FALSE(e.as_tensor().adjointed());
+  REQUIRE(e.denoted_expr()->as<Tensor>() == w);
+
+  // a real-basis '꙳' kept by an indefinite parity: stored bare + {conj};
+  // denoted is the stored spelling K-conjugated, slots in place
+  Tensor s(L"F", bra{idx(L"i_1", Field::Real)}, ket{idx(L"a_1", Field::Real)},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  REQUIRE(s.kconjugate() == 1);
+  REQUIRE(s.kconjugated());
+  EvalExpr es{s};
+  REQUIRE(es.canon_transform().conj);
+  REQUIRE_FALSE(es.canon_transform().braket_swap);
+  REQUIRE(es.denoted_expr()->as<Tensor>() == s);
+
+  // a '꙳' over a complex basis is an array of its own: the state stays on
+  // the stored spelling and there is nothing to re-materialize
+  Tensor c(L"F", bra{L"i_1"}, ket{L"a_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  REQUIRE(c.kconjugate() == 1);
+  EvalExpr ec{c};
+  REQUIRE(ec.canon_transform().trivial());
+  REQUIRE(ec.denoted_expr()->as<Tensor>() == c);
+
+  // an internal node inherits its tensor child's transform, but its
+  // placeholder is built from the child's denoted spelling already, so
+  // denoted_expr() hands it back untouched
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto const scaled = binarize(ex<Variable>(L"x") * ex<Tensor>(w));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(scaled->op_type().has_value());
+  REQUIRE(scaled->is_tensor());
+  REQUIRE(scaled->canon_transform().conj);
+  REQUIRE(scaled->canon_transform().braket_swap);
+  REQUIRE(scaled->denoted_expr()->as<Tensor>() == scaled->as_tensor());
+}
+
+TEST_CASE("tot_leaf_annotation_is_slot_faithful", "[eval_expr][tot]") {
+  // A ToT leaf's canon_indices() is the layout the provider serves for the
+  // STORED spelling: pure proto indices first (the pair labels of
+  // C{mu;a<ij>}, laid out i,j,mu), then the plain slots IN SLOT ORDER, then
+  // the proto-carrying slots. The occupied kets of t{a<ij>,b<ij>;j,i} are
+  // both plain slots and proto indices; they take their SLOT position, since
+  // the array's outer mode k pairs with inner mode k as a column -- read
+  // i,j;a,b (the proto order) the same array would serve t^{ab}_{ij} for
+  // t^{ab}_{ji} (nonrel PNO CSV-CCD exchange energy, 2026-09-11).
+  using namespace sequant;
+  const Index i1(L"i_1"), i2(L"i_2"), mu(L"a_1");
+  const Index a(L"a_2", {i1, i2}), b(L"a_4", {i1, i2});
+  auto t = [&](Index const& k0, Index const& k1) {
+    return Tensor(L"t", bra{a, b}, ket{k0, k1}, Symmetry::Nonsymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto labels = [](EvalExpr const& e) {
+    std::vector<std::wstring> out;
+    for (auto const& ix : e.canon_indices()) out.emplace_back(ix.label());
+    return out;
+  };
+  using L = std::vector<std::wstring>;
+  REQUIRE(labels(EvalExpr{t(i1, i2)}) == L{L"i_1", L"i_2", L"a_2", L"a_4"});
+  REQUIRE(labels(EvalExpr{t(i2, i1)}) == L{L"i_2", L"i_1", L"a_2", L"a_4"});
+  REQUIRE(EvalExpr{t(i2, i1)}.indices_annot() == "i_2,i_1;a_2i_1i_2,a_4i_1i_2");
+  // the two ket orders are different values (t^{ab}_{ji} vs t^{ab}_{ij});
+  // their slot identity is label-blind (one provider array serves both), so
+  // it is the annotation alone that tells the array's modes apart
+  REQUIRE(EvalExpr{t(i1, i2)}.indices_annot() !=
+          EvalExpr{t(i2, i1)}.indices_annot());
+  // a CSV coefficient in either orientation: pair labels, expansion slot,
+  // then the CSV slot
+  Tensor const c_ket(L"C", bra{mu}, ket{a}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm);
+  Tensor const c_bra(L"C", bra{a}, ket{mu}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm);
+  REQUIRE(labels(EvalExpr{c_ket}) == L{L"i_1", L"i_2", L"a_1", L"a_2"});
+  REQUIRE(labels(EvalExpr{c_bra}) == L{L"i_1", L"i_2", L"a_1", L"a_2"});
+  REQUIRE(EvalExpr{c_ket}.indices_annot() == "i_1,i_2,a_1;a_2i_1i_2");
+}
+
+// The symbolic spelling of an eval tree is the expression it denotes: a leaf
+// stores the bare array with its states and its canonicalization sign on the
+// transform, and to_expr puts both back.
+TEST_CASE("to_expr_denotes_the_leaf", "[EvalExpr][conj-transform]") {
+  using namespace sequant;
+  auto ctx = set_scoped_default_context(
+      Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+
+  SECTION("an adjointed leaf") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(ex<Tensor>(t));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    // the leaf stores the bare array under the adjoint channel ...
+    REQUIRE_FALSE(node->as_tensor().adjointed());
+    REQUIRE(node->canon_transform() ==
+            CanonTransform{.conj = true, .braket_swap = true});
+    // ... and denotes the spelling as written
+    REQUIRE(*to_expr(node) == t);
+  }
+
+  SECTION("a K-conjugated leaf over a real basis") {
+    auto rx = [](std::wstring_view l) { return idx(l, Field::Real); };
+    auto r = ex<Tensor>(
+        L"r", bra{rx(L"a_1")}, ket{rx(L"i_1")},
+        TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    auto rc = conjugate(r);
+    REQUIRE(rc->as<Tensor>().kconjugated());
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(rc);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(node->as_tensor().kconjugated());
+    REQUIRE(node->canon_transform() == CanonTransform{.conj = true});
+    REQUIRE(*to_expr(node) == *rc);
+  }
+
+  SECTION("a conjugated scalar leaf") {
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(x);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE_FALSE(node->as_variable().conjugated());
+    REQUIRE(*to_expr(node) == *x);
+  }
+
+  SECTION("a leaf reordered with a sign") {
+    // the block canonicalizer stores the mixed-space bra as i_3,a_1 with the
+    // antisymmetric reorder's sign on the transform
+    auto t = ex<Tensor>(L"t", bra{Index{L"a_1"}, Index{L"i_3"}},
+                        ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto leaf = binarize(t);
+    auto prod = binarize(t * v);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(leaf->canon_phase() == -1);
+    auto const stored = leaf->as_tensor();
+    REQUIRE(stored.bra()[0].label() == L"i_3");
+
+    auto e = to_expr(leaf);
+    REQUIRE(e->is<Product>());
+    REQUIRE(e->as<Product>().scalar() == -1);
+    REQUIRE(e->as<Product>().size() == 1);
+    REQUIRE(*e->as<Product>().factor(0) == stored);
+
+    auto pe = to_expr(prod);
+    REQUIRE(pe->is<Product>());
+    REQUIRE(pe->as<Product>().scalar() == -1);
+    REQUIRE(pe->as<Product>().size() == 2);
+    REQUIRE(*pe->as<Product>().factor(0) == stored);
+    REQUIRE(*pe->as<Product>().factor(1) == *v);
+  }
 }

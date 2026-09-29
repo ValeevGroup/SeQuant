@@ -8,6 +8,8 @@
 // LegalitySchedule + the RichSchedule into an OrderedSchedule for the
 // NON-SPLIT case.
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
@@ -1037,15 +1039,7 @@ struct OrderedSchedFixture {
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       orderedsched_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +

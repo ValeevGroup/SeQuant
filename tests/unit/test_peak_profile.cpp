@@ -92,9 +92,12 @@ EvalExpr eval_tensor_hashed(std::string_view result, std::size_t hash,
   EvalExpr const base{expr->as<sequant::Tensor>()};
   EvalExpr::index_vector ixs{base.canon_indices().begin(),
                              base.canon_indices().end()};
-  return EvalExpr{op,          sequant::ResultType::Tensor,
-                  expr,        std::move(ixs),
-                  /*phase=*/1, hash,
+  return EvalExpr{op,
+                  sequant::ResultType::Tensor,
+                  expr,
+                  std::move(ixs),
+                  sequant::CanonTransform{},
+                  hash,
                   nullptr};
 }
 

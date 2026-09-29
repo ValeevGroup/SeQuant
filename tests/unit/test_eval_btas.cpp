@@ -676,52 +676,6 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
                             100 * std::numeric_limits<double>::epsilon()));
 }
 
-TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
-  using namespace sequant;
-  using BTensorC = btas::Tensor<std::complex<double>>;
-
-  std::srand(2023);
-  const size_t nocc = 2, nvirt = 5;
-  auto yield_ = rand_tensor_yield<BTensorC>{nocc, nvirt};
-
-  // A Nonsymm-braket tensor's adjoint() marks the label with '⁺' and swaps
-  // bra/ket; binarize lowers that to an EvalOp::Adjoint node, and evaluating it
-  // must conjugate-transpose the operand. With genuinely complex data the
-  // conjugation is observable (a missing conj would leave imaginary parts
-  // unflipped — a pure transpose would still pass a norm-only check).
-  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
-           BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
-  Tensor t_adj = t;
-  (void)t_adj.adjoint();
-  REQUIRE(t_adj.label() == L"t⁺");
-
-  auto node = eval_node(ex<Tensor>(t_adj));
-  REQUIRE(node->op_type() == EvalOp::Adjoint);
-
-  // operand tensor (bare 't{a_1;i_1}'): shape [nvirt, nocc], indexed (a, i)
-  auto const& src = yield_(node.left()->as_tensor())->get<BTensorC>();
-  REQUIRE(src.extent(0) == nvirt);
-  REQUIRE(src.extent(1) == nocc);
-
-  // adjoint result: shape [nocc, nvirt], indexed (i, a) == conj(src(a, i))
-  auto const adj = evaluate(node, tidxs(t_adj), yield_)->get<BTensorC>();
-  REQUIRE(adj.extent(0) == nocc);
-  REQUIRE(adj.extent(1) == nvirt);
-
-  for (size_t i = 0; i < nocc; ++i)
-    for (size_t a = 0; a < nvirt; ++a) {
-      auto const expected = std::conj(src(a, i));
-      auto const got = adj(i, a);
-      CHECK(got.real() == Catch::Approx(expected.real()).margin(1e-12));
-      CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
-    }
-}
-
-// A product that contracts every index of both operands is a bilinear dot,
-// sum_k L[k] R[k], with no conjugation: SeQuant spells a conjugated operand
-// explicitly (a Conjugate value modifier, an EvalOp::Adjoint node), so the
-// backend must not conjugate on its own. BTAS's btas::dot is dotc (BLAS zdotc,
-// the first operand conjugated), which is only observable on complex data.
 TEST_CASE("eval_dot_complex_btas", "[eval_btas]") {
   using namespace sequant;
   using C = std::complex<double>;
