@@ -54,6 +54,12 @@ std::wstring serialize_symm(BraKetSymmetry symm, const SerializationOptions&) {
       return L"S";
     case BraKetSymmetry::Nonsymm:
       return L"N";
+    case BraKetSymmetry::Antisymm:
+    case BraKetSymmetry::AntiConjugate:
+      // only a definite hermiticity derives a signed exchange
+      throw Exception(
+          "io::serialization::v1: a signed bra/ket exchange symmetry with an "
+          "indefinite hermiticity has no spelling");
   }
 
   SEQUANT_UNREACHABLE;
