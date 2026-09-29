@@ -50,19 +50,19 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
 
   SECTION("K1: an integral leg meets a granted amplitude leg") {
     CHECK(serialize(vac_av(t::h(2) * with_leg_instance(t::t(2), 1))) ==
-          (yes ? L"1/4 g{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-C-S * "
+          (yes ? L"1/4 g{i_1,i_2;a_1<i_1,i_2;1>,a_2<i_1,i_2;1>}:A-H-S * "
                  L"t{a_1<i_1,i_2;1>,a_2<i_1,i_2;1>;i_1,i_2}:A-N-S"
-               : L"1/4 g{i_1,i_2;a_1<;1>,a_2<;1>}:A-C-S * "
+               : L"1/4 g{i_1,i_2;a_1<;1>,a_2<;1>}:A-H-S * "
                  L"t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S"));
   }
 
   SECTION("K2: projector and amplitude legs of different pairs, one family") {
     CHECK(serialize(vac_av(with_leg_instance(t::P(nₚ(1)), 1) * t::h(1) *
                            with_leg_instance(t::t(2), 1))) ==
-          (yes ? L"-1 Â{i_1;a_1<i_1;1>}:A-N-S * f{i_2;a_2<i_1,i_2;1>}:A-C-S * "
-                 L"s{a_1<i_1;1>;a_3<i_1,i_2;1>}:N-C-S * "
+          (yes ? L"-Â{i_1;a_1<i_1;1>}:A-N-S * f{i_2;a_2<i_1,i_2;1>}:A-H-S * "
+                 L"s{a_1<i_1;1>;a_3<i_1,i_2;1>}:N-H-S * "
                  L"t{a_2<i_1,i_2;1>,a_3<i_1,i_2;1>;i_1,i_2}:A-N-S"
-               : L"Â{i_1;a_1<;1>}:A-N-S * f{i_2;a_2<;1>}:A-C-S * "
+               : L"Â{i_1;a_1<;1>}:A-N-S * f{i_2;a_2<;1>}:A-H-S * "
                  L"t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S"));
   }
 
@@ -79,11 +79,11 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
     const auto r =
         vac_av(with_leg_instance(t::λ(2), 2) * with_leg_instance(t::t(2), 1));
     CHECK(serialize(r) ==
-          (yes ? L"1/4 s{a_1<i_1,i_2;2>;a_2<i_1,i_2;1>}:N-C-S * "
-                 L"s{a_3<i_1,i_2;2>;a_4<i_1,i_2;1>}:N-C-S * "
+          (yes ? L"1/4 s{a_1<i_1,i_2;2>;a_2<i_1,i_2;1>}:N-H-S * "
+                 L"s{a_3<i_1,i_2;2>;a_4<i_1,i_2;1>}:N-H-S * "
                  L"t{a_2<i_1,i_2;1>,a_4<i_1,i_2;1>;i_1,i_2}:A-N-S * "
                  L"λ{i_1,i_2;a_1<i_1,i_2;2>,a_3<i_1,i_2;2>}:A-N-S"
-               : L"1/4 s{a_1<;2>;a_2<;1>}:N-C-S * s{a_3<;2>;a_4<;1>}:N-C-S * "
+               : L"1/4 s{a_1<;2>;a_2<;1>}:N-H-S * s{a_3<;2>;a_4<;1>}:N-H-S * "
                  L"t{a_2<;1>,a_4<;1>;i_1,i_2}:A-N-S * "
                  L"λ{i_1,i_2;a_1<;2>,a_3<;2>}:A-N-S"));
     CHECK(standing_metrics(r) == 2);
@@ -212,14 +212,14 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
 
   SECTION("K0: no instance anywhere") {
     CHECK(serialize(vac_av(t::h(2) * t::t(2))) ==
-          (yes ? L"1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-C-S * "
+          (yes ? L"1/4 g{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:A-H-S * "
                  L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S"
-               : L"1/4 g{i_1,i_2;a_1,a_2}:A-C-S * t{a_1,a_2;i_1,i_2}:A-N-S"));
+               : L"1/4 g{i_1,i_2;a_1,a_2}:A-H-S * t{a_1,a_2;i_1,i_2}:A-N-S"));
     CHECK(serialize(vac_av(t::P(nₚ(1)) * t::h(1) * t::t(2))) ==
-          (yes ? L"-1 Â{i_1;a_1<i_1>}:A-N-S * f{i_2;a_2<i_1,i_2>}:A-C-S * "
-                 L"s{a_1<i_1>;a_3<i_1,i_2>}:N-C-S * "
+          (yes ? L"-Â{i_1;a_1<i_1>}:A-N-S * f{i_2;a_2<i_1,i_2>}:A-H-S * "
+                 L"s{a_1<i_1>;a_3<i_1,i_2>}:N-H-S * "
                  L"t{a_2<i_1,i_2>,a_3<i_1,i_2>;i_1,i_2}:A-N-S"
-               : L"Â{i_1;a_1}:A-N-S * f{i_2;a_2}:A-C-S * "
+               : L"Â{i_1;a_1}:A-N-S * f{i_2;a_2}:A-H-S * "
                  L"t{a_1,a_2;i_1,i_2}:A-N-S"));
     CHECK(serialize(vac_av(t::λ(2) * t::t(2))) ==
           (yes ? L"1/4 t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_2}:A-N-S * "
@@ -233,7 +233,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
           {.csv = CSV::Yes, .op_registry_ptr = make_legacy_registry()}));
       Index::reset_tmp_index();
       CHECK(serialize(op::vac_av(op::H(1) * op::T(1))) ==
-            L"f{i_1;a_1<i_1>}:A-C-S * t{a_1<i_1>;i_1}:A-N-S");
+            L"f{i_1;a_1<i_1>}:A-H-S * t{a_1<i_1>;i_1}:A-N-S");
     }
   }
 }

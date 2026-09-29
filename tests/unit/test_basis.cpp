@@ -443,13 +443,13 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
 
   SECTION("round trips") {
     const std::vector<std::wstring> expressions = {
-        L"t{i_1;a_1<i_1;1>}:N-C-S",
-        L"t{i_1;a_1<i_1,i_2;7>}:N-C-S",
-        L"t{i_1;a_1<;-2>}:N-C-S",
-        L"t{i_1;a_1<i_1<;3>,i_2;1>}:N-C-S",
-        L"t{i_1<;3>;a_1<i_1<;3>>}:N-C-S",
-        L"t{i_1;a_1<;0>}:N-C-S",
-        L"g{i_1,i_2;a_1<;1>,a_2<;2>}:N-C-S",
+        L"t{i_1;a_1<i_1;1>}:N-H-S",
+        L"t{i_1;a_1<i_1,i_2;7>}:N-H-S",
+        L"t{i_1;a_1<;-2>}:N-H-S",
+        L"t{i_1;a_1<i_1<;3>,i_2;1>}:N-H-S",
+        L"t{i_1<;3>;a_1<i_1<;3>>}:N-H-S",
+        L"t{i_1;a_1<;0>}:N-H-S",
+        L"g{i_1,i_2;a_1<;1>,a_2<;2>}:N-H-S",
     };
 
     for (const std::wstring& current : expressions) {
@@ -460,8 +460,8 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
   }
 
   SECTION("';0' is legal and distinct from no instance") {
-    auto zero = deserialize<ExprPtr>(L"t{i_1;a_1<;0>}:N-C-S");
-    auto null = deserialize<ExprPtr>(L"t{i_1;a_1}:N-C-S");
+    auto zero = deserialize<ExprPtr>(L"t{i_1;a_1<;0>}:N-H-S");
+    auto null = deserialize<ExprPtr>(L"t{i_1;a_1}:N-H-S");
     const Index& a_zero = zero->as<Tensor>().ket().at(0);
     const Index& a_null = null->as<Tensor>().ket().at(0);
     REQUIRE(a_zero.basis().has_basis_instance());
@@ -482,8 +482,8 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
     spin_ctx.set(mbpt::make_sr_spaces());
     auto resetter = set_scoped_default_context(spin_ctx);
 
-    auto expr = deserialize<ExprPtr>(L"t{a↓_1;i↑_1<;2>}:N-C-S");
-    REQUIRE(serialize(expr, {.annot_symm = true}) == L"t{a↓_1;i↑_1<;2>}:N-C-S");
+    auto expr = deserialize<ExprPtr>(L"t{a↓_1;i↑_1<;2>}:N-H-S");
+    REQUIRE(serialize(expr, {.annot_symm = true}) == L"t{a↓_1;i↑_1<;2>}:N-H-S");
     CHECK(expr->as<Tensor>().ket().at(0).basis().basis_instance() == 2);
   }
 
@@ -521,11 +521,11 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
     named.set_first_dummy_index_ordinal(1000000);
     auto named_ctx = set_scoped_default_context(std::move(named));
     for (const std::wstring& current :
-         {std::wstring(L"C{μ̃_1;a_1<i_1,i_2;0>}:N-C-S"),
-          std::wstring(L"g{μ̃_1;i_1;Κ_1}:N-C-S"),
-          std::wstring(L"g{μ̃_1;μ̃_2;Κ_1}:N-C-S"),
-          std::wstring(L"t{a_1<ĩ_1>;ĩ_1}:N-C-S"),
-          std::wstring(L"C{μ̃_1152;a_1<i_1,i_2;0>}:N-C-S")}) {
+         {std::wstring(L"C{μ̃_1;a_1<i_1,i_2;0>}:N-H-S"),
+          std::wstring(L"g{μ̃_1;i_1;Κ_1}:N-H-S"),
+          std::wstring(L"g{μ̃_1;μ̃_2;Κ_1}:N-H-S"),
+          std::wstring(L"t{a_1<ĩ_1>;ĩ_1}:N-H-S"),
+          std::wstring(L"C{μ̃_1152;a_1<i_1,i_2;0>}:N-H-S")}) {
       ExprPtr e = deserialize<ExprPtr>(current);
       REQUIRE(serialize(e, {.annot_symm = true}) == current);
       CHECK(deserialize<ExprPtr>(serialize(e)) == e);
@@ -576,8 +576,8 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
       CHECK(named_loc.full_label() == L"ĩ_1");
     }
     // an unnamed instance still prints as ;N
-    CHECK(serialize(deserialize<ExprPtr>(L"t{a_1<;1>;i_1}:N-C-S"),
-                    {.annot_symm = true}) == L"t{a_1<;1>;i_1}:N-C-S");
+    CHECK(serialize(deserialize<ExprPtr>(L"t{a_1<;1>;i_1}:N-H-S"),
+                    {.annot_symm = true}) == L"t{a_1<;1>;i_1}:N-H-S");
   }
 }
 
