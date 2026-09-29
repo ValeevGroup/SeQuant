@@ -112,6 +112,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
     auto _ = set_scoped_default_context(ctx);
 
     {
+      // amplitudes are not Hermitian, so declare them
+      // BraKetSymmetry::Nonsymm rather than take the default (Hermitian ->
+      // Conjugate over a complex field)
       auto input =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -120,9 +123,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_5", L"a_2"},
                      particle_symmetric);
       canonicalize(input);
-      REQUIRE_THAT(
-          input,
-          SimplifiesTo("Ŝ{a1,a2;i1,i2} f{a3;i3} t{i3;a2} t{i1,i2;a1,a3}"));
+      REQUIRE_THAT(input, SimplifiesTo("Ŝ{a1,a2;i1,i2} f{a3;i3} t{i3;a2}:N-N-S "
+                                       "t{i1,i2;a1,a3}:N-N-S"));
     }
     {
       auto input =
@@ -133,10 +135,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
                      particle_symmetric);
       canonicalize(input);
-      REQUIRE_THAT(
-          input,
-          SimplifiesTo(
-              "Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
+      REQUIRE_THAT(input,
+                   SimplifiesTo("Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                "t{i_2;a_3}:N-N-S t{i_1,i_3;a_1,a_2}:N-N-S"));
     }
     {  // Azam's example:
       // two intermediates that are equivalent modulo permutation of columns of
@@ -174,7 +175,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
 
     {  // Product containing Variables
       auto q2 = ex<Variable>(L"q2");
-      (void)q2->adjoint();
+      REQUIRE(q2->adjoint() == 1);
       auto input =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -186,14 +187,14 @@ TEST_CASE("canonicalization", "[algorithms]") {
                      particle_symmetric);
       canonicalize(input);
       REQUIRE_THAT(input,
-                   SimplifiesTo("p q1 q2^* Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
-                                "t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
+                   SimplifiesTo("p q1 q2꙳ Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                "t{i_2;a_3}:N-N-S t{i_1,i_3;a_1,a_2}:N-N-S"));
     }
     {  // Product containing adjoint of a Tensor
       auto f2 = ex<Tensor>(L"f", bra{L"a_1", L"a_2"}, ket{L"i_5", L"i_2"},
                            Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                            ColumnSymmetry::Symm);
-      (void)f2->adjoint();
+      REQUIRE(f2->adjoint() == 1);
       auto input1 =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -202,7 +203,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input1);
       REQUIRE_THAT(input1,
                    SimplifiesTo("Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
-                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
+                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}:N-N-S"));
       auto input2 =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -212,7 +213,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input2);
       REQUIRE_THAT(input2,
                    SimplifiesTo("1/2 w Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
-                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
+                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}:N-N-S"));
     }
     // with aux indices
     {
@@ -232,8 +233,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
     }
     // with bra-ket symmetry
     {
-      // Tensor's BraKetSymmetry is per-tensor (Symm passed explicitly below);
-      // no Context manipulation needed.
+      // B is a real array: declared through the basis field, which makes the
+      // explicit Symm exchange derivable
+      auto real_basis = scoped_real_basis();
       // TN is invariant wrt flipping one if the tensors
       // N.B. it's not possible purely to canonicalize each tensor since bra and
       // ket slots are equivalent, only the overall TN topology determines
@@ -290,6 +292,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
     // if cmp != 0 we'd know the encoding (not the consumer) is at fault.
     {
       auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+      declare_real_basis(*sr_reg);
       Context ctx_min = get_default_context();
       ctx_min.set(sr_reg);
       ctx_min.set(AssertStrictBraKetSymmetry::No);
@@ -306,8 +309,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
       TensorNetworkV3 tnB(exB);
       TensorNetworkV3::NamedIndexSet named{Index(L"i_1"), Index(L"i_2"),
                                            Index(L"a_1"), Index(L"a_2")};
-      auto mdA = tnA.canonicalize_slots({}, &named);
-      auto mdB = tnB.canonicalize_slots({}, &named);
+      auto mdA = tnA.canonicalize_slots({.named_indices = &named});
+      auto mdB = tnB.canonicalize_slots({.named_indices = &named});
       REQUIRE(mdA.graph);
       REQUIRE(mdB.graph);
       const int cmpAB = mdA.graph->cmp(*mdB.graph);
@@ -339,8 +342,10 @@ TEST_CASE("canonicalization", "[algorithms]") {
         REQUIRE(exA);
         REQUIRE(exB);
         TensorNetworkV3 tnA(exA), tnB(exB);
-        auto mdA = tnA.canonicalize_slots();
-        auto mdB = tnB.canonicalize_slots();
+        auto mdA =
+            tnA.canonicalize_slots(TensorNetworkV3::CanonicalizeSlotsOptions{});
+        auto mdB =
+            tnB.canonicalize_slots(TensorNetworkV3::CanonicalizeSlotsOptions{});
         REQUIRE(mdA.graph);
         REQUIRE(mdB.graph);
         return mdA.graph->cmp(*mdB.graph);
@@ -678,6 +683,10 @@ TEST_CASE("canonicalization", "[algorithms]") {
 TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   using namespace sequant;
 
+  // X is a real array: the `S` braket letter is derivable only over a real
+  // basis
+  auto real_basis = scoped_real_basis();
+
   auto canon_hash = [](std::wstring spec) {
     auto e = deserialize(spec);
     ExprPtrList tl{e};
@@ -693,4 +702,75 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   CHECK(canon_hash(L"X{a1;;i1}:N-S-N") == canon_hash(L"X{;a1;i1}:N-S-N"));
   // Without braket symmetry the two forms must remain distinct.
   CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
+}
+TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
+          "[canonicalize][proto]") {
+  // Regression: the lexicographic dummy rewrite skipped "named" edges by
+  // POSITION (loop started at named_indices.size()). A named index that is
+  // not an edge -- e.g. a pure proto index -- shifted that cutoff onto an
+  // anonymous edge; its skipped ordinal was then handed to another edge of
+  // the same space, duplicating a slot index (both t virtuals became a_1).
+  using namespace sequant;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto resetter = set_scoped_default_context(ctx);
+
+  const Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
+  // i_2 is a PURE proto: it decorates the virtuals but is no tensor slot
+  const Index a1 = Index(L"a_1", {i2, i3});
+  const Index a2 = Index(L"a_2", {i2, i3});
+
+  auto term = ex<Tensor>(L"g", bra{i1, i3}, ket{a1, a2}, Symmetry::Antisymm,
+                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+              ex<Tensor>(L"t", bra{a1, a2}, ket{i1, i3}, Symmetry::Antisymm,
+                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+
+  canonicalize(term);
+
+  // no tensor may hold the same index in two slots of one bundle
+  bool duplicate = false;
+  term->visit(
+      [&](ExprPtr const& node) {
+        if (!node->is<Tensor>()) return;
+        auto const& t = node->as<Tensor>();
+        auto scan = [&](auto const& rng) {
+          std::vector<std::wstring> labels;
+          for (auto const& ix : rng) labels.emplace_back(ix.full_label());
+          std::sort(labels.begin(), labels.end());
+          if (std::adjacent_find(labels.begin(), labels.end()) != labels.end())
+            duplicate = true;
+        };
+        scan(t.bra());
+        scan(t.ket());
+      },
+      /*atoms_only=*/true);
+  CHECK(!duplicate);
+}
+
+TEST_CASE("canonicalize_options_equality", "[canonicalize][context]") {
+  using namespace sequant;
+  // a scoped context that differs from the current one ONLY in a
+  // CanonicalizeOptions field must take effect (set_scoped_implicit_context
+  // skips contexts that compare equal, so equality must see every field)
+  auto base = get_default_context();
+  base.set(CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::IgnoreNamedIndexLabel::Yes));
+  auto outer = set_scoped_default_context(base);
+  REQUIRE(CanonicalizeOptions::default_options().ignore_named_index_labels ==
+          CanonicalizeOptions::IgnoreNamedIndexLabel::Yes);
+  {
+    auto ctx = Context(get_default_context());
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    auto inner = set_scoped_default_context(ctx);
+    REQUIRE(CanonicalizeOptions::default_options().ignore_named_index_labels ==
+            CanonicalizeOptions::IgnoreNamedIndexLabel::No);
+  }
+  REQUIRE(CanonicalizeOptions::default_options().ignore_named_index_labels ==
+          CanonicalizeOptions::IgnoreNamedIndexLabel::Yes);
+  auto so = SimplifyOptions::default_options();
+  auto so2 = so;
+  so2.fold_conjugate_pairs = SimplifyOptions::FoldConjugatePairs::No;
+  REQUIRE_FALSE(so == so2);
 }
