@@ -206,7 +206,11 @@ std::wstring to_string(Product const& prod,
   std::wstring serialized;
 
   const auto& scal = prod.scalar();
-  if (scal != Product::scalar_type{1}) {
+  if (scal == Product::scalar_type{-1}) {
+    // a negated product spells its sign rather than a `-1` factor, so that a
+    // subtracted summand reads `- b` and not `- 1 b`
+    serialized += L"-";
+  } else if (scal != Product::scalar_type{1}) {
     serialized += details::serialize_scalar(scal, options) + L" ";
   }
 

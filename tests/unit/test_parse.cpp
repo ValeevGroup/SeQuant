@@ -419,12 +419,11 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(serialize(re) == re_str);
         REQUIRE(*deserialize<ExprPtr>(serialize(re)) == *re);
 
-        // a subtracted summand is spelled by its scalar, as it is outside
-        // the brackets too
-        auto im = deserialize<ExprPtr>(L"Im[a - b]");
+        const auto im_str = L"Im[a - b]";
+        auto im = deserialize<ExprPtr>(im_str);
         REQUIRE(im->is<ImagPart>());
         REQUIRE(im->as<ImagPart>().inner()->is<Sum>());
-        REQUIRE(serialize(im) == L"Im[a - 1 b]");
+        REQUIRE(serialize(im) == im_str);
         REQUIRE(*deserialize<ExprPtr>(serialize(im)) == *im);
       }
 
