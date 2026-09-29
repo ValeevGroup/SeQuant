@@ -61,7 +61,9 @@ TEST_CASE("math", "[elements]") {
     std::vector<Recorded> recorded(static_cast<std::size_t>(last - first));
     auto rng = ranges::views::iota(first, last);
     sequant::for_each(rng, [&recorded](const auto& i) {
-      auto& rec = recorded.at(static_cast<std::size_t>(i - first));
+      // recorded holds one slot per value of rng, so operator[] is in range and
+      // nothing in the worker can throw past this lambda.
+      auto& rec = recorded[static_cast<std::size_t>(i - first)];
       try {
         rec.value = sequant::to_string(sequant::factorial(i));
         rec.memoized = sequant::to_string(sequant::factorial(30));
