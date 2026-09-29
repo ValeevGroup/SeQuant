@@ -567,13 +567,11 @@ container::svector<size_t> imed_hashes(Rng const& rng) {
 struct ExprWithHash {
   ExprPtr expr;
   size_t hash;
-  /// the factor's own canonical phase: the part of its orientation that its
-  /// spelling in the network cannot carry (an index reorder), see
-  /// collect_tensor_factors
-  std::int8_t phase = 1;
-  /// whether the factor's transform conjugates, which is what an enclosing
-  /// hoist takes over from it (see binarize(Product))
-  bool conj = false;
+  /// the factor's own retrieval transform: its phase is the part of its
+  /// orientation that its spelling in the network cannot carry (an index
+  /// reorder), and hoistable() of it is the gate an enclosing hoist runs on
+  /// (see collect_tensor_factors, binarize(Product))
+  CanonTransform transform{};
 };
 
 void all_indices(IndexSet& result, ExprPtr const& expr) {
@@ -631,8 +629,7 @@ template <typename Rng>
     // slot spelling outright: the phase rides along for the product fold.
     collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
                                       .hash = salted_hash(node),
-                                      .phase = node->canon_phase(),
-                                      .conj = node->canon_transform().conj});
+                                      .transform = node->canon_transform()});
     return 1;
   } else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     // left before right: the collected order is part of the network's
@@ -936,18 +933,19 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       auto const rhs_scalar_phase = collect_tensor_factors(right, subfacs);
       auto const scalar_phase =
           static_cast<std::int8_t>(lhs_scalar_phase * rhs_scalar_phase);
-      // Each factor of a hoisted prefix carries a conjugating transform, and
+      // Each factor of a hoisted prefix carries a hoistable transform, and
       // this node's hoist takes it over: the '꙳' that transform put on the
       // factor's spelling comes off, so the flattened network hashes onto the
-      // unconjugated product's slot. The hoist takes over that one state: an
-      // adjoint state names a different array, so it is passed through rather
-      // than cleared.
+      // unconjugated product's slot. The gate is the one the prefix run uses,
+      // so the loop strips exactly what the run assumed hoisted; a transform
+      // that exchanges the bundles is not hoistable and names a different
+      // array, so it is passed through rather than cleared.
       // Clearing the star consumes no sign: a kept '꙳' has parity None.
       // Mixed marks stay in the TN, where the marker coloring keeps e.g.
       // C·C꙳ identity-distinct from C·C.
       if (hoist_conj)
         for (auto& f : subfacs)
-          if (f.conj && f.expr->is<Tensor>()) {
+          if (hoistable(f.transform) && f.expr->is<Tensor>()) {
             auto& t = f.expr->as<Tensor>();
             [[maybe_unused]] auto const sign =
                 t.set_states(t.adjointed(), false);
@@ -1004,7 +1002,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // walk hands up for those seeds the product here.
       std::int8_t factor_phase = scalar_phase;
       for (auto const& f : subfacs)
-        factor_phase = static_cast<std::int8_t>(factor_phase * f.phase);
+        factor_phase =
+            static_cast<std::int8_t>(factor_phase * f.transform.phase);
       CanonTransform const transform{
           .phase = static_cast<std::int8_t>(canon.phase * factor_phase),
           .conj = hoist_conj};
