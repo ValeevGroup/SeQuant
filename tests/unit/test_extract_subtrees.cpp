@@ -19,11 +19,10 @@ using Node = sequant::EvalNode<sequant::EvalExpr>;
 Node bin(std::wstring_view s) {
   using namespace sequant;
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
-  // NonHermitian: these are tree-structure tests; a (default) Hermitian
-  // declaration would let the canonical braket-orientation fold reorient a
-  // leaf, and binarize would then lower it to its value orientation --
-  // for an anti-Hermitian relation with a Constant(-1) node above it --
-  // changing the shapes the predicates below are written against.
+  // NonHermitian: these are tree-structure tests. A Conjugate declaration
+  // (the default) partitions a tensor's slots differently, so canonicalization
+  // may reorient a leaf and binarize lower it with a Constant(-1) node above
+  // it -- changing the shapes the predicates below are written against.
   return binarize(
       deserialize(s, {.def_perm_symm = Symmetry::Antisymm,
                       .def_braket_symm = Hermiticity::NonHermitian}));

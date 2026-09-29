@@ -7,6 +7,7 @@
 // family. Canonicalization- and network-level cases live at the bottom and
 // grow with the conjugation-symbolic work.
 
+#include <SeQuant/core/utility/macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -384,7 +385,13 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
   SECTION("sum pair emits 2 Re(A)") {
     auto folded = fold_conjugate_pairs(term->clone() + term_adj->clone());
     auto expected = ex<Constant>(2) * real_part(term->clone());
-    REQUIRE(*folded == *expected);
+    // the fold emits canonical-representative inners (so wrappers from
+    // different passes merge and cancel); compare canonically
+    auto cf = folded->clone();
+    canonicalize(cf, CanonicalizeOptions::default_options());
+    auto ce = expected->clone();
+    canonicalize(ce, CanonicalizeOptions::default_options());
+    REQUIRE(*cf == *ce);
   }
 
   SECTION("difference pair emits 2i Im(A)") {
@@ -392,7 +399,11 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
                                        ex<Constant>(-1) * term_adj->clone());
     auto expected =
         ex<Constant>(Complex<rational>(0, 2)) * imaginary_part(term->clone());
-    REQUIRE(*folded == *expected);
+    auto cf = folded->clone();
+    canonicalize(cf, CanonicalizeOptions::default_options());
+    auto ce = expected->clone();
+    canonicalize(ce, CanonicalizeOptions::default_options());
+    REQUIRE(*cf == *ce);
   }
 
   SECTION("self-conjugate and unpaired summands stay untouched") {
@@ -419,8 +430,14 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
   }
 
   SECTION("back-compat real-sum fold emits 2 A") {
+    SEQUANT_PRAGMA_CLANG(diagnostic push)
+    SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
+    SEQUANT_PRAGMA_GCC(diagnostic push)
+    SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
     auto folded =
         fold_conjugate_pairs_of_real_sum(term->clone() + term_adj->clone());
+    SEQUANT_PRAGMA_GCC(diagnostic pop)
+    SEQUANT_PRAGMA_CLANG(diagnostic pop)
     auto expected = ex<Constant>(2) * term->clone();
     simplify(folded);
     simplify(expected);
@@ -445,9 +462,47 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
           term_up->clone() + term_dn->clone(),
           CanonicalizeOptions::default_options(),
           [](ExprPtr const& sm) { return mbpt::swap_spin(sm); });
-      auto expected = ex<Constant>(2) * real_part(term_up->clone());
-      REQUIRE(*folded == *expected);
+      // the fold emits a canonical-representative inner; the up spelling
+      // and its (value-equal, per swap_spin) down partner are both valid
+      auto expected_up = ex<Constant>(2) * real_part(term_up->clone());
+      auto expected_dn =
+          ex<Constant>(2) * real_part(mbpt::swap_spin(term_up->clone()));
+      auto cf = folded->clone();
+      canonicalize(cf, CanonicalizeOptions::default_options());
+      auto cu = expected_up->clone();
+      canonicalize(cu, CanonicalizeOptions::default_options());
+      auto cd = expected_dn->clone();
+      canonicalize(cd, CanonicalizeOptions::default_options());
+      REQUIRE((*cf == *cu || *cf == *cd));
     }
+  }
+
+  SECTION("a real scalar inside a wrapper merges with one outside") {
+    // Re(c X) = c Re(X) for real c, so the two spellings are one summand
+    auto x = deserialize(L"h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+    auto a = ex<RealPart>(ex<Constant>(2) * x->clone());  // Re(2 X)
+    auto b = ex<Constant>(-2) * real_part(x->clone());    // -2 Re(X)
+    auto folded = fold_conjugate_pairs(a + b);
+    simplify(folded);
+    REQUIRE(folded->is<Constant>());
+    REQUIRE(folded->as<Constant>().value() == 0);
+  }
+
+  SECTION("a wrapper on the adjoint spelling is the same summand") {
+    // Re(x*) = Re(x), so wrappers on the two spellings share a representative
+    // and opposite scalars cancel
+    auto d =
+        ex<Tensor>(L"d", bra{L"i_1"}, ket{L"a_1"},
+                   TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian,
+                                    .column = ColumnSymmetry::Symm});
+    auto u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"i_1"});
+    auto x = d * u;
+    auto folded =
+        fold_conjugate_pairs(real_part(x->clone()) +
+                             ex<Constant>(-1) * real_part(adjoint(x->clone())));
+    simplify(folded);
+    REQUIRE(folded->is<Constant>());
+    REQUIRE(folded->as<Constant>().value() == 0);
   }
 
   SECTION("opt-in fold in simplify, complex field") {
@@ -465,9 +520,11 @@ TEST_CASE("fold_conjugate_pairs", "[conjugation]") {
     if (folded->is<RealPart>()) have_re = true;
     REQUIRE(have_re);
 
-    // default is No until evaluation understands RealPart/ImagPart nodes
+    // the default is Yes (evaluation ingests RealPart/ImagPart nodes);
+    // opting out preserves the unfolded sum
     auto unfolded = sum->clone();
-    simplify(unfolded);
+    simplify(unfolded, SimplifyOptions::default_options().copy_and_set(
+                           SimplifyOptions::FoldConjugatePairs::No));
     REQUIRE(unfolded->is<Sum>());
     REQUIRE(unfolded->as<Sum>().summands().size() == 2);
   }
@@ -988,8 +1045,8 @@ TEST_CASE("conjugate_fold_skips_reserved", "[conjugation]") {
 }
 
 TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
-  // identically-marked summands merge; a marked and an unmarked spelling of
-  // _different_ values do not
+  // identically-marked summands merge into one; a marked and an unmarked
+  // spelling are the two members of a conjugate pair
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
   ctx.set(sr);
@@ -1003,10 +1060,14 @@ TEST_CASE("sum_merge_conjugate_marked_terms", "[conjugation]") {
   REQUIRE(sum->is<Product>());
   REQUIRE(sum->as<Product>().scalar() == (C{2, 0}));
 
+  // a marked and an unmarked spelling are a conjugate pair, but a
+  // tensor-valued one: the default simplify folds scalar-valued pairs only
+  // (Re/Im evaluate and export scalar results), so t + t꙳ stays as written
   auto mixed = t->clone() + tstar->clone();
   simplify(mixed);
   REQUIRE(mixed->is<Sum>());
   REQUIRE(mixed->as<Sum>().summands().size() == 2);
+  for (auto const& sm : *mixed) REQUIRE(sm->is<Tensor>());
 }
 
 TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
@@ -1025,8 +1086,7 @@ TEST_CASE("eval_tot_leaf_named_index_comparator", "[conjugation]") {
   auto const& ci = leaf.canon_indices();
   // named indices: the proto i_1, the ket i_2, and the ToT virtual a_1<i_1>
   REQUIRE(ci.size() == 3);
-  // proto-free indices precede proto-indexed ones (the comparator orders by
-  // proto-index count before space)
+  // proto-free indices precede proto-indexed ones (Nested outer;inner order)
   REQUIRE_FALSE(ci[0].has_proto_indices());
   REQUIRE_FALSE(ci[1].has_proto_indices());
   REQUIRE(ci[2].has_proto_indices());
@@ -1751,6 +1811,59 @@ TEST_CASE("conjugate_is_the_value_conjugate", "[conjugation]") {
   }
 }
 
+TEST_CASE("fold_conjugate_pairs_is_scalar_only", "[conjugation]") {
+  auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+  REQUIRE(Index{L"a_1"}.space().field() == Field::Complex);
+
+  // a tensor-valued conjugate pair: Re/Im nodes evaluate and export scalar
+  // results only, and the adjoint of a tensor-valued summand is another
+  // tensor (R{a;i} against R{i;a}), so the pair is left as written
+  auto A = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"p_1"}) *
+           ex<Tensor>(L"v", bra{L"p_1"}, ket{L"i_1"});
+  auto sum = A->clone() + conjugate(A->clone());
+  auto const no_wrapper = [](ExprPtr const& e) {
+    bool wrapped = e->is<RealPart>() || e->is<ImagPart>();
+    e->visit(
+        [&](ExprPtr const& n) {
+          if (n->is<RealPart>() || n->is<ImagPart>()) wrapped = true;
+        },
+        /*atoms_only=*/false);
+    return !wrapped;
+  };
+
+  SECTION("the fold leaves it") {
+    auto folded = fold_conjugate_pairs(sum->clone());
+    REQUIRE(folded->is<Sum>());
+    REQUIRE(folded->as<Sum>().summands().size() == 2);
+    REQUIRE(no_wrapper(folded));
+  }
+
+  SECTION("the default simplify leaves it, and it binarizes") {
+    auto simplified = sum->clone();
+    simplify(simplified);
+    REQUIRE(simplified->is<Sum>());
+    REQUIRE(simplified->as<Sum>().summands().size() == 2);
+    REQUIRE(no_wrapper(simplified));
+
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(simplified);
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(node->op_type() == EvalOp::Sum);
+    REQUIRE(node->is_tensor());
+  }
+
+  SECTION("a scalar pair still folds") {
+    auto w = ex<Tensor>(L"w", bra{L"i_1"}, ket{L"a_1"});
+    auto closed = A->clone() * w;
+    auto folded = fold_conjugate_pairs(closed->clone() + conjugate(closed));
+    REQUIRE_FALSE(no_wrapper(folded));
+  }
+}
+
 TEST_CASE("fold_conjugate_pairs_is_order_independent", "[conjugation]") {
   auto sr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
   Context ctx = get_default_context();
@@ -1893,4 +2006,32 @@ TEST_CASE("slot_mutation_renormalizes_states", "[conjugation]") {
     REQUIRE(moved.hash_value() == fresh.hash_value());
     REQUIRE(moved == fresh);
   }
+}
+
+TEST_CASE("has_tensor_sees_through_re_im", "[conjugation]") {
+  // the conjugate-pair fold (default-on in a complex field) wraps folded
+  // summands in RealPart/ImagPart; tensor queries must see through them
+  using namespace sequant;
+  auto sr = mbpt::make_min_sr_spaces();
+  Context ctx = get_default_context();
+  ctx.set(sr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto t = deserialize(L"t{a_1;i_1}:N-C-S");
+  auto f = deserialize(L"f{i_1;a_1}:N-C-S");
+  REQUIRE(f->as<Tensor>().kconjugate() == 1);  // f꙳
+  auto summand = ex<Constant>(2) * real_part(t->clone() * f->clone());
+  INFO("summand = " << toUtf8(to_latex(summand)));
+  REQUIRE(has_tensor(summand, L"f"));
+  REQUIRE_FALSE(has_tensor(summand, L"g"));
+  auto sum = summand->clone() + deserialize(L"g{i_1;a_1}:N-C-S");
+  REQUIRE(has_tensor(sum, L"f"));
+  REQUIRE(has_tensor(sum, L"g"));
+  auto im = ex<Constant>(Constant::scalar_type(0, 2)) *
+            imaginary_part(t->clone() * f->clone());
+  REQUIRE(has_tensor(im, L"f"));
+  // a factor that is itself a Product is descended into
+  auto nested =
+      ex<Product>(ExprPtrList{t->clone() * f->clone()}, Product::Flatten::No);
+  REQUIRE(has_tensor(nested, L"f"));
+  REQUIRE_FALSE(has_tensor(nested, L"g"));
 }

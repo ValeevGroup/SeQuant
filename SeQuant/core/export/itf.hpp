@@ -197,9 +197,12 @@ class ItfGenerator : public Generator<Context> {
     return representation;
   }
 
+  /// @note ITF has no conjugation spelling for a scalar operand, so a
+  ///       conjugated variable is an object of its own, named the way a marked
+  ///       tensor's array is (export_name)
   std::string represent(const Variable &variable,
                         const Context &) const override {
-    return toUtf8(variable.label()) + "[]";
+    return export_name(variable) + "[]";
   }
 
   std::string represent(const Constant &constant,
@@ -339,7 +342,7 @@ class ItfGenerator : public Generator<Context> {
       if (import_name.has_value()) {
         append(import_name.value());
       } else {
-        append(toUtf8(variable.label()));
+        append(export_name(variable));
       }
     } else {
       append("!Create{type:scalar}");

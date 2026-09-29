@@ -69,14 +69,14 @@ struct CellRegistryHooks {
 ///
 /// Orientation convention, shared with the \c CacheManager scope caches: a cell
 /// holds the value in its node's canonical orientation, and every reader
-/// applies that node's own \c canon_phase once. A producer therefore stores
-/// \c apply_phase(node, result) -- \c evaluate_impl hands back the oriented
-/// result, and the phase is an involution -- matching \c
-/// CacheManager::store_and_access (\c cache.store_and_access(node,
-/// apply_phase(node, rb)), readers \c apply_phase again, roots \c
-/// mult_by_phase). Storing the
-/// oriented value here instead would double-apply the phase at every read
-/// and flip the sign of every value whose canonicalization needed an odd
+/// applies that node's own \c CanonTransform once. A producer therefore stores
+/// \c convert_canon_orientation(node, result) -- a computed node's result
+/// arrives oriented, and the transform is an involution -- matching \c
+/// CacheManager::store_and_access. The whole transform converts, phase and
+/// elementwise conjugation alike: converting by the phase alone would hand a
+/// conjugation-bearing node back conjugated at every read, and storing the
+/// oriented value instead would double-apply the transform at every read and
+/// flip the sign of every value whose canonicalization needed an odd
 /// permutation.
 class CellRegistry {
  public:

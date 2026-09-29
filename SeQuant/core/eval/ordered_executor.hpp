@@ -452,7 +452,7 @@ ordered_range_of(eval::BatchContext const& ctx, LoopKey const& key) {
 /// CellReadResolver::fetch names the source cell, spends one of its declared
 /// lives and applies the Read's declared slices, and the value comes back in
 /// the registry's canonical orientation, which this converts to the operand
-/// node's own orientation (\c apply_canon_phase). Two cases do not resolve
+/// node's own orientation (\c apply_canon_transform). Two cases do not resolve
 /// to a held cell:
 ///   - a leaf's first touch: \c fetch defers (leaving the Read unconsumed),
 ///     the leaf evaluator runs on the whole leaf, the result is recorded as
@@ -532,19 +532,21 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   auto const read_operand = [&](auto&& self, node_t const& child) -> ResultPtr {
     std::size_t const key = value_key_of(child);
     if (auto v = resolver.fetch(key, ctx))
-      return apply_canon_phase<EvalTrace>(child, std::move(*v), cache);
+      return apply_canon_transform<EvalTrace>(child, std::move(*v), cache);
     if (child.leaf()) {
       ResultPtr whole =
           fetch_leaf_traced<EvalTrace>(child, leaf_evaluator, cache);
-      // Recorded in the canonical orientation, the registry's convention
-      // (see CellRegistry's own doc); a no-op if the leaf is not a value of
-      // the table, in which case the whole leaf below is this leg's value.
-      resolver.record_leaf(key,
-                           apply_canon_phase<EvalTrace>(child, whole, cache));
+      // A provider serves the array the leaf stores, which is already the
+      // canonical orientation the registry keeps (see CellRegistry's own
+      // doc), so it is recorded as fetched; a no-op if the leaf is not a
+      // value of the table, in which case the whole leaf below is this leg's
+      // value. Either way the leg's value is the leaf's own orientation, one
+      // conversion away.
+      resolver.record_leaf(key, whole);
       note_fresh_build(child, cache);
       if (auto v = resolver.fetch(key, ctx))
-        return apply_canon_phase<EvalTrace>(child, std::move(*v), cache);
-      return whole;
+        return apply_canon_transform<EvalTrace>(child, std::move(*v), cache);
+      return apply_canon_transform<EvalTrace>(child, std::move(whole), cache);
     }
     // A transient of this production tree: computed in place from its own
     // operands. Its result is this leg's value directly -- a transient has no
@@ -554,9 +556,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
       return intercepted;
     }
     ResultPtr tl = self(self, child.left());
-    ResultPtr const tr = child->op_type() == EvalOp::Adjoint
-                             ? ResultPtr{}
-                             : self(self, child.right());
+    ResultPtr const tr = self(self, child.right());
     return apply_op(child, std::move(tl), tr);
   };
 
@@ -576,11 +576,7 @@ template <Trace EvalTrace, typename node_t, typename F, typename N, bool FHC>
   }
 
   ResultPtr left = read_operand(read_operand, node.left());
-  // Unary (Adjoint): the right child is the Constant(1) sentinel, never
-  // evaluated -- and so never read, exactly as the tree walk never read it.
-  ResultPtr const right = node->op_type() == EvalOp::Adjoint
-                              ? ResultPtr{}
-                              : read_operand(read_operand, node.right());
+  ResultPtr const right = read_operand(read_operand, node.right());
 
   return apply_op(node, std::move(left), right);
 }
@@ -712,16 +708,14 @@ void run_ordered_contracted_block(
   };
 
   // A cell holds the canonical orientation (see CellRegistry's own doc);
-  // compute_cell returns the node's oriented result, and the phase is an
-  // involution, so a production converts by multiplying it back in -- exactly
-  // what CacheManager::store_and_access did with apply_phase before storage
-  // moved onto the table. Every reader (the resolver's fetch, and pre_results)
-  // applies the node's phase once more and so sees the oriented value again.
+  // compute_cell returns the node's oriented result, and the whole transform
+  // -- phase, elementwise conjugation and the bra<->ket relabeling alike -- is
+  // an involution, so a production converts by applying it back. Every reader
+  // (the resolver's fetch, and pre_results) applies it once more and so sees
+  // the oriented value again; a conjugation-bearing node converted by its
+  // phase alone would be read back conjugated.
   auto const canonical = [](node_t const& nd, ResultPtr r) -> ResultPtr {
-    auto const ph = nd->canon_phase();
-    // Null passes through untouched (never dereferenced): a missing result is
-    // diagnosed where it is read, not here.
-    return (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph);
+    return convert_canon_orientation(nd, std::move(r));
   };
 
   CellScope const parent_scope = current_scope(ectx);
@@ -1533,17 +1527,16 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
         continue;
       }
       // The registry holds the canonical orientation (see CellRegistry's own
-      // doc); compute_cell returns the oriented result and the phase is an
-      // involution, so a production converts by multiplying it back in.
+      // doc); compute_cell returns the oriented result and the whole transform
+      // is an involution, so a production converts by applying it back.
       {
-        auto const ph = (*it->second)->canon_phase();
         ResultPtr r = compute_cell<EvalTrace>(*it->second, *root_cell, resolver,
                                               leaf_evaluator, cache, root_ectx);
         // A null result is recorded as null rather than dereferenced here, so
         // the diagnostic stays the "forest root was never produced" throw at
-        // the combine below instead of a crash in the phase conversion.
+        // the combine below instead of a crash in the conversion.
         registry.set(*root_cell,
-                     (!r || ph == 1) ? std::move(r) : r->mult_by_phase(ph));
+                     convert_canon_orientation(*it->second, std::move(r)));
         // Diagnostic (SEQUANT_DUMP_ROOT_NORMS): root-scope builds by value
         // hash, for cross-schedule comparison of term values.
         if (static bool const dump_build_norms =
@@ -1654,8 +1647,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
     // would mutate the stored value: a persistent root would then seed the
     // next evaluation from root0 + root1, and two forest roots resolving to
     // one cell would double one of them. Hand out a private copy. (The
-    // phase-shifting branch is not a substitute: a backend's \c
-    // mult_by_phase may return a shallow handle onto the same tiles.) Only
+    // conversion below is not a substitute: it is a no-op for a node whose
+    // transform is trivial, and a backend may serve a converted value as a
+    // shallow handle onto the same tiles.) Only
     // the first root's buffer is mutated (it becomes the accumulator); the
     // other roots are read-only addends, so they are handed out as-is: one
     // copy per evaluation, not one per root.
@@ -1668,10 +1662,9 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
       detail::dump_root_norm(i, (*roots[i])->hash_value(), vid, *cell,
                              int((*roots[i])->canon_phase()),
                              detail::dump_norm2(ptr));
-    // Orient the stored value to this root's phase, matching the
+    // Orient the stored value to this root's own transform, matching the
     // canonical->orientation return convention every production uses.
-    auto const ph = (*roots[i])->canon_phase();
-    pre_results[i] = (ph == 1) ? std::move(ptr) : ptr->mult_by_phase(ph);
+    pre_results[i] = convert_canon_orientation(*roots[i], std::move(ptr));
     if (!pre_results[i])
       throw Exception(
           "evaluate_ordered_schedule: forest root was never produced");

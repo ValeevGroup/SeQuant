@@ -3,11 +3,17 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
+#include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
+#include <SeQuant/core/eval/backends/dryrun/size_regime.hpp>
 #include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/ordered_executor.hpp>
+#include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -30,6 +36,7 @@
 
 #include <cmath>
 #include <complex>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -729,11 +736,11 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   auto yield_ = rand_tensor_yield<BTensorC>{nocc, nvirt};
 
   // A non-Hermitian tensor's adjoint() swaps bra/ket and sets the adjointed
-  // state (spelled with a trailing '⁺'); binarize lowers that to an
-  // EvalOp::Adjoint node over the bare leaf, and evaluating it must
-  // conjugate-transpose the operand. With genuinely complex data the
-  // conjugation is observable (a missing conj would leave imaginary parts
-  // unflipped; a pure transpose would still pass a norm-only check).
+  // state (spelled with a trailing '⁺'); binarize lowers that to a leaf whose
+  // CanonTransform conjugate-transposes the operand on retrieval. With
+  // genuinely complex data the conjugation is observable (a missing conj
+  // would leave imaginary parts unflipped; a pure transpose would still pass
+  // a norm-only check).
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
@@ -742,22 +749,29 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   REQUIRE(t_adj.adjointed());
 
   auto node = eval_node(ex<Tensor>(t_adj));
-  REQUIRE(node->op_type() == EvalOp::Adjoint);
+  REQUIRE(node.leaf());
+  REQUIRE(node->canon_transform().conj);
+  REQUIRE(node->canon_transform().braket_swap);
 
-  // operand tensor (bare 't{a_1;i_1}'): shape [nvirt, nocc], indexed (a, i)
-  auto const& src = yield_(node.left()->as_tensor())->get<BTensorC>();
+  // the provider is asked for the bare array 't{a_1;i_1}': shape
+  // [nvirt, nocc], indexed (a, i)
+  auto const& src = yield_(node->as_tensor())->get<BTensorC>();
+  REQUIRE_FALSE(node->as_tensor().adjointed());
   REQUIRE(src.extent(0) == nvirt);
   REQUIRE(src.extent(1) == nocc);
 
-  // adjoint result: shape [nocc, nvirt], indexed (i, a) == conj(src(a, i))
-  auto const adj = evaluate(node, tidxs(t_adj), yield_)->get<BTensorC>();
-  REQUIRE(adj.extent(0) == nocc);
-  REQUIRE(adj.extent(1) == nvirt);
+  // the transform is applied on retrieval and permutes nothing
+  // (apply_canon_transform passes the node's own annot twice), so the served
+  // buffer's modes keep their own labels: the requested layout is the stored
+  // array's and the value is elementwise conj(src)
+  auto const adj = evaluate(node, tidxs(L"a_1,i_1"), yield_)->get<BTensorC>();
+  REQUIRE(adj.extent(0) == nvirt);
+  REQUIRE(adj.extent(1) == nocc);
 
-  for (size_t i = 0; i < nocc; ++i)
-    for (size_t a = 0; a < nvirt; ++a) {
+  for (size_t a = 0; a < nvirt; ++a)
+    for (size_t i = 0; i < nocc; ++i) {
       auto const expected = std::conj(src(a, i));
-      auto const got = adj(i, a);
+      auto const got = adj(a, i);
       CHECK(got.real() == Catch::Approx(expected.real()).margin(1e-12));
       CHECK(got.imag() == Catch::Approx(expected.imag()).margin(1e-12));
     }
@@ -765,12 +779,12 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
 
 // A real-field odd-parity Hermitian tensor is antisymmetric under the whole
 // bra<->ket exchange, p{a;i} = -p{i;a}. At the eval boundary a flat leaf keeps
-// such a signed orientation as written: a leaf's phase is a cache-orientation
-// round trip, and the engine takes the yielder's array for the leaf's spelling
-// as the leaf's value, so a swap that costs a sign has no channel to the
-// value. The two orientations are therefore distinct leaves, each with phase
-// +1, and a sum that uses both evaluates to the denoted value, with and
-// without a cache. (The orientations differ in space because the pinned
+// such a signed orientation as written: the leaf canonicalizer does not trade
+// a bra<->ket exchange for a sign (fold_signed_braket is false), so the
+// provider is asked for the spelling as written and the leaf's transform
+// carries no phase. The two orientations are therefore distinct leaves, each
+// with phase +1, and a sum that uses both evaluates to the denoted value, with
+// and without a cache. (The orientations differ in space because the pinned
 // yielder keys leaves by label and slot spaces only.)
 TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
   using namespace sequant;
@@ -873,10 +887,515 @@ TEST_CASE("eval_signed_leaf_phase_btas", "[eval_btas]") {
   }
 }
 
+// A flat leaf whose written slot order is not the block-canonical one is
+// stored under the canonical spelling and carries the canonicalization's sign
+// in its CanonTransform. That sign reaches the value: a leaf's transform is
+// applied once on the way out of the retrieval, so the engine hands up the
+// written spelling's value, phase and all, and the two spellings share one
+// provider array and one cache slot while denoting values that differ by the
+// sign. (t{a_1,i_3;i_1,i_2} is Antisymm with symmetric columns, so sorting its
+// bra costs one transposition.)
+TEST_CASE("eval_leaf_phase_reaches_the_value_btas", "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+
+  const std::size_t nocc = 2, nvirt = 3;
+  std::srand(7);
+  auto rnd = [](std::vector<std::size_t> const& extents) {
+    BTensorD r{btas::Range{extents}};
+    r.generate(
+        []() { return static_cast<double>(std::rand()) / RAND_MAX - 0.5; });
+    return r;
+  };
+  auto isr = get_default_context().index_space_registry();
+  auto extents_of = [&isr, nocc, nvirt](Tensor const& tn) {
+    std::vector<std::size_t> e;
+    for (auto const& ix : tn.const_braket_indices())
+      e.push_back(ix.space() == isr->retrieve(L"i") ? nocc : nvirt);
+    return e;
+  };
+
+  auto t = [](std::wstring_view b0, std::wstring_view b1) {
+    return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                      ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto t_as_written = t(L"a_1", L"i_3");
+  auto t_canon = t(L"i_3", L"a_1");
+  auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+  auto u = ex<Tensor>(L"u", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_1"});
+
+  auto leaf = eval_node(t_as_written);
+  auto leaf_canon = eval_node(t_canon);
+  REQUIRE(leaf.leaf());
+  // one slot, two phases: the stored spelling is the canonical one
+  REQUIRE(leaf->hash_value() == leaf_canon->hash_value());
+  REQUIRE(leaf->canon_phase() == -1);
+  REQUIRE(leaf_canon->canon_phase() == 1);
+  REQUIRE(leaf->as_tensor().bra()[0].label() == L"i_3");
+  REQUIRE(leaf->as_tensor().bra()[1].label() == L"a_1");
+  REQUIRE(leaf->as_tensor().ket()[0].label() == L"i_1");
+  REQUIRE(leaf->as_tensor().ket()[1].label() == L"i_2");
+  REQUIRE(leaf->annot() == leaf_canon->annot());
+
+  // T is the provider's array for the stored spelling t{i_3,a_1;i_1,i_2},
+  // laid out (i_3, a_1, i_1, i_2)
+  BTensorD T = rnd(extents_of(leaf->as_tensor()));
+  BTensorD V = rnd({nocc, nocc, nvirt, nocc});  // v{i_1,i_2;a_1,i_3}
+  BTensorD U = rnd({nocc, nocc, nocc, nvirt});  // u{i_1,i_2;i_3,a_1}
+  pinned_tensor_yield<BTensorD> yield;
+  yield.put(leaf->as_tensor(), T);
+  yield.put(v->as<Tensor>(), V);
+  yield.put(u->as<Tensor>(), U);
+
+  auto scalar_of = [](ResultPtr const& res) {
+    REQUIRE(res->is<ResultScalar<double>>());
+    return res->as<ResultScalar<double>>().value();
+  };
+  // each network is checked with no cache and then twice through one shared
+  // CacheManager, so that the second read of a slot both spellings share
+  // would surface a conversion applied the wrong number of times
+  auto check_scalar = [&scalar_of](auto const& node, auto const& leaf_yield,
+                                   double ref) {
+    auto check = [&scalar_of, ref](ResultPtr const& res) {
+      CHECK(scalar_of(res) == Catch::Approx(ref).margin(1e-12));
+    };
+    check(evaluate(node, node->annot(), leaf_yield));
+    auto cache =
+        cache_manager(std::array{node}, [](auto const&) { return false; });
+    check(evaluate(node, node->annot(), leaf_yield, cache));
+    check(evaluate(node, node->annot(), leaf_yield, cache));
+  };
+
+  SECTION("the leaf alone is the stored array times its phase") {
+    auto const got = evaluate(leaf, leaf->annot(), yield)->get<BTensorD>();
+    REQUIRE(got.range() == T.range());
+    for (std::size_t k = 0; k < nocc; ++k)
+      for (std::size_t a = 0; a < nvirt; ++a)
+        for (std::size_t i = 0; i < nocc; ++i)
+          for (std::size_t j = 0; j < nocc; ++j)
+            CHECK(got(k, a, i, j) ==
+                  Catch::Approx(-T(k, a, i, j)).margin(1e-12));
+  }
+
+  // Σ over all four slots; the as-written spelling contributes -T
+  double ref_v = 0., ref_u = 0.;
+  for (std::size_t k = 0; k < nocc; ++k)
+    for (std::size_t a = 0; a < nvirt; ++a)
+      for (std::size_t i = 0; i < nocc; ++i)
+        for (std::size_t j = 0; j < nocc; ++j) {
+          ref_v += -T(k, a, i, j) * V(i, j, a, k);
+          ref_u += T(k, a, i, j) * U(i, j, k, a);
+        }
+
+  SECTION("a closed product carries the leaf's phase") {
+    auto node = eval_node(t_as_written * v);
+    REQUIRE(node->is_scalar());
+    check_scalar(node, yield, ref_v);
+  }
+
+  SECTION("both spellings in one sum, one leaf slot, two phases") {
+    auto node = eval_node(t_as_written * v + t_canon * u);
+    REQUIRE(node->is_scalar());
+    REQUIRE(node.left().left()->hash_value() ==
+            node.right().left()->hash_value());
+    check_scalar(node, yield, ref_v + ref_u);
+  }
+}
+
+// A product whose last combination is scalar-valued (scalar * scalar) has
+// opaque children: nothing is flattened, so each child hands up the value it
+// denotes, and the node's transform must carry what the slot hash leaves out
+// of its children -- their phases and the conjugation a hoisted prefix
+// strips. Two spellings that share the slot are read through one cache, so
+// the second read surfaces a transform the node failed to record.
+TEST_CASE("eval_scalar_product_node_carries_its_children_transform_btas",
+          "[eval_btas]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+
+  SECTION("a uniformly conjugated scalar pair hoists onto the bare slot") {
+    auto x = ex<Variable>(L"x"), y = ex<Variable>(L"y");
+    auto xs = x->clone(), ys = y->clone();
+    xs->as<Variable>().conjugate();
+    ys->as<Variable>().conjugate();
+    auto n_conj = eval_node(xs * ys);
+    auto n_bare = eval_node(x * y);
+    REQUIRE(n_conj->is_scalar());
+    REQUIRE(n_conj->hash_value() == n_bare->hash_value());
+    REQUIRE(n_conj->canon_transform() == CanonTransform{.conj = true});
+    REQUIRE(n_bare->canon_transform().trivial());
+
+    auto yield = [](auto const& n) -> ResultPtr {
+      REQUIRE(n->is_variable());
+      return eval_result<ResultScalar<C>>(
+          n->as_variable().label() == L"x" ? C(1, 2) : C(3, -1));
+    };
+    auto scalar_of = [](ResultPtr const& res) {
+      REQUIRE(res->is<ResultScalar<C>>());
+      return res->as<ResultScalar<C>>().value();
+    };
+    auto close_to = [](C got, C ref) {
+      CHECK(got.real() == Catch::Approx(ref.real()).margin(1e-12));
+      CHECK(got.imag() == Catch::Approx(ref.imag()).margin(1e-12));
+    };
+    C const xy = C(1, 2) * C(3, -1);
+    auto cache = cache_manager(std::array{n_conj, n_bare});
+    close_to(scalar_of(evaluate(n_conj, n_conj->annot(), yield, cache)),
+             std::conj(xy));
+    // the bare spelling reads the slot the conjugated one filled
+    close_to(scalar_of(evaluate(n_bare, n_bare->annot(), yield, cache)), xy);
+    close_to(scalar_of(evaluate(n_bare, n_bare->annot(), yield)), xy);
+  }
+
+  SECTION("a scalar-valued product child's phase reaches the node") {
+    using BTensorD = btas::Tensor<double>;
+    const std::size_t nocc = 2, nvirt = 3;
+    std::srand(13);
+    auto rnd = [](std::vector<std::size_t> const& extents) {
+      BTensorD r{btas::Range{extents}};
+      r.generate(
+          []() { return static_cast<double>(std::rand()) / RAND_MAX - 0.5; });
+      return r;
+    };
+    auto t = [](std::wstring_view b0, std::wstring_view b1) {
+      return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                        ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    };
+    auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+    auto y = ex<Variable>(L"y");
+    // (t v) y, with t in the two slot orders the antisymmetry relates
+    auto p_w = eval_node(ex<Product>(ExprPtrList{t(L"a_1", L"i_3"), v, y},
+                                     Product::Flatten::No));
+    auto p_c = eval_node(ex<Product>(ExprPtrList{t(L"i_3", L"a_1"), v, y},
+                                     Product::Flatten::No));
+    REQUIRE(p_w->is_scalar());
+    REQUIRE(p_w.left()->is_scalar());
+    // the inner products share a slot with opposite phases ...
+    REQUIRE(p_w.left()->hash_value() == p_c.left()->hash_value());
+    REQUIRE(p_w.left()->canon_phase() == -1);
+    REQUIRE(p_c.left()->canon_phase() == 1);
+    // ... and so do the outer nodes, whose transform carries that phase
+    REQUIRE(p_w->hash_value() == p_c->hash_value());
+    REQUIRE(p_w->canon_phase() == -1);
+    REQUIRE(p_c->canon_phase() == 1);
+
+    // T is the provider's array for the stored spelling t{i_3,a_1;i_1,i_2}
+    BTensorD T = rnd({nocc, nvirt, nocc, nocc});
+    BTensorD V = rnd({nocc, nocc, nvirt, nocc});  // v{i_1,i_2;a_1,i_3}
+    pinned_tensor_yield<BTensorD> tensors;
+    tensors.put(p_c.left().left()->as_tensor(), T);
+    tensors.put(v->as<Tensor>(), V);
+    auto yield = [&tensors](auto const& n) -> ResultPtr {
+      if (n->is_variable()) return eval_result<ResultScalar<double>>(2.0);
+      return tensors(n);
+    };
+    double ref_c = 0.;
+    for (std::size_t k = 0; k < nocc; ++k)
+      for (std::size_t a = 0; a < nvirt; ++a)
+        for (std::size_t i = 0; i < nocc; ++i)
+          for (std::size_t j = 0; j < nocc; ++j)
+            ref_c += T(k, a, i, j) * V(i, j, a, k);
+    ref_c *= 2.0;
+    auto scalar_of = [](ResultPtr const& res) {
+      REQUIRE(res->is<ResultScalar<double>>());
+      return res->as<ResultScalar<double>>().value();
+    };
+    auto cache = cache_manager(std::array{p_w, p_c});
+    CHECK(scalar_of(evaluate(p_w, p_w->annot(), yield, cache)) ==
+          Catch::Approx(-ref_c).margin(1e-12));
+    // the canonical spelling reads the slot the as-written one filled
+    CHECK(scalar_of(evaluate(p_c, p_c->annot(), yield, cache)) ==
+          Catch::Approx(ref_c).margin(1e-12));
+    CHECK(scalar_of(evaluate(p_c, p_c->annot(), yield)) ==
+          Catch::Approx(ref_c).margin(1e-12));
+  }
+}
+
+// A scalar-valued factor is opaque to the network an enclosing product
+// canonicalizes: it contributes no spelling, so that network's
+// canonicalization phase knows nothing of it and its own phase reaches the
+// enclosing node's transform instead. A closed sum of antisymmetric
+// contractions, written in the two orientations its antisymmetry relates,
+// therefore leads two products that share a slot and whose values differ by
+// a sign.
+TEST_CASE("eval_scalar_sum_factor_phase_reaches_the_product_btas",
+          "[eval_btas]") {
+  using namespace sequant;
+  using BTensorD = btas::Tensor<double>;
+  const std::size_t nocc = 2, nvirt = 3;
+
+  auto t = [](std::wstring_view b0, std::wstring_view b1, std::wstring_view k0,
+              std::wstring_view k1) {
+    return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                      ket{Index{k0}, Index{k1}}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  auto const v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+  auto const w = ex<Tensor>(L"w", bra{L"i_4", L"i_5"}, ket{L"a_2", L"i_6"});
+  auto const A = ex<Tensor>(L"A", bra{L"i_7"}, ket{L"a_3"});
+  auto const B = ex<Tensor>(L"B", bra{L"a_3"}, ket{L"i_8"});
+  auto closed = [](ExprPtr const& l, ExprPtr const& r) {
+    return ex<Product>(ExprPtrList{l, r}, Product::Flatten::No);
+  };
+  // the summands as written carry the antisymmetric reorder's sign; the same
+  // sum spelled in slot order carries none
+  auto sum = [&](bool as_written) {
+    return ex<Sum>(
+        ExprPtrList{closed(as_written ? t(L"a_1", L"i_3", L"i_1", L"i_2")
+                                      : t(L"i_3", L"a_1", L"i_1", L"i_2"),
+                           v),
+                    closed(as_written ? t(L"a_2", L"i_6", L"i_4", L"i_5")
+                                      : t(L"i_6", L"a_2", L"i_4", L"i_5"),
+                           w)});
+  };
+  auto const p_w = eval_node(
+      ex<Product>(ExprPtrList{sum(true), A, B}, Product::Flatten::No));
+  auto const p_c = eval_node(
+      ex<Product>(ExprPtrList{sum(false), A, B}, Product::Flatten::No));
+
+  // the scalar sums share a slot and hoist opposite phases ...
+  auto const& s_w = p_w.left().left();
+  auto const& s_c = p_c.left().left();
+  REQUIRE(s_w->op_type() == EvalOp::Sum);
+  REQUIRE(s_w->is_scalar());
+  REQUIRE(s_w->hash_value() == s_c->hash_value());
+  REQUIRE(s_w->canon_phase() == -1);
+  REQUIRE(s_c->canon_phase() == 1);
+  // ... and so do the products that multiply them by a tensor network whose
+  // own canonicalization is blind to them
+  REQUIRE(p_w->hash_value() == p_c->hash_value());
+  REQUIRE(p_w->canon_phase() == -1);
+  REQUIRE(p_c->canon_phase() == 1);
+
+  std::srand(19);
+  rand_tensor_yield<BTensorD> yield{nocc, nvirt};
+  auto const free_w = evaluate(p_w, p_w->annot(), yield)->get<BTensorD>();
+  auto const free_c = evaluate(p_c, p_c->annot(), yield)->get<BTensorD>();
+  REQUIRE(free_w.rank() == 2);
+  REQUIRE(free_w.extent(0) == nocc);
+  REQUIRE(free_w.extent(1) == nocc);
+  // the two spellings are each other's negative
+  for (std::size_t i = 0; i < nocc; ++i)
+    for (std::size_t j = 0; j < nocc; ++j)
+      REQUIRE(free_w(i, j) == Catch::Approx(-free_c(i, j)).margin(1e-12));
+  REQUIRE(std::abs(free_w(0, 0)) > 1e-8);
+
+  // both read through one cache, in either order, keep their cache-free value
+  auto cache = cache_manager(std::array{p_w, p_c});
+  auto const got_w = evaluate(p_w, p_w->annot(), yield, cache)->get<BTensorD>();
+  auto const got_c = evaluate(p_c, p_c->annot(), yield, cache)->get<BTensorD>();
+  for (std::size_t i = 0; i < nocc; ++i)
+    for (std::size_t j = 0; j < nocc; ++j) {
+      CHECK(got_w(i, j) == Catch::Approx(free_w(i, j)).margin(1e-12));
+      CHECK(got_c(i, j) == Catch::Approx(free_c(i, j)).margin(1e-12));
+    }
+}
+
+// The default simplify() folds conjugate pairs of scalar-valued summands
+// only, so a tensor-valued sum with a conjugate pair reaches the evaluator as
+// the sum it was written as, whose adjointed summand is a network of leaves
+// stored bare under the adjoint channel.
+TEST_CASE("eval_tensor_valued_conjugate_pair_btas", "[eval_btas]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+  using BTensorC = btas::Tensor<C>;
+
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+  REQUIRE(Index{L"a_1"}.space().field() == Field::Complex);
+
+  const std::size_t nocc = 2, nvirt = 3;
+  std::srand(17);
+  auto rnd = [](std::vector<std::size_t> const& extents) {
+    BTensorC r{btas::Range{extents}};
+    r.generate([]() {
+      return C(static_cast<double>(std::rand()) / RAND_MAX - 0.5,
+               static_cast<double>(std::rand()) / RAND_MAX - 0.5);
+    });
+    return r;
+  };
+
+  auto const u = ex<Tensor>(L"u", bra{L"a_1"}, ket{L"a_2"});
+  auto const v = ex<Tensor>(L"v", bra{L"a_2"}, ket{L"i_1"});
+  auto sum = u * v + conjugate(u * v);
+  simplify(sum);
+  REQUIRE(sum->is<Sum>());
+  REQUIRE(sum->as<Sum>().summands().size() == 2);
+
+  auto node = eval_node(sum);
+  REQUIRE(node->op_type() == EvalOp::Sum);
+  REQUIRE(node->is_tensor());
+
+  BTensorC U = rnd({nvirt, nvirt});  // u{a_1;a_2}: U(a1, a2)
+  BTensorC V = rnd({nvirt, nocc});   // v{a_2;i_1}: V(a2, i)
+  pinned_tensor_yield<BTensorC> yield;
+  yield.put(u->as<Tensor>(), U);
+  yield.put(v->as<Tensor>(), V);
+
+  auto const got =
+      evaluate(node, tidxs(std::vector<Index>{Index{L"a_1"}, Index{L"i_1"}}),
+               yield)
+          ->get<BTensorC>();
+  REQUIRE(got.rank() == 2);
+  REQUIRE(got.extent(0) == nvirt);
+  REQUIRE(got.extent(1) == nocc);
+  for (std::size_t a = 0; a < nvirt; ++a)
+    for (std::size_t i = 0; i < nocc; ++i) {
+      C x{0., 0.};
+      for (std::size_t b = 0; b < nvirt; ++b) x += U(a, b) * V(b, i);
+      C const ref = x + std::conj(x);
+      CHECK(got(a, i).real() == Catch::Approx(ref.real()).margin(1e-12));
+      CHECK(got(a, i).imag() == Catch::Approx(0.).margin(1e-12));
+    }
+}
+
+// The cell table holds a value in its canonical orientation while every
+// reader wants the node's own, and the conversion is the node's whole
+// CanonTransform: a node that carries a hoisted elementwise conjugation
+// (t꙳ g꙳ over a real basis, whose two factors are both hoistable, so the
+// intermediate carries {conj} and shares the unconjugated t g slot) must come
+// back out of the table conjugated. Two roots sharing that intermediate make
+// it a cell of its own rather than a transient of one production tree, which
+// is what puts the store side's conversion on the path.
+TEST_CASE("eval_ordered_conj_node_is_converted_whole_btas",
+          "[eval_btas][ordered]") {
+  using namespace sequant;
+  using C = std::complex<double>;
+  using BTensorC = btas::Tensor<C>;
+
+  Context ctx = get_default_context();
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const std::size_t nocc = 2, nvirt = 3;
+  std::srand(11);
+  auto rnd = [](std::vector<std::size_t> const& extents) {
+    BTensorC r{btas::Range{extents}};
+    r.generate([]() {
+      return C(static_cast<double>(std::rand()) / RAND_MAX - 0.5,
+               static_cast<double>(std::rand()) / RAND_MAX - 0.5);
+    });
+    return r;
+  };
+  // an Index whose space carries a real field (the default field is Complex)
+  auto ridx = [](std::wstring_view label) {
+    Index i(label);
+    IndexSpace sp = i.space();
+    sp.field(Field::Real);
+    return Index(label, sp);
+  };
+  // parity None keeps the '꙳' over a real basis; the default Even consumes it
+  auto starred = [&ridx](std::wstring_view lbl, std::wstring_view b,
+                         std::wstring_view k) {
+    Tensor t(lbl, bra{ridx(b)}, ket{ridx(k)},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    REQUIRE(t.kconjugate() == 1);
+    REQUIRE(t.kconjugated());
+    return ex<Tensor>(std::move(t));
+  };
+  auto bare = [&ridx](std::wstring_view lbl, std::wstring_view b,
+                      std::wstring_view k) {
+    return ex<Tensor>(lbl, bra{ridx(b)}, ket{ridx(k)});
+  };
+
+  auto const t_ = starred(L"t", L"a_1", L"i_1");
+  auto const g_ = starred(L"g", L"i_1", L"a_2");
+  auto const v_ = bare(L"v", L"a_2", L"a_1");
+  auto const u_ = bare(L"u", L"a_2", L"a_1");
+
+  auto root1 = eval_node(t_->clone() * g_->clone() * v_->clone());
+  auto root2 = eval_node(t_->clone() * g_->clone() * u_->clone());
+  using NodeT = decltype(root1);
+  REQUIRE(root1->is_scalar());
+  REQUIRE(root2->is_scalar());
+  // the two-factor prefix hoists the conj; v and u break the three-factor one
+  REQUIRE_FALSE(root1->canon_transform().conj);
+  REQUIRE_FALSE(root2->canon_transform().conj);
+  auto const& imed = root1.left();
+  REQUIRE(imed->is_tensor());
+  REQUIRE(imed->canon_transform() == CanonTransform{.conj = true});
+  // one cell, shared by both roots
+  REQUIRE(imed->hash_value() == root2.left()->hash_value());
+
+  // the stored (bare) spellings the provider is asked for
+  auto const& tl = imed.left();
+  auto const& gl = imed.right();
+  REQUIRE(tl.leaf());
+  REQUIRE(gl.leaf());
+  REQUIRE(tl->canon_transform() == CanonTransform{.conj = true});
+  REQUIRE(gl->canon_transform() == CanonTransform{.conj = true});
+  REQUIRE_FALSE(tl->as_tensor().kconjugated());
+  REQUIRE_FALSE(gl->as_tensor().kconjugated());
+  REQUIRE(tl->as_tensor().bra()[0].label() == L"a_1");
+  REQUIRE(tl->as_tensor().ket()[0].label() == L"i_1");
+  REQUIRE(gl->as_tensor().bra()[0].label() == L"i_1");
+  REQUIRE(gl->as_tensor().ket()[0].label() == L"a_2");
+
+  BTensorC T = rnd({nvirt, nocc});   // t{a_1;i_1}: T(a1, i)
+  BTensorC G = rnd({nocc, nvirt});   // g{i_1;a_2}: G(i, a2)
+  BTensorC V = rnd({nvirt, nvirt});  // v{a_2;a_1}: V(a2, a1)
+  BTensorC U = rnd({nvirt, nvirt});  // u{a_2;a_1}: U(a2, a1)
+  pinned_tensor_yield<BTensorC> yield;
+  yield.put(tl->as_tensor(), T);
+  yield.put(gl->as_tensor(), G);
+  yield.put(v_->as<Tensor>(), V);
+  yield.put(u_->as<Tensor>(), U);
+
+  // A(a1, a2) = Σ_i conj(T(a1, i)) conj(G(i, a2)); the roots close it
+  C ref1{0., 0.}, ref2{0., 0.};
+  for (std::size_t a1 = 0; a1 < nvirt; ++a1)
+    for (std::size_t a2 = 0; a2 < nvirt; ++a2) {
+      C a{0., 0.};
+      for (std::size_t i = 0; i < nocc; ++i)
+        a += std::conj(T(a1, i)) * std::conj(G(i, a2));
+      ref1 += a * V(a2, a1);
+      ref2 += a * U(a2, a1);
+    }
+
+  auto scalar_of = [](ResultPtr const& res) {
+    REQUIRE(res->is<ResultScalar<C>>());
+    return res->as<ResultScalar<C>>().value();
+  };
+  auto close_to = [](C got, C ref) {
+    CHECK(got.real() == Catch::Approx(ref.real()).margin(1e-12));
+    CHECK(got.imag() == Catch::Approx(ref.imag()).margin(1e-12));
+  };
+
+  SECTION("the tree-walking engine agrees with the hand reference") {
+    close_to(scalar_of(evaluate(root1, root1->annot(), yield)), ref1);
+    close_to(scalar_of(evaluate(root2, root2->annot(), yield)), ref2);
+  }
+
+  SECTION("the ordered executor reads the shared conj node back conjugated") {
+    BatchPolicy const policy;
+    eval::dryrun::SizeRegime const regime;
+    eval::dryrun::CostModel const cm{regime};
+    auto const block_of = [](Index const&) -> std::size_t { return 1; };
+    std::function<std::size_t(Index const&)> const target =
+        [](Index const&) -> std::size_t { return 1; };
+
+    container::svector<NodeT> const roots{root1, root2};
+    auto const rich = eval::compute_dag_boulevard(roots, cm, block_of);
+    auto const legality = eval::analyze_legality(rich, roots, policy);
+    auto const ordered =
+        eval::build_ordered_schedule(rich, legality, policy, {});
+    auto cache = CacheManager<NodeT>::empty();
+    // one schedule over both roots: the forest form sums them, so the
+    // reference is ref1 + ref2
+    auto const got = eval::evaluate_ordered_schedule(
+        roots, ordered, rich, EvalExprBTAS::annot_t{}, yield, cache, target);
+    close_to(scalar_of(got), ref1 + ref2);
+  }
+}
+
 // A product that contracts every index of both operands is a bilinear dot,
 // sum_k L[k] R[k], with no conjugation: SeQuant spells a conjugated operand
-// explicitly (an adjointed or K-conjugated state, lowered to an
-// EvalOp::Adjoint node), so the backend must not conjugate on its own. BTAS's
+// explicitly (an adjointed or K-conjugated state, lowered to a leaf whose
+// CanonTransform conjugates), so the backend must not conjugate on its own.
+// BTAS's
 // btas::dot is dotc (BLAS zdotc, the first operand conjugated), which is only
 // observable on complex data.
 TEST_CASE("eval_dot_complex_btas", "[eval_btas]") {
@@ -1146,12 +1665,14 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   using C = std::complex<double>;
   using BTensorC = btas::Tensor<C>;
 
-  // A leaf keeps its as-written orientation, and the states are served as IR
-  // ops over the bare leaf: '⁺' as the Adjoint node (permute and conjugate),
-  // a '꙳' over a real basis as the Adjoint node with an identity layout (a
-  // pure elementwise conjugation). A marked tensor never carries a sign;
-  // signs live in scalars. Symbolic canonicalization never exchanges a
-  // Conjugate tensor's bundles, so a network keeps its value through it.
+  // A leaf keeps its as-written orientation, and the states ride the leaf's
+  // retrieval transform over the bare array: '⁺' as {conj, braket_swap} (the
+  // adjoint of the stored array -- the bundles are exchanged in the leaf's
+  // spelling, the modes keep their own labels), a '꙳' over a real basis as
+  // {conj} alone (a pure elementwise conjugation, identity layout). A stated
+  // tensor never carries a sign; signs live in scalars. Symbolic
+  // canonicalization never exchanges a Conjugate tensor's bundles, so a
+  // network keeps its value through it.
   Context ctx = get_default_context();
   ctx.set(AssertStrictBraKetSymmetry::No);
   auto resetter = set_scoped_default_context(ctx);
@@ -1247,8 +1768,8 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     for (size_t i = 0; i < nocc; ++i) ref_conj += std::conj(T(a, i)) * W(i, a);
   // the root is checked against the reference without a cache, then twice
   // through one shared cache, so that a cache-slot collision between the
-  // bare leaf and its marked spelling (t and t꙳, or an Adjoint node and its
-  // operand) would surface on the second read
+  // bare leaf and its stated spelling (t and t꙳ over a real basis, or t and
+  // t⁺ -- each pair shares one slot) would surface on the second read
   auto check_closed = [&ref_conj](auto const& node, auto const& leaf_yield) {
     REQUIRE(node->is_scalar());
     REQUIRE(node->canon_phase() == 1);
@@ -1268,8 +1789,8 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
   SECTION("a K-conjugated leaf over a real basis is the conjugate array") {
     // over a real basis with complex data, t꙳{a_1;i_1} w{i_1;a_1} evaluates
     // to Σ conj(T(a, i)) W(i, a): the K-conjugate of t is the elementwise
-    // conjugate of its array, served as an Adjoint node with an identity
-    // layout over the bare leaf
+    // conjugate of its array, served by a {conj} transform over the bare
+    // leaf, which permutes nothing
     auto ridx = [](std::wstring_view label) {
       Index i(label);
       IndexSpace sp = i.space();
@@ -1296,18 +1817,16 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     auto node = eval_node(tk * ex<Tensor>(w));
     REQUIRE(node->op_type() == EvalOp::Product);
     auto const& kn = node.left();
-    REQUIRE(kn->op_type() == EvalOp::Adjoint);
-    REQUIRE(kn.left().leaf());
-    REQUIRE_FALSE(kn.left()->as_tensor().kconjugated());
-    REQUIRE(kn->canon_indices() == kn.left()->canon_indices());
-    REQUIRE(kn->annot() == kn.left()->annot());
+    REQUIRE(kn.leaf());
+    REQUIRE(kn->canon_transform() == CanonTransform{.conj = true});
+    REQUIRE_FALSE(kn->as_tensor().kconjugated());
 
     check_closed(node, ryield);
   }
 
-  SECTION("an adjointed leaf over a complex basis is the Adjoint node") {
-    // over a complex basis conjugate(t{a_1;i_1}) is t⁺{i_1;a_1}, the Adjoint
-    // node over the bare leaf: t⁺{i_1;a_1} w'{a_1;i_1} = Σ conj(T(a, i))
+  SECTION("an adjointed leaf over a complex basis rides the transform") {
+    // over a complex basis conjugate(t{a_1;i_1}) is t⁺{i_1;a_1}, a leaf whose
+    // transform conjugate-transposes: t⁺{i_1;a_1} w'{a_1;i_1} = Σ conj(T(a, i))
     // W'(a, i), with W'(a, i) = W(i, a) so that the reference is the same
     Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
     Tensor w(L"w", bra{L"a_1"}, ket{L"i_1"});
@@ -1329,11 +1848,11 @@ TEST_CASE("eval_signed_network_btas", "[eval_btas]") {
     auto node = eval_node(tadj * ex<Tensor>(w));
     REQUIRE(node->op_type() == EvalOp::Product);
     auto const& an = node.left();
-    REQUIRE(an->op_type() == EvalOp::Adjoint);
-    REQUIRE(an.left().leaf());
-    REQUIRE_FALSE(an.left()->as_tensor().adjointed());
-    REQUIRE(an.left()->as_tensor().bra()[0].label() == L"a_1");
-    REQUIRE(an->canon_indices() != an.left()->canon_indices());
+    REQUIRE(an.leaf());
+    REQUIRE_FALSE(an->as_tensor().adjointed());
+    REQUIRE(an->as_tensor().bra()[0].label() == L"a_1");
+    REQUIRE(an->canon_transform().conj);
+    REQUIRE(an->canon_transform().braket_swap);
 
     check_closed(node, cyield);
   }

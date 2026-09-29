@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EXPORT_MARKED_NAME_HPP
 
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -25,6 +26,22 @@ inline std::wstring export_label(const Tensor &tensor) {
 /// @return export_label() as UTF-8
 inline std::string export_name(const Tensor &tensor) {
   return toUtf8(export_label(tensor));
+}
+
+/// @return Variable::label() followed by `_conj` when @p variable is
+///         conjugated. A conjugated scalar carries no slots to tell it apart
+///         from the one label() names, so where a backend has no conjugation
+///         spelling for a scalar operand (ITF) the mark belongs in the name,
+///         exactly as a marked tensor's does.
+inline std::wstring export_label(const Variable &variable) {
+  std::wstring result(variable.label());
+  if (variable.conjugated()) result += L"_conj";
+  return result;
+}
+
+/// @return export_label() as UTF-8
+inline std::string export_name(const Variable &variable) {
+  return toUtf8(export_label(variable));
 }
 
 /// @brief renames @p tensor to export_label() and clears its core states, so

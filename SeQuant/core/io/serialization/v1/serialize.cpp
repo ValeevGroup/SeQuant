@@ -183,9 +183,9 @@ std::wstring to_string(const Constant& constant,
 }
 
 std::wstring to_string(const Variable& variable, const SerializationOptions&) {
-  std::wstring serialized(variable.label());
-  if (variable.conjugated()) serialized.push_back(sequant::conjugate_label);
-  return serialized;
+  // the state is spelled as a mark trailing the label, the form the
+  // deserializer grammar accepts, so the round-trip is lossless
+  return variable.decorated_label();
 }
 
 std::wstring to_string(const Power& power,

@@ -8,6 +8,8 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
@@ -1207,6 +1209,111 @@ TEST_CASE("optimize", "[optimize]") {
         opt::eliminate_common_subexpressions(expressions, binarizer, opts);
 
         REQUIRE(collect_as_expr(expressions) == expected);
+      }
+    }
+  }
+
+  SECTION("CSE definitions and uses denote what was written") {
+    auto ctx_resetter = set_scoped_default_context(
+        Context{get_default_context()}.set(AssertStrictBraKetSymmetry::No));
+    auto binarizer = [](auto&& expr) {
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+      return binarize(expr);
+      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    };
+    auto has_state = [](ExprPtr const& e, auto&& pred) {
+      bool found = false;
+      e->visit(
+          [&](ExprPtr const& n) {
+            if (n->is<Tensor>() && pred(n->as<Tensor>())) found = true;
+          },
+          /*atoms_only=*/true);
+      return found;
+    };
+
+    SECTION("an adjointed leaf keeps its state in the definition") {
+      Tensor t(L"t", bra{L"a_2"}, ket{L"i_1"});
+      REQUIRE(t.adjoint() == 1);
+      auto const f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+      auto const g = ex<Tensor>(L"g", bra{L"a_1"}, ket{L"a_3"});
+      auto const h = ex<Tensor>(L"h", bra{L"a_1"}, ket{L"a_3"});
+      auto term = [&t, &f](ExprPtr const& last) {
+        return ex<Product>(ExprPtrList{ex<Tensor>(t), f, last},
+                           Product::Flatten::No);
+      };
+      std::vector<EvalNode<EvalExpr>> trees{
+          binarizer(
+              ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_3"}), term(g))),
+          binarizer(
+              ResultExpr(Tensor(L"S", bra{L"i_1"}, ket{L"a_3"}), term(h)))};
+      auto const defs = opt::eliminate_common_subexpressions(trees, binarizer);
+      REQUIRE(defs.size() == 1);
+      auto const def = to_expr(trees[defs.front()]);
+      CAPTURE(def->to_latex());
+      REQUIRE(has_state(def, [](Tensor const& x) { return x.adjointed(); }));
+    }
+
+    SECTION("a conjugated network is not the intermediate of its twin") {
+      // over a real basis a uniformly K-conjugated product hoists its
+      // conjugation and shares its twin's slot, but an intermediate is
+      // defined by the spelling it denotes and used by name, so the two are
+      // two intermediates
+      auto rx = [](std::wstring_view label) {
+        Index const ix{label};
+        IndexSpace sp = ix.space();
+        sp.field(Field::Real);
+        return Index(label, sp);
+      };
+      auto rt = [&rx](std::wstring_view lbl, std::wstring_view b,
+                      std::wstring_view k) {
+        return ex<Tensor>(
+            lbl, bra{rx(b)}, ket{rx(k)},
+            TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+      };
+      auto AB = [&rt]() {
+        return rt(L"A", L"i_1", L"a_1") * rt(L"B", L"a_1", L"i_2");
+      };
+      auto const g = rt(L"g", L"i_2", L"i_3");
+      auto const h = rt(L"h", L"i_2", L"i_3");
+      Tensor const R(L"R", bra{rx(L"i_1")}, ket{rx(L"i_3")});
+      Tensor const S(L"S", bra{rx(L"i_1")}, ket{rx(L"i_3")});
+      auto term = [](ExprPtr const& ab, ExprPtr const& last) {
+        return ex<Product>(ExprPtrList{ab, last}, Product::Flatten::No);
+      };
+
+      {
+        std::vector<EvalNode<EvalExpr>> trees{
+            binarizer(ResultExpr(R, term(conjugate(AB()), g))),
+            binarizer(ResultExpr(S, term(AB(), h)))};
+        // the twins share the slot ...
+        REQUIRE(trees[0].left()->hash_value() == trees[1].left()->hash_value());
+        REQUIRE(trees[0].left()->canon_transform().conj);
+        REQUIRE_FALSE(trees[1].left()->canon_transform().conj);
+        // ... and no intermediate
+        auto const defs =
+            opt::eliminate_common_subexpressions(trees, binarizer);
+        REQUIRE(defs.empty());
+        REQUIRE(trees.size() == 2);
+        REQUIRE(has_state(to_expr(trees[0]),
+                          [](Tensor const& x) { return x.kconjugated(); }));
+        REQUIRE_FALSE(has_state(to_expr(trees[1]), [](Tensor const& x) {
+          return x.kconjugated();
+        }));
+      }
+      {
+        // two conjugated occurrences do share one, defined conjugated
+        std::vector<EvalNode<EvalExpr>> trees{
+            binarizer(ResultExpr(R, term(conjugate(AB()), g))),
+            binarizer(ResultExpr(S, term(conjugate(AB()), h)))};
+        auto const defs =
+            opt::eliminate_common_subexpressions(trees, binarizer);
+        REQUIRE(defs.size() == 1);
+        auto const def = to_expr(trees[defs.front()]);
+        CAPTURE(def->to_latex());
+        REQUIRE(def->is<Product>());
+        REQUIRE(def->as<Product>().size() == 2);
+        for (auto const& fac : def->as<Product>())
+          REQUIRE(fac->as<Tensor>().kconjugated());
       }
     }
   }
@@ -4533,5 +4640,101 @@ TEST_CASE("batchability role-split building-block predicates",
     CHECK(cost.is_batchable_contracted_index(a));
     CHECK(cost.is_batchable_external_index(i));
     CHECK(cost.batch_target_size(a) == 8u);
+  }
+}
+
+TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
+  using namespace sequant;
+  // A Re/Im wrapper must be transparent to optimization: the inner product
+  // gets contraction-order optimized (binarized) and re-wrapped. An opaque
+  // wrapper would come back untouched, leaving the inner to evaluate in
+  // naive left-to-right order.
+  auto const flat =
+      deserialize(L"g{i3,i4;a3,a4} * t{a1,a2;i3,i4} * t{a3,a4;i1,i2}");
+  REQUIRE(flat->as<Product>().size() == 3);
+
+  SECTION("RealPart") {
+    auto opt = optimize(ex<RealPart>(flat->clone()),
+                        OptimizeOptions{.reorder = ReorderSum::NoReorder});
+    REQUIRE(opt->is<RealPart>());
+    auto const& inner = opt->as<RealPart>().inner();
+    REQUIRE(inner->is<Product>());
+    CHECK(inner->as<Product>().size() == 2);  // binarized, not flat
+  }
+
+  SECTION("ImagPart") {
+    auto opt = optimize(ex<ImagPart>(flat->clone()),
+                        OptimizeOptions{.reorder = ReorderSum::NoReorder});
+    REQUIRE(opt->is<ImagPart>());
+    auto const& inner = opt->as<ImagPart>().inner();
+    REQUIRE(inner->is<Product>());
+    CHECK(inner->as<Product>().size() == 2);
+  }
+
+  SECTION("wrapped summand inside a Sum") {
+    auto sum = ex<Sum>(ExprPtrList{ex<RealPart>(flat->clone()), flat->clone()});
+    auto opt = optimize(sum, OptimizeOptions{.reorder = ReorderSum::NoReorder});
+    REQUIRE(opt->is<Sum>());
+    auto const& s0 = opt->as<Sum>().summand(0);
+    REQUIRE(s0->is<RealPart>());
+    CHECK(s0->as<RealPart>().inner()->as<Product>().size() == 2);
+  }
+}
+
+// T20 (PR 2): a Re/Im-wrapped product factor must not be an opaque scalar to
+// the optimizer. The conjugate-pair fold emits `2 Re[A]`; RealPart::is_scalar()
+// made the wrapper pass through opt_pure_product untouched, so A evaluated in
+// its naive left-to-right order (measured 14 GB vs 1.7 GB peak on a Kramers
+// CSV-MP2 energy). The wrapper's inner must come out exactly as optimize(A).
+TEST_CASE("Re-wrapped product factor is optimized like the bare product",
+          "[optimize][re_im]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 300}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  OptimizeOptions opts;
+  opts.objective_function = ObjectiveFunction::DenseFLOPs;
+  opts.idx_to_extent = idxsz;
+
+  // naive left-to-right order is far from optimal here (g.g first)
+  auto bare = deserialize(
+      L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} t{i_1,i_2;a_1,a_2} f{i_3;i_3}");
+  auto ref = optimize(bare, opts);
+  REQUIRE(ref->is<Product>());
+  auto inner_of = [](ExprPtr const& e) -> ExprPtr {
+    if (e->is<RealPart>()) return e->as<RealPart>().inner();
+    REQUIRE(e->is<Product>());
+    ExprPtr found;
+    for (auto const& f : e->as<Product>())
+      if (f->is<RealPart>()) found = f->as<RealPart>().inner();
+    REQUIRE(found);
+    return found;
+  };
+  {
+    auto opt = optimize(real_part(bare->clone()), opts);
+    INFO("bare Re[A]: " << toUtf8(to_latex(opt)));
+    REQUIRE(*inner_of(opt) == *ref);
+  }
+  {
+    auto opt = optimize(ex<Constant>(2) * real_part(bare->clone()), opts);
+    INFO("2 Re[A]: " << toUtf8(to_latex(opt)));
+    REQUIRE(*inner_of(opt) == *ref);
+  }
+  {
+    auto opt = optimize(ex<Constant>(2) * imaginary_part(bare->clone()), opts);
+    REQUIRE(opt->is<Product>());
+    ExprPtr found;
+    for (auto const& f : opt->as<Product>())
+      if (f->is<ImagPart>()) found = f->as<ImagPart>().inner();
+    REQUIRE(found);
+    REQUIRE(*found == *ref);
   }
 }

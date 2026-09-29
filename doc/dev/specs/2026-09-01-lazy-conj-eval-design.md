@@ -1,0 +1,441 @@
+# Lazy-conj eval redesign (conjugation PR 2) — design
+
+Date: 2026-09-01. Builds on the symbolic conjugation redesign
+(`kshitij/feature/conjugation-symbolic`, PR #602, base commit
+`13dd902c7`). Draft PR for evaluation; branch
+`kshitij/feature/conjugation-eval`, PR based on the PR-1 branch and
+retargeted to master when #602 merges.
+
+## Problem
+
+PR 1 made the elementwise-conjugation marker first-class in the symbolic
+layer but kept the eval layer on the structural model: conjugation is
+served by an `EvalOp::Adjoint` IR node (own cache slot, own dispatch
+stage `NeedLeftAdj`, `Constant{1}` sentinel, eager whole-array
+`Result::adjoint`), while the canonicalization *phase* is already served
+lazily on retrieval (`apply_phase`, cache holds the pre-phase value).
+Consequences, confirmed by review of the PR-1 branch:
+
+- the eval boundary disables the conjugate-braket fold, so leaf serving
+  is orientation-sensitive: a starred Conjugate spelling and the plain
+  swapped spelling of the same value are served differently (review
+  finding F1, CONFIRMED), and off-pipeline orientation aliasing is
+  possible (F3);
+- `fold_conjugate_braket` is threaded through five gating points that
+  must stay mutually consistent (F4);
+- marked-Nonsymm leaves cannot be served at all — PR 1 added explicit
+  `std::logic_error` gates in `binarize(Tensor)` (including before the
+  '⁺' label channel) pending this redesign;
+- every adjoint-served leaf pays a separate cache slot plus an eager
+  `.conj()` materialization per node.
+
+## Architecture: one retrieval-time canonical transform
+
+Generalize the phase-on-retrieval model to carry conjugation and
+bra<->ket transposition:
+
+- `EvalExpr::canon_phase_` generalizes to a canonical transform
+  `canon_transform_ = {phase: int8_t, conj: bool, braket_swap: bool}` —
+  the map from the *cached canonical* result to *this node's denoted*
+  value. Excluded from the node's own hash, exactly like phase today.
+- `apply_phase` in `evaluate` (eval.hpp) becomes
+  `apply_canon_transform`. Backend hook: one new virtual
+  `Result::apply_transform(phase, conj, swap-annotation)`; the TA
+  implementation fuses relabel + `.conj()` + scale in one pass; the
+  default composes `mult_by_phase` with the existing pieces.
+- `EvalOp::Adjoint`, the `NeedLeftAdj` stage, the `Constant{1}` sentinel
+  convention, and `make_adjoint_node` are retired.
+
+Leaf boundary (`EvalExpr(Tensor)` / `binarize(Tensor)`):
+
+- **Conjugate** leaves: the braket fold is re-enabled at the eval
+  boundary (`fold_conjugate_braket` returns to one setting everywhere —
+  F4 dissolves). Both orientations land on one cache slot spelled
+  canonically; the folded spelling carries `{conj, braket_swap}`.
+  Yielders are only ever asked for the canonical spelling — F1 and F3
+  dissolve.
+- **Nonsymm starred** leaves (`t^*`): same slot as `t`, transform
+  `{conj}`. The PR-1 throws in `binarize` are replaced by serving.
+- **'⁺'-labeled Nonsymm adjoints**: label stripped at the boundary,
+  same slot as bare `t`, transform `{conj, braket_swap}`. The
+  '⁺'+marker combination composes to `{braket_swap}` alone (pure
+  transpose) — that refusal also becomes serving.
+- **Symm** markers: dropped (identity in value), as today.
+
+`sequant::value_oriented` is unchanged: its Nonsymm throw remains
+correct for its surviving (symbolic, slot-rebuilding) consumers — the
+mbpt rules; the eval-layer call sites are replaced by transform-based
+logic.
+
+> **As built on the core model (2026-09-28).** The elementwise mark is a core
+> state of `Tensor` (`⁺` adjointed, `꙳` K-conjugated; see
+> `doc/dev/specs/2026-09-26-core-conjugation-design.md`), so the boundary
+> decodes states instead of folding spellings. `decode_leaf_states`
+> (`SeQuant/core/eval/eval_expr.cpp`) is exhaustive over the two states in
+> three cases:
+>
+> - `⁺`: `t⁺{q;p}` is `conj t{p;q}`, so the array is the bare `t`;
+>   `Tensor::adjoint()` exchanges the bundles back and clears the state, and
+>   the transform is `{conj, braket_swap}`. A kept `⁺` is `NonHermitian`,
+>   so this consumes no sign.
+> - `꙳` over a real basis: the elementwise conjugate of the same array
+>   with the slots in place, so the array is the bare `t` and the transform is
+>   `{conj}` over the identity layout.
+> - `꙳` over a complex basis: the matrix of another operator, an array of
+>   its own. The state stays on the stored spelling, `hash_terminal_tensor`
+>   keys it apart from the bare leaf, and the transform stays trivial.
+>
+> `t⁺꙳` over a complex basis composes the first case with the third:
+> the array is `t꙳` and the transform is `{conj, braket_swap}`. A
+> `꙳` on a default-parity tensor never reaches the boundary at all --
+> the core spelling normalizes it away, so the old _Symm markers are dropped_
+> case has no eval-side counterpart.
+>
+> `normalize_leaf` then block-canonicalizes the decoded spelling with
+> `fold_signed_braket = false` and composes the byproduct sign into the same
+> transform. Two invariants follow.
+>
+> - The decoding is invertible on a leaf: `denoted_expr()` respells the stored
+>   array as written, up to the free (sign-free) block reordering the
+>   canonicalizer performed -- `{conj, braket_swap}` through
+>   `Tensor::adjoint()`, a bare `{conj}` through `Tensor::kconjugate()`, and a
+>   leaf whose state named an array of its own already carries it.
+> - The two orientations of a `Conjugate` tensor are two values, hence two
+>   spellings and two slots, each asked of the provider as written.
+>
+> F1, F3 and F4 are therefore dissolved by the _absence_ of the fold rather
+> than by re-enabling it: there is no `fold_conjugate_braket` flag left to
+> keep consistent across gating points, and the one remaining setting is
+> stated at the boundary itself. `TensorBlockCanonicalizer` folds a signed
+> bra<->ket exchange by default, and `canonicalize_graph` asks for that; the
+> eval leaf boundary is the site that passes `false` explicitly, which is the
+> setting the report-only `canonicalize_slots` path -- the one the
+> tensor-of-tensors branch also uses -- leaves in place. The whole transform
+> -- the phase included -- is applied once on the way out of the leaf fetch,
+> so a leaf's block-canonicalization sign reaches the value.
+
+## Cache/CSE identity and the hash contract
+
+Identity splits in two; this is the load-bearing invariant.
+
+- **Slot identity** (what the cache stores under): a node's own hash
+  covers only its canonical spelling; its own transform is excluded. So
+  `t`/`t^*` and both orientations of a Conjugate tensor share one slot
+  holding the canonical value. PR 1's Nonsymm marker salt in
+  `hash_terminal_tensor` moves out of the slot hash into the transform.
+- **Structural identity** (what a parent is): a child's *phase* is
+  multiplicatively hoistable (`A·(-B) = -(A·B)`) and stays out of hash
+  combination, folding into the parent's own transform — unchanged.
+  Conjugation obeys a finer rule — **uniform conj hoists, mixed conj
+  salts** — because elementwise conj distributes over contraction and
+  addition (`(A·B)^* = A^*·B^*`, `(sum_i T_i)^* = sum_i T_i^*`,
+  `(c·X)^* = conj(c)·X^*`):
+  - if EVERY tensor child of a product/sum carries the conj bit (and
+    the scalar is conjugated correspondingly), the conjugation is a
+    whole-node transform: strip the child marks, conjugate the scalar,
+    set `{conj}` on the node's own transform, and hash the UNMARKED
+    spelling. Recursively, whole-subtree conjugation bubbles to the
+    root, so a conjugated TN hashes onto its unconjugated
+    counterpart's slot: `B^*·A^*` (reordering already canonicalized
+    away) is a cache HIT on the `A·B` slot, served as one retrieval
+    conj — no recomputation. This is the mechanism the TRS/Kramers
+    tracing fold (PR 3) relies on to serve \mathcal{T}-partner (time-reversal) intermediates
+    from one evaluation; it is a named requirement of this PR, not an
+    optimization.
+  - with MIXED marks the conjugation is NOT a whole-node transform
+    (`C·C^*` is no transform of `C·C`), so each marked child
+    contributes `slot_hash (+) transform_salt(conj, braket_swap)` to
+    the parent's hash — what the retired Adjoint node's
+    `hash::combine(h, EvalOp::Adjoint)` encoded structurally. The
+    C·C^* vs C^*·C regression tests must pass unchanged.
+  `braket_swap` does not hoist in this PR (adjoint of a product also
+  reverses the contraction frame); hermitian-network recognition stays
+  with the symbolic layer's `is_hermitian_network()`.
+
+Consequences:
+
+- One stored canonical array per slot; each consumer applies its own
+  transform on retrieval. TA has only eager `.conj()`, so a retrieval
+  materializes a transformed copy — the same per-use cost as the
+  Adjoint node today, but without duplicate cache entries. A TA lazy
+  conj-view is a named future optimization, out of scope.
+- PR 1's `conjugated_tensors` report (test-only until now) gains its
+  intended consumer: deriving a ToT leaf's transform from
+  `canonicalize_slots`.
+
+**Conj-aware CSE (in scope).** The hoisting rule applies recursively at
+EVERY node, so common-subexpression identity is conj-aware at all
+granularities, not just whole terms:
+
+- inside a mixed product, a uniformly conjugated subgroup hoists at its
+  own node: binarizing `A^*·B^*·C` forms the `(A^*·B^*)` intermediate
+  with hash == the canonical `A·B` slot and transform `{conj}` — a
+  cache HIT when `A·B` (or its reordering) was computed anywhere,
+  in this term or another;
+- `CacheManager` keys and the intermediate hashes (`imed_hashes`)
+  inherit this from the hash contract, so cross-term CSE spans conj
+  variants with no separate machinery — PR 1's deferred symbolic
+  rewrite `A^*B^*·C -> (BA)^*·C` is realized as slot identity at
+  binarize time rather than as an expression transform (the symbolic
+  named hook stays for pretty-printing/export);
+- the single-term optimizer's repeated-subnet detection is already
+  fold-aware (audit item 5), so its groupings and the eval-side slots
+  agree; steering the contraction-ORDER search toward conj-reusable
+  groupings (a cost-model credit for conj-related cached intermediates)
+  is a stretch goal within this PR, exercised by the mixed-product
+  test below.
+
+> **As built on the core model (2026-09-28).** The slot rule reads: _a leaf's
+> slot hash is the hash of the array it stores_. `hash_terminal_tensor` keys
+> that array by its bare label, its slot layout (each slot's space type and
+> quantum numbers, and a proto-carrying slot's proto labels), the state byte
+> when a state is set, and the conjugation symmetry when it is `AntiSymm` --
+> over a real basis an odd-parity array is imaginary where an even-parity one
+> is real, so the two must not share a slot, while `Symm` and `NonSymm` add
+> no term.
+>
+> - A state byte reaches the slot hash only where the decoder left it on the
+>   stored spelling, i.e. for a `꙳` over a complex basis, which is an
+>   array of its own. The two states the decoder takes off (`⁺`, and
+>   `꙳` over a real basis) are gone from the spelling before it is
+>   hashed and live in the transform, so there is no marker salt to move out
+>   of the hash.
+> - The slot hash is _label-blind_: index labels do not enter it (a proto
+>   index's label does, as part of the slot's own identity). Where a flat
+>   Hermitian tensor's two orientations present the same sequence of slot
+>   spaces and quantum numbers -- `g{p_1,p_2;p_3,p_4}` over one space, not
+>   `f{i;a}` against `f{a;i}`, which differ in that sequence and hash apart --
+>   they therefore share one slot: one provider array, with each node's
+>   annotations carrying the wiring and its transform the orientation.
+> - A tensor-of-tensors leaf takes its slot hash from
+>   `TensorNetwork::canonicalize_slots` instead, and that hash is the
+>   canonical labeling, which colours a `Conjugate` tensor's bundles apart. A
+>   Hermitian tensor-of-tensors pair hashes _apart_ where its flat counterpart
+>   shares a slot. The asymmetry is accepted: each spelling is served through
+>   its own annotations and transform, so the cost is a missed cache hit,
+>   never a wrong value.
+>
+> Hoisting is the predicate `hoistable(tr)`
+> (`SeQuant/core/eval/canon_transform.hpp`): a transform hoists out of a
+> product or a sum exactly when it is a pure conjugation, `conj &&
+> !braket_swap`. Elementwise conjugation distributes over contraction and
+> addition, while a bra<->ket exchange respells the node's own result -- the
+> partition its placeholder is built from -- so a transform carrying one
+> salts the parent's hash instead. Hence the decision this settles: _the
+> adjoint of a contraction gets its own slot_. Over a complex basis every
+> factor of the adjoint of `X·Y` decodes to `{conj, braket_swap}`, the
+> prefix run does not hoist, and the adjointed network keeps a slot of its
+> own; the value is right (the node's network is built from the denoted
+> spellings, so it computes the adjointed contraction directly) and the cost
+> is a missed hit. Over a real basis, where conjugation takes the
+> K-conjugation channel, every factor decodes to `{conj}` and the
+> uniform-conj rule this section contracts for applies unchanged, per prefix
+> -- the shape the Kramers-tracing reuse needs.
+>
+> Two further terms enter identity, both shared with the phase machinery.
+> Every tensor-valued node folds a renaming-invariant _layout fingerprint_
+> into its hash, so hash equality implies layout equality and no cached buffer
+> is served under another node's mode order. A sum's prefix hashes
+> (`imed_hashes`) are unordered, so a sum written in another order is one
+> value; the layout a sum hands up (its first summand's, kept on the
+> placeholder by `keep_order`) is what the fingerprint keeps apart. On
+> retrieval, `apply_canon_transform` charges a transform that only aliases its
+> source nothing (`Result::is_buffer_alias()`), which is what keeps the peak
+> accounting truthful for the flat TiledArray backend's lazy view.
+>
+> Symbolic common-subexpression elimination is the one consumer that carries a
+> term of its own. `SubexpressionHasher` and `SubexpressionEqualityComparator`
+> (`eval_node_compare.hpp`) take the slot identity and add the node's
+> `canon_transform().conj`, so a uniformly conjugated product is not the
+> intermediate of its unconjugated twin, and `SubexpressionPhases` records the
+> defining occurrence's phase, so that a use is the intermediate times the
+> product of the two phases. The value cache keeps the identity this section
+> contracts for: it hoists the conjugation and serves one array to both
+> spellings. The two identities differ because an intermediate is defined by
+> the spelling it denotes and then used by name: a cache applies the transform
+> on retrieval, while a generated program has no spelling for a conjugated
+> intermediate and no generator emits one. The cost is a missed reuse between
+> conjugated twins in exported code, never a wrong value. So the bullet above
+> reads: the cache keys and the intermediate hashes span conj variants with no
+> separate machinery; the symbolic rewrite carries the one bit named here.
+
+## Symbolic-surface audit -> eval obligations
+
+Every conj construct PR 1 introduced, checked against this design
+(gap audit, 2026-09-01):
+
+1. **Re/Im nodes (MAJOR).** `simplify()` in a complex field folds
+   `A + A^* -> 2 Re(A)` and `A - A^* -> 2 i Im(A)` behind `SimplifyOptions::FoldConjugatePairs`,
+   whose default is parked at `No` explicitly "until the evaluation
+   layer understands them" (options.hpp); `binarize(ExprPtr)` throws
+   `Exception("unsupported expression")` on a RealPart/ImagPart node.
+   PR 2 adds first-class unary eval nodes for Re/Im — they are
+   PROJECTIONS (not invertible), so unlike Adjoint they remain IR
+   nodes: `EvalOp::RealPart`/`ImagPart`, backend
+   `Result::real_part()/imag_part()` (TA: elementwise), inner operand
+   served from its own (shared) cache slot. PR 2 then flips the
+   FoldConjugatePairs default to `Yes`, completing the owner's A6
+   decision (auto-fold in complex-field simplify()).
+2. **Conjugated scalar leaves (`Variable`, `Power`).** Export already
+   prints them (`wrap_conj`), but eval cannot serve them: a marked
+   Variable/Power hashes to its own slot and no conj is ever applied.
+   Under this design they follow the same transform model as tensor
+   leaves: slot = unmarked spelling, transform = `{conj}`
+   (`conj(b^n) = conj(b)^n` for integer Power), and
+   `Result::apply_transform` must therefore work for scalar-backed
+   results too.
+3. **Anti-conjugate forward-compat (PR 3).** The plan records the
+   owner directive to add a sign-carrying fold
+   (`T{p;q} = -conj(T{q;p})`, Hermiticity::AntiHermitian) when TRS
+   lands. The transform accommodates it as `{phase: -1, conj,
+   braket_swap}` with no structural change — noted so nothing in PR 2
+   precludes it.
+4. **Export.** Today `EvalOp::Adjoint` exports only the transpose,
+   with a documented real-field-only limitation (conj is not
+   representable in the exported IR). With Adjoint retired, export
+   consumes the canonical transform instead: `braket_swap` as the same
+   index reordering, `conj` via the generators' existing `wrap_conj`
+   where supported, else the same documented real-field limitation —
+   no regression against today.
+5. **Optimizer consistency.** `single_term_detail` subnet identity
+   already runs `canonicalize_slots` with the fold ON, so
+   conj-related subnets dedupe there; once the eval boundary re-folds
+   (F4 dissolution), optimizer subnet identity and eval slot identity
+   share one fold semantics by construction.
+6. **Reality recognition** (`N = conj(N)` up to canonicalization =>
+   real, the Kramers energy fold basis) stays symbolic
+   (`is_hermitian_network()`); eval needs nothing beyond conj
+   hoisting; covered by a worked example.
+
+## Testing (owner requirements, recorded in the PR-1 plan)
+
+- Unit tests for evaluation WITH conj.
+- Verification + worked examples of each PR-1 symbolic relation showing
+  how it is exploited at eval time — per relation: the symbolic form,
+  the eval strategy, a numeric test.
+- **Exhaustive over PR 1's symbolic catalogue**: a new
+  `test_eval_conjugation.cpp` mirrors EVERY test case of PR 1's
+  `test_conjugation.cpp` (and the conj sections of `test_eval_expr`)
+  with an eval-level numeric validation, maintained as a one-to-one
+  mapping table in the test file; a purely-symbolic invariant with no
+  eval observable (e.g. serialization roundtrip, with_slots attribute
+  carriage, TN slot determinism) gets an explicit `n/a` entry with
+  one-line justification instead of silent omission. Mapping classes:
+  * marker/involution/roundtrip cases -> slot-identity invariants
+    (`(A^*)^*` shares `A`'s slot; marked-leaf transforms compose to
+    identity);
+  * per-symmetry fold identities (`T{q;p} = conj(T{p;q})`) -> numeric
+    equality of served values on random Hermitian data, per
+    BraKetSymmetry class;
+  * `adjoint_conjugate_transpose_relations` (Klein four-group) ->
+    transform-composition tests: '⁺' alone, marker alone, '⁺'+marker
+    (pure transpose), each served value checked against the
+    directly-computed reference;
+  * 2Re/2iIm fold cases (incl. mixed sums, bystanders, i-rotation,
+    scalar hoisting) -> fold-on == fold-off numeric equality;
+  * `hermitian_network_recognition`/reality -> the energy-reality
+    worked example;
+  * `conjugate_free_function_total` -> every node kind conj-evaluated
+    (Constant, Variable, Power, Tensor, Sum, Product, Re/Im).
+- Existing conj identity regressions (cache ON == cache OFF, C·C^* vs
+  C^*·C) pass unchanged.
+- Conj-hoisting cache reuse: evaluate `A·B`, then request
+  `conjugate(A·B)` (spelled `B^*·A^*`) — assert a cache hit on the
+  `A·B` slot and `result == conj(A·B)` numerically; same for a sum of
+  uniformly conjugated products (the Kramers-tracing shape).
+- Conj-aware CSE at intermediate granularity: with `A·B` cached,
+  evaluate `A^*·B^*·C` — assert the `(A^*·B^*)` intermediate is a
+  cache hit on the `A·B` slot and the result equals the reference
+  computed without reuse.
+- Re/Im evaluation: `Re(A) + i·Im(A) == A` on random complex data;
+  `2·Re(A)` from the auto-fold evaluates equal to `A + A^*` computed
+  with the fold off; inner `A` slot shared between `Re(A)` and other
+  consumers of `A`.
+- Conjugated scalar leaves: `x^*` (Variable) and `conj(b^n)` (Power)
+  served as conj of the unmarked leaf's value.
+- Energy-reality worked example: a self-conjugate scalar network
+  evaluates with zero imaginary part (numeric), matching
+  `is_hermitian_network()` recognition (symbolic).
+- Export / serialized eval-tree goldens churn (Adjoint nodes vanish
+  from tree shapes); regenerated with justification in the PR
+  description.
+- MPQC smoke before the draft goes up: on the current MPQC branch
+  (`kshitij/refactor/kramer-pairs-separation`), repin SeQuant to the
+  PR-2 branch and re-run the certified decks
+  (h2o -0.23967684425, dch -1.04169026053).
+
+## Out of scope
+
+- TA lazy conj-view (retrieval stays eager per use).
+- TRS/korbit folding (PR 3).
+
+## Implementation deltas (recorded 2026-09-01, Plan A complete)
+
+Refinements the implementation forced on the letter (not the spirit) of
+the contract above; the plan doc's "Execution deviations" section has
+the play-by-play.
+
+- **Marker composition is syntactic and slot-free**: the elementwise
+  marker contributes a PURE {conj} bit; orientation deltas come from the
+  canonicalizer fold alone. (The draft's marker-unfold would have
+  re-aliased starred-canonical spellings with their plain form.)
+- **Hoisting is per-PREFIX of the left fold**: a uniformly conjugated
+  factor prefix strips its factors' conj salts (per-prefix, keeping
+  C.C^* vs C^*.C order-insensitive) and records {conj} on its node --
+  this is what makes the buried-intermediate CSE work; whole-product
+  uniformity is the special case.
+- **Evaluation invariant**: hand-ups are DENOTED values; the cache holds
+  CANONICAL data. The leaf evaluator serves the canonical spelling and
+  the leaf hand-up applies the transform; finish_phase_b's store
+  re-applies it (an involution), leaving canonical data in the cache.
+- **ToT leaves carry array-faithful Nested (outer;inner) indices** via
+  tot_indices -- the md named list (proto-only constituents, named
+  order) stays internal to slot canonicalization.
+- **Export**: scalar leaves re-materialize the conj marker
+  (denoted_expr); tensor leaves keep the documented transpose-only
+  real-field limitation.
+- **symmetrize/antisymmetrize wrappers** use the DENOTED bra rank
+  (braket_swap-aware).
+- **Test-fixture contract**: yield keys and stored arrays are
+  canonical-spelling shaped; literal spellings are served through the
+  leaf's transform (the fixture caches the transformed variant).
+
+> **As built on the core model (2026-09-28).** Item by item:
+>
+> - _Marker composition is syntactic and slot-free_ is superseded by the state
+>   decoder: composition happens in `decode_leaf_states`, over the core states,
+>   and what it yields is the transform while the respelled tensor is the
+>   array. What survives of the bullet is its conclusion -- an orientation
+>   delta is never invented at the boundary.
+> - _ToT leaves carry array-faithful Nested indices_ stands; the
+>   `conjugated_tensors` consumer named under _Consequences_ above does not.
+>   The tensor-of-tensors branch runs the same decoder as the flat branch
+>   before it builds the network, and takes only the phase from
+>   `canonicalize_slots`' metadata.
+> - _Export_: a tensor leaf's denoted spelling is materialized once, on the
+>   node, in `PreprocessVisitor::preprocess_node_content`, before any
+>   label-keyed map or generator sees it; `fold_marks_into_label` then names a
+>   `⁺` leaf's array `t_adj` and a `꙳` leaf's array `t_conj`. A
+>   marked array is a terminal the host supplies -- the generated code loads
+>   it -- so the transpose-only real-field limitation is retired. A scalar
+>   leaf that survives the pruning is materialized there too, so the operand a
+>   backend loads and the one its computation names are one object; a pruned
+>   scalar prefactor re-materializes at the point of use (`denoted_scalar`).
+>   The generators that can spell a scalar conjugation wrap it in `conj(...)`;
+>   ITF cannot, so it names a conjugated variable `x_conj[]`.
+> - _Evaluation invariant_ holds as stated, with the leaf's arithmetic fixed
+>   at two sites. A leaf is stored as fetched -- a provider already serves the
+>   canonical orientation, unlike a computed node whose operands reach it in
+>   their own -- and its whole transform converts once on the way out. A
+>   production is converted by the whole transform rather than by its phase
+>   alone, so a hoisted conjugation reaches a cell, a cache slot and a hoist
+>   slot in the orientation each of them holds.
+
+## Status note (2026-09-02): MPQC integration
+
+The exact fold + Re/Im eval nodes are exercised end-to-end on MPQC's
+Kramers CC path. Non-CSV (flat TA) wrapper evaluation is certified; the
+Kramers-CSV energy fold is gated opt-in in MPQC pending one known eval
+defect (wrapped summand's inner root evaluates as a materializing DeNest
+einsum instead of the scalar-trace reduction -- see the plan's 2026-09-02
+deviations section for the measurement and fix direction).
