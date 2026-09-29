@@ -118,8 +118,8 @@ very useful for debugging or other cases in which a human-readable version of th
    map and backend match — declarations, reference counts, load strategies, import names, the ITF two-electron integral remap — tells
    it apart from the bare ``g``. A backend therefore never has to spell an elementwise conjugation for a tensor; it has to be able to
    serve the folded name as an array. A conjugated :class:`sequant::Variable` is spelled ``conj(x)`` by the generators that have a
-   conjugation spelling for a scalar (text, Julia, Python/einsum); ITF has none, so there the same folding names it ``x_conj[]``
-   throughout. See ``doc/dev/conjugation-model.md`` for the whole model.
+   conjugation spelling for a scalar — the text and Julia backends write it bare, the Python/einsum ones prefix their module
+   (``np.conj(x)``, ``torch.conj(x)``); ITF has none, so there the same folding names it ``x_conj[]`` throughout. See ``doc/dev/conjugation-model.md`` for the whole model.
 
 Debugging and tests
 ------------------------
