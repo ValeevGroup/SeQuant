@@ -2549,14 +2549,13 @@ TEST_CASE(
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
-// D1.2 (external-mode batching wired into DP SELECTION): the external batch
-// loop must flow into the DP's REPORTED peak. Optimizing the over-budget C60
-// giant through PeakBatchedModel::reconstruct_batched_modes (the path
-// optimize() drives) must, with batch_spectator_indices ON, report a root peak
-// BELOW its flag-OFF value (the external occ sliced) and stamp
-// BatchModeType::External ONLY on that external occ; with the flag OFF the
-// reported peak is byte-identical to the unsliced baseline and NO External
-// modes are stamped.
+// External-mode batching reaches the DP's reported peak. Optimizing the
+// over-budget C60 giant through PeakBatchedModel::reconstruct_batched_modes
+// (the path optimize() drives) with batch_spectator_indices on reports a root
+// peak below its flag-off value and within the 40 GB budget, and stamps
+// BatchModeType::External only on occ labels; with the flag off the reported
+// peak stays over budget and no External mode is stamped. The size of the drop
+// is not pinned.
 TEST_CASE(
     "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
     "[dryrun-extmode]") {
