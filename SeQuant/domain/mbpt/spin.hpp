@@ -316,7 +316,8 @@ enum class TripletResidualKind {
   Combined,
   /// EOM triplet doubles: the bare TE primitive only, i.e.
   /// (1/4)*TE instead of (3*TE - TE_ps)/16; drops the pair-swap
-  /// TE_ps. Doubles only (for now).
+  /// TE_ps. Doubles only (for now); the singles residual is the Combined one,
+  /// triples throw.
   BareTE
 };
 
@@ -344,11 +345,13 @@ struct ClosedShellEOMTripletSpintraceOptions {
 // clang-format off
 /// @brief Closed-shell triplet (M_S = 0) spin trace of EOM-CC equations
 /// @param expr spin-orbital EOM equation (from CC::eom_r or CC::eom_l) with
-///        one or two external index groups (singles or doubles projection)
+///        one to three external index groups (singles, doubles or triples
+///        projection)
 /// @param options triplet spin-tracing options
-/// @throw Exception for projection manifolds beyond doubles, or if the
-///        equations contain amplitudes beyond doubles (triples coupling
-///        T (x) E (x) E is not implemented)
+/// @return the triplet spin-trace residual (see triplet_combined_residual)
+/// @throw Exception for projection manifolds beyond triples, for
+///        TripletResidualKind::BareTE with a triples projection, or if the
+///        equations contain amplitudes beyond triples
 // clang-format on
 ExprPtr closed_shell_EOM_triplet_spintrace(
     ExprPtr const& expr, ClosedShellEOMTripletSpintraceOptions options = {});

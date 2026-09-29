@@ -2379,28 +2379,23 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   canonicalize(triplet);
   simplify(triplet);
 
-  if (n_ext == 1) {
-    // the metric of the T_{ai} kets is 2*delta, so the rank-1 biorthogonal
-    // dual is T_{ai}/2; the NNS projector is trivial at rank 1
-    triplet = biorthogonal_transform_pre_nnsproject(
-        triplet, ext_idxs, /*factor_out_nns_projector=*/false);
-  } else {  // n_ext == 2 or 3: one set of external permutation weights
-    const bool te_only = options.residual == TripletResidualKind::BareTE;
-    if (n_ext != 2 && te_only)
-      throw Exception(
-          "closed_shell_EOM_triplet_spintrace: te_only is a doubles-only "
-          "experiment, not implemented beyond doubles");
-    SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
-                               [](const auto& g) { return g.size() == 2; }));
+  const bool bare_te = options.residual == TripletResidualKind::BareTE;
+  if (bare_te && n_ext == 3)
+    throw Exception(
+        "closed_shell_EOM_triplet_spintrace: te_only is a doubles-only "
+        "experiment, not implemented beyond doubles");
+  // BareTE only handles the rank 2 residual; rank 1 uses the Combined one
+  const bool te_only = bare_te && n_ext == 2;
+  SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
+                             [](const auto& g) { return g.size() == 2; }));
 
-    triplet = triplet_combined_residual(triplet, ext_groups, te_only);
-    simplify(triplet);
-    if (options.compact)
-      triplet = triplet_maxcoeff_compact(
-          triplet, ext_groups,
-          te_only ? TripletWeightKind::TeNnsReconstruction
-                  : TripletWeightKind::NnsReconstruction);
-  }
+  triplet = triplet_combined_residual(triplet, ext_groups, te_only);
+  simplify(triplet);
+  if (options.compact)
+    triplet = triplet_maxcoeff_compact(
+        triplet, ext_groups,
+        te_only ? TripletWeightKind::TeNnsReconstruction
+                : TripletWeightKind::NnsReconstruction);
   simplify(triplet);
   return triplet;
 }
