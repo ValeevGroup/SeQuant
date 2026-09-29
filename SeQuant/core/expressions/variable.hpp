@@ -44,6 +44,10 @@ class Variable : public Expr, public MutatableLabeled {
   /// @return whether this object has been conjugated
   bool conjugated() const;
 
+  /// @return label() followed by the `꙳` of a conjugated variable: the printed
+  ///         name, the counterpart of Tensor::decorated_label()
+  std::wstring decorated_label() const;
+
   std::wstring to_latex() const override;
 
   type_id_type type_id() const override;

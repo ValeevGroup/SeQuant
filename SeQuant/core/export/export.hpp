@@ -518,12 +518,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
       else
         return folded_names.variables;
     }();
-    const std::wstring decorated = [&expr]() -> std::wstring {
-      if constexpr (std::is_same_v<ExprType, Tensor>)
-        return expr.decorated_label();
-      else
-        return std::wstring(expr.label()) + (expr.conjugated() ? L"꙳" : L"");
-    }();
+    const std::wstring decorated = expr.decorated_label();
     const auto [it, inserted] =
         registry.try_emplace(export_label(expr), decorated);
     if (!inserted && it->second != decorated)

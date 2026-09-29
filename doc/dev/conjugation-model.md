@@ -126,7 +126,7 @@ label with the states. The star is `꙳`, U+A673 (`sequant::conjugate_label`).
 | `Tensor`   | `⁺`   | `t⁺{…}`        | `{t^{\dagger}}`   | `t_adj`       |
 | `Tensor`   | `꙳`   | `t꙳{…}`        | `{t^{*}}`         | `t_conj`      |
 | `Tensor`   | `⁺꙳`  | `t⁺꙳{…}`       | `{t^{\dagger *}}` | `t_adj_conj`  |
-| `Variable` | `꙳`   | `x꙳`           | `{{x}^{*}}`       |               |
+| `Variable` | `꙳`   | `x꙳`           | `{{x}^{*}}`       | `x_conj`      |
 | `Power`    | `conjugated()` flag, no mark | `(x^(2))^*` | `{{{x}^{2}}^{*}}` |    |
 
 The deserializer splits the marks off a tensor or variable name and applies

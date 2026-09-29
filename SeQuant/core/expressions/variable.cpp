@@ -54,6 +54,12 @@ void Variable::conjugate() {
 
 bool Variable::conjugated() const { return conjugated_; }
 
+std::wstring Variable::decorated_label() const {
+  std::wstring result(label_);
+  if (conjugated_) result.push_back(sequant::conjugate_label);
+  return result;
+}
+
 std::wstring Variable::to_latex() const {
   std::wstring result = L"{" + io::latex::utf_to_string(label_) + L"}";
   if (conjugated_) result = L"{" + result + L"^{*}}";
