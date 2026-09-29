@@ -6,6 +6,7 @@
 #include <SeQuant/core/index.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <utility>
 
@@ -42,7 +43,23 @@ struct BackendArrayOps {
       Index const& axis, std::size_t target_batch_size)>
       axis_batches;
 
-  /// True iff both closures are installed (a batched run requires them).
+  /// The realization of an \c EvalOp::KramersFlip node: \p phase times the
+  /// time-reversal flip of \p operand over its OUTER modes \p modes, each a
+  /// Kramers-union axis blocked [⇑ half | ⇓ half]: per mode out[⇑] = +conj
+  /// in[⇓], out[⇓] = −conj in[⇑] (the sign is that of the target half; the
+  /// signs multiply over modes, the conjugation is applied once; no union
+  /// mode = the conjugation alone). What a union axis IS (its blocking,
+  /// tiling and half-swap) is the backend's ("user's") knowledge, so the
+  /// operation lives here and not in the eval layer's array backends.
+  /// Required by any run whose trees hold a KramersFlip node
+  /// (\c BinarizationOptions::kramers_fold_intermediates).
+  std::function<ResultPtr(Result const& operand,
+                          container::svector<std::size_t> const& modes,
+                          std::int8_t phase)>
+      kramers_flip;
+
+  /// True iff the two batching closures are installed (a batched run requires
+  /// them); \c kramers_flip is independent of them.
   explicit operator bool() const noexcept {
     return static_cast<bool>(make_zeros) && static_cast<bool>(axis_batches);
   }

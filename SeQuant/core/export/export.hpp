@@ -284,6 +284,24 @@ class GenerationVisitor {
     }
   }
 
+  /// scalar leaves store the UNMARKED spelling (the conj bit rides the
+  /// node's CanonTransform); re-materialize the marker for code generation.
+  /// Tensor leaves keep the documented transpose-only (real-field) export
+  /// limitation.
+  template <typename Node>
+  static ExprPtr denoted_expr(Node const &node) {
+    ExprPtr e = node->expr();
+    if (node->canon_transform().conj &&
+        (e->template is<Variable>() || e->template is<Power>())) {
+      e = e->clone();
+      if (e->template is<Variable>())
+        e->template as<Variable>().conjugate();
+      else
+        e->template as<Power>().conjugate();
+    }
+    return e;
+  }
+
   void process_computation(const ExportNode<NodeData> &node) {
     SEQUANT_ASSERT(!node.leaf());
     SEQUANT_ASSERT(node->op_type().has_value());
@@ -303,7 +321,9 @@ class GenerationVisitor {
       }
       case EvalOp::RealPart:
       case EvalOp::ImagPart:
-        throw Exception("export: a Re/Im eval node has no exported form");
+      case EvalOp::KramersFlip:
+        throw Exception(
+            "export: a Re/Im/KramersFlip eval node has no exported form");
       case EvalOp::Sum: {
         switch (node->compute_selection()) {
           case ComputeSelection::None:

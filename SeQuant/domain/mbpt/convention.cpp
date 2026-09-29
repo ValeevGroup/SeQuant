@@ -74,6 +74,7 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
                            space.field());
       result.add(spin_up);
       result.add(spin_down);
+      result.add_kramers_partners(spin_up, spin_down);
     }
   }
   const bool nulltype_ok = true;

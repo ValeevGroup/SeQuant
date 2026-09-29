@@ -1,5 +1,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/expr_matcher.hpp>
@@ -299,7 +300,12 @@ namespace {
 /// Counts every index occurrence in @p expr, treating a proto-index of a
 /// composite (CSV) index as an occurrence of that (bare) index in addition to
 /// counting the composite index itself. The recursion descends through
-/// Products/Sums down to the Tensor leaves.
+/// Products down to the Tensor leaves; a nested Sum contributes the counts of
+/// ONE summand (its first): a Sum's summands all carry the same external
+/// indices (is_valid checks every nested Sum before its parent) and its value
+/// occupies the slots of one summand, whereas adding up all summands counts a
+/// two- or four-flavor CSV projection bracket's externals an even number of
+/// times and drops them from the parity-based external set.
 container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
   container::map<Index, std::size_t> counts;
   auto visit = [&counts](const Expr &e, auto &self) -> void {
@@ -308,6 +314,8 @@ container::map<Index, std::size_t> index_occurrence_counts(const Expr &expr) {
         ++counts[ix];
         for (const Index &p : ix.proto_indices()) ++counts[p];
       }
+    } else if (e.is<Sum>()) {
+      if (e.size() > 0) self(*e.as<Sum>().summand(0), self);
     } else if (!e.is_atom()) {
       for (const ExprPtr &sub : e) self(*sub, self);
     }
@@ -453,6 +461,13 @@ bool is_valid(const Expr &expr, std::string *msg) {
     // rational and is always well-formed. Power is atomic (it exposes no
     // subexpressions to the children loop above), so validate the base here.
     if (!is_valid(expr.as<Power>().base(), msg)) return false;
+  } else if (expr.is<RealPart>()) {
+    // Re(x) / Im(x) are valid iff x is; like Power they are atomic (the inner
+    // expression is not exposed to the children loop above), so validate it
+    // here. The time-reversal fold of a complex network emits these.
+    if (!is_valid(expr.as<RealPart>().inner(), msg)) return false;
+  } else if (expr.is<ImagPart>()) {
+    if (!is_valid(expr.as<ImagPart>().inner(), msg)) return false;
   } else {
     SEQUANT_ASSERT(false, "Unsupported expression type in is_valid");
   }

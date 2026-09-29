@@ -194,6 +194,8 @@ class IndexBasisRegistry {
       : bases_(other.bases_),
         named_count_(other.named_count_),
         follows_(other.follows_),
+        kramers_partner_keys_(other.kramers_partner_keys_),
+        kramers_canonical_keys_(other.kramers_canonical_keys_),
         physical_particle_attribute_mask_(
             other.physical_particle_attribute_mask_),
         vacocc_(other.vacocc_),
@@ -207,6 +209,8 @@ class IndexBasisRegistry {
       : bases_(std::move(other.bases_)),
         named_count_(other.named_count_),
         follows_(std::move(other.follows_)),
+        kramers_partner_keys_(std::move(other.kramers_partner_keys_)),
+        kramers_canonical_keys_(std::move(other.kramers_canonical_keys_)),
         physical_particle_attribute_mask_(
             std::move(other.physical_particle_attribute_mask_)),
         vacocc_(std::move(other.vacocc_)),
@@ -225,6 +229,8 @@ class IndexBasisRegistry {
     bases_ = other.bases_;
     named_count_ = other.named_count_;
     follows_ = other.follows_;
+    kramers_partner_keys_ = other.kramers_partner_keys_;
+    kramers_canonical_keys_ = other.kramers_canonical_keys_;
     physical_particle_attribute_mask_ = other.physical_particle_attribute_mask_;
     vacocc_ = other.vacocc_;
     refocc_ = other.refocc_;
@@ -240,6 +246,8 @@ class IndexBasisRegistry {
     bases_ = std::move(other.bases_);
     named_count_ = other.named_count_;
     follows_ = std::move(other.follows_);
+    kramers_partner_keys_ = std::move(other.kramers_partner_keys_);
+    kramers_canonical_keys_ = std::move(other.kramers_canonical_keys_);
     physical_particle_attribute_mask_ =
         std::move(other.physical_particle_attribute_mask_);
     vacocc_ = std::move(other.vacocc_);
@@ -553,6 +561,40 @@ class IndexBasisRegistry {
   bool contains(const IndexSpace::Attr& space_attr) const {
     return this->retrieve_space_ptr(space_attr);
   }
+
+  /// @name Kramers (time-reversal) partner spaces
+  /// @{
+
+  /// @brief registers @p canonical (the up flavor) and @p partner (the down
+  /// flavor) as each other's Kramers (time-reversal) partner spaces
+  void add_kramers_partners(const IndexSpace& canonical,
+                            const IndexSpace& partner) {
+    kramers_partner_keys_[std::wstring(canonical.base_key())] =
+        std::wstring(partner.base_key());
+    kramers_partner_keys_[std::wstring(partner.base_key())] =
+        std::wstring(canonical.base_key());
+    kramers_canonical_keys_.insert(std::wstring(canonical.base_key()));
+  }
+
+  /// @return false iff @p space is the non-canonical (down) flavor of a
+  ///         registered Kramers pair; unflavored spaces are canonical
+  bool kramers_canonical(const IndexSpace& space) const {
+    const std::wstring key(space.base_key());
+    if (kramers_partner_keys_.find(key) == kramers_partner_keys_.end())
+      return true;
+    return kramers_canonical_keys_.find(key) != kramers_canonical_keys_.end();
+  }
+
+  /// @return the Kramers partner of @p space, or nullopt if @p space has no
+  ///         registered partner (an unflavored space never flips)
+  std::optional<IndexSpace> kramers_partner(const IndexSpace& space) const {
+    auto it = kramers_partner_keys_.find(std::wstring(space.base_key()));
+    if (it == kramers_partner_keys_.end()) return std::nullopt;
+    if (const auto* p = retrieve_space_ptr(it->second)) return *p;
+    return std::nullopt;
+  }
+
+  /// @}
 
   /// @name adding IndexSpace objects to the registry
   /// @{
@@ -1703,6 +1745,11 @@ class IndexBasisRegistry {
   std::size_t named_count_ = 0;  // the number of named basis instances
   // follower label -> label of the named basis instance it follows
   container::map<std::wstring, std::wstring, std::less<>> follows_;
+  /// Kramers (time-reversal) partner spaces, keyed by base key in both
+  /// directions; populated by the convention that creates the spin clones
+  container::map<std::wstring, std::wstring> kramers_partner_keys_;
+  /// base keys of the CANONICAL (up) flavor of each Kramers pair
+  container::set<std::wstring> kramers_canonical_keys_;
 
   /// writes into every follower the extent, metric and field of the entry it
   /// follows

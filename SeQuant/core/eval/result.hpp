@@ -356,6 +356,29 @@ class Result {
   }
 
   ///
+  /// \brief Build a zero-filled result shaped like \c *this but with mode
+  ///        \p mode carrying the FULL extent of an external (spectator) axis.
+  ///
+  /// Used to PRE-SIZE the destination of an external-axis scatter (see
+  /// make_batched_custom_evaluator's External branch): \c *this is one block
+  /// partial (the node's result with the external axis sliced to a single
+  /// block, but full on every other mode), and \p axis_src is the unsliced
+  /// axis-carrying leaf whose mode \p axis_src_mode holds the external axis at
+  /// its FULL extent/tiling. The returned result has \c *this's TiledRange with
+  /// dim \p mode replaced by \c axis_src's dim \p axis_src_mode, zero-filled,
+  /// so the per-block partials can be write_into_slice()d into their disjoint
+  /// slices. \p axis_src's tiling on \p axis_src_mode must be the tiling the
+  /// block partials slice from (guaranteed when both derive from the same
+  /// leaf). Not a pure virtual: only tensor-backed results need it; the default
+  /// throws. Mirrors the slice_mode()/write_into_slice() precedent.
+  ///
+  [[nodiscard]] virtual ResultPtr pre_sized_zeros_over_mode(
+      std::size_t /*mode*/, Result const& /*axis_src*/,
+      std::size_t /*axis_src_mode*/) const {
+    throw detail::unimplemented_method("pre_sized_zeros_over_mode");
+  }
+
+  ///
   /// \brief Add other Result object into this object.
   ///
   virtual void add_inplace(Result const&) = 0;
@@ -505,6 +528,10 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] T value() const noexcept { return get<T>(); }
 
+  [[nodiscard]] ResultPtr clone() const override {
+    return std::make_shared<ResultScalar<T>>(value());
+  }
+
   [[nodiscard]] ResultPtr sum(Result const& other,
                               std::array<std::any, 3> const&) const override {
     if (other.is<ResultScalar<T>>()) {
@@ -558,10 +585,6 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
     return eval_result<ResultScalar<T>>(value() * T(factor));
-  }
-
-  [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<ResultScalar<T>>(value());
   }
 
   [[nodiscard]] ResultPtr apply_transform(

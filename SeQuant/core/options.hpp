@@ -48,6 +48,8 @@ std::wstring to_wstring(CanonicalizationMethod m);
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
+  enum class FoldKramers : bool { Yes = true, No = false };
+  enum class FoldKramersEvalLeaves : bool { Yes = true, No = false };
 
   /// TN canonicalization method
   /// @internal
@@ -71,6 +73,21 @@ struct CanonicalizeOptions {
   /// two named indices of the network. A Sum canonicalizes its summands with
   /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
+  /// whether to apply the Kramers (time-reversal) network fold: every
+  /// connected component of KramersSymmetry::TimeReversal tensors joined by
+  /// shared flavored dummy indices is given one orientation (the one with
+  /// fewer down-first tensors), flipped tensors acquiring the conjugation
+  /// marker and the phase; components touching a named index are pinned.
+  /// Engaged only when the default context's registry has Kramers partner
+  /// spaces (IndexSpaceRegistry::add_kramers_partners).
+  FoldKramers fold_kramers = FoldKramers::No;
+  /// whether an EvalExpr LEAF applies the single-tensor Kramers fold (a
+  /// down-first leaf shares the up-first partner's hash/cache slot with a
+  /// {conj, phase} transform). Off by default: the leaf provider serves the
+  /// leaf's own spelling and the transform cannot relabel flavors, so this
+  /// is only correct when the provider aliases the Kramers partner block
+  /// (serving-level aliasing).
+  FoldKramersEvalLeaves fold_kramers_eval_leaves = FoldKramersEvalLeaves::No;
 
   enum class FoldConjugatePairs : bool { Yes = true, No = false };
   /// whether simplify() folds complex-conjugate-related summand pairs
@@ -89,6 +106,8 @@ struct CanonicalizeOptions {
   CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
   CanonicalizeOptions copy_and_set(FoldConjugatePairs) const;
+  CanonicalizeOptions copy_and_set(FoldKramers) const;
+  CanonicalizeOptions copy_and_set(FoldKramersEvalLeaves) const;
 
   /// @return true if @p a and @p b agree in every member
   friend bool operator==(const CanonicalizeOptions& a,
@@ -96,14 +115,16 @@ struct CanonicalizeOptions {
     // the bindings name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY
     // tag), so that a member added to CanonicalizeOptions fails to compile here
     // until it is compared
-    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a, fold_a] =
-        a;
-    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b, fold_b] =
-        b;
+    const auto& [guard_a, method_a, named_indices_a, ignore_labels_a,
+                 fold_kramers_a, fold_kramers_leaves_a, fold_a] = a;
+    const auto& [guard_b, method_b, named_indices_b, ignore_labels_b,
+                 fold_kramers_b, fold_kramers_leaves_b, fold_b] = b;
     (void)guard_a;
     (void)guard_b;
     return method_a == method_b && named_indices_a == named_indices_b &&
-           ignore_labels_a == ignore_labels_b && fold_a == fold_b;
+           ignore_labels_a == ignore_labels_b &&
+           fold_kramers_a == fold_kramers_b &&
+           fold_kramers_leaves_a == fold_kramers_leaves_b && fold_a == fold_b;
   }
 };
 
