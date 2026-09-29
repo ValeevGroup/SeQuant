@@ -64,10 +64,14 @@ void add_fermi_spin(IndexBasisRegistry& isr) {
 
   for (auto&& space : isr) {
     if (space.base_key() != L"") {
+      // the spin label does not change the basis, so the parent space's field
+      // carries over
       IndexSpace spin_up(spinannotation_add(space.base_key(), Spin::alpha),
-                         space.type(), Spin::alpha, space.dimension());
+                         space.type(), Spin::alpha, space.dimension(),
+                         space.field());
       IndexSpace spin_down(spinannotation_add(space.base_key(), Spin::beta),
-                           space.type(), Spin::beta, space.dimension());
+                           space.type(), Spin::beta, space.dimension(),
+                           space.field());
       result.add(spin_up);
       result.add(spin_down);
     }

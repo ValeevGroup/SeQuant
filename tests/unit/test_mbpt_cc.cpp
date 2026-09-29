@@ -32,17 +32,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  [[maybe_unused]] auto has_tensor = [](const ExprPtr& e,
-                                        const std::wstring& label) {
-    bool found = false;
-    e->visit(
-        [&](const ExprPtr& n) {
-          if (n.is<Tensor>() && n.as<Tensor>().label() == label) found = true;
-        },
-        /*atoms_only=*/true);
-    return found;
-  };
-
   SECTION("sr_tcc") {
     SECTION("t") {
       // TCC R1
@@ -227,7 +216,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     auto h0 = bernoulli::hbar(2, 0, false);
     auto h1 = bernoulli::hbar(2, 1, false);
     auto h2 = bernoulli::hbar(2, 2, false);
-    auto has_f = [&](const ExprPtr& e) { return has_tensor(e, L"f"); };
+    auto has_f = [&](const ExprPtr& e) { return sequant::has_tensor(e, L"f"); };
     REQUIRE(has_f(simplify(h1 - h0)));  // [F,σ]
     REQUIRE_FALSE(has_f(simplify(h2 - h1)));
     REQUIRE_THAT(h0,  // H̄⁰ = F + V, Eq. (46)
@@ -247,8 +236,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         L"1/8 t{a_1,a_2;i_1,i_2}:A-N-S * g{i_1,i_2;a_1,a_2}:A-C-S "
         L"+ 1/8 t⁺{i_1,i_2;a_1,a_2}:A-N-S * g{a_1,a_2;i_1,i_2}:A-C-S");
     const auto E1_brillouin = simplify(E1_contrib - E1_g_closed);
-    REQUIRE_FALSE(has_tensor(E1_brillouin, L"g"));
-    REQUIRE(has_tensor(E1_brillouin, L"f"));
+    REQUIRE_FALSE(sequant::has_tensor(E1_brillouin, L"g"));
+    REQUIRE(sequant::has_tensor(E1_brillouin, L"f"));
 
     // <0|H̄²|0> = 1/12 <ij||ab> σ_i^a σ_j^b + h.c.
     REQUIRE_THAT(E2_contrib,
@@ -324,6 +313,17 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto E = cc.energy(3);
     REQUIRE_THAT(E, !EquivalentTo(amps.at(0)));
     REQUIRE(size(E) == 46);
+    // with the conjugate-pair fold on, every one of the 46 terms pairs with
+    // its conjugate: no term here is its own conjugate, so the energy is 23
+    // Re wrappers
+    {
+      auto fold = sequant::tests::scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizeOptions::FoldConjugatePairs::Yes));
+      auto E_folded = E->clone();
+      simplify(E_folded);
+      REQUIRE(size(E_folded) == 23);
+    }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
@@ -796,6 +796,18 @@ SECTION("ucc") {
       const auto energy_nterms = size(t_eqs[0]);
       if (c == 2) REQUIRE(energy_nterms == 20);
       if (c == 3) REQUIRE(energy_nterms == 74);
+      // with the conjugate-pair fold on, the 8 terms carrying both t and t⁺
+      // are their own conjugates and the rest pair up into Re wrappers:
+      // c == 2: 6 wrappers + 8 (2*6 + 8 = 20); c == 3: 33 + 8 (2*33 + 8 = 74)
+      {
+        auto fold = sequant::tests::scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                CanonicalizeOptions::FoldConjugatePairs::Yes));
+        auto E_folded = t_eqs[0]->clone();
+        simplify(E_folded);
+        if (c == 2) REQUIRE(size(E_folded) == 14);
+        if (c == 3) REQUIRE(size(E_folded) == 41);
+      }
     }
   }  // SECTION("t")
 }  // SECTION("ucc")
