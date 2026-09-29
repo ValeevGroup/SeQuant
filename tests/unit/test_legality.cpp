@@ -22,6 +22,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstdlib>
@@ -177,16 +179,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_basis_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-      *ctx.index_basis_registry());
-  sequant::mbpt::add_pao_basis(
-      isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body =
       legality_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
@@ -815,16 +808,7 @@ TEST_CASE(
     using sequant::eval::dryrun::EvalNodeDryRun;
     using Node = EvalNodeDryRun;
 
-    auto ctx = sequant::get_default_context_snapshot();
-    ctx.set_first_dummy_index_ordinal(1000000);
-    REQUIRE(ctx.index_basis_registry() != nullptr);
-    auto isr = std::make_shared<sequant::IndexBasisRegistry>(
-        *ctx.index_basis_registry());
-    sequant::mbpt::add_pao_basis(
-        isr, sequant::IndexSpace::QuantumNumbers{sequant::mbpt::Spin::any});
-    sequant::mbpt::add_df_spaces(isr);
-    ctx.set(isr);
-    auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+    auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
     auto const body =
         legality_witness_slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
