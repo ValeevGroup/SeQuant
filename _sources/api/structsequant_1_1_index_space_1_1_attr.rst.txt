@@ -1,0 +1,33 @@
+.. _exhale_struct_structsequant_1_1_index_space_1_1_attr:
+
+Struct IndexSpace::Attr
+=======================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_index_space`.
+
+
+Inheritance Relationships
+-------------------------
+
+Base Types
+**********
+
+- ``public sequant::TypeAttr`` (:ref:`exhale_class_classsequant_1_1_type_attr`)
+- ``public sequant::QuantumNumbersAttr`` (:ref:`exhale_class_classsequant_1_1_quantum_numbers_attr`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexSpace::Attr
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

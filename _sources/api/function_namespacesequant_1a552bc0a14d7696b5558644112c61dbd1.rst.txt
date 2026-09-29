@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a552bc0a14d7696b5558644112c61dbd1:
+
+Template Function sequant::apply_one_op
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::apply_one_op(Node const&, ResultPtr const&, ResultPtr const&)
+   :project: SeQuant

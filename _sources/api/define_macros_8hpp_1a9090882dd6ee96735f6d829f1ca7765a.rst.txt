@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a9090882dd6ee96735f6d829f1ca7765a:
+
+Define SEQUANT_ASSERT_ABORT
+===========================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_ASSERT_ABORT
+   :project: SeQuant

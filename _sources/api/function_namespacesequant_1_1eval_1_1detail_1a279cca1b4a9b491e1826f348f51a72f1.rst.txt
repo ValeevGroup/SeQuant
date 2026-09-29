@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a279cca1b4a9b491e1826f348f51a72f1:
+
+Function sequant::eval::detail::ordered_last_block_skips_slot
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_last_block_skips_slot()
+   :project: SeQuant

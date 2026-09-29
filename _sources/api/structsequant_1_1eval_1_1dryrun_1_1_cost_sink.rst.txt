@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1eval_1_1dryrun_1_1_cost_sink:
+
+Struct CostSink
+===============
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_cost_model_object.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::eval::dryrun::CostSink
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_slot_types:
+
+Struct SlotTypes
+================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::SlotTypes
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

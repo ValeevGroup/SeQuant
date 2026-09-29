@@ -1,0 +1,84 @@
+
+.. _program_listing_file_SeQuant_core_eval_dag_scope.hpp:
+
+Program Listing for File dag_scope.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_dag_scope.hpp>` (``SeQuant/core/eval/dag_scope.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_DAG_SCOPE_HPP
+   #define SEQUANT_EVAL_DAG_SCOPE_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <cstddef>
+   #include <functional>
+   #include <optional>
+   #include <string>
+   #include <tuple>
+   #include <unordered_map>
+   #include <utility>
+   
+   namespace sequant {
+   
+   using LoopId = std::size_t;
+   
+   struct LoopKey {
+     std::size_t depth;  
+     int loop_slot;      
+   
+     friend bool operator==(LoopKey const& a, LoopKey const& b) {
+       return a.depth == b.depth && a.loop_slot == b.loop_slot;
+     }
+     friend bool operator!=(LoopKey const& a, LoopKey const& b) {
+       return !(a == b);
+     }
+   };
+   
+   struct DagScopeLevel {
+     std::size_t depth;   
+     std::wstring space;  
+     int loop_slot = 0;   
+     int altitude_ordinal =
+         0;  
+     int latitude_ordinal = 0;  
+   
+     [[nodiscard]] LoopKey key() const { return LoopKey{depth, loop_slot}; }
+   
+     friend bool operator==(DagScopeLevel const& lhs, DagScopeLevel const& rhs) {
+       // Full-tuple comparison; \c key() alone is the loop's identity.
+       return lhs.depth == rhs.depth && lhs.space == rhs.space &&
+              lhs.loop_slot == rhs.loop_slot &&
+              lhs.altitude_ordinal == rhs.altitude_ordinal &&
+              lhs.latitude_ordinal == rhs.latitude_ordinal;
+     }
+   
+     friend bool operator!=(DagScopeLevel const& lhs, DagScopeLevel const& rhs) {
+       return !(lhs == rhs);
+     }
+   };
+   
+   struct ModeToLevel {
+     container::svector<std::optional<DagScopeLevel>> by_mode;
+   };
+   
+   }  // namespace sequant
+   
+   template <>
+   struct std::hash<sequant::LoopKey> {
+     std::size_t operator()(sequant::LoopKey const& k) const noexcept {
+       std::size_t h = std::hash<std::size_t>{}(k.depth);
+       // boost-style combine; the two fields are small and would otherwise
+       // collide trivially under a plain xor.
+       h ^= std::hash<int>{}(k.loop_slot) + 0x9e3779b97f4a7c15ULL + (h << 6) +
+            (h >> 2);
+       return h;
+     }
+   };
+   
+   #endif  // SEQUANT_EVAL_DAG_SCOPE_HPP

@@ -1,0 +1,41 @@
+
+.. _program_listing_file_SeQuant_core_eval_backend_array_ops.hpp:
+
+Program Listing for File backend_array_ops.hpp
+==============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_backend_array_ops.hpp>` (``SeQuant/core/eval/backend_array_ops.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_BACKEND_ARRAY_OPS_HPP
+   #define SEQUANT_EVAL_BACKEND_ARRAY_OPS_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/result.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <cstddef>
+   #include <functional>
+   #include <utility>
+   
+   namespace sequant {
+   
+   struct BackendArrayOps {
+     std::function<ResultPtr(container::vector<Index> const& descriptor)>
+         make_zeros;
+   
+     std::function<container::svector<std::pair<std::size_t, std::size_t>>(
+         Index const& axis, std::size_t target_batch_size)>
+         axis_batches;
+   
+     explicit operator bool() const noexcept {
+       return static_cast<bool>(make_zeros) && static_cast<bool>(axis_batches);
+     }
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_BACKEND_ARRAY_OPS_HPP

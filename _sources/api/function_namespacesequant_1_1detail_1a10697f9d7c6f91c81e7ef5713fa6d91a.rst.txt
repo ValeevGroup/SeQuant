@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a10697f9d7c6f91c81e7ef5713fa6d91a:
+
+Function sequant::detail::format_power
+======================================
+
+- Defined in :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::format_power(const Power&, std::string, std::string_view, bool, const std::function<std::string(std::string)>&)
+   :project: SeQuant

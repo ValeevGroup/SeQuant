@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7:
+
+Enum Spin
+=========
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::Spin
+   :project: SeQuant

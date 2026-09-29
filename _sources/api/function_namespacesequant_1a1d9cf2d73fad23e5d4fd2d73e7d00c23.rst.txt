@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1d9cf2d73fad23e5d4fd2d73e7d00c23:
+
+Function sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(cre)
+=================================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(cre)
+   :project: SeQuant

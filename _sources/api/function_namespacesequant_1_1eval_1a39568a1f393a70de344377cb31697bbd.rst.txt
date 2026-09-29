@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a39568a1f393a70de344377cb31697bbd:
+
+Function sequant::eval::make_node_meta
+======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::make_node_meta(RichSchedule const&)
+   :project: SeQuant

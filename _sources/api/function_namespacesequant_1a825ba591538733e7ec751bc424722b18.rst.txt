@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a825ba591538733e7ec751bc424722b18:
+
+Function sequant::binarize(Tensor const&)
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::binarize(Tensor const&)
+   :project: SeQuant

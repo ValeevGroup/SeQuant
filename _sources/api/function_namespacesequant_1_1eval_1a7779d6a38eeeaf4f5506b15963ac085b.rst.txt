@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1a7779d6a38eeeaf4f5506b15963ac085b:
+
+Template Function sequant::eval::evaluate_ordered
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::evaluate_ordered(Nodes const&, BatchPolicy const&, auto const&, F const&, CacheManager<N, FHC>&, std::function<std::size_t(Index const&)> const&, std::initializer_list<std::wstring>, ScopeGuardFactory)
+   :project: SeQuant

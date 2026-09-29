@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1aa294a68004f5ab6b3a57b133258d92c3:
+
+Template Function sequant::detail::handle_declarations
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::handle_declarations(Range&&, Generator<Context>&, Context&)
+   :project: SeQuant

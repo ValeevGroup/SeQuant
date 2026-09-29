@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aef40fb885cd272e3785dd6b51651e931:
+
+Function sequant::toplevel_diff(const Index&, const Index&)
+===========================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::toplevel_diff(const Index&, const Index&)
+   :project: SeQuant

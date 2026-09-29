@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1ad56f11dc6567b5d8e793399637b42bd0:
+
+Enum Normalization
+==================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::Normalization
+   :project: SeQuant

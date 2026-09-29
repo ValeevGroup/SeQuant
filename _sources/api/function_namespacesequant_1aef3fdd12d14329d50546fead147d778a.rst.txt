@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aef3fdd12d14329d50546fead147d778a:
+
+Template Function sequant::to_latex(T&&)
+========================================
+
+- Defined in :ref:`file_SeQuant_core_io_shorthands.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_latex(T&&)
+   :project: SeQuant

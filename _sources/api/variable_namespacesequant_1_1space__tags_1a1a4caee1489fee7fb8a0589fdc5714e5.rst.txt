@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1space__tags_1a1a4caee1489fee7fb8a0589fdc5714e5:
+
+Variable sequant::space_tags::is_reference_occupied
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::space_tags::is_reference_occupied
+   :project: SeQuant

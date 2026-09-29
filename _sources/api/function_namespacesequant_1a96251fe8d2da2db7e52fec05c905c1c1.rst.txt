@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a96251fe8d2da2db7e52fec05c905c1c1:
+
+Function sequant::optimize(ResultExpr&&, bool)
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::optimize(ResultExpr&&, bool)
+   :project: SeQuant

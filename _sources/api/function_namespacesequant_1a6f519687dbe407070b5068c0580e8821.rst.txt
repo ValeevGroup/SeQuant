@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6f519687dbe407070b5068c0580e8821:
+
+Template Function sequant::normalize
+====================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::normalize(const NormalOperatorSequence<S>&, const container::svector<std::pair<Index, Index>>&)
+   :project: SeQuant

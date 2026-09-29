@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1mbpt_1_1op_1_1_e_v_options:
+
+Template Struct EVOptions
+=========================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::mbpt::op::EVOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1log_1a9e686a8214c597610d1f0a26227e82c0:
+
+Function sequant::log::eval_mode
+================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log::eval_mode(meta::eval_node auto const&)
+   :project: SeQuant

@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1eval_1_1_cell_registry:
+
+Class CellRegistry
+==================
+
+- Defined in :ref:`file_SeQuant_core_eval_cell_registry.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1eval_1_1_cell_registry_1_1_slot`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::eval::CellRegistry
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

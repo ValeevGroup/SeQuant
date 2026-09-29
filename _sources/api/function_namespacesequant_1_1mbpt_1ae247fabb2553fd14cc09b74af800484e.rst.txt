@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1ae247fabb2553fd14cc09b74af800484e:
+
+Function sequant::mbpt::add_pao_spaces
+======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>&, IndexSpace::QuantumNumbers)
+   :project: SeQuant

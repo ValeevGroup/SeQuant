@@ -1,0 +1,1325 @@
+
+.. _program_listing_file_SeQuant_core_eval_cache_manager.hpp:
+
+Program Listing for File cache_manager.hpp
+==========================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_cache_manager.hpp>` (``SeQuant/core/eval/cache_manager.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_CACHE_MANAGER_HPP
+   #define SEQUANT_EVAL_CACHE_MANAGER_HPP
+   
+   #include <SeQuant/core/asy_cost.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/eval/backend_array_ops.hpp>
+   #include <SeQuant/core/eval/dag_scope.hpp>
+   #include <SeQuant/core/eval/eval_node.hpp>
+   #include <SeQuant/core/eval/eval_node_compare.hpp>
+   #include <SeQuant/core/eval/fwd.hpp>
+   #include <SeQuant/core/eval/lifetime_mask.hpp>
+   #include <SeQuant/core/eval/peak_monitor.hpp>
+   #include <SeQuant/core/eval/result.hpp>
+   #include <SeQuant/core/eval/value_id.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/utility/exception.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <range/v3/algorithm/for_each.hpp>
+   #include <range/v3/view/filter.hpp>
+   #include <range/v3/view/map.hpp>
+   #include <range/v3/view/transform.hpp>
+   
+   #include <algorithm>
+   #include <any>
+   #include <array>
+   #include <chrono>
+   #include <cstdint>
+   #include <cstdio>
+   #include <cstdlib>
+   #include <functional>
+   #include <limits>
+   #include <map>
+   #include <memory>
+   #include <optional>
+   #include <ostream>
+   #include <ranges>
+   #include <stdexcept>
+   #include <string>
+   #include <type_traits>
+   #include <unordered_map>
+   #include <unordered_set>
+   #include <vector>
+   
+   namespace sequant::eval {
+   
+   // Forward declaration only: CellReadResolver (cell_registry.hpp) is a plain,
+   // non-template type, so CacheManager only needs a non-owning pointer to it;
+   // cell_registry.hpp includes this header, not the reverse.
+   class CellReadResolver;
+   
+   struct ScheduleSink {
+     std::ostream* os = nullptr;
+     bool fired = false;
+   };
+   
+   struct AccessClock {
+     static bool enabled() noexcept {
+       static bool const on = std::getenv("SEQUANT_UT_ACCESS_CLOCK") != nullptr;
+       return on;
+     }
+     static std::size_t& counter() noexcept {
+       static std::size_t c = 0;
+       return c;
+     }
+     static std::unordered_map<std::size_t, std::size_t>&
+     last_access_map() noexcept {
+       static std::unordered_map<std::size_t, std::size_t> m;
+       return m;
+     }
+     static std::size_t tick() noexcept { return ++counter(); }
+     static std::size_t now() noexcept { return counter(); }
+     static void stamp(std::size_t h) noexcept {
+       if (!enabled()) return;
+       last_access_map()[h] = tick();
+     }
+     static void reset() noexcept {
+       counter() = 0;
+       last_access_map().clear();
+     }
+   };
+   
+   struct LookupMeter {
+     static bool enabled() noexcept {
+       static bool const on = std::getenv("SEQUANT_UT_LOOKUP_METER") != nullptr;
+       return on;
+     }
+     static std::size_t& calls() noexcept {
+       static std::size_t c = 0;
+       return c;
+     }
+     static std::uint64_t& nanos() noexcept {
+       static std::uint64_t n = 0;
+       return n;
+     }
+     template <typename F>
+     static auto timed(F&& f) {
+       if (!enabled()) return f();
+       auto const t0 = std::chrono::steady_clock::now();
+       auto r = f();
+       auto const t1 = std::chrono::steady_clock::now();
+       ++calls();
+       nanos() += static_cast<std::uint64_t>(
+           std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+       return r;
+     }
+     static void reset() noexcept {
+       calls() = 0;
+       nanos() = 0;
+     }
+     struct Reporter {
+       ~Reporter() {
+         if (!enabled()) return;
+         std::fprintf(stderr,
+                      "[lookup-meter] cache_map_.find calls=%zu total_ms=%.3f "
+                      "mean_ns=%.1f\n",
+                      calls(), static_cast<double>(nanos()) / 1e6,
+                      calls() ? static_cast<double>(nanos()) / calls() : 0.0);
+       }
+     };
+     inline static Reporter reporter_{};
+   };
+   
+   struct PhaseTimer {
+     static bool enabled() noexcept {
+       static bool const on = std::getenv("SEQUANT_UT_PHASE") != nullptr;
+       return on;
+     }
+     // Backend-supplied barrier that drains all pending async work (set by the TA
+     // backend to a world fence). When present, each Scope fences at both
+     // boundaries so async work cannot leak across timer regions and every
+     // region's time reflects the work it actually dispatched-and-completed.
+     static std::function<void()>& fence_hook() noexcept {
+       static std::function<void()> h;
+       return h;
+     }
+     static std::size_t& barrier_count() noexcept {
+       static std::size_t c = 0;
+       return c;
+     }
+     static std::uint64_t& barrier_ns() noexcept {
+       static std::uint64_t v = 0;
+       return v;
+     }
+     static void barrier() noexcept {
+       if (auto const& h = fence_hook()) {
+         auto const t0 = std::chrono::steady_clock::now();
+         h();
+         barrier_ns() += static_cast<std::uint64_t>(
+             std::chrono::duration_cast<std::chrono::nanoseconds>(
+                 std::chrono::steady_clock::now() - t0)
+                 .count());
+         ++barrier_count();
+       }
+     }
+     // name -> {total ns, call count}. Leaked so teardown Reporter can read it.
+     static std::map<std::string, std::pair<std::uint64_t, std::uint64_t>>&
+     acc() noexcept {
+       static auto* const m =
+           new std::map<std::string, std::pair<std::uint64_t, std::uint64_t>>();
+       return *m;
+     }
+     struct Scope {
+       char const* name;
+       std::chrono::steady_clock::time_point t0;
+       bool on;
+       explicit Scope(char const* n) noexcept : name(n), on(enabled()) {
+         if (on) t0 = std::chrono::steady_clock::now();
+       }
+       ~Scope() {
+         if (!on) return;
+         barrier();  // dtor-only: drain the async we dispatched before stopping
+         auto const d = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::steady_clock::now() - t0)
+                            .count();
+         auto& e = acc()[name];
+         e.first += static_cast<std::uint64_t>(d);
+         ++e.second;
+       }
+     };
+     struct Reporter {
+       ~Reporter() {
+         if (!enabled()) return;
+         std::fprintf(stderr, "[phase-timer] (inclusive wall, name: s / calls)\n");
+         for (auto const& [n, e] : acc())
+           std::fprintf(stderr, "  %-28s %8.3f s  %8llu\n", n.c_str(),
+                        e.first / 1e9, static_cast<unsigned long long>(e.second));
+       }
+     };
+     inline static Reporter reporter_{};
+   };
+   
+   struct EvalImplTimeline {
+     static bool enabled() noexcept {
+       static bool const on = std::getenv("SEQUANT_UT_EVALIMPL") != nullptr;
+       return on;
+     }
+     static int& depth() noexcept {
+       static thread_local int d = 0;
+       return d;
+     }
+     static std::uint64_t& body_ns() noexcept {
+       static std::uint64_t v = 0;
+       return v;
+     }
+     static std::uint64_t& gap_ns() noexcept {
+       static std::uint64_t v = 0;
+       return v;
+     }
+     static std::size_t& calls() noexcept {
+       static std::size_t v = 0;
+       return v;
+     }
+     static std::chrono::steady_clock::time_point& last_exit() noexcept {
+       static std::chrono::steady_clock::time_point t{};
+       return t;
+     }
+     static bool& have_last() noexcept {
+       static bool b = false;
+       return b;
+     }
+     static std::uint64_t& max_gap_ns() noexcept {
+       static std::uint64_t v = 0;
+       return v;
+     }
+     // Node-evaluation (prod / TA contraction) time inside the body, fenced so it
+     // captures the contraction's full sync+async cost. body - prod == "other
+     // inside evaluate_impl" (stack machine, cache access, apply_phase, store).
+     static std::uint64_t& prod_ns() noexcept {
+       static std::uint64_t v = 0;
+       return v;
+     }
+     static void note_prod(std::chrono::steady_clock::time_point t0) noexcept {
+       if (!enabled()) return;
+       PhaseTimer::barrier();  // drain this contraction's async before stopping
+       prod_ns() += static_cast<std::uint64_t>(
+           std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now() - t0)
+               .count());
+     }
+     // apply_phase (canonicalization-phase tensor multiply) time inside the body:
+     // node-eval-adjacent TA work that is not the contraction.
+     static std::uint64_t& phase_ns() noexcept {
+       static std::uint64_t v = 0;
+       return v;
+     }
+     static void note_phase(std::chrono::steady_clock::time_point t0) noexcept {
+       if (!enabled()) return;
+       PhaseTimer::barrier();
+       phase_ns() += static_cast<std::uint64_t>(
+           std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now() - t0)
+               .count());
+     }
+     struct Scope {
+       std::chrono::steady_clock::time_point entry;
+       bool on;
+       bool top;
+       Scope() noexcept : on(enabled()), top(false) {
+         if (!on) return;
+         top = (depth() == 0);
+         ++depth();
+         if (top) {
+           entry = std::chrono::steady_clock::now();
+           if (have_last()) {
+             auto const g = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                entry - last_exit())
+                                .count();
+             gap_ns() += static_cast<std::uint64_t>(g);
+             if (static_cast<std::uint64_t>(g) > max_gap_ns())
+               max_gap_ns() = static_cast<std::uint64_t>(g);
+           }
+         }
+       }
+       ~Scope() {
+         if (!on) return;
+         --depth();
+         if (!top) return;
+         PhaseTimer::barrier();  // drain this body's async so the gap is pure
+         auto const e = std::chrono::steady_clock::now();
+         body_ns() += static_cast<std::uint64_t>(
+             std::chrono::duration_cast<std::chrono::nanoseconds>(e - entry)
+                 .count());
+         last_exit() = e;
+         have_last() = true;
+         ++calls();
+       }
+     };
+     struct Reporter {
+       ~Reporter() {
+         if (!enabled()) return;
+         std::fprintf(stderr,
+                      "[evalimpl-timeline] top_calls=%zu  body=%.3f s  "
+                      "gap(between-calls)=%.3f s  max_gap=%.1f ms\n",
+                      calls(), body_ns() / 1e9, gap_ns() / 1e9,
+                      max_gap_ns() / 1e6);
+         auto const accounted = prod_ns() + phase_ns();
+         std::fprintf(
+             stderr,
+             "[evalimpl-timeline]   of body: node-eval(prod)=%.3f s  "
+             "apply_phase=%.3f s  other-inside=%.3f s\n",
+             prod_ns() / 1e9, phase_ns() / 1e9,
+             (body_ns() > accounted ? (body_ns() - accounted) / 1e9 : 0.0));
+         std::fprintf(stderr,
+                      "[evalimpl-timeline]   instrumentation barrier(): calls=%zu "
+                      "total=%.3f s (this is fence overhead, NOT real work)\n",
+                      PhaseTimer::barrier_count(), PhaseTimer::barrier_ns() / 1e9);
+       }
+     };
+     inline static Reporter reporter_{};
+   };
+   
+   [[nodiscard]] inline bool strict_fill_once() noexcept {
+     static bool const on = std::getenv("SEQUANT_UT_STRICT_FILL_ONCE") != nullptr;
+     return on;
+   }
+   
+   struct BuildMeter {
+     static bool enabled() noexcept {
+       static bool const on = std::getenv("SEQUANT_UT_BUILD_METER") != nullptr;
+       return on;
+     }
+     static std::unordered_map<std::size_t, std::size_t>& build_count() noexcept {
+       static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+       return *m;
+     }
+     static std::size_t& total() noexcept {
+       static std::size_t t = 0;
+       return t;
+     }
+     static std::unordered_map<std::size_t, std::string>& label_of() noexcept {
+       static auto* const m = new std::unordered_map<std::size_t, std::string>();
+       return *m;
+     }
+     static std::unordered_map<std::size_t, std::size_t>& read_count() noexcept {
+       static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+       return *m;
+     }
+     static std::unordered_map<std::size_t, std::size_t>& max_life_of() noexcept {
+       static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+       return *m;
+     }
+     static void on_read(std::size_t hash, std::size_t max_life) noexcept {
+       if (!enabled()) return;
+       ++read_count()[hash];
+       max_life_of()[hash] = max_life;
+     }
+     static void on_build(std::size_t hash,
+                          std::string label = std::string{}) noexcept {
+       if (!enabled()) return;
+       ++total();
+       ++build_count()[hash];
+       if (!label.empty()) label_of().try_emplace(hash, std::move(label));
+     }
+     struct Reporter {
+       ~Reporter() {
+         if (!enabled()) return;
+         std::map<std::size_t, std::size_t> hist;
+         for (auto const& [h, c] : build_count()) ++hist[c];
+         std::fprintf(stderr, "[build-meter] builds=%zu distinct=%zu", total(),
+                      build_count().size());
+         std::fprintf(stderr, " histogram(k:nodes):");
+         for (auto const& [k, n] : hist) std::fprintf(stderr, " %zu:%zu", k, n);
+         std::fprintf(stderr, "\n");
+         if (char const* dump = std::getenv("SEQUANT_UT_BUILD_DUMP")) {
+           if (std::FILE* fp = std::fopen(dump, "w")) {
+             for (auto const& [h, c] : build_count()) {
+               auto const it = label_of().find(h);
+               auto const rit = read_count().find(h);
+               auto const mit = max_life_of().find(h);
+               std::fprintf(fp, "%zu\t%zu\t%zu\t%zu\t%s\n", h, c,
+                            rit != read_count().end() ? rit->second : 0,
+                            mit != max_life_of().end() ? mit->second : 0,
+                            it != label_of().end() ? it->second.c_str() : "");
+             }
+             std::fclose(fp);
+           }
+         }
+       }
+     };
+     inline static Reporter reporter_{};
+   };
+   
+   struct DefUseMeter {
+     static bool enabled() noexcept {
+       static bool const on = std::getenv("SEQUANT_UT_DEFUSE_METER") != nullptr;
+       return on;
+     }
+     static std::size_t& op_clock() noexcept {
+       static std::size_t c = 0;
+       return c;
+     }
+     // Leaked (never destroyed) so the teardown Reporter can safely read them
+     // regardless of static-destruction order.
+     static std::unordered_map<std::size_t, std::size_t>& produce_at() noexcept {
+       static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+       return *m;
+     }
+     static std::unordered_map<std::size_t, std::size_t>& store_count() noexcept {
+       static auto* const m = new std::unordered_map<std::size_t, std::size_t>();
+       return *m;
+     }
+     static std::size_t& reads() noexcept {
+       static std::size_t r = 0;
+       return r;
+     }
+     static std::uint64_t& sum_dist() noexcept {
+       static std::uint64_t s = 0;
+       return s;
+     }
+     static long double& sum_dist_bytes() noexcept {
+       static long double s = 0;
+       return s;
+     }
+     static long double& sum_bytes() noexcept {
+       static long double s = 0;
+       return s;
+     }
+     static std::size_t& max_dist() noexcept {
+       static std::size_t m = 0;
+       return m;
+     }
+     static void on_store(std::size_t hash) noexcept {
+       if (!enabled()) return;
+       produce_at()[hash] = ++op_clock();
+       ++store_count()[hash];
+     }
+     static void on_read(std::size_t hash, std::size_t bytes) noexcept {
+       if (!enabled()) return;
+       auto const it = produce_at().find(hash);
+       if (it == produce_at().end()) return;
+       std::size_t const d = op_clock() - it->second;
+       ++reads();
+       sum_dist() += d;
+       sum_dist_bytes() += static_cast<long double>(d) * bytes;
+       sum_bytes() += bytes;
+       if (d > max_dist()) max_dist() = d;
+     }
+     struct Reporter {
+       ~Reporter() {
+         if (!enabled()) return;
+         double const mean =
+             reads() ? static_cast<double>(sum_dist()) / reads() : 0.0;
+         double const meanw =
+             sum_bytes() > 0 ? static_cast<double>(sum_dist_bytes() / sum_bytes())
+                             : 0.0;
+         std::fprintf(stderr,
+                      "[defuse-meter] ops=%zu distinct=%zu reads=%zu "
+                      "mean_dist=%.2f byteweighted_mean_dist=%.2f max_dist=%zu "
+                      "sum_dist=%llu sum_dist_bytes=%.4e\n",
+                      op_clock(), produce_at().size(), reads(), mean, meanw,
+                      max_dist(), static_cast<unsigned long long>(sum_dist()),
+                      static_cast<double>(sum_dist_bytes()));
+         // Store-count histogram: how many distinct nodes were stored k times.
+         // k > iterations => recompute (a cacheable node rebuilt while resident).
+         std::map<std::size_t, std::size_t> hist;
+         for (auto const& [h, c] : store_count()) ++hist[c];
+         std::fprintf(stderr, "[defuse-meter] store-count histogram (k:nodes):");
+         for (auto const& [k, n] : hist) std::fprintf(stderr, " %zu:%zu", k, n);
+         std::fprintf(stderr, "\n");
+         // Optional: dump the distinct stored-node hash set (hash store_count),
+         // one per line, so two runs' cache-membership sets can be diffed.
+         if (char const* const path = std::getenv("SEQUANT_UT_DEFUSE_DUMP")) {
+           if (std::FILE* f = std::fopen(path, "w")) {
+             for (auto const& [h, c] : store_count())
+               std::fprintf(f, "%zu %zu\n", h, c);
+             std::fclose(f);
+           }
+         }
+       }
+     };
+     inline static Reporter reporter_{};
+   };
+   
+   class PersistentValueStore {
+    public:
+     void put(std::size_t hash, ResultPtr v) { map_[hash] = std::move(v); }
+   
+     [[nodiscard]] ResultPtr get(std::size_t hash) const {
+       auto const it = map_.find(hash);
+       return it == map_.end() ? nullptr : it->second;
+     }
+   
+     [[nodiscard]] bool holds(std::size_t hash) const {
+       return map_.find(hash) != map_.end();
+     }
+   
+     void erase(std::size_t hash) { map_.erase(hash); }
+   
+     void clear() { map_.clear(); }
+   
+     [[nodiscard]] std::size_t size() const { return map_.size(); }
+   
+     [[nodiscard]] std::size_t bytes() const {
+       std::size_t total = 0;
+       for (auto const& [h, v] : map_) total += v->size_in_bytes();
+       return total;
+     }
+   
+     template <typename F>
+     void for_each(F&& f) const {
+       for (auto const& [h, v] : map_) f(h, v);
+     }
+   
+    private:
+     std::unordered_map<std::size_t, ResultPtr> map_;
+   };
+   
+   }  // namespace sequant::eval
+   
+   namespace sequant {
+   
+   struct BatchContextEntry {
+     Index axis;
+     DagScopeLevel level{};
+     std::pair<std::size_t, std::size_t> range{};
+     std::optional<Index> exact_axis{};
+   };
+   
+   template <typename TreeNode, bool force_hash_collisions>
+   class CacheManager {
+    public:
+     using key_type = TreeNode;
+   
+     using cache_key_type = eval::CachedValue<TreeNode>;
+   
+     using custom_evaluator_type =
+         std::function<ResultPtr(key_type const&, CacheManager&)>;
+   
+     using shaped_product_hook_type = std::function<ResultPtr(
+         std::any const& node, Result const& left, Result const& right,
+         std::array<std::any, 3> const& annot)>;
+   
+     using multiroot_driver_type = std::function<container::svector<ResultPtr>(
+         container::svector<key_type> const& roots,
+         container::svector<std::string> const& layouts, CacheManager&)>;
+   
+     using BatchContext = container::svector<BatchContextEntry>;
+   
+     struct AccessResult {
+       ResultPtr ptr;
+       std::size_t hops;
+     };
+   
+     struct BuildRecord {
+       std::size_t count = 0;  // number of builds of this exact (value, slice)
+       double flops = 0;       // this slice's actual realized-extent FLOPs
+       double exec = 0;        // this slice's actual roofline exec-cost estimate
+     };
+     struct BuildTally {
+       std::unordered_map<std::string, BuildRecord> slices;
+     };
+   
+    private:
+     using hasher_type = eval::CachedValueHasher<TreeNode, force_hash_collisions>;
+     using comparator_type = eval::CachedValueEqual<TreeNode>;
+   
+     class entry {
+      private:
+       size_t max_life;
+   
+       size_t life_c;
+   
+       ResultPtr data_p;
+   
+       mutable std::optional<size_t> size_bytes_;
+   
+       bool persistent_;
+   
+       bool stored_this_eval_ = false;
+   
+      public:
+       explicit entry(size_t count, bool persistent = false) noexcept
+           : max_life{count},
+             life_c{count},
+             data_p{nullptr},
+             persistent_{persistent} {}
+   
+       [[nodiscard]] ResultPtr access() noexcept {
+         if (!data_p) return nullptr;
+         if (persistent_) return data_p;  // never drain a persistent entry
+         if (decay() == 0) {              // last use: release the data
+           size_bytes_.reset();
+           // The value has now been fully consumed and released, so a later
+           // store() of this key is a fresh re-production (e.g. the CCk energy
+           // observable, evaluated on the residual's cache, recomputing a volatile
+           // whose residual-side lifetime just drained), not a duplicate producer
+           // within one eval. Clear the re-store tripwire so that legitimate
+           // re-production is allowed; a true duplicate (two store()s with no
+           // access draining the value in between) leaves the flag set and still
+           // trips.
+           stored_this_eval_ = false;
+           return std::move(data_p);
+         }
+         return data_p;
+       }
+   
+       // Not noexcept: SEQUANT_ASSERT below can throw (SEQUANT_ASSERT_BEHAVIOR
+       // = throw) -- see the tripwire comment on stored_this_eval_. In every
+       // default build config (ignore, or Debug's abort) this never actually
+       // throws.
+       void store(ResultPtr&& data, bool strict_fill_once) {
+         // Regression tripwire: a non-persistent entry re-stored without an
+         // intervening reset() means the same value was produced twice within
+         // one evaluation (a duplicate producer). Persistent entries are
+         // excluded: they legitimately re-store across batch replays.
+         if (!persistent_) {
+           SEQUANT_ASSERT(!stored_this_eval_);
+           // Strict cache-fill-once (dry-run schedule test-drive): the assert
+           // above is compiled out in Release/RelWithDebInfo, so a duplicate
+           // producer (the same value cell built twice without an intervening
+           // reset -- e.g. a frame-sensitive key that made a consumer miss a
+           // resident value and rebuild it) passes silently. Under strict mode
+           // it is a hard error.
+           if (stored_this_eval_ && strict_fill_once)
+             throw Exception(
+                 "CacheManager::entry::store: value cell stored twice without an "
+                 "intervening reset() (duplicate producer / a consumer missed the "
+                 "resident cell and rebuilt it) -- cache-fill-once violated");
+           stored_this_eval_ = true;
+         }
+         data_p = std::move(data);
+         size_bytes_
+             .reset();  // (re)computed lazily on demand; see size_in_bytes()
+       }
+   
+       void reset() noexcept {
+         life_c = max_life;
+         stored_this_eval_ = false;
+         if (!persistent_) {  // persistent data (and its size) survives reset()
+           data_p = nullptr;
+           size_bytes_.reset();
+         }
+       }
+   
+       [[nodiscard]] bool persistent() const noexcept { return persistent_; }
+   
+       [[nodiscard]] size_t life_count() const noexcept { return life_c; }
+   
+       [[nodiscard]] size_t max_life_count() const noexcept { return max_life; }
+   
+       [[nodiscard]] size_t size_in_bytes() const noexcept {
+         if (!data_p) return 0;
+         if (!size_bytes_)
+           size_bytes_ = data_p->size_in_bytes();  // lazy, memoized
+         return *size_bytes_;
+       }
+   
+       [[nodiscard]] bool alive() const noexcept { return data_p ? true : false; }
+   
+       [[nodiscard]] bool holds(ResultPtr const& other) const noexcept {
+         return data_p && data_p.get() == other.get();
+       }
+   
+      private:
+       [[nodiscard]] int decay() noexcept {
+         return life_c > 0 ? static_cast<int>(--life_c) : 0;
+       }
+   
+     };  // entry
+   
+     // Not noexcept: forwards to entry::store(), which is not noexcept (see
+     // there).
+     ResultPtr store_and_access(entry& ent, ResultPtr&& data) {
+       ent.store(std::move(data), strict_fill_once_);
+       return ent.access();
+     }
+   
+     std::unordered_map<cache_key_type, entry, hasher_type, comparator_type>
+         cache_map_;
+   
+     // Keyed by node identity (not the cache's value-id): a per-distinct-value
+     // build diagnostic the dry-run costing rolls up, consumed node-by-node by the
+     // eval tests. The node-keyed value identity lives in cache_map_
+     // (correctness); this rollup is node-keyed as well.
+     std::unordered_map<TreeNode, BuildTally,
+                        TreeNodeHasher<TreeNode, force_hash_collisions>,
+                        TreeNodeEqualityComparator<TreeNode>>
+         recompute_tally_;
+   
+     bool recompute_tally_enabled_ = false;
+   
+     CacheManager* parent_ = nullptr;
+   
+     BackendArrayOps const* array_ops_ = nullptr;
+   
+     eval::PersistentValueStore persistent_values_;
+   
+     eval::CellReadResolver* cell_read_resolver_ = nullptr;
+   
+     size_t working_set_hwmark_ = 0;
+   
+     custom_evaluator_type custom_evaluator_{};
+   
+     shaped_product_hook_type shaped_product_hook_{};
+   
+     multiroot_driver_type multiroot_driver_{};
+   
+     BatchContext batch_context_{};
+   
+     eval::PeakMonitor* peak_monitor_ = nullptr;
+   
+     std::function<std::size_t()> external_residency_{};
+   
+     std::function<void(std::function<void(std::size_t hash, std::size_t bytes)>)>
+         external_liveset_{};
+   
+     eval::ScheduleSink* schedule_sink_ = nullptr;
+   
+     bool strict_fill_once_ = eval::strict_fill_once();
+   
+    public:
+     void set_strict_fill_once(bool strict) noexcept {
+       strict_fill_once_ = strict;
+     }
+   
+     [[nodiscard]] bool strict_fill_once() const noexcept {
+       return strict_fill_once_;
+     }
+   
+     void set_custom_evaluator(custom_evaluator_type fn) noexcept {
+       custom_evaluator_ = std::move(fn);
+     }
+   
+     [[nodiscard]] custom_evaluator_type const& custom_evaluator() const noexcept {
+       return custom_evaluator_;
+     }
+   
+     void set_shaped_product_hook(shaped_product_hook_type fn) noexcept {
+       shaped_product_hook_ = std::move(fn);
+     }
+   
+     [[nodiscard]] shaped_product_hook_type const& shaped_product_hook()
+         const noexcept {
+       if (!shaped_product_hook_ && parent_) return parent_->shaped_product_hook();
+       return shaped_product_hook_;
+     }
+   
+     void set_multiroot_driver(multiroot_driver_type fn) noexcept {
+       multiroot_driver_ = std::move(fn);
+     }
+   
+     [[nodiscard]] multiroot_driver_type const& multiroot_driver() const noexcept {
+       return multiroot_driver_;
+     }
+   
+     void set_batch_context(BatchContext c) noexcept {
+       batch_context_ = std::move(c);
+     }
+   
+     [[nodiscard]] BatchContext const& batch_context() const noexcept {
+       return batch_context_;
+     }
+   
+     void set_parent(CacheManager* p) noexcept { parent_ = p; }
+   
+     [[nodiscard]] CacheManager* parent() const noexcept { return parent_; }
+   
+     void set_peak_monitor(eval::PeakMonitor* m) noexcept { peak_monitor_ = m; }
+   
+     [[nodiscard]] eval::PeakMonitor* peak_monitor() const noexcept {
+       return peak_monitor_ ? peak_monitor_
+              : parent_     ? parent_->peak_monitor()
+                            : nullptr;
+     }
+   
+     void set_schedule_sink(eval::ScheduleSink* s) noexcept { schedule_sink_ = s; }
+   
+     [[nodiscard]] eval::ScheduleSink* schedule_sink() const noexcept {
+       return schedule_sink_ ? schedule_sink_
+              : parent_      ? parent_->schedule_sink()
+                             : nullptr;
+     }
+   
+     void set_array_ops(BackendArrayOps const* a) noexcept { array_ops_ = a; }
+   
+     [[nodiscard]] BackendArrayOps const* array_ops() const noexcept {
+       return array_ops_ ? array_ops_ : parent_ ? parent_->array_ops() : nullptr;
+     }
+   
+     [[nodiscard]] eval::PersistentValueStore& persistent_values() noexcept {
+       return persistent_values_;
+     }
+     [[nodiscard]] eval::PersistentValueStore const& persistent_values()
+         const noexcept {
+       return persistent_values_;
+     }
+   
+     void clear_persistent_values() noexcept { persistent_values_.clear(); }
+   
+     void set_cell_read_resolver(eval::CellReadResolver* r) noexcept {
+       cell_read_resolver_ = r;
+     }
+   
+     [[nodiscard]] eval::CellReadResolver* cell_read_resolver() const noexcept {
+       return cell_read_resolver_ ? cell_read_resolver_
+              : parent_           ? parent_->cell_read_resolver()
+                                  : nullptr;
+     }
+   
+     void set_external_residency(std::function<std::size_t()> f) noexcept {
+       SEQUANT_ASSERT(parent_ == nullptr &&
+                      "CacheManager::set_external_residency: the external "
+                      "residency hook must be installed on the chain-root handle "
+                      "(chain_residency() folds it in only there)");
+       external_residency_ = std::move(f);
+     }
+   
+     [[nodiscard]] std::function<std::size_t()> const& external_residency_hook()
+         const noexcept {
+       if (external_residency_) return external_residency_;
+       static std::function<std::size_t()> const empty{};
+       return parent_ ? parent_->external_residency_hook() : empty;
+     }
+   
+     void set_external_liveset(
+         std::function<
+             void(std::function<void(std::size_t hash, std::size_t bytes)>)>
+             f) noexcept {
+       SEQUANT_ASSERT(parent_ == nullptr &&
+                      "CacheManager::set_external_liveset: the external liveset "
+                      "hook must be installed on the chain-root handle");
+       external_liveset_ = std::move(f);
+     }
+   
+     [[nodiscard]] std::function<
+         void(std::function<void(std::size_t hash, std::size_t bytes)>)> const&
+     external_liveset() const noexcept {
+       if (external_liveset_) return external_liveset_;
+       static std::function<void(
+           std::function<void(std::size_t hash, std::size_t bytes)>)> const
+           empty{};
+       return parent_ ? parent_->external_liveset() : empty;
+     }
+   
+     void ensure_hoist_slot(key_type const& key) {
+       cache_map_.try_emplace(
+           key, entry{std::numeric_limits<size_t>::max(), /*persistent=*/false});
+     }
+   
+     struct all_non_persistent {
+       bool operator()(key_type const&) const noexcept { return false; }
+     };
+   
+     template <typename Iterable, typename PersistencePred = all_non_persistent>
+       requires(!std::same_as<std::remove_cvref_t<Iterable>, CacheManager>)
+     explicit CacheManager(Iterable&& decaying,
+                           PersistencePred is_persistent = {}) noexcept {
+       for (auto&& [k, c] : decaying)
+         cache_map_.try_emplace(k, entry{c, is_persistent(k)});
+     }
+   
+     void reset() noexcept {
+       for (auto&& [k, v] : cache_map_) v.reset();
+       working_set_hwmark_ = 0;
+     }
+   
+     size_t note_working_set(size_t current_bytes, size_t op_hash = 0) noexcept {
+       working_set_hwmark_ = std::max(working_set_hwmark_, current_bytes);
+       if (auto* m = peak_monitor()) {
+         // Diagnostic (analysis-only): if a live-set capture hook is installed,
+         // enumerate the chain's alive entries before observe() advances the mark,
+         // on each real high-water advance. Gated on on_peak_liveset being set, so
+         // the default path enumerates nothing.
+         if (m->on_peak_liveset && current_bytes > m->hwmark_bytes) {
+           std::vector<eval::PeakLiveEntry> live;
+           for (CacheManager const* c = this; c; c = c->parent_)
+             for (auto const& [k, e] : c->cache_map_)
+               if (e.alive()) live.push_back({k->hash_value(), e.size_in_bytes()});
+           // Fold in the external liveset (the ordered executor's
+           // CellRegistry, once wired via set_external_liveset) alongside this
+           // hierarchy's own cache_map_ entries, exactly as external_residency()
+           // folds into chain_residency() above.
+           if (auto const& ext = external_liveset())
+             ext([&live](std::size_t hash, std::size_t bytes) {
+               live.push_back({hash, bytes});
+             });
+           m->on_peak_liveset(current_bytes, live);
+         }
+         m->observe(current_bytes, op_hash);
+       }
+       // Diagnostic (SEQUANT_UT_PEAK_COMPOSE): on each new global max working set,
+       // print what composes it -- the co-resident cache chain vs the single
+       // transient result/scratch being formed (current_bytes - chain_residency),
+       // plus the largest single alive entry. Answers whether the realized peak is
+       // cache-co-residency-bound or transient-working-set-bound. Env-gated, off
+       // by default; harmless (a fprintf on monotone maxima only).
+       static bool const compose =
+           std::getenv("SEQUANT_UT_PEAK_COMPOSE") != nullptr;
+       if (compose) {
+         static size_t g_max = 0;
+         if (current_bytes > g_max) {
+           g_max = current_bytes;
+           size_t const chain = chain_residency();
+           size_t const transient =
+               current_bytes > chain ? current_bytes - chain : 0;
+           size_t max_entry = 0, n_alive = 0;
+           for (CacheManager const* c = this; c; c = c->parent_)
+             for (auto const& [k, e] : c->cache_map_)
+               if (e.alive()) {
+                 ++n_alive;
+                 max_entry = std::max(max_entry, e.size_in_bytes());
+               }
+           std::fprintf(stderr,
+                        "[peak-compose] max=%.1f GB = cache_chain %.1f + "
+                        "transient(result) %.1f | n_alive_chain=%zu "
+                        "max_single_alive=%.1f GB\n",
+                        current_bytes / 1e9, chain / 1e9, transient / 1e9, n_alive,
+                        max_entry / 1e9);
+         }
+       }
+       return working_set_hwmark_;
+     }
+   
+     [[nodiscard]] size_t working_set_hwmark() const noexcept {
+       return working_set_hwmark_;
+     }
+   
+     void tally_build(key_type const& key, std::string const& slice_sig,
+                      double flops, double exec) noexcept {
+       if (parent_) {
+         parent_->tally_build(key, slice_sig, flops, exec);
+         return;
+       }
+       if (!recompute_tally_enabled_) return;  // wet path: no-op
+       auto& slice = recompute_tally_[key].slices[slice_sig];
+       slice.count += 1;     // one more build of this exact (value, slice)
+       slice.flops = flops;  // this slice's actual cost (same for repeats)
+       slice.exec = exec;    // this slice's actual exec-cost (same for repeats)
+     }
+   
+     void set_recompute_tally_enabled(bool on) noexcept {
+       recompute_tally_enabled_ = on;
+     }
+   
+     [[nodiscard]] std::unordered_map<
+         TreeNode, BuildTally, TreeNodeHasher<TreeNode, force_hash_collisions>,
+         TreeNodeEqualityComparator<TreeNode>> const&
+     recompute_tally() const noexcept {
+       return recompute_tally_;
+     }
+   
+     [[nodiscard]] size_t current_residency() const noexcept {
+       size_t s = 0;
+       for (auto const& [k, e] : cache_map_)
+         if (e.alive()) s += e.size_in_bytes();
+       return s;
+     }
+     [[nodiscard]] size_t chain_residency() const noexcept {
+       if (parent_) return current_residency() + parent_->chain_residency();
+       auto const& ext = external_residency_hook();
+       return current_residency() + (ext ? ext() : 0);
+     }
+   
+     [[nodiscard]] bool chain_holds(ResultPtr const& value) const noexcept {
+       if (!value) return false;
+       for (auto const& [k, e] : cache_map_)
+         if (e.holds(value)) return true;
+       return parent_ ? parent_->chain_holds(value) : false;
+     }
+   
+     [[nodiscard]] bool chain_holds_shared(ResultPtr const& value) const noexcept {
+       if (!value) return false;
+       for (auto const& [k, e] : cache_map_)
+         if (e.holds(value) && (e.persistent() || e.max_life_count() > 1))
+           return true;
+       return parent_ ? parent_->chain_holds_shared(value) : false;
+     }
+   
+     [[nodiscard]] AccessResult access_at(key_type const& key) noexcept {
+       if (auto found =
+               eval::LookupMeter::timed([&] { return cache_map_.find(key); });
+           found != cache_map_.end()) {
+         if (auto data = found->second.access(); data) {
+           // Diagnostic (SEQUANT_UT_ACCESS_CLOCK): stamp this genuine local-hit
+           // read into the global access clock. No-op when the gate is off.
+           eval::AccessClock::stamp(found->first->hash_value());
+           eval::BuildMeter::on_read(found->first->hash_value(),
+                                     found->second.max_life_count());
+           // Nb: size_in_bytes() walks the array; only pay it when metering.
+           if (eval::DefUseMeter::enabled())
+             eval::DefUseMeter::on_read(found->first->hash_value(),
+                                        found->second.size_in_bytes());
+           return {data, 0};
+         }
+       }
+       if (!parent_) return {nullptr, 0};
+       auto up = parent_->access_at(key);
+       return {up.ptr, up.hops + 1};  // count the link we just crossed
+     }
+   
+     ResultPtr access(key_type const& key) noexcept { return access_at(key).ptr; }
+   
+     // Not noexcept: forwards to entry::store(), which is not noexcept (see
+     // there).
+     [[nodiscard]] ResultPtr store_and_access(key_type const& key,
+                                              ResultPtr data) {
+       if (auto found =
+               eval::LookupMeter::timed([&] { return cache_map_.find(key); });
+           found != cache_map_.end()) {
+         // Instrumentation (SEQUANT_REBUILD_TRACE, analysis-only): a store onto an
+         // entry that is already alive means the value was still resident in cache
+         // yet got rebuilt anyway -- a hash-bypassing recompute. Emit the hash and
+         // the persistent flag so a persistent (should-never-recompute) value that
+         // is nonetheless rebuilt-while-resident is caught. No-op when the gate is
+         // off.
+         static bool const rebuild_trace =
+             std::getenv("SEQUANT_REBUILD_TRACE") != nullptr;
+         if (rebuild_trace && found->second.alive())
+           std::cerr << "REBUILD-RESIDENT persist=" << found->second.persistent()
+                     << " hash=" << key->hash_value() << "\n";
+         eval::DefUseMeter::on_store(key->hash_value());
+         return store_and_access(found->second, std::move(data));
+       }
+       return data;
+     }
+   
+     [[nodiscard]] bool exists(key_type const& key) const noexcept {
+       return cache_map_.find(key) != cache_map_.end();
+     }
+   
+     template <typename F>
+       requires std::invocable<F&, key_type const&>
+     void for_each_key(F&& fn) const {
+       // The map key is a CachedValue; callers enumerate nodes (key_type), so hand
+       // them the node.
+       for (auto const& [k, v] : cache_map_) fn(k.node);
+     }
+   
+     [[nodiscard]] int life(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       auto end = cache_map_.end();
+       return iter == end ? -1 : static_cast<int>(iter->second.life_count());
+     }
+   
+     [[nodiscard]] int max_life(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       auto end = cache_map_.end();
+       return iter == end ? -1 : static_cast<int>(iter->second.max_life_count());
+     }
+   
+     [[nodiscard]] bool alive(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       return iter != cache_map_.end() && iter->second.alive();
+     }
+   
+     [[nodiscard]] bool resident_in_chain(key_type const& key) const noexcept {
+       if (auto iter =
+               eval::LookupMeter::timed([&] { return cache_map_.find(key); });
+           iter != cache_map_.end() && iter->second.alive())
+         return true;
+       return parent_ ? parent_->resident_in_chain(key) : false;
+     }
+   
+     [[nodiscard]] bool persistent(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       return iter != cache_map_.end() && iter->second.persistent();
+     }
+   
+     [[nodiscard]] size_t entry_size_in_bytes(key_type const& key) const noexcept {
+       auto iter = cache_map_.find(key);
+       return iter == cache_map_.end() ? 0 : iter->second.size_in_bytes();
+     }
+   
+     [[nodiscard]] size_t alive_count() const noexcept {
+       using ranges::views::filter;
+       using ranges::views::transform;
+       using ranges::views::values;
+       return ranges::accumulate(cache_map_                            //
+                                     | values                          //
+                                     | filter(&entry::alive)           //
+                                     | transform(&entry::life_count),  //
+                                 size_t{0});
+     }
+   
+     [[nodiscard]] size_t size_in_bytes() const noexcept {
+       using ranges::views::transform;
+       using ranges::views::values;
+       return ranges::accumulate(
+           cache_map_ | values | transform(&entry::size_in_bytes), size_t{0});
+     }
+   
+     static CacheManager empty() noexcept {
+       using map_type =
+           std::unordered_map<TreeNode, size_t, hasher_type, comparator_type>;
+       return CacheManager{map_type{}};
+     }
+   
+     // for unit testing
+     template <typename T>
+     struct access_by;
+     template <typename T>
+     friend struct access_by;
+   
+   };  // CacheManager
+   
+   template <bool force_hash_collisions = false>
+   auto cache_manager(meta::eval_node_range auto const& nodes,
+                      size_t min_repeats = 1) noexcept {
+     using TreeNode =
+         std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+     using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
+     using Comp = TreeNodeEqualityComparator<TreeNode>;
+   
+     // Phase 1: Scan with pointer-based map (low memory)
+     std::unordered_map<const TreeNode*, size_t, Hasher, Comp> imed_counts;
+   
+     auto imed_visitor = [&imed_counts](auto&& n) -> bool {
+       if (auto found = imed_counts.find(&n); found != imed_counts.end()) {
+         ++found->second;
+         return false;
+       }
+       imed_counts.emplace(&n, 1);
+       return true;
+     };
+   
+     ranges::for_each(nodes, [&imed_visitor](auto&& tree) {
+       tree.visit_internal(imed_visitor);
+     });
+   
+     // Phase 2: Copy repeated entries (node by value)
+     std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+     for (auto&& [ptr, count] : imed_counts) {
+       if (count >= min_repeats) filtered.emplace(*ptr, count);
+     }
+   
+     return CacheManager<TreeNode, force_hash_collisions>{std::move(filtered)};
+   }
+   
+   struct zero_footprint {
+     double operator()(auto const&) const noexcept { return 0.; }
+   };
+   
+   template <bool force_hash_collisions = false,
+             typename FootprintOf = zero_footprint>
+   auto cache_manager(meta::eval_node_range auto const& nodes, auto&& is_volatile,
+                      size_t min_repeats = 1, FootprintOf footprint_of = {},
+                      double max_footprint = 0.)
+     requires requires(
+         std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>> const&
+             n) {
+       { is_volatile(n) } -> std::convertible_to<bool>;
+       { footprint_of(n) } -> std::convertible_to<double>;
+     }
+   {
+     // Stamp the cross-occurrence lifetime mask on this same forest before the
+     // DAG walk / veto below reads it (the batch-variant veto reads
+     // EvalExpr::mask_all_full()). Doing this here -- rather than leaving it to
+     // each caller -- makes "mask is current for the veto" an invariant of this
+     // builder instead of a per-caller obligation: every caller of this overload
+     // (SeQuant's build_dryrun_cache, mpqc's build_cache_manager) is covered
+     // uniformly. Unconditional and idempotent; a no-op when the forest carries
+     // no External node_slice_mask() stamps (every mask stays empty/all-full), so
+     // this never changes behavior on the off path.
+     eval::stamp_lifetime_masks(nodes);
+   
+     using TreeNode =
+         std::ranges::range_value_t<std::remove_cvref_t<decltype(nodes)>>;
+     using Hasher = TreeNodeHasher<TreeNode, force_hash_collisions>;
+     using Comp = TreeNodeEqualityComparator<TreeNode>;
+   
+     // The DAG walk below keys on non-owning pointers into \p nodes, not on
+     // TreeNode by value: copying a TreeNode deep-copies its whole subtree
+     // (binary_node.hpp), so a by-value walk map costs the sum of all subtree
+     // sizes -- quadratic in the number of terms on the left-leaning Sum-tree
+     // binarize now builds for a whole equation (one spine node per summand; a UCC
+     // BCH energy expansion has thousands of them). Only the nodes actually cached
+     // are copied, at the end of this function. \p nodes must therefore be a range
+     // of references to nodes that outlive this call (asserted below) -- the same
+     // contract the min_repeats-only overload's pointer-keyed scan already relies
+     // on. Hasher/Comp are heterogeneous (eval_node_compare.hpp): a pointer key
+     // still hashes and compares by node content, so structurally equal nodes
+     // dedup exactly as they did with by-value keys.
+     static_assert(
+         std::is_reference_v<
+             std::ranges::range_reference_t<std::remove_cvref_t<decltype(nodes)>>>,
+         "cache_manager(): the node range must yield references to "
+         "nodes that outlive the call (the DAG walk keys on their "
+         "addresses)");
+     using NodePtr = TreeNode const*;
+     std::unordered_map<NodePtr, size_t, Hasher, Comp> counts;     // internal uses
+     std::unordered_map<NodePtr, bool, Hasher, Comp> volatile_of;  // memoized
+     std::unordered_set<NodePtr, Hasher, Comp> persistent;         // NV/V frontier
+   
+     // Single DAG walk: count internal-node uses (CSE), memoize volatility
+     // bottom-up, and mark the NV/V frontier. Every (parent, child) edge is
+     // visited exactly once (children are recursed only on a node's first visit),
+     // so a child is marked persistent iff some volatile parent consumes it.
+     // Iterative (explicit frame stack), not recursion: the forest's residual /
+     // energy is a single in-place Sum tree whose left spine is as deep as the
+     // number of summands (thousands for a UCC BCH expansion), and a recursive
+     // descent would overflow the call stack here, while merely building the
+     // cache. The per-node logic matches the recursive form: the use count is
+     // bumped on every visit, children are descended only on a node's first
+     // visit, and the frontier is marked from the parent once both children's
+     // volatility is known.
+     struct Frame {
+       TreeNode const* n = nullptr;
+       int stage = 0;  
+       bool vl = false;
+       bool vr = false;
+     };
+     std::vector<Frame> stack;
+     bool last_v = false;  
+   
+     // Visit \p n: bump its use count, then answer straight away if it is
+     // already classified or is a leaf, else push a frame for it.
+     auto const descend = [&](TreeNode const& n) {
+       bool const first = !volatile_of.contains(&n);
+       if (!n.leaf()) ++counts[&n];  // count this use of an internal node
+       if (!first) {
+         last_v = volatile_of.at(&n);
+         return;
+       }
+       if (n.leaf()) {
+         bool const v = is_volatile(n);
+         volatile_of.emplace(&n, v);
+         last_v = v;
+         return;
+       }
+       stack.push_back(Frame{.n = &n});
+     };
+   
+     for (auto&& tree : nodes) {
+       descend(tree);
+       while (!stack.empty()) {
+         std::size_t const top = stack.size() - 1;
+         int const stage = stack[top].stage++;
+         TreeNode const& n = *stack[top].n;
+         if (stage == 0) {
+           descend(n.left());
+           continue;
+         }
+         if (stage == 1) {
+           stack[top].vl = last_v;
+           descend(n.right());
+           continue;
+         }
+         stack[top].vr = last_v;
+         bool const vl = stack[top].vl, vr = stack[top].vr;
+         bool const v = is_volatile(n) || vl || vr;
+         if (v) {  // n is a volatile consumer => its NV internal children are P
+           if (!vl && !n.left().leaf()) persistent.insert(&n.left());
+           if (!vr && !n.right().leaf()) persistent.insert(&n.right());
+         }
+         volatile_of.emplace(&n, v);
+         last_v = v;
+         stack.pop_back();
+       }
+     }
+   
+     // Cache NP repeats + every P node; persistence = membership in `persistent`.
+     // Footprint gate: a node whose result is larger than max_footprint is never
+     // cached (so it is recomputed by each consumer rather than materialized whole
+     // and held), bounding the footprint of huge free-large-index intermediates.
+     // Batch-variant veto ("a batched node cannot be run-scope"): this builder
+     // populates the outermost / persistent (run-scope) cache, so it must refuse
+     // any node that is batch-variant -- one whose cached value would depend on
+     // which batch is live. Such a node is refused for two reasons: caching it
+     // whole contradicts the runtime slicing it (and the optimizer pricing it
+     // sliced), and -- the F1 safety invariant -- a child batch scratch that
+     // misses locally falls through to this cache for any key, so a batch-variant
+     // final left here could be served full (wrong-batch) to an inner body. A node
+     // is batch-variant iff its cross-occurrence lifetime mask is non-empty (\c
+     // !n->mask_all_full(), \c lifetime_mask.hpp) -- some External batch mode (of
+     // this node or an enclosing ancestor, over all its occurrences under the
+     // canonical meet) slices it, so its value differs per batch of that mode even
+     // if it slices nothing itself.
+     // A node that is invariant to every batched mode is not vetoed and stays
+     // cacheable at run scope -- this is where a hoisted loop-invariant
+     // intermediate (all-full mask; or an External-only / no node_slice_mask
+     // entry, e.g. gC) lands. Off path (no order-aware annotations, hence no \c
+     // stamp_lifetime_masks External stamps): every mask is empty (all-full,
+     // \c EvalExpr::sliced_modes_ default-constructed), so the veto never fires
+     // and every candidate is admitted.
+     // Only the selected nodes are copied by value here -- into the cache map and,
+     // for the frontier, into the owning set the returned is_persistent closes
+     // over. A node that is not cached never pays a (deep) copy.
+     std::unordered_map<TreeNode, size_t, Hasher, Comp> filtered;
+     std::unordered_set<TreeNode, Hasher, Comp> persistent_nodes;
+     for (auto&& [np, c] : counts) {
+       TreeNode const& n = *np;
+       bool const is_p = persistent.contains(np);
+       if (!(c >= min_repeats || is_p)) continue;
+       // Batch-variant: a node whose cross-occurrence lifetime mask is non-empty
+       // is sliced by some enclosing external mode in every occurrence => its
+       // value differs per batch => refused run-scope residence. all-full (empty
+       // mask; incl. the off path) is admitted.
+       bool const batch_variant = !n->mask_all_full();
+       if (batch_variant ||
+           (max_footprint > 0. && footprint_of(n) > max_footprint)) {
+         // Not cached => not persistent either: skipping the insert below keeps
+         // is_persistent consistent with what is cached.
+         continue;
+       }
+       filtered.emplace(n, c);
+       if (is_p) persistent_nodes.insert(n);
+     }
+   
+     auto is_persistent = [persistent =
+                               std::move(persistent_nodes)](TreeNode const& n) {
+       return persistent.contains(n);
+     };
+     return CacheManager<TreeNode, force_hash_collisions>{
+         std::move(filtered), std::move(is_persistent)};
+   }
+   
+   AsyCost peak_cache(Sum const& expr,
+                      std::optional<size_t> min_repeats = std::nullopt);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_CACHE_MANAGER_HPP

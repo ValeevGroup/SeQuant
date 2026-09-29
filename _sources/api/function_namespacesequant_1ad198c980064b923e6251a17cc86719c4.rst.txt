@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad198c980064b923e6251a17cc86719c4:
+
+Template Function sequant::signatures_consistent
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_slicing_signature.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::signatures_consistent(Range const&, container::svector<Index> const&)
+   :project: SeQuant

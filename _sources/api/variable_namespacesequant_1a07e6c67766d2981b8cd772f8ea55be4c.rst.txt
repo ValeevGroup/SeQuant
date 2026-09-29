@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a07e6c67766d2981b8cd772f8ea55be4c:
+
+Variable sequant::is_a_power_v
+==============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_traits.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_a_power_v
+   :project: SeQuant

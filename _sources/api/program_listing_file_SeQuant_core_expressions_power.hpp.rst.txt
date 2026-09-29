@@ -1,0 +1,85 @@
+
+.. _program_listing_file_SeQuant_core_expressions_power.hpp:
+
+Program Listing for File power.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_expressions_power.hpp>` (``SeQuant/core/expressions/power.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EXPRESSIONS_POWER_HPP
+   #define SEQUANT_EXPRESSIONS_POWER_HPP
+   
+   #include <SeQuant/core/expressions/constant.hpp>
+   #include <SeQuant/core/expressions/expr.hpp>
+   #include <SeQuant/core/expressions/expr_ptr.hpp>
+   #include <SeQuant/core/expressions/variable.hpp>
+   #include <SeQuant/core/rational.hpp>
+   
+   namespace sequant {
+   
+   class Power : public Expr {
+    public:
+     using exponent_type = rational;
+   
+     Power() = delete;
+     virtual ~Power() = default;
+     Power(const Power&) = default;
+     Power(Power&&) = default;
+     Power& operator=(const Power&) = default;
+     Power& operator=(Power&&) = default;
+   
+     Power(ExprPtr base, exponent_type exponent);
+   
+     template <typename L>
+       requires std::constructible_from<std::wstring, L> &&
+                (!std::convertible_to<L, ExprPtr>)
+     Power(L&& label, exponent_type exponent)
+         : Power(ex<Variable>(std::forward<L>(label)), std::move(exponent)) {}
+   
+     template <typename V>
+       requires(!std::constructible_from<std::wstring, V> &&
+                !std::convertible_to<V, ExprPtr> &&
+                std::constructible_from<Constant::scalar_type, V>)
+     Power(V&& value, exponent_type exponent)
+         : Power(ex<Constant>(std::forward<V>(value)), std::move(exponent)) {}
+   
+     const ExprPtr& base() const;
+   
+     const exponent_type& exponent() const;
+   
+     bool conjugated() const;
+   
+     void conjugate();
+   
+     bool is_zero() const override;
+   
+     static void flatten(ExprPtr& expr);
+   
+     type_id_type type_id() const override;
+   
+     bool is_scalar() const override;
+   
+     ExprPtr clone() const override;
+   
+     void adjoint() override;
+   
+     Power& operator*=(const Expr& that);
+   
+    private:
+     ExprPtr base_;
+     exponent_type exponent_;
+     bool conjugated_ = false;
+   
+     hash_type memoizing_hash() const override;
+   
+     bool static_equal(const Expr& that) const override;
+   
+     bool static_less_than(const Expr& that) const override;
+   };
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EXPRESSIONS_POWER_HPP

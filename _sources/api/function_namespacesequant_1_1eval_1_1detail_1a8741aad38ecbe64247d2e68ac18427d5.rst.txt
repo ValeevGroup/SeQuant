@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1detail_1a8741aad38ecbe64247d2e68ac18427d5:
+
+Function sequant::eval::detail::ordered_range_of
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_ordered_executor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::detail::ordered_range_of(eval::BatchContext const&, LoopKey const&)
+   :project: SeQuant

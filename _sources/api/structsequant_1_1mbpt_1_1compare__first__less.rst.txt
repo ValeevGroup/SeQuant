@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1mbpt_1_1compare__first__less:
+
+Template Struct compare_first_less
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::mbpt::compare_first_less
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

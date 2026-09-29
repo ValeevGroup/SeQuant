@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a061d310e111004cae906a24611d4c087:
+
+Define SEQUANT_PRAGMA
+=====================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_PRAGMA
+   :project: SeQuant

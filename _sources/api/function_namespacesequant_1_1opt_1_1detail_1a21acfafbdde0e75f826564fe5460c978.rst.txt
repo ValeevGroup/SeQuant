@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1a21acfafbdde0e75f826564fe5460c978:
+
+Template Function sequant::opt::detail::inner_aware_volume
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::inner_aware_volume(Tot const&, Ixex const&, InnerPow const&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a2f80e08adcd3519623a78a93699db4a3:
+
+Function sequant::mbpt::open_shell_P_op_vector
+==============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::open_shell_P_op_vector(const Tensor&)
+   :project: SeQuant

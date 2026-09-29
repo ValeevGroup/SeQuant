@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a780e48f86950b225df1c21e4cdbcd38d:
+
+Function sequant::detail::format_power_base
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_export_utils.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::format_power_base(const ExprPtr&, std::string)
+   :project: SeQuant

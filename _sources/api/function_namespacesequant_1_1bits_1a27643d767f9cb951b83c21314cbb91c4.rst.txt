@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1bits_1a27643d767f9cb951b83c21314cbb91c4:
+
+Function sequant::bits::sieve
+=============================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bits::sieve(std::ranges::viewable_range auto&&)
+   :project: SeQuant

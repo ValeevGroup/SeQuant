@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1_1detail_1afa56947e10e062745f953bedd83f35a6:
+
+Template Function sequant::opt::detail::subset_footprints
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_single_term_detail.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::detail::subset_footprints(TensorNetwork const&, TIdxs const&, IdxToSz&&, std::function<double(Index const&, std::size_t)> const&, container::vector<char> const *)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1eval_1_1detail_1ad4459d1336cdc3c5672eeaa6220744f4:
+
+Typedef sequant::eval::detail::BatchContext
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_peak_profile.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::eval::detail::BatchContext
+   :project: SeQuant

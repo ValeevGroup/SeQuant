@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1eval_1_1dryrun_1_1detail_1ae38310bdeb795211b6a917c409228cbe:
+
+Function sequant::eval::dryrun::detail::range_at
+================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_backends_dryrun_result.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::eval::dryrun::detail::range_at(ExtentOverrides const&, ExtentOverrides const&, std::shared_ptr<CostModel const> const&, annot_t const&, std::size_t)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a44d1205756f25b30567dd354e58eacb3:
+
+Template Function sequant::base_field(BraRange, KetRange)
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::base_field(BraRange, KetRange)
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_index_specific_tensor_block_comparator:
+
+Template Struct IndexSpecificTensorBlockComparator
+==================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_tensor.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::IndexSpecificTensorBlockComparator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
