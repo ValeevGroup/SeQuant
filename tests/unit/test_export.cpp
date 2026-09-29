@@ -1597,6 +1597,65 @@ TEST_CASE("a folded name must come from one tensor", "[export]") {
   }
 }
 
+TEST_CASE("a folded name must come from one variable", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // ITF prunes no variable, so a scalar leaf survives and reaches the guard
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  REQUIRE((ItfGenerator<ItfContext>{}.prunable_scalars() &
+           PrunableScalars::Variables) == PrunableScalars::None);
+
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"i_1"});
+  const Tensor R(L"R", bra{L"a_1"}, ket{L"i_1"});
+  auto product = [](ExprPtrList factors) {
+    return ex<Product>(std::move(factors), Product::Flatten::No);
+  };
+
+  SECTION("two variables under one folded name are refused") {
+    // a conjugated `x` is exported as `x_conj`, so a variable already written
+    // `x_conj` would be the same imported scalar under two readings
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    const auto x_conj_written = ex<Variable>(L"x_conj");
+    REQUIRE_FALSE(x_conj_written->as<Variable>().conjugated());
+    REQUIRE(export_label(x->as<Variable>()) ==
+            export_label(x_conj_written->as<Variable>()));
+
+    ItfGenerator<ItfContext> gen;
+    REQUIRE_THROWS_AS(
+        export_expression(
+            to_export_tree(
+                ResultExpr(R, product(ExprPtrList{x, x_conj_written, f, w}))),
+            gen, ctx),
+        Exception);
+  }
+
+  SECTION("a tensor and a variable of one folded name coexist") {
+    // the two are different objects under one name: a scalar operand is never
+    // the array a tensor of the same label names, so each keeps its own name
+    const auto t_marked = ex<Tensor>(L"T⁺", bra{L"a_1"}, ket{L"a_2"});
+    REQUIRE(t_marked->as<Tensor>().adjointed());
+    const auto t_adj_written = ex<Variable>(L"T_adj");
+    REQUIRE(export_label(t_marked->as<Tensor>()) ==
+            export_label(t_adj_written->as<Variable>()));
+
+    ItfGenerator<ItfContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(
+            ResultExpr(R, product(ExprPtrList{t_adj_written, t_marked, w}))),
+        gen, ctx));
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    // the scalar under its own name, the array under its tags
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load T_adj[]"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("T_adj:ee[bc]"));
+  }
+}
+
 TEST_CASE("a context rewrite folds a tensor's marks into its label",
           "[export]") {
   using namespace sequant;
