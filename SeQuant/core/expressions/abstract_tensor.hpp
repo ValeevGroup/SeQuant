@@ -603,6 +603,12 @@ inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
 /// @param[in,out] t an AbstractTensor object whose indices will be untagged
 inline void reset_tags(AbstractTensor& t) { t._reset_tags(); }
 
+/// Removes tags from the indices of every tensor in an expression
+/// @param[in,out] expr an expression whose tensors' indices will be untagged
+/// @note @p expr is taken by const reference since ExprPtr does not propagate
+/// constness to the expression it points to
+void reset_tags(const ExprPtr& expr);
+
 /// permutes bra slots of @p t according to @p perm
 /// @param t reference to an AbstractTensor object
 /// @param perm from-permutation, i.e. Index in input slot `permutation[i]` will

@@ -130,16 +130,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   std::string represent(const Power &power, const Context &ctx) const override {
-    const ExprPtr &base = power.base();
-    std::string base_str = to_julia_expr(*base, ctx);
-    if (base->is<Variable>() && base->as<Variable>().conjugated()) {
-      base_str = wrap_conj(std::move(base_str));
-    }
-    auto s = detail::format_power_base(base, std::move(base_str)) + "^" +
-             detail::format_power_exponent(power.exponent(),
-                                           /*double_slash*/ true);
-    if (power.conjugated()) s = wrap_conj(std::move(s));
-    return s;
+    return detail::format_power(power, to_julia_expr(*power.base(), ctx), "^",
+                                /*double_slash*/ true, &wrap_conj);
   }
 
   void create(const Tensor &tensor, bool zero_init,
@@ -200,7 +192,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     m_generated += represent(variable, ctx) + " = ";
 
     if (set_to_zero)
-      m_generated = "0";
+      m_generated += "0.0";
     else {
       m_generated += "deserialize(\"" + represent(variable, ctx) + ".jlbin\")";
     }
@@ -283,51 +275,58 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   std::string m_generated;
 
   std::string to_julia_expr(const Expr &expr, const Context &ctx) const {
-    if (expr.is<Tensor>()) {
-      return represent(expr.as<Tensor>(), ctx);
-    } else if (expr.is<Variable>()) {
-      return represent(expr.as<Variable>(), ctx);
-    } else if (expr.is<Constant>()) {
-      return represent(expr.as<Constant>(), ctx);
-    } else if (expr.is<Power>()) {
-      return represent(expr.as<Power>(), ctx);
-    } else if (expr.is<Product>()) {
-      const Product &product = expr.as<Product>();
-      std::string repr;
-
-      if (!product.scalar().is_identity()) {
-        repr += represent(Constant(product.scalar()), ctx) + " * ";
-      }
-
-      for (std::size_t i = 0; i < product.size(); ++i) {
-        repr += to_julia_expr(*product.factor(i), ctx);
-
-        if (i + 1 < product.size()) {
-          repr += " * ";
-        }
-      }
-
-      return repr;
-    } else if (expr.is<Sum>()) {
-      const Sum &sum = expr.as<Sum>();
-      std::string repr;
-
-      for (std::size_t i = 0; i < sum.size(); ++i) {
-        repr += to_julia_expr(*sum.summand(i), ctx);
-
-        if (i + 1 < sum.size()) {
-          repr += " + ";
-        }
-      }
-
-      return repr;
-    }
-
-    throw Exception("Unsupported expression type in to_julia_expr");
+    return detail::stringify_expr(
+        expr, " * ",
+        [this, &ctx](const auto &e) { return this->represent(e, ctx); },
+        "to_julia_expr");
   }
 
   static std::string wrap_conj(std::string s) {
     return "conj(" + std::move(s) + ")";
+  }
+
+  /// emits `<name> = <wrapper>(zeros(Float64, <dims>...), <shape>)`
+  void create_wrapped(const Tensor &tensor, bool zero_init, const Context &ctx,
+                      std::string_view wrapper, const std::string &shape) {
+    if (!zero_init) {
+      throw Exception(
+          "In Julia tensors can't be created without being initialized");
+    }
+
+    m_generated += tensor_name(tensor, ctx);
+    m_generated += " = ";
+    m_generated += wrapper;
+    m_generated += "(zeros(Float64";
+
+    for (const Index &idx : tensor.const_indices()) {
+      m_generated += ", ";
+      m_generated += ctx.get_dim(idx.space());
+    }
+
+    m_generated += "), ";
+    m_generated += shape;
+    m_generated += ")\n";
+  }
+
+  /// emits `<name> = <wrapper>(deserialize("<name>.jlbin"), <shape>)`, or
+  /// the zero-initialization of create_wrapped if @p set_to_zero
+  void load_wrapped(const Tensor &tensor, bool set_to_zero, const Context &ctx,
+                    std::string_view wrapper, const std::string &shape) {
+    if (set_to_zero) {
+      // In Julia setting a tensor to zero has to be done by overwriting it with
+      // a zero tensor
+      create_wrapped(tensor, true, ctx, wrapper, shape);
+      return;
+    }
+
+    m_generated += tensor_name(tensor, ctx);
+    m_generated += " = ";
+    m_generated += wrapper;
+    m_generated += "(deserialize(\"";
+    m_generated += tensor_name(tensor, ctx);
+    m_generated += ".jlbin\"), ";
+    m_generated += shape;
+    m_generated += ")\n";
   }
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {

@@ -258,8 +258,7 @@ EquationResult process(const Config& cfg, const ExprPtr& rhs,
   EquationResult res;
 
   ExprPtr input = rhs->clone();
-  auto popped = pop_tensor(input, reserved::symm_label());
-  if (!popped.has_value()) pop_tensor(input, reserved::antisymm_label());
+  pop_symmetrizer(input);
 
   flatten(input);
 

@@ -637,6 +637,21 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
   throw Exception("Unhandled expression type in pop_tensor");
 }
 
+std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression) {
+  std::optional<ExprPtr> symmetrizer =
+      pop_tensor(expression, reserved::symm_label());
+
+  if (!symmetrizer.has_value()) {
+    symmetrizer = pop_tensor(expression, reserved::antisymm_label());
+  }
+
+  return symmetrizer;
+}
+
+std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression) {
+  return pop_symmetrizer(expression.expression());
+}
+
 ExprPtr &replace(ExprPtr &expr, const ExprMatcher &target,
                  const Expr &replacement) {
   if (!target.expr().is_atom()) {

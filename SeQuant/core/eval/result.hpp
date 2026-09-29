@@ -10,6 +10,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/intersperse.hpp>
@@ -134,12 +135,8 @@ void symmetric_permutation(SymmetricParticleRange const& rng, F call_back) {
 
 template <typename RngOfOrdinals>
 std::string ords_to_annot(RngOfOrdinals const& ords) {
-  using ranges::views::intersperse;
-  using ranges::views::join;
-  using ranges::views::transform;
-  auto to_str = [](auto x) { return std::to_string(x); };
-  return ords | transform(to_str) | intersperse(std::string{","}) | join |
-         ranges::to<std::string>;
+  return join_strings<std::string>(ords, ",",
+                                   [](auto x) { return std::to_string(x); });
 }
 
 /// Maps an integer annot value to a short symbolic name (i0, i1, ...).
@@ -157,13 +154,9 @@ inline std::string annot_label(std::int64_t key) noexcept {
 
 template <typename RngOfOrdinals>
 std::string ords_to_labels(RngOfOrdinals const& ords) {
-  using ranges::views::intersperse;
-  using ranges::views::join;
-  using ranges::views::transform;
-  return ords | transform([](auto x) {
-           return annot_label(static_cast<std::int64_t>(x));
-         }) |
-         intersperse(std::string{","}) | join | ranges::to<std::string>;
+  return join_strings<std::string>(ords, ",", [](auto x) {
+    return annot_label(static_cast<std::int64_t>(x));
+  });
 }
 
 template <typename... Args>

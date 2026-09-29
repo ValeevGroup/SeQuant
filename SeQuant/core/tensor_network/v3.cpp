@@ -873,9 +873,7 @@ TensorNetworkV3::canonicalize_slots(
         vertices.emplace_back(canonize_perm[vertex]);
       }
 
-      reset_ts_swap_counter<std::size_t>();
-      bubble_sort(vertices.begin(), vertices.end());
-      if (!ts_swap_counter_is_even<std::size_t>()) {
+      if (bubble_sort_parity(vertices) == -1) {
         // Performed an uneven amount of pairwise exchanges -> this incurs a
         // phase change
         metadata.phase *= -1;
@@ -895,9 +893,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter<TensorNetworkV3> colorizer(named_indices,
-                                           options.distinct_named_indices,
-                                           options.named_index_colors);
+  VertexPainter colorizer(named_indices, options.distinct_named_indices,
+                          options.named_index_colors);
 
   // results
   Graph graph;
@@ -1013,7 +1010,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // min (number of bra slots, number of ket slots) slots, i.e. the number of
     // 2-index columns
     const std::size_t num_paired_cols =
-        std::max(bra_rank(tensor), ket_rank(tensor));
+        std::min(bra_rank(tensor), ket_rank(tensor));
     const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::Symm;
 
     // vertices for braket bundles:
@@ -1066,9 +1063,6 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // create vertices for bra and ket slot bundles of any symmetry
-    // N.B. TNV1/TNV2 created such vertices for symmetric/anstisymmetric
-    // bra/ket also but did not create index slots. Here we create them
-    // even for asymmetric bra/ket
     {
       for (auto s : {Origin::Bra, Origin::Ket}) {
         const bool bra = s == Origin::Bra;
@@ -1100,8 +1094,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       }
     }
 
-    // - Create vertex for every index slot, regardless of symmetry (V1 and V2
-    // only created slots for antisymmetric/symmetric tensors)
+    // - Create vertex for every index slot, regardless of symmetry
     for (auto &slot_type : {SlotType::Bra, SlotType::Ket}) {
       const auto is_bra = slot_type == SlotType::Bra;
       const auto vertex_type =
@@ -1599,10 +1592,10 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
         TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
-    [[maybe_unused]] const TensorCanonicalizer &tensor_canonizer =
+    const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 
-    auto bp = canonicalizer.apply(*tensor);
+    auto bp = tensor_canonizer.apply(*tensor);
 
     if (bp) {
       byproduct *= bp;

@@ -148,13 +148,8 @@ void Operator<QuantumNumbers, S>::adjoint() {
 
   // grab label and update according to adjoint flag
   auto lbl = std::wstring(this->label());
-  if (lbl.back() == sequant::adjoint_label) {
-    SEQUANT_ASSERT(is_adjoint_);
-    lbl.pop_back();
-  } else {
-    SEQUANT_ASSERT(!is_adjoint_);
-    lbl.push_back(sequant::adjoint_label);
-  }
+  SEQUANT_ASSERT(sequant::is_adjoint_label(lbl) == is_adjoint_);
+  sequant::toggle_adjoint_label(lbl);
 
   // get order and batch_ordinals to restore later
   const auto saved_order = this->order_;

@@ -683,6 +683,14 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(serialize(expression, {.annot_symm = true}) == current);
     }
 
+    SECTION("nested Sum") {
+      Sum::summands_type summands{
+          ex<Variable>(L"a"),
+          ex<Sum>(ExprPtrList{ex<Variable>(L"b"), ex<Variable>(L"c")})};
+      auto nested = ex<Sum>(std::move(summands), Sum::move_only_tag{});
+      REQUIRE(serialize(nested) == L"a + (b + c)");
+    }
+
     SECTION("result_expressions") {
       std::vector<std::wstring> expressions = {
           L"A = 5",
