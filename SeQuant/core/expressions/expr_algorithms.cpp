@@ -9,9 +9,12 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/range/primitives.hpp>
 
 #include <iostream>
@@ -499,6 +502,80 @@ ResultExpr& non_canon_simplify(ResultExpr& expr) {
   expand(expr);
   rapid_simplify(expr);
   return expr;
+}
+
+namespace {
+
+/// whether @p idx and every index of its proto-index closure lie in a
+/// `K`-closed space
+bool is_kclosed(const Index& idx) {
+  if (idx.space().field() != Field::Real) return false;
+  return ranges::all_of(idx.proto_indices(),
+                        [](const Index& p) { return is_kclosed(p); });
+}
+
+/// whether every index @p op acts on lies in a `K`-closed space, the
+/// condition for `K O K⁻¹` to be the same operator string
+template <Statistics S>
+bool acts_on_kclosed_spaces(const NormalOperator<S>& op) {
+  return ranges::all_of(op,
+                        [](const auto& o) { return is_kclosed(o.index()); });
+}
+
+/// @overload for a sequence of normal operators
+template <Statistics S>
+bool acts_on_kclosed_spaces(const NormalOperatorSequence<S>& seq) {
+  return ranges::all_of(
+      seq, [](const auto& op) { return acts_on_kclosed_spaces(op); });
+}
+
+/// @throw Exception if an operator in @p expr acts on an index space that
+///        `K` does not close, so that `K E K⁻¹` has no spelling in the
+///        indices at hand
+void assert_kclosed_operators(const ExprPtr& expr) {
+  std::as_const(*expr).visit(
+      [](const ExprPtr& atom) {
+        const bool closed =
+            atom->is<FNOperator>()
+                ? acts_on_kclosed_spaces(atom->as<FNOperator>())
+            : atom->is<BNOperator>()
+                ? acts_on_kclosed_spaces(atom->as<BNOperator>())
+            : atom->is<FNOperatorSeq>()
+                ? acts_on_kclosed_spaces(atom->as<FNOperatorSeq>())
+            : atom->is<BNOperatorSeq>()
+                ? acts_on_kclosed_spaces(atom->as<BNOperatorSeq>())
+                : true;
+        if (!closed)
+          throw Exception(
+              "sequant::kconjugate: an operator over a complex basis has no "
+              "K-closed index space");
+      },
+      /*atoms_only=*/true);
+}
+
+}  // namespace
+
+ExprPtr kconjugate(const ExprPtr& expr) {
+  SEQUANT_ASSERT(expr);
+  // K acts on the basis the operators are written in, so an operator string
+  // is reproduced only where every index space is K-closed
+  if (!expr->is_cnumber()) assert_kclosed_operators(expr);
+  auto result = expr->clone();
+  const auto sign = result->kconjugate();
+  if (sign == 1) return result;
+  return ex<Product>(sign, ExprPtrList{std::move(result)});
+}
+
+ExprPtr conjugate(const ExprPtr& expr) {
+  SEQUANT_ASSERT(expr);
+  // the complex conjugate of a value: for a matrix element
+  // conj <p|O|q> = <q|O⁺|p>, so on c-number content this is the adjoint (a
+  // Product's factors commute, so the adjoint's reversal is not observable)
+  if (!expr->is_cnumber())
+    throw Exception(
+        "sequant::conjugate: an operator has no value to conjugate; "
+        "sequant::kconjugate is the conjugation of an operator");
+  return sequant::adjoint(expr);
 }
 
 }  // namespace sequant

@@ -165,7 +165,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
 
     {  // Product containing Variables
       auto q2 = ex<Variable>(L"q2");
-      q2->adjoint();
+      (void)q2->adjoint();
       auto input =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -184,7 +184,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto f2 = ex<Tensor>(L"f", bra{L"a_1", L"a_2"}, ket{L"i_5", L"i_2"},
                            Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
                            ColumnSymmetry::Symm);
-      f2->adjoint();
+      (void)f2->adjoint();
       auto input1 =
           ex<Tensor>(reserved::symm_label(), bra{L"a_1", L"a_2"},
                      ket{L"i_1", L"i_2"}, particle_symmetric) *
@@ -917,6 +917,8 @@ TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
   // a bra<->ket symmetric tensor's bra bundle can map onto its ket bundle:
   // p1<->p3, p2<->p4 maps g onto itself (+1) and is odd on u
   SECTION("automorphism exchanging the bra and ket of a tensor") {
+    // a pinned bra/ket exchange symmetry is derivable over a real basis only
+    auto real_basis = scoped_real_basis();
     auto make = [](Symmetry w_symm) {
       return ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, aux{},
                         Symmetry::Antisymm, BraKetSymmetry::Symm) *

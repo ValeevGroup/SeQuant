@@ -54,14 +54,25 @@ void Variable::conjugate() {
 
 bool Variable::conjugated() const { return conjugated_; }
 
+std::wstring Variable::decorated_label() const {
+  std::wstring result(label_);
+  if (conjugated_) result.push_back(sequant::conjugate_label);
+  return result;
+}
+
 std::wstring Variable::to_latex() const {
   std::wstring result = L"{" + io::latex::utf_to_string(label_) + L"}";
-  if (conjugated_) result = L"{" + result + L"^*" + L"}";
+  if (conjugated_) result = L"{" + result + L"^{*}}";
   return result;
 }
 
 ExprPtr Variable::clone() const { return ex<Variable>(*this); }
 
-void Variable::adjoint() { conjugate(); }
+std::int8_t Variable::adjoint() {
+  conjugate();
+  return 1;
+}
+
+std::int8_t Variable::kconjugate() { return adjoint(); }
 
 }  // namespace sequant

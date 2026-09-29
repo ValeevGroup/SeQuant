@@ -692,7 +692,7 @@ TEST_CASE("eval_adjoint_complex_btas", "[eval_btas]") {
   Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
            BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
   Tensor t_adj = t;
-  t_adj.adjoint();
+  (void)t_adj.adjoint();
   REQUIRE(t_adj.label() == L"t⁺");
 
   auto node = eval_node(ex<Tensor>(t_adj));

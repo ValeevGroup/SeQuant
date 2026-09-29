@@ -394,7 +394,7 @@ EvalExprNode binarize(Tensor const& t) {
     // Build the bare-label operand: copy and call adjoint() to toggle the
     // marker off and swap bra/ket back to natural orientation.
     Tensor bare{t};
-    bare.adjoint();
+    (void)bare.adjoint();
     SEQUANT_ASSERT(!is_adjoint_label(bare.label()));
     EvalExprNode bare_leaf{EvalExpr{bare}};
 

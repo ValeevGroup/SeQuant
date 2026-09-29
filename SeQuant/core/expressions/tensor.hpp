@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -68,8 +69,9 @@ DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
 /// @note #braket and #hermiticity are two ways to specify the same underlying
 ///       trait: if #braket is set it is used directly (and, unless #hermiticity
 ///       is also set, the Hermiticity is back-filled from it); otherwise the
-///       braket symmetry is *derived* from #hermiticity and the tensor's base
-///       field. Prefer #hermiticity for field-agnostic physical facts.
+///       braket symmetry is *derived* from #hermiticity, #conjugation_parity
+///       and the tensor's base field. Prefer #hermiticity for field-agnostic
+///       physical facts.
 struct TensorSymmetries {
   /// bra/ket permutational symmetry
   std::optional<Symmetry> perm = std::nullopt;
@@ -77,12 +79,78 @@ struct TensorSymmetries {
   std::optional<BraKetSymmetry> braket = std::nullopt;
   /// abstract (field-agnostic) adjoint symmetry
   std::optional<Hermiticity> hermiticity = std::nullopt;
+  /// behaviour of the represented operator under complex conjugation (the
+  /// elementwise ConjugationSymmetry is derived from it and the base field)
+  std::optional<ConjugationParity> conjugation_parity = std::nullopt;
   /// particle (column) permutation symmetry
   std::optional<ColumnSymmetry> column = std::nullopt;
 };
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
+///
+// clang-format off
+/// ### The two core states: adjointed and K-conjugated
+///
+/// A Tensor is `<bra|O|ket>`: the matrix, over the slots' basis, of a core
+/// `O` with the traits #Hermiticity and #ConjugationParity. Two commuting Z2
+/// states act on the core, not on the array, so both are covariant for every
+/// slot structure (rectangular and half tensors, aux slots, bra/ket-less
+/// tensors alike):
+///
+/// | state        | mark | denotes                                     | via          |
+/// |--------------|------|---------------------------------------------|--------------|
+/// | adjointed    | `⁺`  | `t⁺{q;p} = conj t{p;q}`, the matrix of `O†` | adjoint()    |
+/// | K-conjugated | `꙳`  | `t꙳{p;q} = <p|K O K⁻¹|q>`, slots in place   | kconjugate() |
+///
+/// Normalization against the traits runs at construction, in set_states(),
+/// adjoint(), kconjugate(), set_label()/adopt_marks(), with_slots(), and the
+/// slot-mutating APIs transform_indices(), set_bra(), set_ket() and set_aux()
+/// (renormalize_after_slot_mutation(), which also derives #BraKetSymmetry and
+/// the elementwise #ConjugationSymmetry again from the traits and the new
+/// slots' #Field, so a mutated tensor is the tensor a construction over those
+/// slots would have given), so a state set through any of those always denotes
+/// a genuinely distinct array. A mutation whose normalization would consume a
+/// sign is refused and leaves the tensor as the call found it, since no Tensor
+/// holds a sign. The AbstractTensor primitives _swap_bra_ket() and
+/// _bra_mutable() / _ket_mutable() do not reconcile anything: normalization and
+/// the tensor-network machinery drive them themselves:
+///
+/// | #Hermiticity    | `t⁺`             | kept? | sign returned by adjoint() |
+/// |-----------------|------------------|-------|----------------------------|
+/// | `Hermitian`     | `t`              | no    | +1                         |
+/// | `AntiHermitian` | `-t`             | no    | -1                         |
+/// | `NonHermitian`  | a distinct array | yes   | +1                         |
+///
+/// | #ConjugationParity | `t꙳`             | kept? | sign returned by kconjugate() |
+/// |--------------------|------------------|-------|-------------------------------|
+/// | `Even`             | `t`              | no    | +1                            |
+/// | `Odd`              | `-t`             | no    | -1                            |
+/// | `None`             | a distinct array | yes   | +1                            |
+///
+/// The parity is a property of the operator, so `꙳` normalizes against it in
+/// every basis (unlike the elementwise conjugation_symmetry(), which is read
+/// through the basis). Over a real basis, and for a bra/ket-less tensor,
+/// `t⁺{q;p}` and `t꙳{p;q}` are two spellings of one value, so the coset rule
+/// identifies them (normalize_states()): a definite hermiticity consumes the
+/// mark at its sign, with the bundles exchanged, so there `kconjugate()`
+/// agrees with `conjugate()`; an indefinite one keeps `꙳`, the spelling with
+/// the slots as written.
+/// Elementwise conjugation of the value is the adjoint with the slots
+/// exchanged, in every basis; transposition is not a state.
+///
+/// label() is always the bare array name; trailing marks in a constructor or
+/// set_label() argument are adopted into the states (adopt_marks()).
+/// decorated_label() (label plus the marks, `⁺` first) is what printing and
+/// the exporters use; hashing, equality, ordering and graph colouring combine
+/// the bare label with the states, so `t`, `t⁺`, `t꙳` and `t⁺꙳` are distinct
+/// everywhere those consumers look.
+///
+/// Both states are involutions and commute. Operator-valued AbstractTensors
+/// (NormalOperator) have an adjoint and are K-invariant, so the states live
+/// on Tensor only (see as_cnumber_tensor()).
+// clang-format on
+
 class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
  public:
   /// @brief the fixed library defaults used to resolve the symmetry attributes
@@ -93,14 +161,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// resolve_symmetries(). They are *independent of the active
   /// sequant::Context* -- unlike deserialization, whose corresponding defaults
   /// come from Context. There is deliberately no BraKetSymmetry default: it is
-  /// *derived* from #hermiticity and the tensor's #base_field via
-  /// to_braket_symmetry().
+  /// *derived* from #hermiticity, #conjugation_parity and the tensor's
+  /// #base_field via to_braket_symmetry().
   struct Defaults {
     /// default bra/ket permutational Symmetry
     static constexpr Symmetry symmetry = Symmetry::Nonsymm;
     /// default (field-agnostic) Hermiticity; the observable BraKetSymmetry is
     /// derived from this and the tensor's base field
     static constexpr Hermiticity hermiticity = Hermiticity::NonHermitian;
+    /// default parity: a real operator; the observable ConjugationSymmetry is
+    /// derived from this and the tensor's base field
+    static constexpr ConjugationParity conjugation_parity =
+        ConjugationParity::Even;
     /// default particle-exchange ColumnSymmetry
     static constexpr ColumnSymmetry column_symmetry = ColumnSymmetry::Nonsymm;
   };
@@ -309,6 +381,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     Symmetry symmetry;
     BraKetSymmetry braket_symmetry;
     Hermiticity hermiticity;
+    ConjugationParity conjugation_parity;
     ColumnSymmetry column_symmetry;
     /// whether #column_symmetry was spelled out by the caller rather than
     /// defaulted; see check_symmetries()
@@ -320,14 +393,27 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// Resolves the (possibly unspecified) symmetry attributes of a tensor.
   /// - #BraKetSymmetry is a *derived* property: if not given explicitly it is
-  ///   computed from the (explicit or default) #Hermiticity and the tensor's
-  ///   @p base_fld via to_braket_symmetry().
-  /// - #Symmetry, #Hermiticity and #ColumnSymmetry fall back to the *fixed*
-  ///   library defaults in Tensor::Defaults -- the safest, fully non-symmetric
-  ///   / non-Hermitian choice -- when not specified.
+  ///   computed from the (explicit or default) #Hermiticity and
+  ///   #ConjugationParity and the tensor's @p base_fld via
+  ///   to_braket_symmetry().
+  /// - an explicitly given #BraKetSymmetry is accepted only where the traits
+  ///   derive it: the traits that are given are used as given, and the
+  ///   missing ones are back-filled with the values that reproduce the pin
+  ///   (the first parity of Even, Odd, None and, for it, the first of
+  ///   Hermitian, AntiHermitian, NonHermitian that does), so that deriving
+  ///   the exchange symmetry from the
+  ///   traits again reproduces what was given. A pin no trait combination
+  ///   derives over @p base_fld (Symm or Antisymm over a complex basis, where
+  ///   the exchange relates an array to its conjugate) is refused: such an
+  ///   array is real, and a real array is declared through the basis field.
+  /// - #Symmetry, #Hermiticity, #ConjugationParity and #ColumnSymmetry fall
+  ///   back to the *fixed* library defaults in Tensor::Defaults -- the safest,
+  ///   fully non-symmetric / non-Hermitian choice -- when not specified.
   /// @param syms the (partially specified) symmetry pack
   /// @param base_fld the tensor's #base_field, used to derive the
-  ///        #BraKetSymmetry from the #Hermiticity
+  ///        #BraKetSymmetry from the #Hermiticity and #ConjugationParity
+  /// @throw Exception if the given #BraKetSymmetry is not derivable from the
+  ///        given traits over @p base_fld
   /// @note Programmatic Tensor construction never consults the default
   ///       sequant::Context: the meaning of a ctor call is independent of
   ///       ambient global state (so it is predictable and lock-free). Only the
@@ -340,33 +426,89 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const Symmetry s_resolved = syms.perm.value_or(Defaults::symmetry);
     const ColumnSymmetry ps_resolved =
         syms.column.value_or(Defaults::column_symmetry);
-    const Hermiticity h_resolved =
-        syms.hermiticity.value_or(Defaults::hermiticity);
-    const BraKetSymmetry bks_resolved =
-        syms.braket.has_value() ? *syms.braket
-                                : to_braket_symmetry(h_resolved, base_fld);
-    // #braket and #hermiticity spell the same underlying trait, so a caller
-    // that gives both must give a consistent pair. N.B. the comparison is on
-    // the *derived* braket symmetry, so pinning AntiHermitian (which
-    // BraKetSymmetry cannot represent) alongside its Nonsymm braket is legal.
-    if (syms.braket.has_value() && syms.hermiticity.has_value() &&
-        to_braket_symmetry(*syms.hermiticity, base_fld) != *syms.braket)
-      throw Exception(
-          "Tensor: the given BraKetSymmetry and Hermiticity contradict each "
-          "other");
-    // an explicit Hermiticity is reported verbatim, to preserve traits that
-    // the BraKetSymmetry round-trip cannot represent (e.g. AntiHermitian)
-    const Hermiticity hermiticity_resolved =
-        syms.hermiticity.has_value()
-            ? *syms.hermiticity
-            : (syms.braket.has_value() ? to_hermiticity(*syms.braket)
-                                       : h_resolved);
-    return {s_resolved,
-            bks_resolved,
-            hermiticity_resolved,
-            ps_resolved,
-            syms.column.has_value(),
-            syms.perm.has_value()};
+    if (!syms.braket.has_value()) {
+      const Hermiticity h = syms.hermiticity.value_or(Defaults::hermiticity);
+      const ConjugationParity k =
+          syms.conjugation_parity.value_or(Defaults::conjugation_parity);
+      return {s_resolved,
+              to_braket_symmetry(h, k, base_fld),
+              h,
+              k,
+              ps_resolved,
+              syms.column.has_value(),
+              syms.perm.has_value()};
+    }
+    // an explicit exchange symmetry: search the traits that derive it, the
+    // given ones fixed
+    constexpr std::array hermiticities{Hermiticity::Hermitian,
+                                       Hermiticity::AntiHermitian,
+                                       Hermiticity::NonHermitian};
+    constexpr std::array parities{ConjugationParity::Even,
+                                  ConjugationParity::Odd,
+                                  ConjugationParity::None};
+    for (const auto k : parities) {
+      if (syms.conjugation_parity.has_value() && k != *syms.conjugation_parity)
+        continue;
+      for (const auto h : hermiticities) {
+        if (syms.hermiticity.has_value() && h != *syms.hermiticity) continue;
+        if (to_braket_symmetry(h, k, base_fld) == *syms.braket)
+          return {s_resolved,
+                  *syms.braket,
+                  h,
+                  k,
+                  ps_resolved,
+                  syms.column.has_value(),
+                  syms.perm.has_value()};
+      }
+    }
+    const auto name = [](BraKetSymmetry b) -> const char * {
+      switch (b) {
+        case BraKetSymmetry::Symm:
+          return "Symm";
+        case BraKetSymmetry::Conjugate:
+          return "Conjugate";
+        case BraKetSymmetry::Nonsymm:
+          return "Nonsymm";
+        case BraKetSymmetry::Antisymm:
+          return "Antisymm";
+        case BraKetSymmetry::AntiConjugate:
+          return "AntiConjugate";
+      }
+      SEQUANT_UNREACHABLE;
+    };
+    throw Exception(
+        std::string("Tensor: BraKetSymmetry::") + name(*syms.braket) +
+        " is not derivable from " +
+        (syms.hermiticity.has_value() || syms.conjugation_parity.has_value()
+             ? "the given traits"
+             : "any hermiticity and conjugation parity") +
+        " over a " + (base_fld == Field::Real ? "real" : "complex") +
+        " basis (a real array is declared through the basis field, "
+        "IndexSpace::field)");
+  }
+
+  /// @return the elementwise ConjugationSymmetry an array of @p parity would
+  ///         have over the current bra_/ket_, or Nonsymm for a tensor with no
+  ///         bra/ket slot at all
+  /// @note the aux slots take no part: they are array-like, with no
+  ///       primal/dual pairing, so they carry no basis over which the
+  ///       conjugation relation could be stated. A tensor without bra/ket
+  ///       slots has no such basis either, so it asserts no conjugation
+  ///       symmetry rather than borrowing a vacuously real field.
+  ConjugationSymmetry conjugation_symmetry_of(ConjugationParity parity) const {
+    const auto has_slot = [](const auto &indices) {
+      for (const Index &idx : indices)
+        if (idx) return true;
+      return false;
+    };
+    if (!has_slot(bra_) && !has_slot(ket_)) return ConjugationSymmetry::Nonsymm;
+    return to_conjugation_symmetry(parity, base_field());
+  }
+
+  /// @return the elementwise ConjugationSymmetry derived from
+  ///         conjugation_parity_ over the current bra_/ket_
+  ConjugationSymmetry derive_conjugation_symmetry() const {
+    return conjugation_symmetry_of(conjugation_parity_);
   }
 
   // fully-resolved terminal ctor (range form)
@@ -384,11 +526,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         symmetry_(rsym.symmetry),
         braket_symmetry_(rsym.braket_symmetry),
         hermiticity_(rsym.hermiticity),
+        conjugation_parity_(rsym.conjugation_parity),
         column_symmetry_(rsym.column_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    // the conjugation symmetry is resolved before the label's marks are
+    // adopted: normalizing the states reads it
+    conjugation_symmetry_ = derive_conjugation_symmetry();
+    adopt_marks();
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -407,11 +554,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         symmetry_(rsym.symmetry),
         braket_symmetry_(rsym.braket_symmetry),
         hermiticity_(rsym.hermiticity),
+        conjugation_parity_(rsym.conjugation_parity),
         column_symmetry_(rsym.column_symmetry),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
             ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
+    // the conjugation symmetry is resolved before the label's marks are
+    // adopted: normalizing the states reads it
+    conjugation_symmetry_ = derive_conjugation_symmetry();
+    adopt_marks();
     validate_indices();
     check_symmetries(rsym.column_symmetry_specified, rsym.symmetry_specified);
     canonicalize_slots();
@@ -700,39 +852,67 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
-  /// @throw Exception if @p label is a reserved density label (see
+  /// @param label the new label; trailing marks (`⁺`, `꙳`) in @p label are
+  ///        adopted into the states, exactly as in the constructors; callers
+  ///        that only rename must not pass a label ending in a mark.
+  /// @throw Exception if the bare label is a reserved density label (see
   ///        reserved::density_labels()) and this lacks its defining symmetries
   void set_label(std::wstring label) override {
-    if (ranges::contains(reserved::density_labels(), label)) {
-      const auto previous = std::exchange(label_, std::move(label));
+    const auto previous = std::exchange(label_, std::move(label));
+    adopt_marks();
+    if (ranges::contains(reserved::density_labels(), label_)) {
       try {
         check_density_symmetries();
       } catch (...) {
         label_ = previous;
         throw;
       }
-    } else {
-      label_ = std::move(label);
     }
     reset_hash_value();
   }
   /// @return the bra slot range (empty slots are occupied by null indices)
   const auto &bra() const { return bra_; }
+  /// @brief replaces the bra bundle, then reconciles the field-derived
+  /// symmetries and the states with the new slots (see
+  /// renormalize_after_slot_mutation())
+  /// @throw Exception if the normalization consumes a sign, in which case the
+  ///        tensor is left as the call found it
   void set_bra(index_container_type indices) {
+    auto before = slot_snapshot_if_stateful();
     bra_ = sequant::bra(std::move(indices));
+    bra_net_rank_ =
+        ranges::count_if(bra_, [](const Index &idx) { return idx.nonnull(); });
     reset_hash_value();
+    renormalize_after_slot_mutation("set_bra", std::move(before));
   }
   /// @return the ket slot range (empty slots are occupied by null indices)
   const auto &ket() const { return ket_; }
+  /// @brief replaces the ket bundle, then reconciles the field-derived
+  /// symmetries and the states with the new slots (see
+  /// renormalize_after_slot_mutation())
+  /// @throw Exception if the normalization consumes a sign, in which case the
+  ///        tensor is left as the call found it
   void set_ket(index_container_type indices) {
+    auto before = slot_snapshot_if_stateful();
     ket_ = sequant::ket(std::move(indices));
+    ket_net_rank_ =
+        ranges::count_if(ket_, [](const Index &idx) { return idx.nonnull(); });
     reset_hash_value();
+    renormalize_after_slot_mutation("set_ket", std::move(before));
   }
   /// @return the aux slot range (empty slots are occupied by null indices)
   const auto &aux() const { return aux_; }
+  /// @brief replaces the aux bundle, then reconciles the field-derived
+  /// symmetries and the states with the new slots (see
+  /// renormalize_after_slot_mutation()), which the aux bundle does not move:
+  /// it is no part of base_field() and no part of the net ranks
+  /// @throw Exception if the normalization consumes a sign, in which case the
+  ///        tensor is left as the call found it
   void set_aux(index_container_type indices) {
+    auto before = slot_snapshot_if_stateful();
     aux_ = sequant::aux(std::move(indices));
     reset_hash_value();
+    renormalize_after_slot_mutation("set_aux", std::move(before));
   }
   /// @return concatenated view of the bra and ket slot ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
@@ -789,22 +969,56 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @return the BraKetSymmetry object describing the symmetry of the Tensor
   /// under exchange of bra and ket.
   /// @note this is the *derived* observable; it is the composition of the
-  /// (field-agnostic) #hermiticity with this tensor's #base_field, resolved
-  /// when this Tensor was constructed (see to_braket_symmetry).
+  /// (field-agnostic) #hermiticity and #conjugation_parity with this
+  /// tensor's #base_field, resolved when this Tensor was constructed (see
+  /// to_braket_symmetry).
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
   /// @return the Hermiticity object describing the (field-agnostic) symmetry of
   /// the abstract tensor under (Hermitian) adjoint.
   /// @sa braket_symmetry()
   Hermiticity hermiticity() const { return hermiticity_; }
+  /// @return the trait of the represented operator under complex conjugation
+  ConjugationParity conjugation_parity() const { return conjugation_parity_; }
+  /// @return the elementwise conjugation symmetry of this array, derived at
+  ///         construction from conjugation_parity() and base_field() (the
+  ///         bra/ket slots only; aux slots are array-like and pair nothing).
+  ///         A tensor without bra/ket slots has no basis for the relation to
+  ///         be stated over and asserts none: Nonsymm.
+  ConjugationSymmetry conjugation_symmetry() const {
+    return conjugation_symmetry_;
+  }
+  /// @return the conjugation symmetry this tensor would have with parity
+  ///         Even: Nonsymm without bra/ket slots, else
+  ///         to_conjugation_symmetry(Even, base_field())
+  /// @note the default a reader compares against to tell whether this
+  ///       tensor's conjugation symmetry says anything of its own
+  /// @sa conjugation_symmetry()
+  ConjugationSymmetry even_parity_conjugation_symmetry() const {
+    return conjugation_symmetry_of(ConjugationParity::Even);
+  }
   /// @return the base scalar Field of this tensor: the OR of its bra/ket index
   /// spaces' IndexSpace::field() (Complex dominates). Together with
-  /// #hermiticity it determines #braket_symmetry.
+  /// #hermiticity and #conjugation_parity it determines #braket_symmetry.
   /// @sa sequant::base_field, IndexSpace::field
   Field base_field() const { return sequant::base_field(bra_, ket_); }
   /// @return the ColumnSymmetry object describing the symmetry of the Tensor
   /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}
   /// slot bundles).
   ColumnSymmetry column_symmetry() const { return column_symmetry_; }
+  /// @return the traits, for rebuilding this tensor with other slots; the
+  ///         field-dependent symmetries are derived again from them
+  /// @note no #TensorSymmetries::braket is pinned: the traits always derive
+  ///       the stored exchange symmetry (resolve_symmetries() accepts no
+  ///       other), so it is derived again from #hermiticity,
+  ///       #conjugation_parity and the new slots' field, which is what
+  ///       with_slots() does and what a rebuild onto slots over another field
+  ///       needs
+  TensorSymmetries symmetries() const {
+    return {.perm = symmetry_,
+            .hermiticity = hermiticity_,
+            .conjugation_parity = conjugation_parity_,
+            .column = column_symmetry_};
+  }
 
   /// @return number of bra slots (some may be occupied by null indices, hence
   /// this is the gross rank)
@@ -850,8 +1064,19 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     std::wstring core_label;
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
       core_label += L"\\bar{";
-    core_label += io::latex::utf_to_string(this->label());
+    core_label += io::latex::utf_to_string(label_);
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
+    // the states are part of the core label -- `t`, `t⁺` and `t꙳` are
+    // different arrays -- and typeset as its superscript
+    if (adjointed_ || kconjugated_) {
+      std::wstring states;
+      if (adjointed_) states += L"\\dagger";
+      if (kconjugated_) {
+        if (!states.empty()) states += L" ";
+        states += L"*";
+      }
+      core_label = L"{" + core_label + L"^{" + states + L"}}";
+    }
 
     switch (bkst) {
       case BraKetSlotTypesetting::Naive: {
@@ -907,20 +1132,126 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ExprPtr canonicalize(CanonicalizeOptions opts =
                            CanonicalizeOptions::default_options()) override;
 
-  /// @brief adjoint of a Tensor swaps its bra and ket
-  virtual void adjoint() override;
+  /// @return whether this is the adjoint of the array label() names
+  bool adjointed() const { return adjointed_; }
+  /// @return whether this is the K-conjugate of the array label() names
+  bool kconjugated() const { return kconjugated_; }
+
+  /// @brief the adjoint: exchanges bra and ket, toggles the adjointed state,
+  /// normalizes (see normalize_states()); over a real basis with both traits
+  /// indefinite the result is the K-conjugate with the slots in place
+  /// @return the sign consumed; sequant::adjoint(const ExprPtr&) turns it
+  ///         into a scalar factor
+  [[nodiscard]] std::int8_t adjoint() override {
+    _swap_bra_ket();
+    adjointed_ = !adjointed_;
+    const auto sign = normalize_states();
+    reset_hash_value();
+    return sign;
+  }
+
+  /// @brief complex conjugation of the represented operator, `K O K⁻¹`:
+  /// toggles the K-conjugated state, slots untouched, normalizes. Over a real
+  /// basis this is the elementwise conjugate of the array; over a complex
+  /// basis it is a different operator's matrix and _not_ the conjugate of the
+  /// values (that is adjoint() with the slots exchanged).
+  /// @note where the conjugation is the adjoint (a real basis, or no bra/ket
+  ///       slots) a definite #Hermiticity consumes the mark and exchanges the
+  ///       bundles, so this leaves the slots in place only for a tensor whose
+  ///       hermiticity is indefinite
+  /// @return the sign consumed: −1 for an odd-parity array, or for an
+  ///         anti-Hermitian one whose conjugation is the adjoint
+  [[nodiscard]] std::int8_t kconjugate() override {
+    kconjugated_ = !kconjugated_;
+    const auto sign = normalize_states();
+    reset_hash_value();
+    return sign;
+  }
+
+  /// @brief sets both states on a tensor whose slots already are the intended
+  /// ones (a rebuild, the deserializer, OpMaker): the states are assigned
+  /// rather than toggled, no exchange preceding them
+  /// @note the normalization that follows can still exchange the bundles,
+  ///       since over a real basis the coset rule trades a `⁺` for a `꙳`
+  ///       with the slots exchanged back
+  /// @return the sign consumed by the normalization
+  [[nodiscard]] std::int8_t set_states(bool adjointed, bool kconjugated) {
+    adjointed_ = adjointed;
+    kconjugated_ = kconjugated;
+    const auto sign = normalize_states();
+    reset_hash_value();
+    return sign;
+  }
+
+  /// @return label() followed by the marks of the set states, `⁺` first:
+  ///         the printed core label and the exporters' array-name source
+  std::wstring decorated_label() const {
+    std::wstring result(label_);
+    if (adjointed_) result.push_back(sequant::adjoint_label);
+    if (kconjugated_) result.push_back(sequant::conjugate_label);
+    return result;
+  }
+
+  /// @brief rebuilds this tensor with new slot bundles, carrying every
+  /// non-slot attribute: label, #Symmetry, #BraKetSymmetry, #Hermiticity,
+  /// #ColumnSymmetry, and the two core states.
+  ///
+  /// The sanctioned rebuild API for transforms that rewrite a tensor's slots
+  /// (relabeling, expansion, factorization rules): rebuilding through a plain
+  /// constructor silently drops the states (and can demote Hermiticity),
+  /// corrupting every complex-field workflow downstream.
+  // N.B. the slot bundle types are qualified because at this point in the
+  // class the bra()/ket()/aux() member accessors shadow the strong-type
+  // templates
+  [[nodiscard]] Tensor with_slots(
+      sequant::bra<index_container_type> new_bra,
+      sequant::ket<index_container_type> new_ket,
+      sequant::aux<index_container_type> new_aux) const {
+    // the traits (label, symmetry, hermiticity, conjugation parity, column
+    // symmetry) and the states are carried; the field-dependent symmetries
+    // are derived again from them and the new slots, so a rebuild onto
+    // slots of another field stays consistent
+    const auto rsym = resolve_symmetries(
+        symmetries(), sequant::base_field(new_bra.value(), new_ket.value()));
+    Tensor t(label_, std::move(new_bra), std::move(new_ket), std::move(new_aux),
+             reserved_tag{}, rsym);
+    t.adjointed_ = adjointed_;
+    t.kconjugated_ = kconjugated_;
+    // the states denote a value relative to *this* tensor's traits; over the
+    // new slots' field they are normalized again, as a fresh construction
+    // would, so that a set state always denotes a distinct value. A rebuild
+    // whose normalization costs a sign names minus a tensor, which no Tensor
+    // can hold.
+    if (t.normalize_states() != 1)
+      throw Exception(
+          "Tensor::with_slots: over the new slots' traits the states denote "
+          "minus the tensor; apply sequant::adjoint / kconjugate to the "
+          "expression instead");
+    t.reset_hash_value();
+    return t;
+  }
 
   /// Replaces indices using the index map
   /// @param index_map maps Index to Index
   /// @return true if one or more indices changed
+  /// @note a replacement can move the tensor onto a basis of another #Field, so
+  ///       the field-derived symmetries and the states are reconciled with the
+  ///       new slots afterwards (see renormalize_after_slot_mutation()); a
+  ///       relabeling within one field leaves both as they are
+  /// @throw Exception if the normalization consumes a sign, in which case the
+  ///        tensor is left as the call found it
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
   bool transform_indices(const Map<Index, Index, Args...> &index_map) {
+    auto before = slot_snapshot_if_stateful();
     bool mutated = false;
     ranges::for_each(indices(), [&](auto &idx) {
       if (idx.transform(index_map)) mutated = true;
     });
-    if (mutated) this->reset_hash_value();
+    if (mutated) {
+      this->reset_hash_value();
+      renormalize_after_slot_mutation("transform_indices", std::move(before));
+    }
     return mutated;
   }
 
@@ -961,17 +1292,219 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   sequant::aux<index_container_type> aux_{};
   Symmetry symmetry_ = Symmetry::Nonsymm;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::Nonsymm;
-  // field-agnostic abstract trait; braket_symmetry_ is its resolution against
-  // base_field() at construction. Not folded into the hash / static_equal:
-  // braket_symmetry_ is the observable that drives canonicalization, and
-  // AntiHermitian/NonHermitian currently share it.
+  // field-agnostic abstract trait; braket_symmetry_ is its resolution
+  // (together with conjugation_parity_) against base_field() at construction.
+  // Not folded into the hash / static_equal: braket_symmetry_ is the
+  // observable that drives canonicalization.
   // N.B. not separately serialized: (de)serialization records braket_symmetry_,
-  // from which hermiticity is reconstructed via to_hermiticity(); this is
-  // lossless except that AntiHermitian round-trips as NonHermitian (both
-  // serialize as Nonsymm). Acceptable while AntiHermitian is unused (it has no
-  // distinct canonicalization behavior yet); revisit if that changes.
+  // from which hermiticity is reconstructed via to_hermiticity().
   Hermiticity hermiticity_ = Hermiticity::NonHermitian;
+  // field-agnostic trait; conjugation_symmetry_ is its resolution against
+  // base_field() (see derive_conjugation_symmetry()) at construction. The
+  // parity itself is not folded into the hash / static_equal, only the resolved
+  // conjugation_symmetry_ (see memoizing_hash).
+  ConjugationParity conjugation_parity_ = ConjugationParity::Even;
+  ConjugationSymmetry conjugation_symmetry_ = ConjugationSymmetry::Nonsymm;
   ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
+  // the two core states (see the class doc): `⁺` the adjoint of the
+  // represented operator, `꙳` its complex conjugate K O K⁻¹; both are kept
+  // out of label_ so that label() names the array and rebuilds cannot lose or
+  // invent them
+  bool adjointed_ = false;
+  bool kconjugated_ = false;
+
+  /// @return the states as one number, `adjointed | kconjugated << 1`: the
+  ///         hash term and the ordering key (`t < t⁺ < t꙳ < t⁺꙳`)
+  std::uint8_t states_code() const {
+    return static_cast<std::uint8_t>((adjointed_ ? 1 : 0) |
+                                     (kconjugated_ ? 2 : 0));
+  }
+
+  /// everything about a Tensor that its slots decide: the three bundles, the
+  /// cached net ranks, the two core states and the two field-derived
+  /// symmetries. Taken before a slot mutation (slot_snapshot_if_stateful()) so
+  /// that a refused mutation is undone whole, down to the slots' #Field, which
+  /// Index equality does not see.
+  struct SlotSnapshot {
+    sequant::bra<index_container_type> bra;
+    sequant::ket<index_container_type> ket;
+    sequant::aux<index_container_type> aux;
+    std::size_t bra_net_rank;
+    std::size_t ket_net_rank;
+    bool adjointed;
+    bool kconjugated;
+    BraKetSymmetry braket_symmetry;
+    ConjugationSymmetry conjugation_symmetry;
+  };
+
+  /// @return the slot-decided state of this tensor where a core state is set,
+  ///         and nothing otherwise: only a set state can make the
+  ///         normalization in renormalize_after_slot_mutation() refuse, and
+  ///         only a refusal has anything to undo
+  std::optional<SlotSnapshot> slot_snapshot_if_stateful() const {
+    if (!adjointed_ && !kconjugated_) return std::nullopt;
+    return SlotSnapshot{bra_,
+                        ket_,
+                        aux_,
+                        bra_net_rank_,
+                        ket_net_rank_,
+                        adjointed_,
+                        kconjugated_,
+                        braket_symmetry_,
+                        conjugation_symmetry_};
+  }
+
+  /// @brief puts back what slot_snapshot_if_stateful() recorded
+  void restore_slots(SlotSnapshot &&saved) {
+    bra_ = std::move(saved.bra);
+    ket_ = std::move(saved.ket);
+    aux_ = std::move(saved.aux);
+    bra_net_rank_ = saved.bra_net_rank;
+    ket_net_rank_ = saved.ket_net_rank;
+    adjointed_ = saved.adjointed;
+    kconjugated_ = saved.kconjugated;
+    braket_symmetry_ = saved.braket_symmetry;
+    conjugation_symmetry_ = saved.conjugation_symmetry;
+    reset_hash_value();
+  }
+
+  /// @brief brings the field-derived attributes and the two core states back in
+  /// line with the slots after a mutation, so that a mutated tensor is the
+  /// tensor a construction over the new slots would have given:
+  /// #BraKetSymmetry and the elementwise #ConjugationSymmetry are derived again
+  /// from the field-agnostic traits and the slots' #Field, and the states are
+  /// then normalized against them.
+  /// @param api the mutating member's name, for the exception message
+  /// @param before the slot state as the call found it, from
+  ///        slot_snapshot_if_stateful()
+  /// @note a mutation can put the tensor on a basis of another field, where the
+  ///       coset rule identifies `⁺` with `꙳` and a definite trait consumes the
+  ///       mark outright, so a state left as written would name a different
+  ///       array
+  /// @throw Exception if the normalization consumes a −1: that names minus a
+  ///        tensor, which no Tensor can hold, exactly as in with_slots(). The
+  ///        tensor is restored to what @p before recorded first, so a refused
+  ///        mutation leaves it as the call found it, down to the slots' field.
+  void renormalize_after_slot_mutation(std::string_view api,
+                                       std::optional<SlotSnapshot> &&before) {
+    braket_symmetry_ =
+        resolve_symmetries(symmetries(), base_field()).braket_symmetry;
+    conjugation_symmetry_ = derive_conjugation_symmetry();
+    if (adjointed_ || kconjugated_) {
+      SEQUANT_ASSERT(before.has_value());
+      if (normalize_states() != 1) {
+        restore_slots(std::move(*before));
+        throw Exception(
+            "Tensor::" + std::string(api) +
+            ": over the mutated slots' traits the states denote minus the "
+            "tensor; apply sequant::adjoint / kconjugate to the expression "
+            "instead");
+      }
+    }
+    reset_hash_value();
+  }
+
+  /// @brief reduces the states against the traits and returns the sign it
+  /// consumes: `⁺` against the hermiticity (`T⁺ = ±T` clears it), `꙳`
+  /// against the parity (`T꙳ = ±T` clears it, see kconjugation_sign()). Over
+  /// a real basis, or with no bra/ket slot, `T⁺{q;p}` and `T꙳{p;q}` are two
+  /// spellings of one value (kconjugation_is_the_adjoint()), so the coset
+  /// rule identifies them: a definite hermiticity consumes the mark
+  /// altogether at its sign, with the bundles exchanged; an indefinite one
+  /// keeps `꙳`, which is what makes adjoint() leave the slots in place and
+  /// toggle `꙳` there.
+  [[nodiscard]] std::int8_t normalize_states() {
+    std::int8_t sign = 1;
+    if (adjointed_) {
+      if (const auto s = adjoint_sign(hermiticity_)) {
+        adjointed_ = false;
+        sign = static_cast<std::int8_t>(sign * *s);
+      } else if (kconjugation_is_the_adjoint()) {
+        // coset rule: `T⁺{q;p}` and `T꙳{p;q}` are one value, so the `⁺` is
+        // traded for a `꙳` with the bundles exchanged back (a bra/ket-less
+        // tensor has nothing to exchange)
+        adjointed_ = false;
+        kconjugated_ = !kconjugated_;
+        if (bra_net_rank() != 0 || ket_net_rank() != 0) _swap_bra_ket();
+      }
+    }
+    if (kconjugated_ && kconjugation_is_the_adjoint()) {
+      // the other direction of the coset rule: `T꙳{p;q}` is `T⁺{q;p}`, which
+      // a definite hermiticity reduces to `±T{q;p}` -- the mark is consumed
+      // and the bundles are exchanged (a bra/ket-less tensor has nothing to
+      // exchange). Ahead of the parity check, so a definite hermiticity wins
+      // where the parity is indefinite; there is no cycle with the `⁺` branch
+      // above, which trades `⁺` for `꙳` only where the hermiticity is not.
+      if (const auto s = adjoint_sign(hermiticity_)) {
+        kconjugated_ = false;
+        sign = static_cast<std::int8_t>(sign * *s);
+        if (bra_net_rank() != 0 || ket_net_rank() != 0) _swap_bra_ket();
+      }
+    }
+    if (kconjugated_) {
+      if (const auto s = kconjugation_sign()) {
+        kconjugated_ = false;
+        sign = static_cast<std::int8_t>(sign * *s);
+      }
+    }
+    return sign;
+  }
+
+  /// whether `T⁺{q;p}` and `T꙳{p;q}` denote one value: over a real basis
+  /// (`Kp = p`, so the conjugate of the value is the K-conjugated operator's
+  /// matrix element), and for a tensor without bra/ket slots (empty exchange)
+  bool kconjugation_is_the_adjoint() const {
+    return base_field() == Field::Real ||
+           (bra_net_rank() == 0 && ket_net_rank() == 0);
+  }
+
+  /// @return the sign `s` in `T꙳ = s T` that the parity states, if any. The
+  ///         parity states it in every basis (`K O K⁻¹ = ±O` is a property of
+  ///         the operator, not of the matrix; the elementwise
+  ///         conjugation_symmetry() is a different, basis-dependent
+  ///         observable). Where the hermiticity states a sign too -- over a
+  ///         real basis, or without bra/ket slots, where the conjugation is
+  ///         the adjoint -- normalize_states() applies that one first.
+  std::optional<std::int8_t> kconjugation_sign() const {
+    switch (conjugation_parity_) {
+      case ConjugationParity::Even:
+        return std::int8_t{1};
+      case ConjugationParity::Odd:
+        return std::int8_t{-1};
+      case ConjugationParity::None:
+        return std::nullopt;
+    }
+    SEQUANT_UNREACHABLE;
+  }
+
+  /// adopts trailing marks of label_ (`⁺`, `꙳`, either order, at most one
+  /// each) into the states and normalizes; a mark whose normalization carries
+  /// −1 names minus a tensor, which no Tensor can hold, and is refused
+  void adopt_marks() {
+    bool adj = false, kconj = false;
+    while (!label_.empty()) {
+      const wchar_t c = label_.back();
+      if (c == sequant::adjoint_label) {
+        if (adj) throw Exception("Tensor: repeated adjoint mark in the label");
+        adj = true;
+      } else if (c == sequant::conjugate_label) {
+        if (kconj)
+          throw Exception("Tensor: repeated conjugation mark in the label");
+        kconj = true;
+      } else {
+        break;
+      }
+      label_.pop_back();
+    }
+    if (!adj && !kconj) return;
+    adjointed_ = adj;
+    kconjugated_ = kconj;
+    if (normalize_states() != 1)
+      throw Exception(
+          "Tensor: the label's marks denote minus a tensor; build it with "
+          "sequant::adjoint / sequant::kconjugate(const ExprPtr&)");
+  }
+
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   std::size_t bra_net_rank_;
@@ -1054,8 +1587,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, label_);
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
+      // the default state adds nothing, so complex-field tensors keep their
+      // hash
+      if (conjugation_symmetry_ != ConjugationSymmetry::Nonsymm)
+        hash::combine(val, conjugation_symmetry_);
       hash::combine(val, column_symmetry_);
-      // N.B. adjointness is baked into the label
+      // the states enter the hash as one numeric term on the bare label; the
+      // default state adds nothing, so unmarked tensors keep their hash
+      if (adjointed_ || kconjugated_) hash::combine(val, states_code());
       return val;
     };
     if (!hash_value_) {
@@ -1073,8 +1612,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() == that_cast.label() &&
+        this->adjointed_ == that_cast.adjointed_ &&
+        this->kconjugated_ == that_cast.kconjugated_ &&
         this->symmetry() == that_cast.symmetry() &&
         this->braket_symmetry() == that_cast.braket_symmetry() &&
+        this->conjugation_symmetry() == that_cast.conjugation_symmetry() &&
         this->column_symmetry() == that_cast.column_symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
         this->ket_rank() == that_cast.ket_rank() &&
@@ -1096,6 +1638,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() != that_cast.label()) {
       return this->label() < that_cast.label();
+    }
+
+    if (this->states_code() != that_cast.states_code()) {
+      return this->states_code() < that_cast.states_code();
     }
 
     if (this->bra_rank() != that_cast.bra_rank()) {
@@ -1169,6 +1715,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     return braket_symmetry_;
   }
   Hermiticity _hermiticity() const override final { return hermiticity_; }
+  ConjugationParity _conjugation_parity() const override final {
+    return conjugation_parity_;
+  }
+  ConjugationSymmetry _conjugation_symmetry() const override final {
+    return conjugation_symmetry_;
+  }
   ColumnSymmetry _column_symmetry() const override final {
     return column_symmetry_;
   }
@@ -1216,6 +1768,17 @@ static_assert(is_tensor<Tensor>,
               "Tensor interface");
 
 using TensorPtr = std::shared_ptr<Tensor>;
+
+/// @return @p t viewed as a c-number Tensor, or nullptr if @p t is some other
+///         AbstractTensor (e.g. an operator-valued NormalOperator), which
+///         carries neither core state: an operator has an adjoint and is
+///         K-invariant
+inline Tensor *as_cnumber_tensor(AbstractTensor &t) {
+  return dynamic_cast<Tensor *>(&t);
+}
+inline const Tensor *as_cnumber_tensor(const AbstractTensor &t) {
+  return dynamic_cast<const Tensor *>(&t);
+}
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
   // an overlap is Hermitian and particle (column) symmetric by definition;
