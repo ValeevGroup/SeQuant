@@ -1432,7 +1432,7 @@ TEST_CASE("canonicalize_lone_term", "[algorithms]") {
 TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
           "[canonicalize][proto]") {
   // Regression: the lexicographic dummy rewrite skipped "named" edges by
-  // POSITION (loop started at named_indices.size()). A named index that is
+  // _position_ (loop started at named_indices.size()). A named index that is
   // not an edge -- e.g. a pure proto index -- shifted that cutoff onto an
   // anonymous edge; its skipped ordinal was then handed to another edge of
   // the same space, duplicating a slot index (both t virtuals became a_1).
@@ -1443,7 +1443,7 @@ TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
   auto resetter = set_scoped_default_context(ctx);
 
   const Index i1{L"i_1"}, i2{L"i_2"}, i3{L"i_3"};
-  // i_2 is a PURE proto: it decorates the virtuals but is no tensor slot
+  // i_2 is a _pure_ proto: it decorates the virtuals but is no tensor slot
   const Index a1 = Index(L"a_1", {i2, i3});
   const Index a2 = Index(L"a_2", {i2, i3});
 

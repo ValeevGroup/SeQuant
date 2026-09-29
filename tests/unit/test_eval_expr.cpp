@@ -892,7 +892,7 @@ TEST_CASE("canon_transform_algebra", "[EvalExpr][conj-transform]") {
   REQUIRE(cs.conj);
   REQUIRE(cs.braket_swap);
   REQUIRE(compose(c, c).trivial());  // involution
-  // structural salt: conj/swap enter, phase does NOT (hoistable)
+  // structural salt: conj/swap enter, phase does _not_ (hoistable)
   REQUIRE(CanonTransform{.phase = -1}.structural_salt() ==
           CanonTransform{}.structural_salt());
   REQUIRE(c.structural_salt() != CanonTransform{}.structural_salt());
@@ -1138,7 +1138,7 @@ TEST_CASE("re_im_eval_nodes", "[EvalExpr][re-im]") {
   REQUIRE(re.right()->is_constant());
   REQUIRE(re.left()->is_product());
 
-  // the inner subtree occupies the SAME slot as an independent binarize of s
+  // the inner subtree occupies the _same_ slot as an independent binarize of s
   auto inner_alone = binarize(s_expr->clone());
   REQUIRE(re.left()->hash_value() == inner_alone->hash_value());
 
@@ -1153,7 +1153,7 @@ TEST_CASE("re_im_eval_nodes", "[EvalExpr][re-im]") {
 }
 
 TEST_CASE("tot_leaf_canonical_spelling_and_phase", "[eval_expr][tot][phase]") {
-  // A tensor-of-tensors leaf is block-canonicalized IN PLACE like a flat
+  // A tensor-of-tensors leaf is block-canonicalized in place like a flat
   // leaf: the stored spelling (what a leaf provider serves) and
   // canon_indices() carry the canonical slot order, the antisymmetric
   // reorder phase is the retrieval transform's byproduct, and the two
@@ -1187,7 +1187,7 @@ TEST_CASE("tot_leaf_canonical_spelling_and_phase", "[eval_expr][tot][phase]") {
   REQUIRE(e23.canon_transform().phase * e32.canon_transform().phase == -1);
   REQUIRE_FALSE(e23.canon_transform().conj);
   REQUIRE_FALSE(e32.canon_transform().conj);
-  // a MIXED-flavor bundle is stored space-major (up before down: the named
+  // a _mixed_-flavor bundle is stored space-major (up before down: the named
   // canonical order), whichever way it was written -- the raw canonical
   // vertex order sorts colors by their hash, which a provider cannot follow
   const Index b3(L"a↓_3", {i1, i2});
@@ -1200,8 +1200,8 @@ TEST_CASE("tot_leaf_canonical_spelling_and_phase", "[eval_expr][tot][phase]") {
 
 TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
   // Products and sums that differ only by the slot order of an antisymmetric
-  // ToT leaf: the leaf's reorder parity is a child TRANSFORM (its hash is
-  // phase-blind), so the parents occupy ONE slot. A product carries the
+  // ToT leaf: the leaf's reorder parity is a child _transform_ (its hash is
+  // phase-blind), so the parents occupy _one_ slot. A product carries the
   // parity in its own transform (phases hoist multiplicatively); a sum
   // hoists a uniform parity and salts a mixed one -- otherwise one slot
   // would hold sign-different values for the two spellings.
@@ -1249,9 +1249,9 @@ TEST_CASE("leaf_reorder_phase_hoists_into_parents", "[eval_expr][tot][phase]") {
 }
 
 TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
-  // a sum's slot depends on ALL its summands: A + B and A + C are different
+  // a sum's slot depends on _all_ its summands: A + B and A + C are different
   // values; A + B and B + A are one value (the summand hash multiset is
-  // order-blind) unless the leading summand's LAYOUT differs
+  // order-blind) unless the leading summand's _layout_ differs
   using namespace sequant;
   auto sum_of = [](std::wstring_view a, std::wstring_view b) {
     return binarize(ex<Sum>(ExprPtrList{deserialize(a), deserialize(b)}));
@@ -1265,7 +1265,7 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
   // the same sum shares it too
   REQUIRE(ab->hash_value() == ba->hash_value());
   REQUIRE(ab->hash_value() == ab2->hash_value());
-  // the result layout is the FIRST summand's: the same summands in another
+  // the result layout is the _first_ summand's: the same summands in another
   // order with a different leading layout are a different slot (the cached
   // array would be served in the wrong mode order otherwise)
   // (NonHermitian f keeps its written orientation, so the two leaves have
@@ -1280,7 +1280,7 @@ TEST_CASE("sum_slot_identity_covers_every_summand", "[eval_expr][sum]") {
       ex<Sum>(ExprPtrList{nonherm(L"f{i_1;a_1}"), nonherm(L"t{a_1;i_1}")}));
   REQUIRE(tf->canon_indices().front() != ft->canon_indices().front());
   REQUIRE(tf->hash_value() != ft->hash_value());
-  // three summands: the LAST one must count too
+  // three summands: the _last_ one must count too
   auto const abc = binarize(ex<Sum>(ExprPtrList{deserialize(L"f{i_1;a_1}"),
                                                 deserialize(L"g{i_1;a_1}"),
                                                 deserialize(L"h{i_1;a_1}")}));
@@ -1345,10 +1345,10 @@ TEST_CASE("denoted_expr_is_the_parent_network_spelling",
 
 TEST_CASE("tot_leaf_annotation_is_slot_faithful", "[eval_expr][tot]") {
   // A ToT leaf's canon_indices() is the layout the provider serves for the
-  // STORED spelling: pure proto indices first (the pair labels of
-  // C{mu;a<ij>}, laid out i,j,mu), then the plain slots IN SLOT ORDER, then
+  // _stored_ spelling: pure proto indices first (the pair labels of
+  // C{mu;a<ij>}, laid out i,j,mu), then the plain slots in slot order, then
   // the proto-carrying slots. The occupied kets of t{a<ij>,b<ij>;j,i} are
-  // both plain slots and proto indices; they take their SLOT position, since
+  // both plain slots and proto indices; they take their slot position, since
   // the array's outer mode k pairs with inner mode k as a column -- read
   // i,j;a,b (the proto order) the same array would serve t^{ab}_{ij} for
   // t^{ab}_{ji} (nonrel PNO CSV-CCD exchange energy, 2026-09-11).

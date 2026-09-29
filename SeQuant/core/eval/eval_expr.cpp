@@ -62,7 +62,7 @@ ExprPtr make_tensor(const BinarizationOptions& opts, bra<Bra> b, ket<Ket> k,
   // This function is creating intermediate tensors, which don't come with
   // an externally provided "correct"/canonical order of its indices.
   // Hence, we are free to define our own canonical order, which we
-  // conveniently set to the indices being sorted in each group -- EXCEPT
+  // conveniently set to the indices being sorted in each group -- _except_
   // when the caller passes an order that must be kept (keep_order): the
   // placeholder of an opaque node (a Sum) is what an enclosing tensor network
   // sees, so its slots must be spelled in the order the value is laid out in
@@ -149,7 +149,7 @@ std::size_t EvalExpr::layout_fingerprint_of(
     return ids.try_emplace(ix, ids.size()).first->second;
   };
   std::size_t fp = 0;
-  // Walk the modes in the order the RESULT carries them, which is the order
+  // Walk the modes in the order the _result_ carries them, which is the order
   // indices_annot() builds: the proto-free (outer) indices in canonical order,
   // then the proto-carrying (inner) ones. Using the raw canon_indices() order
   // instead would separate nodes whose two groups interleave differently while
@@ -241,7 +241,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     // bra/ket bundle is put into the labeling's canonical slot order (the
     // order its phase is defined against) with the permutation parity as
     // the phase -- so the two spellings t{a2,a3;..} and t{a3,a2;..} store
-    // ONE spelling, share one slot, and differ by the retrieval phase only.
+    // _one_ spelling, share one slot, and differ by the retrieval phase only.
     // (The network clones its tensors: adopt the respelled one.)
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
@@ -254,12 +254,12 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     expr_ = std::dynamic_pointer_cast<Expr>(tn.tensors().front());
     SEQUANT_ASSERT(expr_ && expr_->is<Tensor>());
     // array-faithful indices in the Nested (outer;inner) convention, i.e. the
-    // layout a leaf provider serves for the STORED spelling: the outer modes
+    // layout a leaf provider serves for the _stored_ spelling: the outer modes
     // are the pure proto indices (those not occupying a slot of their own,
     // e.g. the pair labels of C{mu;a<ij>}, laid out i,j,mu) followed by the
-    // plain slots IN SLOT ORDER, the inner modes the proto-carrying slots in
+    // plain slots in slot order, the inner modes the proto-carrying slots in
     // slot order. A plain slot that is also a proto index (the occupied kets
-    // of t{a<ij>,b<ij>;i,j}) takes its SLOT position: the array's outer mode
+    // of t{a<ij>,b<ij>;i,j}) takes its slot position: the array's outer mode
     // k pairs with inner mode k as a column, so t{a<ij>,b<ij>;j,i} must be
     // read j,i;a,b -- the proto-first order (tot_indices) would read the same
     // array i,j;a,b and serve t^{ab}_{ij} for t^{ab}_{ji}. (The md list is the
@@ -724,7 +724,7 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       // out in. Sorted by label instead, two relabeled spellings of one sum
       // (values: transposes of each other, e.g. the bra slots of a
       // column-symmetric g projected by C's onto a_1,a_2 vs a_2,a_1) spell
-      // one identical placeholder, and an enclosing product gets one hash AND
+      // one identical placeholder, and an enclosing product gets one hash _and_
       // one canonical layout for both: the cache then serves one value for
       // the other untransposed.
       auto const& frame = left.canon_indices();
@@ -809,7 +809,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           if (x->is<Sum>()) {
             // A Sum factor is opaque to the single-term optimizer
             // (opt_mixed_product stands a placeholder tensor in for it, and
-            // puts the Sum back untouched), so the contraction nodes INSIDE
+            // puts the Sum back untouched), so the contraction nodes _inside_
             // it are not DP nodes and have no entry in opts.node_batch_axes:
             // binarize them with a private counter and no axes. Consuming the
             // shared counter here shifts every outer node's annotation onto
@@ -842,7 +842,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       prefix_conj.push_back(run);
     }
   }
-  // prefix hashes with PER-PREFIX conj-salt stripping: factor salts are
+  // prefix hashes with per-prefix conj-salt stripping: factor salts are
   // stripped only inside a prefix that is uniformly conjugated (where the
   // conj hoists onto that prefix's node); in a broken prefix every factor
   // contributes its full salt. Per-prefix (not per-factor) stripping keeps
@@ -977,14 +977,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
            .named_indices = &named_indices});
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
-      // The network above is the FLATTENED one: every leaf (and Sum root)
+      // The network above is the _flattened_ one: every leaf (and Sum root)
       // under this product enters in its slot spelling
       // (collect_tensor_factors), so canon.phase already relates the value
       // this node computes -- the contraction of those spellings, phases
       // aside -- to the canonical network's. The one thing a spelling cannot
       // carry is a factor's own reorder phase, so those hoist
       // multiplicatively onto this node (A * (-B) = -(A * B)). A Product
-      // child's own phase is NOT re-applied: its sub-network is part of the
+      // child's own phase is _not_ re-applied: its sub-network is part of the
       // flattened one, so its reorder sign is inside canon.phase already;
       // multiplying it again makes two spellings of one slot disagree by a
       // sign whenever the child's canonical phase is -1 (a cache-only
@@ -1057,7 +1057,7 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                                       : detail::make_variable();
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
-    // a REAL scalar commutes with conj, so a conj-hoisted subtree hoists
+    // a _real_ scalar commutes with conj, so a conj-hoisted subtree hoists
     // through the wrap too (\mathcal{T}-partner terms carry real prefactors)
     bool const wrap_hoist = hoistable(left->canon_transform()) &&
                             right->is_constant() &&

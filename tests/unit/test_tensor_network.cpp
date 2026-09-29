@@ -254,7 +254,7 @@ TEST_CASE("tensor_network_shared", "[elements]") {
 
     SECTION("apply slot order") {
       // an antisymmetric bundle spelled in its two slot orders: with the
-      // canonical slot order APPLIED both networks leave in ONE spelling
+      // canonical slot order applied both networks leave in _one_ spelling
       // and the reported phase is the parity of that reorder (the order
       // the phase is defined against); by default the spelling is kept
       const auto cardinal = get_default_context().cardinal_tensor_labels();

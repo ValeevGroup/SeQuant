@@ -14,7 +14,7 @@
 /// Symbolic real/imaginary-part wrappers for scalar-valued expressions.
 ///
 /// `RealPart(E)` = `Re(E)` and `ImagPart(E)` = `Im(E)` for a scalar-valued
-/// Expr `E`; both wrappers are REAL-valued by convention (`E = Re(E) +
+/// Expr `E`; both wrappers are _real_-valued by convention (`E = Re(E) +
 /// i*Im(E)`), hence self-adjoint and conjugation-invariant. They are general
 /// expression nodes (not domain-specific): any pipeline that folds a sum of
 /// conjugate pairs (`A + A* = 2 Re(A)`, `A - A* = 2i Im(A)`) produces them.

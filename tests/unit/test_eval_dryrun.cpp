@@ -4278,7 +4278,7 @@ TEST_CASE(
 
 TEST_CASE("range evaluate does not accumulate into a cached result",
           "[eval][cache]") {
-  // evaluate(nodes, ...) sums the nodes' results in place into the FIRST
+  // evaluate(nodes, ...) sums the nodes' results in place into the _first_
   // node's result. When that node is cached (it recurs among the nodes, or
   // elsewhere in the block) the first result IS the cache's own buffer, so the
   // in-place adds corrupt the cache: every later use of the node reads the

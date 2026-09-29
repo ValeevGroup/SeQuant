@@ -1083,14 +1083,14 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   // - Determine this phase change by determining the parity of index
   //   permutations required to arrive at canonical form; with
   //   options.apply_slot_order the same permutations are applied to the
-  //   tensors (below), so the phase and the spelling come from ONE sort.
+  //   tensors (below), so the phase and the spelling come from _one_ sort.
   metadata.phase = 1;
   // tensor ordinal -> {bra, ket} from-permutations to the canonical slot
   // order (empty = identity or not an (anti)symmetric bundle)
   container::svector<std::array<container::svector<std::size_t>, 2>>
       slot_orders(options.apply_slot_order ? tensors_.size() : 0);
   // With apply_slot_order the order applied (and the phase reported) is the
-  // NAMED-index canonical order -- what get_indices() reports: coarse groups
+  // _named_-index canonical order -- what get_indices() reports: coarse groups
   // by named_index_compare (space-major), canonical vertex ordinal within a
   // group -- so a respelled leaf keeps the space order of its bundles (the
   // raw vertex ordinals order same-color cells by the color hash, which for
