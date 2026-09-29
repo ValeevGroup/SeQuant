@@ -2549,6 +2549,152 @@ TEST_CASE(
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
+// D1.2 (external-mode batching wired into DP SELECTION): the external batch
+// loop must flow into the DP's REPORTED peak. Optimizing the over-budget C60
+// giant through PeakBatchedModel::reconstruct_batched_modes (the path
+// optimize() drives) must, with batch_spectator_indices ON, report a root peak
+// BELOW its flag-OFF value (the external occ sliced) and stamp
+// BatchModeType::External ONLY on that external occ; with the flag OFF the
+// reported peak is byte-identical to the unsliced baseline and NO External
+// modes are stamped.
+TEST_CASE(
+    "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
+    "[dryrun-extmode]") {
+  auto ctx = get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
+  sequant::mbpt::add_df_spaces(isr);                             // K
+  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+
+  auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
+                          "/data/csv_ccsd_doubles_residual_df.txt");
+  REQUIRE(!body.empty());
+  std::string line = body;
+  if (auto nl = line.find('\n'); nl != std::string::npos)
+    line = line.substr(0, nl);
+  auto expr = deserialize<ExprPtr>(line);
+  REQUIRE(static_cast<bool>(expr));
+  REQUIRE(expr->is<Sum>());
+  auto const& summands = expr->as<Sum>().summands();
+  REQUIRE(summands.size() > 38);
+  auto flatten_product = [](ExprPtr const& e) -> ExprPtr {
+    if (!e->is<Product>()) return e;
+    auto const& p = e->as<Product>();
+    return ex<Product>(p.scalar(), p.factors(), Product::Flatten::Yes);
+  };
+  ExprPtr giant = flatten_product(summands[38]);  // the C60 PPL/ladder giant
+  REQUIRE(giant);
+  REQUIRE(giant->is<Product>());
+
+  auto regime = df_regime(kC60_pVDZF12);
+  container::svector<ExprPtr> gtensors;
+  for (auto const& f : giant->as<Product>().factors())
+    if (f->is<Tensor>()) gtensors.push_back(f);
+  TensorNetwork gtn{gtensors};
+  container::svector<Index> const gtidxs{};
+
+  using BModel = sequant::opt::detail::PeakBatchedModel<
+      std::function<std::size_t(Index const&)>>;
+  auto make_model = [&](bool spectator_on) {
+    BModel m{regime.idx_to_extent(),
+             [](Index const& ix) -> std::size_t {
+               auto const k = ix.space().base_key();
+               if (k == L"μ̃") return std::size_t{256};  // pao_target_size
+               if (k == L"i") return std::size_t{8};    // occ_target_size: occ
+               // blocks are small; the aux value 72 must NOT leak to the occ.
+               return std::size_t{72};  // aux_target_size (DF Κ)
+             },
+             [](Tensor const& t) { return t.label() == L"t"; },
+             regime.inner_pow_fn(),
+             /*volatile_weight=*/20.0,
+             /*machine_balance=*/200.0,
+             /*fast_mem_elems=*/1000000.0,
+             /*block_tiles=*/3.0,
+             /*block_prefactor=*/1.0,
+             /*batch_persistent_only=*/false,
+             /*peak_flops_tolerance=*/0.0,
+             /*accumulation_factor=*/1.0,
+             /*peak_threshold=*/40.0 * 1e9,
+             /*numeric_size=*/8.0,
+             /*perf_first=*/true};
+    m.is_batchable_contracted_index = is_df_batchable;
+    // External role admits the DF/PAO spaces AND the occ: occ is never
+    // contracted here (a spectator on the giant), so it is batchable ONLY in
+    // the external role -- exactly the role-split the two predicates encode.
+    // is_df_batchable alone (μ̃/Κ) would drop the external occ from
+    // ctx.batchable_modes, leaving the spectator seed nothing to adopt.
+    m.is_batchable_external_index = [](Index const& ix) {
+      auto const k = ix.space().base_key();
+      return k == L"μ̃" || k == L"Κ" || k == L"i";
+    };
+    m.batch_spectator_indices = spectator_on;
+    return m;
+  };
+
+  // Drive the actual optimize() selection path: build the DP table and call
+  // reconstruct_batched_modes (which optimize()/run_single_term_opt_axes
+  // calls), reading back the REPORTED root peak and the per-node emitted modes.
+  auto reported_peak = [&](bool spectator_on,
+                           container::vector<NodeBatchAnnotation>& node_axes) {
+    auto m = make_model(spectator_on);
+    auto mctx = m.build_context(gtn, gtidxs);
+    auto mst = sequant::opt::detail::solve_single_term(m, gtn, gtidxs, mctx);
+    double peak = 0.0;
+    auto [seq, modes] = m.reconstruct_batched_modes(mctx, mst, &peak);
+    node_axes = std::move(modes);
+    return peak;
+  };
+
+  container::vector<NodeBatchAnnotation> ax_off, ax_on;
+  double const peak_off = reported_peak(false, ax_off);
+  double const peak_on = reported_peak(true, ax_on);
+
+  std::wcerr << L"[dryrun-extmode] reported root peak flag-off="
+             << (peak_off / 1e9) << L" GB  flag-on=" << (peak_on / 1e9)
+             << L" GB\n";
+
+  // The giant is genuinely over the 40 GB budget (else nothing to batch).
+  REQUIRE(peak_off > 40.0 * 1e9);
+
+  // Flag OFF: no External modes stamped; reported peak is the unseeded
+  // baseline.
+  bool any_external_off = false;
+  for (auto const& axs : ax_off)
+    for (auto const& e : axs.axes)
+      if (e.second == BatchModeType::External) any_external_off = true;
+  CHECK(!any_external_off);
+
+  // Flag ON: the DP-reported peak DROPS below the flag-off value -- the
+  // external occ sliced into the root batch context, work-neutral (identical
+  // flops). Chosen policy (D1.3): JOINTLY seed BOTH external occ i_1,i_2 of the
+  // doubles residual. The giant is the 4-PNO-leg particle-particle-ladder
+  //   W^{a1<i1,i2> a2<i1,i2>}_{a3<i1,i2> a4<i1,i2>} = sum_K (g.C.C)(g.C.C),
+  // whose four virtual legs are all protoindexed by the same occ pair (i1,i2),
+  // so seeding the pair shrinks the footprint on every one of them. How far the
+  // peak drops is not pinned here: the block/extent ratio 8/120 per mode bounds
+  // it, but the per-node external opens the DP performs (section 4.2) decide
+  // which nodes carry the slice, so only the drop and the budget fit are.
+  CHECK(peak_on < peak_off);
+  // ...and the giant now FITS the 40 GB budget (~1874 GB -> ~33 GB): the DP
+  // models external batching bounding the PPL giant with a realistic occ block.
+  CHECK(peak_on < 40.0 * 1e9);
+
+  // Flag ON: External stamped, and ONLY on an external occ (space "i") -- the
+  // chosen seed modes -- never on a contracted DF-aux/PAO mode (emit follows
+  // selection). BOTH external occ (i_1 and i_2) must be stamped (joint seed).
+  auto occ_space = isr->retrieve(L"i");
+  std::set<std::wstring> external_labels;
+  for (auto const& axs : ax_on)
+    for (auto const& e : axs.axes)
+      if (e.second == BatchModeType::External) {
+        CHECK(e.first.space() == occ_space);
+        external_labels.insert(std::wstring(e.first.full_label()));
+      }
+  CHECK(external_labels.size() == 2);  // both i_1 and i_2 seeded jointly
+}
+
 // P1 gate spike (external-occ forest batching, mechanism b): PURE SIZING check.
 // Does the cost model's footprint of the perf-first PPL W giant respond to
 // slicing ONE external occupied index to a block? The external occ (the

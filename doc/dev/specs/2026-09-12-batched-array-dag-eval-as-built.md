@@ -714,5 +714,3 @@ test and the `PeakSink` metering (hence the evaluator's `Trace` parameter) are k
   descent over a batched ToT External occ loop.
 - **Shape still wanting coverage:** two distinct occupied indices stamped `External` on
   one node nest both scatter loops, so the batch count is the PRODUCT of the two.
-- **Shape still wanting coverage:** external-mode (occ) seeding lowers the DP-reported
-  peak of the C60 giant by the occ block ratio on each sliced mode.
