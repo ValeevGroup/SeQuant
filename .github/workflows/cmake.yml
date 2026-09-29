@@ -135,8 +135,9 @@ jobs:
       shell: bash
       run: echo "timestamp=$(date -u +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
 
-    - name: Setup ccache cache files
-      uses: actions/cache@v6
+    - name: Restore ccache cache files
+      id: ccache_restore
+      uses: actions/cache/restore@v6
       with:
         path: ${{github.workspace}}/build/.ccache
         key: ${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.sanitize }}-${{ matrix.valgrind }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
@@ -156,6 +157,13 @@ jobs:
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
       run: ccache -p && ccache -z && cmake --build . -j 2 && ccache -s
+
+    - name: Save ccache cache files
+      if: ${{ github.ref == 'refs/heads/master' }}
+      uses: actions/cache/save@v6
+      with:
+        path: ${{github.workspace}}/build/.ccache
+        key: ${{ steps.ccache_restore.outputs.cache-primary-key }}
 
     - name: Test
       if: ${{ !matrix.valgrind }}
