@@ -302,6 +302,19 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L"0 / 10")->is<Constant>());
       REQUIRE(deserialize<ExprPtr>(L"0.5/0.25")->is<Constant>());
       REQUIRE(deserialize<ExprPtr>(L".4")->is<Constant>());
+
+      // several written summands that fold are the value they denote, not a
+      // degenerate container -- a one-summand Sum, or an empty one
+      REQUIRE(deserialize<ExprPtr>(L"1 + 2")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"1 + 2")->as<Constant>().value() == 3);
+      REQUIRE(deserialize<ExprPtr>(L"1 - 1")->as<Constant>().value() == 0);
+      // ... and a parenthesized constant factor joins the product's scalar,
+      // where a bare one already did
+      auto scaled = deserialize<ExprPtr>(L"(3) x");
+      REQUIRE(scaled->is<Product>());
+      REQUIRE(scaled->as<Product>().scalar() == rational{3});
+      REQUIRE(scaled->as<Product>().size() == 1);
+      REQUIRE(scaled->as<Product>().factor(0)->is<Variable>());
     }
 
     SECTION("Complex constant") {
