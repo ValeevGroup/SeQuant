@@ -1,4 +1,5 @@
 #include <SeQuant/core/export/itf.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -69,7 +70,12 @@ std::string ItfContext::get_tag(const IndexSpace &space) const {
 }
 
 std::optional<std::string> ItfContext::import_name(const Tensor &tensor) const {
-  auto it = m_tensor_imports.find(tensor);
+  // the map is keyed the way the pipeline looks it up: every rewrite folds a
+  // tensor's marks into its label before the name is asked for
+  Tensor key = tensor;
+  fold_marks_into_label(key);
+
+  auto it = m_tensor_imports.find(key);
 
   if (it == m_tensor_imports.end()) {
     return {};
@@ -98,7 +104,12 @@ void ItfContext::set_tag(const IndexSpace &space, std::string tag) {
 }
 
 void ItfContext::set_import_name(const Tensor &tensor, std::string name) {
-  m_tensor_imports[tensor] = std::move(name);
+  // keyed on the folded label, as import_name() looks it up: a marked tensor
+  // is an array of its own and keeps its own import name
+  Tensor key = tensor;
+  fold_marks_into_label(key);
+
+  m_tensor_imports[std::move(key)] = std::move(name);
 }
 
 void ItfContext::set_import_name(const Variable &variable, std::string name) {
@@ -106,7 +117,11 @@ void ItfContext::set_import_name(const Variable &variable, std::string name) {
 }
 
 bool ItfContext::rewrite(Tensor &tensor) const {
-  bool modified = false;
+  // the remap below matches on the bare label, so the marks are folded into
+  // the label first: a marked integral is an array of its own and is not a
+  // J/K integral
+  bool modified = tensor.adjointed() || tensor.kconjugated();
+  fold_marks_into_label(tensor);
 
   auto num_indices = std::distance(tensor.const_indices().begin(),
                                    tensor.const_indices().end());
@@ -190,8 +205,7 @@ bool ItfContext::rewrite(Tensor &tensor) const {
 
     tensor =
         Tensor(std::move(label), sequant::bra(std::move(bra)),
-               sequant::ket(std::move(ket)), tensor.aux(), tensor.symmetry(),
-               tensor.braket_symmetry(), tensor.column_symmetry());
+               sequant::ket(std::move(ket)), tensor.aux(), tensor.symmetries());
 
     modified = true;
   }

@@ -12,21 +12,21 @@ Declare index u_1
 
 Declare tensor A[a_1, i_1, u_1]
 Declare tensor B[a_2, i_2, u_1]
-Declare tensor I[i_1, i_2, a_1, a_2]
+Declare tensor I[a_1, a_2, i_2, i_1]
 
 Start batching over i_1, i_2
-Create I[i_1, i_2, a_1, a_2] and initialize to zero
+Create I[a_1, a_2, i_2, i_1] and initialize to zero
 Load A[a_1, i_1, u_1]
 Load B[a_2, i_2, u_1]
-Compute I[i_1, i_2, a_1, a_2] += A[a_1, i_1, u_1] B[a_2, i_2, u_1]
+Compute I[a_1, a_2, i_2, i_1] += A[a_1, i_1, u_1] B[a_2, i_2, u_1]
 Unload B[a_2, i_2, u_1]
 Unload A[a_1, i_1, u_1]
 Load B[a_1, i_1, u_1]
 Load B[a_2, i_2, u_1]
-Compute I[i_1, i_2, a_1, a_2] += B[a_1, i_1, u_1] B[a_2, i_2, u_1]
+Compute I[a_1, a_2, i_2, i_1] += B[a_1, i_1, u_1] B[a_2, i_2, u_1]
 Unload B[a_2, i_2, u_1]
 Unload B[a_1, i_1, u_1]
-Persist I[i_1, i_2, a_1, a_2]
+Persist I[a_1, a_2, i_2, i_1]
 End batching
 
 =================================================
@@ -45,23 +45,23 @@ index-space: v, Active, a
 
 tensor: A:eca[bjv], A:eca
 tensor: B:eca[ckv], B:eca
-tensor: I:eecc[bcjk], I:eecc
+tensor: I:eecc[bckj], I:eecc
 
 
 ---- code("unnamed")
 for [j, k]:
-	alloc I:eecc[bcjk]
+	alloc I:eecc[bckj]
 	load A:eca[bjv]
 	load B:eca[ckv]
-	.I:eecc[bcjk] += A:eca[bjv] B:eca[ckv]
+	.I:eecc[bckj] += A:eca[bjv] B:eca[ckv]
 	drop B:eca[ckv]
 	drop A:eca[bjv]
 	load B:eca[bjv]
 	load B:eca[ckv]
-	.I:eecc[bcjk] += B:eca[bjv] B:eca[ckv]
+	.I:eecc[bckj] += B:eca[bjv] B:eca[ckv]
 	drop B:eca[ckv]
 	drop B:eca[bjv]
-	store I:eecc[bcjk]
+	store I:eecc[bckj]
 
 
 ---- end

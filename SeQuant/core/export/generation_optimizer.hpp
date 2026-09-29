@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -157,7 +158,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
       if (std::holds_alternative<Tensor>(m_object)) {
         const Tensor &tensor = std::get<Tensor>(m_object);
-        str += toUtf8(tensor.label());
+        str += export_name(tensor);
         str += ":";
         for (const Index &idx : tensor.indices()) {
           str += toUtf8(idx.space().reduce_key(idx.label()));
