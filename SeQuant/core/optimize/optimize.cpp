@@ -237,7 +237,7 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
                                       /*parallel_outer=*/false));
   if (expr->is<Product>()) {
     auto const& prod_in = expr->as<Product>();
-    // Re/Im wrapper FACTORS are transparent too (the conjugate-pair fold
+    // Re/Im wrapper _factors_ are transparent too (the conjugate-pair fold
     // emits `2 Re[A]`): RealPart::is_scalar() would otherwise let the
     // wrapper pass through opt_pure_product as an opaque scalar with A left
     // in its naive left-to-right order. Optimize each wrapper's inner first.

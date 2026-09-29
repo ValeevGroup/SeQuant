@@ -203,7 +203,7 @@ struct TreeNodeEqualityComparator {
       }
 
       // NB the canonicalization transform (phase / conjugation / bra-ket
-      // swap) is deliberately NOT part of the identity: a slot holds the
+      // swap) is deliberately _not_ part of the identity: a slot holds the
       // canonical value and every consumer applies its own transform on
       // retrieval (apply_canon_transform), so +T / -T / T꙳ share one slot --
       // and the hash-keyed value maps of the ordered (DAG) executor must

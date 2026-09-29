@@ -19,7 +19,7 @@ Consequences, confirmed by review of the PR-1 branch:
 - the eval boundary disables the conjugate-braket fold, so leaf serving
   is orientation-sensitive: a starred Conjugate spelling and the plain
   swapped spelling of the same value are served differently (review
-  finding F1, CONFIRMED), and off-pipeline orientation aliasing is
+  finding F1, confirmed), and off-pipeline orientation aliasing is
   possible (F3);
 - `fold_conjugate_braket` is threaded through five gating points that
   must stay mutually consistent (F4);
@@ -130,19 +130,19 @@ Identity splits in two; this is the load-bearing invariant.
   salts** — because elementwise conj distributes over contraction and
   addition (`(A·B)^* = A^*·B^*`, `(sum_i T_i)^* = sum_i T_i^*`,
   `(c·X)^* = conj(c)·X^*`):
-  - if EVERY tensor child of a product/sum carries the conj bit (and
+  - if _every_ tensor child of a product/sum carries the conj bit (and
     the scalar is conjugated correspondingly), the conjugation is a
     whole-node transform: strip the child marks, conjugate the scalar,
-    set `{conj}` on the node's own transform, and hash the UNMARKED
+    set `{conj}` on the node's own transform, and hash the _unmarked_
     spelling. Recursively, whole-subtree conjugation bubbles to the
     root, so a conjugated TN hashes onto its unconjugated
     counterpart's slot: `B^*·A^*` (reordering already canonicalized
-    away) is a cache HIT on the `A·B` slot, served as one retrieval
+    away) is a cache hit on the `A·B` slot, served as one retrieval
     conj — no recomputation. This is the mechanism the TRS/Kramers
     tracing fold (PR 3) relies on to serve \mathcal{T}-partner (time-reversal) intermediates
     from one evaluation; it is a named requirement of this PR, not an
     optimization.
-  - with MIXED marks the conjugation is NOT a whole-node transform
+  - with _mixed_ marks the conjugation is _not_ a whole-node transform
     (`C·C^*` is no transform of `C·C`), so each marked child
     contributes `slot_hash (+) transform_salt(conj, braket_swap)` to
     the parent's hash — what the retired Adjoint node's
@@ -164,13 +164,13 @@ Consequences:
   `canonicalize_slots`.
 
 **Conj-aware CSE (in scope).** The hoisting rule applies recursively at
-EVERY node, so common-subexpression identity is conj-aware at all
+_every_ node, so common-subexpression identity is conj-aware at all
 granularities, not just whole terms:
 
 - inside a mixed product, a uniformly conjugated subgroup hoists at its
   own node: binarizing `A^*·B^*·C` forms the `(A^*·B^*)` intermediate
   with hash == the canonical `A·B` slot and transform `{conj}` — a
-  cache HIT when `A·B` (or its reordering) was computed anywhere,
+  cache hit when `A·B` (or its reordering) was computed anywhere,
   in this term or another;
 - `CacheManager` keys and the intermediate hashes (`imed_hashes`)
   inherit this from the hash contract, so cross-term CSE spans conj
@@ -180,7 +180,7 @@ granularities, not just whole terms:
   named hook stays for pretty-printing/export);
 - the single-term optimizer's repeated-subnet detection is already
   fold-aware (audit item 5), so its groupings and the eval-side slots
-  agree; steering the contraction-ORDER search toward conj-reusable
+  agree; steering the contraction-order search toward conj-reusable
   groupings (a cost-model credit for conj-related cached intermediates)
   is a stretch goal within this PR, exercised by the mixed-product
   test below.
@@ -264,13 +264,13 @@ granularities, not just whole terms:
 Every conj construct PR 1 introduced, checked against this design
 (gap audit, 2026-09-01):
 
-1. **Re/Im nodes (MAJOR).** `simplify()` in a complex field folds
+1. **Re/Im nodes (major).** `simplify()` in a complex field folds
    `A + A^* -> 2 Re(A)` and `A - A^* -> 2 i Im(A)` behind `SimplifyOptions::FoldConjugatePairs`,
    whose default is parked at `No` explicitly "until the evaluation
    layer understands them" (options.hpp); `binarize(ExprPtr)` throws
    `Exception("unsupported expression")` on a RealPart/ImagPart node.
    PR 2 adds first-class unary eval nodes for Re/Im — they are
-   PROJECTIONS (not invertible), so unlike Adjoint they remain IR
+   _projections_ (not invertible), so unlike Adjoint they remain IR
    nodes: `EvalOp::RealPart`/`ImagPart`, backend
    `Result::real_part()/imag_part()` (TA: elementwise), inner operand
    served from its own (shared) cache slot. PR 2 then flips the
@@ -309,12 +309,12 @@ Every conj construct PR 1 introduced, checked against this design
 
 ## Testing (owner requirements, recorded in the PR-1 plan)
 
-- Unit tests for evaluation WITH conj.
+- Unit tests for evaluation _with_ conj.
 - Verification + worked examples of each PR-1 symbolic relation showing
   how it is exploited at eval time — per relation: the symbolic form,
   the eval strategy, a numeric test.
 - **Exhaustive over PR 1's symbolic catalogue**: a new
-  `test_eval_conjugation.cpp` mirrors EVERY test case of PR 1's
+  `test_eval_conjugation.cpp` mirrors _every_ test case of PR 1's
   `test_conjugation.cpp` (and the conj sections of `test_eval_expr`)
   with an eval-level numeric validation, maintained as a one-to-one
   mapping table in the test file; a purely-symbolic invariant with no
@@ -337,7 +337,7 @@ Every conj construct PR 1 introduced, checked against this design
     worked example;
   * `conjugate_free_function_total` -> every node kind conj-evaluated
     (Constant, Variable, Power, Tensor, Sum, Product, Re/Im).
-- Existing conj identity regressions (cache ON == cache OFF, C·C^* vs
+- Existing conj identity regressions (cache-on == cache-off, C·C^* vs
   C^*·C) pass unchanged.
 - Conj-hoisting cache reuse: evaluate `A·B`, then request
   `conjugate(A·B)` (spelled `B^*·A^*`) — assert a cache hit on the
@@ -376,16 +376,16 @@ the contract above; the plan doc's "Execution deviations" section has
 the play-by-play.
 
 - **Marker composition is syntactic and slot-free**: the elementwise
-  marker contributes a PURE {conj} bit; orientation deltas come from the
+  marker contributes a _pure_ {conj} bit; orientation deltas come from the
   canonicalizer fold alone. (The draft's marker-unfold would have
   re-aliased starred-canonical spellings with their plain form.)
-- **Hoisting is per-PREFIX of the left fold**: a uniformly conjugated
+- **Hoisting is per-prefix of the left fold**: a uniformly conjugated
   factor prefix strips its factors' conj salts (per-prefix, keeping
   C.C^* vs C^*.C order-insensitive) and records {conj} on its node --
   this is what makes the buried-intermediate CSE work; whole-product
   uniformity is the special case.
-- **Evaluation invariant**: hand-ups are DENOTED values; the cache holds
-  CANONICAL data. The leaf evaluator serves the canonical spelling and
+- **Evaluation invariant**: hand-ups are _denoted_ values; the cache holds
+  canonical data. The leaf evaluator serves the canonical spelling and
   the leaf hand-up applies the transform; finish_phase_b's store
   re-applies it (an involution), leaving canonical data in the cache.
 - **ToT leaves carry array-faithful Nested (outer;inner) indices** via
@@ -394,7 +394,7 @@ the play-by-play.
 - **Export**: scalar leaves re-materialize the conj marker
   (denoted_expr); tensor leaves keep the documented transpose-only
   real-field limitation.
-- **symmetrize/antisymmetrize wrappers** use the DENOTED bra rank
+- **symmetrize/antisymmetrize wrappers** use the _denoted_ bra rank
   (braket_swap-aware).
 - **Test-fixture contract**: yield keys and stored arrays are
   canonical-spelling shaped; literal spellings are served through the

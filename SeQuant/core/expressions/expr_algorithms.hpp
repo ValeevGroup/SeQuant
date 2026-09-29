@@ -333,7 +333,7 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 ///
 /// @param[in] expr the sum to fold; returned unchanged if not a Sum
 /// @param[in] conjugate_op optional map from a summand to an expression the
-///            caller asserts to EQUAL the summand's complex conjugate in
+///            caller asserts to _equal_ the summand's complex conjugate in
 ///            value. Defaults to the algebraic adjoint (for a fully
 ///            contracted c-number summand the adjoint IS its complex
 ///            conjugate). Supply a custom map when a domain identity
@@ -349,10 +349,10 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
     ExprPtr const& expr,
     std::function<ExprPtr(ExprPtr const&)> conjugate_op = {});
 
-/// Back-compat variant of fold_conjugate_pairs() for a sum whose VALUE the
+/// Back-compat variant of fold_conjugate_pairs() for a sum whose _value_ the
 /// caller asserts to be real: a pair {s, s*} folds to 2*s (the imaginary
 /// parts of the folded and input expressions differ; both are discarded by
-/// the caller's reality assertion). Difference pairs {s, -s*} are NOT
+/// the caller's reality assertion). Difference pairs {s, -s*} are _not_
 /// folded. Prefer fold_conjugate_pairs(), which needs no assertion.
 [[deprecated(
     "fragile: asserts (unverifiably) that the sum's value is real, and "
@@ -363,13 +363,13 @@ fold_conjugate_pairs_of_real_sum(
     std::function<ExprPtr(ExprPtr const&)> conjugate_op = {});
 
 /// @return whether the c-number expression @p expr denotes a Hermitian
-///         network: its VALUE equals that of its adjoint (conjugate
+///         network: its _value_ equals that of its adjoint (conjugate
 ///         transpose), decided by comparing canonical forms. For a closed
 ///         (fully contracted, scalar-valued) network this is reality
 ///         recognition: N == conj(N). This derived recognition is what the
 ///         time-reversal-symmetry folding builds on; subexpressions carry no
 ///         first-class hermiticity tag today (a cached tag on subnetworks is
-///         a possible later extension). For an OPEN network the comparison
+///         a possible later extension). For an open network the comparison
 ///         answers the strict expression-level question (adjoint exchanges
 ///         the named bra/ket slots), not block hermiticity under a slot
 ///         pairing -- that refinement also belongs to the time-reversal

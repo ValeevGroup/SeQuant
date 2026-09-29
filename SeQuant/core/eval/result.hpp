@@ -424,7 +424,7 @@ class Result {
     return *std::any_cast<const T>(&value_);
   }
 
-  /// @return whether this result's buffer is OWNED BY ANOTHER result -- the
+  /// @return whether this result's buffer is _owned by another_ result -- the
   ///         value is an alias, produced by a transform (phase, conjugation,
   ///         relabel) that was recorded instead of performed, whether or not
   ///         anything is still pending (a transform composing to the identity
@@ -435,7 +435,7 @@ class Result {
   [[nodiscard]] virtual bool is_buffer_alias() const { return false; }
 
   /// @return the size of the object in bytes. For a lazy view (see
-  ///         is_buffer_alias()) this is the LOGICAL size of the value it
+  ///         is_buffer_alias()) this is the _logical_ size of the value it
   ///         represents, which is the size of the buffer it shares -- not a
   ///         buffer of its own.
   [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
@@ -461,7 +461,7 @@ class Result {
   /// Default: no-op.
   virtual void ensure_materialized() const {}
 
-  /// @return the stored value WITHOUT the materialization hook (for a
+  /// @return the stored value _without_ the materialization hook (for a
   ///         backend's own lazy paths)
   template <typename T>
   [[nodiscard]] T const& raw() const {
@@ -483,7 +483,7 @@ class Result {
 
  private:
   /// mutable so that a lazily transformed result can materialize itself on
-  /// first read through a const handle. NOT thread-safe: a Result is owned
+  /// first read through a const handle. _Not_ thread-safe: a Result is owned
   /// by one evaluation (the serial evaluate() stack / cache); concurrent
   /// get<>() on a pending view is not supported
   mutable std::any value_;

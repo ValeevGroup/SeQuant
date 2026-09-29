@@ -252,17 +252,17 @@ class EvalExpr {
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
   ///
-  /// \brief Rename-invariant fingerprint of this node's result LAYOUT: which
+  /// \brief Rename-invariant fingerprint of this node's result _layout_: which
   ///        canonical slot each result mode holds, and how the proto bundles
   ///        of the (nested / CSV) modes refer back to those slots.
   ///
   /// \details Two nodes may share an evaluation-cache slot only if the value
   ///          stored for one is, mode for mode, the value the other denotes.
   ///          The node hash and the graph comparison deliberately identify
-  ///          nodes across index RENAMINGS (that is what makes common
+  ///          nodes across index _renamings_ (that is what makes common
   ///          subexpressions shareable) and across bra<->ket orientation, and
   ///          CanonTransform carries the leftover phase / conjugation /
-  ///          bra-ket swap. What none of them carries is a PERMUTATION of the
+  ///          bra-ket swap. What none of them carries is a _permutation_ of the
   ///          result modes, so a shared slot whose two users order their modes
   ///          differently hands one of them transposed data -- silently, since
   ///          annotations are just labels (measured on h2o tpns=0 PNS-CCD,
