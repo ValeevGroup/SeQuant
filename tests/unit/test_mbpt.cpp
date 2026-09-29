@@ -15,6 +15,7 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
+#include <SeQuant/domain/mbpt/rules/csv.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
@@ -26,6 +27,7 @@
 
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -35,6 +37,16 @@
 #include "SeQuant/core/utility/debug.hpp"
 
 namespace {
+/// @return the Tensor factor of an OpMaker tensor form, which is either a bare
+///         Tensor or a `Tensor * NormalOperator` Product
+const sequant::Tensor& tensor_factor(const sequant::ExprPtr& e) {
+  if (e->is<sequant::Tensor>()) return e->as<sequant::Tensor>();
+  REQUIRE(e->is<sequant::Product>());
+  for (auto&& f : e->as<sequant::Product>().factors())
+    if (f->is<sequant::Tensor>()) return f->as<sequant::Tensor>();
+  throw sequant::Exception("tensor form has no Tensor factor");
+}
+
 /// Returns an RAII guard that, while alive, pins the (de)excitation amplitude
 /// operators (t, λ, R, L) Hermitian in the default MBPT context. The
 /// field/hermiticity model makes these operators bra<->ket *nonsymmetric* by
@@ -540,11 +552,13 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
               simplify(adjoint(r_1_2.tensor_form())));
 
       // to_latex()
-      REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f⁺}}");
-      REQUIRE(to_latex(adjoint(t1).as<Expr>()) == L"{\\hat{t⁺}^{1}}");
+      REQUIRE(to_latex(adjoint(f).as<Expr>()) == L"{\\hat{f}^{\\dagger}}");
+      REQUIRE(to_latex(adjoint(t1).as<Expr>()) ==
+              L"{{\\hat{t}^{\\dagger}}^{1}}");
       REQUIRE(to_latex(adjoint(lambda2).as<Expr>()) ==
-              L"{\\hat{\\lambda⁺}^{2}}");
-      REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) == L"{\\hat{R⁺}^{1,2}}");
+              L"{{\\hat{\\lambda}^{\\dagger}}^{2}}");
+      REQUIRE(to_latex(adjoint(r_1_2).as<Expr>()) ==
+              L"{{\\hat{R}^{\\dagger}}^{1,2}}");
 
       // adjoint(adjoint(op)) == op
       auto t1_adj = adjoint(t1);
@@ -577,6 +591,139 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(λ2adj.tensor_form()) != to_latex(λ2adj.tensor_form()));
 
     }  // SECTION("adjoint")
+
+    SECTION("adjoint tensor form: sign vs. mark") {
+      // OpMaker<S>::operator() builds an operator's tensor with its
+      // Hermiticity threaded through as the tensor's BraKetSymmetry (and
+      // returns Tensor * NormalOperator; the NormalOperator factor is
+      // irrelevant here). Adjointing the tensor factor alone
+      // (sequant::adjoint(ExprPtr), through Tensor::adjoint() and
+      // set_states()) distinguishes two cases: a NonHermitian tensor's
+      // adjoint stays a distinct, Adjoint-marked array; an anti-Hermitian
+      // one's adjoint mark normalizes away a sign that no Tensor can hold,
+      // so it comes back unmarked with swapped slots and a -1 Product
+      // scalar.
+      using namespace sequant::mbpt;
+
+      OpRegistry registry;
+      registry.add(L"x", OpClass::Gen, Hermiticity::NonHermitian)
+          .add(L"z", OpClass::Gen, Hermiticity::AntiHermitian);
+      auto ctx_resetter = set_scoped_default_mbpt_context(
+          {.csv = CSV::No, .op_registry = registry});
+
+      // NonHermitian: the adjoint tensor form is the Adjoint-marked tensor.
+      {
+        auto x_base = OpMaker<Statistics::FermiDirac>(L"x", 1)(
+            {}, {}, Normalization::Implicit);
+        auto x_adj = sequant::adjoint(ex<Tensor>(tensor_factor(x_base)));
+        REQUIRE(x_adj->is<Tensor>());
+        REQUIRE(x_adj->as<Tensor>().adjointed());
+      }
+
+      // anti-Hermitian: -1 times the unmarked, slot-swapped tensor.
+      {
+        auto z_base = OpMaker<Statistics::FermiDirac>(L"z", 1)(
+            {}, {}, Normalization::Implicit);
+        const auto& zt_base = tensor_factor(z_base);
+
+        auto z_adj = sequant::adjoint(ex<Tensor>(zt_base));
+        REQUIRE(z_adj->is<Product>());
+        const auto& zp = z_adj->as<Product>();
+        REQUIRE(zp.scalar() == sequant::Constant::scalar_type(-1));
+        REQUIRE(zp.factors().size() == 1);
+        REQUIRE(zp.factor(0)->is<Tensor>());
+        const auto& zt = zp.factor(0)->as<Tensor>();
+        REQUIRE_FALSE(zt.adjointed());
+        REQUIRE_FALSE(zt.kconjugated());
+        REQUIRE(zt.label() == L"z");
+        REQUIRE(zt.bra().at(0) == zt_base.ket().at(0));
+        REQUIRE(zt.ket().at(0) == zt_base.bra().at(0));
+      }
+    }  // SECTION("adjoint tensor form: sign vs. mark")
+
+    SECTION("OpMaker: a pre-marked operator name's sign vs. mark") {
+      // OpMaker<S>::operator() builds full_label =
+      // decorate_with_pert_order(label_, order_); if label_ itself ends in
+      // the adjoint mark (as here, an operator registered under an
+      // already-marked name), full_label carries it too, and the two
+      // ex<Tensor>(full_label, ...) sites strip that mark and apply it via
+      // set_states() themselves, rather than leave it for the
+      // Tensor constructor's own mark adoption: that throws when the
+      // mark's normalization would consume a sign (an anti-Hermitian
+      // operator), which no Tensor can hold but the Product this returns
+      // instead can.
+      using namespace sequant::mbpt;
+
+      // NonHermitian: the mark just becomes the Adjoint bits, no sign --
+      // matching the Tensor constructor's own mark adoption, unchanged.
+      {
+        OpRegistry registry;
+        registry.add(L"v⁺", OpClass::Gen, Hermiticity::NonHermitian);
+        auto ctx_resetter = set_scoped_default_mbpt_context(
+            {.csv = CSV::No, .op_registry = registry});
+        auto v = OpMaker<Statistics::FermiDirac>(L"v⁺", 1)(
+            {}, {}, Normalization::Implicit);
+        const auto& vt = tensor_factor(v);
+        REQUIRE(vt.label() == L"v");
+        REQUIRE(vt.adjointed());
+      }
+
+      // anti-Hermitian: the mark's normalization consumes a sign, so the
+      // tensor form is -1 times the unmarked, slot-swapped tensor -- where
+      // the Tensor constructor's own mark adoption would instead throw.
+      {
+        OpRegistry registry;
+        registry.add(L"w⁺", OpClass::Gen, Hermiticity::AntiHermitian);
+        auto ctx_resetter = set_scoped_default_mbpt_context(
+            {.csv = CSV::No, .op_registry = registry});
+        auto w = OpMaker<Statistics::FermiDirac>(L"w⁺", 1)(
+            {}, {}, Normalization::Implicit);
+        REQUIRE(w->is<Product>());
+        const auto& wp = w->as<Product>();
+        REQUIRE(wp.scalar() == sequant::Constant::scalar_type(-1));
+        const auto& wt = tensor_factor(w);
+        REQUIRE(wt.label() == L"w");
+        REQUIRE_FALSE(wt.adjointed());
+        REQUIRE_FALSE(wt.kconjugated());
+      }
+    }  // SECTION("OpMaker: a pre-marked operator name's sign vs. mark")
+
+    SECTION("anti-Hermitian operator: adjoint tensor form carries the sign") {
+      // mbpt::Operator::adjoint() rebuilds the tensor form through
+      // sequant::adjoint(ExprPtr), which adjoints the operator's tensor. For
+      // an anti-Hermitian operator the adjointed state normalizes away
+      // against the Hermiticity and consumes a -1; a Tensor carries the two
+      // core states but no sign, so the -1 lands on the enclosing Product.
+      using namespace sequant::mbpt;
+      using op_t = mbpt::Operator<mbpt::qns_t>;
+
+      OpRegistry registry;
+      registry.add(L"z", OpClass::Gen, Hermiticity::AntiHermitian);
+      auto ctx_resetter = set_scoped_default_mbpt_context(
+          {.csv = CSV::No, .op_registry = registry});
+
+      auto z = ex<op_t>(
+          []() -> std::wstring_view { return L"z"; },
+          []() -> ExprPtr {
+            return OpMaker<Statistics::FermiDirac>(L"z", 1)(
+                {}, {}, Normalization::Implicit);
+          },
+          [](mbpt::qns_t& qns) { qns = combine(general_type_qns(1), qns); });
+
+      auto z_adj = sequant::adjoint(z);
+      REQUIRE(z_adj->is<op_t>());
+      REQUIRE(z_adj->as<op_t>().label() == L"z⁺");
+
+      auto tform = z_adj->as<op_t>().tensor_form();
+      REQUIRE(tform->is<Product>());
+      REQUIRE(tform->as<Product>().scalar() ==
+              sequant::Constant::scalar_type(-1));
+      const auto& zt = tensor_factor(tform);
+      REQUIRE(zt.label() == L"z");
+      REQUIRE_FALSE(zt.adjointed());
+      REQUIRE_FALSE(zt.kconjugated());
+    }  // SECTION("anti-Hermitian operator: adjoint tensor form carries the
+       // sign")
 
     SECTION("screen") {
       using namespace sequant::mbpt;
@@ -688,6 +835,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
       auto theta1 = θ(1)->as<op_t>();
       // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
+      // the adjoint of the Hermitian θ is θ itself with the slots
+      // exchanged, so no state survives on the tensor and nothing is typeset
+      // beside its label
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
               L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
@@ -734,6 +884,9 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto L_3 = l(3)->as<op_t>();
       //    std::wcout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
       //    std::endl;
+      // under this test's scoped_hermitian_amplitudes() pinning L is
+      // Hermitian, so its adjoint is L with the slots exchanged and no state
+      // survives on the tensor
       REQUIRE(
           to_latex(simplify(L_3.tensor_form())) ==
           L"{{{\\frac{1}{36}}}{\\bar{L}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
@@ -750,11 +903,10 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       auto L_1_2 = l(nₚ(1), nₕ(2))->as<op_t>();
       // std::wcout << "l(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
       // std::endl;
-      REQUIRE(
-          to_latex(simplify(L_1_2.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_"
-          L"1}{i_2}}"
-          L"_{\\textvisiblespace\\,{a_1}}}}");
+      REQUIRE(to_latex(simplify(L_1_2.tensor_form())) ==
+              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{"
+              L"{i_1}{i_2}}"
+              L"_{\\textvisiblespace\\,{a_1}}}}");
 
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
       //    std::wcout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
@@ -814,8 +966,7 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(R21) ==
               L"{ "
               L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
-              L"\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
+              L"\\tilde{a}^{\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
               L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
@@ -825,11 +976,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
       REQUIRE(to_latex(L23) ==
               L"{ "
               L"\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
-              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
-              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
-              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
-              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
-              L"a_2}}}}\\bigr) }");
+              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{"
+              L"a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
+              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}"
+              L"}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_"
+              L"2}}}}\\bigr) }");
 
       // perturbation ops
       REQUIRE_NOTHROW(Hʼ(1, {.order = 1}));
@@ -1197,6 +1348,9 @@ SECTION("MRSO") {
               fcrex(p) * fannx(q);
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
+    // the adjoint of the Hermitian h is h with the slots exchanged, so one
+    // of the two factors is spelled with its bra and ket the other way round
+    // and neither carries a state
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
   }
@@ -1307,6 +1461,92 @@ SECTION("rules") {
 
       REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
     }
+  }
+
+  SECTION("df and thc refuse a marked tensor") {
+    // both rules rebuild their factors from the tensor's indices alone, so a
+    // tensor carrying a core state names a different array and is refused;
+    // the refusal is a throw, so it holds in every build type
+    using namespace sequant;
+
+    auto isr = get_default_context().index_space_registry();
+    IndexSpace occ = isr->retrieve(L"i");
+    occ.field(Field::Real);
+    IndexSpace uocc = isr->retrieve(L"a");
+    uocc.field(Field::Real);
+
+    // over real orbitals with an indefinite hermiticity and parity None the
+    // K-conjugated state is kept: a complex-valued integral over a real basis
+    Tensor g(L"g", bra{Index(L"i_1", occ), Index(L"i_2", occ)},
+             ket{Index(L"a_1", uocc), Index(L"a_2", uocc)},
+             TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+    auto gk = kconjugate(ex<Tensor>(g));
+    REQUIRE(gk->is<Tensor>());
+    REQUIRE(gk->as<Tensor>().kconjugated());
+
+    const IndexSpace aux_space = isr->retrieve(L"x");
+    REQUIRE_THROWS_AS(mbpt::density_fit(gk, aux_space, L"g", L"B"), Exception);
+    REQUIRE_THROWS_AS(
+        mbpt::tensor_hypercontract(gk, aux_space, L"g", L"B", L"C"), Exception);
+  }
+
+  SECTION("csv: an odd-parity adjointed tensor onto a real basis") {
+    // csv_transform_impl rebuilds the transformed tensor on the csv basis's
+    // slots and carries the source's two core states onto it. Where the csv
+    // basis is real the normalization trades the adjointed state for the
+    // K-conjugated one with the bundles exchanged back, and an odd
+    // conjugation parity then clears that state for a -1: a Tensor holds no
+    // sign, so it goes to the returned Product's scalar.
+    using namespace sequant;
+
+    auto isr = get_default_context().index_space_registry();
+    IndexSpace csv_basis = isr->retrieve(L"a");
+    csv_basis.field(Field::Real);
+
+    const Index i1(L"i_1");
+    const Index src_bra(L"a_1", {i1});
+    const Index src_ket(L"a_2", {i1});
+    Tensor f(L"f", bra{src_bra}, ket{src_ket},
+             TensorSymmetries{.hermiticity = Hermiticity::NonHermitian,
+                              .conjugation_parity = ConjugationParity::Odd});
+    // over the source's complex slots the adjointed state is kept as is
+    REQUIRE(f.set_states(true, false) == 1);
+    REQUIRE(f.adjointed());
+
+    auto transformed = mbpt::csv_transform(
+        ex<Tensor>(f), csv_basis, L"C", container::svector<std::wstring>{L"f"});
+    REQUIRE(transformed);
+    REQUIRE(transformed->is<Product>());
+    const auto& prod = transformed->as<Product>();
+    REQUIRE(prod.scalar() == Constant::scalar_type(-1));
+
+    // each C factor straddles one of the source's complex slots and the csv
+    // index that replaced it
+    std::optional<Index> x_from_bra, x_from_ket;
+    const Tensor* xf = nullptr;
+    for (auto&& factor : prod.factors()) {
+      REQUIRE(factor->is<Tensor>());
+      const auto& t = factor->as<Tensor>();
+      if (t.label() == L"f") {
+        REQUIRE(xf == nullptr);
+        xf = &t;
+        REQUIRE_FALSE(t.adjointed());
+        REQUIRE_FALSE(t.kconjugated());
+      } else {
+        REQUIRE(t.label() == L"C");
+        if (t.bra().at(0) == src_bra) x_from_bra = t.ket().at(0);
+        if (t.ket().at(0) == src_ket) x_from_ket = t.bra().at(0);
+      }
+    }
+    REQUIRE(xf != nullptr);
+    REQUIRE(x_from_bra.has_value());
+    REQUIRE(x_from_ket.has_value());
+    REQUIRE(x_from_bra != x_from_ket);
+    // the coset rule exchanged the bundles along with the sign: the csv index
+    // that replaced the source's ket slot sits in the rebuilt tensor's bra,
+    // and the one that replaced its bra slot in the ket
+    REQUIRE(xf->bra().at(0) == *x_from_ket);
+    REQUIRE(xf->ket().at(0) == *x_from_bra);
   }
 }  // SECTION("rules")
 
