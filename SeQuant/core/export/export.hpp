@@ -9,19 +9,24 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <map>
 #include <optional>
 #include <ranges>
 #include <set>
 #include <span>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -41,6 +46,74 @@ struct PreprocessResult {
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
 };
+
+/// Maps the ASCII name an object is exported under (export_label(), which folds
+/// the core states into the label) to the decorated spelling it came from,
+/// tensors and variables apart: a scalar operand is never the array a tensor of
+/// the same label names. One registry spans a whole export_groups() call,
+/// because declarations are merged across its trees: two different originals
+/// under one exported name would be one declared object whichever trees they
+/// appear in, so the preprocessing refuses that; see preprocess().
+struct FoldedNameRegistry {
+  std::map<std::wstring, std::wstring> tensors, variables;
+};
+
+/// @return the spelling @p node denotes, for a scalar-valued node: a scalar
+///         leaf stores the unmarked spelling and carries the conjugation in
+///         its CanonTransform, so the marker is re-materialized here -- for a
+///         leaf that survives the pruning once and for all on the node
+///         (PreprocessVisitor::preprocess_node_content, as a tensor leaf's
+///         spelling is), and for a prefactor pruned out of the tree
+///         (prune_scalar_factor) at the point of use. Idempotent, so a reader
+///         that comes after the preprocessing (the generation visitor's
+///         operands, which wrap what they get) hands back what the node
+///         already spells. Only a leaf: an internal node's placeholder holds
+///         what the emitted computation puts in it, which is built from its
+///         operands' denoted spellings and so is already the denoted value;
+///         conjugating it again would conjugate twice.
+template <typename Node>
+ExprPtr denoted_scalar(Node const &node) {
+  ExprPtr e = node->expr();
+  if (!node.leaf() || !node->canon_transform().conj) return e;
+  // Idempotent: preprocess_node_content materializes a surviving scalar leaf's
+  // denoted spelling on the node, so a reader that runs after the
+  // preprocessing (the generation visitor's operands) finds the marker there
+  // already and must not toggle it back off.
+  if (e->template is<Variable>() && !e->template as<Variable>().conjugated()) {
+    e = e->clone();
+    e->template as<Variable>().conjugate();
+  } else if (e->template is<Power>() && !e->template as<Power>().conjugated()) {
+    e = e->clone();
+    e->template as<Power>().conjugate();
+  }
+  return e;
+}
+
+/// @return the sign @p node contributes to the computation that consumes it
+///         as an operand. A leaf's stored spelling is the array the generator
+///         names, and the sign the block canonicalizer took off that spelling
+///         (an antisymmetric bundle reordered into slot order) is the one part
+///         of the leaf's transform no spelling carries, so it reaches the
+///         emitted term as a scalar. An internal node contributes none: its
+///         phase relates the value it computes to the slot a cache would hold
+///         it in, and the export computes every node from what its operands
+///         denote, so the sign the node's own operands carried is already in
+///         its emitted computation.
+template <typename Node>
+Constant::scalar_type operand_sign(Node const &node) {
+  return node.leaf() ? Constant::scalar_type(node->canon_phase())
+                     : Constant::scalar_type(1);
+}
+
+/// @return the spelling @p node denotes as an operand of a summation, i.e.
+///         denoted_scalar() scaled by operand_sign()
+template <typename Node>
+ExprPtr signed_operand(Node const &node) {
+  ExprPtr e = denoted_scalar(node);
+  if (auto const sign = operand_sign(node); sign != 1)
+    return ex<Product>(sign, ExprPtrList{std::move(e)}, Product::Flatten::No);
+  return e;
+}
 
 /// Visitor objects that will steer code generation while visiting a given
 /// expression/evaluation tree by triggering the corresponding callbacks in the
@@ -218,11 +291,16 @@ class GenerationVisitor {
     // Assemble the expression that should be evaluated
     container::svector<ExprPtr> expressions;
     switch (node->op_type().value()) {
-      case EvalOp::Product:
-        expressions.push_back(
-            ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
-                        Product::Flatten::No));
+      case EvalOp::Product: {
+        // a leaf operand's canonicalization sign scales the term
+        auto prod = ex<Product>(ExprPtrList{denoted_scalar(node.left()),
+                                            denoted_scalar(node.right())},
+                                Product::Flatten::No);
+        prod->as<Product>().scale(operand_sign(node.left()) *
+                                  operand_sign(node.right()));
+        expressions.push_back(std::move(prod));
         break;
+      }
       case EvalOp::RealPart:
       case EvalOp::ImagPart:
         throw Exception("export: a Re/Im eval node has no exported form");
@@ -233,14 +311,14 @@ class GenerationVisitor {
             // computation that should be exported.
             return;
           case ComputeSelection::Left:
-            expressions.push_back(node.left()->expr());
+            expressions.push_back(signed_operand(node.left()));
             break;
           case ComputeSelection::Right:
-            expressions.push_back(node.right()->expr());
+            expressions.push_back(signed_operand(node.right()));
             break;
           case ComputeSelection::Both:
-            expressions.push_back(node.left()->expr());
-            expressions.push_back(node.right()->expr());
+            expressions.push_back(signed_operand(node.left()));
+            expressions.push_back(signed_operand(node.right()));
             break;
         }
         break;
@@ -304,7 +382,9 @@ class GenerationVisitor {
       drop(*iter);
     }
 
-    // Drop used leaf elements
+    // Drop used leaf elements, under the spelling load_or_create registered
+    // them with: that is the stored one, which for a conjugated scalar leaf
+    // is not the one it denotes
     drop(*node.right()->expr());
     drop(*node.left()->expr());
   }
@@ -339,7 +419,10 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
   ExprPtr parentFactor =
       iter == result.scalarFactors.end() ? nullptr : iter->second;
 
-  ExprPtr factor = node->expr();
+  // the pruned prefactor is multiplied into the result wherever the tree it
+  // came out of is computed, so it must carry the conjugation the node's
+  // transform holds
+  ExprPtr factor = denoted_scalar(node);
 
   SEQUANT_ASSERT(factor);
   SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>() ||
@@ -416,12 +499,51 @@ bool rename(Variable &variable, PreprocessResult &result);
 /// Preprocesses the given expression
 template <typename ExprType, typename Node>
 void preprocess(ExprType expr, ExportContext &ctx, Node &node,
-                PreprocessResult &result) {
+                PreprocessResult &result, FoldedNameRegistry &folded_names) {
   static_assert(
       std::is_same_v<ExprType, Tensor> || std::is_same_v<ExprType, Variable>,
       "This function currently only works for tensors and variables");
 
   bool storeExpr = false;
+
+  // The exported name must name one object: a tensor written `t_adj` and a
+  // `t⁺` that folds to `t_adj`, or a variable written `x_conj` and a
+  // conjugated `x`, would share every name-keyed map below, and the generated
+  // code would read one object under two readings. A variable gets here only
+  // once it has survived the pruning, which is exactly when a generator names
+  // it: ITF prunes no variable and is covered throughout, while a generator
+  // that wraps a conjugated scalar in `conj(...)` keeps one only where pruning
+  // would leave the tree empty.
+  {
+    auto &registry =
+        [&folded_names]() -> std::map<std::wstring, std::wstring> & {
+      if constexpr (std::is_same_v<ExprType, Tensor>)
+        return folded_names.tensors;
+      else
+        return folded_names.variables;
+    }();
+    const std::wstring decorated = expr.decorated_label();
+    const auto [it, inserted] =
+        registry.try_emplace(export_label(expr), decorated);
+    if (!inserted && it->second != decorated)
+      throw Exception("preprocess: the exported name \"" + toUtf8(it->first) +
+                      "\" comes from both \"" + toUtf8(it->second) +
+                      "\" and \"" + toUtf8(decorated) +
+                      "\"; rename one of the two");
+  }
+
+  if constexpr (std::is_same_v<ExprType, Tensor>) {
+    // A marked tensor is an array of its own, and every map below (and in the
+    // generators) keys on the label and the slots. Folding the marks into the
+    // label, before the context gets to rewrite anything, is what makes `t`
+    // and `t⁺` two arrays under two names throughout the pipeline. It also
+    // keeps the backends' label matching (e.g. the ITF integral remap) from
+    // treating a marked tensor as the array its bare label names.
+    if (expr.adjointed() || expr.kconjugated()) {
+      fold_marks_into_label(expr);
+      storeExpr = true;
+    }
+  }
 
   // TODO: find a way to pass usage information to this call so that indices
   // of tensors that are only used as an intermediate can be more easily
@@ -588,8 +710,11 @@ template <typename T>
 class PreprocessVisitor {
  public:
   PreprocessVisitor(PreprocessResult &result, ExportContext &ctx,
-                    PrunableScalars prunable)
-      : m_result(result), m_ctx(ctx), m_prunable(prunable) {}
+                    PrunableScalars prunable, FoldedNameRegistry &folded_names)
+      : m_result(result),
+        m_ctx(ctx),
+        m_prunable(prunable),
+        m_folded_names(folded_names) {}
 
   void operator()(ExportNode<T> &tree, TreeTraversal context) {
     // Note the context for leaf nodes is always TreeTraversal::Any
@@ -664,14 +789,43 @@ class PreprocessVisitor {
   }
 
   void preprocess_node_content(ExportNode<T> &node) {
+    // A tensor leaf stores the array a provider serves; the value it denotes
+    // adds its transform's states. Export names arrays, so the denoted
+    // spelling is what the label-keyed maps and the generators must see:
+    // preprocess folds its marks into the name (fold_marks_into_label),
+    // naming a ⁺ leaf's array t_adj and a ꙳ leaf's array t_conj. Only a
+    // leaf needs this -- an internal node's placeholder is built in the
+    // spelling it denotes -- and a leaf whose state already named an array of
+    // its own (a ꙳ over a complex basis) stores that state, which its
+    // transform then does not carry. The transform stays on the node: the
+    // one export reader left once the spelling carries the states is
+    // operand_sign(), for the phase no spelling carries.
+    if (node.leaf() && node->is_tensor() && node->canon_transform().conj) {
+      // the '⁺' is the state a leaf's construction always takes off the
+      // stored spelling; a '꙳' over a complex basis stays on it (t⁺꙳ stores
+      // t꙳ under {conj, braket_swap}), so only the former is asserted absent
+      SEQUANT_ASSERT(!node->as_tensor().adjointed());
+      node->set_expr(node->denoted_expr());
+    }
+
+    // A scalar leaf that survives the pruning is loaded, dropped and declared
+    // like any other terminal, so it too reaches the generators in the
+    // spelling it denotes: otherwise the operand a backend names in the
+    // computation and the one it loads are two different readings of one leaf.
+    if (node.leaf() && node->is_scalar() && node->canon_transform().conj)
+      node->set_expr(denoted_scalar(node));
+
     if (node->is_tensor()) {
-      preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result);
+      preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result,
+                         m_folded_names);
     } else if (node->is_variable()) {
-      preprocess<Variable>(node->as_variable(), m_ctx, node, m_result);
+      preprocess<Variable>(node->as_variable(), m_ctx, node, m_result,
+                           m_folded_names);
     } else if (node->is_power()) {
       const Power &pw = node->as_power();
       if (pw.base()->is<Variable>()) {
-        preprocess<Variable>(pw.base()->as<Variable>(), m_ctx, node, m_result);
+        preprocess<Variable>(pw.base()->as<Variable>(), m_ctx, node, m_result,
+                             m_folded_names);
       }
     }
   }
@@ -773,13 +927,15 @@ class PreprocessVisitor {
   PreprocessResult &m_result;
   ExportContext &m_ctx;
   PrunableScalars m_prunable;
+  FoldedNameRegistry &m_folded_names;
 };
 
 /// Uses the PreprocessVisitor to perform preprocessing and, if desired, also
 /// logs the tree before and after preprocessing
 template <typename T>
 void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
-                              ExportContext &ctx, PrunableScalars prunable) {
+                              ExportContext &ctx, PrunableScalars prunable,
+                              FoldedNameRegistry &folded_names) {
   if (Logger::instance().export_equations) {
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
@@ -791,7 +947,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
               << "\n";
   }
 
-  detail::PreprocessVisitor<T> preprocessor(result, ctx, prunable);
+  detail::PreprocessVisitor<T> preprocessor(result, ctx, prunable,
+                                            folded_names);
   tree.visit(preprocessor, TreeTraversal::PreAndPostOrder);
 
   if (Logger::instance().export_equations) {
@@ -983,8 +1140,11 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
   generator.begin_export(ctx);
 
-  // First step: preprocessing of all expressions
+  // First step: preprocessing of all expressions. The folded-name registry is
+  // shared by every tree of this call, since the declarations the trees ask for
+  // are merged below.
   container::svector<detail::PreprocessResult> pp_results;
+  detail::FoldedNameRegistry folded_names;
   for (ExpressionGroup<T> &current_group : groups) {
     pp_results.reserve(pp_results.size() + size(groups));
 
@@ -994,7 +1154,8 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
       ctx.set_current_expression_id(current_tree->id());
 
       detail::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx,
-                                       generator.prunable_scalars());
+                                       generator.prunable_scalars(),
+                                       folded_names);
 
       ctx.clear_current_expression_id();
     }

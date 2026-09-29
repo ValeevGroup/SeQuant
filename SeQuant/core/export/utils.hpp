@@ -43,7 +43,8 @@ std::string format_power_base(const ExprPtr &base, std::string base_str);
 /// @param pow_op the exponentiation operator of the target language
 /// @param double_slash see format_power_exponent
 /// @param wrap_conj renders the complex conjugate of its argument, applied to
-///        a conjugated Variable base and to a conjugated @p power
+///        a conjugated @p power; a conjugated Variable base is already spelled
+///        out by the caller, which renders @p base_str in a value position
 /// @return the formatted power
 std::string format_power(
     const Power &power, std::string base_str, std::string_view pow_op,
