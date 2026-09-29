@@ -708,9 +708,9 @@ test and the `PeakSink` metering (hence the evaluator's `Trace` parameter) are k
   are `well_formed` with every `value_id` produced exactly once, and all four
   production-site roles reachable across the two are exercised.
 - **Shape still wanting coverage:** every block carries axis, kind and outputs, sibling
-  child blocks come as an ORDERED list rather than one chained child, and `value_id`s
+  child blocks come as an ordered list rather than one chained child, and `value_id`s
   resolve through `rich.cells[...].hash`.
 - **Shape still wanting coverage:** `evaluate_ordered_schedule` agrees with forest
   descent over a batched ToT External occ loop.
 - **Shape still wanting coverage:** two distinct occupied indices stamped `External` on
-  one node nest both scatter loops, so the batch count is the PRODUCT of the two.
+  one node nest both scatter loops, so the batch count is the product of the two.
