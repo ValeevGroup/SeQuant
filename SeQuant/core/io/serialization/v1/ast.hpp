@@ -91,6 +91,7 @@ struct Tensor : boost::spirit::x3::position_tagged {
 
 struct Product;
 struct Sum;
+struct RealImagPart;
 
 struct Power : boost::spirit::x3::position_tagged {
   boost::variant<Number, Variable> base;
@@ -106,7 +107,7 @@ struct Power : boost::spirit::x3::position_tagged {
 };
 
 using NullaryValue =
-    boost::variant<Number, Tensor, Variable, Power, Product, Sum>;
+    boost::variant<Number, Tensor, Variable, Power, Product, Sum, RealImagPart>;
 
 struct Product : boost::spirit::x3::position_tagged {
   std::vector<NullaryValue> factors;
@@ -136,6 +137,18 @@ struct Sum : boost::spirit::x3::position_tagged {
 template <typename T>
 Product::Product(T value) : factors({std::move(value)}) {}
 
+/// the real or the imaginary part of a wrapped expression, spelled `Re[...]`
+/// or `Im[...]`
+struct RealImagPart : boost::spirit::x3::position_tagged {
+  /// false spells `Re`, true spells `Im`
+  bool imaginary;
+  Sum inner;
+
+  RealImagPart() noexcept : imaginary(false) {}
+  RealImagPart(bool imaginary, Sum inner)
+      : imaginary(imaginary), inner(std::move(inner)) {}
+};
+
 struct ResultExpr : boost::spirit::x3::position_tagged {
   std::variant<Tensor, Variable> lhs;
   Sum rhs;
@@ -164,6 +177,9 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
                           indices, symmetry);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,
                           exponent, conjugated);
+
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::RealImagPart,
+                          imaginary, inner);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Product,
                           factors);

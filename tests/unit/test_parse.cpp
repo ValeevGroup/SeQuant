@@ -7,6 +7,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -391,6 +392,95 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(pw_conj_var_conj_str) == pw_conj_var_conj);
     }
 
+    SECTION("Real and imaginary parts") {
+      // `Re[...]` / `Im[...]` wrap a whole expression; the brackets keep the
+      // spelling apart from a tensor or a variable of the same name
+      SECTION("over a scalar product") {
+        const auto re_str = L"Re[h{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N]";
+        auto re = deserialize<ExprPtr>(re_str);
+        REQUIRE(re->is<RealPart>());
+        REQUIRE(re->as<RealPart>().inner()->is<Product>());
+        REQUIRE(re->as<RealPart>().inner()->as<Product>().size() == 2);
+        REQUIRE(serialize(re) == re_str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(re)) == *re);
+
+        const auto im_str = L"Im[h{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N]";
+        auto im = deserialize<ExprPtr>(im_str);
+        REQUIRE(im->is<ImagPart>());
+        REQUIRE(serialize(im) == im_str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(im)) == *im);
+      }
+
+      SECTION("over a sum") {
+        const auto re_str = L"Re[a + b]";
+        auto re = deserialize<ExprPtr>(re_str);
+        REQUIRE(re->is<RealPart>());
+        REQUIRE(re->as<RealPart>().inner()->is<Sum>());
+        REQUIRE(serialize(re) == re_str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(re)) == *re);
+
+        // a subtracted summand is spelled by its scalar, as it is outside
+        // the brackets too
+        auto im = deserialize<ExprPtr>(L"Im[a - b]");
+        REQUIRE(im->is<ImagPart>());
+        REQUIRE(im->as<ImagPart>().inner()->is<Sum>());
+        REQUIRE(serialize(im) == L"Im[a - 1 b]");
+        REQUIRE(*deserialize<ExprPtr>(serialize(im)) == *im);
+      }
+
+      SECTION("nested in a product with a coefficient") {
+        const auto str = L"-1/2 Re[a + b] * c";
+        auto prod = deserialize<ExprPtr>(str);
+        REQUIRE(prod->is<Product>());
+        REQUIRE(prod->as<Product>().scalar() == rational{-1, 2});
+        REQUIRE(prod->as<Product>().factor(0)->is<RealPart>());
+        REQUIRE(prod->as<Product>().factor(1)->is<Variable>());
+        REQUIRE(serialize(prod) == str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(prod)) == *prod);
+      }
+
+      SECTION("the eager rules apply on deserialization") {
+        // a second projection is the identity on `Re`-of and annihilates on
+        // `Im`-of, a real scalar prefactor hoists out, and a Constant is
+        // evaluated -- exactly as real_part()/imaginary_part() do
+        REQUIRE(*deserialize<ExprPtr>(L"Re[Re[x]]") ==
+                *deserialize<ExprPtr>(L"Re[x]"));
+        REQUIRE(*deserialize<ExprPtr>(L"Im[Im[x]]") == *ex<Constant>(0));
+        REQUIRE(*deserialize<ExprPtr>(L"Im[Re[x]]") == *ex<Constant>(0));
+        auto hoisted = deserialize<ExprPtr>(L"Re[1/2 x]");
+        REQUIRE(hoisted->is<Product>());
+        REQUIRE(hoisted->as<Product>().scalar() == rational{1, 2});
+        REQUIRE(hoisted->as<Product>().factor(0)->is<RealPart>());
+        REQUIRE(serialize(hoisted) == L"1/2 Re[x]");
+        REQUIRE(*deserialize<ExprPtr>(L"Im[3]") == *ex<Constant>(0));
+        REQUIRE(*deserialize<ExprPtr>(L"Re[3]") == *ex<Constant>(3));
+      }
+
+      SECTION("a name spelling Re or Im is not a wrapper") {
+        REQUIRE(deserialize<ExprPtr>(L"Re")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"Im")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"Real")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"Re{i_1;a_1}")->is<Tensor>());
+        REQUIRE(deserialize<ExprPtr>(L"Re{i_1;a_1}")->as<Tensor>().label() ==
+                L"Re");
+        REQUIRE(deserialize<ExprPtr>(L"Im^(2)")->is<Power>());
+      }
+
+      SECTION("a malformed spelling is reported with a position") {
+        // an unclosed bracket is an expectation failure at the offset the
+        // closing bracket was expected at
+        REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"Re[a"),
+                               io::serialization::SerializationError,
+                               serializationErrorMatches(4, 1, "expected"));
+        REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"2 * Im[a + b"),
+                               io::serialization::SerializationError,
+                               serializationErrorMatches(12, 1, "expected"));
+        // ... and an empty pair of brackets wraps no expression
+        REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"Re[]"),
+                          io::serialization::SerializationError);
+      }
+    }
+
     SECTION("Product") {
       auto expr = deserialize<ExprPtr>(L"-1/2 g{i2,i3; i1,a2} t{a1,a2; i2,i3}");
       REQUIRE(expr->is<Product>());
@@ -750,5 +840,38 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(serialize(result, {.annot_symm = true}) == current);
       }
     }
+  }
+
+  SECTION("serialize a folded conjugate pair") {
+    using namespace sequant;
+
+    // over a complex basis simplify() folds `A + conjugate(A)` into
+    // `2 Re[A]` (SimplifyOptions::FoldConjugatePairs defaults to Yes), so the
+    // wrappers reach the serializer through the ordinary simplification path
+    Context ctx = get_default_context();
+    ctx.set(mbpt::make_min_sr_spaces(mbpt::SpinConvention::None));
+    ctx.set(AssertStrictBraKetSymmetry::No);
+    auto resetter = set_scoped_default_context(ctx);
+
+    auto term = deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+    ExprPtr folded = term->clone() + conjugate(term->clone());
+    simplify(folded);
+
+    bool have_re = false;
+    folded->visit(
+        [&have_re](const ExprPtr& node) {
+          if (node->is<RealPart>()) have_re = true;
+        },
+        /* atoms_only = */ false);
+    if (folded->is<RealPart>()) have_re = true;
+    REQUIRE(have_re);
+
+    std::wstring serialized;
+    REQUIRE_NOTHROW(serialized = serialize(folded, {.annot_symm = true}));
+    REQUIRE(serialized.find(L"Re[") != std::wstring::npos);
+
+    ExprPtr respelled = deserialize<ExprPtr>(serialized);
+    REQUIRE(*respelled == *folded);
+    REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
   }
 }

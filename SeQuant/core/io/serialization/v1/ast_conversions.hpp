@@ -8,6 +8,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/op.hpp>
@@ -515,6 +516,19 @@ struct Transformer {
 
   ExprPtr operator()(const io::serialization::v1::ast::Number &number) const {
     return ex<Constant>(to_constant(number, position_cache.get(), begin.get()));
+  }
+
+  ExprPtr operator()(
+      const io::serialization::v1::ast::RealImagPart &part) const {
+    ExprPtr inner = ast_to_expr<PositionCache>(
+        part.inner, position_cache.get(), begin.get(), default_symms.get());
+    if (!inner) throw_at(part, "Re[]/Im[] wraps no expression");
+    // the smart builders apply the eager composition rules, so what comes
+    // back can be the inner expression itself (`Re[Re[x]]`), a constant
+    // (`Re[1 + 2 i]`) or a scaled wrapper (`Re[1/2 x]`), exactly as a
+    // programmatic real_part()/imaginary_part() call would give
+    return part.imaginary ? imaginary_part(std::move(inner))
+                          : real_part(std::move(inner));
   }
 
   ExprPtr operator()(const io::serialization::v1::ast::Power &power) const {

@@ -93,7 +93,8 @@ V1
    Expression      Sum?                                                            
    Sum             Product ( ('+' | '-') Product)*                                 
    Product         Nullary ( '*'? Nullary )*                                        Explict '*' use is optional
-   Nullary         '(' Sum ')' | Number | Tensor | Variable                        
+   Nullary         '(' Sum ')' | Number | Tensor | Variable | RealImagPart     
+   RealImagPart    ('Re' | 'Im') '[' Sum ']'                                        Real/imaginary part of the wrapped expression
    Number                                                                           Integer, Floating point or fraction
    Tensor          Name IndexGroup SymmetrySpec?                                   
    IndexGroup      | '{' IndexList? ( ';' IndexList? ( ';' IndexList? )? )? '}'     | Meaning is {<bra>;<ket>;<aux>}
@@ -113,6 +114,14 @@ permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = S
 :class:`ColumnSymmetry <sequant::ColumnSymmetry>` (``S`` = Symm, ``N`` = Nonsymm — this field has no Conjugate case). A tensor's trailing
 ``:A-C-S`` in the example below therefore reads "antisymmetric, conjugate bra-ket symmetric, symmetric column".
 
+``RealImagPart`` spells the :class:`RealPart <sequant::RealPart>` and :class:`ImagPart <sequant::ImagPart>` expression nodes, which
+:func:`simplify() <sequant::simplify>` emits when it folds a pair of complex-conjugate summands (``A + A*`` becomes ``2 Re[A]``,
+``A - A*`` becomes ``2i Im[A]``). The square brackets follow the LaTeX these nodes render as (``\Re\left[...\right]``) and are what
+keeps the spelling apart from a tensor or a variable named ``Re``/``Im``: neither of those admits a ``[``, so ``Re{i_1;a_1}`` is a
+tensor, ``Re`` alone is a variable, and only ``Re[`` opens a real part. Deserialization goes through the same eager composition rules
+as the :func:`real_part() <sequant::real_part>` / :func:`imaginary_part() <sequant::imaginary_part>` builders, so ``Re[Re[x]]`` yields
+``Re[x]``, ``Im[Re[x]]`` yields ``0``, and a real scalar prefactor hoists out of the brackets (``Re[1/2 x]`` yields ``1/2 Re[x]``).
+
 :func:`sequant::io::serialization::from_string<ExprPtr>` will start at rule :code:`Expression`, whereas
 :func:`sequant::io::serialization::from_string<ResultExpr>` will start at :code:`Result`.
 
@@ -126,3 +135,10 @@ scaled by the constant ``1/2``:
 ::
 
    R1{u1;i1} = f{u1;i1} - Ym1{u1;u2} f{u2;i1} - Ym1{u3;u2} * g{u1,u2;u3,i1} + 1/2 Ym2{u1,u4;u_2,u_3} g{u2,u3;u4,i1}:A-C-S
+
+The following parses the real part of a fully contracted product, scaled by ``2`` -- the shape :func:`simplify() <sequant::simplify>`
+leaves a folded conjugate pair in:
+
+::
+
+   2 Re[h{i_1;a_1} * t{a_1;i_1}]

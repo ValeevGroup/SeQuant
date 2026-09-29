@@ -3,6 +3,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -190,6 +191,16 @@ std::wstring to_string(const Power& power,
   return core;
 }
 
+std::wstring to_string(const RealPart& part,
+                       const SerializationOptions& options) {
+  return L"Re[" + v1::to_string(*part.inner(), options) + L"]";
+}
+
+std::wstring to_string(const ImagPart& part,
+                       const SerializationOptions& options) {
+  return L"Im[" + v1::to_string(*part.inner(), options) + L"]";
+}
+
 std::wstring to_string(Product const& prod,
                        const SerializationOptions& options) {
   std::wstring serialized;
@@ -278,6 +289,10 @@ std::wstring to_string(const Expr& expr, const SerializationOptions& options) {
     return details::to_string(expr.as<Variable>(), options);
   else if (expr.is<Power>())
     return details::to_string(expr.as<Power>(), options);
+  else if (expr.is<RealPart>())
+    return details::to_string(expr.as<RealPart>(), options);
+  else if (expr.is<ImagPart>())
+    return details::to_string(expr.as<ImagPart>(), options);
   else
     throw Exception("Unsupported expr type for serialize!");
 }

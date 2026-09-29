@@ -41,6 +41,7 @@ struct NumberRule;
 struct VariableRule;
 struct TensorRule;
 struct PowerRule;
+struct RealImagPartRule;
 struct ProductRule;
 struct SumRule;
 struct ExprRule;
@@ -55,6 +56,7 @@ x3::rule<NumberRule, ast::Number> number{"Number"};
 x3::rule<VariableRule, ast::Variable> variable{"Variable"};
 x3::rule<TensorRule, ast::Tensor> tensor{"Tensor"};
 x3::rule<PowerRule, ast::Power> power{"Power"};
+x3::rule<RealImagPartRule, ast::RealImagPart> real_imag_part{"RealImagPart"};
 
 // Expression structure
 x3::rule<ProductRule, ast::Product> product{"Product"};
@@ -132,9 +134,18 @@ auto power_core       = (('(' >> (number | variable) >> ')') | number | variable
 auto power_def        = (power_core >> x3::attr(false))
                         | ('(' >> power_core >> ')' >> x3::lit(L"^*") >> x3::attr(true));
 
+// `Re[...]` / `Im[...]` wrap a whole expression, mirroring the LaTeX
+// `\Re\left[...\right]` these nodes render as. The brackets are what keeps
+// the spelling apart from a tensor (`Re{...}`) or a variable (`Re`) of the
+// same name: neither admits a `[`, so the literal alone never commits and a
+// name merely starting with `Re`/`Im` falls through to the nullary rules
+auto real_imag_core   = (x3::lit(L"Re") >> x3::attr(false) | x3::lit(L"Im") >> x3::attr(true))
+                        >> '[';
+auto real_imag_part_def = real_imag_core > sum > ']';
+
 auto nullary          = number | tensor | variable;
 
-auto grouped          = power | '(' > sum > ')' | nullary;
+auto grouped          = real_imag_part | power | '(' > sum > ')' | nullary;
 
 auto product_def      = grouped % -x3::lit('*');
 
@@ -150,8 +161,8 @@ auto resultExpr_def       = (tensor | variable) > (L'=' | x3::lit(L"->")) >> exp
 // clang-format on
 
 BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,
-                    tensor, power, product, sum, expr, symmetry_spec,
-                    resultExpr);
+                    tensor, power, real_imag_part, product, sum, expr,
+                    symmetry_spec, resultExpr);
 
 struct position_cache_tag;
 struct error_handler_tag;
@@ -185,6 +196,7 @@ struct NumberRule : helpers::annotate_position, helpers::error_handler {};
 struct VariableRule : helpers::annotate_position, helpers::error_handler {};
 struct TensorRule : helpers::annotate_position, helpers::error_handler {};
 struct PowerRule : helpers::annotate_position, helpers::error_handler {};
+struct RealImagPartRule : helpers::annotate_position, helpers::error_handler {};
 struct ProductRule : helpers::annotate_position, helpers::error_handler {};
 struct SumRule : helpers::annotate_position, helpers::error_handler {};
 struct ExprRule : helpers::annotate_position, helpers::error_handler {};
