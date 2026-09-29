@@ -509,7 +509,11 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   // The exported name must name one object: a tensor written `t_adj` and a
   // `t⁺` that folds to `t_adj`, or a variable written `x_conj` and a
   // conjugated `x`, would share every name-keyed map below, and the generated
-  // code would read one object under two readings.
+  // code would read one object under two readings. A variable gets here only
+  // once it has survived the pruning, which is exactly when a generator names
+  // it: ITF prunes no variable and is covered throughout, while a generator
+  // that wraps a conjugated scalar in `conj(...)` keeps one only where pruning
+  // would leave the tree empty.
   {
     auto &registry =
         [&folded_names]() -> std::map<std::wstring, std::wstring> & {
