@@ -254,6 +254,25 @@ class ResultTensorTAPP final : public Result {
     return eval_result<ResultTensorTAPP<T>>(std::move(result));
   }
 
+  [[nodiscard]] ResultPtr apply_transform(
+      CanonTransform t, std::array<std::any, 2> const& ann) const override {
+    // phase * (elementwise conj) * permute in one pass; conj elided for a
+    // real numeric_type (equal annots => the permute is a copy)
+    auto const pre_annot = std::any_cast<annot_t>(ann[0]);
+    auto const post_annot = std::any_cast<annot_t>(ann[1]);
+    detail::log_tapp(detail::ords_to_labels(post_annot), " = apply_transform(",
+                     detail::ords_to_labels(pre_annot), ")\n");
+    T result;
+    tapp_ops::permute(get<T>(), pre_annot, result, post_annot);
+    if constexpr (meta::is_complex_v<numeric_type>) {
+      if (t.conj)
+        for (auto& x : result) x = std::conj(x);
+    }
+    if (t.phase != 1)
+      for (auto& x : result) x = x * numeric_type(t.phase);
+    return eval_result<ResultTensorTAPP<T>>(std::move(result));
+  }
+
   void add_inplace(Result const& other) override {
     auto& t = get<T>();
     auto const& o = other.get<T>();
