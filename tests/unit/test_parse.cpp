@@ -573,8 +573,9 @@ TEST_CASE("serialization", "[serialization]") {
                                io::serialization::SerializationError,
                                serializationErrorMatches(12, 1, "expected"));
         // ... and an empty pair of brackets wraps no expression
-        REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"Re[]"),
-                          io::serialization::SerializationError);
+        REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"Re[]"),
+                               io::serialization::SerializationError,
+                               serializationErrorMatches(3, 1, "expected"));
       }
     }
 
