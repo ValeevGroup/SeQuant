@@ -10,6 +10,7 @@ set(symb_test_sources
     "test_binary_node.cpp"
     "test_bliss.cpp"
     "test_canonicalize.cpp"
+    "test_conjugation.cpp"
     "test_expr.cpp"
     "test_index.cpp"
     "test_iterator.cpp"

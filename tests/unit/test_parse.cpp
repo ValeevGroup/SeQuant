@@ -986,11 +986,14 @@ TEST_CASE("serialization", "[serialization]") {
     using namespace sequant;
 
     // over a complex basis simplify() folds `A + conjugate(A)` into
-    // `2 Re[A]` (SimplifyOptions::FoldConjugatePairs defaults to Yes), so the
-    // wrappers reach the serializer through the ordinary simplification path
+    // `2 Re[A]` when asked to (CanonicalizeOptions::FoldConjugatePairs), so
+    // the wrappers reach the serializer through the ordinary simplification
+    // path
     Context ctx = get_default_context();
     ctx.set(mbpt::make_min_sr_spaces(mbpt::SpinConvention::None));
     ctx.set(AssertStrictBraKetSymmetry::No);
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizeOptions::FoldConjugatePairs::Yes));
     auto resetter = set_scoped_default_context(ctx);
 
     auto term = deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
