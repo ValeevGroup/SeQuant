@@ -17,10 +17,14 @@
 
 #include <unsupported/Eigen/CXX11/Tensor>
 
+#include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <sstream>
 #include <string>
+#include <string_view>
 
 using namespace sequant;
 
@@ -237,9 +241,26 @@ std::string shell_escape(const std::string &arg) {
 #endif
 }
 
-// Execute Python code and check for errors
 #if defined(SEQUANT_HAS_NUMPY_FOR_VALIDATION) || \
     defined(SEQUANT_HAS_TORCH_FOR_VALIDATION)
+// Creates a temporary directory named after @p stem, made unique by a
+// per-process random token and a per-directory counter: two concurrent runs of
+// this binary must not write into, or remove, each other's directory.
+std::filesystem::path make_unique_temp_dir(std::string_view stem) {
+  static const std::uint64_t token = [] {
+    std::random_device rd;
+    return (static_cast<std::uint64_t>(rd()) << 32) | rd();
+  }();
+  static std::atomic<unsigned> counter{0};
+
+  std::ostringstream name;
+  name << stem << '_' << std::hex << token << '_' << counter++;
+  auto dir = std::filesystem::temp_directory_path() / name.str();
+  std::filesystem::create_directories(dir);
+  return dir;
+}
+
+// Execute Python code and check for errors
 bool run_python_code(const std::string &code, const std::string &working_dir,
                      bool use_torch = false) {
   // Convert to filesystem::path for proper handling
@@ -499,8 +520,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
   SECTION("Validation: Simple matrix multiplication") {
     // Create temporary directory for test files
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_simple";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_simple");
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
@@ -572,8 +592,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
   SECTION("Validation: Scalar contraction (energy)") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_scalar";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_scalar");
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
@@ -642,8 +661,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
   SECTION("Validation: Three-tensor contraction (scalar result)") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_three_scalar";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_three_scalar");
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
@@ -718,8 +736,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
   SECTION("Validation: Ternary contraction with tensor result") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_ternary";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_ternary");
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
@@ -801,8 +818,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
   SECTION("Validation: With scalar prefactor") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_scalar_factor";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_scalar_factor");
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
@@ -866,8 +882,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
   SECTION("Validation: Sum of expressions") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_sum_expr";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_sum_expr");
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
@@ -948,8 +963,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     // Test THC factorization with auxiliary (non-covariant) indices:
     // I[a1,a3,a2,a4] = sum_{x1,x2} X(a1,x1)*X(a2,x1)*Y(x1,x2)*X(a3,x2)*X(a4,x2)
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_thc_numpy";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_thc_numpy");
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
@@ -1041,8 +1055,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
   SECTION("Validation: RowMajor memory layout") {
     // Test that RowMajor (C order) layout produces numerically correct results
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_rowmajor";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_rowmajor");
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
@@ -1128,8 +1141,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     // Test that explicit ColumnMajor (Fortran order) layout produces correct
     // results
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_colmajor";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_colmajor");
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
@@ -1204,8 +1216,7 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
   SECTION("Tensor I/O - Layout compatibility") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_layout";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_layout");
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
@@ -1362,8 +1373,7 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
 
   SECTION("Validation: Simple matrix multiplication with PyTorch") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_pytorch_simple";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_pytorch_simple");
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
@@ -1433,9 +1443,8 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
   }
 
   SECTION("Validation: RowMajor memory layout with PyTorch") {
-    std::filesystem::path temp_dir = std::filesystem::temp_directory_path() /
-                                     "sequant_test_pytorch_rowmajor";
-    std::filesystem::create_directories(temp_dir);
+    std::filesystem::path temp_dir =
+        make_unique_temp_dir("sequant_test_pytorch_rowmajor");
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
@@ -1519,9 +1528,8 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
   SECTION("Validation: ColumnMajor memory layout with PyTorch") {
     // Note: PyTorch tensors are always row-major, so even when ColumnMajor is
     // requested, PyTorch will use row-major layout
-    std::filesystem::path temp_dir = std::filesystem::temp_directory_path() /
-                                     "sequant_test_pytorch_colmajor";
-    std::filesystem::create_directories(temp_dir);
+    std::filesystem::path temp_dir =
+        make_unique_temp_dir("sequant_test_pytorch_colmajor");
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
@@ -1603,8 +1611,7 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
   SECTION("Validation: Non-covariant indices (THC) with PyTorch") {
     // Same THC factorization test as NumPy but using PyTorch backend
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_thc_pytorch";
-    std::filesystem::create_directories(temp_dir);
+        make_unique_temp_dir("sequant_test_thc_pytorch");
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
