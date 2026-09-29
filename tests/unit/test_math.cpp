@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <range/v3/view/iota.hpp>
 
@@ -47,13 +48,33 @@ TEST_CASE("math", "[elements]") {
     REQUIRE(sequant::to_string(sequant::factorial(21)) ==
             "51090942171709440000");
 
-    // try to stress-test reentrancy of memoization
-    auto rng = ranges::views::iota(31, 100);
-    sequant::for_each(rng, [](const auto& i) {
-      REQUIRE_NOTHROW(sequant::to_string(sequant::factorial(i)));
-      REQUIRE(sequant::to_string(sequant::factorial(30)) ==
-              "265252859812191058636308480000000");
+    // try to stress-test reentrancy of memoization; sequant::for_each is
+    // parallel and Catch2's assertion macros are not thread-safe, so the loop
+    // only records per-position results and the assertions run below
+    constexpr int first = 31;
+    constexpr int last = 100;
+    struct Recorded {
+      std::string value;
+      std::string memoized;
+      std::string error;
+    };
+    std::vector<Recorded> recorded(static_cast<std::size_t>(last - first));
+    auto rng = ranges::views::iota(first, last);
+    sequant::for_each(rng, [&recorded](const auto& i) {
+      auto& rec = recorded.at(static_cast<std::size_t>(i - first));
+      try {
+        rec.value = sequant::to_string(sequant::factorial(i));
+        rec.memoized = sequant::to_string(sequant::factorial(30));
+      } catch (const std::exception& e) {
+        rec.error = e.what();
+      }
     });
+    for (std::size_t pos = 0; pos != recorded.size(); ++pos) {
+      CAPTURE(first + static_cast<int>(pos));
+      REQUIRE(recorded[pos].error.empty());
+      REQUIRE(!recorded[pos].value.empty());
+      REQUIRE(recorded[pos].memoized == "265252859812191058636308480000000");
+    }
 
     // 100! has been memoized by now
     REQUIRE(sequant::to_string(sequant::factorial(100)) ==
