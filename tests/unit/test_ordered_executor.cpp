@@ -1535,13 +1535,11 @@ TEST_CASE(
     REQUIRE(table.unresolved.empty());
   }
 
-  {
-    sequant::tests::ScopedEnv const strict("SEQUANT_UT_STRICT_FILL_ONCE", "1");
-    REQUIRE_NOTHROW(
-        sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
-            forest, ordered, rich, layout, yield, ordered_cache, target, {},
-            is_volatile_node));
-  }
+  // Per-instance override; see [block-skip]'s note on the env latch.
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
 
   logger.eval.level = prev_level;
 }
@@ -4281,15 +4279,11 @@ TEST_CASE(
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_array_ops(&aops);
 
-  // The strict tripwires the default walk runs under, set and RESTORED (this
-  // case does not own the process environment).
-  {
-    sequant::tests::ScopedEnv const strict("SEQUANT_UT_STRICT_FILL_ONCE", "1");
-    REQUIRE_NOTHROW(
-        sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
-            forest, ordered, rich, layout, yield, ordered_cache, target, {},
-            is_volatile_node));
-  }
+  // Per-instance override; see [block-skip]'s note on the env latch.
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
 
   logger.eval.level = prev_level;
 }
@@ -4564,13 +4558,11 @@ TEST_CASE(
 
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_array_ops(&aops);
-  {
-    sequant::tests::ScopedEnv const strict("SEQUANT_UT_STRICT_FILL_ONCE", "1");
-    REQUIRE_NOTHROW(
-        sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
-            forest, ordered, rich, layout, yield, ordered_cache, target, {},
-            is_volatile_node));
-  }
+  // Per-instance override; see [block-skip]'s note on the env latch.
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
   logger.eval.level = prev_level;
 
   REQUIRE(!zeros.empty());  // the run really did assemble by scattering
@@ -4961,13 +4953,11 @@ TEST_CASE(
   std::ostringstream sink;
   auto* const prev_stream = logger.eval.stream;
   logger.eval.stream = &sink;
-  {
-    sequant::tests::ScopedEnv const strict("SEQUANT_UT_STRICT_FILL_ONCE", "1");
-    REQUIRE_NOTHROW(
-        sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
-            forest, ordered, rich, layout, yield, ordered_cache, target, {},
-            is_volatile_node));
-  }
+  // Per-instance override; see [block-skip]'s note on the env latch.
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::On>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
   logger.eval.level = prev_level;
   logger.eval.stream = prev_stream;
 
