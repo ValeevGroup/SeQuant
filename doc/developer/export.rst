@@ -113,9 +113,13 @@ producing a plain text representation of the code. Mostly intended for having a 
 very useful for debugging or other cases in which a human-readable version of the code is required."
 
 .. note::
-   The adjoint/transpose case (``EvalOp::Adjoint``) currently exports only the index permutation, not elementwise conjugation: correct
-   for a real-valued field, incomplete for a complex one, since the exported IR has no node to carry an explicit conjugation yet. A
-   backend targeting complex arithmetic needs to be aware of this gap.
+   A tensor carrying a core state (``t⁺``, ``t꙳``) reaches the exporters as an array of its own: preprocessing folds the marks into
+   the label (``fold_marks_into_label()``, suffixes ``_adj`` then ``_conj``), so ``g⁺`` is exported as ``g_adj`` and every label-keyed
+   map and backend match — declarations, reference counts, load strategies, import names, the ITF two-electron integral remap — tells
+   it apart from the bare ``g``. A backend therefore never has to spell an elementwise conjugation for a tensor; it has to be able to
+   serve the folded name as an array. A conjugated :class:`sequant::Variable` is spelled ``conj(x)`` by the generators that have a
+   conjugation spelling for a scalar (text, Julia, Python/einsum); ITF has none, so there the same folding names it ``x_conj[]``
+   throughout. See ``doc/dev/conjugation-model.md`` for the whole model.
 
 Debugging and tests
 ------------------------
