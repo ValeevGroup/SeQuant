@@ -316,6 +316,9 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   using CurrentCtx = CurrentGen::Context;
 
   auto resetter = to_export_context();
+  // the generated code is real arithmetic: the test tensors live over a real
+  // basis, where the `S` braket letter is derivable
+  auto real_basis = tests::scoped_real_basis();
 
   REQUIRE(Index(L"i_1") < Index(L"a_1"));
 
@@ -406,6 +409,8 @@ TEST_CASE("export", "[export]") {
   auto resetter = to_export_context();
 
   SECTION("reordering_context") {
+    // the `S` braket letters below are derivable only over a real basis
+    auto real_basis = tests::scoped_real_basis();
     REQUIRE(Index(L"i_1").space().approximate_size() >
             Index(L"u_1").space().approximate_size());
     REQUIRE(Index(L"a_1").space().approximate_size() >
@@ -562,7 +567,8 @@ TEST_CASE("export", "[export]") {
       SECTION("multiple") {
         export_expression(to_export_tree(deserialize<ResultExpr>(
                               L"ECC = 2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} "
-                              "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}")),
+                              "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}",
+                              {.def_braket_symm = Hermiticity::NonHermitian})),
                           generator, ctx);
 
         REQUIRE_THAT(
@@ -1062,4 +1068,667 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("->'"));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
   }
+}
+
+TEST_CASE("exported names of marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+  Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+           TensorSymmetries{.conjugation_parity = ConjugationParity::None});
+  Tensor ta = t;
+  REQUIRE(ta.adjoint() == 1);
+  Tensor tk = t;
+  REQUIRE(tk.kconjugate() == 1);
+  TextGenerator<TextGeneratorContext> gen;
+  TextGeneratorContext ctx;
+  REQUIRE(gen.represent(t, ctx) == "t[a_1, i_1]");
+  REQUIRE(gen.represent(ta, ctx) == "t_adj[i_1, a_1]");
+  REQUIRE(gen.represent(tk, ctx) == "t_conj[a_1, i_1]");
+}
+
+TEST_CASE("exported names of reordered marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  ItfGenerator<ItfContext> gen;
+
+  // the array name that the generator produces, without the index-space tags
+  auto array_name = [&](const Tensor &tensor) {
+    const std::string name = gen.get_name(tensor, ctx);
+    return name.substr(0, name.find(':'));
+  };
+
+  const Tensor t(
+      L"t", bra{L"i_1", L"a_1"}, ket{L"i_2", L"a_2"},
+      TensorSymmetries{.perm = Symmetry::Symm,
+                       .conjugation_parity = ConjugationParity::None});
+
+  Tensor adjointed = t;
+  REQUIRE(adjointed.adjoint() == 1);
+  REQUIRE(adjointed.adjointed());
+  REQUIRE(array_name(adjointed) == "t_adj");
+
+  Tensor kconjugated = t;
+  REQUIRE(kconjugated.kconjugate() == 1);
+  REQUIRE(kconjugated.kconjugated());
+  REQUIRE(array_name(kconjugated) == "t_conj");
+
+  // the index reordering must leave the array name of a marked tensor alone
+  Tensor reordered = t;
+  REQUIRE(ctx.rewrite(reordered));
+  REQUIRE(array_name(reordered) == "t");
+
+  Tensor reordered_adjointed = adjointed;
+  REQUIRE(ctx.rewrite(reordered_adjointed));
+  REQUIRE(array_name(reordered_adjointed) == "t_adj");
+
+  Tensor reordered_kconjugated = kconjugated;
+  REQUIRE(ctx.rewrite(reordered_kconjugated));
+  REQUIRE(array_name(reordered_kconjugated) == "t_conj");
+
+  // the import-name map tells the marked arrays apart from the bare one
+  ctx.set_import_name(reordered, "T");
+  ctx.set_import_name(reordered_adjointed, "TADJ");
+  ctx.set_import_name(reordered_kconjugated, "TCONJ");
+  REQUIRE(ctx.import_name(reordered).value() == "T");
+  REQUIRE(ctx.import_name(reordered_adjointed).value() == "TADJ");
+  REQUIRE(ctx.import_name(reordered_kconjugated).value() == "TCONJ");
+}
+
+TEST_CASE("full export of marked tensors", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+  const auto t_adj = ex<Tensor>(L"t⁺", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE(t_adj->as<Tensor>().adjointed());
+  const auto f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+  const ResultExpr result(R, t * f + t_adj * f);
+
+  SECTION("itf tells a marked tensor apart from its bare twin") {
+    // the reordering leaves these Nonsymm, aux-less tensors alone, so only the
+    // marks can keep the two arrays apart
+    for (bool rewriting : {true, false}) {
+      CAPTURE(rewriting);
+
+      ItfContext ctx;
+      configure_context_defaults(ctx);
+      ctx.enable_rewriting(rewriting);
+      ItfGenerator<ItfContext> gen;
+      export_expression(to_export_tree(result), gen, ctx);
+      const std::string code = gen.get_generated_code();
+      CAPTURE(code);
+
+      // two declarations under two names
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("tensor: t:ce["));
+      REQUIRE_THAT(code,
+                   Catch::Matchers::ContainsSubstring("tensor: t_adj:ce["));
+      // and two terminals in the load-strategy bookkeeping: the marked array
+      // is one the host code supplies, not one the generated code builds
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t:ce["));
+      REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t_adj:ce["));
+    }
+  }
+
+  SECTION("the text generator tells them apart as well") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("Declare tensor t[i_1, a_2]"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Declare tensor t_adj[i_1, a_2]"));
+    // the marked array is contracted under its own name, in the slot order
+    // the `⁺` denotes
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring(
+                     "Compute R[i_1, a_1] += t_adj[i_1, a_2] f[a_2, a_1]"));
+  }
+
+  SECTION("an import name set on the marked tensor as written is honoured") {
+    // the name is registered on the tensor that still carries its `⁺`, before
+    // any rewrite; the map is keyed on the folded label, which is the name the
+    // rest of the pipeline looks up
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_import_name(t_adj->as<Tensor>(), "TADJ");
+    REQUIRE(ctx.import_name(t_adj->as<Tensor>()).value() == "TADJ");
+
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R, t_adj * f)), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("TADJ"));
+  }
+
+  SECTION("a K-conjugated terminal is imported under its own name") {
+    // over a complex basis a `꙳` is a leaf of its own, so both arrays are
+    // terminals and both are imported
+    const TensorSymmetries syms{.conjugation_parity = ConjugationParity::None};
+    const auto tp = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"}, syms);
+    const auto tc = ex<Tensor>(L"t꙳", bra{L"i_1"}, ket{L"a_2"}, syms);
+    REQUIRE(tc->as<Tensor>().kconjugated());
+
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R, tp * f + tc * f)), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("tensor: t:ce[jc], t:ce"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "tensor: t_conj:ce[jc], t_conj:ce"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load t:ce[jc]"));
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("load t_conj:ce[jc]"));
+  }
+
+  SECTION("the integral remap does not see a marked integral") {
+    // the marks are folded into the label before any context rewrite, so a
+    // marked integral reaches the g->J/K remap under its own name and is not
+    // recognized by it
+    const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    const auto g_adj =
+        ex<Tensor>(L"g⁺", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    REQUIRE(g_adj->as<Tensor>().adjointed());
+    const auto t2 = ex<Tensor>(L"t2", bra{L"a_1", L"a_2"}, ket{L"i_2", L"a_3"});
+    const Tensor R2(L"R2", bra{L"i_1"}, ket{L"a_3"});
+
+    ItfContext ctx;
+    configure_context_defaults(ctx);
+    ctx.set_two_electron_integral_label(L"g");
+    ItfGenerator<ItfContext> gen;
+    export_expression(to_export_tree(ResultExpr(R2, g * t2 + g_adj * t2)), gen,
+                      ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    // the bare integral is still remapped
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("tensor: K:eecc["));
+    // the marked one is not
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("tensor: g_adj:ccee["));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("K_adj"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("J_adj"));
+  }
+}
+
+TEST_CASE("a conjugated scalar leaf is named by its folded name throughout",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // ITF has no conjugation spelling for a scalar operand, so a conjugated
+  // variable is an object of its own there: the preprocessing materializes a
+  // surviving scalar leaf's denoted spelling, and the generator names that
+  // object `x_conj[]` wherever it appears -- declaration, load, value, drop
+  auto x = ex<Variable>(L"x");
+  auto y = ex<Variable>(L"y");
+  x->as<Variable>().conjugate();
+  y->as<Variable>().conjugate();
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"i_1"});
+  const Tensor R(L"R", bra{L"a_1"}, ket{L"i_1"});
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  REQUIRE((ItfGenerator<ItfContext>{}.prunable_scalars() &
+           PrunableScalars::Variables) == PrunableScalars::None);
+  ItfGenerator<ItfContext> gen;
+  export_expression(
+      to_export_tree(ResultExpr(
+          R, ex<Product>(ExprPtrList{x, y, f, w}, Product::Flatten::No))),
+      gen, ctx);
+  const std::string code = gen.get_generated_code();
+  CAPTURE(code);
+
+  REQUIRE_THAT(code,
+               Catch::Matchers::ContainsSubstring("tensor: x_conj[], x_conj"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load x_conj[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load y_conj[]"));
+  // the value position names the same object, so the loaded operand and the
+  // one the computation reads are one array
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("x_conj[] y_conj[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop y_conj[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop x_conj[]"));
+  // and the array the leaf stores is nowhere in the generated code
+  REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" x[]"));
+}
+
+TEST_CASE("a marked leaf reaches the generator as the array it denotes",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  auto generate = [](const ResultExpr &result) {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    return gen.get_generated_code();
+  };
+
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+
+  SECTION("an adjointed leaf is named _adj") {
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"});
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+
+    const std::string code = generate(ResultExpr(R, ex<Tensor>(t) * f));
+    CAPTURE(code);
+
+    // the `⁺` is spelled by the array name, over the slots it denotes
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("t_adj[i_1, a_1]"));
+    // and the array the leaf stores is nowhere in the generated code
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" t["));
+  }
+
+  SECTION("a K-conjugated leaf is named _conj") {
+    // over this complex basis a `꙳` whose parity leaves it unresolved names
+    // an array of its own, which the leaf stores as written
+    const TensorSymmetries no_parity{.conjugation_parity =
+                                         ConjugationParity::None};
+    Tensor r(L"r", bra{L"a_1"}, ket{L"i_1"}, no_parity);
+    REQUIRE(r.kconjugate() == 1);
+    REQUIRE(r.kconjugated());
+
+    // the dummy pairs r's bra with a ket, as the network requires
+    const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"a_1"});
+    const std::string code = generate(ResultExpr(R, ex<Tensor>(r) * w));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("r_conj[a_1, i_1]"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" r["));
+  }
+
+  SECTION("an adjointed and K-conjugated leaf is named _adj_conj") {
+    // over a complex basis the leaf stores t꙳ (an array of its own) under the
+    // adjoint channel's {conj, braket_swap}, and denotes t⁺꙳
+    const TensorSymmetries no_parity{.conjugation_parity =
+                                         ConjugationParity::None};
+    Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"}, no_parity);
+    REQUIRE(t.kconjugate() == 1);
+    REQUIRE(t.adjoint() == 1);
+    REQUIRE(t.adjointed());
+    REQUIRE(t.kconjugated());
+
+    const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"i_1"});
+    const Tensor R2(L"R", bra{L"a_2"}, ket{L"a_1"});
+    const std::string code = generate(ResultExpr(R2, ex<Tensor>(t) * w));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code,
+                 Catch::Matchers::ContainsSubstring("t_adj_conj[i_1, a_1]"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" t["));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" t_conj["));
+  }
+}
+
+TEST_CASE("a reordered leaf's canonicalization sign reaches the coefficient",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  auto generate = [](const ResultExpr &result) {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    return gen.get_generated_code();
+  };
+
+  // the block canonicalizer stores the mixed-space bra of an antisymmetric
+  // tensor in slot order, i_3,a_1, with the reorder's sign on the leaf's
+  // transform; the generated code names the stored array and must carry the
+  // sign, which no spelling does
+  auto t = [](std::wstring_view b0, std::wstring_view b1) {
+    return ex<Tensor>(L"t", bra{Index{b0}, Index{b1}},
+                      ket{Index{L"i_1"}, Index{L"i_2"}}, Symmetry::Antisymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  const auto v = ex<Tensor>(L"v", bra{L"i_1", L"i_2"}, ket{L"a_1", L"i_3"});
+  const auto u = ex<Tensor>(L"u", bra{L"i_1", L"i_2"}, ket{L"i_3", L"a_1"});
+
+  SECTION("as an operand of a product") {
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto const leaf = binarize(t(L"a_1", L"i_3"));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    REQUIRE(leaf->canon_phase() == -1);
+    REQUIRE(leaf->as_tensor().bra()[0].label() == L"i_3");
+
+    const std::string code =
+        generate(ResultExpr(Variable(L"E"), t(L"a_1", L"i_3") * v));
+    CAPTURE(code);
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("-1 t[i_3, a_1, i_1, i_2]"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("t[a_1"));
+
+    // the spelling already in slot order carries no sign
+    const std::string canon =
+        generate(ResultExpr(Variable(L"E"), t(L"i_3", L"a_1") * u));
+    CAPTURE(canon);
+    REQUIRE_THAT(canon,
+                 Catch::Matchers::ContainsSubstring(" t[i_3, a_1, i_1, i_2]"));
+    REQUIRE_THAT(canon, !Catch::Matchers::ContainsSubstring("-1"));
+  }
+
+  SECTION("as a summand") {
+    const Tensor R(L"R", bra{L"i_3", L"a_1"}, ket{L"i_1", L"i_2"});
+    const std::string code =
+        generate(ResultExpr(R, t(L"a_1", L"i_3") + t(L"i_3", L"a_1")));
+    CAPTURE(code);
+    REQUIRE_THAT(
+        code, Catch::Matchers::ContainsSubstring("-1 t[i_3, a_1, i_1, i_2]"));
+  }
+}
+
+TEST_CASE("a pruned scalar prefactor keeps its conjugation", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // the text generator prunes every scalar it can
+  REQUIRE(TextGenerator<TextGeneratorContext>{}.prunable_scalars() ==
+          PrunableScalars::All);
+
+  auto generate = [](const ResultExpr &result) {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    return gen.get_generated_code();
+  };
+
+  const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+
+  // a scalar leaf stores the unmarked spelling, its conjugation riding the
+  // node's transform
+  auto conjugated_power = []() {
+    auto p = ex<Power>(L"x", rational(2));
+    p->as<Power>().conjugate();
+    return p;
+  };
+
+  SECTION("pruned out of the tree") {
+    // two tensor factors leave the product a subtree to hold the pruned
+    // scalar, so the prefactor is taken out of the tree
+    const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+    const std::string code =
+        generate(ResultExpr(R, conjugated_power() * t * f));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x^2)"));
+  }
+
+  SECTION("kept in the tree") {
+    // one tensor factor: pruning the scalar would make the tree vanish, so it
+    // reaches the generator through the computation instead
+    const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+    const std::string code = generate(ResultExpr(R, conjugated_power() * t));
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x^2)"));
+  }
+
+  SECTION("a conjugated power base is spelled as written") {
+    // the base's own marker is part of the stored spelling, not of the
+    // transform, and survives the pruning unchanged
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    const auto p = ex<Power>(std::move(x), rational(2));
+
+    const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+    const ResultExpr result(R, p * t * f);
+    const std::string code = generate(result);
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x)^2"));
+
+    // the base is wrapped by the same value-string funnel in every generator,
+    // so each spells the power over the wrapped base
+    {
+      JuliaTensorOperationsGeneratorContext ctx;
+      configure_context_defaults(ctx);
+      JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext> gen;
+      export_expression(to_export_tree(result), gen, ctx);
+      const std::string julia = gen.get_generated_code();
+      CAPTURE(julia);
+      REQUIRE_THAT(julia, Catch::Matchers::ContainsSubstring("conj(x)^2"));
+    }
+    {
+      auto registry = get_default_context().index_space_registry();
+      NumPyEinsumGeneratorContext ctx;
+      ctx.set_shape(registry->retrieve("i"), "nocc");
+      ctx.set_shape(registry->retrieve("a"), "nvirt");
+      ctx.set_tag(registry->retrieve("i"), "o");
+      ctx.set_tag(registry->retrieve("a"), "v");
+      NumPyEinsumGenerator gen;
+      export_expression(to_export_tree(result), gen, ctx);
+      const std::string python = gen.get_generated_code();
+      CAPTURE(python);
+      REQUIRE_THAT(python, Catch::Matchers::ContainsSubstring("np.conj(x)**2"));
+    }
+  }
+}
+
+TEST_CASE("a bare conjugated variable is spelled conj(...)", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  auto registry = get_default_context().index_space_registry();
+  const IndexSpace occ = registry->retrieve("i");
+  const IndexSpace virt = registry->retrieve("a");
+
+  // a conjugated variable's label is the unconjugated one, so the conjugation
+  // reaches the generated code only through the wrapping
+  auto conjugated_variable = []() {
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    return x;
+  };
+  REQUIRE(conjugated_variable()->as<Variable>().label() == L"x");
+
+  const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
+  const ResultExpr result(R, conjugated_variable() * t * f);
+
+  SECTION("text") {
+    TextGeneratorContext ctx;
+    configure_context_defaults(ctx);
+    TextGenerator<TextGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x)"));
+  }
+
+  SECTION("Julia") {
+    JuliaTensorOperationsGeneratorContext ctx;
+    configure_context_defaults(ctx);
+    JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext> gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x)"));
+  }
+
+  SECTION("Python einsum") {
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    NumPyEinsumGenerator gen;
+    export_expression(to_export_tree(result), gen, ctx);
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.conj(x)"));
+  }
+}
+
+TEST_CASE("a folded name must come from one tensor", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // `t⁺` is exported as `t_adj`, so a tensor already written `t_adj` would
+  // share every label-keyed map with it and the generated code would read one
+  // buffer under two readings
+  const auto t_adj_written = ex<Tensor>(L"t_adj", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE_FALSE(t_adj_written->as<Tensor>().adjointed());
+  const auto t_marked = ex<Tensor>(L"t⁺", bra{L"i_1"}, ket{L"a_2"});
+  REQUIRE(t_marked->as<Tensor>().adjointed());
+  REQUIRE(export_label(t_marked->as<Tensor>()) ==
+          export_label(t_adj_written->as<Tensor>()));
+  const auto f = ex<Tensor>(L"f", bra{L"a_2"}, ket{L"a_1"});
+  const Tensor R(L"R", bra{L"i_1"}, ket{L"a_1"});
+
+  SECTION("the collision is refused") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_THROWS_AS(
+        export_expression(
+            to_export_tree(ResultExpr(R, t_adj_written * f + t_marked * f)),
+            gen, ctx),
+        Exception);
+  }
+
+  SECTION("distinct folded names are fine") {
+    const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(ResultExpr(R, t * f + t_marked * f)), gen, ctx));
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(
+                           "Declare tensor t_adj[i_1, a_2]"));
+  }
+
+  SECTION("one tensor used twice is not a collision") {
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(ResultExpr(R, t_marked * f + t_marked * f)), gen, ctx));
+  }
+
+  SECTION("the guard spans every tree of one export") {
+    // the declarations of all trees are merged into one global block, so two
+    // trees are as much a collision as two factors of one tree
+    const Tensor S(L"S", bra{L"i_1"}, ket{L"a_1"});
+    std::vector<ExpressionGroup<>> groups;
+    groups.emplace_back();
+    groups.back().add(to_export_tree(ResultExpr(R, t_adj_written * f)));
+    groups.back().add(to_export_tree(ResultExpr(S, t_marked * f)));
+
+    TextGeneratorContext ctx;
+    TextGenerator<TextGeneratorContext> gen;
+    REQUIRE_THROWS_AS(export_groups<>(std::move(groups), gen, ctx), Exception);
+  }
+}
+
+TEST_CASE("a folded name must come from one variable", "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  // ITF prunes no variable, so a scalar leaf survives and reaches the guard
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  REQUIRE((ItfGenerator<ItfContext>{}.prunable_scalars() &
+           PrunableScalars::Variables) == PrunableScalars::None);
+
+  const auto f = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"});
+  const auto w = ex<Tensor>(L"w", bra{L"a_2"}, ket{L"i_1"});
+  const Tensor R(L"R", bra{L"a_1"}, ket{L"i_1"});
+  auto product = [](ExprPtrList factors) {
+    return ex<Product>(std::move(factors), Product::Flatten::No);
+  };
+
+  SECTION("two variables under one folded name are refused") {
+    // a conjugated `x` is exported as `x_conj`, so a variable already written
+    // `x_conj` would be the same imported scalar under two readings
+    auto x = ex<Variable>(L"x");
+    x->as<Variable>().conjugate();
+    const auto x_conj_written = ex<Variable>(L"x_conj");
+    REQUIRE_FALSE(x_conj_written->as<Variable>().conjugated());
+    REQUIRE(export_label(x->as<Variable>()) ==
+            export_label(x_conj_written->as<Variable>()));
+
+    ItfGenerator<ItfContext> gen;
+    REQUIRE_THROWS_AS(
+        export_expression(
+            to_export_tree(
+                ResultExpr(R, product(ExprPtrList{x, x_conj_written, f, w}))),
+            gen, ctx),
+        Exception);
+  }
+
+  SECTION("a tensor and a variable of one folded name coexist") {
+    // the two are different objects under one name: a scalar operand is never
+    // the array a tensor of the same label names, so each keeps its own name
+    const auto t_marked = ex<Tensor>(L"T⁺", bra{L"a_1"}, ket{L"a_2"});
+    REQUIRE(t_marked->as<Tensor>().adjointed());
+    const auto t_adj_written = ex<Variable>(L"T_adj");
+    REQUIRE(export_label(t_marked->as<Tensor>()) ==
+            export_label(t_adj_written->as<Variable>()));
+
+    ItfGenerator<ItfContext> gen;
+    REQUIRE_NOTHROW(export_expression(
+        to_export_tree(
+            ResultExpr(R, product(ExprPtrList{t_adj_written, t_marked, w}))),
+        gen, ctx));
+    const std::string code = gen.get_generated_code();
+    CAPTURE(code);
+
+    // the scalar under its own name, the array under its tags
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load T_adj[]"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("T_adj:ee[bc]"));
+  }
+}
+
+TEST_CASE("a context rewrite folds a tensor's marks into its label",
+          "[export]") {
+  using namespace sequant;
+  auto resetter = to_export_context();
+
+  ItfContext ctx;
+  configure_context_defaults(ctx);
+  ctx.set_two_electron_integral_label(L"g");
+
+  // a plain Nonsymm, aux-less tensor gives the reordering nothing to do, so
+  // only the fold can report a change
+  Tensor bare(L"t", bra{L"i_1"}, ket{L"a_1"});
+  REQUIRE_FALSE(ctx.rewrite(bare));
+  REQUIRE(bare.label() == L"t");
+
+  Tensor marked(L"t⁺", bra{L"i_1"}, ket{L"a_1"});
+  REQUIRE(marked.adjointed());
+  REQUIRE(ctx.rewrite(marked));
+  REQUIRE(marked.label() == L"t_adj");
+  REQUIRE_FALSE(marked.adjointed());
+  REQUIRE_FALSE(marked.kconjugated());
+  REQUIRE_THAT(marked, EquivalentTo("t_adj{i_1;a_1}"));
+
+  // the fold precedes the two-electron integral remap, which matches on the
+  // bare label
+  Tensor bare_integral(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  REQUIRE(ctx.rewrite(bare_integral));
+  REQUIRE((bare_integral.label() == L"J" || bare_integral.label() == L"K"));
+
+  Tensor marked_integral(L"g⁺", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+  REQUIRE(marked_integral.adjointed());
+  REQUIRE(ctx.rewrite(marked_integral));
+  REQUIRE(marked_integral.label() == L"g_adj");
+  REQUIRE_FALSE(marked_integral.adjointed());
 }

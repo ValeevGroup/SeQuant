@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -310,8 +311,9 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   /// Get the tensor name (without indices)
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
-    // For Python variable names, start with sanitized tensor label
-    std::string name = sanitize_python_name(tensor.label());
+    // For Python variable names, start with the sanitized array name (the
+    // label plus the suffixes of the tensor's marks)
+    std::string name = sanitize_python_name(export_label(tensor));
 
     // Append index space tags to distinguish different tensor blocks
     // e.g., I[i1,a1] becomes "I_ov", I[a2,a1] becomes "I_vv"
@@ -495,7 +497,12 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   /// as its Python source representation.
   std::string stringify_scalar(const Expr &expr, const Context &ctx) const {
     if (expr.is<Variable>()) {
-      return represent(expr.as<Variable>(), ctx);
+      const Variable &variable = expr.as<Variable>();
+      std::string repr = represent(variable, ctx);
+      // represent() names the variable; in a value position its conjugation
+      // has to be spelled out, because the name does not carry it
+      if (variable.conjugated()) repr = wrap_conj(std::move(repr));
+      return repr;
     } else if (expr.is<Constant>()) {
       return represent(expr.as<Constant>(), ctx);
     } else if (expr.is<Power>()) {
