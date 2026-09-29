@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/export/memory_model.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/export/utils.hpp>
@@ -123,6 +124,11 @@ class ItfGenerator : public Generator<Context> {
   bool requires_named_sections() const override { return true; }
 
   bool supports_index_batching() const override { return true; }
+
+  // ITF's own memory model (alloc/load/drop/store) only ever supports
+  // stack-like allocation; there is no ITF construct for holding a value
+  // resident across arbitrary intervening allocations.
+  MemoryModel memory_model() const override { return MemoryModel::Stack; }
 
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
