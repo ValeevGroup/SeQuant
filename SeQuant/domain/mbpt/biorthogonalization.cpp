@@ -860,6 +860,10 @@ std::vector<rational> make_triplet_combined_residual_weights(
   }
 
   switch (n_particles) {
+    case 1:
+      set({0}, {0}, ratio(1, 2));  // identity
+      break;
+
     case 2:
       set({0, 1}, {0, 1}, ratio(3, 16));   // identity
       set({1, 0}, {1, 0}, ratio(-1, 16));  // whole-pair swap
@@ -875,7 +879,7 @@ std::vector<rational> make_triplet_combined_residual_weights(
     default:
       throw Exception(
           "triplet paper-combined residual weights are only available for "
-          "n_particles = 2, 3, requested rank is : " +
+          "n_particles = 1, 2, 3, requested rank is : " +
           std::to_string(n_particles));
   }
   return weights;

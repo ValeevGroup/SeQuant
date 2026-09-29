@@ -120,7 +120,8 @@ enum class TripletWeightKind {
 /// sector-summed primitive V, for any supported rank
 /// (rank 2 based on Kohn's paper)
 ///
-///   n = 2: Omega = (3 V - V_ps)/16 (Faber's paper)
+///   n = 1: Omega = V/2, the biorthogonal factor for rank one is 1/2.
+///   n = 2: Omega = (3 V - V_ps)/16 (Kohn's paper)
 ///   te_only (n = 2, EFV experiment): Omega = V/4, i.e. the bare TE primitive
 ///          with the external pair swap dropped. The dropped part is restored
 ///          by the postprocessing Omega = V/4 + (V_bs + V_ks)/16
@@ -132,7 +133,8 @@ enum class TripletWeightKind {
 ///
 /// \pre \p V is a Product or a Sum of Products
 /// \param V The sector-summed triplet primitive
-/// \param ext_idxs A vector of external index groups (must have 2 or 3 groups)
+/// \param ext_idxs A vector of external index groups (must have 1, 2 or 3
+///        groups)
 /// \param te_only Assemble the bare-TE weights instead (n = 2 only)
 /// \note I might want to have te_only for triples if EFV prefer it (tee_only)
 /// \return The combined residual, simplified
