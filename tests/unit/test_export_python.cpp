@@ -26,6 +26,12 @@
 #include <string>
 #include <string_view>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 using namespace sequant;
 
 // ============================================================================
@@ -244,12 +250,20 @@ std::string shell_escape(const std::string &arg) {
 #if defined(SEQUANT_HAS_NUMPY_FOR_VALIDATION) || \
     defined(SEQUANT_HAS_TORCH_FOR_VALIDATION)
 // Creates a temporary directory named after @p stem, made unique by a
-// per-process random token and a per-directory counter: two concurrent runs of
-// this binary must not write into, or remove, each other's directory.
+// per-process token and a per-directory counter: two concurrent runs of this
+// binary must not write into, or remove, each other's directory. The token
+// mixes the process id into std::random_device, whose output some standard
+// library builds do not vary between runs.
 std::filesystem::path make_unique_temp_dir(std::string_view stem) {
   static const std::uint64_t token = [] {
     std::random_device rd;
-    return (static_cast<std::uint64_t>(rd()) << 32) | rd();
+    auto const random = (static_cast<std::uint64_t>(rd()) << 32) | rd();
+#ifdef _WIN32
+    auto const pid = static_cast<std::uint64_t>(_getpid());
+#else
+    auto const pid = static_cast<std::uint64_t>(::getpid());
+#endif
+    return random ^ (pid * 0x9e3779b97f4a7c15ull);
   }();
   static std::atomic<unsigned> counter{0};
 
