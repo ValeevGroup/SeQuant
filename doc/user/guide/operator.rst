@@ -107,6 +107,8 @@ A mark is part of the tensor's name: ``t``, ``t⁺`` and ``t꙳`` are three diff
 ``t``, ``t_adj`` and ``t_conj``. A mark that a tensor's declared symmetry makes redundant is not kept: ``t⁺`` of a Hermitian ``t`` is
 ``t`` (with bra and ket exchanged), and ``t꙳`` of a tensor with the default conjugation parity is ``t``; declare
 ``ConjugationParity::None`` on a tensor whose conjugate is a distinct array.
+The model behind these marks -- the two states, their normalization against the traits, and how the eval boundary and the
+exporters treat them -- is described for contributors in :doc:`/developer/conjugation`.
 
 Operator Registry
 -----------------
