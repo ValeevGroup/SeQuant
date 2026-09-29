@@ -7,6 +7,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -210,7 +211,14 @@ TEST_CASE("serialization", "[serialization]") {
     SECTION("Tensor with symmetry annotation") {
       auto expr1 = deserialize<ExprPtr>(L"t{a1;i1}:A");
       auto expr2 = deserialize<ExprPtr>(L"t{a1;i1}:S-C");
-      auto expr3 = deserialize<ExprPtr>(L"t{a1;i1}:N-S-N");
+      // the `S` braket letter is derivable only over a real basis
+      REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"t{a1;i1}:N-S-N"),
+                        io::serialization::SerializationError);
+      ExprPtr expr3;
+      {
+        auto real_basis = tests::scoped_real_basis();
+        expr3 = deserialize<ExprPtr>(L"t{a1;i1}:N-S-N");
+      }
       auto expr4 = deserialize<ExprPtr>(L"t{a1;i1}:N-H-N");
       auto expr5 = deserialize<ExprPtr>(L"t{a1;i1}:N-A-N");
       auto expr6 = deserialize<ExprPtr>(L"t{a1;i1}:N-N-N");
@@ -313,10 +321,127 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L"0 / 10")->is<Constant>());
       REQUIRE(deserialize<ExprPtr>(L"0.5/0.25")->is<Constant>());
       REQUIRE(deserialize<ExprPtr>(L".4")->is<Constant>());
+
+      // several written summands that fold are the value they denote, not a
+      // degenerate container -- a one-summand Sum, or an empty one
+      REQUIRE(deserialize<ExprPtr>(L"1 + 2")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"1 + 2")->as<Constant>().value() == 3);
+      REQUIRE(deserialize<ExprPtr>(L"1 - 1")->as<Constant>().value() == 0);
+      // ... and a parenthesized constant factor joins the product's scalar,
+      // where a bare one already did
+      auto scaled = deserialize<ExprPtr>(L"(3) x");
+      REQUIRE(scaled->is<Product>());
+      REQUIRE(scaled->as<Product>().scalar() == rational{3});
+      REQUIRE(scaled->as<Product>().size() == 1);
+      REQUIRE(scaled->as<Product>().factor(0)->is<Variable>());
+    }
+
+    SECTION("Complex constant") {
+      using scalar_type = Constant::scalar_type;
+
+      SECTION("an imaginary literal is a rational with an abutting i") {
+        REQUIRE(deserialize<ExprPtr>(L"2i")->as<Constant>().value() ==
+                scalar_type{0, 2});
+        REQUIRE(deserialize<ExprPtr>(L"-3i")->as<Constant>().value() ==
+                scalar_type{0, -3});
+        REQUIRE(deserialize<ExprPtr>(L"1/2i")->as<Constant>().value() ==
+                scalar_type{0, rational{1, 2}});
+        for (const auto& spelling : {L"2i", L"-3i", L"1/2i"}) {
+          REQUIRE(serialize(deserialize<ExprPtr>(spelling)) == spelling);
+        }
+      }
+
+      SECTION("a bare or detached i is still a variable") {
+        REQUIRE(deserialize<ExprPtr>(L"i")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"i")->as<Variable>().label() == L"i");
+        // a space between the digits and the `i` makes it a product
+        auto detached = deserialize<ExprPtr>(L"2 i");
+        REQUIRE(detached->is<Product>());
+        REQUIRE(detached->as<Product>().scalar() == rational{2});
+        REQUIRE(detached->as<Product>().factor(0)->is<Variable>());
+        // ... and an `i` that opens a longer name is part of that name
+        auto indexed = deserialize<ExprPtr>(L"2i_1");
+        REQUIRE(indexed->is<Product>());
+        REQUIRE(indexed->as<Product>().scalar() == rational{2});
+        REQUIRE(indexed->as<Product>().factor(0)->as<Variable>().label() ==
+                L"i_1");
+        // ... as is a state mark, which is part of the name without being a
+        // word component
+        auto conjugated = deserialize<ExprPtr>(L"2i꙳");
+        REQUIRE(conjugated->is<Product>());
+        REQUIRE(conjugated->as<Product>().scalar() == rational{2});
+        REQUIRE(conjugated->as<Product>().factor(0)->is<Variable>());
+        REQUIRE(conjugated->as<Product>().factor(0)->as<Variable>().label() ==
+                L"i");
+        REQUIRE(
+            conjugated->as<Product>().factor(0)->as<Variable>().conjugated());
+      }
+
+      SECTION("a general complex constant is a real plus an imaginary term") {
+        auto c = deserialize<ExprPtr>(L"1 + 2i");
+        REQUIRE(c->is<Constant>());
+        REQUIRE(c->as<Constant>().value() == scalar_type{1, 2});
+        REQUIRE(serialize(c) == L"1 + 2i");
+
+        auto d = deserialize<ExprPtr>(L"1 - 2i");
+        REQUIRE(d->is<Constant>());
+        REQUIRE(d->as<Constant>().value() == scalar_type{1, -2});
+        REQUIRE(serialize(d) == L"1 - 2i");
+
+        auto e = deserialize<ExprPtr>(L"-1/2 - 3/4i");
+        REQUIRE(e->is<Constant>());
+        REQUIRE(e->as<Constant>().value() ==
+                scalar_type{rational{-1, 2}, rational{-3, 4}});
+        REQUIRE(serialize(e) == L"-1/2 - 3/4i");
+      }
+
+      SECTION("as a coefficient of a product") {
+        // a purely imaginary coefficient is one token, a composite one is
+        // parenthesized: juxtaposition binds tighter than `+`
+        for (const auto& spelling :
+             {L"2i x", L"-3i x", L"(1 + 2i) x", L"(1 - 2i) x * y"}) {
+          auto prod = deserialize<ExprPtr>(spelling);
+          REQUIRE(prod->is<Product>());
+          REQUIRE(prod->as<Product>().factor(0)->is<Variable>());
+          REQUIRE(serialize(prod) == spelling);
+          REQUIRE(*deserialize<ExprPtr>(serialize(prod)) == *prod);
+        }
+        REQUIRE(deserialize<ExprPtr>(L"(1 + 2i) x")->as<Product>().scalar() ==
+                scalar_type{1, 2});
+      }
+
+      SECTION("as a summand") {
+        for (const auto& spelling :
+             {L"a + 2i", L"a - 2i", L"a + 1 + 2i", L"a + 2i b"}) {
+          auto sum = deserialize<ExprPtr>(spelling);
+          REQUIRE(serialize(sum) == spelling);
+          REQUIRE(*deserialize<ExprPtr>(serialize(sum)) == *sum);
+        }
+      }
+
+      SECTION("nested in Re[] / Im[]") {
+        // a composite scalar is not hoisted out of a wrapper, so it stays
+        // inside the brackets
+        const auto wrapped = L"Re[(1 + 2i) x]";
+        auto re = deserialize<ExprPtr>(wrapped);
+        REQUIRE(re->is<RealPart>());
+        REQUIRE(serialize(re) == wrapped);
+        REQUIRE(*deserialize<ExprPtr>(serialize(re)) == *re);
+        // ... while a purely imaginary one rotates the projection
+        REQUIRE(*deserialize<ExprPtr>(L"Im[2i x]") ==
+                *deserialize<ExprPtr>(L"2 Re[x]"));
+      }
+
+      SECTION("an imaginary exponent is refused") {
+        REQUIRE_THROWS_MATCHES(
+            deserialize<ExprPtr>(L"x^(2i)"),
+            io::serialization::SerializationError,
+            serializationErrorMatches(0, 6, "Power exponent"));
+      }
     }
 
     SECTION("Variable") {
-      // SeQuant variable is just a label followed by an optional ^*
+      // SeQuant variable is just a label followed by an optional ꙳
       // to denote if the variable is conjugated
       REQUIRE(deserialize<ExprPtr>(L"a")->is<Variable>());
       REQUIRE(deserialize<ExprPtr>(L"α")->is<Variable>());
@@ -324,12 +449,33 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L"γ")->is<Variable>());
       REQUIRE(deserialize<ExprPtr>(L"λ")->is<Variable>());
       REQUIRE(deserialize<ExprPtr>(L"δ")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"a^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"α^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"β^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"b^*")->is<Variable>());
-      REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().conjugated());
-      REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().label() == L"b");
+      REQUIRE(deserialize<ExprPtr>(L"a꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"α꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"β꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"b꙳")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"b꙳")->as<Variable>().conjugated());
+      REQUIRE(deserialize<ExprPtr>(L"b꙳")->as<Variable>().label() == L"b");
+    }
+
+    SECTION("Conjugated tensor") {
+      // a tensor label followed by ꙳ carries the K-conjugated state (the
+      // spelling the serializer emits for Tensor::kconjugated()); the state
+      // survives only where the parity leaves it standing, hence the
+      // spelled-out parity letter `N`
+      const auto tstar_str = L"t꙳{i_1;a_1}:N-N-N-N";
+      auto tstar = deserialize<ExprPtr>(tstar_str);
+      REQUIRE(tstar->is<Tensor>());
+      REQUIRE(tstar->as<Tensor>().kconjugated());
+      REQUIRE(tstar->as<Tensor>().label() == L"t");
+      {  // round-trip through the serializer
+        REQUIRE(serialize(tstar, {.annot_symm = true}) == tstar_str);
+        auto respelled =
+            deserialize<ExprPtr>(serialize(tstar, {.annot_symm = true}));
+        REQUIRE(respelled->as<Tensor>().kconjugated());
+        REQUIRE(*respelled == *tstar);
+      }
+      // an unmarked spelling parses without the state
+      REQUIRE(!deserialize<ExprPtr>(L"t{i_1;a_1}")->as<Tensor>().kconjugated());
     }
 
     SECTION("Power") {
@@ -370,16 +516,109 @@ TEST_CASE("serialization", "[serialization]") {
       auto conj_var = ex<Variable>(L"x");
       conj_var->as<Variable>().conjugate();
       auto pw_conj_var = ex<Power>(conj_var, rational{2});
-      const auto pw_conj_var_str = L"(x^*)^(2)";
+      const auto pw_conj_var_str = L"(x꙳)^(2)";
       REQUIRE(serialize(pw_conj_var) == pw_conj_var_str);
       REQUIRE(deserialize<ExprPtr>(pw_conj_var_str) == pw_conj_var);
 
-      // conjugated power with conjugated Variable base: ((x^*)^(2))^*
+      // conjugated power with conjugated Variable base: ((x꙳)^(2))^*
       auto pw_conj_var_conj = pw_conj_var->clone();
       pw_conj_var_conj->as<Power>().conjugate();
-      const auto pw_conj_var_conj_str = L"((x^*)^(2))^*";
+      const auto pw_conj_var_conj_str = L"((x꙳)^(2))^*";
       REQUIRE(serialize(pw_conj_var_conj) == pw_conj_var_conj_str);
       REQUIRE(deserialize<ExprPtr>(pw_conj_var_conj_str) == pw_conj_var_conj);
+    }
+
+    SECTION("Real and imaginary parts") {
+      // `Re[...]` / `Im[...]` wrap a whole expression; the brackets keep the
+      // spelling apart from a tensor or a variable of the same name
+      SECTION("over a scalar product") {
+        const auto re_str = L"Re[h{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N]";
+        auto re = deserialize<ExprPtr>(re_str);
+        REQUIRE(re->is<RealPart>());
+        REQUIRE(re->as<RealPart>().inner()->is<Product>());
+        REQUIRE(re->as<RealPart>().inner()->as<Product>().size() == 2);
+        REQUIRE(serialize(re) == re_str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(re)) == *re);
+
+        const auto im_str = L"Im[h{i_1;a_1}:N-N-N * t{a_1;i_1}:N-N-N]";
+        auto im = deserialize<ExprPtr>(im_str);
+        REQUIRE(im->is<ImagPart>());
+        REQUIRE(serialize(im) == im_str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(im)) == *im);
+      }
+
+      SECTION("over a sum") {
+        const auto re_str = L"Re[a + b]";
+        auto re = deserialize<ExprPtr>(re_str);
+        REQUIRE(re->is<RealPart>());
+        REQUIRE(re->as<RealPart>().inner()->is<Sum>());
+        REQUIRE(serialize(re) == re_str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(re)) == *re);
+
+        const auto im_str = L"Im[a - b]";
+        auto im = deserialize<ExprPtr>(im_str);
+        REQUIRE(im->is<ImagPart>());
+        REQUIRE(im->as<ImagPart>().inner()->is<Sum>());
+        REQUIRE(serialize(im) == im_str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(im)) == *im);
+      }
+
+      SECTION("nested in a product with a coefficient") {
+        const auto str = L"-1/2 Re[a + b] * c";
+        auto prod = deserialize<ExprPtr>(str);
+        REQUIRE(prod->is<Product>());
+        REQUIRE(prod->as<Product>().scalar() == rational{-1, 2});
+        REQUIRE(prod->as<Product>().factor(0)->is<RealPart>());
+        REQUIRE(prod->as<Product>().factor(1)->is<Variable>());
+        REQUIRE(serialize(prod) == str);
+        REQUIRE(*deserialize<ExprPtr>(serialize(prod)) == *prod);
+      }
+
+      SECTION("the eager rules apply on deserialization") {
+        // a second projection is the identity on `Re`-of and annihilates on
+        // `Im`-of, a real scalar prefactor hoists out, and a Constant is
+        // evaluated -- exactly as real_part()/imaginary_part() do
+        REQUIRE(*deserialize<ExprPtr>(L"Re[Re[x]]") ==
+                *deserialize<ExprPtr>(L"Re[x]"));
+        REQUIRE(*deserialize<ExprPtr>(L"Im[Im[x]]") == *ex<Constant>(0));
+        REQUIRE(*deserialize<ExprPtr>(L"Im[Re[x]]") == *ex<Constant>(0));
+        auto hoisted = deserialize<ExprPtr>(L"Re[1/2 x]");
+        REQUIRE(hoisted->is<Product>());
+        REQUIRE(hoisted->as<Product>().scalar() == rational{1, 2});
+        REQUIRE(hoisted->as<Product>().factor(0)->is<RealPart>());
+        REQUIRE(serialize(hoisted) == L"1/2 Re[x]");
+        // the hoist strips the scalar down to the bare factor, so the two
+        // spellings are one expression and the round trip is a fixed point
+        REQUIRE(*hoisted == *deserialize<ExprPtr>(L"1/2 Re[x]"));
+        REQUIRE(*deserialize<ExprPtr>(serialize(hoisted)) == *hoisted);
+        REQUIRE(*deserialize<ExprPtr>(L"Im[3]") == *ex<Constant>(0));
+        REQUIRE(*deserialize<ExprPtr>(L"Re[3]") == *ex<Constant>(3));
+      }
+
+      SECTION("a name spelling Re or Im is not a wrapper") {
+        REQUIRE(deserialize<ExprPtr>(L"Re")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"Im")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"Real")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"Re{i_1;a_1}")->is<Tensor>());
+        REQUIRE(deserialize<ExprPtr>(L"Re{i_1;a_1}")->as<Tensor>().label() ==
+                L"Re");
+        REQUIRE(deserialize<ExprPtr>(L"Im^(2)")->is<Power>());
+      }
+
+      SECTION("a malformed spelling is reported with a position") {
+        // an unclosed bracket is an expectation failure at the offset the
+        // closing bracket was expected at
+        REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"Re[a"),
+                               io::serialization::SerializationError,
+                               serializationErrorMatches(4, 1, "expected"));
+        REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"2 * Im[a + b"),
+                               io::serialization::SerializationError,
+                               serializationErrorMatches(12, 1, "expected"));
+        // ... and an empty pair of brackets wraps no expression
+        REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"Re[]"),
+                               io::serialization::SerializationError,
+                               serializationErrorMatches(3, 1, "expected"));
+      }
     }
 
     SECTION("Product") {
@@ -683,23 +922,39 @@ TEST_CASE("serialization", "[serialization]") {
   SECTION("serialize") {
     using namespace sequant;
 
-    std::vector<std::wstring> expressions = {
-        L"t{a_1,a_2;a_3,a_4}:N-C-S",
-        L"42",
-        L"1/2",
-        L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S",
-        L"a + b - 4 specialVariable",
-        L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
-        L"1/2 (a + b) * c",
-        L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
-        L"+ T4{a_1;;x_2}:S-C-S * T5{;a_1;x_2}:S-S-S",
-        L"q1 * q2^* * q3",
-        L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
+    // the `S` braket letters below are derivable only over a real basis
+    auto real_basis = tests::scoped_real_basis();
 
-    for (const std::wstring& current : expressions) {
+    // {spelling, what serializing what it parses to gives back}: a definite
+    // hermiticity is spelled with its trait letter, so the pinned `C` and `S`
+    // braket letters come back as `H`, together with the fourth letter where
+    // the traits they stand for include a parity other than Even
+    std::vector<std::pair<std::wstring, std::wstring>> expressions = {
+        {L"t{a_1,a_2;a_3,a_4}:N-C-S", L"t{a_1,a_2;a_3,a_4}:N-H-S-N"},
+        {L"42", L"42"},
+        {L"1/2", L"1/2"},
+        {L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S",
+         L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S"},
+        {L"a + b - 4 specialVariable", L"a + b - 4 specialVariable"},
+        {L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
+         L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-H-S-N"},
+        {L"1/2 (a + b) * c", L"1/2 (a + b) * c"},
+        {L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
+         L"+ T4{a_1;;x_2}:S-C-S * T5{;a_1;x_2}:S-S-S",
+         L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N "
+         L"+ T4{a_1;;x_2}:S-H-S-N * T5{;a_1;x_2}:S-H-S"},
+        {L"q1 * q2꙳ * q3", L"q1 * q2꙳ * q3"},
+        {L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}", L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"}};
+
+    for (const auto& [current, serialized] : expressions) {
       ExprPtr expression = deserialize<ExprPtr>(current);
 
-      REQUIRE(serialize(expression, {.annot_symm = true}) == current);
+      REQUIRE(serialize(expression, {.annot_symm = true}) == serialized);
+
+      // what the serializer emits is a fixed point of the round-trip
+      ExprPtr respelled = deserialize<ExprPtr>(serialized);
+      REQUIRE(*respelled == *expression);
+      REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
     }
 
     SECTION("nested Sum") {
@@ -725,5 +980,88 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(serialize(result, {.annot_symm = true}) == current);
       }
     }
+  }
+
+  SECTION("serialize a folded conjugate pair") {
+    using namespace sequant;
+
+    // over a complex basis simplify() folds `A + conjugate(A)` into
+    // `2 Re[A]` (SimplifyOptions::FoldConjugatePairs defaults to Yes), so the
+    // wrappers reach the serializer through the ordinary simplification path
+    Context ctx = get_default_context();
+    ctx.set(mbpt::make_min_sr_spaces(mbpt::SpinConvention::None));
+    ctx.set(AssertStrictBraKetSymmetry::No);
+    auto resetter = set_scoped_default_context(ctx);
+
+    auto term = deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+
+    // the sum pair folds to `2 Re[A]`, the difference to `2i Im[A]`; the
+    // second carries a purely imaginary coefficient, so it round-trips only
+    // if the grammar spells one
+    for (const auto& [difference, marker] :
+         {std::pair{false, std::wstring_view{L"Re["}},
+          std::pair{true, std::wstring_view{L"Im["}}}) {
+      ExprPtr conjugated = conjugate(term->clone());
+      ExprPtr folded = difference
+                           ? term->clone() + ex<Constant>(-1) * conjugated
+                           : term->clone() + conjugated;
+      simplify(folded);
+
+      bool wrapped = folded->is<RealPart>() || folded->is<ImagPart>();
+      folded->visit(
+          [&wrapped](const ExprPtr& node) {
+            if (node->is<RealPart>() || node->is<ImagPart>()) wrapped = true;
+          },
+          /* atoms_only = */ false);
+      REQUIRE(wrapped);
+
+      std::wstring serialized;
+      REQUIRE_NOTHROW(serialized = serialize(folded, {.annot_symm = true}));
+      REQUIRE(serialized.find(marker) != std::wstring::npos);
+
+      ExprPtr respelled = deserialize<ExprPtr>(serialized);
+      REQUIRE(*respelled == *folded);
+      REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
+    }
+  }
+
+  SECTION("serialize a scaled wrapper") {
+    using namespace sequant;
+
+    Context ctx = get_default_context();
+    ctx.set(mbpt::make_min_sr_spaces(mbpt::SpinConvention::None));
+    ctx.set(AssertStrictBraKetSymmetry::No);
+    auto resetter = set_scoped_default_context(ctx);
+
+    // a wrapper built directly around a scaled product: canonicalization
+    // re-applies the eager hoist, so the scalar leaves the brackets and the
+    // emitted spelling is a fixed point of the round trip
+    ExprPtr folded = ex<RealPart>(
+        deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S"));
+    simplify(folded);
+    REQUIRE(folded->is<Product>());
+    REQUIRE(folded->as<Product>().scalar() == rational{1, 2});
+    REQUIRE(folded->as<Product>().factor(0)->is<RealPart>());
+
+    const auto serialized = serialize(folded, {.annot_symm = true});
+    REQUIRE(serialized.find(L"Re[1/2") == std::wstring::npos);
+
+    ExprPtr respelled = deserialize<ExprPtr>(serialized);
+    REQUIRE(*respelled == *folded);
+    REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
+
+    // a wrapper that reached the serializer by neither the builders nor
+    // canonicalization spells the same way: the serializer hoists too
+    ExprPtr raw = ex<RealPart>(
+        deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S"));
+    const auto raw_serialized = serialize(raw, {.annot_symm = true});
+    REQUIRE(raw_serialized.find(L"Re[1/2") == std::wstring::npos);
+    REQUIRE(raw_serialized.starts_with(L"1/2 Re[h"));
+
+    ExprPtr raw_respelled = deserialize<ExprPtr>(raw_serialized);
+    REQUIRE(raw_respelled->is<Product>());
+    REQUIRE(raw_respelled->as<Product>().scalar() == rational{1, 2});
+    REQUIRE(raw_respelled->as<Product>().factor(0)->is<RealPart>());
+    REQUIRE(serialize(raw_respelled, {.annot_symm = true}) == raw_serialized);
   }
 }

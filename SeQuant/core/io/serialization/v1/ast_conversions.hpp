@@ -9,6 +9,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/complex.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/op.hpp>
@@ -159,19 +160,16 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
     return default_symmetry;
   }
 
-  // The v1 serialized form historically encodes BraKetSymmetry directly:
+  // The letter is either a pinned exchange symmetry or a hermiticity trait.
   // 'C' / 'S' / 'N' are concrete BraKetSymmetry::{Conjugate, Symm, Nonsymm}
-  // values, not Hermiticity traits — Tensor's hermiticity_ is back-filled
-  // from the BraKetSymmetry via to_hermiticity at construction. Round-tripping
-  // through Hermiticity here would corrupt that encoding: 'C' field-resolved
-  // against Real-field indices would silently flip to Symm, and 'N' would
-  // round-trip as NonHermitian losing the AntiHermitian preimage.
-  //
-  // The explicit Hermiticity letters 'H' (Hermitian) and 'A' (AntiHermitian)
-  // are the *new* abstract-trait spellings that intentionally defer to
-  // field resolution at Tensor construction time; use those when serializing
-  // tensors whose adjoint symmetry should be expressed independently of the
-  // computation's scalar field.
+  // values, from which Tensor back-fills the traits that derive them; 'H'
+  // (Hermitian) and 'A' (AntiHermitian) name the field-agnostic trait itself
+  // and leave the exchange symmetry to be derived from it, the parity and the
+  // indices' basis at Tensor construction. The two are kept apart: reading a
+  // pin as a trait instead would resolve 'C' against Real-field indices to
+  // Symm and lose the AntiHermitian preimage of 'N'. The serializer spells a
+  // definite hermiticity with its trait letter (see serialize_symm), so a pin
+  // letter reaches here only from hand-written or older input.
   switch (c) {
     case 'C':
     case 'c':
@@ -194,6 +192,31 @@ std::variant<BraKetSymmetry, Hermiticity> to_braket_symmetry(
       offset, 1,
       std::string("Invalid BraKet symmetry / Hermiticity specifier '") + c +
           "'");
+}
+
+template <typename Iterator>
+std::optional<ConjugationParity> to_conjugation_parity(char c,
+                                                       std::size_t offset,
+                                                       const Iterator &) {
+  if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
+    return std::nullopt;
+  }
+
+  switch (c) {
+    case 'E':
+    case 'e':
+      return ConjugationParity::Even;
+    case 'O':
+    case 'o':
+      return ConjugationParity::Odd;
+    case 'N':
+    case 'n':
+      return ConjugationParity::None;
+  }
+
+  throw SerializationError(
+      offset, 1,
+      std::string("Invalid conjugation parity specifier '") + c + "'");
 }
 
 template <typename Iterator>
@@ -220,27 +243,32 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
 template <typename PositionCache, typename Iterator>
 Constant to_constant(const io::serialization::v1::ast::Number &number,
                      const PositionCache &, const Iterator &) {
-  if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
-      static_cast<std::int64_t>(number.denominator) == number.denominator) {
-    // Integer fraction
-    return Constant(
-        ::sequant::rational(static_cast<std::int64_t>(number.numerator),
-                            static_cast<std::int64_t>(number.denominator)));
-  } else {
-    // Construct from floating point value
-    return Constant(::sequant::rational(number.numerator / number.denominator));
+  const ::sequant::rational magnitude =
+      (static_cast<std::int64_t>(number.numerator) == number.numerator &&
+       static_cast<std::int64_t>(number.denominator) == number.denominator)
+          // Integer fraction
+          ? ::sequant::rational(static_cast<std::int64_t>(number.numerator),
+                                static_cast<std::int64_t>(number.denominator))
+          // Construct from floating point value
+          : ::sequant::rational(number.numerator / number.denominator);
+
+  // an imaginary literal is the same magnitude on the imaginary axis
+  if (number.imaginary) {
+    return Constant(Constant::scalar_type{::sequant::rational{0}, magnitude});
   }
+  return Constant(magnitude);
 }
 
 template <typename PositionCache, typename Iterator>
-std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>, ColumnSymmetry>
+std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>, ColumnSymmetry,
+           std::optional<ConjugationParity>>
 to_symmetries(
     const boost::optional<io::serialization::v1::ast::SymmetrySpec> &symm_spec,
     const DefaultSymmetries &default_symms, const PositionCache &cache,
     const Iterator &begin) {
   if (!symm_spec.has_value()) {
     return {std::get<0>(default_symms), std::get<1>(default_symms),
-            std::get<2>(default_symms)};
+            std::get<2>(default_symms), std::nullopt};
   }
 
   const ast::SymmetrySpec &spec = symm_spec.get();
@@ -255,8 +283,12 @@ to_symmetries(
       spec.braket_symm, offset + 3, begin, std::get<1>(default_symms));
   ColumnSymmetry column_symm = to_column_symmetry(
       spec.column_symm, offset + 5, begin, std::get<2>(default_symms));
+  // the fourth letter is optional and has no Context-level default: absent
+  // means "let Tensor::resolve_symmetries derive it", not "Even"
+  std::optional<ConjugationParity> parity =
+      to_conjugation_parity(spec.conjugation_parity, offset + 7, begin);
 
-  return {perm_symm, braket_symm, column_symm};
+  return {perm_symm, braket_symm, column_symm, parity};
 }
 
 template <typename PositionCache, typename Iterator>
@@ -291,18 +323,67 @@ struct Transformer {
                                       default_symms.get());
   }
 
+  /// reports @p message at the source range @p node came from
+  template <typename AST>
+  [[noreturn]] void throw_at(const AST &node, std::string message) const {
+    auto [offset, length] = get_pos(node, position_cache.get(), begin.get());
+    throw SerializationError(offset, length, std::move(message));
+  }
+
+  /// splits the trailing state marks off the name of @p node ; the marks may
+  /// come in either order, at most one of each
+  /// @return the bare name, whether it was adjointed, whether it was
+  ///         K-conjugated
+  template <typename AST>
+  std::tuple<std::wstring, bool, bool> split_marks(const AST &node) const {
+    std::wstring name = node.name;
+    bool adjointed = false;
+    bool kconjugated = false;
+    while (!name.empty()) {
+      const wchar_t c = name.back();
+      if (c == sequant::adjoint_label) {
+        if (adjointed) throw_at(node, "repeated adjoint mark in the name");
+        adjointed = true;
+      } else if (c == sequant::conjugate_label) {
+        if (kconjugated)
+          throw_at(node, "repeated conjugation mark in the name");
+        kconjugated = true;
+      } else {
+        break;
+      }
+      name.pop_back();
+    }
+    return {std::move(name), adjointed, kconjugated};
+  }
+
+  /// refuses a state on a name that admits none
+  template <typename AST>
+  void refuse_marks(const AST &node, bool adjointed, bool kconjugated) const {
+    if (adjointed || kconjugated)
+      throw_at(node, "an operator name carries no adjoint or conjugation mark");
+  }
+
   ExprPtr operator()(const io::serialization::v1::ast::Tensor &tensor) const {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    auto [perm_symm, braket_symm, column_symm] =
+    auto [perm_symm, braket_symm, column_symm, parity] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
 
+    // the two core states are spelled as trailing marks of the name; they are
+    // split off here and applied after construction rather than left to the
+    // Tensor constructor's own mark adoption, which cannot hand back the sign
+    // their normalization can carry
+    auto [name, adjointed, kconjugated] = split_marks(tensor);
+
     // create NormalOperator or Tensor
     decltype(ranges::begin(FNOperator::labels())) fit;
-    if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
+    if ((fit = ranges::find(FNOperator::labels(), name)) !=
         ranges::end(FNOperator::labels())) {
+      // an operator-valued tensor carries neither state: its bra<->ket swap
+      // exchanges creators and annihilators
+      refuse_marks(tensor, adjointed, kconjugated);
       SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
       SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
                      ((tensor.symmetry.value().perm_symm ==
@@ -318,8 +399,9 @@ struct Transformer {
                             ann(std::move(braIndices)), vac);
     }
     decltype(ranges::begin(BNOperator::labels())) bit;
-    if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
+    if ((bit = ranges::find(BNOperator::labels(), name)) !=
         ranges::end(BNOperator::labels())) {
+      refuse_marks(tensor, adjointed, kconjugated);
       SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
       SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
                      ((tensor.symmetry.value().perm_symm ==
@@ -362,16 +444,15 @@ struct Transformer {
     // Force the defining symmetries of the reserved (anti)symmetrization
     // operators; see sequant::{anti,}symmetrizer_symmetries.
     const bool is_reserved_symmetrizer =
-        tensor.name == reserved::antisymm_label() ||
-        tensor.name == reserved::symm_label();
+        name == reserved::antisymm_label() || name == reserved::symm_label();
     // Â antisymmetrizes within bra and within ket, Ŝ only across the
     // {bra,ket} particle columns (i.e. it is perm-Nonsymm). Supply the
     // defining value only when none was spelled out, so that a contradicting
     // explicit spec reaches the Tensor ctor and is rejected there rather than
     // silently overwritten here.
     if (is_reserved_symmetrizer && !perm_symm_specified)
-      perm_symm = tensor.name == reserved::antisymm_label() ? Symmetry::Antisymm
-                                                            : Symmetry::Nonsymm;
+      perm_symm = name == reserved::antisymm_label() ? Symmetry::Antisymm
+                                                     : Symmetry::Nonsymm;
     // (anti)symmetrization operators act on indistinguishable particles, hence
     // are always column symmetric; supply that rather than passing the
     // Context's column default through, which the Tensor ctor would reject as
@@ -390,8 +471,8 @@ struct Transformer {
     // that a deserialized s/δ equals the one make_overlap()/make_kronecker()
     // builds (they participate in the tensor hash, so a mismatch would keep
     // otherwise-equal terms from merging)
-    if ((tensor.name == reserved::overlap_label() ||
-         tensor.name == reserved::kronecker_label()) &&
+    if ((name == reserved::overlap_label() ||
+         name == reserved::kronecker_label()) &&
         !braket_symm_specified)
       braket_symm = Hermiticity::Hermitian;
 
@@ -399,46 +480,64 @@ struct Transformer {
     // density::symmetries()); supply them where none was spelled out, and let
     // the Tensor ctor reject a spelled-out one that contradicts them. An
     // aux-only tensor is a layout representation, not a density.
-    if (ranges::contains(reserved::density_labels(), tensor.name) &&
-        !(braIndices.empty() && ketIndices.empty())) {
-      auto syms = density::symmetries(tensor.name, braIndices.size());
-      if (perm_symm_specified) syms.perm = perm_symm;
-      if (column_symm_specified) syms.column = column_symm;
-      if (braket_symm_specified)
-        std::visit(
-            [&syms](auto symm) {
-              if constexpr (std::is_same_v<decltype(symm), BraKetSymmetry>) {
-                syms.braket = symm;
-                syms.hermiticity = std::nullopt;
-              } else
-                syms.hermiticity = symm;
-            },
-            braket_symm);
-      return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
-                        ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
-                        syms);
-    }
+    const bool is_density =
+        ranges::contains(reserved::density_labels(), name) &&
+        !(braIndices.empty() && ketIndices.empty());
+    TensorSymmetries syms = is_density
+                                ? density::symmetries(name, braIndices.size())
+                                : TensorSymmetries{};
+    if (!is_density || perm_symm_specified) syms.perm = perm_symm;
+    if (!is_density || column_symm_specified) syms.column = column_symm;
+    // the braket spec is a BraKetSymmetry or a Hermiticity; the parity, when
+    // spelled out, is passed alongside it, and otherwise left unset so
+    // Tensor::resolve_symmetries derives or defaults it the same way a
+    // programmatic construction would
+    if (!is_density || braket_symm_specified)
+      std::visit(
+          [&syms](auto symm) {
+            using SymmType = std::decay_t<decltype(symm)>;
+            if constexpr (std::is_same_v<SymmType, BraKetSymmetry>) {
+              syms.braket = symm;
+              syms.hermiticity = std::nullopt;
+            } else {
+              static_assert(std::is_same_v<SymmType, Hermiticity>);
+              syms.hermiticity = symm;
+            }
+          },
+          braket_symm);
+    if (parity.has_value()) syms.conjugation_parity = *parity;
 
-    // Dispatch to correct Tensor constructor (taking either BraKetSymmetry or
-    // Hermiticity)
-    return std::visit(
-        [&](auto symm) {
-          return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
-                            ket(std::move(ketIndices)),
-                            aux(std::move(auxiliaries)), perm_symm, symm,
-                            column_symm);
-        },
-        braket_symm);
+    ExprPtr t;
+    try {
+      t = ex<Tensor>(name, bra(std::move(braIndices)),
+                     ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
+                     syms);
+    } catch (const Exception &e) {
+      // a symmetry the tensor cannot have (an exchange symmetry the traits do
+      // not derive over the indices' basis, a contradicting column symmetry,
+      // a density without its defining symmetries): report it at the tensor
+      auto [offset, length] =
+          get_pos(tensor, position_cache.get(), begin.get());
+      throw SerializationError(offset, length, e.what());
+    }
+    if (adjointed || kconjugated) {
+      const auto sign =
+          t->template as<Tensor>().set_states(adjointed, kconjugated);
+      // the normalization can consume a sign (an anti-Hermitian or
+      // odd-parity tensor), which only a scalar factor can carry
+      if (sign != 1) return ex<Product>(sign, ExprPtrList{std::move(t)});
+    }
+    return t;
   }
 
   ExprPtr operator()(
       const io::serialization::v1::ast::Variable &variable) const {
-    ExprPtr var = ex<Variable>(variable.name);
-
-    if (variable.conjugated) {
-      var->as<Variable>().conjugate();
-    }
-
+    // a Variable has the one conjugated state, spelled by a trailing `꙳`
+    auto [name, adjointed, kconjugated] = split_marks(variable);
+    if (adjointed)
+      throw_at(variable, "a variable name carries no adjoint mark");
+    ExprPtr var = ex<Variable>(std::move(name));
+    if (kconjugated) var->as<Variable>().conjugate();
     return var;
   }
 
@@ -446,11 +545,29 @@ struct Transformer {
     return ex<Constant>(to_constant(number, position_cache.get(), begin.get()));
   }
 
+  ExprPtr operator()(
+      const io::serialization::v1::ast::RealImagPart &part) const {
+    ExprPtr inner = ast_to_expr<PositionCache>(
+        part.inner, position_cache.get(), begin.get(), default_symms.get());
+    if (!inner) throw_at(part, "Re[]/Im[] wraps no expression");
+    // the smart builders apply the eager composition rules, so what comes
+    // back can be the inner expression itself (`Re[Re[x]]`), a constant
+    // (`Re[3]`) or a scaled wrapper (`Re[1/2 x]`), exactly as a programmatic
+    // real_part()/imaginary_part() call would give
+    return part.imaginary ? imaginary_part(std::move(inner))
+                          : real_part(std::move(inner));
+  }
+
   ExprPtr operator()(const io::serialization::v1::ast::Power &power) const {
     // build base from Number or Variable
     ExprPtr base = boost::apply_visitor(*this, power.base);
 
-    // exponent must be a rational, reject otherwise
+    // exponent must be a real rational, reject otherwise
+    if (power.exponent.imaginary) {
+      auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
+      throw SerializationError(offset, length,
+                               "Power exponent must be a real number");
+    }
     if (static_cast<std::int64_t>(power.exponent.numerator) !=
             power.exponent.numerator ||
         static_cast<std::int64_t>(power.exponent.denominator) !=
@@ -513,8 +630,15 @@ ExprPtr ast_to_expr(const io::serialization::v1::ast::Product &product,
           to_constant(boost::get<io::serialization::v1::ast::Number>(value),
                       position_cache, begin);
     } else {
-      factors.push_back(
-          ast_to_expr(value, position_cache, begin, default_symms));
+      ExprPtr factor = ast_to_expr(value, position_cache, begin, default_symms);
+      // a group that collapses to a constant joins the prefactor too: `(1 +
+      // 2i)`, the spelling a composite scalar is emitted with, lands back on
+      // the Product's scalar it was serialized from
+      if (factor && factor->is<Constant>()) {
+        prefactor *= factor->as<Constant>();
+      } else {
+        factors.push_back(std::move(factor));
+      }
     }
   }
 
@@ -551,7 +675,19 @@ ExprPtr ast_to_expr(const io::serialization::v1::ast::Sum &sum,
         return ast_to_expr(product, position_cache, begin, default_symms);
       });
 
-  return ex<Sum>(std::move(summands));
+  ExprPtr folded = ex<Sum>(std::move(summands));
+  // Sum::append adds constants up and drops zeros, so a written sum can
+  // collapse; a collapsed one is its remaining term, not a one-summand Sum.
+  // That is what makes `1 + 2i` -- the spelling of a composite scalar -- the
+  // Constant it was serialized from
+  const auto &folded_summands = folded->as<Sum>().summands();
+  if (folded_summands.empty()) {
+    return ex<Constant>(0);
+  }
+  if (folded_summands.size() == 1) {
+    return folded_summands.front();
+  }
+  return folded;
 }
 
 template <typename PositionCache, typename Iterator>
