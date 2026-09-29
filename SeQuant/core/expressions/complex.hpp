@@ -26,9 +26,10 @@
 /// `Re`-of and annihilates on `Im`-of) and evaluate complex `Constant`s via
 /// their `Complex` ring value.
 ///
-/// @note evaluation of `Re`/`Im` of a tensor network is not implemented yet;
-///       consumers evaluate the inner expression and take the real/imaginary
-///       part of the resulting scalar.
+/// @note the evaluation engine ingests both nodes: `EvalOp::RealPart` and
+///       `EvalOp::ImagPart` evaluate the wrapped expression and take the
+///       real or the imaginary part of the resulting scalar, so an inner
+///       that is not scalar-valued has no evaluation.
 
 namespace sequant {
 
