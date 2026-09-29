@@ -136,7 +136,13 @@ class Sum : public Expr {
   ExprPtr clone() const override;
 
   /// @brief adjoint of a Sum is a sum of adjoints of its factors
-  virtual void adjoint() override;
+  [[nodiscard]] virtual std::int8_t adjoint() override;
+
+  /// @brief K-conjugate of a Sum is a sum of the K-conjugates of its summands
+  /// @note the sum is rebuilt with the constructor's default flattening, so a
+  ///       nested sum is spliced in and a summand's sign byproduct folds into
+  ///       that summand's own scalar
+  [[nodiscard]] std::int8_t kconjugate() override;
 
   Sum &operator+=(const Expr &that);
 

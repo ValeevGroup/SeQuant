@@ -9,6 +9,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -155,6 +156,13 @@ inline sequant::Context csv_cc_context() {
   return csv_cc_context(csv_cc_registry());
 }
 
+/// the label of tensor @p x as printed: a Tensor's carries the marks of its
+/// states (Tensor::decorated_label())
+inline std::wstring printed_label(ExprPtr const& x) {
+  if (x->is<Tensor>()) return x->as<Tensor>().decorated_label();
+  return std::wstring(x->as<AbstractTensor>()._label());
+}
+
 /// every tensor of @p expr labelled @p label
 inline std::vector<AbstractTensor const*> tensors_labelled(
     ExprPtr const& expr, std::wstring_view label) {
@@ -163,7 +171,7 @@ inline std::vector<AbstractTensor const*> tensors_labelled(
       [&](ExprPtr const& x) {
         if (!x->is<AbstractTensor>()) return;
         auto const& t = x->as<AbstractTensor>();
-        if (std::wstring_view(t._label()) == label) result.push_back(&t);
+        if (printed_label(x) == label) result.push_back(&t);
       },
       /* atoms_only = */ true);
   return result;

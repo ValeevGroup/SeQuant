@@ -490,6 +490,8 @@ TEST_CASE("export", "[export]") {
     auto reg = *get_default_context().index_basis_registry();
     const IndexSpace virt = reg.retrieve_space(L"a");
     reg.add(L"ã", IndexBasis{virt, 1}, 1000ul);
+    // the Symm braket pins below are derivable only over a real basis
+    tests::declare_real_basis(reg);
     auto ctx_resetter = set_scoped_default_context(
         get_default_context_snapshot().set(std::move(reg)));
     const Index a1(L"a_1"), ã1(L"ã_1");

@@ -39,6 +39,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -2648,28 +2649,35 @@ SECTION("cumulant-to-density decompositions") {
                      kappa3_ref) == ex<Constant>(0));
   }
 
-  // antisymmetrize() keeps the bra-ket symmetry of the tensors it permutes
-  // as spelled, not only their Hermiticity: over a complex field a tensor is
-  // bra-ket Symm without being Conjugate
-  {
-    auto cidx = [](std::wstring_view label) {
+  // antisymmetrize() keeps the traits of the tensors it permutes, so their
+  // bra-ket symmetry is not reset to that of a Hermitian, K-even tensor
+  for (const auto& [field, hermiticity, parity, braket] :
+       {std::tuple{Field::Complex, Hermiticity::AntiHermitian,
+                   ConjugationParity::Even, BraKetSymmetry::AntiConjugate},
+        std::tuple{Field::Real, Hermiticity::Hermitian, ConjugationParity::Odd,
+                   BraKetSymmetry::Antisymm}}) {
+    auto cidx = [field](std::wstring_view label) {
       Index i{label};
       IndexSpace space = i.space();
-      space.field(Field::Complex);
+      space.field(field);
       return Index(space, i.ordinal());
     };
     auto t = [&](std::wstring_view b, std::wstring_view k) {
-      return ex<Tensor>(L"t", bra{cidx(b)}, ket{cidx(k)}, Symmetry::Nonsymm,
-                        BraKetSymmetry::Symm, ColumnSymmetry::Symm);
+      return ex<Tensor>(L"t", bra{cidx(b)}, ket{cidx(k)},
+                        TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                         .hermiticity = hermiticity,
+                                         .conjugation_parity = parity,
+                                         .column = ColumnSymmetry::Symm});
     };
+    REQUIRE(t(L"i_3", L"i_1")->as<Tensor>().braket_symmetry() == braket);
     const auto permuted =
         mbpt::antisymmetrize(t(L"i_3", L"i_1") * t(L"i_4", L"i_2")).result;
     REQUIRE(permuted->is<Sum>());
     REQUIRE(permuted->size() == 2);
     permuted->visit(
-        [](const ExprPtr& e) {
+        [&](const ExprPtr& e) {
           if (e->is<Tensor>())
-            REQUIRE(e->as<Tensor>().braket_symmetry() == BraKetSymmetry::Symm);
+            REQUIRE(e->as<Tensor>().braket_symmetry() == braket);
         },
         /*atoms_only=*/true);
   }

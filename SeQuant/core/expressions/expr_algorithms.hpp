@@ -253,6 +253,66 @@ ResultExpr& non_canon_simplify(ResultExpr& expr);
 /// @return Simplified expression
 [[nodiscard]] ResultExpr non_canon_simplify(ResultExpr&& expr);
 
+/// @brief the complex conjugate of the value of a c-number expression
+///
+/// `conj <p|O|q> = <q|O⁺|p>`, so on c-number content this is
+/// sequant::adjoint(const ExprPtr&), one implementation: every `Tensor` is
+/// adjointed (over a real basis the coset rule spells that adjoint as the
+/// `꙳` state with the slots in place), `Constant`, `Variable` and `Power`
+/// conjugate, `RealPart`/`ImagPart` are invariant, a `Sum` maps its
+/// summands, and a `Product` conjugates its scalar and reverses its factors
+/// -- a reversal that is not observable, the factors of a c-number product
+/// commuting. For an expression with open indices the head's bra and ket are
+/// exchanged, so a `ResultExpr` caller exchanges the head as well.
+///
+/// The result is assembled with the Sum and Product constructors' default
+/// flattening, as kconjugate()'s is: a nested product is spliced into the
+/// rebuilt product and a factor's sign byproduct folds into its scalar, and
+/// a nested sum is spliced into the rebuilt sum.
+///
+/// Conjugation is an involution up to that flattening:
+/// `conjugate(conjugate(e))` equals `e` for an @p expr whose Products and
+/// Sums are already flat, and equals its flattened form otherwise.
+///
+/// @param expr a c-number expression
+/// @return a new expression denoting `conj(expr)`
+/// @throw sequant::Exception for operator-valued content, which has no value
+///        to conjugate; sequant::kconjugate() is the conjugation of an
+///        operator
+/// @sa kconjugate(const ExprPtr&)
+[[nodiscard]] ExprPtr conjugate(const ExprPtr& expr);
+
+/// @brief the K-conjugate of an expression, `K E K⁻¹`
+///
+/// Dispatches to Expr::kconjugate() on a clone: the complex conjugate of a
+/// scalar, the K-conjugated state of a Tensor, the identity on an operator
+/// string. A sign byproduct that the conjugated object cannot hold (a Tensor
+/// holds no scalar) becomes a scalar factor here.
+///
+/// The result is assembled with the Sum and Product constructors' default
+/// flattening, as conjugate()'s is:
+/// - a Product is rebuilt with that flattening, so a nested product is
+///   spliced into it and a factor's sign byproduct folds into the product's
+///   scalar;
+/// - a Sum is rebuilt with that flattening, so a nested sum is spliced in,
+///   but a summand whose K-conjugate carries a sign stays a
+///   `Product{-1, summand}` -- a Sum has no scalar to fold into, so the
+///   sign is carried by that summand's own scalar.
+///
+/// @param expr an expression
+/// @return a new expression denoting `K expr K⁻¹`
+/// @throw sequant::Exception if @p expr is operator-valued and a normal
+///        operator in it acts on an index space that `K` does not close
+///        (only a real-field space, with a real-field proto-index closure,
+///        is `K`-closed today). The check covers `NormalOperator` and
+///        `NormalOperatorSequence`; two operator kinds are accepted without
+///        it: a non-normal-ordered `Operator<S>` (`FOperator`/`BOperator`),
+///        which the check does not reach, and an `mbpt::Operator`, whose
+///        K-conjugate is the operator itself -- complex conjugation acts
+///        through the coefficients of its tensor form.
+/// @sa conjugate(const ExprPtr&)
+[[nodiscard]] ExprPtr kconjugate(const ExprPtr& expr);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
