@@ -17,10 +17,13 @@ bool Constant::is_scalar() const { return true; }
 
 ExprPtr Constant::clone() const { return ex<Constant>(this->value()); }
 
-void Constant::adjoint() {
+std::int8_t Constant::adjoint() {
   value_ = conj(value_);
   reset_hash_value();
+  return 1;
 }
+
+std::int8_t Constant::kconjugate() { return adjoint(); }
 
 Constant &Constant::operator*=(const Expr &that) {
   if (that.is<Constant>()) {

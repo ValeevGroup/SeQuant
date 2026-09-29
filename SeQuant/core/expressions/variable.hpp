@@ -44,6 +44,10 @@ class Variable : public Expr, public MutatableLabeled {
   /// @return whether this object has been conjugated
   bool conjugated() const;
 
+  /// @return label() followed by the `꙳` of a conjugated variable: the printed
+  ///         name, the counterpart of Tensor::decorated_label()
+  std::wstring decorated_label() const;
+
   std::wstring to_latex() const override;
 
   type_id_type type_id() const override;
@@ -53,7 +57,10 @@ class Variable : public Expr, public MutatableLabeled {
   ExprPtr clone() const override;
 
   /// @brief adjoint of a Variable is its complex conjugate
-  virtual void adjoint() override;
+  [[nodiscard]] virtual std::int8_t adjoint() override;
+
+  /// @brief K-conjugate of a Variable is its complex conjugate
+  [[nodiscard]] std::int8_t kconjugate() override;
 
  private:
   std::wstring label_;

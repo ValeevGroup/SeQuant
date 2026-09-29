@@ -234,7 +234,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
              BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
     REQUIRE(t.label() == L"t");
     Tensor t_adj = t;
-    t_adj.adjoint();
+    (void)t_adj.adjoint();
     REQUIRE(t_adj.label() == L"t⁺");
     REQUIRE(t_adj.bra().at(0).label() == L"i_1");
     REQUIRE(t_adj.ket().at(0).label() == L"a_1");
@@ -293,7 +293,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     Tensor g(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, Symmetry::Nonsymm,
              BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
     Tensor g_adj = g;
-    g_adj.adjoint();
+    (void)g_adj.adjoint();
     REQUIRE(g_adj.label() == L"g");  // no marker added for Conjugate
     SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     auto g_tree = binarize(ex<Tensor>(g_adj));
