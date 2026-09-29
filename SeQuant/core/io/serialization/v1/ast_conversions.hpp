@@ -240,16 +240,20 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
 template <typename PositionCache, typename Iterator>
 Constant to_constant(const io::serialization::v1::ast::Number &number,
                      const PositionCache &, const Iterator &) {
-  if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
-      static_cast<std::int64_t>(number.denominator) == number.denominator) {
-    // Integer fraction
-    return Constant(
-        ::sequant::rational(static_cast<std::int64_t>(number.numerator),
-                            static_cast<std::int64_t>(number.denominator)));
-  } else {
-    // Construct from floating point value
-    return Constant(::sequant::rational(number.numerator / number.denominator));
+  const ::sequant::rational magnitude =
+      (static_cast<std::int64_t>(number.numerator) == number.numerator &&
+       static_cast<std::int64_t>(number.denominator) == number.denominator)
+          // Integer fraction
+          ? ::sequant::rational(static_cast<std::int64_t>(number.numerator),
+                                static_cast<std::int64_t>(number.denominator))
+          // Construct from floating point value
+          : ::sequant::rational(number.numerator / number.denominator);
+
+  // an imaginary literal is the same magnitude on the imaginary axis
+  if (number.imaginary) {
+    return Constant(Constant::scalar_type{::sequant::rational{0}, magnitude});
   }
+  return Constant(magnitude);
 }
 
 template <typename PositionCache, typename Iterator>
@@ -525,8 +529,8 @@ struct Transformer {
     if (!inner) throw_at(part, "Re[]/Im[] wraps no expression");
     // the smart builders apply the eager composition rules, so what comes
     // back can be the inner expression itself (`Re[Re[x]]`), a constant
-    // (`Re[1 + 2 i]`) or a scaled wrapper (`Re[1/2 x]`), exactly as a
-    // programmatic real_part()/imaginary_part() call would give
+    // (`Re[3]`) or a scaled wrapper (`Re[1/2 x]`), exactly as a programmatic
+    // real_part()/imaginary_part() call would give
     return part.imaginary ? imaginary_part(std::move(inner))
                           : real_part(std::move(inner));
   }
@@ -535,7 +539,12 @@ struct Transformer {
     // build base from Number or Variable
     ExprPtr base = boost::apply_visitor(*this, power.base);
 
-    // exponent must be a rational, reject otherwise
+    // exponent must be a real rational, reject otherwise
+    if (power.exponent.imaginary) {
+      auto [offset, length] = get_pos(power, position_cache.get(), begin.get());
+      throw SerializationError(offset, length,
+                               "Power exponent must be a real number");
+    }
     if (static_cast<std::int64_t>(power.exponent.numerator) !=
             power.exponent.numerator ||
         static_cast<std::int64_t>(power.exponent.denominator) !=
@@ -598,8 +607,15 @@ ExprPtr ast_to_expr(const io::serialization::v1::ast::Product &product,
           to_constant(boost::get<io::serialization::v1::ast::Number>(value),
                       position_cache, begin);
     } else {
-      factors.push_back(
-          ast_to_expr(value, position_cache, begin, default_symms));
+      ExprPtr factor = ast_to_expr(value, position_cache, begin, default_symms);
+      // a group that collapses to a constant joins the prefactor too: `(1 +
+      // 2i)`, the spelling a composite scalar is emitted with, lands back on
+      // the Product's scalar it was serialized from
+      if (factor && factor->is<Constant>()) {
+        prefactor *= factor->as<Constant>();
+      } else {
+        factors.push_back(std::move(factor));
+      }
     }
   }
 
@@ -636,7 +652,19 @@ ExprPtr ast_to_expr(const io::serialization::v1::ast::Sum &sum,
         return ast_to_expr(product, position_cache, begin, default_symms);
       });
 
-  return ex<Sum>(std::move(summands));
+  ExprPtr folded = ex<Sum>(std::move(summands));
+  // Sum::append adds constants up and drops zeros, so a written sum can
+  // collapse; a collapsed one is its remaining term, not a one-summand Sum.
+  // That is what makes `1 + 2i` -- the spelling of a composite scalar -- the
+  // Constant it was serialized from
+  const auto &folded_summands = folded->as<Sum>().summands();
+  if (folded_summands.empty()) {
+    return ex<Constant>(0);
+  }
+  if (folded_summands.size() == 1) {
+    return folded_summands.front();
+  }
+  return folded;
 }
 
 template <typename PositionCache, typename Iterator>

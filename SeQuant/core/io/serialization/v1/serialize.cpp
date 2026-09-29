@@ -109,47 +109,64 @@ std::wstring serialize_symm(ColumnSymmetry symm, const SerializationOptions&) {
   SEQUANT_UNREACHABLE;
 }
 
+/// @return whether @p scalar spells as a real term plus an imaginary one, so
+///         that it needs parentheses wherever juxtaposition binds tighter
+///         than `+` -- as a factor of a Product does
+bool is_composite_scalar(const Constant::scalar_type& scalar) {
+  return numerator(scalar.real()) != 0 && numerator(scalar.imag()) != 0;
+}
+
 std::wstring serialize_scalar(const Constant::scalar_type& scalar,
                               const SerializationOptions&) {
   if (scalar == 0) {
     return L"0";
   }
 
+  // a rational spells as `n` or `n/d`; the imaginary part is the same spelling
+  // with an `i` abutting it (`2i`, `1/2i`), which is the grammar's imaginary
+  // literal
+  const auto spell = [](const auto& num, const auto& den) {
+    std::string serialized = num.str();
+    if (den != 1) {
+      serialized += "/" + den.str();
+    }
+    return serialized;
+  };
+
   const auto& real = scalar.real();
-  const auto& realNumerator = numerator(real);
-  const auto& realDenominator = denominator(real);
   const auto& imag = scalar.imag();
   auto imagNumerator = numerator(imag);
-  const auto& imagDenominator = denominator(imag);
 
   std::string serialized;
-  if (realNumerator != 0) {
-    serialized += realNumerator.str();
-
-    if (realDenominator != 1) {
-      serialized += "/" + realDenominator.str();
-    }
+  if (numerator(real) != 0) {
+    serialized += spell(numerator(real), denominator(real));
   }
   if (imagNumerator != 0) {
     if (!serialized.empty()) {
       if (imagNumerator < 0) {
-        serialized += " - i ";
+        serialized += " - ";
         imagNumerator *= -1;
       } else {
-        serialized += " + i ";
+        serialized += " + ";
       }
     }
 
-    serialized += imagNumerator.str();
-
-    if (imagDenominator != 1) {
-      serialized += "/" + imagDenominator.str();
-    }
+    serialized += spell(imagNumerator, denominator(imag)) + "i";
   }
 
   SEQUANT_ASSERT(!serialized.empty());
 
   return toUtf16(serialized);
+}
+
+/// @return serialize_scalar(), parenthesized where the spelling is composite
+std::wstring serialize_scalar_atom(const Constant::scalar_type& scalar,
+                                   const SerializationOptions& options) {
+  auto serialized = serialize_scalar(scalar, options);
+  if (is_composite_scalar(scalar)) {
+    return L"(" + std::move(serialized) + L")";
+  }
+  return serialized;
 }
 
 std::wstring to_string(Tensor const& tensor,
@@ -211,13 +228,17 @@ std::wstring to_string(Product const& prod,
     // subtracted summand reads `- b` and not `- 1 b`
     serialized += L"-";
   } else if (scal != Product::scalar_type{1}) {
-    serialized += details::serialize_scalar(scal, options) + L" ";
+    serialized += details::serialize_scalar_atom(scal, options) + L" ";
   }
 
   for (std::size_t i = 0; i < prod.size(); ++i) {
     const ExprPtr& current = prod[i];
     bool parenthesize = false;
-    if (current->is<Product>() || current->is<Sum>()) {
+    // a composite scalar reads as a sum where a factor is expected, so it is
+    // parenthesized here as it is in the scalar position above
+    if (current->is<Product>() || current->is<Sum>() ||
+        (current->is<Constant>() &&
+         is_composite_scalar(current->as<Constant>().value()))) {
       parenthesize = true;
       serialized += L"(";
     }

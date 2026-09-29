@@ -304,6 +304,100 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(deserialize<ExprPtr>(L".4")->is<Constant>());
     }
 
+    SECTION("Complex constant") {
+      using scalar_type = Constant::scalar_type;
+
+      SECTION("an imaginary literal is a rational with an abutting i") {
+        REQUIRE(deserialize<ExprPtr>(L"2i")->as<Constant>().value() ==
+                scalar_type{0, 2});
+        REQUIRE(deserialize<ExprPtr>(L"-3i")->as<Constant>().value() ==
+                scalar_type{0, -3});
+        REQUIRE(deserialize<ExprPtr>(L"1/2i")->as<Constant>().value() ==
+                scalar_type{0, rational{1, 2}});
+        for (const auto& spelling : {L"2i", L"-3i", L"1/2i"}) {
+          REQUIRE(serialize(deserialize<ExprPtr>(spelling)) == spelling);
+        }
+      }
+
+      SECTION("a bare or detached i is still a variable") {
+        REQUIRE(deserialize<ExprPtr>(L"i")->is<Variable>());
+        REQUIRE(deserialize<ExprPtr>(L"i")->as<Variable>().label() == L"i");
+        // a space between the digits and the `i` makes it a product
+        auto detached = deserialize<ExprPtr>(L"2 i");
+        REQUIRE(detached->is<Product>());
+        REQUIRE(detached->as<Product>().scalar() == rational{2});
+        REQUIRE(detached->as<Product>().factor(0)->is<Variable>());
+        // ... and an `i` that opens a longer name is part of that name
+        auto indexed = deserialize<ExprPtr>(L"2i_1");
+        REQUIRE(indexed->is<Product>());
+        REQUIRE(indexed->as<Product>().scalar() == rational{2});
+        REQUIRE(indexed->as<Product>().factor(0)->as<Variable>().label() ==
+                L"i_1");
+      }
+
+      SECTION("a general complex constant is a real plus an imaginary term") {
+        auto c = deserialize<ExprPtr>(L"1 + 2i");
+        REQUIRE(c->is<Constant>());
+        REQUIRE(c->as<Constant>().value() == scalar_type{1, 2});
+        REQUIRE(serialize(c) == L"1 + 2i");
+
+        auto d = deserialize<ExprPtr>(L"1 - 2i");
+        REQUIRE(d->is<Constant>());
+        REQUIRE(d->as<Constant>().value() == scalar_type{1, -2});
+        REQUIRE(serialize(d) == L"1 - 2i");
+
+        auto e = deserialize<ExprPtr>(L"-1/2 - 3/4i");
+        REQUIRE(e->is<Constant>());
+        REQUIRE(e->as<Constant>().value() ==
+                scalar_type{rational{-1, 2}, rational{-3, 4}});
+        REQUIRE(serialize(e) == L"-1/2 - 3/4i");
+      }
+
+      SECTION("as a coefficient of a product") {
+        // a purely imaginary coefficient is one token, a composite one is
+        // parenthesized: juxtaposition binds tighter than `+`
+        for (const auto& spelling :
+             {L"2i x", L"-3i x", L"(1 + 2i) x", L"(1 - 2i) x * y"}) {
+          auto prod = deserialize<ExprPtr>(spelling);
+          REQUIRE(prod->is<Product>());
+          REQUIRE(prod->as<Product>().factor(0)->is<Variable>());
+          REQUIRE(serialize(prod) == spelling);
+          REQUIRE(*deserialize<ExprPtr>(serialize(prod)) == *prod);
+        }
+        REQUIRE(deserialize<ExprPtr>(L"(1 + 2i) x")->as<Product>().scalar() ==
+                scalar_type{1, 2});
+      }
+
+      SECTION("as a summand") {
+        for (const auto& spelling :
+             {L"a + 2i", L"a - 2i", L"a + 1 + 2i", L"a + 2i b"}) {
+          auto sum = deserialize<ExprPtr>(spelling);
+          REQUIRE(serialize(sum) == spelling);
+          REQUIRE(*deserialize<ExprPtr>(serialize(sum)) == *sum);
+        }
+      }
+
+      SECTION("nested in Re[] / Im[]") {
+        // a composite scalar is not hoisted out of a wrapper, so it stays
+        // inside the brackets
+        const auto wrapped = L"Re[(1 + 2i) x]";
+        auto re = deserialize<ExprPtr>(wrapped);
+        REQUIRE(re->is<RealPart>());
+        REQUIRE(serialize(re) == wrapped);
+        REQUIRE(*deserialize<ExprPtr>(serialize(re)) == *re);
+        // ... while a purely imaginary one rotates the projection
+        REQUIRE(*deserialize<ExprPtr>(L"Im[2i x]") ==
+                *deserialize<ExprPtr>(L"2 Re[x]"));
+      }
+
+      SECTION("an imaginary exponent is refused") {
+        REQUIRE_THROWS_MATCHES(
+            deserialize<ExprPtr>(L"x^(2i)"),
+            io::serialization::SerializationError,
+            serializationErrorMatches(0, 6, "Power exponent"));
+      }
+    }
+
     SECTION("Variable") {
       // SeQuant variable is just a label followed by an optional ꙳
       // to denote if the variable is conjugated
@@ -857,25 +951,35 @@ TEST_CASE("serialization", "[serialization]") {
     auto resetter = set_scoped_default_context(ctx);
 
     auto term = deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
-    ExprPtr folded = term->clone() + conjugate(term->clone());
-    simplify(folded);
 
-    bool have_re = false;
-    folded->visit(
-        [&have_re](const ExprPtr& node) {
-          if (node->is<RealPart>()) have_re = true;
-        },
-        /* atoms_only = */ false);
-    if (folded->is<RealPart>()) have_re = true;
-    REQUIRE(have_re);
+    // the sum pair folds to `2 Re[A]`, the difference to `2i Im[A]`; the
+    // second carries a purely imaginary coefficient, so it round-trips only
+    // if the grammar spells one
+    for (const auto& [difference, marker] :
+         {std::pair{false, std::wstring_view{L"Re["}},
+          std::pair{true, std::wstring_view{L"Im["}}}) {
+      ExprPtr conjugated = conjugate(term->clone());
+      ExprPtr folded = difference
+                           ? term->clone() + ex<Constant>(-1) * conjugated
+                           : term->clone() + conjugated;
+      simplify(folded);
 
-    std::wstring serialized;
-    REQUIRE_NOTHROW(serialized = serialize(folded, {.annot_symm = true}));
-    REQUIRE(serialized.find(L"Re[") != std::wstring::npos);
+      bool wrapped = folded->is<RealPart>() || folded->is<ImagPart>();
+      folded->visit(
+          [&wrapped](const ExprPtr& node) {
+            if (node->is<RealPart>() || node->is<ImagPart>()) wrapped = true;
+          },
+          /* atoms_only = */ false);
+      REQUIRE(wrapped);
 
-    ExprPtr respelled = deserialize<ExprPtr>(serialized);
-    REQUIRE(*respelled == *folded);
-    REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
+      std::wstring serialized;
+      REQUIRE_NOTHROW(serialized = serialize(folded, {.annot_symm = true}));
+      REQUIRE(serialized.find(marker) != std::wstring::npos);
+
+      ExprPtr respelled = deserialize<ExprPtr>(serialized);
+      REQUIRE(*respelled == *folded);
+      REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
+    }
   }
 
   SECTION("serialize a scaled wrapper") {

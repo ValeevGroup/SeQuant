@@ -80,8 +80,8 @@ V1
    Known limitations:
 
    - No support for second-quantized (normal-ordered) operators
-   - No support for complex numbers
    - No support for representing operators (e.g. symmetrizers) explicitly
+   - A number is a rational (or a floating-point value converted to one); there is no irrational or transcendental literal
 
 .. table::
    :widths: auto
@@ -95,7 +95,7 @@ V1
    Product         Nullary ( '*'? Nullary )*                                        Explict '*' use is optional
    Nullary         '(' Sum ')' | Number | Tensor | Variable | RealImagPart     
    RealImagPart    ('Re' | 'Im') '[' Sum ']'                                        Real/imaginary part of the wrapped expression
-   Number                                                                           Integer, Floating point or fraction
+   Number          Rational 'i'?                                                    Integer, floating point or fraction; a trailing 'i' (no space) makes it imaginary
    Tensor          Name IndexGroup SymmetrySpec?                                   
    IndexGroup      | '{' IndexList? ( ';' IndexList? ( ';' IndexList? )? )? '}'     | Meaning is {<bra>;<ket>;<aux>}
                    | '^{' IndexList? '}_{' IndexList '}'                            | Meaning is ^{<ket>}_{<bra>} (no aux)
@@ -107,6 +107,12 @@ V1
    Variable        Name
    Name                                                                              Single word (may include Unicode chars)
    ==============  ===============================================================  ===========================================
+
+A ``Number`` whose digits are immediately followed by ``i`` is imaginary: ``2i``, ``1/2i`` (which is *(1/2)i*, not *1/(2i)*), ``-3i``.
+The ``i`` has to abut the digits and must not begin a longer name, so a bare ``i`` is an ordinary :class:`Variable <sequant::Variable>`,
+``2 i`` is a product of a number and that variable, and ``2i_1`` is ``2`` times the variable ``i_1``. A general complex constant is
+written as its real part plus (or minus) its imaginary one — ``1 + 2i``, ``1 - 2i`` — and is parenthesized wherever a factor is
+expected, since juxtaposition binds tighter than ``+``: ``(1 + 2i) t{i_1;a_1}``. A purely real constant is spelled exactly as before.
 
 The single-letter codes in ``SymmetrySpec`` abbreviate the corresponding enumerators, one letter per field: ``[ASN]`` is the tensor's
 permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = Symm, ``N`` = Nonsymm); ``[SCN]`` is its
@@ -142,3 +148,9 @@ leaves a folded conjugate pair in:
 ::
 
    2 Re[h{i_1;a_1} * t{a_1;i_1}]
+
+The ``Im`` half of the same fold carries a purely imaginary coefficient:
+
+::
+
+   2i Im[h{i_1;a_1} * t{a_1;i_1}]

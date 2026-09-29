@@ -37,9 +37,12 @@ struct Index : boost::spirit::x3::position_tagged {
 struct Number : boost::spirit::x3::position_tagged {
   double numerator;
   double denominator;
+  /// whether an `i` abutted the digits, i.e. the literal sits on the
+  /// imaginary axis (`2i`, `1/2i`)
+  bool imaginary;
 
-  Number(double numerator = {}, double denominator = 1)
-      : numerator(numerator), denominator(denominator) {}
+  Number(double numerator = {}, double denominator = 1, bool imaginary = false)
+      : numerator(numerator), denominator(denominator), imaginary(imaginary) {}
 };
 
 struct Variable : boost::spirit::x3::position_tagged {
@@ -167,7 +170,7 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexLabel,
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Index, label,
                           protoLabels);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Number,
-                          numerator, denominator);
+                          numerator, denominator, imaginary);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
                           ket, auxiliaries, reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
