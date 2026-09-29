@@ -4451,10 +4451,10 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
 
 TEST_CASE("a conjugation-bearing invariant survives the hoist-slot store",
           "[eval][conj-transform]") {
-  // A hoist slot holds a loop-invariant intermediate in the CANONICAL
+  // A hoist slot holds a loop-invariant intermediate in the canonical
   // orientation (convert_canon_orientation at the store; the node's own
   // transform again on every read), so an invariant whose transform
-  // CONJUGATES is what tells that convention apart from storing the value as
+  // conjugates is what tells that convention apart from storing the value as
   // built. Here the hoisted invariant is I2 = g꙳*h꙳, whose two leaves are
   // both '꙳' over a real basis with an indefinite hermiticity and parity
   // None: each decodes to a pure {conj}, the prefix is uniformly conjugated,
