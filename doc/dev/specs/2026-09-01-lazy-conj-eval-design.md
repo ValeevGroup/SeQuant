@@ -418,8 +418,11 @@ the play-by-play.
 >   `⁺` leaf's array `t_adj` and a `꙳` leaf's array `t_conj`. A
 >   marked array is a terminal the host supplies -- the generated code loads
 >   it -- so the transpose-only real-field limitation is retired. A scalar
->   leaf keeps its re-materialization at the point of use (`denoted_scalar`),
->   which is the path a pruned scalar prefactor takes as well.
+>   leaf that survives the pruning is materialized there too, so the operand a
+>   backend loads and the one its computation names are one object; a pruned
+>   scalar prefactor re-materializes at the point of use (`denoted_scalar`).
+>   The generators that can spell a scalar conjugation wrap it in `conj(...)`;
+>   ITF cannot, so it names a conjugated variable `x_conj[]`.
 > - _Evaluation invariant_ holds as stated, with the leaf's arithmetic fixed
 >   at two sites. A leaf is stored as fetched -- a provider already serves the
 >   canonical orientation, unlike a computed node whose operands reach it in

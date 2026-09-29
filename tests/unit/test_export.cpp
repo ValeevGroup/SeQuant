@@ -1221,14 +1221,15 @@ TEST_CASE("full export of marked tensors", "[export]") {
   }
 }
 
-TEST_CASE("a conjugated scalar leaf is loaded and dropped as it is stored",
+TEST_CASE("a conjugated scalar leaf is named by its folded name throughout",
           "[export]") {
   using namespace sequant;
   auto resetter = to_export_context();
 
-  // a scalar leaf stores the unmarked spelling and keeps the conjugation on
-  // its transform, and a generator that does not prune variables loads and
-  // drops that stored spelling: the denoted one is a different key
+  // ITF has no conjugation spelling for a scalar operand, so a conjugated
+  // variable is an object of its own there: the preprocessing materializes a
+  // surviving scalar leaf's denoted spelling, and the generator names that
+  // object `x_conj[]` wherever it appears -- declaration, load, value, drop
   auto x = ex<Variable>(L"x");
   auto y = ex<Variable>(L"y");
   x->as<Variable>().conjugate();
@@ -1249,10 +1250,17 @@ TEST_CASE("a conjugated scalar leaf is loaded and dropped as it is stored",
   const std::string code = gen.get_generated_code();
   CAPTURE(code);
 
-  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load x[]"));
-  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load y[]"));
-  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop y[]"));
-  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop x[]"));
+  REQUIRE_THAT(code,
+               Catch::Matchers::ContainsSubstring("tensor: x_conj[], x_conj"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load x_conj[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("load y_conj[]"));
+  // the value position names the same object, so the loaded operand and the
+  // one the computation reads are one array
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("x_conj[] y_conj[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop y_conj[]"));
+  REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("drop x_conj[]"));
+  // and the array the leaf stores is nowhere in the generated code
+  REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring(" x[]"));
 }
 
 TEST_CASE("a marked leaf reaches the generator as the array it denotes",

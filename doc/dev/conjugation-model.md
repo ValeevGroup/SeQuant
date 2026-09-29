@@ -190,6 +190,11 @@ an array of its own to every label-keyed map and backend match: `g⁺` is
 exported as `g_adj` and is not remapped to a J/K integral; the index
 reordering bakes the suffixes into the rebuilt label.
 
+A conjugated `Variable` is spelled `conj(x)` by the generators that have a
+conjugation spelling for a scalar (text, Julia, Python-einsum). ITF has none,
+so there the same folding names it: a conjugated `x` is the object `x_conj[]`
+wherever it appears -- declaration, load, value and drop alike.
+
 `adjoint` of an `mbpt::Operator` marks its label `t⁺`, inverts its
 quantum-number action and regenerates its tensor form as
 `sequant::adjoint(tensor form)`, which is where an anti-Hermitian operator's

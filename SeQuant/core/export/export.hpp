@@ -47,38 +47,44 @@ struct PreprocessResult {
   std::map<Variable, std::size_t> variableReferences;
 };
 
-/// Maps the ASCII array name a tensor is exported under (export_label(), which
-/// folds the core states into the label) to the decorated label it came from.
-/// One registry spans a whole export_groups() call, because declarations are
-/// merged across its trees: two different originals under one exported name
-/// would be one declared array whichever trees they appear in, so the
-/// preprocessing refuses that; see preprocess().
-using FoldedNameRegistry = std::map<std::wstring, std::wstring>;
+/// Maps the ASCII name an object is exported under (export_label(), which folds
+/// the core states into the label) to the decorated spelling it came from,
+/// tensors and variables apart: a scalar operand is never the array a tensor of
+/// the same label names. One registry spans a whole export_groups() call,
+/// because declarations are merged across its trees: two different originals
+/// under one exported name would be one declared object whichever trees they
+/// appear in, so the preprocessing refuses that; see preprocess().
+struct FoldedNameRegistry {
+  std::map<std::wstring, std::wstring> tensors, variables;
+};
 
 /// @return the spelling @p node denotes, for a scalar-valued node: a scalar
 ///         leaf stores the unmarked spelling and carries the conjugation in
-///         its CanonTransform, so the marker is re-materialized here, both
-///         where a scalar prefactor is pruned out of the tree
-///         (prune_scalar_factor) and where a scalar is handed to a generator
-///         (GenerationVisitor::process_computation), which wraps it. Only a
-///         leaf: an internal node's placeholder holds what the emitted
-///         computation puts in it, which is built from its operands' denoted
-///         spellings and so is already the denoted value; conjugating it
-///         again would conjugate twice. A tensor-valued node needs no such
-///         treatment: its denoted spelling is materialized on the node itself
-///         before preprocessing (see
-///         PreprocessVisitor::preprocess_node_content), which is what makes a
-///         marked array a name of its own.
+///         its CanonTransform, so the marker is re-materialized here -- for a
+///         leaf that survives the pruning once and for all on the node
+///         (PreprocessVisitor::preprocess_node_content, as a tensor leaf's
+///         spelling is), and for a prefactor pruned out of the tree
+///         (prune_scalar_factor) at the point of use. Idempotent, so a reader
+///         that comes after the preprocessing (the generation visitor's
+///         operands, which wrap what they get) hands back what the node
+///         already spells. Only a leaf: an internal node's placeholder holds
+///         what the emitted computation puts in it, which is built from its
+///         operands' denoted spellings and so is already the denoted value;
+///         conjugating it again would conjugate twice.
 template <typename Node>
 ExprPtr denoted_scalar(Node const &node) {
   ExprPtr e = node->expr();
-  if (node.leaf() && node->canon_transform().conj &&
-      (e->template is<Variable>() || e->template is<Power>())) {
+  if (!node.leaf() || !node->canon_transform().conj) return e;
+  // Idempotent: preprocess_node_content materializes a surviving scalar leaf's
+  // denoted spelling on the node, so a reader that runs after the
+  // preprocessing (the generation visitor's operands) finds the marker there
+  // already and must not toggle it back off.
+  if (e->template is<Variable>() && !e->template as<Variable>().conjugated()) {
     e = e->clone();
-    if (e->template is<Variable>())
-      e->template as<Variable>().conjugate();
-    else
-      e->template as<Power>().conjugate();
+    e->template as<Variable>().conjugate();
+  } else if (e->template is<Power>() && !e->template as<Power>().conjugated()) {
+    e = e->clone();
+    e->template as<Power>().conjugate();
   }
   return e;
 }
@@ -500,21 +506,34 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 
   bool storeExpr = false;
 
-  if constexpr (std::is_same_v<ExprType, Tensor>) {
-    // The exported name must name one array: a tensor written `t_adj` and a
-    // `t⁺` that folds to `t_adj` would share every label-keyed map below, and
-    // the generated code would read one buffer under two readings.
-    {
-      const std::wstring decorated = expr.decorated_label();
-      const auto [it, inserted] =
-          folded_names.try_emplace(export_label(expr), decorated);
-      if (!inserted && it->second != decorated)
-        throw Exception("preprocess: the exported array name \"" +
-                        toUtf8(it->first) + "\" comes from both \"" +
-                        toUtf8(it->second) + "\" and \"" + toUtf8(decorated) +
-                        "\"; rename one of the two tensors");
-    }
+  // The exported name must name one object: a tensor written `t_adj` and a
+  // `t⁺` that folds to `t_adj`, or a variable written `x_conj` and a
+  // conjugated `x`, would share every name-keyed map below, and the generated
+  // code would read one object under two readings.
+  {
+    auto &registry =
+        [&folded_names]() -> std::map<std::wstring, std::wstring> & {
+      if constexpr (std::is_same_v<ExprType, Tensor>)
+        return folded_names.tensors;
+      else
+        return folded_names.variables;
+    }();
+    const std::wstring decorated = [&expr]() -> std::wstring {
+      if constexpr (std::is_same_v<ExprType, Tensor>)
+        return expr.decorated_label();
+      else
+        return std::wstring(expr.label()) + (expr.conjugated() ? L"꙳" : L"");
+    }();
+    const auto [it, inserted] =
+        registry.try_emplace(export_label(expr), decorated);
+    if (!inserted && it->second != decorated)
+      throw Exception("preprocess: the exported name \"" + toUtf8(it->first) +
+                      "\" comes from both \"" + toUtf8(it->second) +
+                      "\" and \"" + toUtf8(decorated) +
+                      "\"; rename one of the two");
+  }
 
+  if constexpr (std::is_same_v<ExprType, Tensor>) {
     // A marked tensor is an array of its own, and every map below (and in the
     // generators) keys on the label and the slots. Folding the marks into the
     // label, before the context gets to rewrite anything, is what makes `t`
@@ -789,6 +808,13 @@ class PreprocessVisitor {
       SEQUANT_ASSERT(!node->as_tensor().adjointed());
       node->set_expr(node->denoted_expr());
     }
+
+    // A scalar leaf that survives the pruning is loaded, dropped and declared
+    // like any other terminal, so it too reaches the generators in the
+    // spelling it denotes: otherwise the operand a backend names in the
+    // computation and the one it loads are two different readings of one leaf.
+    if (node.leaf() && node->is_scalar() && node->canon_transform().conj)
+      node->set_expr(denoted_scalar(node));
 
     if (node->is_tensor()) {
       preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result,
