@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -208,14 +209,43 @@ std::wstring to_string(const Power& power,
   return core;
 }
 
+/// Spells `Re[...]` / `Im[...]` with a real scalar of the wrapped expression
+/// hoisted in front of the brackets, as `Re(c X) = c Re(X)` allows for a real
+/// c. That is the form the real_part()/imaginary_part() builders and the
+/// wrappers' canonicalization produce, so a wrapper that reached the
+/// serializer by neither route still spells as its canonical self and the
+/// round trip is a fixed point. A complex scalar stays inside: neither
+/// wrapper is linear over it.
+std::wstring serialize_wrapper(std::wstring_view projection,
+                               const ExprPtr& inner,
+                               const SerializationOptions& options) {
+  std::wstring serialized;
+  ExprPtr wrapped = inner;
+
+  if (inner->is<Product>()) {
+    const auto& prod = inner->as<Product>();
+    const auto scalar = prod.scalar();
+    if (scalar.imag() == 0 && scalar != Product::scalar_type{1}) {
+      serialized = scalar == Product::scalar_type{-1}
+                       ? std::wstring(L"-")
+                       : serialize_scalar_atom(scalar, options) + L" ";
+      wrapped = sequant::detail::strip_scalar(prod);
+    }
+  }
+
+  serialized += projection;
+  serialized += L"[" + v1::to_string(*wrapped, options) + L"]";
+  return serialized;
+}
+
 std::wstring to_string(const RealPart& part,
                        const SerializationOptions& options) {
-  return L"Re[" + v1::to_string(*part.inner(), options) + L"]";
+  return serialize_wrapper(L"Re", part.inner(), options);
 }
 
 std::wstring to_string(const ImagPart& part,
                        const SerializationOptions& options) {
-  return L"Im[" + v1::to_string(*part.inner(), options) + L"]";
+  return serialize_wrapper(L"Im", part.inner(), options);
 }
 
 std::wstring to_string(Product const& prod,

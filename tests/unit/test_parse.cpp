@@ -1007,5 +1007,19 @@ TEST_CASE("serialization", "[serialization]") {
     ExprPtr respelled = deserialize<ExprPtr>(serialized);
     REQUIRE(*respelled == *folded);
     REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
+
+    // a wrapper that reached the serializer by neither the builders nor
+    // canonicalization spells the same way: the serializer hoists too
+    ExprPtr raw = ex<RealPart>(
+        deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S"));
+    const auto raw_serialized = serialize(raw, {.annot_symm = true});
+    REQUIRE(raw_serialized.find(L"Re[1/2") == std::wstring::npos);
+    REQUIRE(raw_serialized.starts_with(L"1/2 Re[h"));
+
+    ExprPtr raw_respelled = deserialize<ExprPtr>(raw_serialized);
+    REQUIRE(raw_respelled->is<Product>());
+    REQUIRE(raw_respelled->as<Product>().scalar() == rational{1, 2});
+    REQUIRE(raw_respelled->as<Product>().factor(0)->is<RealPart>());
+    REQUIRE(serialize(raw_respelled, {.annot_symm = true}) == raw_serialized);
   }
 }
