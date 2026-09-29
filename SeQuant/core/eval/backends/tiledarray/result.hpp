@@ -670,8 +670,8 @@ class ResultTensorTA final : public Result {
     return out;
   }
 
-  /// annotation of the STORED array for a consumer annotation given in the
-  /// view's LOGICAL mode order
+  /// annotation of the _stored_ array for a consumer annotation given in the
+  /// view's _logical_ mode order
   [[nodiscard]] std::string translate(std::string const& logical) const {
     if (!view_ || view_->perm.empty()) return logical;
     auto toks = tokens(logical);
@@ -1153,7 +1153,7 @@ class ResultTensorOfTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr apply_transform(
       CanonTransform t, std::array<std::any, 2> const& ann) const override {
-    // fused phase * conj * relabel in ONE TA expression (conj is elided for
+    // fused phase * conj * relabel in _one_ TA expression (conj is elided for
     // a real numeric_type, where it is a no-op)
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);

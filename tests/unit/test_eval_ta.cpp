@@ -148,7 +148,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
            mo[2].str();
   };
 
-  // leaves are stored and served in their CANONICAL spelling, so normalize
+  // leaves are stored and served in their _canonical_ spelling, so normalize
   // the orientation (and drop any state) before keying -- this makes literal
   // test spellings and ctor-canonicalized leaves agree
   auto canon = tnsr.clone();
@@ -560,7 +560,7 @@ class rand_tensor_yield {
     found = label_to_er_.find(tensor_to_key(label));
     if (found == label_to_er_.end())
       throw sequant::Exception{"attempted access of non-existent ResultPtr!"};
-    // stored arrays are CANONICAL-spelling shaped; serve the literal spelling
+    // stored arrays are _canonical_-spelling shaped; serve the literal spelling
     // by applying its full leaf transform (orientation relabel + conj/phase),
     // exactly as evaluation would. A label with no slot list is not a tensor
     // spelling: hand it back as stored.
@@ -592,7 +592,7 @@ class rand_tensor_yield {
     };
     auto const post = annot_of(lt);    // requested (as-written) mode order
     sequant::EvalExprTA const ev{lt};  // canonicalizes; computes the map
-    // canonical (stored) mode order from the tensor's SLOTS (ev.annot() is
+    // canonical (stored) mode order from the tensor's _slots_ (ev.annot() is
     // md-ordered for ToT leaves and may include proto-only named indices)
     auto const pre = annot_of(ev.expr()->as<sequant::Tensor>());
     auto const tr = ev.canon_transform();
@@ -6991,7 +6991,7 @@ TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
 
 TEST_CASE("conj_eval_cache_reuse", "[eval][conj-transform]") {
   // The uniform-conjugate reuse contract end-to-end (the Kramers-partner
-  // shape a time-reversal fold consumes): a conjugated network is a cache HIT
+  // shape a time-reversal fold consumes): a conjugated network is a cache hit
   // on its unconjugated counterpart's slot, served as one retrieval conj --
   // whole terms, sum shapes, and intermediates buried in mixed terms alike.
   //
@@ -7144,7 +7144,7 @@ TEST_CASE("re_im_evaluation", "[eval][re-im]") {
   REQUIRE(im.real() == Catch::Approx(direct.imag()));
 }
 
-// T19 layer 1: apply_transform on a TA result is LAZY -- it returns a view
+// T19 layer 1: apply_transform on a TA result is _lazy_ -- it returns a view
 // that shares the array and carries a pending {phase, conj, relabel}; the
 // view feeds sum/prod/dot/permute without materializing, get<>() (external
 // readers) materializes on demand, and transforms compose.
@@ -7196,7 +7196,7 @@ TEST_CASE("result_transform_view_ta", "[eval][conj-transform][view]") {
     REQUIRE(norm_diff(got->get<ZArray>(), ref, "i,j") < 1e-12);
     REQUIRE(v->as<ResultZ>().is_view());  // the operand was not materialized
   }
-  SECTION("view as the RIGHT operand, and dot") {
+  SECTION("view as the right operand, and dot") {
     std::array<std::any, 2> ann{std::string{"i,a"}, std::string{"i,a"}};
     auto v = other->apply_transform(CanonTransform{.conj = true}, ann);
     std::array<std::any, 3> pann{std::string{"i,a"}, std::string{"j,a"},
@@ -7213,7 +7213,7 @@ TEST_CASE("result_transform_view_ta", "[eval][conj-transform][view]") {
     REQUIRE(std::abs(d->get<std::complex<double>>() - dref) < 1e-12);
     REQUIRE(v->as<ResultZ>().is_view());
   }
-  SECTION("view as the LEFT operand of a dot, with a relabeling") {
+  SECTION("view as the left operand of a dot, with a relabeling") {
     // the left operand is the one whose pending relabeling names the
     // reduction's target index list, so a bra<->ket exchange buried in the
     // view has to be translated back to the stored mode order

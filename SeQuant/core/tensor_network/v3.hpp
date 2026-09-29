@@ -337,7 +337,7 @@ class TensorNetworkV3 {
     /// nullptr = use the external indices
     const NamedIndexSet *named_indices = nullptr;
     /// less-than comparison for coarse-grained sorting of named indices
-    /// before sorting to canonical order. N.B. defaulted to the DECLARED
+    /// before sorting to canonical order. N.B. defaulted to the _declared_
     /// default (default_idxptr_slottype_lesscompare), so a value-initialized
     /// options object exercises the same code path as explicit callers -- a
     /// default-constructed (empty) std::function is replaced by an internal
@@ -351,16 +351,16 @@ class TensorNetworkV3 {
     /// canonicalization at the space-only named coloring.
     const tensor_network::NamedIndexColorMap *named_index_colors = nullptr;
     /// if true, the bra and ket slots of every tensor with (anti)symmetric
-    /// bra/ket bundles are permuted IN PLACE into their canonical order, and
+    /// bra/ket bundles are permuted in place into their canonical order, and
     /// SlotCanonicalizationMetadata::phase reports the parity of exactly
-    /// that reorder. The canonical order is then the NAMED-index canonical
+    /// that reorder. The canonical order is then the _named_-index canonical
     /// order (the order of get_indices(): coarse groups by
     /// named_index_compare, canonical vertex ordinal within a group;
     /// anonymous slots after the named ones by vertex ordinal), so a
     /// respelled leaf keeps the space order of its bundles. (Without this
     /// option the phase is relative to the raw canonical vertex order and
     /// nothing is permuted.) Column-symmetric Nonsymm tensors and the
-    /// bra<->ket orientation are NOT touched.
+    /// bra<->ket orientation are _not_ touched.
     bool apply_slot_order = false;
   };
 

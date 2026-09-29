@@ -7,7 +7,7 @@
 namespace sequant {
 
 ///
-/// \brief Canonicalization byproduct mapping a node's CACHED canonical result
+/// \brief Canonicalization byproduct mapping a node's _cached_ canonical result
 ///        to the value the node denotes. Applied on retrieval
 ///        (see apply_canon_transform in eval.hpp); excluded from the node's
 ///        own (slot) hash, exactly as the former standalone canon_phase was.
@@ -23,7 +23,7 @@ struct CanonTransform {
   [[nodiscard]] constexpr bool trivial() const noexcept {
     return phase == 1 && !conj && !braket_swap;
   }
-  /// salt for the PARENT's hash combination: conj/swap only -- phase is
+  /// salt for the _parent_'s hash combination: conj/swap only -- phase is
   /// multiplicatively hoistable and never enters structural identity
   /// (a product folds its children's phases into its own transform; a sum
   /// hoists a uniform phase and salts a mixed one with phase_salt)

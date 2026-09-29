@@ -100,7 +100,7 @@ struct CanonTransform {
 }
 ```
 
-- [ ] **Step 4: Run, verify PASS**, then run the full `eval_expr` case: both green.
+- [ ] **Step 4: Run, verify pass**, then run the full `eval_expr` case: both green.
 
 - [ ] **Step 5: Commit** — `eval: CanonTransform value type (phase/conj/swap retrieval byproduct)`
 
@@ -142,7 +142,7 @@ TEST_CASE("eval_expr_carries_canon_transform", "[EvalExpr][conj-transform]") {
     two `make_adjoint_node` calls updated in place, deleted in Task 6).
   - Compile; chase every caller the compiler flags — no other semantic change.
 
-- [ ] **Step 4: Run `unit_tests-sequant '~[long-tests]'` — ALL green** (pure carrier change).
+- [ ] **Step 4: Run `unit_tests-sequant '~[long-tests]'` — _all_ green** (pure carrier change).
 
 - [ ] **Step 5: Commit** — `eval: EvalExpr carries CanonTransform (canon_phase_ generalized)`
 
@@ -180,8 +180,8 @@ TEST_CASE("leaf_slot_identity_is_canonical_spelling",
   longer reaches the hash by any route. (Conjugate/Symm markers get their
   transforms in Task 4; keep their current behavior compiling.)
 
-- [ ] **Step 4: Run — new test PASSES; `starred non-Conjugate leaves` section
-  now FAILS at its hash-distinct assertion. Update that PR-1 assertion in the
+- [ ] **Step 4: Run — new test passes; `starred non-Conjugate leaves` section
+  now fails at its hash-distinct assertion. Update that PR-1 assertion in the
   same change** (it pinned the gate model): replace
 
 ```cpp
@@ -353,7 +353,7 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
                                  {.conj = true, .braket_swap = true});
     canon_transform_.phase = md.phase;
 ```
-  Apply the same '⁺'/marker pre-normalization as the flat branch BEFORE
+  Apply the same '⁺'/marker pre-normalization as the flat branch _before_
   building the TensorNetwork (factor steps 1-2 of Task 4 into a private
   helper `normalize_leaf_spelling(Tensor&) -> CanonTransform` used by both
   branches).
@@ -387,7 +387,7 @@ TEST_CASE("leaf_transform_channels", "[EvalExpr][conj-transform]") {
 - [ ] **Step 2:** Rewrite the now-red PR-1 IR-shape tests in
   `tests/unit/test_eval_expr.cpp`: the `"Adjoint op"` /
   `"Adjoint op in a binarized term"` / `"starred non-Conjugate leaves"`
-  sections assert LEAF nodes with the expected `canon_transform()`
+  sections assert _leaf_ nodes with the expected `canon_transform()`
   (bare label, canonical slots, `{conj,swap}` for '⁺', `{conj}` for starred
   Nonsymm, throw assertions deleted). Every expected value is fixed by
   Task 4's table.
@@ -546,7 +546,7 @@ TEST_CASE("result_apply_transform_ta", "[eval][conj-transform]") {
   - BTAS/tapp: same composition using their existing `adjoint`/`mult_by_phase`
     building blocks.
 
-- [ ] **Step 4: PASS.  Step 5: Commit** — `eval: Result::apply_transform (fused phase/conj/swap on retrieval)`
+- [ ] **Step 4: pass.  Step 5: Commit** — `eval: Result::apply_transform (fused phase/conj/swap on retrieval)`
 
 ---
 
@@ -605,7 +605,7 @@ TEST_CASE("conjugated_scalar_leaves", "[EvalExpr][conj-transform]") {
   clone and set `canon_transform_.conj = true` (`conj(b^n) = conj(b)^n`).
   `ResultScalar::apply_transform` from Task 8 already serves it.
 
-- [ ] **Step 4: PASS.  Step 5: Commit** — `eval: conjugated Variable/Power leaves served via the transform`
+- [ ] **Step 4: pass.  Step 5: Commit** — `eval: conjugated Variable/Power leaves served via the transform`
 
 ---
 
@@ -614,7 +614,7 @@ TEST_CASE("conjugated_scalar_leaves", "[EvalExpr][conj-transform]") {
 **Files:**
 - Test: `tests/unit/test_eval_ta.cpp`
 
-- [ ] **Step 1:** Numeric tests on random COMPLEX data (fixture idiom of
+- [ ] **Step 1:** Numeric tests on random _complex_ data (fixture idiom of
   `eval_with_tiledarray`), each asserting against a hand-built TA reference.
   The reuse assertions all use one instrumented leaf yielder — build it once:
 
@@ -647,13 +647,13 @@ struct CountingYielder {
 
   2. **Kramers hoisting reuse:** evaluate `A·B`; record
      `counts_after_first = yielder.counts`; evaluate `conjugate(A·B)` with
-     the SAME cache; `REQUIRE(yielder.counts == counts_after_first)` (pure
+     the _same_ cache; `REQUIRE(yielder.counts == counts_after_first)` (pure
      cache hit) and result == `conj(A·B)` reference;
   3. **mixed-term CSE:** with `A·B` cached, evaluate `A^*·B^*·C`;
      `REQUIRE(yielder.counts[L"A"] == 1)` and same for B (intermediate hit;
      only C newly yielded); result matches the no-reuse reference computed
      on a fresh cache;
-  4. uniform-conj SUM of products (the \mathcal{T}-partner shape):
+  4. uniform-conj sum of products (the \mathcal{T}-partner shape):
      `conjugate(A·B + C·D)` after `A·B + C·D` — zero new yields + equality.
 
 - [ ] **Step 2:** All green; run everything including `[long-tests]` once.
@@ -668,7 +668,7 @@ struct CountingYielder {
 - [ ] Update `doc/dev/specs/2026-09-01-lazy-conj-eval-design.md` if any
   design detail shifted during implementation (record the delta, don't
   rewrite history).
-- [ ] Push `kshitij/feature/conjugation-eval`; open the DRAFT PR against
+- [ ] Push `kshitij/feature/conjugation-eval`; open the draft PR against
   `kshitij/feature/conjugation-symbolic` titled
   "Lazy-conj eval: retrieval-time canonical transform (draft for evaluation)"
   with the spec inlined in the description and the golden-churn justification.
@@ -682,7 +682,7 @@ Owner decision: the exact `fold_conjugate_pairs` ({s, s*} -> 2 Re(s),
 {s, -s*} -> 2i Im(s)) is the wanted fold; `fold_conjugate_pairs_of_real_sum`
 is fragile (unverifiable reality assertion; difference pairs silently
 unfolded) and is to be retired. Since that needs eval-side Re/Im ingestion,
-the following Plan-B items move INTO this draft PR.
+the following Plan-B items move into this draft PR.
 
 ### Task 13: Re/Im eval nodes (IR + backends)
 
@@ -692,10 +692,10 @@ tests `test_eval_expr.cpp`, `test_eval_ta.cpp`.
 
 - Failing IR test first: `binarize` of the fold emission
   `Constant(2) * RealPart(s)` (s = closed-contraction scalar network) yields a
-  Product node whose RealPart factor is a UNARY node -- `EvalOp::RealPart`,
+  Product node whose RealPart factor is a _unary_ node -- `EvalOp::RealPart`,
   `ResultType::Scalar`, `Constant{1}` sentinel right child (the retired
   Adjoint's FullBinaryNode pattern), hash = inner subtree hash combined with
-  the EvalOp -- over the SHARED inner subtree (inner slots identical to the
+  the EvalOp -- over the _shared_ inner subtree (inner slots identical to the
   ones other consumers of s's pieces use). Same for ImagPart.
 - `EvalOp::RealPart`/`ImagPart` enumerators; dispatcher case in
   `binarize(ExprPtr,...)` (replacing the "unsupported expression" throw for
@@ -749,18 +749,18 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
   - simplify() gates the fold on `expr->is_cnumber()` -- operator-carrying
     intermediates head back into Wick, which does not ingest Re/Im wrappers
     (unfolded, a worker-thread TN ctor threw and terminated the process).
-  - Wrapped summands from DIFFERENT simplify passes hold conjugate-related
+  - Wrapped summands from _different_ simplify passes hold conjugate-related
     inners (for a closed c-number network the adjoint IS the conjugate);
-    the fold now merges Re/Im-wrapped summands at entry AND exit over
+    the fold now merges Re/Im-wrapped summands at entry _and_ exit over
     canonical representatives (Re(x*) = Re(x), Im(x*) = -Im(x)), so
     e.g. +c Re(X) - c Re(X^+) cancels exactly.
-  - RealPart/ImagPart canonicalize their inner in place (+ REAL-scalar
+  - RealPart/ImagPart canonicalize their inner in place (+ _real_-scalar
     hoist via the byproduct contract); Product::canonicalize_impl resets
     its memoized hash when a subfactor mutates in place (first mutating
     non-tensor factor canonicalization ever -- the stale-hash self-check
     fired).
   - has_tensor sees through the wrappers (top level and product factors).
-  - Folding before the canonicalize stage was tried and REVERTED: it
+  - Folding before the canonicalize stage was tried and _reverted_: it
     preempts the Symm-braket collapse (a real-field a - a^T pair became
     2i Im instead of 0).
   - Diagnosis was repeatedly misled by (a) a file-local has_tensor lambda
@@ -773,15 +773,15 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 
 ## Execution deviations (recorded 2026-09-01, tasks 4/6/7)
 
-- Tasks 4, 6, and the product half of 7 landed as ONE green unit: the leaf
+- Tasks 4, 6, and the product half of 7 landed as _one_ green unit: the leaf
   ctor's marker-clearing changes binarize's observable behavior, so the
   plan's "IR-shape tests still pass" prediction at T4 was wrong.
 - The plan's T4 step-2 "unfold" (marker => {conj, braket_swap} + slot ops)
-  was WRONG: it collapses a starred-canonical spelling's transform onto the
+  was _wrong_: it collapses a starred-canonical spelling's transform onto the
   plain spelling and re-aliases C with C^*. Implemented rule: the marker
-  composes a PURE {conj} bit (slots untouched); orientation deltas come from
+  composes a _pure_ {conj} bit (slots untouched); orientation deltas come from
   the step-3 fold alone.
-- collect_tensor_factors re-materializes each leaf's DENOTED spelling
+- collect_tensor_factors re-materializes each leaf's _denoted_ spelling
   (swap + marker) for TN building and slot counting -- the canonical
   respelling otherwise moves indices across bra/ket slots (strict-braket
   assert) and erases the marker coloring that keeps mixed-conj products
@@ -792,9 +792,9 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 
 ## Execution deviations (recorded 2026-09-02, T16 MPQC smoke)
 
-- The MPQC CC-path fold (process_equations) needed THREE upstream repairs
+- The MPQC CC-path fold (process_equations) needed _three_ upstream repairs
   before pairing worked on the Kramers-CSV energy:
-  (1) expand + flatten ALL CSV flavor sums before the korbit rebase
+  (1) expand + flatten _all_ CSV flavor sums before the korbit rebase
   (residuals included; 48 flat terms/block replace 12 nested);
   (2) rebase the fully contracted energy too, so a member's TRS partner is
   its plain elementwise conjugate -- conjugate_op = sequant::conjugate on
@@ -805,11 +805,11 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
   bits) and the rebase minted spurious flavored aux dummies, defeating
   every pairing op. Measured after repairs: dch 24/36 paired -> 12 Re
   (eq0 36 -> 24 terms), h2o 8/10.
-- optimize_impl was OPAQUE to Re/Im wrappers (returned untouched -> naive
+- optimize_impl was _opaque_ to Re/Im wrappers (returned untouched -> naive
   inner contraction order). Fixed with a see-through case + regression
   test (test_optimize.cpp "optimize sees through Re/Im wrappers").
-- OPEN: a Re-wrapped ToT/CSV scalar summand's inner root evaluates through
-  a MATERIALIZING DeNest einsum instead of the plain summand's scalar
+- open: a Re-wrapped ToT/CSV scalar summand's inner root evaluates through
+  a _materializing_ DeNest einsum instead of the plain summand's scalar
   reduction (binarize_re_im's inner binarize lacks the ResultExpr root
   treatment): ~14 GB peak / OOM on dch vs 1.7 GB unfolded. Flat-TA wrapper
   eval is certified (h2o). The MPQC CSV-energy fold therefore ships opt-in
@@ -821,14 +821,14 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
 
 ## Follow-up roadmap (2026-09-02)
 
-- **T18 -- Kramers-canonical configs only (symbolic layer): RESOLVED on the
+- **T18 -- Kramers-canonical configs only (symbolic layer): resolved on the
   Kramers round-2 branch** by a time-reversal-aware canonicalizer
   (`KramersSymmetry` tensor attribute, registry partner spaces, network
   fold under `CanonicalizeOptions::fold_kramers`; design and plan under
   `doc/dev/{specs,plans}/2026-09-02-kramers-trs-canonicalizer-*.md`).
   Measured on dch: energy conjugate-pair fold 36 -> 20 terms (floor);
   residual blocks are externally anchored and unchanged.
-- **T19 -- MPQC serving-level aliasing.** Layer 1 DONE here (597beb1fa):
+- **T19 -- MPQC serving-level aliasing.** Layer 1 done here (597beb1fa):
   `ResultTensorTA` records `apply_transform`/`permute`/`mult_by_phase` as
   a lazy {phase, conj, perm} view consumed by the first contraction
   (TA's `.conj()` and scaling are lazy expressions); ToT results still
@@ -843,7 +843,7 @@ Remaining after the in-draft pull: export conj emission via `wrap_conj`
   fold_conjugate_pairs`) was a silent no-op whenever the default context
   already carried options (MPQC's `load_convention` does). Every field
   now participates; test `canonicalize_options_equality`.
-- **T20 -- wrapped-summand CSV eval: RESOLVED (2026-09-02).** Root cause was
+- **T20 -- wrapped-summand CSV eval: resolved (2026-09-02).** Root cause was
   not the ResultExpr head but the optimizer: `RealPart::is_scalar()` made
   the fold's `2 Re[A]` an opaque scalar factor (A unoptimized, and on the
   batching branch unbatched). Fix: Re/Im wrapper factors are transparent to
