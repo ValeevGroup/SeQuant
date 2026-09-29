@@ -4449,6 +4449,154 @@ TEST_CASE("eval_batched_custom_evaluator hoists loop-invariant descendant",
   CHECK(g_evals == 1);
 }
 
+TEST_CASE("a conjugation-bearing invariant survives the hoist-slot store",
+          "[eval][conj-transform]") {
+  // A hoist slot holds a loop-invariant intermediate in the CANONICAL
+  // orientation (convert_canon_orientation at the store; the node's own
+  // transform again on every read), so an invariant whose transform
+  // CONJUGATES is what tells that convention apart from storing the value as
+  // built. Here the hoisted invariant is I2 = g꙳*h꙳, whose two leaves are
+  // both '꙳' over a real basis with an indefinite hermiticity and parity
+  // None: each decodes to a pure {conj}, the prefix is uniformly conjugated,
+  // and the product node takes that conjugation onto itself. The data is
+  // complex, so the conjugation is observable, and the network is a
+  // tensor-of-tensors one (g carries a composite bra slot, so I2 and the root
+  // are nested arrays).
+  using namespace sequant;
+  using node_t = FullBinaryNode<EvalExprTA>;
+  using cache_t = CacheManager<node_t>;
+
+  auto const basis_resetter = tests::scoped_real_basis();
+
+  auto& world = TA::get_default_world();
+  // occ/virt single-tiled (4); aux multi-tiled (12 in tiles of 4 -> 3 tiles),
+  // so the root's aux mode x_1 slices into 3 batches
+  rand_tensor_yield<std::complex<double>, TA::DensePolicy> yield_{world, 4, 4,
+                                                                  12};
+  yield_.set_max_tile(4);
+  using ArrayToT = typename decltype(yield_)::array_tot_type;
+
+  // every element of a ToT array, in outer-then-inner traversal order
+  auto const flatten = [](ArrayToT const& arr) {
+    std::vector<std::complex<double>> out;
+    for (auto it = arr.begin(); it != arr.end(); ++it) {
+      auto const& outer = it->get();
+      for (auto const& inner : outer)
+        for (auto const& el : inner) out.push_back(el);
+    }
+    return out;
+  };
+
+  // the traits that keep a '꙳' symbolically and make it a pure conjugation
+  // with the slots in place
+  auto rt = [](std::wstring_view lbl, Index b, Index k, Index x) {
+    return ex<Tensor>(
+        lbl, bra{std::move(b)}, ket{std::move(k)}, aux{std::move(x)},
+        TensorSymmetries{.perm = Symmetry::Nonsymm,
+                         .hermiticity = Hermiticity::NonHermitian,
+                         .conjugation_parity = ConjugationParity::None,
+                         .column = ColumnSymmetry::Symm});
+  };
+  Index const a1(L"a_1", {L"i_5"});
+  {
+    auto const cg = conjugate(rt(L"g", a1, Index(L"i_1"), Index(L"x_2")));
+    REQUIRE(cg->as<Tensor>().base_field() == Field::Real);
+    REQUIRE(cg->as<Tensor>().kconjugated());
+    REQUIRE(cg->as<Tensor>().bra()[0].full_label() == a1.full_label());
+  }
+
+  // R = (((g꙳{a_1<i_5>;i_1;x_2} * h꙳{i_1;i_2;x_2}) * w{i_2;i_6;x_1})
+  //      * p{i_6;i_7;x_1}), the shape of the pre-existing hoist test with the
+  // innermost pair conjugated and its left factor nested:
+  // - I2 = g꙳*h꙳ contracts i_1 and x_2 -> {a_1<i_5>;i_2}: a nested array that
+  //   carries no aux, so it is invariant to the outer x_1 loop, and its two
+  //   conjugating factors put a conjugation on its own transform;
+  // - M = I2*w -> {a_1<i_5>;i_6} carries x_1 (loop-local);
+  // - R = M*p contracts i_6 and x_1: the x_1 batch trigger.
+  auto const expr = ex<Product>(ExprPtrList{
+      conjugate(rt(L"g", a1, Index(L"i_1"), Index(L"x_2"))),
+      conjugate(rt(L"h", Index(L"i_1"), Index(L"i_2"), Index(L"x_2"))),
+      rt(L"w", Index(L"i_2"), Index(L"i_6"), Index(L"x_1")),
+      rt(L"p", Index(L"i_6"), Index(L"i_7"), Index(L"x_1"))});
+  auto node = eval_node(expr);
+  std::string const target = node->annot();
+  REQUIRE(node->tot());
+
+  auto const aux_space =
+      get_default_context().index_space_registry()->retrieve(L"x");
+  auto accept_aux = [aux_space](Index const& ix) {
+    return ix.space() == aux_space;
+  };
+
+  // the root batches over its contracted aux mode x_1 (the outer loop)
+  auto const root_axis = batch_axis(node, accept_aux);
+  REQUIRE(root_axis.has_value());
+  node->set_node_slice_mask({{*root_axis, BatchModeType::Contracted}});
+
+  // I2 = the unique non-root node contracting an aux mode (x_2)
+  node_t* i2 = nullptr;
+  std::optional<Index> i2_axis;
+  auto find_i2 = [&](auto&& self, node_t& n) -> void {
+    if (n.leaf()) return;
+    if (&n != &node) {
+      if (auto ax = batch_axis(n, accept_aux)) {
+        i2 = &n;
+        i2_axis = *ax;
+      }
+    }
+    self(self, n.left());
+    self(self, n.right());
+  };
+  find_i2(find_i2, node);
+  REQUIRE(i2 != nullptr);
+  REQUIRE(i2_axis.has_value());
+  REQUIRE(*i2_axis != *root_axis);
+  // the conjugation the hoist store has to convert: the uniformly conjugated
+  // prefix put it on I2's own node, and no enclosing node carries one
+  REQUIRE((*i2)->canon_transform().conj);
+  REQUIRE_FALSE(node->canon_transform().conj);
+  // order-aware with an empty residency: invariant to the whole nest, so
+  // per-level placement hoists it to the root cache and builds it once
+  (*i2)->set_node_slice_mask({{*i2_axis, BatchModeType::Contracted}});
+  (*i2)->set_batch_order_aware(true);
+
+  // Reference: plain (unbatched) evaluation, which never reaches a hoist slot
+  auto const ref = flatten(evaluate(node, target, yield_)->get<ArrayToT>());
+  REQUIRE_FALSE(ref.empty());
+
+  // `g` appears only inside I2, so its yield count is I2's build count
+  int g_evals = 0;
+  auto counting_yield = [&yield_, &g_evals](node_t const& leaf) -> ResultPtr {
+    if (leaf->is_tensor() && leaf->as_tensor().label() == L"g") ++g_evals;
+    return yield_(leaf);
+  };
+
+  auto cache = cache_t::empty();
+  auto aops = yield_.array_ops<ArrayToT>();
+  cache.set_array_ops(&aops);
+  cache.set_custom_evaluator(make_batched_custom_evaluator(
+      counting_yield,
+      [](Index const&) -> std::size_t { return std::size_t{4}; }, accept_aux,
+      make_no_scope_guard{}, never_volatile{}));
+  auto const res =
+      flatten(evaluate(node, target, counting_yield, cache)->get<ArrayToT>());
+
+  // the hoisted invariant is built once, so the batched run did go through the
+  // hoist slot rather than rebuilding I2 per x_1 batch
+  CHECK(g_evals == 1);
+
+  // and the value read back out of that slot is the one the unbatched
+  // evaluation produces
+  REQUIRE(res.size() == ref.size());
+  double scale = 0, err = 0;
+  for (std::size_t n = 0; n < ref.size(); ++n) {
+    scale = std::max(scale, std::abs(ref[n]));
+    err = std::max(err, std::abs(ref[n] - res[n]));
+  }
+  REQUIRE(scale > 0);
+  REQUIRE(err / scale < 1e-12);
+}
+
 TEST_CASE(
     "eval_batched_custom_evaluator hoists to an intermediate contracted-mode "
     "level",
