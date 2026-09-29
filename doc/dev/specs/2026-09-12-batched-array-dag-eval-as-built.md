@@ -693,14 +693,26 @@ test and the `PeakSink` metering (hence the evaluator's `Trace` parameter) are k
   subnetwork CSE, costing terms standalone.
 - **`subnet_cse` is asserted off in Debug builds ONLY** (`SEQUANT_ASSERT`,
   `single_term.hpp:104,129`): a Release caller must not set it with a batched objective.
-- **Thirteen `[blocked-layers-1-2]` fixtures are hidden and NOT retargeted**
-  (`test_ordered_schedule.cpp` 7, `test_eval_ta.cpp` 5, `test_eval_dryrun.cpp` 1). Each
-  encodes the older loop-identity / layout model the identity rework superseded, not a
-  known-good test switched off, and their "blocked on Layers 1-2" reason has EXPIRED
-  (6.2 / 6.3 / 7 are built). At least two FAIL when run: `test_eval_ta.cpp`'s "batched
-  ToT External occ loop" and `test_ordered_schedule.cpp`'s "forced-split occ axis
-  realizes TWO ordered sibling blocks" -- the latter sets only a `BatchPolicy` role
-  predicate and never stamps `node_slice_mask`, so the builder realizes NO loop and
-  finds zero occ blocks: its INPUT contract is stale and 6.3 stands as written. Each
-  file carries a note saying so; none should be un-hidden without rewriting its
-  expectation first.
+- **Shape still wanting coverage:** the water-20 aux-only residual places the
+  Κ-contraction result as an `AccumulateSum` output of the `{Κ}` block, ordered before
+  the root-level composite that reads it.
+- **Shape still wanting coverage:** a root-homed leaf consumed inside the `{Κ}` block
+  sorts before that block, which itself sorts before the root-level composite reading
+  its `AccumulateSum` output.
+- **Shape still wanting coverage:** a forced-split occ axis realizes two ordered sibling
+  blocks with distinct ordinals -- a producer pass (loop-carried operands scattered to
+  full) before a consumer pass (the cross-iteration read).
+- **Shape still wanting coverage:** a 2-axis occ-outer/aux-inner term realizes occ as
+  the outer forced split, with the aux block nested inside it.
+- **Shape still wanting coverage:** the water-20 and cross-iteration `OrderedSchedule`s
+  are `well_formed` with every `value_id` produced exactly once, and all four
+  production-site roles reachable across the two are exercised.
+- **Shape still wanting coverage:** every block carries axis, kind and outputs, sibling
+  child blocks come as an ORDERED list rather than one chained child, and `value_id`s
+  resolve through `rich.cells[...].hash`.
+- **Shape still wanting coverage:** `evaluate_ordered_schedule` agrees with forest
+  descent over a batched ToT External occ loop.
+- **Shape still wanting coverage:** two distinct occupied indices stamped `External` on
+  one node nest both scatter loops, so the batch count is the PRODUCT of the two.
+- **Shape still wanting coverage:** external-mode (occ) seeding lowers the DP-reported
+  peak of the C60 giant by the occ block ratio on each sliced mode.
