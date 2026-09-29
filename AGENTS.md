@@ -101,6 +101,30 @@ elsewhere in the tree — even in a different file or class than the one
 being added — factor the shared part out into a function or utility both
 call, rather than copying it.
 
+## Conjugation is a state on the tensor core, not a modifier on the array
+
+`doc/developer/conjugation.rst` states the model; the rules an agent trips
+over are these:
+
+- The states `⁺` (`adjointed()`) and `꙳` (`kconjugated()`) are part of a
+  tensor's identity: hashing, equality, ordering, graph colouring and the
+  exporters' names (`t_adj`, `t_conj`) all see them. Match tensors by
+  `label()` only where a mark cannot matter, and never strip a state to make
+  two tensors "the same".
+- The elementwise conjugate of an array is the adjoint with the slots
+  exchanged (`conj t{a;b}` is `t⁺{b;a}`). Do not reintroduce an array-level
+  "conjugated" or "transposed" bit, and do not spell `^*` / `^T` on a tensor
+  or variable name; those are parse errors.
+- A mark normalizes against the traits: a definite `Hermiticity` or
+  `ConjugationParity` consumes it, at a sign. A constructor, `with_slots()`
+  or a slot mutation refuses a mark whose normalization carries `-1`; use the
+  free `adjoint(ExprPtr)` / `kconjugate(ExprPtr)`, which wrap the sign as a
+  scalar factor.
+- Evaluation never conjugates in an op: the eval boundary decodes the states
+  into the leaf's `CanonTransform`, applied once on retrieval, and a backend
+  implements only `Result::apply_transform`. A new backend or a new leaf path
+  must go through that hook, not add a conjugating node.
+
 ## Throw `sequant::Exception`, nothing else
 
 Everything thrown in this tree — library, `utilities/`, `tests/`,
