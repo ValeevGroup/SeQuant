@@ -2559,6 +2559,39 @@ TEST_CASE("triplet_combined_residual_product", "[spin][triplet]") {
   }
 }
 
+TEST_CASE("triplet_combined_residual_singles", "[spin][triplet]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  auto P = [](const wchar_t* s) {
+    return deserialize(std::wstring(s), {.def_perm_symm = Symmetry::Nonsymm});
+  };
+
+  const ExprPtr V =
+      P(L"f{a_2;a_1} * R{i_1;a_2}") - P(L"f{i_1;i_2} * R{i_2;a_1}");
+
+  const container::svector<container::svector<Index>> ext_idxs{
+      {Index(L"i_1"), Index(L"a_1")}};
+
+  // the rank-1 biorthogonal transform, without its symmetrizer
+  ExprPtr biorth = V->clone();
+  const ExprPtr expected = remove_tensor(
+      biorthogonal_transform_pre_nnsproject(biorth, ext_idxs,
+                                            /*factor_out_nns_projector=*/false),
+      reserved::symm_label());
+
+  ExprPtr diff = triplet_combined_residual(V, ext_idxs) - expected;
+  canonicalize(diff);
+  simplify(diff);
+  REQUIRE(diff->size() == 0);
+
+  REQUIRE_THROWS(triplet_combined_residual(V, ext_idxs, /*te_only=*/true));
+}
+
 TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
