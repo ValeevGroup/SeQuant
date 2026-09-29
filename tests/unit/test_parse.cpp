@@ -451,6 +451,10 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(hoisted->as<Product>().scalar() == rational{1, 2});
         REQUIRE(hoisted->as<Product>().factor(0)->is<RealPart>());
         REQUIRE(serialize(hoisted) == L"1/2 Re[x]");
+        // the hoist strips the scalar down to the bare factor, so the two
+        // spellings are one expression and the round trip is a fixed point
+        REQUIRE(*hoisted == *deserialize<ExprPtr>(L"1/2 Re[x]"));
+        REQUIRE(*deserialize<ExprPtr>(serialize(hoisted)) == *hoisted);
         REQUIRE(*deserialize<ExprPtr>(L"Im[3]") == *ex<Constant>(0));
         REQUIRE(*deserialize<ExprPtr>(L"Re[3]") == *ex<Constant>(3));
       }
@@ -868,6 +872,32 @@ TEST_CASE("serialization", "[serialization]") {
     std::wstring serialized;
     REQUIRE_NOTHROW(serialized = serialize(folded, {.annot_symm = true}));
     REQUIRE(serialized.find(L"Re[") != std::wstring::npos);
+
+    ExprPtr respelled = deserialize<ExprPtr>(serialized);
+    REQUIRE(*respelled == *folded);
+    REQUIRE(serialize(respelled, {.annot_symm = true}) == serialized);
+  }
+
+  SECTION("serialize a scaled wrapper") {
+    using namespace sequant;
+
+    Context ctx = get_default_context();
+    ctx.set(mbpt::make_min_sr_spaces(mbpt::SpinConvention::None));
+    ctx.set(AssertStrictBraKetSymmetry::No);
+    auto resetter = set_scoped_default_context(ctx);
+
+    // a wrapper built directly around a scaled product: canonicalization
+    // re-applies the eager hoist, so the scalar leaves the brackets and the
+    // emitted spelling is a fixed point of the round trip
+    ExprPtr folded = ex<RealPart>(
+        deserialize<ExprPtr>(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S"));
+    simplify(folded);
+    REQUIRE(folded->is<Product>());
+    REQUIRE(folded->as<Product>().scalar() == rational{1, 2});
+    REQUIRE(folded->as<Product>().factor(0)->is<RealPart>());
+
+    const auto serialized = serialize(folded, {.annot_symm = true});
+    REQUIRE(serialized.find(L"Re[1/2") == std::wstring::npos);
 
     ExprPtr respelled = deserialize<ExprPtr>(serialized);
     REQUIRE(*respelled == *folded);

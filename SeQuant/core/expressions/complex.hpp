@@ -59,10 +59,12 @@ class RealPart : public Expr {
   std::int8_t kconjugate() override { return 1; }  // Re(E) is real
   std::wstring to_latex() const override;
 
-  /// canonicalizes the wrapped expression in place
-  /// @return nullptr: `Re()` is not linear over a complex byproduct, so a
-  ///         byproduct of the inner canonicalization is folded back into the
-  ///         wrapped expression instead of being handed to the caller
+  /// canonicalizes the wrapped expression in place, then re-applies the eager
+  /// hoist, so that no canonical `Re()` wraps a Product with a real scalar
+  /// @return the hoisted real scalar as a Constant, or nullptr when there is
+  ///         none. A byproduct of the inner canonicalization is folded back
+  ///         into the wrapped expression first: `Re()` is not linear over a
+  ///         complex scalar, so only a real one can leave the wrapper
   ExprPtr canonicalize(CanonicalizeOptions opts =
                            CanonicalizeOptions::default_options()) override;
 
@@ -109,10 +111,12 @@ class ImagPart : public Expr {
   std::int8_t kconjugate() override { return 1; }  // Im(E) is real
   std::wstring to_latex() const override;
 
-  /// canonicalizes the wrapped expression in place
-  /// @return nullptr: `Im()` is not linear over a complex byproduct, so a
-  ///         byproduct of the inner canonicalization is folded back into the
-  ///         wrapped expression instead of being handed to the caller
+  /// canonicalizes the wrapped expression in place, then re-applies the eager
+  /// hoist, so that no canonical `Im()` wraps a Product with a real scalar
+  /// @return the hoisted real scalar as a Constant, or nullptr when there is
+  ///         none. A byproduct of the inner canonicalization is folded back
+  ///         into the wrapped expression first: `Im()` is not linear over a
+  ///         complex scalar, so only a real one can leave the wrapper
   ExprPtr canonicalize(CanonicalizeOptions opts =
                            CanonicalizeOptions::default_options()) override;
 

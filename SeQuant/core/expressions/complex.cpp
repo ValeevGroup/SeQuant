@@ -5,6 +5,21 @@
 
 namespace sequant {
 
+namespace {
+/// Takes a real scalar out of @p inner in place, as `Re(c X) = c Re(X)` and
+/// `Im(c X) = c Im(X)` allow for a real @c c. A complex scalar stays put:
+/// neither wrapper is linear over it.
+/// @return the scalar taken out, or nullptr if there was none to take
+ExprPtr hoist_real_scalar(ExprPtr& inner) {
+  if (!inner->is<Product>()) return {};
+  const auto& prod = inner->as<Product>();
+  const auto scalar = prod.scalar();
+  if (scalar.imag() != 0 || scalar.real() == 1) return {};
+  inner = detail::strip_scalar(prod);
+  return ex<Constant>(scalar);
+}
+}  // namespace
+
 ExprPtr RealPart::clone() const { return ex<RealPart>(inner_->clone()); }
 
 std::wstring RealPart::to_latex() const {
@@ -12,14 +27,17 @@ std::wstring RealPart::to_latex() const {
 }
 
 ExprPtr RealPart::canonicalize(CanonicalizeOptions opts) {
-  // a Constant byproduct multiplies the wrapped expression back: the
-  // wrapper is not linear over a complex scalar, so the byproduct cannot be
-  // hoisted out of it
+  // a Constant byproduct of the inner canonicalization multiplies the wrapped
+  // expression back, and the eager hoist then takes a real scalar out again:
+  // `Re(c X)` is `c Re(X)` for a real c, so that scalar leaves as this node's
+  // own byproduct and no canonical wrapper holds a scaled Product. A complex
+  // scalar stays inside, the wrapper not being linear over it
   if (auto byproduct = inner_->canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
+  ExprPtr hoisted = hoist_real_scalar(inner_);
   reset_hash_value();
-  return {};
+  return hoisted;
 }
 
 ExprPtr RealPart::rapid_canonicalize(CanonicalizeOptions opts) {
@@ -27,8 +45,9 @@ ExprPtr RealPart::rapid_canonicalize(CanonicalizeOptions opts) {
   if (auto byproduct = inner_->rapid_canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
+  ExprPtr hoisted = hoist_real_scalar(inner_);
   reset_hash_value();
-  return {};
+  return hoisted;
 }
 
 ExprIterator RealPart::begin_subexpr() {
@@ -75,14 +94,17 @@ std::wstring ImagPart::to_latex() const {
 }
 
 ExprPtr ImagPart::canonicalize(CanonicalizeOptions opts) {
-  // a Constant byproduct multiplies the wrapped expression back: the
-  // wrapper is not linear over a complex scalar, so the byproduct cannot be
-  // hoisted out of it
+  // a Constant byproduct of the inner canonicalization multiplies the wrapped
+  // expression back, and the eager hoist then takes a real scalar out again:
+  // `Im(c X)` is `c Im(X)` for a real c, so that scalar leaves as this node's
+  // own byproduct and no canonical wrapper holds a scaled Product. A complex
+  // scalar stays inside, the wrapper not being linear over it
   if (auto byproduct = inner_->canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
+  ExprPtr hoisted = hoist_real_scalar(inner_);
   reset_hash_value();
-  return {};
+  return hoisted;
 }
 
 ExprPtr ImagPart::rapid_canonicalize(CanonicalizeOptions opts) {
@@ -90,8 +112,9 @@ ExprPtr ImagPart::rapid_canonicalize(CanonicalizeOptions opts) {
   if (auto byproduct = inner_->rapid_canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
+  ExprPtr hoisted = hoist_real_scalar(inner_);
   reset_hash_value();
-  return {};
+  return hoisted;
 }
 
 ExprIterator ImagPart::begin_subexpr() {
@@ -133,6 +156,9 @@ bool ImagPart::static_less_than(const Expr& that) const {
 
 namespace detail {
 ExprPtr strip_scalar(const Product& prod) {
+  // a lone factor stands on its own: wrapping it in a one-factor Product
+  // would make `Re[c X]` and `c Re[X]` different expressions spelled alike
+  if (prod.factors().size() == 1) return prod.factors().front();
   auto rest = std::make_shared<Product>();
   for (const auto& f : prod.factors()) rest->append(1, f, Product::Flatten::No);
   return rest;
