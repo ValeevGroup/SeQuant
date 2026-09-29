@@ -1026,11 +1026,10 @@ struct OrderedSchedFixture {
 // CSV-CCSD doubles residual with AUX+OCC batching -- Kappa
 // batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
 // make_csv_batch_policy with occ_target>0), stopping once the schedule is
-// built. Unlike an aux-ONLY policy (where Kappa is always fully contracted
-// and nothing is ever LoopCarried), this
-// configuration genuinely carries values on occ -- shared by the
-// [w20-auxocc] case and the forced_split_levels equivalence case below so
-// the two do not silently drift apart.
+// built. Unlike an aux-ONLY policy (where Kappa is always fully contracted and
+// nothing is ever LoopCarried), this configuration genuinely carries values on
+// occ -- shared by the [w20-auxocc] case and the forced_split_levels
+// equivalence case below so the two do not silently drift apart.
 [[maybe_unused]] OrderedSchedFixture orderedsched_water20_auxocc_fixture() {
   using sequant::eval::dryrun::EvalExprDryRun;
   using sequant::eval::dryrun::EvalNodeDryRun;
@@ -1327,8 +1326,8 @@ orderedsched_old_partition(
 // (the SAME shared fixture the "[w20-auxocc]" TEST_CASE above consumes --
 // Kappa batchable-contracted, occ ("i") batchable-EXTERNAL, matching MPQC's
 // make_csv_batch_policy with occ_target>0), which genuinely carries values
-// on occ (unlike an aux-ONLY policy, where Kappa is always fully
-// contracted and nothing is ever LoopCarried).
+// on occ (unlike an aux-ONLY policy, where Kappa is always fully contracted
+// and nothing is ever LoopCarried).
 // old.consumer_pass is exactly today's upward-plus-downward pass-1 set; the
 // property this pins -- pass(v) >= 1 iff v is in old.consumer_pass -- holds
 // for a carried chain of ANY depth, not just the depth-1 case this real
