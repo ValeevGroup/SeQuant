@@ -286,8 +286,11 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
   /// \param fold_signed_braket if false, canonicalize_braket leaves a tensor
   ///        whose bra<->ket exchange costs a sign (Antisymm) untouched, so
   ///        that only sign-free respellings (Symm) fold. Eval-boundary
-  ///        bridge: a leaf's phase is a cache-orientation round trip and
-  ///        never reaches its value.
+  ///        bridge: the two orientations of such a tensor stay separate
+  ///        spellings, each asked of a leaf provider as written, while the
+  ///        phase of the respellings that do happen composes into the leaf's
+  ///        retrieval transform and so reaches its value (normalize_leaf()
+  ///        in eval_expr.cpp).
   explicit TensorBlockCanonicalizer(bool fold_signed_braket)
       : fold_signed_braket_(fold_signed_braket) {}
 
