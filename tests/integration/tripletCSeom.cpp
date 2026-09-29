@@ -567,7 +567,8 @@ class compute_eomcc_closedshell_triplet {
 
       try {
         const auto tstart = std::chrono::high_resolution_clock::now();
-        auto st = closed_shell_EOM_triplet_spintrace(eqvec[i]);
+        auto st =
+            closed_shell_EOM_triplet_spintrace(eqvec[i], {.compact = false});
         const auto tstop = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> dt = tstop - tstart;
         std::wcout << "R[" << i
@@ -631,7 +632,8 @@ class compute_eomcc_closedshell_triplet {
           // te_only: drop the external pair-swap TE_ps (or we can say ET)->
           // residual = TE/4.
           auto te_a = closed_shell_EOM_triplet_spintrace(
-              eqvec[i], {.residual = TripletResidualKind::BareTE});
+              eqvec[i],
+              {.compact = false, .residual = TripletResidualKind::BareTE});
           simplify(te_a);
 
           std::wcout << "\n----- EFV experiment (TE-only) comparison R[" << i

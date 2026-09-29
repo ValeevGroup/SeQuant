@@ -334,7 +334,9 @@ struct ClosedShellEOMTripletSpintraceOptions {
   /// kept -2c representative is expanded by triplet_te_nns_project
   /// ({1,-1/2,-1/2,0}, numerical) or triplet_symbolic_reconstruct with
   /// TeNnsReconstruction (symbolic).
-  bool compact = false;
+  /// On by default; false gives the full residual, which is used only as a
+  /// reference in tests.
+  bool compact = true;
   /// which residual variant to build
   TripletResidualKind residual = TripletResidualKind::Combined;
 };
