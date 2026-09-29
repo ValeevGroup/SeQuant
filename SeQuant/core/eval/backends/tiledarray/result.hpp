@@ -23,6 +23,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
+#include <string>
 
 namespace sequant {
 
@@ -30,6 +32,14 @@ namespace sequant {
 // sequant::detail over an unnamed namespace in a header (see CppCoreGuidelines
 // SF.21 / "Use unnamed namespaces in headers ... no" guidance)
 namespace detail {
+
+/// @return true if SEQUANT_EVAL_WARN_TOT_SUM_INNER is set in the environment
+/// (diagnostic for nested additions whose inner index order disagrees)
+inline bool warn_tot_sum_inner() {
+  static const bool on =
+      std::getenv("SEQUANT_EVAL_WARN_TOT_SUM_INNER") != nullptr;
+  return on;
+}
 
 // Instrumentation (SEQUANT_SYNC_STATS, analysis-only): count gop.fence() calls
 // so the ordered-executor's synchronization overhead can be localized.
@@ -44,22 +54,32 @@ inline std::atomic<std::size_t>& wait_counter() {
   static std::atomic<std::size_t> c{0};
   return c;
 }
-inline void note_wait() {
-  wait_counter().fetch_add(1, std::memory_order_relaxed);
-}
-/// waits for the deferred cleanup of \p arr's world (see
-/// TA::DistArray::wait_for_lazy_cleanup) and records the wait
-template <typename Array>
-void wait_for_lazy_cleanup(Array const& arr) {
-  Array::wait_for_lazy_cleanup(arr.world());
-  note_wait();
-}
 inline std::atomic<std::size_t>& slice_counter() {
   static std::atomic<std::size_t> c{0};
   return c;
 }
 inline void note_slice() {
   slice_counter().fetch_add(1, std::memory_order_relaxed);
+}
+// Drain policy: every backend op used to end with
+// DistArray::wait_for_lazy_cleanup(world), which blocks until EVERY array
+// scheduled for lazy deletion so far has finished its pending tasks. On one
+// rank that is a cheap local wait; on many ranks it is a pipeline drain after
+// each of the (tens of) thousands of ops an iteration issues, so no op's tail
+// (remote sends, straggler tiles) overlaps the next op's start. The consumer
+// chooses: `true` (default) keeps the drain, `false` lets ops pipeline and
+// leaves the cleanup to run alongside the next op (temporaries are released a
+// little later, so the peak can grow by the in-flight set).
+inline std::atomic<bool>& drain_after_op_flag() {
+  static std::atomic<bool> f{true};
+  return f;
+}
+template <typename ArrayT>
+inline void drain_lazy_cleanup(ArrayT const& arr) {
+  if (drain_after_op_flag().load(std::memory_order_relaxed)) {
+    ArrayT::wait_for_lazy_cleanup(arr.world());
+    wait_counter().fetch_add(1, std::memory_order_relaxed);
+  }
 }
 inline std::atomic<long long>& slice_ns() {
   static std::atomic<long long> c{0};
@@ -77,6 +97,18 @@ struct FenceReporter {
 };
 inline FenceReporter fence_reporter_{};
 
+}  // namespace detail
+
+/// Whether every TA-backend op ends with DistArray::wait_for_lazy_cleanup
+/// (see detail::drain_lazy_cleanup). Default true (the historical behavior).
+inline void set_ta_drain_after_op(bool on) {
+  detail::drain_after_op_flag().store(on, std::memory_order_relaxed);
+}
+inline bool ta_drain_after_op() {
+  return detail::drain_after_op_flag().load(std::memory_order_relaxed);
+}
+
+namespace detail {
 // Wire PhaseTimer's boundary barrier to a TA world fence so per-region phase
 // timers cannot misattribute async (deferred) work across regions. Runs only
 // under SEQUANT_UT_PHASE (PhaseTimer::Scope calls barrier() only when enabled).
@@ -199,7 +231,7 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
   result(lannot) = nf * result(lannot);
 
-  ::sequant::detail::wait_for_lazy_cleanup(result);
+  ::sequant::detail::drain_lazy_cleanup(result);
 
   return result;
 }
@@ -270,7 +302,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
       rational{1, factorial(bra_rank) * factorial(ket_rank)});
   result(lannot) = nf * result(lannot);
 
-  ::sequant::detail::wait_for_lazy_cleanup(result);
+  ::sequant::detail::drain_lazy_cleanup(result);
   return result;
 }
 
@@ -292,18 +324,21 @@ inline void log_ta(Args const&... args) noexcept {
 /// identical across ranks). These movements are not eval-tree ops, so the
 /// `Eval` records never see them; this is the only accounting of their cost.
 template <typename... Args>
-inline void log_batch_op([[maybe_unused]] char const* kind,
-                         [[maybe_unused]] std::chrono::nanoseconds elapsed,
-                         [[maybe_unused]] TA::DistArray<Args...> const& moved,
-                         [[maybe_unused]] std::string const& annot) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
+inline void log_batch_op(char const* kind, std::chrono::nanoseconds elapsed,
+                         TA::DistArray<Args...> const& moved,
+                         std::string const& annot) noexcept {
+  // Gated at run time by the trace level (like the per-op `Eval |` lines a
+  // Trace::On evaluation emits), not by SEQUANT_EVAL_TRACE: the batched
+  // executor's data movement (Slice / Scatter / Accumulate / Clone) is
+  // exactly what a wet trace on a release build must account for.
   auto& l = Logger::instance();
   if (l.eval.level == 0) return;
-  auto bytes = TA::size_of<TA::MemorySpace::Host>(moved);
-  moved.world().gop.sum(bytes);
-  write_log(l, "Batch | ", kind, " | ", elapsed.count(), "ns | bytes=", bytes,
-            "B | ", annot, '\n');
-#endif
+  // this rank's share of the moved array: no collective here, so a batch op
+  // a rank runs on its own never waits on the others (and the line costs a
+  // tile walk, not a reduction)
+  auto const bytes = TA::size_of<TA::MemorySpace::Host>(moved);
+  write_log(l, "Batch | ", kind, " | ", elapsed.count(),
+            "ns | local_bytes=", bytes, "B | ", annot, '\n');
 }
 
 /// Convert sequant::DeNest to TA::DeNest
@@ -606,6 +641,8 @@ class ResultTensorTA final : public Result {
   };
 
   explicit ResultTensorTA(ArrayT arr) : Result{std::move(arr)} {}
+  /// @param arr the array to share or own
+  /// @param view the transform pending on it
   /// @param alias whether @p arr is owned by another result (true for every
   ///        transform of an existing value; false when @p view rides on a
   ///        buffer this result just computed, e.g. a phase on a product)
@@ -729,7 +766,7 @@ class ResultTensorTA final : public Result {
     auto const ann = TA::detail::dummy_annotation(rank);
     ArrayT r;
     with_expr(ann, [&](auto&& e) { r(ann) = e; });
-    ::sequant::detail::wait_for_lazy_cleanup(r);
+    ::sequant::detail::drain_lazy_cleanup(r);
     log_ta_tensor_host_memory_use();
     reset_value(std::move(r));
     view_.reset();
@@ -776,16 +813,26 @@ class ResultTensorTA final : public Result {
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-    with_expr(a.lannot, [&](auto&& le) {
-      o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
-    });
-    ::sequant::detail::wait_for_lazy_cleanup(result);
+    // a TA failure names the operands (as the product's wrapper does): the
+    // raw TA message carries no annotation
+    try {
+      with_expr(a.lannot, [&](auto&& le) {
+        o.with_expr(a.rannot,
+                    [&](auto&& re) { result(a.this_annot) = le + re; });
+      });
+    } catch (std::exception const& ex) {
+      throw std::runtime_error(std::string("TA sum failed: ") + ex.what() +
+                               " | " + a.lannot + " + " + a.rannot + " -> " +
+                               a.this_annot);
+    }
+    ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
+    ensure_materialized();
     ::sequant::detail::note_slice();
     auto const t0 = std::chrono::steady_clock::now();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
@@ -814,6 +861,7 @@ class ResultTensorTA final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
+    ensure_materialized();
     auto& dest = get<ArrayT>();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
@@ -833,7 +881,7 @@ class ResultTensorTA final : public Result {
       ArrayT result;
       with_expr(a.lannot,
                 [&](auto&& le) { result(a.this_annot) = scalar * le; });
-      ::sequant::detail::wait_for_lazy_cleanup(result);
+      ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     }
@@ -849,8 +897,8 @@ class ResultTensorTA final : public Result {
               return TA::dot(le, re);
             });
           });
-      ::sequant::detail::wait_for_lazy_cleanup(raw<ArrayT>());
-      ::sequant::detail::wait_for_lazy_cleanup(od.template raw<ArrayT>());
+      ::sequant::detail::drain_lazy_cleanup(raw<ArrayT>());
+      ::sequant::detail::drain_lazy_cleanup(od.template raw<ArrayT>());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -868,19 +916,37 @@ class ResultTensorTA final : public Result {
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
     ArrayT result;
-    if (plain_contraction(a.lannot, a.rannot, a.this_annot)) {
-      // TA's expression engine takes the pending transforms lazily
-      with_expr(a.lannot, [&](auto&& le) {
-        o.with_expr(a.rannot,
-                    [&](auto&& re) { result(a.this_annot) = le * re; });
-      });
-    } else {
-      // einsum takes plain tensor expressions only: materialize views
-      auto const A = logical_array();
-      auto const B = o.logical_array();
-      result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
+    // on failure, name the contraction: annotations and outer extents
+    auto const describe = [&](std::string const& what) {
+      auto extents = [](ArrayT const& arr) {
+        std::string s = "[";
+        if (arr.is_initialized())
+          for (auto const& e : arr.trange().elements_range().extent())
+            s += std::to_string(e) + ",";
+        return s + "]";
+      };
+      return "TA product failed: " + what + " | " + a.lannot + " * " +
+             a.rannot + " -> " + a.this_annot + " | A extents " +
+             extents(logical_array()) + " B extents " +
+             extents(o.logical_array());
+    };
+    try {
+      if (plain_contraction(a.lannot, a.rannot, a.this_annot)) {
+        // TA's expression engine takes the pending transforms lazily
+        with_expr(a.lannot, [&](auto&& le) {
+          o.with_expr(a.rannot,
+                      [&](auto&& re) { result(a.this_annot) = le * re; });
+        });
+      } else {
+        // einsum takes plain tensor expressions only: materialize views
+        auto const A = logical_array();
+        auto const B = o.logical_array();
+        result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
+      }
+    } catch (std::exception const& ex) {
+      throw std::runtime_error(describe(ex.what()));
     }
-    ::sequant::detail::wait_for_lazy_cleanup(result);
+    ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -897,7 +963,11 @@ class ResultTensorTA final : public Result {
   /// would be seen by every other holder -- \c TA::clone allocates and copies
   /// the tiles.
   [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+    auto const t0 = std::chrono::steady_clock::now();
+    auto res = eval_result<this_type>(TA::clone(get<ArrayT>()));
+    detail::log_batch_op("Clone", std::chrono::steady_clock::now() - t0,
+                         get<ArrayT>(), "");
+    return res;
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -942,7 +1012,7 @@ class ResultTensorTA final : public Result {
 
     auto const t0 = std::chrono::steady_clock::now();
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
-    ::sequant::detail::wait_for_lazy_cleanup(t);
+    ::sequant::detail::drain_lazy_cleanup(t);
     detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
                          oarr, ann);
     log_ta_tensor_host_memory_use();
@@ -978,7 +1048,49 @@ class ResultTensorOfTensorTA final : public Result {
   using Result::id_t;
   using numeric_type = typename ArrayT::numeric_type;
 
+  /// A pending (lazy) transform of the shared array -- the nested-tile
+  /// counterpart of ResultTensorTA::View: a phase, an elementwise conjugation
+  /// and a relabeling of the OUTER and INNER modes (logical outer mode m is
+  /// stored outer mode operm[m], likewise iperm for the inner modes; an empty
+  /// perm is the identity; a relabel never moves a mode across the ';'). The
+  /// phase and the relabel are folded into every consumer for free (einsum
+  /// reads relabeled annotations, the phase rides on the result's view); the
+  /// conjugation is folded into the TA expression where the consumer is an
+  /// expression-engine contraction or sum (TA conj on nested-tile
+  /// contractions), and materialized on demand where the consumer is einsum
+  /// (which takes plain tensor expressions only) or needs the array.
+  struct View {
+    std::int8_t phase = 1;
+    bool conj = false;
+    container::svector<std::size_t> operm;
+    container::svector<std::size_t> iperm;
+    [[nodiscard]] bool trivial() const noexcept {
+      return phase == 1 && !conj && operm.empty() && iperm.empty();
+    }
+    [[nodiscard]] bool relabeled() const noexcept {
+      return !operm.empty() || !iperm.empty();
+    }
+  };
+
   explicit ResultTensorOfTensorTA(ArrayT arr) : Result{std::move(arr)} {}
+  /// @param arr the array to share or own
+  /// @param view the transform pending on it
+  /// @param alias whether @p arr is owned by another result (true for every
+  ///        transform of an existing value; false when @p view rides on a
+  ///        buffer this result just computed, e.g. a phase on a product)
+  ResultTensorOfTensorTA(ArrayT arr, View view, bool alias = false)
+      : Result{std::move(arr)}, view_{std::move(view)}, alias_{alias} {
+    if (view_->trivial()) view_.reset();
+  }
+
+  /// @return whether this result is a lazy view (see View); get<>() /
+  ///         logical_array() materialize it into a private array on first
+  ///         read, raw<>() does not
+  [[nodiscard]] bool is_view() const noexcept { return view_.has_value(); }
+  /// @return whether the array is owned by another result (see
+  ///         Result::is_buffer_alias): true for every value a transform
+  ///         produced, including one whose pending transform composed away
+  [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
 
   [[nodiscard]] std::string trange_annot() const override {
     return detail::ta_trange_string(get<ArrayT>());
@@ -1002,8 +1114,227 @@ class ResultTensorOfTensorTA final : public Result {
   // Only @c that_type type is allowed for ToT * T computation
   using that_type = ResultTensorTA<compatible_regular_distarray_type>;
 
+  mutable std::optional<View> view_;
+  /// the array belongs to another result (see is_buffer_alias())
+  mutable bool alias_ = false;
+
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<this_type>();
+  }
+
+  /// "outer;inner" annotation -> {outer tokens, inner tokens, has ';'}
+  struct Tokens {
+    container::svector<std::string> outer, inner;
+    bool nested = false;
+  };
+  static container::svector<std::string> split_list(std::string const& s) {
+    container::svector<std::string> out;
+    std::string cur;
+    for (char c : s) {
+      if (c == ',') {
+        out.push_back(cur);
+        cur.clear();
+      } else if (c != ' ')
+        cur += c;
+    }
+    if (!cur.empty() || !s.empty()) out.push_back(cur);
+    return out;
+  }
+  static Tokens tokens(std::string const& annot) {
+    Tokens t;
+    auto const semi = annot.find(';');
+    if (semi == std::string::npos) {
+      t.outer = split_list(annot);
+    } else {
+      t.nested = true;
+      t.outer = split_list(annot.substr(0, semi));
+      t.inner = split_list(annot.substr(semi + 1));
+    }
+    return t;
+  }
+  static std::string join(container::svector<std::string> const& toks) {
+    std::string out;
+    for (std::size_t i = 0; i < toks.size(); ++i) {
+      if (i) out += ',';
+      out += toks[i];
+    }
+    return out;
+  }
+  static std::string join(Tokens const& t) {
+    return t.nested ? join(t.outer) + ";" + join(t.inner) : join(t.outer);
+  }
+  static void apply_perm(container::svector<std::string>& toks,
+                         container::svector<std::size_t> const& perm) {
+    if (perm.empty()) return;
+    // a synthetic single inner label (the zero ToT's materialization) has no
+    // inner modes to permute
+    if (toks.size() != perm.size()) {
+      SEQUANT_ASSERT(toks.size() == 1);
+      return;
+    }
+    container::svector<std::string> stored(toks.size());
+    for (std::size_t m = 0; m < toks.size(); ++m) stored[perm[m]] = toks[m];
+    toks = std::move(stored);
+  }
+
+  /// annotation of the STORED array for a consumer annotation given in the
+  /// view's LOGICAL mode order
+  [[nodiscard]] std::string translate(std::string const& logical) const {
+    if (!view_ || !view_->relabeled()) return logical;
+    auto t = tokens(logical);
+    apply_perm(t.outer, view_->operm);
+    apply_perm(t.inner, view_->iperm);
+    return join(t);
+  }
+
+  /// perm such that post[k] = pre[perm[k]] composed onto @p cur (identity ->
+  /// cleared)
+  static void compose_perm(container::svector<std::string> const& pre,
+                           container::svector<std::string> const& post,
+                           container::svector<std::size_t>& cur) {
+    if (pre == post) return;
+    SEQUANT_ASSERT(pre.size() == post.size());
+    container::svector<std::size_t> perm(post.size());
+    for (std::size_t k = 0; k < post.size(); ++k) {
+      auto it = std::find(pre.begin(), pre.end(), post[k]);
+      SEQUANT_ASSERT(it != pre.end());
+      auto const m = static_cast<std::size_t>(it - pre.begin());
+      perm[k] = cur.empty() ? m : cur[m];
+    }
+    bool identity = true;
+    for (std::size_t k = 0; k < perm.size(); ++k)
+      if (perm[k] != k) identity = false;
+    if (identity)
+      cur.clear();
+    else
+      cur = std::move(perm);
+  }
+
+  /// relabel `result(post) = this(pre)` composed onto the current view
+  [[nodiscard]] View composed_relabel(std::string const& pre,
+                                      std::string const& post) const {
+    View v = view_.value_or(View{});
+    auto const pre_t = tokens(pre), post_t = tokens(post);
+    compose_perm(pre_t.outer, post_t.outer, v.operm);
+    compose_perm(pre_t.inner, post_t.inner, v.iperm);
+    return v;
+  }
+
+  [[nodiscard]] std::int8_t phase() const noexcept {
+    return view_ ? view_->phase : std::int8_t{1};
+  }
+  [[nodiscard]] bool conjugated() const noexcept {
+    return view_ && view_->conj;
+  }
+
+  /// invokes @p f with the TA expression of this result under the consumer
+  /// annotation @p annot (logical order), the pending transform folded in
+  template <typename F>
+  decltype(auto) with_expr(std::string const& annot, F&& f) const {
+    auto const& arr = raw<ArrayT>();
+    auto const a = translate(annot);
+    if (view_) {
+      auto const ph = view_->phase;
+      if constexpr (TA::detail::is_complex_v<numeric_type>) {
+        if (view_->conj && ph != 1) return f(numeric_type(ph) * arr(a).conj());
+        if (view_->conj) return f(arr(a).conj());
+      }
+      if (ph != 1) return f(numeric_type(ph) * arr(a));
+    }
+    return f(arr(a));
+  }
+
+  /// the annotation TA needs to spell every mode of the stored array. An
+  /// all-empty-inner ToT (tot_inner_rank 0: the zero every amplitude leaf
+  /// starts as) is spelled with ONE synthetic inner label: a TA expression on
+  /// a nested array needs an inner block, its empty inner tiles carry no modes
+  /// to permute, and the outer permutation / phase / conj act on them as on
+  /// any tile (a zero stays a zero).
+  [[nodiscard]] std::string dummy_annotation() const {
+    auto const& arr = raw<ArrayT>();
+    return TA::detail::dummy_annotation(
+        arr.trange().rank(),
+        std::max<std::size_t>(1, detail::tot_inner_rank(arr)));
+  }
+
+  void ensure_materialized() const override {
+    if (!view_) return;
+    auto const ann = dummy_annotation();
+    ArrayT r;
+    with_expr(ann, [&](auto&& e) { r(ann) = e; });
+    ::sequant::detail::drain_lazy_cleanup(r);
+    log_ta_tensor_host_memory_use();
+    reset_value(std::move(r));
+    view_.reset();
+    alias_ = false;  // the buffer is this result's own now
+  }
+
+  /// the array in the view's logical layout: a pending view is
+  /// materialized (and memoized) first, so repeated reads pay once
+  [[nodiscard]] ArrayT const& logical_array() const {
+    ensure_materialized();
+    return raw<ArrayT>();
+  }
+
+  /// whether TA's expression engine (`C = A * B`) evaluates this nested
+  /// product -- the shapes TA::einsum itself delegates to it verbatim: outer
+  /// indices either with NO Hadamard index (a plain contraction, every index in
+  /// exactly two of {l, r, c}) or PURELY Hadamard (every outer index in all
+  /// three: the CSV pair product), with the inner indices a plain contraction
+  /// or purely Hadamard. There a pending conj/phase folds into the expression
+  /// (TA conj on nested-tile contractions). Anything else (outer Hadamard mixed
+  /// with contracted or external outer indices, DeNest) is einsum's own
+  /// tile-level product, which takes plain tensor expressions only.
+  static bool expression_delegable(std::string const& l, std::string const& r,
+                                   std::string const& c) {
+    auto lt = tokens(l), rt = tokens(r), ct = tokens(c);
+    auto in = [](auto const& v, std::string const& x) {
+      return std::find(v.begin(), v.end(), x) != v.end();
+    };
+    auto distinct = [](auto v) {
+      std::sort(v.begin(), v.end());
+      return std::adjacent_find(v.begin(), v.end()) == v.end();
+    };
+    // every index of {a, b, c} in exactly two of the three
+    auto plain = [&](auto const& a, auto const& b, auto const& cc) {
+      for (auto const& x : a)
+        if (in(b, x) == in(cc, x)) return false;
+      for (auto const& x : b)
+        if (in(a, x) == in(cc, x)) return false;
+      for (auto const& x : cc)
+        if (in(a, x) == in(b, x)) return false;
+      return true;
+    };
+    // every index of {a, b, c} in all three
+    auto fused = [&](auto const& a, auto const& b, auto const& cc) {
+      if (a.size() != b.size() || a.size() != cc.size()) return false;
+      for (auto const& x : a)
+        if (!in(b, x) || !in(cc, x)) return false;
+      return true;
+    };
+    for (auto const* t : {&lt, &rt, &ct})
+      if (!distinct(t->outer) || !distinct(t->inner)) return false;
+    bool const outer_ok =
+        plain(lt.outer, rt.outer, ct.outer) ||
+        (!lt.outer.empty() && fused(lt.outer, rt.outer, ct.outer));
+    bool const inner_ok =
+        plain(lt.inner, rt.inner, ct.inner) ||
+        (!lt.inner.empty() && fused(lt.inner, rt.inner, ct.inner));
+    return outer_ok && inner_ok;
+  }
+
+  /// operand for an einsum consumer: the stored array (a pending conj is
+  /// materialized first -- einsum cannot take it -- a relabel is folded into
+  /// the annotation, the phase is returned for the caller to carry on the
+  /// result's view)
+  struct EinsumOperand {
+    std::string annot;
+    std::int8_t phase = 1;
+  };
+  [[nodiscard]] EinsumOperand einsum_operand(std::string const& annot,
+                                             bool keep_conj) const {
+    if (view_ && view_->conj && !keep_conj) ensure_materialized();
+    return {translate(annot), phase()};
   }
 
   // Diagnostic (see Result::fence): force all pending async work in this
@@ -1025,20 +1356,56 @@ class ResultTensorOfTensorTA final : public Result {
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = static_cast<this_type const&>(other);
     auto const a = annot_wrap{annot};
 
     detail::log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
 
+    // SEQUANT_EVAL_WARN_TOT_SUM_INNER=1: report a nested addition whose three
+    // annotations do not agree on the INNER (post-';') index order. TA permutes
+    // the outer modes of a nested addition but not the inner ones, so such a
+    // sum adds transposed inner tiles.
+    if (detail::warn_tot_sum_inner()) {
+      auto inner = [](std::string const& s) {
+        auto p = s.find(';');
+        return p == std::string::npos ? std::string{} : s.substr(p + 1);
+      };
+      const auto li = inner(translate(a.lannot)),
+                 ri = inner(o.translate(a.rannot)), ti = inner(a.this_annot);
+      if (li != ri || li != ti)
+        std::cerr << "[sequant-eval] WARNING: nested sum with mismatched inner "
+                     "annotations: "
+                  << a.lannot << " + " << a.rannot << " = " << a.this_annot
+                  << "\n";
+    }
+
+    // a relabeled INNER order cannot ride on the addition (TA permutes only
+    // the outer modes of a nested sum): materialize such an operand. A
+    // conj / phase view rides on it (`le + ph * re.conj()`; the nested add
+    // conjugates arena inner cells: TA tests/tot_add_conj.cpp)
+    if (view_ && !view_->iperm.empty()) ensure_materialized();
+    if (o.view_ && !o.view_->iperm.empty()) o.ensure_materialized();
     ArrayT result;
-    result(a.this_annot) =
-        get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
-    ::sequant::detail::wait_for_lazy_cleanup(result);
+    // a TA failure names the operands (as the product's wrapper does): the
+    // raw TA message carries no annotation
+    try {
+      with_expr(a.lannot, [&](auto&& le) {
+        o.with_expr(a.rannot,
+                    [&](auto&& re) { result(a.this_annot) = le + re; });
+      });
+    } catch (std::exception const& ex) {
+      throw std::runtime_error(std::string("TA sum failed: ") + ex.what() +
+                               " | " + a.lannot + " + " + a.rannot + " -> " +
+                               a.this_annot);
+    }
+    ::sequant::detail::drain_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
 
   [[nodiscard]] ResultPtr slice_mode(std::size_t mode, std::size_t elem_lo,
                                      std::size_t elem_hi) const override {
+    ensure_materialized();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         get<ArrayT>().trange().dim(mode), elem_lo, elem_hi);
     return eval_result<this_type>(
@@ -1059,10 +1426,54 @@ class ResultTensorOfTensorTA final : public Result {
   void write_into_slice(Result const& block, std::size_t mode,
                         std::size_t block_lo, std::size_t block_hi) override {
     SEQUANT_ASSERT(block.is<this_type>());
+    ensure_materialized();
     auto& dest = get<ArrayT>();
     auto const [tile_lo, tile_hi] = detail::slice_bounds_to_tiles(
         dest.trange().dim(mode), block_lo, block_hi);
     write_array_into_mode(dest, block.get<ArrayT>(), mode, tile_lo, tile_hi);
+  }
+
+  [[nodiscard]] ResultPtr pre_sized_zeros_over_mode(
+      std::size_t mode, Result const& axis_src,
+      std::size_t axis_src_mode) const override {
+    auto const& self = get<ArrayT>();
+    auto const rank = self.trange().rank();
+    SEQUANT_ASSERT(mode < rank);
+    // The axis-carrying leaf supplying K's FULL tiling for mode `mode` may be
+    // nested (this_type) or flat (that_type, e.g. an integral over the external
+    // occ index): read the widened axis TiledRange1 from whichever kind. Only
+    // this one OUTER TiledRange1 is needed; every other mode of a block partial
+    // is already at full extent, so *this's own outer tiling supplies them.
+    TA::TiledRange1 const axis_dim = [&]() -> TA::TiledRange1 {
+      if (axis_src.is<this_type>()) {
+        auto const& src = axis_src.get<ArrayT>();
+        SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
+        return src.trange().dim(axis_src_mode);
+      }
+      SEQUANT_ASSERT(axis_src.is<that_type>());
+      auto const& src = axis_src.get<compatible_regular_distarray_type>();
+      SEQUANT_ASSERT(axis_src_mode < src.trange().rank());
+      return src.trange().dim(axis_src_mode);
+    }();
+    std::vector<TA::TiledRange1> dims;
+    dims.reserve(rank);
+    for (std::size_t d = 0; d < rank; ++d) dims.push_back(self.trange().dim(d));
+    dims[mode] = axis_dim;
+    // A zero ToT is represented with empty inner tiles (tot_inner_rank() == 0):
+    // build the widened OUTER trange, then give every local outer tile a
+    // well-formed (empty-inner) outer tile over its range -- exactly the zero
+    // ToT that slice_array_over_mode() emits, and a valid destination that the
+    // ToT write_array_into_mode() block-assignment overwrites per scatter. The
+    // batches tile the widened `mode` axis with no gaps, so every outer tile is
+    // subsequently overwritten by some block's real inner tensors.
+    using value_type = typename ArrayT::value_type;
+    ArrayT dest(self.world(), TA::TiledRange(dims.begin(), dims.end()));
+    for (auto it = dest.begin(); it != dest.end(); ++it)
+      if (dest.is_local(it.index())) *it = value_type{it.make_range()};
+    dest.world().gop.fence();
+    ::sequant::detail::note_fence();
+    log_ta_tensor_host_memory_use();
+    return eval_result<this_type>(std::move(dest));
   }
 
   [[nodiscard]] ResultPtr prod(Result const& other,
@@ -1071,23 +1482,24 @@ class ResultTensorOfTensorTA final : public Result {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {
-      auto result = get<ArrayT>();
       auto scalar = other.get<numeric_type>();
 
       detail::log_ta(a.lannot, " * ", scalar, " = ", a.this_annot, "\n");
 
-      result(a.this_annot) = scalar * result(a.lannot);
-
-      ::sequant::detail::wait_for_lazy_cleanup(result);
+      ArrayT result;
+      with_expr(a.lannot,
+                [&](auto&& le) { result(a.this_annot) = scalar * le; });
+      ::sequant::detail::drain_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
-      // DOT product
+      // DOT product: TA::dot takes plain tensor expressions
       SEQUANT_ASSERT(other.is<this_type>());
+      auto const& o = static_cast<this_type const&>(other);
       numeric_type d =
-          TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
-      ::sequant::detail::wait_for_lazy_cleanup(get<ArrayT>());
-      ::sequant::detail::wait_for_lazy_cleanup(other.get<ArrayT>());
+          TA::dot(logical_array()(a.lannot), o.logical_array()(a.rannot));
+      ::sequant::detail::drain_lazy_cleanup(get<ArrayT>());
+      ::sequant::detail::drain_lazy_cleanup(o.template get<ArrayT>());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -1097,44 +1509,110 @@ class ResultTensorOfTensorTA final : public Result {
 
     detail::log_ta(a.lannot, " * ", a.rannot, " = ", a.this_annot, "\n");
 
+    // on failure, name the contraction: annotations and this operand's outer
+    // extents (the other operand's type varies below)
+    auto const describe_tot = [&](std::string const& what) {
+      std::string ext = "[";
+      if (raw<ArrayT>().is_initialized())
+        for (auto const& e : raw<ArrayT>().trange().elements_range().extent())
+          ext += std::to_string(e) + ",";
+      return "TA ToT product failed: " + what + " | " + a.lannot + " * " +
+             a.rannot + " -> " + a.this_annot + " | left outer extents " + ext +
+             "]";
+    };
+
     if (other.is<that_type>()) {
-      // ToT * T -> ToT
-      auto result =
-          TA::einsum(get<ArrayT>()(a.lannot),
-                     other.get<compatible_regular_distarray_type>()(a.rannot),
-                     a.this_annot);
+      // ToT * T -> ToT. The flat operand is read materialized (its own view
+      // is memoized on first read); ours rides on the einsum annotation
+      // (relabel) and the result's view (phase); a pending conj is
+      // materialized (einsum takes plain tensor expressions only).
+      auto const l = einsum_operand(a.lannot, /*keep_conj=*/false);
+      auto result = [&] {
+        try {
+          return TA::einsum(
+              raw<ArrayT>()(l.annot),
+              other.template get<compatible_regular_distarray_type>()(a.rannot),
+              a.this_annot);
+        } catch (std::exception const& ex) {
+          throw std::runtime_error(describe_tot(ex.what()));
+        }
+      }();
       log_ta_tensor_host_memory_use();
-      return eval_result<this_type>(std::move(result));
+      return eval_result<this_type>(std::move(result), View{.phase = l.phase});
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::True) {
-      // ToT * ToT -> T
-      auto result = TA::einsum<TA::DeNest::True>(
-          get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
+      // ToT * ToT -> T (einsum only)
+      auto const& o = static_cast<this_type const&>(other);
+      bool const both_conj = conjugated() && o.conjugated();
+      auto const l = einsum_operand(a.lannot, both_conj);
+      auto const r = o.einsum_operand(a.rannot, both_conj);
+      auto result = [&] {
+        try {
+          return TA::einsum<TA::DeNest::True>(raw<ArrayT>()(l.annot),
+                                              o.template raw<ArrayT>()(r.annot),
+                                              a.this_annot);
+        } catch (std::exception const& ex) {
+          throw std::runtime_error(describe_tot(ex.what()));
+        }
+      }();
       log_ta_tensor_host_memory_use();
-      return eval_result<that_type>(std::move(result));
+      // conj(A) . conj(B) = conj(A . B): both conjugations ride on the result
+      typename that_type::View rv;
+      rv.phase = static_cast<std::int8_t>(l.phase * r.phase);
+      rv.conj = both_conj;
+      return eval_result<that_type>(std::move(result), std::move(rv));
 
     } else if (other.is<this_type>() && DeNestFlag == DeNest::False) {
+      auto const& o = static_cast<this_type const&>(other);
       // ToT * ToT -> ToT
-      auto result = TA::einsum(get<ArrayT>()(a.lannot),
-                               other.get<ArrayT>()(a.rannot), a.this_annot);
+      if ((conjugated() || o.conjugated()) &&
+          expression_delegable(a.lannot, a.rannot, a.this_annot)) {
+        // the expression engine evaluates this shape (einsum would hand it
+        // over verbatim) and folds a pending conj/phase: no conj copy
+        ArrayT result;
+        with_expr(a.lannot, [&](auto&& le) {
+          o.with_expr(a.rannot,
+                      [&](auto&& re) { result(a.this_annot) = le * re; });
+        });
+        ::sequant::detail::drain_lazy_cleanup(result);
+        log_ta_tensor_host_memory_use();
+        return eval_result<this_type>(std::move(result));
+      }
+      bool const both_conj = conjugated() && o.conjugated();
+      auto const l = einsum_operand(a.lannot, both_conj);
+      auto const r = o.einsum_operand(a.rannot, both_conj);
+      auto result = [&] {
+        try {
+          return TA::einsum(raw<ArrayT>()(l.annot),
+                            o.template raw<ArrayT>()(r.annot), a.this_annot);
+        } catch (std::exception const& ex) {
+          throw std::runtime_error(describe_tot(ex.what()));
+        }
+      }();
       log_ta_tensor_host_memory_use();
-      return eval_result<this_type>(std::move(result));
+      View rv;
+      rv.phase = static_cast<std::int8_t>(l.phase * r.phase);
+      rv.conj = both_conj;
+      return eval_result<this_type>(std::move(result), std::move(rv));
     } else {
       throw detail::invalid_operand();
     }
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
-    auto pre = get<ArrayT>();
-    TA::scale(pre, numeric_type(factor));
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(pre));
+    View v = view_.value_or(View{});
+    v.phase = static_cast<std::int8_t>(v.phase * factor);
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
   /// Deep copy; see \c ResultTensorTA::clone. \c TA::clone deep-copies the
   /// (nested) tiles too, so the copy shares no inner tensor with this one.
   [[nodiscard]] ResultPtr clone() const override {
-    return eval_result<this_type>(TA::clone(get<ArrayT>()));
+    auto const t0 = std::chrono::steady_clock::now();
+    auto res = eval_result<this_type>(TA::clone(get<ArrayT>()));
+    detail::log_batch_op("Clone", std::chrono::steady_clock::now() - t0,
+                         get<ArrayT>(), "");
+    return res;
   }
 
   [[nodiscard]] ResultPtr permute(
@@ -1142,72 +1620,60 @@ class ResultTensorOfTensorTA final : public Result {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
 
-    detail::log_ta(pre_annot, " = ", post_annot, "\n");
+    detail::log_ta(pre_annot, " = ", post_annot, " (view)\n");
 
-    ArrayT result;
-    result(post_annot) = get<ArrayT>()(pre_annot);
-    ::sequant::detail::wait_for_lazy_cleanup(result);
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    return eval_result<this_type>(
+        raw<ArrayT>(), composed_relabel(pre_annot, post_annot), /*alias=*/true);
   }
 
   [[nodiscard]] ResultPtr apply_transform(
       CanonTransform t, std::array<std::any, 2> const& ann) const override {
-    // fused phase * conj * relabel in _one_ TA expression (conj is elided for
-    // a real numeric_type, where it is a no-op)
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
     auto const post_annot = std::any_cast<std::string>(ann[1]);
-    detail::log_ta(post_annot, " = apply_transform(", pre_annot, ")\n");
-    ArrayT result;
-    if constexpr (TA::detail::is_complex_v<numeric_type>) {
-      if (t.conj && t.phase != 1)
-        result(post_annot) =
-            numeric_type(t.phase) * get<ArrayT>()(pre_annot).conj();
-      else if (t.conj)
-        result(post_annot) = get<ArrayT>()(pre_annot).conj();
-      else if (t.phase != 1)
-        result(post_annot) = numeric_type(t.phase) * get<ArrayT>()(pre_annot);
-      else
-        result(post_annot) = get<ArrayT>()(pre_annot);
-    } else {
-      if (t.phase != 1)
-        result(post_annot) = numeric_type(t.phase) * get<ArrayT>()(pre_annot);
-      else
-        result(post_annot) = get<ArrayT>()(pre_annot);
-    }
-    ::sequant::detail::wait_for_lazy_cleanup(result);
-    log_ta_tensor_host_memory_use();
-    return eval_result<this_type>(std::move(result));
+    detail::log_ta(post_annot, " = apply_transform(", pre_annot, ") (view)\n");
+    View v = composed_relabel(pre_annot, post_annot);
+    v.phase = static_cast<std::int8_t>(v.phase * t.phase);
+    if constexpr (TA::detail::is_complex_v<numeric_type>)
+      if (t.conj) v.conj = !v.conj;
+    return eval_result<this_type>(raw<ArrayT>(), std::move(v), /*alias=*/true);
   }
 
   void add_inplace(Result const& other) override {
     SEQUANT_ASSERT(other.is<this_type>());
+    auto const& o = static_cast<this_type const&>(other);
 
+    ensure_materialized();  // the target must be a real, unshared array
     auto& t = get<ArrayT>();
-    auto const& o = other.get<ArrayT>();
+    // a relabeled view has a different stored mode order: materialize it;
+    // a phase / conj view is consumed lazily (`t += ph * o.conj()`; the
+    // nested in-place add conjugates arena inner cells, null destination
+    // cells included: TA tests/tot_add_conj.cpp)
+    if (o.view_ && o.view_->relabeled()) o.ensure_materialized();
+    auto const& oarr = o.template raw<ArrayT>();
 
-    SEQUANT_ASSERT(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == oarr.trange());
     // ToT annotation needs an inner block ("outer;inner"); tot_inner_rank()
     // reads it from a populated inner tile and is 0 when an operand's inner
     // tiles are all empty. Take the rank from whichever operand has data; if
     // both are empty the add is an identity no-op (t += 0), nothing to
     // annotate.
     auto const inner_rank =
-        std::max(detail::tot_inner_rank(t), detail::tot_inner_rank(o));
+        std::max(detail::tot_inner_rank(t), detail::tot_inner_rank(oarr));
     if (inner_rank == 0) return;
     auto ann = TA::detail::dummy_annotation(t.trange().rank(), inner_rank);
 
     detail::log_ta(ann, " += ", ann, "\n");
 
     auto const t0 = std::chrono::steady_clock::now();
-    t(ann) += o(ann);
-    ::sequant::detail::wait_for_lazy_cleanup(t);
-    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, o,
-                         ann);
+    o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
+    ::sequant::detail::drain_lazy_cleanup(t);
+    detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
+                         oarr, ann);
     log_ta_tensor_host_memory_use();
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
+    ensure_materialized();
     return eval_result<this_type>(detail::column_symmetrize_ta(get<ArrayT>()));
   }
 
@@ -1220,7 +1686,9 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] std::size_t size_in_bytes() const final {
     if (Logger::instance().eval.level == 0)
       return 0;  // size_of disabled untraced
-    auto& v = get<ArrayT>();
+    // the shared array's size (a view is not materialized to be measured;
+    // same convention as ResultTensorTA)
+    auto& v = raw<ArrayT>();
     auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
     v.world().gop.sum(local_size);
     return local_size;
@@ -1305,7 +1773,7 @@ template <typename... Args>
   // keeps its real element offset too, consistently across all sliced operands.
   auto const t0 = std::chrono::steady_clock::now();
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
-  ::sequant::detail::wait_for_lazy_cleanup(arr);
+  ::sequant::detail::drain_lazy_cleanup(arr);
   detail::log_batch_op("Slice", std::chrono::steady_clock::now() - t0, out,
                        annot + " mode=" + std::to_string(mode) + " tiles=[" +
                            std::to_string(tile_lo) + "," +
@@ -1372,7 +1840,7 @@ void write_array_into_mode(TA::DistArray<Args...>& dest,
   // block() would rebase the sub-block to 0 and mismatch the source trange.
   auto const t0 = std::chrono::steady_clock::now();
   dest(annot).block(lo, hi, TA::preserve_lobound) = block(annot);
-  ::sequant::detail::wait_for_lazy_cleanup(dest);
+  ::sequant::detail::drain_lazy_cleanup(dest);
   detail::log_batch_op("Scatter", std::chrono::steady_clock::now() - t0, block,
                        annot + " mode=" + std::to_string(mode) + " tiles=[" +
                            std::to_string(tile_lo) + "," +
@@ -1474,7 +1942,7 @@ template <typename NumericT, typename PolicyT,
     out(a.this_annot) =
         (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
             .set_shape(shape);
-    ::sequant::detail::wait_for_lazy_cleanup(out);
+    ::sequant::detail::drain_lazy_cleanup(out);
     return eval_result<FlatResult>(std::move(out));
   }
 
@@ -1495,7 +1963,7 @@ template <typename NumericT, typename PolicyT,
           (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
               .set_shape(shape);
     }
-    ::sequant::detail::wait_for_lazy_cleanup(out);
+    ::sequant::detail::drain_lazy_cleanup(out);
     return eval_result<ToTResult>(std::move(out));
   }
 
@@ -1507,7 +1975,7 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) = left.get<ToTArray>()(a.lannot)
                               .dot_inner(right.get<ToTArray>()(a.rannot))
                               .set_shape(shape);
-      ::sequant::detail::wait_for_lazy_cleanup(out);
+      ::sequant::detail::drain_lazy_cleanup(out);
       return eval_result<FlatResult>(std::move(out));
     } else {
       // ToT * ToT -> ToT (general product). TiledArray's expression-layer
@@ -1523,7 +1991,7 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) =
           (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
               .set_shape(shape);
-      ::sequant::detail::wait_for_lazy_cleanup(out);
+      ::sequant::detail::drain_lazy_cleanup(out);
       return eval_result<ToTResult>(std::move(out));
     }
   }

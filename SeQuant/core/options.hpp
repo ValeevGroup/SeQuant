@@ -45,6 +45,8 @@ std::wstring to_wstring(CanonicalizationMethod m);
 struct CanonicalizeOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
+  enum class FoldKramers : bool { Yes = true, No = false };
+  enum class FoldKramersEvalLeaves : bool { Yes = true, No = false };
 
   /// TN canonicalization method
   /// @internal
@@ -66,11 +68,28 @@ struct CanonicalizeOptions {
   /// contexts where labels are meaningful, e.g. when canonicalizing sum of
   /// tensor networks and will be therefore ignored.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
+  /// whether to apply the Kramers (time-reversal) network fold: every
+  /// connected component of KramersSymmetry::TimeReversal tensors joined by
+  /// shared flavored dummy indices is given one orientation (the one with
+  /// fewer down-first tensors), flipped tensors acquiring the conjugation
+  /// marker and the phase; components touching a named index are pinned.
+  /// Engaged only when the default context's registry has Kramers partner
+  /// spaces (IndexSpaceRegistry::add_kramers_partners).
+  FoldKramers fold_kramers = FoldKramers::No;
+  /// whether an EvalExpr LEAF applies the single-tensor Kramers fold (a
+  /// down-first leaf shares the up-first partner's hash/cache slot with a
+  /// {conj, phase} transform). Off by default: the leaf provider serves the
+  /// leaf's own spelling and the transform cannot relabel flavors, so this
+  /// is only correct when the provider aliases the Kramers partner block
+  /// (serving-level aliasing).
+  FoldKramersEvalLeaves fold_kramers_eval_leaves = FoldKramersEvalLeaves::No;
 
   static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
   CanonicalizeOptions copy_and_set(std::optional<container::set<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
+  CanonicalizeOptions copy_and_set(FoldKramers) const;
+  CanonicalizeOptions copy_and_set(FoldKramersEvalLeaves) const;
 
   /// every field participates (defaulted, so a new field cannot be left
   /// out): Context equality, and hence the scoped context setter, which

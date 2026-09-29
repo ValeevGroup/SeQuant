@@ -297,6 +297,13 @@ class TensorNetworkV3 {
     /// reports the phase change due to permutation of slots relative to their
     /// input order
     std::int8_t phase = +1;  // +1 or -1
+
+    /// Kramers (time-reversal) fold byproduct (CanonicalizeSlotsOptions::
+    /// fold_kramers): the input ordinals of the tensors whose flavored slots
+    /// were flipped to their Kramers partners to give their connected
+    /// component its canonical orientation; the accumulated phase is folded
+    /// into `phase`
+    container::svector<std::size_t> kramers_flipped_tensors;
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -350,6 +357,10 @@ class TensorNetworkV3 {
     /// not interchangeable. A null (default) or empty map leaves the
     /// canonicalization at the space-only named coloring.
     const tensor_network::NamedIndexColorMap *named_index_colors = nullptr;
+    /// if true, apply the Kramers (time-reversal) network fold before
+    /// canonicalization (see CanonicalizeOptions::fold_kramers); reported
+    /// via kramers_flipped_tensors
+    bool fold_kramers = false;
     /// if true, the bra and ket slots of every tensor with (anti)symmetric
     /// bra/ket bundles are permuted in place into their canonical order, and
     /// SlotCanonicalizationMetadata::phase reports the parity of exactly
@@ -522,6 +533,23 @@ class TensorNetworkV3 {
 
   /// initializes edges_, ext_indices_, and pure_proto_indices_
   void init_edges();
+
+  /// @brief Kramers (time-reversal) network fold: gives every connected
+  /// component of tensors joined by shared flavored indices (slots and proto
+  /// indices) ONE orientation. Components containing a named index, a
+  /// non-foldable tensor (see kramers_foldable()) are pinned; a free
+  /// component is flipped (every flavored slot of every member replaced by
+  /// its Kramers partner, conjugation marker toggled) iff the flipped
+  /// spelling has fewer down-first tensors, ties broken by the sorted
+  /// (label, slot flavors) fingerprint (marker-free, so an unmarked flavor
+  /// twin of a traced sum orients like the marked flip). Both spellings of a
+  /// component thus land on the same orientation.
+  /// @param named_indices indices whose flavor is fixed
+  /// @return the accumulated phase, (-1)^(#down slots) per flipped tensor,
+  ///         and the (sorted) ordinals of the flipped tensors
+  /// @note invalidates edges_ if any tensor was flipped
+  std::pair<int, container::svector<std::size_t>> kramers_orient(
+      const NamedIndexSet &named_indices);
 
   /// Canonicalizes the network graph representation using colored graph
   /// canonicalization

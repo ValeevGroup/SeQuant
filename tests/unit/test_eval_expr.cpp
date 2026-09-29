@@ -1,4 +1,6 @@
 #include <SeQuant/core/expressions/complex.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -7,6 +9,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_node_compare.hpp>
+#include <SeQuant/core/eval/kramers_blind.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -16,6 +20,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <initializer_list>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <set>
@@ -170,9 +175,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // The binarized tree shall respect the label of the ResultExpr
     ResultExpr res =
         deserialize<ResultExpr>(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"E");
 
@@ -181,9 +184,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     auto real_basis = sequant::tests::scoped_real_basis();
     res = deserialize<ResultExpr>(
         L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
@@ -194,9 +195,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     // tree
     res = deserialize<ResultExpr>(
         L"Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
@@ -205,16 +204,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // The name-respecting property shall also hold for terminals
     res = deserialize<ResultExpr>(L"Other = Var");
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"Other");
 
     res = deserialize<ResultExpr>(L"Amplitude{i1;a1} = t{a1;i1}");
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
     root_expr = binarize(res)->expr();
-    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
     REQUIRE(root_expr.is<Tensor>());
     // the deserialized ResultExpr's Amplitude picks up the Context's column
     // symmetry (Symm), so the programmatic reference must request it too --
@@ -234,9 +229,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       auto res = deserialize<ResultExpr>(
           std::wstring{L"Result{a3;i1,i2} = "} + std::wstring{expr_str},
           {.def_perm_symm = Symmetry::Antisymm});
-      SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
       auto root = binarize(res);
-      SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
       auto const& tensor_operand =
           root.left()->is_tensor() ? root.left() : root.right();
       // Sanity: this contraction must exercise phase=-1, else the CHECK
@@ -749,6 +742,20 @@ TEST_CASE("no eval op performs a conjugation", "[eval_expr]") {
   REQUIRE(conjugating_leaves == 1);
 }
 
+TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
+  using namespace sequant;
+  auto const tnsr =
+      parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
+  EvalExpr node{tnsr};
+  container::svector<std::pair<Index, BatchModeType>> modes{
+      {Index{L"a_1"}, BatchModeType::Contracted},
+      {Index{L"i_1"}, BatchModeType::External}};
+  node.set_node_slice_mask(modes);
+  REQUIRE(node.node_slice_mask().size() == 2);
+  REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
+  REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
+}
+
 // The cases below build eval trees straight from expressions: the head layout
 // is irrelevant to what they check (slot identity, transforms, phases), so
 // the deprecated binarize(ExprPtr) is used on purpose.
@@ -828,18 +835,208 @@ TEST_CASE("eval_expr_conjugation_state_identity",
   REQUIRE(D->hash_value() != E->hash_value());
 }
 
-TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
+TEST_CASE("kramers_leaf_slot_identity", "[eval_expr][kramers]") {
+  // a down-first Kramers leaf occupies the SAME eval slot as its up-first
+  // partner; the difference rides the CanonTransform as {conj, phase}
   using namespace sequant;
-  auto const tnsr =
-      parse_tensor(L"g{i_1,a_1;i_2,a_2}", {.def_perm_symm = Symmetry::Nonsymm});
-  EvalExpr node{tnsr};
-  container::svector<std::pair<Index, BatchModeType>> modes{
-      {Index{L"a_1"}, BatchModeType::Contracted},
-      {Index{L"i_1"}, BatchModeType::External}};
-  node.set_node_slice_mask(modes);
-  REQUIRE(node.node_slice_mask().size() == 2);
-  REQUIRE(node.node_slice_mask()[0].second == BatchModeType::Contracted);
-  REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto mk = [](std::wstring_view b, std::wstring_view k, BraKetSymmetry bks) {
+    return Tensor(L"C", bra{Index(b)}, ket{Index(k)}, Symmetry::Nonsymm, bks,
+                  ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+  };
+  // OFF by default: the leaf provider serves as_tensor()'s spelling and the
+  // transform's labels must match the sibling's, which a flavor flip breaks
+  // unless the provider itself aliases the partner block (serving-level
+  // aliasing); so the leaf fold is an explicit opt-in
+  {
+    auto resetter = set_scoped_default_context(ctx);
+    EvalExpr eu{mk(L"a↑_1", L"a↓_2", BraKetSymmetry::Nonsymm)};
+    EvalExpr ed{mk(L"a↓_1", L"a↑_2", BraKetSymmetry::Nonsymm)};
+    REQUIRE(eu.hash_value() != ed.hash_value());
+    REQUIRE(ed.canon_transform().trivial());
+  }
+  ctx.set(
+      CanonicalizeOptions{.fold_kramers_eval_leaves =
+                              CanonicalizeOptions::FoldKramersEvalLeaves::Yes});
+  auto resetter = set_scoped_default_context(ctx);
+  for (auto bks : {BraKetSymmetry::Nonsymm, BraKetSymmetry::Conjugate}) {
+    // C(down,up) = -conj(C(up,down)): one slot flipped from down. For a
+    // Hermitian C the up-row spelling is reached by the braket move instead
+    // (C{a↓;a↑} = conj C{a↑;a↓} swapped): conj, no phase
+    EvalExpr eu{mk(L"a↑_1", L"a↓_2", bks)};
+    EvalExpr ed{mk(L"a↓_1", L"a↑_2", bks)};
+    REQUIRE(ed.canon_transform().conj != eu.canon_transform().conj);
+    if (bks == BraKetSymmetry::Nonsymm) {
+      REQUIRE(eu.hash_value() == ed.hash_value());
+      REQUIRE(ed.canon_transform().phase == -eu.canon_transform().phase);
+    } else {
+      REQUIRE(ed.canon_transform().braket_swap);
+      REQUIRE(ed.canon_transform().phase == eu.canon_transform().phase);
+    }
+    // C(down,down) = +conj(C(up,up)): two slots flipped from down
+    EvalExpr euu{mk(L"a↑_1", L"a↑_2", bks)};
+    EvalExpr edd{mk(L"a↓_1", L"a↓_2", bks)};
+    REQUIRE(euu.hash_value() == edd.hash_value());
+    REQUIRE(edd.canon_transform().conj != euu.canon_transform().conj);
+    REQUIRE(edd.canon_transform().phase == euu.canon_transform().phase);
+    // distinct families stay distinct
+    REQUIRE(eu.hash_value() != euu.hash_value());
+    // T19 layer 2 contract: expr() is the FOLDED (up-row) spelling -- what a
+    // leaf provider fetches -- while canon_indices() carries the as-written
+    // labels (the parent contracts by label; TA matches annotations, not
+    // spellings), so the served up block + {conj, phase} denotes the
+    // as-written value. (For a Conjugate tensor the braket fold may swap
+    // bra and ket, so label SETS are the invariant, not slot positions.)
+    auto const& ed_t = ed.expr()->as<Tensor>();
+    REQUIRE(!ed_t.kconjugated());
+    REQUIRE(!ed_t.adjointed());
+    auto has_space = [&](auto rng, std::wstring_view sp) {
+      return ranges::any_of(
+          rng, [&](Index const& i) { return i.space() == isr->retrieve(sp); });
+    };
+    REQUIRE(has_space(ed_t.const_indices(), L"a↑"));
+    // the served spelling is the Kramers-canonical one: bra slot up
+    REQUIRE(ed_t.bra()[0].space() == isr->retrieve(L"a↑"));
+    auto has_label = [&](std::wstring_view lbl) {
+      return ranges::any_of(ed.canon_indices(), [&](Index const& i) {
+        return i.full_label() == lbl;
+      });
+    };
+    REQUIRE(has_label(L"a↓_1"));
+    REQUIRE(has_label(L"a↑_2"));
+  }
+  // a product over a down-flavored dummy still contracts: the folded leaf
+  // shares the up-row slot while its labels keep matching the sibling
+  {
+    auto f_dn = Tensor(L"f", bra{Index(L"a↓_1")}, ket{Index(L"i↑_1")},
+                       Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                       ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto f_up = Tensor(L"f", bra{Index(L"a↑_1")}, ket{Index(L"i↓_1")},
+                       Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                       ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto t = Tensor(L"t", bra{Index(L"i↑_1")}, ket{Index(L"a↓_1")},
+                    Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                    ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto root = binarize(ex<Tensor>(f_dn) * ex<Tensor>(t));
+    REQUIRE(root->result_type() == ResultType::Scalar);
+    REQUIRE(root->canon_indices().empty());
+    auto const& f_leaf =
+        root.left()->as_tensor().label() == L"f" ? root.left() : root.right();
+    REQUIRE(f_leaf->hash_value() == EvalExpr{f_up}.hash_value());
+    REQUIRE(f_leaf->canon_transform().conj);
+    REQUIRE(f_leaf->canon_transform().phase == -1);
+  }
+}
+
+TEST_CASE("sum_placeholder_is_spelled_in_its_layout", "[eval_expr][sum]") {
+  // A sum hands up its FIRST summand's canonical layout, and the tensor it
+  // spells for its value (expr()) is what an enclosing network sees for the
+  // opaque node -- so that placeholder must be spelled in that layout. Two
+  // relabeled copies of one sum share a slot (their hashes are label-blind)
+  // while their values are transposes of each other: here the column
+  // symmetry of g lets a_1 and a_2 trade bra slots, and the ket slots (a_3 vs
+  // p_1) pin which column is which. Spelled label-sorted instead, the two
+  // placeholders coincide, an enclosing product gets ONE slot with ONE
+  // layout for both, and a cache serves one value for the other untransposed
+  // (HSeOH PNS-CCD, (vv|vv) ladder kept 4-center, 2026-09-04).
+  using namespace sequant;
+  auto const bracket = [](std::wstring const& cs) {
+    return ex<Sum>(ExprPtrList{deserialize(L"g{a_5,a_6;a_7,a_8}:N-C-S" + cs),
+                               deserialize(L"h{a_5,a_6;a_7,a_8}:N-C-S" + cs)});
+  };
+  auto const product = [](ExprPtr const& sum) {
+    return ex<Product>(
+        ExprPtrList{sum, deserialize(L"t{a_3,p_1;i_1,i_2}:A-N-S")});
+  };
+  auto const PA = binarize(product(
+      bracket(L" * C{a_5;a_1} * C{a_6;a_2} * C{a_7;a_3} * C{a_8;p_1}")));
+  auto const PB = binarize(product(
+      bracket(L" * C{a_5;a_2} * C{a_6;a_1} * C{a_7;a_3} * C{a_8;p_1}")));
+  auto const swap12 = [](Index::index_vector v) {
+    for (auto& ix : v) {
+      if (ix.label() == L"a_1")
+        ix = Index(L"a_2");
+      else if (ix.label() == L"a_2")
+        ix = Index(L"a_1");
+    }
+    return v;
+  };
+  auto const slots = [](EvalExpr const& e) {
+    auto const& t = e.expr()->as<Tensor>();
+    Index::index_vector v;
+    for (auto const& ix : t.bra()) v.push_back(ix);
+    for (auto const& ix : t.ket()) v.push_back(ix);
+    for (auto const& ix : t.aux()) v.push_back(ix);
+    return v;
+  };
+  auto const labels = [](Index::index_vector const& v) {
+    std::wstring out;
+    for (auto const& ix : v) out += std::wstring(ix.full_label()) + L" ";
+    return toUtf8(out);
+  };
+  auto const& SA = *PA.left();
+  auto const& SB = *PB.left();
+  REQUIRE(SA.op_type() == EvalOp::Sum);
+  REQUIRE(SB.op_type() == EvalOp::Sum);
+  INFO("SA layout " << labels(SA.canon_indices()) << " placeholder "
+                    << toUtf8(to_latex(SA.expr())));
+  INFO("SB layout " << labels(SB.canon_indices()) << " placeholder "
+                    << toUtf8(to_latex(SB.expr())));
+  // relabeled copies of one sum: one slot, transposed layouts
+  REQUIRE(SA.hash_value() == SB.hash_value());
+  REQUIRE(SB.canon_indices() == swap12(SA.canon_indices()));
+  // the placeholders spell the layouts
+  CHECK(slots(SB) == swap12(slots(SA)));
+  // ... so the enclosing products share a slot with transposed layouts too
+  INFO("PA layout " << labels(PA->canon_indices()));
+  INFO("PB layout " << labels(PB->canon_indices()));
+  REQUIRE(PA->hash_value() == PB->hash_value());
+  CHECK(PB->canon_indices() == swap12(PA->canon_indices()));
+  // The two products ARE one cache slot: the buffer of one, read under the
+  // other's labels, is the other's value (plain externals -- the layout
+  // fingerprint is relabeling-invariant on purpose)
+  using node_t = std::remove_cvref_t<decltype(PA)>;
+  TreeNodeEqualityComparator<node_t> same;
+  REQUIRE(same(PA, PA));
+  REQUIRE(same(PA, PB));
+}
+
+TEST_CASE("twins_whose_composites_carry_the_swapped_externals_are_two_slots",
+          "[eval_expr][cache]") {
+  // CSV/PNS composites carry their pair as proto indices, so the inner tile
+  // at outer position (p,q) is the pair-(p,q) block: two relabeled twins that
+  // lay the pair out as (i_1,i_2) and (i_2,i_1) are NOT value-compatible --
+  // served for each other, one gets the pair-(q,p) blocks. The layout
+  // fingerprint (ids of the externals AND of every composite's protos, in
+  // layout order) tells them apart: binarize folds it into the node id, so
+  // the twins are two slots outright, and the comparator refuses them too.
+  // Measured 2026-09-05 (HSeOH PNS-MP1, residual block 3 after the brackets
+  // were optimized): C†.(g.C) laid out (i↑_1,i↑_2;..) was served to its twin
+  // laid out (i↑_2,i↑_1;..): |R| 0.579 instead of 0.293, E 7 % off.
+  using namespace sequant;
+  auto const X = binarize(ex<Product>(
+      ExprPtrList{deserialize(L"f{i_1;i_3}:N-N-N"),
+                  deserialize(L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_2}:N-N-N")}));
+  auto const Y = binarize(ex<Product>(
+      ExprPtrList{deserialize(L"f{i_2;i_3}:N-N-N"),
+                  deserialize(L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_1}:N-N-N")}));
+  auto const labels = [](Index::index_vector const& v) {
+    std::wstring out;
+    for (auto const& ix : v) out += std::wstring(ix.full_label()) + L" ";
+    return toUtf8(out);
+  };
+  INFO("X layout " << labels(X->canon_indices()));
+  INFO("Y layout " << labels(Y->canon_indices()));
+  REQUIRE(X->canon_indices() != Y->canon_indices());
+  REQUIRE(X->layout_fingerprint() != Y->layout_fingerprint());
+  REQUIRE(X->hash_value() != Y->hash_value());  // two slots
+  using node_t = std::remove_cvref_t<decltype(X)>;
+  TreeNodeEqualityComparator<node_t> same;
+  REQUIRE(same(X, X));
+  REQUIRE_FALSE(same(X, Y));
 }
 
 SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
@@ -1458,4 +1655,641 @@ TEST_CASE("to_expr_denotes_the_leaf", "[EvalExpr][conj-transform]") {
     REQUIRE(*pe->as<Product>().factor(0) == stored);
     REQUIRE(*pe->as<Product>().factor(1) == *v);
   }
+}
+
+TEST_CASE("kramers_blind_erasure_helpers", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  // C(i↓_1,i↓_2,a_1; a↑_1<i↓_1 i↓_2>): outer pair slots blind, inner not
+  // (↑ is the representative flavour, so ↓ labels are what gets erased)
+  auto C = parse(L"C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}")->as<Tensor>();
+  auto g = parse(L"g{i↓_1,a_2;a_1}")->as<Tensor>();
+  KramersBlindness kb{.blind_slot =
+                          [](Tensor const& t, std::size_t slot) {
+                            return t.label() == L"C" && slot < 2;
+                          },
+                      .erase_space =
+                          [](IndexSpace const& s) {
+                            if (mbpt::to_spin(s.qns()) == mbpt::Spin::any)
+                              return s;
+                            return mbpt::make_spinalpha(Index(s, 1)).space();
+                          }};
+  SECTION("erasable set of a blind leaf") {
+    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, kb);
+    REQUIRE(er.size() == 2);
+    REQUIRE(er.count(Index(L"i↓_1")) == 1);
+    REQUIRE(er.count(Index(L"i↓_2")) == 1);
+  }
+  SECTION("a non-blind occurrence pins the index") {
+    auto er = erasable_indices(
+        std::array{ExprPtr(ex<Tensor>(C)), ExprPtr(ex<Tensor>(g))}, kb);
+    REQUIRE(er.size() == 1);
+    REQUIRE(er.count(Index(L"i↓_2")) == 1);
+  }
+  SECTION("erased clone: spaces spin-free, protos rewritten, inner kept") {
+    auto m = erasure_map(std::array{ExprPtr(ex<Tensor>(C))}, kb);
+    REQUIRE(m.size() == 2);
+    auto Ce = erase_indices(C, m);
+    auto slots = Ce.const_slots() | ranges::to_vector;
+    REQUIRE(slots[0].space() == Index(L"i↑_1").space());
+    // placeholders are fresh temporaries minted in first-occurrence order
+    REQUIRE(*slots[0].ordinal() >= Index::min_tmp_index());
+    REQUIRE(*slots[1].ordinal() > *slots[0].ordinal());
+    REQUIRE(slots[2].space() == Index(L"a_1").space());
+    auto const& inner = slots[3];
+    REQUIRE(inner.space() == Index(L"a↑_1").space());  // component kept
+    REQUIRE(inner.proto_indices().size() == 2);
+    REQUIRE(inner.proto_indices()[0].space() == Index(L"i↑_1").space());
+    // the original is untouched
+    REQUIRE((C.const_slots() | ranges::to_vector)[0].space() ==
+            Index(L"i↓_1").space());
+  }
+  SECTION("empty hook erases nothing") {
+    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(C))},
+                               KramersBlindness{});
+    REQUIRE(er.empty());
+  }
+  SECTION("a blind composite slot nominates its protos (CSV spelling)") {
+    // the CSV transform spells the projector C{a~; a<ij>}: the pair labels
+    // occur only as protos of the PNS composite
+    auto Cp = parse(L"C{a_1;a↑_1<i↓_1,i↓_2>}")->as<Tensor>();
+    KramersBlindness kbp{
+        .blind_slot =
+            [](Tensor const& t, std::size_t slot) {
+              auto const& ix = *(t.const_slots().begin() + slot);
+              return t.label() == L"C" && ix.has_proto_indices();
+            },
+        .erase_space = kb.erase_space};
+    auto er = erasable_indices(std::array{ExprPtr(ex<Tensor>(Cp))}, kbp);
+    REQUIRE(er.size() == 2);
+    auto m = erasure_map(std::array{ExprPtr(ex<Tensor>(Cp))}, kbp);
+    REQUIRE(m.size() == 2);
+    auto Ce = erase_indices(Cp, m);
+    auto slots = Ce.const_slots() | ranges::to_vector;
+    REQUIRE(slots[1].proto_indices()[0].space() == Index(L"i↑_1").space());
+    REQUIRE(*slots[1].proto_indices()[0].ordinal() >= Index::min_tmp_index());
+    REQUIRE(*slots[1].proto_indices()[1].ordinal() >
+            *slots[1].proto_indices()[0].ordinal());
+    // a non-blind composite (an amplitude) pins the protos
+    auto t = parse(L"t{a↑_1<i↓_1,i↓_2>;a_2}")->as<Tensor>();
+    auto er2 = erasable_indices(
+        std::array{ExprPtr(ex<Tensor>(Cp)), ExprPtr(ex<Tensor>(t))}, kbp);
+    REQUIRE(er2.empty());
+    // a non-leaf factor is neutral
+    auto er3 = erasable_indices(
+        std::array{ExprPtr(ex<Tensor>(Cp)), ExprPtr(ex<Tensor>(t))}, kbp,
+        container::svector<bool>{true, false});
+    REQUIRE(er3.size() == 2);
+  }
+}
+
+TEST_CASE("kramers_blind_leaf_identity", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  KramersBlindness kb{.blind_slot =
+                          [](Tensor const& t, std::size_t slot) {
+                            return t.label() == L"C" && slot < 2;
+                          },
+                      .erase_space =
+                          [](IndexSpace const& s) {
+                            if (mbpt::to_spin(s.qns()) == mbpt::Spin::any)
+                              return s;
+                            return mbpt::make_spinalpha(Index(s, 1)).space();
+                          }};
+  auto leaf = [&](std::wstring_view s, KramersBlindness const* k) {
+    return EvalExpr(parse(s)->as<Tensor>(), k);
+  };
+  auto Cuu = leaf(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", &kb);
+  auto Cud = leaf(L"C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", &kb);
+  auto Cdd = leaf(L"C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}", &kb);
+  auto Cuu_dn = leaf(L"C{i↑_1,i↑_2,a_1;a↓_1<i↑_1,i↑_2>}", &kb);
+  using Node = FullBinaryNode<EvalExpr>;
+  TreeNodeEqualityComparator<Node> eq;
+  // pair flavours are one identity
+  REQUIRE(Cuu.hash_value() == Cud.hash_value());
+  REQUIRE(Cuu.hash_value() == Cdd.hash_value());
+  REQUIRE(eq(Node{Cuu}, Node{Cud}));
+  REQUIRE(eq(Node{Cuu}, Node{Cdd}));
+  // the PNS component stays value-distinctive
+  REQUIRE(Cuu.hash_value() != Cuu_dn.hash_value());
+  REQUIRE(!eq(Node{Cuu}, Node{Cuu_dn}));
+  // labels / spelling untouched: the as-written flavours survive
+  auto has_label = [](EvalExpr const& e, std::wstring_view lbl) {
+    return ranges::any_of(
+               e.canon_indices(),
+               [&](Index const& i) { return i.full_label() == lbl; }) &&
+           ranges::any_of(
+               e.expr()->as<Tensor>().const_slots(),
+               [&](Index const& i) { return i.full_label() == lbl; });
+  };
+  REQUIRE(has_label(Cud, L"i↓_1"));
+  REQUIRE(has_label(Cud, L"i↑_2"));
+  // without the hook nothing changes, and identities equal the hook-less ctor
+  auto Cuu0 = leaf(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", nullptr);
+  auto Cud0 = leaf(L"C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", nullptr);
+  REQUIRE(Cuu0.hash_value() != Cud0.hash_value());
+  REQUIRE(Cuu0.hash_value() ==
+          EvalExpr(parse(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}")->as<Tensor>())
+              .hash_value());
+  // an inert hook (no blind slot) is the hook-less identity
+  KramersBlindness inert{
+      .blind_slot = [](Tensor const&, std::size_t) { return false; },
+      .erase_space = kb.erase_space};
+  REQUIRE(leaf(L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", &inert).hash_value() ==
+          Cuu0.hash_value());
+}
+
+TEST_CASE("kramers_blind_product_identity", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  BinarizationOptions opts{
+      .kramers_blindness = {
+          .blind_slot =
+              [](Tensor const& t, std::size_t slot) {
+                return t.label() == L"C" && slot < 2;
+              },
+          .erase_space =
+              [](IndexSpace const& s) {
+                if ((s.qns().to_int32() & mbpt::mask_v<mbpt::Spin>) == 0)
+                  return s;
+                if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+                return mbpt::make_spinalpha(Index(s, 1)).space();
+              }}};
+  auto tree = [&](std::wstring_view head, std::wstring_view rhs,
+                  BinarizationOptions const& o) {
+    return binarize(ResultExpr{parse(head)->as<Tensor>(), parse(rhs)}, o);
+  };
+  using Node = FullBinaryNode<EvalExpr>;
+  TreeNodeEqualityComparator<Node> eq;
+  // PPL-like half projection (a_3 plays the aux index): one identity across
+  // the pair flavours, spelled as the union residual blocks spell them
+  auto Puu = tree(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", opts);
+  auto Pud = tree(L"I{i↑_2,i↓_1,a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", opts);
+  auto Pdd = tree(L"I{i↓_2,i↓_1,a_2,a_3;a↑_1<i↓_1,i↓_2>}",
+                  L"g{a_1,a_2,a_3} * C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}", opts);
+  REQUIRE(Puu->hash_value() == Pud->hash_value());
+  REQUIRE(Puu->hash_value() == Pdd->hash_value());
+  REQUIRE(eq(Puu, Pud));
+  REQUIRE(eq(Puu, Pdd));
+  // the result keeps its as-written labels
+  REQUIRE(ranges::any_of(Pud->canon_indices(), [](Index const& i) {
+    return i.full_label() == L"i↓_1";
+  }));
+  // a flavoured non-blind leaf pins the index: g(i↑,..) vs g(i↓,..) differ
+  auto Quu = tree(L"I{i↑_2,i↑_1,a_3;a↑_1<i↑_1,i↑_2>}",
+                  L"g{a_1,i↑_1,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", opts);
+  auto Qdd = tree(L"I{i↓_2,i↓_1,a_3;a↑_1<i↓_1,i↓_2>}",
+                  L"g{a_1,i↓_1,a_3} * C{i↓_1,i↓_2,a_1;a↑_1<i↓_1,i↓_2>}", opts);
+  REQUIRE(Quu->hash_value() != Qdd->hash_value());
+  REQUIRE(!eq(Quu, Qdd));
+  // the PNS component stays distinctive
+  auto Puu_dn =
+      tree(L"I{i↑_2,i↑_1,a_2,a_3;a↓_1<i↑_1,i↑_2>}",
+           L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↓_1<i↑_1,i↑_2>}", opts);
+  REQUIRE(Puu->hash_value() != Puu_dn->hash_value());
+  // hook off: nothing shared, identical to a hook-less binarize
+  auto Puu0 = tree(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                   L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}", {});
+  auto Pud0 = tree(L"I{i↑_2,i↓_1,a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                   L"g{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}", {});
+  REQUIRE(Puu0->hash_value() != Pud0->hash_value());
+  REQUIRE(
+      Puu0->hash_value() ==
+      binarize(ResultExpr{
+                   parse(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}")->as<Tensor>(),
+                   parse(L"g{a_1,a_2,a_3} * "
+                         L"C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}")})
+          ->hash_value());
+  // the CSV spelling C{a~; a<ij>} (pair labels only as protos): blind on
+  // the composite slot; f pins one pair label through a plain slot
+  BinarizationOptions optsp{
+      .kramers_blindness = {
+          .blind_slot =
+              [](Tensor const& t, std::size_t slot) {
+                auto const& ix = *(t.const_slots().begin() + slot);
+                return t.label() == L"C" && ix.has_proto_indices();
+              },
+          .erase_space =
+              [](IndexSpace const& s) {
+                if ((s.qns().to_int32() & mbpt::mask_v<mbpt::Spin>) == 0)
+                  return s;
+                if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+                return mbpt::make_spinalpha(Index(s, 1)).space();
+              }}};
+  auto Cuu_p = tree(L"I{a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                    L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↑_1,i↑_2>}", optsp);
+  auto Cud_p = tree(L"I{a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                    L"g{a_1,a_2,a_3} * C{a_1;a↑_2<i↑_2,i↓_1>}", optsp);
+  auto Cdd_p = tree(L"I{a_2,a_3;a↑_1<i↓_1,i↓_2>}",
+                    L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↓_1,i↓_2>}", optsp);
+  REQUIRE(Cuu_p->hash_value() == Cud_p->hash_value());
+  REQUIRE(Cuu_p->hash_value() == Cdd_p->hash_value());
+  REQUIRE(eq(Cuu_p, Cud_p));
+  auto Fuu_p =
+      tree(L"I{i↑_1,a_3;a↑_1<i↑_1,i↑_2>}",
+           L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↑_1,i↑_2>} * f{a_2;i↑_1}", optsp);
+  auto Fdd_p =
+      tree(L"I{i↓_1,a_3;a↑_1<i↓_1,i↓_2>}",
+           L"g{a_1,a_2,a_3} * C{a_1;a↑_1<i↓_1,i↓_2>} * f{a_2;i↓_1}", optsp);
+  REQUIRE(Fuu_p->hash_value() != Fdd_p->hash_value());
+  // a sum of two blind products is one identity across the pair flavours
+  auto Suu = tree(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>} + "
+                  L"f{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}",
+                  opts);
+  auto Sud = tree(L"I{i↑_2,i↓_1,a_2,a_3;a↑_2<i↑_2,i↓_1>}",
+                  L"g{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>} + "
+                  L"f{a_1,a_2,a_3} * C{i↑_2,i↓_1,a_1;a↑_2<i↑_2,i↓_1>}",
+                  opts);
+  REQUIRE(Suu->hash_value() == Sud->hash_value());
+  REQUIRE(eq(Suu, Sud));
+}
+
+TEST_CASE("kramers_blind_guards", "[eval_expr][kramers-blind]") {
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  auto parse = [](std::wstring_view s) {
+    return deserialize(s, {.def_perm_symm = Symmetry::Nonsymm,
+                           .def_braket_symm = Hermiticity::NonHermitian});
+  };
+  auto erase = [](IndexSpace const& s) {
+    if ((s.qns().to_int32() & mbpt::mask_v<mbpt::Spin>) == 0) return s;
+    if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+    return mbpt::make_spinalpha(Index(s, 1)).space();
+  };
+  auto C = parse(L"C{i↓_1,i↓_2,a↓_1;a↑_1<i↓_1,i↓_2>}")->as<Tensor>();
+  SECTION("a blind slot must be pure occupied") {
+    KramersBlindness bad{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s == 2; },
+        .erase_space = erase};
+    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, bad),
+                      std::invalid_argument);
+  }
+  SECTION("a blind composite slot must be indexed by pure-occupied protos") {
+    auto D = parse(L"D{a_1;a↑_1<a↓_2>}")->as<Tensor>();
+    KramersBlindness bad{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s == 1; },
+        .erase_space = erase};
+    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(D))}, bad),
+                      std::invalid_argument);
+    // with the pair labels also in plain slots, the plain slots govern: a
+    // blind composite alone erases nothing here (its protos follow the
+    // non-blind plain slots), and it is not a violation
+    KramersBlindness ok{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s == 3; },
+        .erase_space = erase};
+    REQUIRE(erasable_indices(std::array{ExprPtr(ex<Tensor>(C))}, ok).empty());
+  }
+  SECTION("an index blind in one slot and not in another of one leaf") {
+    auto D = parse(L"D{i↓_1,i↓_2;i↓_1}")->as<Tensor>();
+    KramersBlindness bad{
+        .blind_slot = [](Tensor const&, std::size_t s) { return s < 2; },
+        .erase_space = erase};
+    REQUIRE_THROWS_AS(erasable_indices(std::array{ExprPtr(ex<Tensor>(D))}, bad),
+                      std::invalid_argument);
+  }
+  SECTION("inert hook == hook-less identity, leaf and tree") {
+    BinarizationOptions inert{
+        .kramers_blindness = {
+            .blind_slot = [](Tensor const&, std::size_t) { return false; },
+            .erase_space = erase}};
+    auto e = parse(L"g{a_1,a_2,a_3} * C{i↑_1,i↑_2,a_1;a↑_1<i↑_1,i↑_2>}");
+    auto head = parse(L"I{i↑_2,i↑_1,a_2,a_3;a↑_1<i↑_1,i↑_2>}")->as<Tensor>();
+    auto t0 = binarize(ResultExpr{head, e}, {});
+    auto t1 = binarize(ResultExpr{head, e}, inert);
+    REQUIRE(t0->hash_value() == t1->hash_value());
+    REQUIRE(!t1->has_identity_erasure());
+    REQUIRE(t1->identity_tensor() == nullptr);
+    using Node = FullBinaryNode<EvalExpr>;
+    REQUIRE(TreeNodeEqualityComparator<Node>{}(t0, t1));
+  }
+}
+
+#include <SeQuant/core/eval/eval_node.hpp>
+
+TEST_CASE("kramers_flip_node", "[eval_expr][kramers-flip]") {
+  // EvalOp::KramersFlip: a unary wrapper (RealPart pattern: left = the
+  // canonical ↑ node, right = the Constant(1) sentinel) denoting
+  // phase · F(inner) with F the time-reversal flip over the given union modes
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↑_2");
+  const Index au(L"a↑_1", {i1, i2}), ad(L"a↓_1", {i1, i2});
+  const Index a1(L"a_1"), a2(L"a_2"), a3(L"a_3");
+  auto mk = [](std::wstring_view lbl, std::initializer_list<Index> b,
+               std::initializer_list<Index> k) {
+    return Tensor(lbl, bra(b), ket(k), Symmetry::Nonsymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm,
+                  KramersSymmetry::TimeReversal);
+  };
+  // I{a_2,a_3;a↑_1<i↑_1,i↑_2>} = g{a_1;a_2,a_3} * C{a_1;a↑_1<i↑_1,i↑_2>}
+  auto inner_expr = [&] {
+    return ResultExpr{
+        mk(L"I", {a2, a3}, {au}),
+        ex<Product>(ExprPtrList{ex<Tensor>(mk(L"g", {a1}, {a2, a3})),
+                                ex<Tensor>(mk(L"C", {a1}, {au}))})};
+  };
+  auto inner = binarize(inner_expr());
+  Tensor const denoted = mk(L"I", {a2, a3}, {ad});
+  using modes_t = container::svector<std::size_t>;
+
+  auto wrap = make_kramers_flip_node(inner, modes_t{0, 1}, -1, denoted);
+  REQUIRE(wrap->op_type() == EvalOp::KramersFlip);
+  REQUIRE(wrap->result_type() == ResultType::Tensor);
+  REQUIRE(wrap->kramers_flip_modes() == modes_t{0, 1});
+  REQUIRE(wrap->kramers_flip_phase() == -1);
+  REQUIRE(wrap.left()->hash_value() == inner->hash_value());
+  REQUIRE(wrap.right()->is_constant());
+  REQUIRE(wrap->hash_value() != inner->hash_value());
+  // the wrapper denotes the flipped spelling with the child's layout
+  REQUIRE(wrap->is_tensor());
+  REQUIRE(wrap->as_tensor().label() == L"I");
+  REQUIRE(wrap->canon_indices().size() == inner->canon_indices().size());
+  REQUIRE(
+      std::any_of(wrap->canon_indices().begin(), wrap->canon_indices().end(),
+                  [&](Index const& ix) { return ix.space() == ad.space(); }));
+  REQUIRE(
+      std::none_of(wrap->canon_indices().begin(), wrap->canon_indices().end(),
+                   [&](Index const& ix) { return ix.space() == au.space(); }));
+
+  // same child, modes and phase => the same slot
+  auto wrap2 = make_kramers_flip_node(binarize(inner_expr()), modes_t{0, 1}, -1,
+                                      denoted);
+  REQUIRE(wrap->hash_value() == wrap2->hash_value());
+  using node_t = std::remove_cvref_t<decltype(wrap)>;
+  TreeNodeEqualityComparator<node_t> same;
+  REQUIRE(same(wrap, wrap2));
+
+  // a different phase or mode set is a different value
+  REQUIRE(
+      make_kramers_flip_node(inner, modes_t{0, 1}, 1, denoted)->hash_value() !=
+      wrap->hash_value());
+  REQUIRE(
+      make_kramers_flip_node(inner, modes_t{0}, -1, denoted)->hash_value() !=
+      wrap->hash_value());
+
+  // the linearized form spells the denoted (flipped) contraction
+  auto lin = linearize_eval_node(wrap);
+  REQUIRE(lin->is<Product>());
+  bool has_down = false;
+  lin->visit(
+      [&](ExprPtr const& x) {
+        if (!x->is<Tensor>()) return;
+        for (auto const& ix : x->as<Tensor>().const_indices())
+          if (ix.space() == ad.space()) has_down = true;
+      },
+      /*atoms_only=*/true);
+  REQUIRE(has_down);
+}
+
+TEST_CASE("kramers_fold_intermediates", "[eval_expr][kramers-flip]") {
+  // BinarizationOptions::kramers_fold_intermediates: a down-majority
+  // intermediate (all leaves time-reversal symmetric; the Kramers-blind pair
+  // labels do not count) binarizes as a KramersFlip over its canonical (up)
+  // partner's node, which the partner family builds: one contraction, one
+  // O(size) flip
+  using namespace sequant;
+  using namespace sequant::eval;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const Index i1(L"i↑_1"), i2(L"i↑_2");
+  const Index au(L"a↑_1", {i1, i2}), ad(L"a↓_1", {i1, i2});
+  const Index bu(L"a↑_2", {i1, i2}), bd(L"a↓_2", {i1, i2});
+  const Index a1(L"a_1"), a2(L"a_2"), a3(L"a_3");
+  auto mk = [](std::wstring_view lbl, std::initializer_list<Index> b,
+               std::initializer_list<Index> k,
+               KramersSymmetry ks = KramersSymmetry::TimeReversal) {
+    return ex<Tensor>(lbl, bra(b), ket(k), Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, ks);
+  };
+  // the pair labels are blind on the projector's composite slot (Phase 1)
+  BinarizationOptions opts{
+      .kramers_blindness = {
+          .blind_slot =
+              [](Tensor const& t, std::size_t slot) {
+                return t.label() == L"C" && slot == 1;
+              },
+          .erase_space =
+              [](IndexSpace const& s) {
+                if (mbpt::to_spin(s.qns()) == mbpt::Spin::any) return s;
+                return mbpt::make_spinalpha(Index(s, 1)).space();
+              }},
+      .kramers_fold_intermediates = true};
+  using modes_t = container::svector<std::size_t>;
+
+  // I{a_2,a_3;a<i↑_1,i↑_2>} = g{a_1;a_2,a_3} * C{a_1;a<i↑_1,i↑_2>}
+  auto I = [&](Index const& comp) {
+    return Tensor(L"I", bra{a2, a3}, ket{comp});
+  };
+  auto rhs = [&](Index const& comp,
+                 KramersSymmetry ks = KramersSymmetry::TimeReversal) {
+    return ex<Product>(
+        ExprPtrList{mk(L"g", {a1}, {a2, a3}, ks), mk(L"C", {a1}, {comp}, ks)});
+  };
+  // a ResultExpr root keeps the head's spelling: it never folds as a whole
+  // (its factors may); the fold decision is exercised through the internal
+  // entry a root Product's factors and a Sum's summands' factors go through
+  REQUIRE(binarize(ResultExpr{I(ad), rhs(ad)}, opts)->op_type() ==
+          EvalOp::Product);
+  auto bin = [](ExprPtr const& e, IndexSet const& ext,
+                BinarizationOptions const& o) {
+    std::size_t counter = 0;
+    return impl::binarize(e, ext, o, counter);
+  };
+  auto up = bin(rhs(au), IndexSet{au, a2, a3}, opts);
+  auto dn = bin(rhs(ad), IndexSet{ad, a2, a3}, opts);
+  REQUIRE(up->op_type() == EvalOp::Product);
+  REQUIRE(dn->op_type() == EvalOp::KramersFlip);
+  REQUIRE(dn.left()->hash_value() == up->hash_value());  // one shared family
+  REQUIRE(dn->kramers_flip_phase() == -1);               // one down composite
+  // the union legs a_2, a_3 as OUTER mode positions: the pair labels
+  // i↑_1, i↑_2 are outer (CSV pair) modes too, the composite is inner
+  REQUIRE(dn->kramers_flip_modes() == modes_t{2, 3});
+  REQUIRE(dn->as_tensor().label() == L"I");
+  REQUIRE(
+      std::any_of(dn->canon_indices().begin(), dn->canon_indices().end(),
+                  [&](Index const& ix) { return ix.space() == ad.space(); }));
+
+  // no fold without the option, or with a leaf that is not time-reversal
+  // symmetric
+  auto nofold = opts;
+  nofold.kramers_fold_intermediates = false;
+  REQUIRE(bin(rhs(ad), IndexSet{ad, a2, a3}, nofold)->op_type() ==
+          EvalOp::Product);
+  REQUIRE(bin(rhs(ad, KramersSymmetry::Nonsymm), IndexSet{ad, a2, a3}, opts)
+              ->op_type() == EvalOp::Product);
+
+  // a tie (one up, one down composite) resolves by the flavour string in the
+  // flavour-blind canonical order of the externals: (down_1, up_2) folds onto
+  // (up_1, down_2), never both ways
+  auto rhs2 = [&](Index const& x, Index const& y) {
+    return ex<Product>(ExprPtrList{mk(L"g", {a1, a2}, {a3}),
+                                   mk(L"C", {a1}, {x}), mk(L"C", {a2}, {y})});
+  };
+  auto t_ud = bin(rhs2(au, bd), IndexSet{au, bd, a3}, opts);
+  auto t_du = bin(rhs2(ad, bu), IndexSet{ad, bu, a3}, opts);
+  REQUIRE(t_ud->op_type() == EvalOp::Product);
+  REQUIRE(t_du->op_type() == EvalOp::KramersFlip);
+  REQUIRE(t_du.left()->hash_value() == t_ud->hash_value());
+  REQUIRE(t_du->kramers_flip_phase() == -1);
+  REQUIRE(t_du->kramers_flip_modes() ==
+          modes_t{2});  // a_3 after the pair modes
+
+  // a sum of down-majority terms folds as one node onto the up sum
+  auto sum_of = [&](Index const& comp) {
+    return ex<Sum>(ExprPtrList{
+        rhs(comp), ex<Product>(ExprPtrList{mk(L"h", {a1}, {a2, a3}),
+                                           mk(L"C", {a1}, {comp})})});
+  };
+  auto s_up = bin(sum_of(au), IndexSet{au, a2, a3}, opts);
+  auto s_dn = bin(sum_of(ad), IndexSet{ad, a2, a3}, opts);
+  REQUIRE(s_up->op_type() == EvalOp::Sum);
+  REQUIRE(s_dn->op_type() == EvalOp::KramersFlip);
+  REQUIRE(s_dn.left()->hash_value() == s_up->hash_value());
+  REQUIRE(s_dn.left()->op_type() == EvalOp::Sum);
+
+  // the flip is DEEP: the flavoured pair labels inside an unflavoured
+  // (Kramers-union) composite follow their plain-slot occurrences, so every
+  // leaf of the canonical partner is spelled consistently (an amplitude leaf
+  // t{a_2<i↓_1,i_2>; i↓_1, i_2} becomes t{a_2<i↑_1,i_2>; i↑_1, i_2})
+  // (X, not the blind projector C: its bra composite would carry the pair
+  // labels in a non-blind slot, which the blindness guard rejects)
+  const Index i1d(L"i↓_1"), iu2(L"i_2");
+  const Index au3(L"a_3", {i1d, iu2}), cd(L"a↓_1", {i1d, iu2});
+  auto deep = bin(ex<Product>(ExprPtrList{mk(L"X", {au3}, {cd}),
+                                          mk(L"t", {au3}, {i1d, iu2})}),
+                  IndexSet{i1d, iu2, cd}, opts);
+  REQUIRE(deep->op_type() == EvalOp::KramersFlip);
+  REQUIRE(deep->kramers_flip_phase() == 1);  // two down externals
+  auto no_down = [&](auto const& node, auto& self) -> bool {
+    if (node.leaf()) {
+      if (!node->is_tensor()) return true;
+      for (auto const& ix : node->as_tensor().const_indices()) {
+        if (ix.space() == i1d.space()) return false;
+        for (auto const& p : ix.proto_indices())
+          if (p.space() == i1d.space()) return false;
+      }
+      return true;
+    }
+    return self(node.left(), self) && self(node.right(), self);
+  };
+  REQUIRE(no_down(deep.left(), no_down));
+
+  // a Sum's direct summands keep the Sum's labels: a summand that would fold
+  // on its own (its pair labels are blind inside it) does not when another
+  // summand pins them and the Sum as a whole is canonical; nested factors
+  // still may
+  auto blind_occ = opts;
+  blind_occ.kramers_blindness.blind_slot = [isr](Tensor const& t,
+                                                 std::size_t slot) {
+    if (t.label() != L"C") return false;
+    auto const& ix = *(t.const_slots().begin() + slot);
+    return ix.has_proto_indices() || isr->is_pure_occupied(ix.space());
+  };
+  const Index cdu(L"a↓_1", {i1, i2});  // down column, up pair labels
+  auto p_pinned =
+      ex<Product>(ExprPtrList{mk(L"g", {a3}, {i1, i2}), mk(L"C", {a3}, {cdu})});
+  auto p_blind = ex<Product>(
+      ExprPtrList{mk(L"h", {a3}, {}), mk(L"C", {i1, i2, a3}, {cdu})});
+  auto head = Tensor(L"I", bra{i1, i2}, ket{cdu});
+  // alone, the blind summand is down-majority (its pair labels do not count)
+  REQUIRE(bin(p_blind, IndexSet{i1, i2, cdu}, blind_occ)->op_type() ==
+          EvalOp::KramersFlip);
+  // in the Sum the pinned pair labels make the whole canonical (1 down, 2 up)
+  auto s_mixed = binarize(
+      ResultExpr{head, ex<Sum>(ExprPtrList{p_pinned, p_blind})}, blind_occ);
+  REQUIRE(s_mixed->op_type() == EvalOp::Sum);
+  auto no_flip = [&](auto const& node, auto& self) -> bool {
+    if (node->op_type() == EvalOp::KramersFlip) return false;
+    if (node.leaf()) return true;
+    return self(node.left(), self) && self(node.right(), self);
+  };
+  REQUIRE(no_flip(s_mixed, no_flip));
+
+  // a product whose factor folds contracts THROUGH the factor's denoted
+  // (flipped-flavour) tensor: the parent's network holds the wrapper's
+  // tensor, its annotations are consistent with the wrapper's labels, and
+  // the parent's result is the head
+  auto bracket = ex<Product>(ExprPtrList{mk(L"g", {a1}, {a2, a3}),
+                                         mk(L"C", {a1}, {ad})});  // I{a2,a3;a↓}
+  const Index a4(L"a_4");
+  auto outer = ex<Product>(ExprPtrList{
+      bracket, mk(L"Y", {a2, a3}, {a4})});  // J{a4;a↓<i1,i2>} = I * Y
+  auto pj = bin(outer, IndexSet{a4, ad}, opts);
+  REQUIRE(pj->op_type() == EvalOp::KramersFlip);  // the whole (1 down) folds
+  // ... but not as a ResultExpr root
+  REQUIRE(binarize(ResultExpr{Tensor(L"J", bra{a4}, ket{ad}), outer}, opts)
+              ->op_type() == EvalOp::Product);
+  // the same product where the head is up: the bracket alone folds, the
+  // outer product stays a Product whose left child is the wrapper
+  auto bracket_u =
+      ex<Product>(ExprPtrList{mk(L"g", {a1}, {a2, a3}), mk(L"C", {a1}, {ad})});
+  auto outer_u = ex<Product>(
+      Product{1, ExprPtrList{bracket_u, mk(L"X", {i1, i2, ad}, {a2, a3, au})},
+              Product::Flatten::No});  // K{i1,i2;a↑}, the bracket kept
+  auto pk =
+      binarize(ResultExpr{Tensor(L"K", bra{i1, i2}, ket{au}), outer_u}, opts);
+  REQUIRE(pk->op_type() == EvalOp::Product);
+  bool saw_wrapper = false;
+  for (auto const& ch : {pk.left(), pk.right()}) {
+    if (ch->op_type() == EvalOp::KramersFlip) {
+      saw_wrapper = true;
+      // the wrapper's labels are the bracket's as written (a↓ column)
+      REQUIRE(std::any_of(
+          ch->canon_indices().begin(), ch->canon_indices().end(),
+          [&](Index const& ix) { return ix.space() == ad.space(); }));
+    }
+  }
+  REQUIRE(saw_wrapper);
+  // every index of the product's children is either shared or in the result
+  auto labels = [](auto const& n) {
+    container::set<std::wstring> out;
+    for (auto const& ix : n->canon_indices())
+      out.insert(std::wstring(ix.full_label()));
+    return out;
+  };
+  auto const L = labels(pk.left()), R = labels(pk.right()), T = labels(pk);
+  for (auto const& l : R) REQUIRE((L.contains(l) || T.contains(l)));
+  for (auto const& l : L) REQUIRE((R.contains(l) || T.contains(l)));
 }

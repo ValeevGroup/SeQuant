@@ -468,6 +468,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
+        SeQuant/domain/mbpt/spinor.cpp
+        SeQuant/domain/mbpt/spinor.hpp
         SeQuant/domain/mbpt/vac_av.hpp
         SeQuant/domain/mbpt/vac_av.cpp
         SeQuant/domain/mbpt/utils.hpp
@@ -485,6 +487,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/dag_scope.hpp
         SeQuant/core/eval/eval.hpp
         SeQuant/core/eval/eval_expr.cpp
+        SeQuant/core/eval/canon_transform.hpp
         SeQuant/core/eval/eval_expr.hpp
         SeQuant/core/eval/eval_node.hpp
         SeQuant/core/eval/eval_node_compare.hpp

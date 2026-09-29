@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/canon_transform.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/eval/kramers_blind.hpp>
 #include <SeQuant/core/eval/node_batch_annotation.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -53,6 +54,15 @@ enum class EvalOp {
   /// \brief The imaginary part of a scalar-valued EvalExpr; see RealPart.
   ImagPart,
 
+  ///
+  /// \brief The time-reversal flip of a tensor-valued EvalExpr over its
+  ///        Kramers-union modes: a unary node over the canonical ↑ partner
+  ///        (the right child is a Constant{1} sentinel) denoting
+  ///        kramers_flip_phase() · F(left), with F per union mode
+  ///        out[⇑] = +conj in[⇓], out[⇓] = −conj in[⇑]. F∘F = −1, so like
+  ///        Re/Im it is an IR node and not a CanonTransform channel.
+  KramersFlip,
+
 };
 
 ///
@@ -80,7 +90,20 @@ class EvalExpr {
   ///
   /// \brief Construct an EvalExpr object from a tensor.
   ///
-  explicit EvalExpr(Tensor const& tnsr);
+  /// \param tnsr The tensor to wrap as a leaf. The two bra<->ket
+  ///        orientations of a BraKetSymmetry::Conjugate tensor fold onto one
+  ///        canonical spelling: expr() carries the canonical orientation with
+  ///        the core states ('⁺', a real-basis '꙳') decoded into the leaf's
+  ///        CanonTransform (see decode_leaf_states in eval_expr.cpp), so the
+  ///        orientations and conjugates of one array share a cache slot and
+  ///        are served through the transform on retrieval.
+  ///
+  /// \param blindness optional Kramers blindness (kramers_blind.hpp): the
+  ///        leaf's identity (hash, connectivity graph, layout fingerprint,
+  ///        block comparison) is then read from its flavour-erased spelling;
+  ///        null or inactive => identity exactly as without the hook
+  explicit EvalExpr(Tensor const& tnsr,
+                    eval::KramersBlindness const* blindness = nullptr);
 
   ///
   /// \brief Construct an EvalExpr object from a Constant.
@@ -203,6 +226,15 @@ class EvalExpr {
   [[nodiscard]] bool is_sum() const noexcept;
 
   ///
+  /// \return whether this is a unary IR op (RealPart / ImagPart /
+  ///         KramersFlip): only the left child is an operand; the right child
+  ///         is the Constant(1) sentinel that keeps FullBinaryNode's
+  ///         two-children invariant and is never evaluated, scheduled or
+  ///         counted as an operand
+  ///
+  [[nodiscard]] bool is_unary_op() const noexcept;
+
+  ///
   /// \return True if this expression is an adjoint (unary) node.
   ///
 
@@ -251,6 +283,55 @@ class EvalExpr {
   ///
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
+  /// \return the canonical indices the IDENTITY (layout fingerprint) is read
+  ///         from: canon_indices() with Kramers-blind erasure applied, or
+  ///         canon_indices() itself when nothing was erased
+  [[nodiscard]] index_vector const& identity_indices() const noexcept {
+    return identity_indices_.empty() ? canon_indices_ : identity_indices_;
+  }
+
+  /// \return for a tensor leaf whose identity was Kramers-blind erased, the
+  ///         erased spelling the block comparator reads; null otherwise
+  [[nodiscard]] Tensor const* identity_tensor() const noexcept {
+    return identity_tensor_ ? &*identity_tensor_ : nullptr;
+  }
+
+  /// \return whether Kramers blindness erased something in this node's
+  ///         identity (identity_indices() then differs from canon_indices())
+  [[nodiscard]] bool has_identity_erasure() const noexcept {
+    return !identity_indices_.empty();
+  }
+
+  /// sets identity_indices() (product / sum node construction under Kramers
+  /// blindness) and, for a tensor-valued node, derives identity_tensor() from
+  /// expr() by the positional canon->identity index correspondence; an empty
+  /// vector means "same as canon_indices()"
+  void set_identity_indices(index_vector ixs);
+
+  /// re-derives identity_tensor() from the current expr() (call after expr()
+  /// was respelled in place, e.g. the head overwrite in binarize(ResultExpr));
+  /// no-op without identity erasure
+  void refresh_identity_tensor();
+
+  /// \return for an EvalOp::KramersFlip node, the positions (in the left
+  ///         child's canon_indices()) of the Kramers-union modes F acts on
+  [[nodiscard]] container::svector<std::size_t> const& kramers_flip_modes()
+      const noexcept {
+    return kramers_flip_modes_;
+  }
+
+  /// \return for an EvalOp::KramersFlip node, the phase multiplying F(left)
+  [[nodiscard]] std::int8_t kramers_flip_phase() const noexcept {
+    return kramers_flip_phase_;
+  }
+
+  /// sets the flip modes and phase (EvalOp::KramersFlip node construction)
+  void set_kramers_flip(container::svector<std::size_t> modes,
+                        std::int8_t phase) {
+    kramers_flip_modes_ = std::move(modes);
+    kramers_flip_phase_ = phase;
+  }
+
   ///
   /// \brief Rename-invariant fingerprint of this node's result _layout_: which
   ///        canonical slot each result mode holds, and how the proto bundles
@@ -284,6 +365,13 @@ class EvalExpr {
   [[nodiscard]] static std::size_t layout_fingerprint_of(
       index_vector const& modes) noexcept;
 
+  /// @return whether this leaf's stored spelling is its Kramers-folded
+  ///         (up-row) partner of the as-written one (T19 layer 2): expr()
+  ///         is what a provider fetches, canon_indices() carries the
+  ///         as-written labels, and the {conj, phase} of the transform maps
+  ///         the served block to the as-written value
+  [[nodiscard]] bool kramers_folded() const noexcept { return kramers_folded_; }
+
   ///
   /// \return The canonicalization phase (+1 or -1).
   ///
@@ -308,6 +396,8 @@ class EvalExpr {
   /// placeholder is built in the spelling it denotes and holds no state,
   /// even where it inherits a child's transform. The phase, a scalar, is
   /// not spelled (see to_expr for the value a leaf denotes).
+  /// For a Kramers-folded leaf (see kramers_folded()) the stored spelling is
+  /// the up-row partner and the Kramers flavors are flipped back here.
   [[nodiscard]] ExprPtr denoted_expr() const;
 
   ///
@@ -494,13 +584,21 @@ class EvalExpr {
   ExprPtr expr_;
 
   index_vector canon_indices_;
+  /// see identity_indices(): empty unless Kramers blindness erased something
+  index_vector identity_indices_;
+  /// see identity_tensor(): leaves only, set iff erasure changed the spelling
+  std::optional<Tensor> identity_tensor_;
   mutable std::optional<std::size_t> layout_fingerprint_;
+  /// see kramers_flip_modes() / kramers_flip_phase(): EvalOp::KramersFlip only
+  container::svector<std::size_t> kramers_flip_modes_;
+  std::int8_t kramers_flip_phase_ = 1;
 
   /// folds layout_fingerprint() into hash_value_ for a tensor-valued node;
   /// called once canon_indices_ is final (see the definition)
   void fold_layout_into_hash() noexcept;
 
   CanonTransform canon_transform_{};
+  bool kramers_folded_ = false;
 
   size_t hash_value_;
 
@@ -546,6 +644,29 @@ struct BinarizationOptions {
   /// summand being binarized. Empty (default) => no stamping, no behavior
   /// change. See \c EvalExpr::node_slice_mask.
   container::vector<NodeBatchAnnotation> node_batch_axes = {};
+
+  /// Kramers-blind node identity (see kramers_blind.hpp): inactive by default,
+  /// in which case node identities are exactly those of a hook-less
+  /// binarization.
+  eval::KramersBlindness kramers_blindness = {};
+  /// Phase 2a of the union-axis time-reversal fold (mpqc
+  /// doc/dev/specs/2026-09-18-union-axis-time-reversal-fold.md): a Product /
+  /// Sum whose flavoured externals (after the Kramers-blind erasure) are
+  /// down-majority and whose leaves are all time-reversal symmetric is
+  /// binarized as an EvalOp::KramersFlip over its flipped (canonical) spelling,
+  /// so the two Kramers-partner families share one contraction and differ by
+  /// an O(size) flip. Off by default.
+  bool kramers_fold_intermediates = false;
+  /// Internal to the fold: whether the expression handed to binarize may
+  /// itself be folded as a whole. A Sum's direct summands are added
+  /// elementwise and must keep the Sum's index labels, so binarize(Sum)
+  /// clears it for them (the Sum folds as one, or not at all); binarize(
+  /// Product) restores it for the factors, which are contracted through
+  /// their own denoted labels; binarize(ResultExpr) clears it for the root,
+  /// whose spelling is the head's (a folded root would respell a residual
+  /// block's terms and lose their t-dependent intermediates' sharing with
+  /// the other blocks of the same pair). Callers leave it at its default.
+  bool kramers_fold_this = true;
 };
 
 namespace meta {
@@ -646,6 +767,20 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract,
 }  // namespace impl
 
 ///
+/// \brief An EvalOp::KramersFlip wrapper over \p inner: denotes
+///        \p phase · F(inner) with F the time-reversal flip over the
+///        Kramers-union modes \p modes (positions in inner->canon_indices());
+///        \p denoted is the wrapper's own result tensor (the flipped-flavour
+///        spelling). Identity = the child's salted hash, the op, the modes,
+///        the phase and the flipped layout; the child's phase / conj channels
+///        hoist into the wrapper's transform (F is linear and commutes with
+///        conjugation), as for Re/Im.
+///
+FullBinaryNode<EvalExpr> make_kramers_flip_node(
+    FullBinaryNode<EvalExpr> inner, container::svector<std::size_t> modes,
+    std::int8_t phase, Tensor denoted);
+
+///
 /// \brief A type alias for the types that satisfy the eval_node concept.
 ///
 template <meta::eval_expr T>
@@ -717,8 +852,11 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
   // we overwrite it below with res.result_as_tensor() so the layout is
   // caller-determined and the deprecation does not apply.
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  // the root keeps the head's spelling (see kramers_fold_this)
+  BinarizationOptions root_opts = opts;
+  root_opts.kramers_fold_this = false;
   FullBinaryNode<ExprT> tree =
-      binarize<ExprT>(res.expression(), uncontract, opts);
+      binarize<ExprT>(res.expression(), uncontract, root_opts);
 
   const bool is_scalar =
       res.bra().empty() && res.ket().empty() && res.aux().empty();
@@ -750,6 +888,8 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res,
     Tensor& tensor = tree->expr().template as<Tensor>();
 
     tensor = res.result_as_tensor();
+    // the erased identity spelling follows the respelled head
+    tree->refresh_identity_tensor();
   }
 
   return tree;
@@ -777,6 +917,10 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
     return ex<Product>(evxpr.canon_phase(), ExprPtrList{std::move(e)},
                        Product::Flatten::No);
   }
+
+  // a KramersFlip wrapper denotes its own (flipped-flavour) tensor; the
+  // flip it applies to its child is not an expression
+  if (op == EvalOp::KramersFlip) return evxpr.expr();
 
   if (op == EvalOp::Product) {
     auto prod = Product{};

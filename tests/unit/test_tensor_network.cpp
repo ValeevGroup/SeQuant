@@ -58,6 +58,10 @@ using namespace sequant;
 using namespace std::literals;
 
 TEST_CASE("tensor_network_shared", "[elements]") {
+  using TN =
+      TensorNetworkV3;  // the sections below spell the network through TN
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr, mbpt::Spin::null);
   auto ctx = get_default_context();
@@ -277,6 +281,54 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       REQUIRE(md21_asis.phase == md21.phase);
       REQUIRE(md21_asis.hash_value() == md21.hash_value());
       REQUIRE(tn21_asis.tensors()[0]->_bra()[0].label() == L"a_2");
+    }
+
+    SECTION("twin externals on a nonsymmetric bundle") {
+      if constexpr (TN::version() >= 3) {
+        // Two networks that differ ONLY by which of two same-space externals
+        // sits on which bra slot of a NONSYMMETRIC (column-symmetric) leaf:
+        // R{a_1,a_2} vs R{a_2,a_1}. They denote different tensors (a slot
+        // exchange inside a nonsymmetric bundle is not a symmetry), so their
+        // value identity must differ: either the hash, or the canonical order
+        // of the named indices together with a phase. (The raw network gets
+        // this right; the 2026-09-04 cache defect on this shape -- HSeOH
+        // PNS-CCD, (vv|vv) ladder kept 4-center -- was the eval node's
+        // label-sorted Sum placeholder, see
+        // sum_placeholder_is_spelled_in_its_layout in test_eval_expr.cpp.)
+        const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+        const std::wstring n183 =
+            L"g{a_5,a_6;a_7,a_8}:N-C-S * C{a_5;a_1<i_1,i_2>}:N-N-N * "
+            L"C{a_6;a_2<i_1,i_2>}:N-N-N * C{a_7;a_3<i_1,i_2>}:N-N-N * "
+            L"C{a_8;p_1<i_1,i_2>}:N-N-N * "
+            L"t{a_3<i_1,i_2>,p_1<i_1,i_2>;i_1,i_2}:A-N-S";
+        const std::wstring n190 =
+            L"g{a_5,a_6;a_7,a_8}:N-C-S * C{a_5;a_2<i_1,i_2>}:N-N-N * "
+            L"C{a_6;a_1<i_1,i_2>}:N-N-N * C{a_7;a_3<i_1,i_2>}:N-N-N * "
+            L"C{a_8;p_1<i_1,i_2>}:N-N-N * "
+            L"t{a_3<i_1,i_2>,p_1<i_1,i_2>;i_1,i_2}:A-N-S";
+        const Index i1(L"i_1"), i2(L"i_2");
+        const Index a1(L"a_1", {i1, i2}), a2(L"a_2", {i1, i2});
+        typename TN::NamedIndexSet named{a1, a2, i1, i2};
+        auto canon = [&](std::wstring const& s) {
+          TN tn(deserialize(s));
+          auto md = tn.canonicalize_slots(
+              {.cardinal_tensor_labels = cardinal, .named_indices = &named});
+          std::wstring order;
+          for (auto const& ix : md.template get_indices<Index::index_vector>())
+            order += std::wstring(ix.full_label()) + L" ";
+          return std::make_tuple(md.hash_value(), md.phase, order);
+        };
+        auto const [h183, p183, o183] = canon(n183);
+        auto const [h190, p190, o190] = canon(n190);
+        INFO("183: hash " << h183 << " phase " << int(p183) << " order "
+                          << toUtf8(o183));
+        INFO("190: hash " << h190 << " phase " << int(p190) << " order "
+                          << toUtf8(o190));
+        // identical (hash, order, phase) would let an evaluator serve one
+        // node's buffer for the other
+        const bool same_identity = h183 == h190 && o183 == o190 && p183 == p190;
+        CHECK_FALSE(same_identity);
+      }
     }
 
     SECTION("braket orientation fold") {
@@ -597,7 +649,15 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
       REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), Exception);
 
-      // must be covariant: no bra to bra or ket to ket
+      // dummies may connect bra-to-bra / ket-to-ket when the braket
+      // orientation fold can reorient an incident tensor: a braket-Conjugate
+      // c-number tensor spelled adjoint folds back to its covariant form
+      (void)t2->adjoint();
+      auto t1_x_t2_adjoint = t1 * t2;
+      REQUIRE_NOTHROW(TN(t1_x_t2_adjoint).create_graph());
+
+      // ... but a braket-Nonsymm (rigid) tensor cannot be reoriented, so for
+      // it the covariance check still rejects bra-to-bra / ket-to-ket
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
         REQUIRE(t2->adjoint() == 1);
         auto t1_x_t2_adjoint = t1 * t2;

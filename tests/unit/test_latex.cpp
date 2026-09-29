@@ -98,3 +98,21 @@ TEST_CASE("latex", "[util]") {
     REQUIRE(io::latex::utf_to_string(hat__alpha) == L"\\hat{\\alpha}");
   }
 }
+
+TEST_CASE("diactrics_to_string keeps the characters after a diacritic",
+          "[latex]") {
+  using namespace sequant;
+  // a combining diacritic followed by more characters: the rest of the
+  // string must survive (and the converter must not run past the end)
+  const std::wstring tilde_mu_up = std::wstring(L"\u03bc\u0303") + L"\u2191";
+  REQUIRE(io::latex::diactrics_to_string(tilde_mu_up) ==
+          std::wstring(L"\\tilde{\u03bc}") + L"\u2191");
+  const std::wstring tilde_a_1 = std::wstring(L"a\u0303") + L"1";
+  REQUIRE(io::latex::diactrics_to_string(tilde_a_1) == L"\\tilde{a}1");
+  const std::wstring tilde_a_b_tilde = std::wstring(L"a\u0303b\u0303");
+  REQUIRE(io::latex::diactrics_to_string(tilde_a_b_tilde) ==
+          L"\\tilde{a}\\tilde{b}");
+  // precomposed diacritic followed by a plain character
+  REQUIRE(io::latex::diactrics_to_string(std::wstring(L"\u00e31")) ==
+          L"\\tilde{a}1");
+}

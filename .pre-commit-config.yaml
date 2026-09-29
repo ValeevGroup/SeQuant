@@ -14,8 +14,9 @@ repos:
         hooks:
             -   id: remove-crlf
             -   id: forbid-tabs
-                # MPQC output and JS/XML/CSS/CMake can contain tabs
-                exclude: \.(out|cmake|js|xml|css)$
+                # MPQC output, JS/XML/CSS/CMake, and generated ITF code
+                # (tab-separated by format) can contain tabs
+                exclude: \.(out|cmake|js|xml|css)$|\.itfaa(\.expected)?$
     # see https://github.com/Lucas-C/pre-commit-hooks#forbid--remove-some-unicode-characters
     -   repo: local
         hooks:
