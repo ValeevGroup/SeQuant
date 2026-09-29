@@ -1445,10 +1445,36 @@ TEST_CASE("a pruned scalar prefactor keeps its conjugation", "[export]") {
     const auto p = ex<Power>(std::move(x), rational(2));
 
     const Tensor R(L"R", bra{L"i_1"}, ket{L"a_2"});
-    const std::string code = generate(ResultExpr(R, p * t * f));
+    const ResultExpr result(R, p * t * f);
+    const std::string code = generate(result);
     CAPTURE(code);
 
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("conj(x)^2"));
+
+    // the base is wrapped by the same value-string funnel in every generator,
+    // so each spells the power over the wrapped base
+    {
+      JuliaTensorOperationsGeneratorContext ctx;
+      configure_context_defaults(ctx);
+      JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext> gen;
+      export_expression(to_export_tree(result), gen, ctx);
+      const std::string julia = gen.get_generated_code();
+      CAPTURE(julia);
+      REQUIRE_THAT(julia, Catch::Matchers::ContainsSubstring("conj(x)^2"));
+    }
+    {
+      auto registry = get_default_context().index_space_registry();
+      NumPyEinsumGeneratorContext ctx;
+      ctx.set_shape(registry->retrieve("i"), "nocc");
+      ctx.set_shape(registry->retrieve("a"), "nvirt");
+      ctx.set_tag(registry->retrieve("i"), "o");
+      ctx.set_tag(registry->retrieve("a"), "v");
+      NumPyEinsumGenerator gen;
+      export_expression(to_export_tree(result), gen, ctx);
+      const std::string python = gen.get_generated_code();
+      CAPTURE(python);
+      REQUIRE_THAT(python, Catch::Matchers::ContainsSubstring("np.conj(x)**2"));
+    }
   }
 }
 
