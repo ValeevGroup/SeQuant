@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <optional>
@@ -40,6 +41,7 @@ struct NumberRule;
 struct VariableRule;
 struct TensorRule;
 struct PowerRule;
+struct RealImagPartRule;
 struct ProductRule;
 struct SumRule;
 struct ExprRule;
@@ -54,6 +56,7 @@ x3::rule<NumberRule, ast::Number> number{"Number"};
 x3::rule<VariableRule, ast::Variable> variable{"Variable"};
 x3::rule<TensorRule, ast::Tensor> tensor{"Tensor"};
 x3::rule<PowerRule, ast::Power> power{"Power"};
+x3::rule<RealImagPartRule, ast::RealImagPart> real_imag_part{"RealImagPart"};
 
 // Expression structure
 x3::rule<ProductRule, ast::Product> product{"Product"};
@@ -83,16 +86,29 @@ auto word_components = x3::unicode::alnum
                        | x3::unicode::char_(L'¹') | x3::unicode::char_(L'²') | x3::unicode::char_(L'³')
                        // Arrow block
                        | (x3::unicode::char_(to_char_type(0x2190), to_char_type(0x21FF)) - x3::unicode::unassigned);
+// the two core states are spelled as trailing marks of the name: `t⁺`,
+// `t꙳`, `t⁺꙳` (either order). `⁺` is a Superscript-block character and
+// thus already a word component; `꙳` is not, hence the explicit trailer
+auto mark             = x3::unicode::char_(L'⁺') | x3::unicode::char_(L'꙳');
 // A name begins with a letter, then can container letters, digits and
 // underscores, but can not end with an underscore (to not confuse the parser
 // with tensors á la t_{…}^{…}.
 auto name_def         = x3::lexeme[
                             x3::unicode::alpha >> -( *(word_components >> &word_components) >> (word_components - '_') )
+                                              >> *mark
                         ];
 
-auto number_def       = x3::double_ >> -('/' >> x3::double_);
+// an imaginary literal is a rational with an `i` abutting it: `2i`, `1/2i`,
+// `-3i`. The `i` must follow with no space in between and must neither open a
+// longer name nor carry a state mark of its own, so a bare `i` is still a
+// Variable, `2 i` is still a product of a number and a variable, `2i_1` is
+// still `2` times the variable `i_1`, and `2i꙳` is still `2` times `i꙳`
+auto imaginary_mark   = x3::no_skip[x3::lit(L"i") >> !(word_components | mark)];
 
-auto variable_def     = x3::lexeme[name >> -(x3::lit('^') >> '*' >> x3::attr(true))];
+auto number_def       = x3::double_ >> -('/' >> x3::double_)
+                        >> (imaginary_mark >> x3::attr(true) | x3::attr(false));
+
+auto variable_def     = x3::lexeme[name];
 
 auto index_name       = +(  x3::unicode::alpha | x3::unicode::char_(L'⁺') | x3::unicode::char_(L'⁻') | x3::unicode::char_(L'̃')
                           | x3::unicode::char_(L'↑') | x3::unicode::char_(L'↓')
@@ -112,7 +128,7 @@ auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',')  > L"
                         |  '{'  > -(index % ',') > -( ';' > -(index % ',')) > -(';' > -(index % ','))     >  '}'  >> x3::attr(false);
 
 auto symmetry_spec_def= x3::lexeme[
-                         ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper)
+                         ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper) >> -('-' >> x3::upper)
                         ];
 
 auto tensor_def       = x3::lexeme[
@@ -126,9 +142,18 @@ auto power_core       = (('(' >> (number | variable) >> ')') | number | variable
 auto power_def        = (power_core >> x3::attr(false))
                         | ('(' >> power_core >> ')' >> x3::lit(L"^*") >> x3::attr(true));
 
+// `Re[...]` / `Im[...]` wrap a whole expression, mirroring the LaTeX
+// `\Re\left[...\right]` these nodes render as. The brackets are what keeps
+// the spelling apart from a tensor (`Re{...}`) or a variable (`Re`) of the
+// same name: neither admits a `[`, so the literal alone never commits and a
+// name merely starting with `Re`/`Im` falls through to the nullary rules
+auto real_imag_core   = (x3::lit(L"Re") >> x3::attr(false) | x3::lit(L"Im") >> x3::attr(true))
+                        >> '[';
+auto real_imag_part_def = real_imag_core > sum > ']';
+
 auto nullary          = number | tensor | variable;
 
-auto grouped          = power | '(' > sum > ')' | nullary;
+auto grouped          = real_imag_part | power | '(' > sum > ')' | nullary;
 
 auto product_def      = grouped % -x3::lit('*');
 
@@ -144,8 +169,8 @@ auto resultExpr_def       = (tensor | variable) > (L'=' | x3::lit(L"->")) >> exp
 // clang-format on
 
 BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,
-                    tensor, power, product, sum, expr, symmetry_spec,
-                    resultExpr);
+                    tensor, power, real_imag_part, product, sum, expr,
+                    symmetry_spec, resultExpr);
 
 struct position_cache_tag;
 struct error_handler_tag;
@@ -179,6 +204,7 @@ struct NumberRule : helpers::annotate_position, helpers::error_handler {};
 struct VariableRule : helpers::annotate_position, helpers::error_handler {};
 struct TensorRule : helpers::annotate_position, helpers::error_handler {};
 struct PowerRule : helpers::annotate_position, helpers::error_handler {};
+struct RealImagPartRule : helpers::annotate_position, helpers::error_handler {};
 struct ProductRule : helpers::annotate_position, helpers::error_handler {};
 struct SumRule : helpers::annotate_position, helpers::error_handler {};
 struct ExprRule : helpers::annotate_position, helpers::error_handler {};
