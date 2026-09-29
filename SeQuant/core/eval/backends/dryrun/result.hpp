@@ -1,6 +1,7 @@
 #ifndef SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_RESULT_HPP
 #define SEQUANT_CORE_EVAL_BACKENDS_DRYRUN_RESULT_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backend_array_ops.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
@@ -96,9 +97,7 @@ namespace detail {
   ExtentOverrides out;
   for (auto const& [pos, w] : ov) {
     if (pos >= from.size()) continue;
-    auto const it = std::find(to.begin(), to.end(), from[pos]);
-    if (it != to.end())
-      out.emplace(static_cast<std::size_t>(it - to.begin()), w);
+    if (auto const p = find_position(to, from[pos])) out.emplace(*p, w);
   }
   return out;
 }
@@ -165,9 +164,9 @@ inline void check_shared_ranges(char const* op, annot_t const& lannot,
                                 ExtentOverrides const& rlob,
                                 std::shared_ptr<CostModel const> const& cm) {
   for (std::size_t lp = 0; lp < lannot.size(); ++lp) {
-    auto const rit = std::find(rannot.begin(), rannot.end(), lannot[lp]);
-    if (rit == rannot.end()) continue;
-    std::size_t const rp = static_cast<std::size_t>(rit - rannot.begin());
+    auto const rpos = find_position(rannot, lannot[lp]);
+    if (!rpos) continue;
+    std::size_t const rp = *rpos;
     // Both whole on this label => trivially equal (no regime query needed).
     if (!lov.count(lp) && !llob.count(lp) && !rov.count(rp) && !rlob.count(rp))
       continue;
@@ -408,10 +407,8 @@ struct DryRunOps {
     auto const bov = overrides_of(block);
     auto const bidx = indices_of(block);
     std::size_t const block_extent = [&] {
-      auto const it = std::find(bidx.begin(), bidx.end(), mix);
-      if (it != bidx.end()) {
-        auto const bpos = static_cast<std::size_t>(it - bidx.begin());
-        if (auto ov_it = bov.find(bpos); ov_it != bov.end())
+      if (auto const bpos = find_position(bidx, mix)) {
+        if (auto ov_it = bov.find(*bpos); ov_it != bov.end())
           return ov_it->second;
       }
       return cm->regime().extent(mix);
@@ -439,10 +436,8 @@ struct DryRunOps {
     // the destination slice it is written into.
     {
       auto const blob = lobounds_of(block);
-      auto const bit = std::find(bidx.begin(), bidx.end(), mix);
-      if (bit != bidx.end()) {
-        auto const bpos = static_cast<std::size_t>(bit - bidx.begin());
-        if (auto lit = blob.find(bpos);
+      if (auto const bpos = find_position(bidx, mix)) {
+        if (auto lit = blob.find(*bpos);
             lit != blob.end() && lit->second != block_lo)
           throw Exception(std::format(
               "[dryrun] write_into_slice: block lobound {} on mode {} ({}) != "

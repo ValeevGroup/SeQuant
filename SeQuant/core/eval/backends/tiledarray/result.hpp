@@ -5,6 +5,7 @@
 
 #include <sstream>
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
@@ -45,6 +46,13 @@ inline std::atomic<std::size_t>& wait_counter() {
 }
 inline void note_wait() {
   wait_counter().fetch_add(1, std::memory_order_relaxed);
+}
+/// waits for the deferred cleanup of \p arr's world (see
+/// TA::DistArray::wait_for_lazy_cleanup) and records the wait
+template <typename Array>
+void wait_for_lazy_cleanup(Array const& arr) {
+  Array::wait_for_lazy_cleanup(arr.world());
+  note_wait();
 }
 inline std::atomic<std::size_t>& slice_counter() {
   static std::atomic<std::size_t> c{0};
@@ -191,8 +199,7 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
   result(lannot) = nf * result(lannot);
 
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::wait_for_lazy_cleanup(result);
 
   return result;
 }
@@ -263,8 +270,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
       rational{1, factorial(bra_rank) * factorial(ket_rank)});
   result(lannot) = nf * result(lannot);
 
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::wait_for_lazy_cleanup(result);
   return result;
 }
 
@@ -395,19 +401,12 @@ template <typename LArrayT, typename RArrayT>
   auto const ro = outer_annot_labels(rannot);
   auto const co = outer_annot_labels(cannot);
 
-  auto find_dim = [](container::svector<std::string> const& labels,
-                     std::string const& lbl) -> std::optional<std::size_t> {
-    for (std::size_t i = 0; i < labels.size(); ++i)
-      if (labels[i] == lbl) return i;
-    return std::nullopt;
-  };
-
   std::vector<TA::TiledRange1> dims;
   dims.reserve(co.size());
   for (auto const& lbl : co) {
-    if (auto const i = find_dim(lo, lbl)) {
+    if (auto const i = find_position(lo, lbl)) {
       dims.emplace_back(larr.trange().dim(*i));
-    } else if (auto const j = find_dim(ro, lbl)) {
+    } else if (auto const j = find_position(ro, lbl)) {
       dims.emplace_back(rarr.trange().dim(*j));
     } else {
       throw Exception("result_outer_trange: result outer label '" + lbl +
@@ -436,6 +435,75 @@ template <typename LArrayT, typename RArrayT>
   SEQUANT_ASSERT(elem_hi >= tr1.elements_range().second ||
                  tr1.tile(tile_hi).first == elem_hi);  // hi on a tile boundary
   return {tile_lo, tile_hi};
+}
+
+/// \return the TiledRange of \p arr, as printed by TiledArray
+template <typename ArrayT>
+[[nodiscard]] std::string ta_trange_string(ArrayT const& arr) {
+  std::ostringstream os;
+  os << arr.trange();
+  return os.str();
+}
+
+/// \return the Frobenius norm of \p arr, or -1 if its tile type does not
+///         support TA::squared_norm
+template <typename ArrayT>
+[[nodiscard]] double ta_norm2(ArrayT const& arr) {
+  if constexpr (requires(ArrayT const& a) {
+                  { TA::squared_norm(a) } -> std::convertible_to<double>;
+                })
+    return std::sqrt(static_cast<double>(TA::squared_norm(arr)));
+  else
+    return -1.0;
+}
+
+/// diagnostic tile-by-tile comparison of \p a and \p b: counts of tiles
+/// nonzero in both, only in one, or in neither, and the norms of the
+/// one-sided tiles and of the difference on common tiles (local tiles only)
+template <typename ArrayT>
+[[nodiscard]] std::string ta_tile_diff(ArrayT const& a, ArrayT const& b) {
+  if (a.trange() != b.trange()) return "(trange mismatch)";
+  std::size_t only_a = 0, only_b = 0, both = 0, none = 0;
+  double n_only_a = 0.0, n_only_b = 0.0, n_both_diff = 0.0;
+  for (auto const& ord : a.tiles_range()) {
+    bool const za = a.is_zero(ord), zb = b.is_zero(ord);
+    if (za && zb) {
+      ++none;
+      continue;
+    }
+    if (!za && zb) {
+      ++only_a;
+      if (a.is_local(ord)) {
+        auto const t = a.find_local(ord).get();
+        if constexpr (requires { TA::norm(t); })
+          n_only_a += std::pow(static_cast<double>(TA::norm(t)), 2);
+      }
+      continue;
+    }
+    if (za && !zb) {
+      ++only_b;
+      if (b.is_local(ord)) {
+        auto const t = b.find_local(ord).get();
+        if constexpr (requires { TA::norm(t); })
+          n_only_b += std::pow(static_cast<double>(TA::norm(t)), 2);
+      }
+      continue;
+    }
+    ++both;
+    if (a.is_local(ord) && b.is_local(ord)) {
+      auto const ta = a.find_local(ord).get();
+      auto const tb = b.find_local(ord).get();
+      if constexpr (requires { TA::norm(ta.subt(tb)); })
+        n_both_diff += std::pow(static_cast<double>(TA::norm(ta.subt(tb))), 2);
+    }
+  }
+  std::ostringstream os;
+  os << "tiles: both=" << both << " only_this=" << only_a
+     << " only_other=" << only_b << " none=" << none
+     << " |only_this|=" << std::sqrt(n_only_a)
+     << " |only_other|=" << std::sqrt(n_only_b)
+     << " |diff on both|=" << std::sqrt(n_both_diff);
+  return os.str();
 }
 
 }  // namespace detail
@@ -557,9 +625,7 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] bool is_buffer_alias() const override { return alias_; }
 
   [[nodiscard]] std::string trange_annot() const override {
-    std::ostringstream oss;
-    oss << get<ArrayT>().trange();
-    return oss.str();
+    return detail::ta_trange_string(get<ArrayT>());
   }
 
  private:
@@ -663,7 +729,7 @@ class ResultTensorTA final : public Result {
     auto const ann = TA::detail::dummy_annotation(rank);
     ArrayT r;
     with_expr(ann, [&](auto&& e) { r(ann) = e; });
-    ArrayT::wait_for_lazy_cleanup(r.world());
+    ::sequant::detail::wait_for_lazy_cleanup(r);
     log_ta_tensor_host_memory_use();
     reset_value(std::move(r));
     view_.reset();
@@ -713,8 +779,7 @@ class ResultTensorTA final : public Result {
     with_expr(a.lannot, [&](auto&& le) {
       o.with_expr(a.rannot, [&](auto&& re) { result(a.this_annot) = le + re; });
     });
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -736,65 +801,14 @@ class ResultTensorTA final : public Result {
   }
 
   [[nodiscard]] double norm2() const override {
-    if constexpr (requires(ArrayT const& a) {
-                    { TA::squared_norm(a) } -> std::convertible_to<double>;
-                  })
-      return std::sqrt(static_cast<double>(TA::squared_norm(get<ArrayT>())));
-    else
-      return -1.0;
+    return detail::ta_norm2(get<ArrayT>());
   }
   [[nodiscard]] std::string layout_desc() const override {
-    std::ostringstream os;
-    os << get<ArrayT>().trange();
-    return os.str();
+    return detail::ta_trange_string(get<ArrayT>());
   }
   [[nodiscard]] std::string tile_diff(Result const& other) const override {
     if (!other.is<this_type>()) return "(kind mismatch)";
-    auto const& a = get<ArrayT>();
-    auto const& b = other.get<ArrayT>();
-    if (a.trange() != b.trange()) return "(trange mismatch)";
-    std::size_t only_a = 0, only_b = 0, both = 0, none = 0;
-    double n_only_a = 0.0, n_only_b = 0.0, n_both_diff = 0.0;
-    for (auto const& ord : a.tiles_range()) {
-      bool const za = a.is_zero(ord), zb = b.is_zero(ord);
-      if (za && zb) {
-        ++none;
-        continue;
-      }
-      if (!za && zb) {
-        ++only_a;
-        if (a.is_local(ord)) {
-          auto const t = a.find_local(ord).get();
-          if constexpr (requires { TA::norm(t); })
-            n_only_a += std::pow(static_cast<double>(TA::norm(t)), 2);
-        }
-        continue;
-      }
-      if (za && !zb) {
-        ++only_b;
-        if (b.is_local(ord)) {
-          auto const t = b.find_local(ord).get();
-          if constexpr (requires { TA::norm(t); })
-            n_only_b += std::pow(static_cast<double>(TA::norm(t)), 2);
-        }
-        continue;
-      }
-      ++both;
-      if (a.is_local(ord) && b.is_local(ord)) {
-        auto const ta = a.find_local(ord).get();
-        auto const tb = b.find_local(ord).get();
-        if constexpr (requires { TA::norm(ta.subt(tb)); })
-          n_both_diff +=
-              std::pow(static_cast<double>(TA::norm(ta.subt(tb))), 2);
-      }
-    }
-    std::ostringstream os;
-    os << "tiles: both=" << both << " only_this=" << only_a
-       << " only_other=" << only_b << " none=" << none
-       << " |only_this|=" << std::sqrt(n_only_a)
-       << " |only_other|=" << std::sqrt(n_only_b)
-       << " |diff on both|=" << std::sqrt(n_both_diff);
-    return os.str();
+    return detail::ta_tile_diff(get<ArrayT>(), other.get<ArrayT>());
   }
 
   void write_into_slice(Result const& block, std::size_t mode,
@@ -819,8 +833,7 @@ class ResultTensorTA final : public Result {
       ArrayT result;
       with_expr(a.lannot,
                 [&](auto&& le) { result(a.this_annot) = scalar * le; });
-      decltype(result)::wait_for_lazy_cleanup(result.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     }
@@ -836,10 +849,8 @@ class ResultTensorTA final : public Result {
               return TA::dot(le, re);
             });
           });
-      ArrayT::wait_for_lazy_cleanup(raw<ArrayT>().world());
-      ::sequant::detail::note_wait();
-      ArrayT::wait_for_lazy_cleanup(od.template raw<ArrayT>().world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::wait_for_lazy_cleanup(raw<ArrayT>());
+      ::sequant::detail::wait_for_lazy_cleanup(od.template raw<ArrayT>());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -869,8 +880,7 @@ class ResultTensorTA final : public Result {
       auto const B = o.logical_array();
       result = TA::einsum(A(a.lannot), B(a.rannot), a.this_annot);
     }
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -932,8 +942,7 @@ class ResultTensorTA final : public Result {
 
     auto const t0 = std::chrono::steady_clock::now();
     o.with_expr(ann, [&](auto&& oe) { t(ann) += oe; });
-    ArrayT::wait_for_lazy_cleanup(t.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(t);
     detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0,
                          oarr, ann);
     log_ta_tensor_host_memory_use();
@@ -972,9 +981,7 @@ class ResultTensorOfTensorTA final : public Result {
   explicit ResultTensorOfTensorTA(ArrayT arr) : Result{std::move(arr)} {}
 
   [[nodiscard]] std::string trange_annot() const override {
-    std::ostringstream oss;
-    oss << get<ArrayT>().trange();
-    return oss.str();
+    return detail::ta_trange_string(get<ArrayT>());
   }
 
  private:
@@ -1025,8 +1032,7 @@ class ResultTensorOfTensorTA final : public Result {
     ArrayT result;
     result(a.this_annot) =
         get<ArrayT>()(a.lannot) + other.get<ArrayT>()(a.rannot);
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -1040,65 +1046,14 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   [[nodiscard]] double norm2() const override {
-    if constexpr (requires(ArrayT const& a) {
-                    { TA::squared_norm(a) } -> std::convertible_to<double>;
-                  })
-      return std::sqrt(static_cast<double>(TA::squared_norm(get<ArrayT>())));
-    else
-      return -1.0;
+    return detail::ta_norm2(get<ArrayT>());
   }
   [[nodiscard]] std::string layout_desc() const override {
-    std::ostringstream os;
-    os << get<ArrayT>().trange();
-    return os.str();
+    return detail::ta_trange_string(get<ArrayT>());
   }
   [[nodiscard]] std::string tile_diff(Result const& other) const override {
     if (!other.is<this_type>()) return "(kind mismatch)";
-    auto const& a = get<ArrayT>();
-    auto const& b = other.get<ArrayT>();
-    if (a.trange() != b.trange()) return "(trange mismatch)";
-    std::size_t only_a = 0, only_b = 0, both = 0, none = 0;
-    double n_only_a = 0.0, n_only_b = 0.0, n_both_diff = 0.0;
-    for (auto const& ord : a.tiles_range()) {
-      bool const za = a.is_zero(ord), zb = b.is_zero(ord);
-      if (za && zb) {
-        ++none;
-        continue;
-      }
-      if (!za && zb) {
-        ++only_a;
-        if (a.is_local(ord)) {
-          auto const t = a.find_local(ord).get();
-          if constexpr (requires { TA::norm(t); })
-            n_only_a += std::pow(static_cast<double>(TA::norm(t)), 2);
-        }
-        continue;
-      }
-      if (za && !zb) {
-        ++only_b;
-        if (b.is_local(ord)) {
-          auto const t = b.find_local(ord).get();
-          if constexpr (requires { TA::norm(t); })
-            n_only_b += std::pow(static_cast<double>(TA::norm(t)), 2);
-        }
-        continue;
-      }
-      ++both;
-      if (a.is_local(ord) && b.is_local(ord)) {
-        auto const ta = a.find_local(ord).get();
-        auto const tb = b.find_local(ord).get();
-        if constexpr (requires { TA::norm(ta.subt(tb)); })
-          n_both_diff +=
-              std::pow(static_cast<double>(TA::norm(ta.subt(tb))), 2);
-      }
-    }
-    std::ostringstream os;
-    os << "tiles: both=" << both << " only_this=" << only_a
-       << " only_other=" << only_b << " none=" << none
-       << " |only_this|=" << std::sqrt(n_only_a)
-       << " |only_other|=" << std::sqrt(n_only_b)
-       << " |diff on both|=" << std::sqrt(n_both_diff);
-    return os.str();
+    return detail::ta_tile_diff(get<ArrayT>(), other.get<ArrayT>());
   }
 
   void write_into_slice(Result const& block, std::size_t mode,
@@ -1123,8 +1078,7 @@ class ResultTensorOfTensorTA final : public Result {
 
       result(a.this_annot) = scalar * result(a.lannot);
 
-      decltype(result)::wait_for_lazy_cleanup(result.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::wait_for_lazy_cleanup(result);
       log_ta_tensor_host_memory_use();
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
@@ -1132,10 +1086,8 @@ class ResultTensorOfTensorTA final : public Result {
       SEQUANT_ASSERT(other.is<this_type>());
       numeric_type d =
           TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
-      ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
-      ::sequant::detail::note_wait();
-      ArrayT::wait_for_lazy_cleanup(other.get<ArrayT>().world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::wait_for_lazy_cleanup(get<ArrayT>());
+      ::sequant::detail::wait_for_lazy_cleanup(other.get<ArrayT>());
 
       detail::log_ta(a.lannot, " * ", a.rannot, " = ", d, "\n");
 
@@ -1194,8 +1146,7 @@ class ResultTensorOfTensorTA final : public Result {
 
     ArrayT result;
     result(post_annot) = get<ArrayT>()(pre_annot);
-    ArrayT::wait_for_lazy_cleanup(result.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -1224,7 +1175,7 @@ class ResultTensorOfTensorTA final : public Result {
       else
         result(post_annot) = get<ArrayT>()(pre_annot);
     }
-    ArrayT::wait_for_lazy_cleanup(result.world());
+    ::sequant::detail::wait_for_lazy_cleanup(result);
     log_ta_tensor_host_memory_use();
     return eval_result<this_type>(std::move(result));
   }
@@ -1250,8 +1201,7 @@ class ResultTensorOfTensorTA final : public Result {
 
     auto const t0 = std::chrono::steady_clock::now();
     t(ann) += o(ann);
-    ArrayT::wait_for_lazy_cleanup(t.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(t);
     detail::log_batch_op("Accumulate", std::chrono::steady_clock::now() - t0, o,
                          ann);
     log_ta_tensor_host_memory_use();
@@ -1355,8 +1305,7 @@ template <typename... Args>
   // keeps its real element offset too, consistently across all sliced operands.
   auto const t0 = std::chrono::steady_clock::now();
   out(annot) = arr(annot).block(lo, hi, TA::preserve_lobound);
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(arr.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::wait_for_lazy_cleanup(arr);
   detail::log_batch_op("Slice", std::chrono::steady_clock::now() - t0, out,
                        annot + " mode=" + std::to_string(mode) + " tiles=[" +
                            std::to_string(tile_lo) + "," +
@@ -1423,8 +1372,7 @@ void write_array_into_mode(TA::DistArray<Args...>& dest,
   // block() would rebase the sub-block to 0 and mismatch the source trange.
   auto const t0 = std::chrono::steady_clock::now();
   dest(annot).block(lo, hi, TA::preserve_lobound) = block(annot);
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(dest.world());
-  ::sequant::detail::note_wait();
+  ::sequant::detail::wait_for_lazy_cleanup(dest);
   detail::log_batch_op("Scatter", std::chrono::steady_clock::now() - t0, block,
                        annot + " mode=" + std::to_string(mode) + " tiles=[" +
                            std::to_string(tile_lo) + "," +
@@ -1526,8 +1474,7 @@ template <typename NumericT, typename PolicyT,
     out(a.this_annot) =
         (left.get<FlatArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
             .set_shape(shape);
-    FlatArray::wait_for_lazy_cleanup(out.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(out);
     return eval_result<FlatResult>(std::move(out));
   }
 
@@ -1548,8 +1495,7 @@ template <typename NumericT, typename PolicyT,
           (left.get<ToTArray>()(a.lannot) * right.get<FlatArray>()(a.rannot))
               .set_shape(shape);
     }
-    ToTArray::wait_for_lazy_cleanup(out.world());
-    ::sequant::detail::note_wait();
+    ::sequant::detail::wait_for_lazy_cleanup(out);
     return eval_result<ToTResult>(std::move(out));
   }
 
@@ -1561,8 +1507,7 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) = left.get<ToTArray>()(a.lannot)
                               .dot_inner(right.get<ToTArray>()(a.rannot))
                               .set_shape(shape);
-      FlatArray::wait_for_lazy_cleanup(out.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::wait_for_lazy_cleanup(out);
       return eval_result<FlatResult>(std::move(out));
     } else {
       // ToT * ToT -> ToT (general product). TiledArray's expression-layer
@@ -1578,8 +1523,7 @@ template <typename NumericT, typename PolicyT,
       out(a.this_annot) =
           (left.get<ToTArray>()(a.lannot) * right.get<ToTArray>()(a.rannot))
               .set_shape(shape);
-      ToTArray::wait_for_lazy_cleanup(out.world());
-      ::sequant::detail::note_wait();
+      ::sequant::detail::wait_for_lazy_cleanup(out);
       return eval_result<ToTResult>(std::move(out));
     }
   }

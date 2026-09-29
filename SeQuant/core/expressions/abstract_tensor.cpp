@@ -12,6 +12,16 @@
 
 namespace sequant {
 
+void reset_tags(const ExprPtr& expr) {
+  expr->visit(
+      [](const ExprPtr& current) {
+        if (current.is<AbstractTensor>()) {
+          reset_tags(current->as<AbstractTensor>());
+        }
+      },
+      /* atoms_only = */ true);
+}
+
 bool has_tensor(const ExprPtr& expr, std::wstring label) {
   if (expr->is<Constant>() || expr->is<Variable>()) return false;
 

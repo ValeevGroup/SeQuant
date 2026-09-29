@@ -81,6 +81,17 @@ bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 /// @returns The removed tensor, if any occurrence has been found
 std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
 
+/// Removes the (anti)symmetrization operator, i.e. the tensor labeled
+/// reserved::symm_label() or, if there is none, the one labeled
+/// reserved::antisymm_label(), from the given expression (see pop_tensor)
+///
+/// @param expression The expression to modify
+/// @returns The removed operator, if any
+std::optional<ExprPtr> pop_symmetrizer(ExprPtr &expression);
+
+/// @copydoc pop_symmetrizer(ExprPtr&)
+std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expression);
+
 /// Replaces a given target expression by a given replacement
 ///
 /// If target and replacement have common indices, the indices in the

@@ -203,14 +203,3 @@ sequant::ExprPtr generateResultSymmetrization(
 
   return symmetrization;
 }
-
-std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expr) {
-  std::optional<ExprPtr> symmetrizer =
-      pop_tensor(expr.expression(), reserved::symm_label());
-
-  if (!symmetrizer.has_value()) {
-    symmetrizer = pop_tensor(expr.expression(), reserved::antisymm_label());
-  }
-
-  return symmetrizer;
-}

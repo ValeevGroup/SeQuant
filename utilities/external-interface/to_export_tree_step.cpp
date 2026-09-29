@@ -7,6 +7,7 @@
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 
 #include <nlohmann/json.hpp>
 

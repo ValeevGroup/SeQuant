@@ -1000,9 +1000,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter<TensorNetworkV3> colorizer(named_indices,
-                                           options.distinct_named_indices,
-                                           options.named_index_colors);
+  VertexPainter colorizer(named_indices, options.distinct_named_indices,
+                          options.named_index_colors);
 
   // results
   Graph graph;
@@ -1118,7 +1117,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // min (number of bra slots, number of ket slots) slots, i.e. the number of
     // 2-index columns
     const std::size_t num_paired_cols =
-        std::max(bra_rank(tensor), ket_rank(tensor));
+        std::min(bra_rank(tensor), ket_rank(tensor));
     // A tensor whose bra<->ket exchange is a respelling (see
     // braket_foldable()) gets symmetric bra/ket bundle colors, so that the
     // two orientations share one graph; Antisymm, whose respelling costs a
@@ -1179,9 +1178,6 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // create vertices for bra and ket slot bundles of any symmetry
-    // N.B. TNV1/TNV2 created such vertices for symmetric/anstisymmetric
-    // bra/ket also but did not create index slots. Here we create them
-    // even for asymmetric bra/ket
     {
       for (auto s : {Origin::Bra, Origin::Ket}) {
         const bool bra = s == Origin::Bra;
@@ -1213,8 +1209,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       }
     }
 
-    // - Create vertex for every index slot, regardless of symmetry (V1 and V2
-    // only created slots for antisymmetric/symmetric tensors)
+    // - Create vertex for every index slot, regardless of symmetry
     for (auto &slot_type : {SlotType::Bra, SlotType::Ket}) {
       const auto is_bra = slot_type == SlotType::Bra;
       const auto vertex_type =
@@ -1717,10 +1712,10 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
         TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
-    [[maybe_unused]] const TensorCanonicalizer &tensor_canonizer =
+    const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 
-    auto bp = canonicalizer.apply(*tensor);
+    auto bp = tensor_canonizer.apply(*tensor);
 
     if (bp) {
       byproduct *= bp;

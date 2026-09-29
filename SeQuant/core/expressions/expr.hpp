@@ -14,6 +14,8 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <string>
+#include <string_view>
 
 namespace sequant {
 
@@ -23,6 +25,24 @@ inline constexpr wchar_t adjoint_label = L'⁺';
 /// conjugated Variable, `x꙳` (U+A673 SLAVONIC ASTERISK: Unicode has no
 /// spacing superscript asterisk; LaTeX renders it as `^{*}`)
 inline constexpr wchar_t conjugate_label = L'꙳';
+
+/// @return true if @p label ends with the adjoint marker ::adjoint_label
+inline bool is_adjoint_label(std::wstring_view label) {
+  return !label.empty() && label.back() == adjoint_label;
+}
+
+/// @return @p label without its trailing adjoint marker, if present
+inline std::wstring_view strip_adjoint_label(std::wstring_view label) {
+  return is_adjoint_label(label) ? label.substr(0, label.size() - 1) : label;
+}
+
+/// appends the adjoint marker to @p label, or removes it if already present
+inline void toggle_adjoint_label(std::wstring &label) {
+  if (is_adjoint_label(label))
+    label.pop_back();
+  else
+    label.push_back(adjoint_label);
+}
 
 /// @brief Base expression class
 

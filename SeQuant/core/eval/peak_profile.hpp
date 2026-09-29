@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_PEAK_PROFILE_HPP
 #define SEQUANT_EVAL_PEAK_PROFILE_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -108,9 +109,7 @@ template <typename BlockOfFn>
   // (including as a composite's outer proto), so composite slicing is
   // preserved.
   for (auto const& m : home_modes) {
-    auto const it = std::find(carried.begin(), carried.end(), m);
-    if (it != carried.end())
-      ov[static_cast<std::size_t>(it - carried.begin())] = block_of(m);
+    if (auto const p = find_position(carried, m)) ov[*p] = block_of(m);
   }
   return cm.memsize(carried, ov);  // non-meet carried modes full
 }
@@ -565,27 +564,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
     r.home = home_scope(n);    // sliced_modes (empty on leaves)
     r.carried.assign(n->canon_indices().begin(), n->canon_indices().end());
     // Modes this node contracts in batches at its own node -- mirrors
-    // legality::build_site_of's contracted test (eval.hpp's
-    // contracted_indices(n), intersected with a Contracted-kind
-    // node_slice_mask() stamp) verbatim, inlined rather than shared: this
-    // header cannot include legality.hpp / eval.hpp (legality.hpp already
-    // depends on peak_profile.hpp).
-    if (!n.leaf() && n->is_product()) {
-      auto const& l = n.left()->canon_indices();
-      auto const& rr = n.right()->canon_indices();
-      auto const& c = n->canon_indices();
-      auto const contains = [](auto const& vec, Index const& ix) {
-        return std::find(vec.begin(), vec.end(), ix) != vec.end();
-      };
+    // legality::build_site_of's contracted test (contracted_indices(n),
+    // intersected with a Contracted-kind node_slice_mask() stamp).
+    {
       auto const& stamps = n->node_slice_mask();
-      for (Index const& ix : l) {
-        if (!contains(rr, ix) || contains(c, ix))
-          continue;  // not contracted at this node
+      for (Index const& ix : contracted_indices(n)) {
         bool const batched =
             std::any_of(stamps.begin(), stamps.end(), [&](auto const& p) {
               return p.second == BatchModeType::Contracted && p.first == ix;
             });
-        if (batched && !contains(r.contracted_batched, ix))
+        if (batched &&
+            std::find(r.contracted_batched.begin(), r.contracted_batched.end(),
+                      ix) == r.contracted_batched.end())
           r.contracted_batched.push_back(ix);
       }
     }
@@ -1113,11 +1103,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       carried_seeded[r.key] = true;
       is.assign(r.carried.begin(), r.carried.end());
     } else {
-      container::svector<Index> keep;
-      for (auto const& m : is)
-        if (std::find(r.carried.begin(), r.carried.end(), m) != r.carried.end())
-          keep.push_back(m);
-      is = std::move(keep);
+      detail::lifetime_mask_intersect_in_place(is, r.carried);
     }
   }
 

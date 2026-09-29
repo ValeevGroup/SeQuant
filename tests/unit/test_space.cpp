@@ -96,6 +96,11 @@ TEST_CASE("index_space", "[elements]") {
             isr->retrieve(L"m"));
     REQUIRE(isr->vacuum_unoccupied_space(IndexSpace::QuantumNumbers::null) ==
             isr->retrieve(L"e"));
+    const auto& m = isr->retrieve(L"m");
+    REQUIRE_NOTHROW(isr->vacuum_occupied_space(
+        container::map<IndexSpace::QuantumNumbers, IndexSpace::Type>{
+            {m.qns(), m.type()}}));
+    REQUIRE(isr->vacuum_occupied_space(m.qns()) == m);
     REQUIRE(isr->retrieve("e").field() == Field::Real);
   }
 

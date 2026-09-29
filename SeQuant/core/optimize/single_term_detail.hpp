@@ -374,10 +374,8 @@ container::vector<container::vector<double>> sliced_footprints(
       // slice of any mode admitted outside it a no-op -- the mode sits in the
       // sliced set B yet keeps its full extent, so the DP sees no benefit and
       // never batches it.
-      auto it = ranges::find(aux_list, ix);
-      if (it != ranges::end(aux_list)) {
-        std::size_t k = static_cast<std::size_t>(it - ranges::begin(aux_list));
-        if (B & (std::size_t{1} << k))
+      if (auto const k = find_position(aux_list, ix)) {
+        if (B & (std::size_t{1} << *k))
           return std::min(e, std::max<std::size_t>(batch_target_size(ix), 1));
       }
       return e;

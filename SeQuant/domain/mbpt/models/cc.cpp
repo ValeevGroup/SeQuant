@@ -17,6 +17,7 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -34,6 +35,31 @@ inline auto commutator(const sequant::ExprPtr& A, const sequant::ExprPtr& B) {
 }  // namespace
 
 namespace sequant::mbpt {
+
+namespace {
+/// operator-level screening of the terms of @p expr
+/// @return {terms satisfying @p keep, those of them also satisfying
+///         @p for_vev}; either Sum is null if no term qualifies
+template <typename Keep, typename ForVev>
+std::pair<std::shared_ptr<Sum>, std::shared_ptr<Sum>> screen_terms(
+    const ExprPtr& expr, Keep&& keep, ForVev&& for_vev) {
+  auto append = [](std::shared_ptr<Sum>& sum, const ExprPtr& term) {
+    if (!sum)
+      sum = std::make_shared<Sum>(ExprPtrList{term});
+    else
+      sum->append(term);
+  };
+  std::shared_ptr<Sum> kept, kept_for_vev;
+  for (auto& term : *expr) {
+    SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
+    if (keep(term)) {
+      append(kept, term);
+      if (for_vev(term)) append(kept_for_vev, term);
+    }
+  }
+  return {std::move(kept), std::move(kept_for_vev)};
+}
+}  // namespace
 
 CC::CC(size_t n) : CC(n, Options{}) {}
 
@@ -151,21 +177,12 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
         hbar_le_p;  // keeps products that can produce excitations rank <=p
 
     if (opts_.screen) {  // if operator level screening is on
-      for (auto& term : *hbar) {
-        SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
-        if (raises_vacuum_up_to_rank(term, p)) {
-          if (!hbar_le_p)
-            hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
-          else
-            hbar_le_p->append(term);
-          if (raises_vacuum_to_rank(term, p)) {
-            if (!hbar_for_vev)
-              hbar_for_vev = std::make_shared<Sum>(ExprPtrList{term});
-            else
-              hbar_for_vev->append(term);
-          }
-        }
-      }
+      std::tie(hbar_le_p, hbar_for_vev) = screen_terms(
+          hbar,
+          [p](const ExprPtr& term) {
+            return raises_vacuum_up_to_rank(term, p);
+          },
+          [p](const ExprPtr& term) { return raises_vacuum_to_rank(term, p); });
       hbar = hbar_le_p;
     } else {  // no screening, use full hbar
       hbar_for_vev = hbar.is<Sum>() ? hbar.as_shared_ptr<Sum>()
@@ -219,22 +236,12 @@ std::vector<ExprPtr> CC::λ() const {
     std::shared_ptr<Sum>
         lhbar_le_p;      // keeps products that can produce excitations rank <=p
     if (opts_.screen) {  // if operator level screening is enabled
-      for (auto& term : *lhbar) {  // pick terms from lhbar
-        SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
-
-        if (lowers_rank_or_lower_to_vacuum(term, p)) {
-          if (!lhbar_le_p)
-            lhbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
-          else
-            lhbar_le_p->append(term);
-          if (lowers_rank_to_vacuum(term, p)) {
-            if (!lhbar_for_vev)
-              lhbar_for_vev = std::make_shared<Sum>(ExprPtrList{term});
-            else
-              lhbar_for_vev->append(term);
-          }
-        }
-      }
+      std::tie(lhbar_le_p, lhbar_for_vev) = screen_terms(
+          lhbar,
+          [p](const ExprPtr& term) {
+            return lowers_rank_or_lower_to_vacuum(term, p);
+          },
+          [p](const ExprPtr& term) { return lowers_rank_to_vacuum(term, p); });
       lhbar = lhbar_le_p;
     } else {  // no screening
       lhbar_for_vev = lhbar.is<Sum>() ? lhbar.as_shared_ptr<Sum>()
@@ -421,12 +428,7 @@ constexpr Normalization eom_norm = Normalization::SquareRoot;
 /// reference and, for IP/EA, once either count reaches zero.
 container::svector<std::pair<std::int64_t, std::int64_t>> eom_manifolds(nₚ np,
                                                                         nₕ nh) {
-  container::svector<std::pair<std::int64_t, std::int64_t>> manifolds;
-  for (std::int64_t rp = np, rh = nh; rp >= 0 && rh >= 0; --rp, --rh) {
-    if (rp == 0 && rh == 0) break;
-    manifolds.emplace_back(rp, rh);
-    if (rp == 0 || rh == 0) break;
-  }
+  auto manifolds = detail::descending_rank_pairs(np, nh);
   std::ranges::reverse(manifolds);
   return manifolds;
 }

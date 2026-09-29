@@ -15,6 +15,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -51,12 +52,6 @@ TEST_CASE("spin", "[spin]") {
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<AbstractTensor>())
-      ranges::for_each(expr->as<AbstractTensor>()._slots(),
-                       [](const Index& idx) { idx.reset_tag(); });
-  };
 
   SECTION("protoindices supported") {
     auto isr = get_default_context().index_space_registry();
@@ -859,6 +854,14 @@ SECTION("Swap bra kets") {
     REQUIRE_THAT(result, EquivalentTo("g{a1,a2;i1,i2}"));
   }
 
+  // Tensor with aux indices
+  {
+    auto input = ex<Tensor>(L"B", bra{L"i_1"}, ket{L"a_1"}, aux{L"x_1"},
+                            particle_symmetric);
+    auto result = swap_bra_ket(input);
+    REQUIRE_THAT(result, EquivalentTo("B{a1;i1;x1}"));
+  }
+
   // Product
   {
     auto input = ex<Tensor>(L"g", bra{L"a_5", L"a_6"}, ket{L"i_5", L"i_6"},
@@ -1491,7 +1494,7 @@ SECTION("Relation in spin P operators") {
   auto p6_input = p_aab * input;
   expand(p6_input);
   auto p6_result = expand_P_op(p6_input);
-  p6_result->visit(reset_idx_tags);
+  reset_tags(p6_result);
   simplify(p6_result);
 
   auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
@@ -1505,24 +1508,24 @@ SECTION("Relation in spin P operators") {
   expand(p6_result);
   canonicalize(p6_result);
   p6_result = expand_A_op(p6_result);
-  p6_result->visit(reset_idx_tags);
+  reset_tags(p6_result);
   simplify(p6_result);
 
   auto p7_input = p_abb * input;
   expand(p7_input);
   auto p7_result = expand_P_op(p7_input);
-  p7_result->visit(reset_idx_tags);
+  reset_tags(p7_result);
   simplify(p7_result);
 
   p7_result = A_23 * p7_result;
   expand(p7_result);
   p7_result = expand_A_op(p7_result);
-  p7_result->visit(reset_idx_tags);
+  reset_tags(p7_result);
   simplify(p7_result);
 
   auto expanded_A = A3 * input;
   expanded_A = expand_A_op(expanded_A);
-  expanded_A->visit(reset_idx_tags);
+  reset_tags(expanded_A);
   simplify(expanded_A);
   REQUIRE(p6_result == p7_result);
   REQUIRE(p6_result == expanded_A);
@@ -1700,7 +1703,7 @@ SECTION("Open-shell spin-tracing") {
 
     auto input = ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
     auto result = expand_A_op(input);
-    result->visit(reset_idx_tags);
+    reset_tags(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
                               "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
@@ -1711,7 +1714,7 @@ SECTION("Open-shell spin-tracing") {
 
     input = ex<Tensor>(A2_aab) * ex<Tensor>(g) * ex<Tensor>(t3);
     result = expand_A_op(input);
-    result->visit(reset_idx_tags);
+    reset_tags(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-1 g{i↑_3,i↑_4;i↑_1,i↑_2}:A-N-S * "
                               "t{a↑_1,a↑_2,a↓_3;i↑_4,i↑_3,i↓_3}:N-N-S"));
@@ -1736,7 +1739,7 @@ SECTION("Open-shell spin-tracing") {
     auto result2 = ex<Tensor>(A3_aaa) * result[0];
     expand(result2);
     result2 = expand_A_op(result2);
-    result2->visit(reset_idx_tags);
+    reset_tags(result2);
     canonicalize(result2);
     rapid_simplify(result2);
     REQUIRE(result2->size() == 27);
@@ -1746,7 +1749,7 @@ SECTION("Open-shell spin-tracing") {
     auto result3 = ex<Tensor>(A3_bbb) * result[3];
     expand(result3);
     result3 = expand_A_op(result3);
-    result3->visit(reset_idx_tags);
+    reset_tags(result3);
     canonicalize(result3);
     rapid_simplify(result3);
     REQUIRE(result3->size() == 27);
@@ -1775,7 +1778,7 @@ SECTION("Open-shell spin-tracing") {
                        ket{L"i_3", L"i_4", L"i_5"}, Symmetry::Antisymm);
 
     input = expand_P_op(input);
-    input->visit(reset_idx_tags);
+    reset_tags(input);
     auto result = open_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
@@ -1785,7 +1788,7 @@ SECTION("Open-shell spin-tracing") {
                       result[1];
     expand(result_aab);
     result_aab = expand_A_op(result_aab);
-    result_aab->visit(reset_idx_tags);
+    reset_tags(result_aab);
     canonicalize(result_aab);
     rapid_simplify(result_aab);
     REQUIRE(result_aab->size() == 18);
@@ -1880,6 +1883,48 @@ SECTION("ResultExpr") {
           "- 2 g{a1,u1;u3,i1} γ{u3;u2}",
       },
   };
+
+  SECTION("permuted results with mixed spaces") {
+    // each result R{P(bra);ket} must match tracing the nonsymmetric
+    // R{P(bra);ket} = g{P(bra);ket}, whose sign comes from canonicalizing g
+    // instead; for 3 bra indices the permutations do not alternate in sign.
+    // Permutations that pair the same bra and ket spaces yield one result.
+    auto csv = [](const auto& indices) {
+      return join_strings<std::wstring>(indices, L",", [](const Index& idx) {
+        return std::wstring(idx.full_label());
+      });
+    };
+
+    const std::vector<std::pair<std::wstring, std::size_t>> slots_and_counts = {
+        {L"a1,u1,i1;i2,u2,a2", 6}, {L"a1,a2,u1;i1,i2,u2", 2}};
+    for (const auto& [slots, count] : slots_and_counts)
+      for (std::wstring symm : {L"A", L"S"}) {
+        CAPTURE(toUtf8(slots), toUtf8(symm));
+        const ResultExpr input = deserialize<ResultExpr>(
+            L"R{" + slots + L"}:" + symm + L" = g{" + slots + L"}:" + symm);
+        auto reference = [&](const ResultExpr& result) {
+          const std::wstring result_slots =
+              csv(result.bra()) + L";" + csv(result.ket());
+          return deserialize<ResultExpr>(L"R{" + result_slots + L"}:N = g{" +
+                                         result_slots + L"}:" + symm);
+        };
+
+        for (bool closed_shell : {true, false}) {
+          CAPTURE(closed_shell);
+          auto trace = [&](const ResultExpr& expr) {
+            return closed_shell ? closed_shell_spintrace(expr.clone())
+                                : spintrace(expr.clone());
+          };
+          const auto actual = trace(input);
+          REQUIRE(actual.size() == count);
+          for (const ResultExpr& result : actual) {
+            const auto expected = trace(reference(result));
+            REQUIRE(expected.size() == 1);
+            REQUIRE_THAT(result, EquivalentTo(expected.front()));
+          }
+        }
+      }
+  }
 
   REQUIRE(inputs.size() == expected_outputs.size());
 

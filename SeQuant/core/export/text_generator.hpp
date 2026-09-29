@@ -125,13 +125,8 @@ class TextGenerator : public Generator<Context> {
   }
 
   std::string represent(const Power &power, const Context &ctx) const override {
-    const ExprPtr &base = power.base();
-    std::string base_str = stringify(*base, ctx);
-    auto s = detail::format_power_base(base, std::move(base_str)) + "^" +
-             detail::format_power_exponent(power.exponent(),
-                                           /*double_slash*/ false);
-    if (power.conjugated()) s = wrap_conj(std::move(s));
-    return s;
+    return detail::format_power(power, stringify(*power.base(), ctx), "^",
+                                /*double_slash*/ false, &wrap_conj);
   }
 
   void create(const Tensor &tensor, bool zero_init,
@@ -328,53 +323,27 @@ class TextGenerator : public Generator<Context> {
   std::string m_generated;
   std::string m_indent;
 
+  /// @return @p leaf rendered in a value position
+  template <typename T>
+  std::string stringify_leaf(const T &leaf, const Context &ctx) const {
+    return represent(leaf, ctx);
+  }
+
+  /// @return @p variable rendered in a value position
+  /// @note represent() names the variable; in a value position its conjugation
+  ///       has to be spelled out, because the name does not carry it
+  std::string stringify_leaf(const Variable &variable,
+                             const Context &ctx) const {
+    std::string repr = represent(variable, ctx);
+    if (variable.conjugated()) repr = wrap_conj(std::move(repr));
+    return repr;
+  }
+
   std::string stringify(const Expr &expr, const Context &ctx) const {
-    if (expr.is<Tensor>()) {
-      return represent(expr.as<Tensor>(), ctx);
-    } else if (expr.is<Variable>()) {
-      const Variable &variable = expr.as<Variable>();
-      std::string repr = represent(variable, ctx);
-      // represent() names the variable; in a value position its conjugation
-      // has to be spelled out, because the name does not carry it
-      if (variable.conjugated()) repr = wrap_conj(std::move(repr));
-      return repr;
-    } else if (expr.is<Constant>()) {
-      return represent(expr.as<Constant>(), ctx);
-    } else if (expr.is<Power>()) {
-      return represent(expr.as<Power>(), ctx);
-    } else if (expr.is<Product>()) {
-      const Product &product = expr.as<Product>();
-      std::string repr;
-
-      if (!product.scalar().is_identity()) {
-        repr += represent(Constant(product.scalar()), ctx) + " ";
-      }
-
-      for (std::size_t i = 0; i < product.size(); ++i) {
-        repr += stringify(*product.factor(i), ctx);
-
-        if (i + 1 < product.size()) {
-          repr += " ";
-        }
-      }
-
-      return repr;
-    } else if (expr.is<Sum>()) {
-      const Sum &sum = expr.as<Sum>();
-      std::string repr;
-
-      for (std::size_t i = 0; i < sum.size(); ++i) {
-        repr += stringify(*sum.summand(i), ctx);
-
-        if (i + 1 < sum.size()) {
-          repr += " + ";
-        }
-      }
-
-      return repr;
-    }
-
-    throw Exception("Unsupported expression type in TextGenerator::compute");
+    return detail::stringify_expr(
+        expr, " ",
+        [this, &ctx](const auto &e) { return this->stringify_leaf(e, ctx); },
+        "TextGenerator::compute");
   }
 
   static std::string wrap_conj(std::string s) {

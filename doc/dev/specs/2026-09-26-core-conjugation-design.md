@@ -653,8 +653,8 @@ complex basis is not.* Three audiences, three documents:
 Storage orientation at the eval boundary (lazy conj); Kramers-structured
 bases and index-level conjugation; complex-symmetric bilinear tensors (two
 covariant slots with a permutation symmetry, representable today by slot
-structure, not by an exchange symmetry); serialization of `RealPart`/`ImagPart`;
-`TensorNetworkV1`/`V2` deprecation.
+structure, not by an exchange symmetry); serialization of
+`RealPart`/`ImagPart`.
 
 ## 16. Open decisions
 

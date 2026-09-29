@@ -275,17 +275,6 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
   cell_by_hash.reserve(rich.cells.size());
   for (auto const& cell : rich.cells) cell_by_hash.emplace(cell.hash, &cell);
 
-  // dag-scope formatting: comma-joined IndexSpace base_keys, no trailing
-  // comma -- the same convention make_node_meta uses (ordered_executor.hpp).
-  auto const dag_scope = [](auto const& modes) {
-    std::string s;
-    for (auto const& m : modes) {
-      if (!s.empty()) s += ",";
-      s += toUtf8(m.space().base_key());
-    }
-    return s;
-  };
-
   std::size_t idx = 0;
   for (auto const& [node, tally] : cache.recompute_tally()) {
     std::size_t builds = 0;
@@ -317,11 +306,11 @@ MeterReport assemble_report(Cache const& cache, PeakMonitor const& mon,
     hf.builds = builds;
     if (auto it = cell_by_hash.find(hash); it != cell_by_hash.end()) {
       auto const* cell = it->second;
-      hf.home = dag_scope(cell->home_modes);
+      hf.home = eval::detail::dag_scope(cell->home_modes);
       container::svector<Index> uses_modes;
       for (auto const& occ : cell->occurrences)
         for (auto const& [mode, range] : occ.ectx) uses_modes.push_back(mode);
-      hf.uses = dag_scope(uses_modes);
+      hf.uses = eval::detail::dag_scope(uses_modes);
     }
     report.home_fidelity.push_back(std::move(hf));
   }
