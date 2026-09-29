@@ -78,6 +78,36 @@ it into individual contributions, each with definite effect on quantum numbers. 
     - Although the user can construct ``mbpt::Operator`` directly, SeQuant predefines factories for many commonly-used operators. For example, functions :class:`H_ <sequant::mbpt::op::H_>`, :class:`T_ <sequant::mbpt::op::T_>`, :class:`Λ_ <sequant::mbpt::op::Λ_>`, :class:`R_ <sequant::mbpt::op::R_>`, and :class:`L_ <sequant::mbpt::op::L_>`  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).
     - There are convenient helper functions available in ``sequant::mbpt`` namespace for constructing different types of ``QuantumNumberChange`` objects. For example, see ``sequant::mbpt::excitation_type_qns``.
 
+Adjoint and conjugation
+-----------------------
+
+:func:`adjoint() <sequant::adjoint>` returns the adjoint of an ``mbpt::Operator``, or of any expression built from operators:
+the operator's label gains a trailing ``⁺`` (``t`` becomes ``t⁺``, whose LaTeX form prints the bare label with a dagger, braced so that a rank superscript attaches to the group: ``{{\hat{t}^{\dagger}}^{1}}``, or ``{\hat{f}^{\dagger}}`` where no rank is printed), its action on
+the quantum numbers is inverted, and its tensor form is the adjoint of the original's. In that tensor form the amplitude of a
+non-Hermitian operator is the adjointed tensor ``t⁺`` over complex orbitals; over real orbitals the same value is spelled ``t꙳`` with the
+slots in place. The integral of a Hermitian operator such as the Hamiltonian stays the same tensor with bra and ket exchanged.
+:func:`conjugate() <sequant::conjugate>` is the complex conjugate of a scalar or of a c-number expression (constants, variables,
+tensor expressions); an operator has no value to conjugate, so on operator-valued expressions it throws.
+
+The marks these operations leave in the output:
+
+.. table::
+   :widths: auto
+
+   ==============  ===================================================================================================  ===============  ===========================
+   Mark            Meaning                                                                                              Serialized       LaTeX
+   ==============  ===================================================================================================  ===============  ===========================
+   ``t⁺``          the adjoint of ``t``: ``t⁺{q;p}`` is the complex conjugate of ``t{p;q}``                              ``t⁺{q;p}``      :math:`t^{\dagger}`
+   ``t꙳``          the conjugated operator ``t``, slots in place; over real orbitals, the complex-conjugated array       ``t꙳{p;q}``      :math:`t^{*}`
+   ``x꙳``          the complex conjugate of the variable ``x``                                                           ``x꙳``           :math:`x^{*}`
+   ``(x^(2))^*``   the complex conjugate of a power (a ``conjugated()`` flag spelled ``^*``, no mark)                   ``(x^(2))^*``    :math:`{{x}^{2}}^{*}`
+   ==============  ===================================================================================================  ===============  ===========================
+
+A mark is part of the tensor's name: ``t``, ``t⁺`` and ``t꙳`` are three different arrays, and code generators name them
+``t``, ``t_adj`` and ``t_conj``. A mark that a tensor's declared symmetry makes redundant is not kept: ``t⁺`` of a Hermitian ``t`` is
+``t`` (with bra and ket exchanged), and ``t꙳`` of a tensor with the default conjugation parity is ``t``; declare
+``ConjugationParity::None`` on a tensor whose conjugate is a distinct array.
+
 Operator Registry
 -----------------
 
