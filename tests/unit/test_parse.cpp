@@ -333,6 +333,16 @@ TEST_CASE("serialization", "[serialization]") {
         REQUIRE(indexed->as<Product>().scalar() == rational{2});
         REQUIRE(indexed->as<Product>().factor(0)->as<Variable>().label() ==
                 L"i_1");
+        // ... as is a state mark, which is part of the name without being a
+        // word component
+        auto conjugated = deserialize<ExprPtr>(L"2i꙳");
+        REQUIRE(conjugated->is<Product>());
+        REQUIRE(conjugated->as<Product>().scalar() == rational{2});
+        REQUIRE(conjugated->as<Product>().factor(0)->is<Variable>());
+        REQUIRE(conjugated->as<Product>().factor(0)->as<Variable>().label() ==
+                L"i");
+        REQUIRE(
+            conjugated->as<Product>().factor(0)->as<Variable>().conjugated());
       }
 
       SECTION("a general complex constant is a real plus an imaginary term") {

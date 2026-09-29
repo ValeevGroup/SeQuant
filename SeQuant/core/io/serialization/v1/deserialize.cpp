@@ -99,10 +99,11 @@ auto name_def         = x3::lexeme[
                         ];
 
 // an imaginary literal is a rational with an `i` abutting it: `2i`, `1/2i`,
-// `-3i`. The `i` must follow with no space in between and must not open a
-// longer name, so a bare `i` is still a Variable, `2 i` is still a product of
-// a number and a variable, and `2i_1` is still `2` times the variable `i_1`
-auto imaginary_mark   = x3::no_skip[x3::lit(L"i") >> !word_components];
+// `-3i`. The `i` must follow with no space in between and must neither open a
+// longer name nor carry a state mark of its own, so a bare `i` is still a
+// Variable, `2 i` is still a product of a number and a variable, `2i_1` is
+// still `2` times the variable `i_1`, and `2i꙳` is still `2` times `i꙳`
+auto imaginary_mark   = x3::no_skip[x3::lit(L"i") >> !(word_components | mark)];
 
 auto number_def       = x3::double_ >> -('/' >> x3::double_)
                         >> (imaginary_mark >> x3::attr(true) | x3::attr(false));
