@@ -110,7 +110,9 @@ enum class TripletWeightKind {
 /// \param ext_idxs A vector of external index groups
 /// \param kind The weight row that generated the residual
 /// \return The compacted expression
+/// \throw Exception for more than 3 groups (rank 3)
 /// \throw Exception if a hash group does not match the single-representative
+///        pattern
 [[nodiscard]] ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
     TripletWeightKind kind = TripletWeightKind::NnsReconstruction);
@@ -150,9 +152,10 @@ enum class TripletWeightKind {
 /// slot permutations
 ///
 /// \param compact_expr The compact residual; returned unchanged unless a Sum
-/// \param ext_idxs A vector of external index groups (must have 2 or 3 groups)
+/// \param ext_idxs A vector of external index groups
 /// \param kind The weight row to apply
 /// \return The reconstructed expression
+/// \throw Exception for more than 3 groups
 [[nodiscard]] ExprPtr triplet_symbolic_reconstruct(
     ExprPtr compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs,

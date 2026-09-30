@@ -1061,9 +1061,10 @@ ExprPtr triplet_combined_residual(
 ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
     TripletWeightKind kind) {
-  if (!expr->is<Sum>()) return expr;
   const std::size_t n_particles = ext_idxs.size();
-  if (n_particles != 2 && n_particles != 3) return expr;
+  if (n_particles <= 1) return expr;
+  const auto& weights = triplet_weights_rational(n_particles, kind);
+  if (!expr->is<Sum>()) return expr;
 
   auto work = expr->clone();
   for (auto& term : *work) {
@@ -1074,7 +1075,6 @@ ExprPtr triplet_maxcoeff_compact(
   canonicalize(work);
   simplify(work);
 
-  const auto& weights = triplet_weights_rational(n_particles, kind);
   const auto [b, k] = external_bra_ket(ext_idxs);
 
   container::map<std::size_t, container::vector<ExprPtr>> groups;
@@ -1141,11 +1141,11 @@ ExprPtr triplet_symbolic_reconstruct(
     ExprPtr compact_expr,
     const container::svector<container::svector<Index>>& ext_idxs,
     TripletWeightKind kind) {
-  if (!compact_expr->is<Sum>()) return compact_expr;
   const std::size_t n_particles = ext_idxs.size();
-  if (n_particles != 2 && n_particles != 3) return compact_expr;
-  return triplet_weighted_perm_sum(compact_expr, ext_idxs,
-                                   triplet_weights_rational(n_particles, kind));
+  if (n_particles <= 1) return compact_expr;
+  const auto& weights = triplet_weights_rational(n_particles, kind);
+  if (!compact_expr->is<Sum>()) return compact_expr;
+  return triplet_weighted_perm_sum(compact_expr, ext_idxs, weights);
 }
 
 namespace detail {
