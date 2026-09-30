@@ -318,12 +318,57 @@ class TensorNetworkV3 {
   /// different loops are not interchangeable. A null (default) or empty map
   /// leaves the canonicalization at the space-only named coloring.
   /// @return the computed canonicalization metadata
+  /// @note equivalent to (and forwards to) the CanonicalizeSlotsOptions
+  /// overload; prefer that overload in new code
   SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const NamedIndexSet *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
           default_idxptr_slottype_lesscompare{},
       const tensor_network::NamedIndexColorMap *named_index_colors = nullptr);
+
+  /// @brief options controlling canonicalize_slots()
+  struct CanonicalizeSlotsOptions {
+    SEQUANT_DESIGNATED_INIT_ONLY;
+    /// move all tensors with these labels to the front before canonicalizing
+    /// indices
+    container::vector<std::wstring> cardinal_tensor_labels = {};
+    /// the indices that cannot be renamed, i.e. their labels are meaningful;
+    /// nullptr = use the external indices
+    const NamedIndexSet *named_indices = nullptr;
+    /// less-than comparison for coarse-grained sorting of named indices
+    /// before sorting to canonical order. N.B. defaulted to the _declared_
+    /// default (default_idxptr_slottype_lesscompare), so a value-initialized
+    /// options object exercises the same code path as explicit callers -- a
+    /// default-constructed (empty) std::function is replaced by an internal
+    /// space-only fallback, a different path
+    SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+        default_idxptr_slottype_lesscompare{};
+    /// optional per-named-index loop-color map; when non-null, a named index
+    /// found here has its DAG-scope loop-color folded into its graph vertex
+    /// color so that same-space named indices bound to different loops are
+    /// not interchangeable. A null (default) or empty map leaves the
+    /// canonicalization at the space-only named coloring.
+    const tensor_network::NamedIndexColorMap *named_index_colors = nullptr;
+    /// if true, the bra and ket slots of every tensor with (anti)symmetric
+    /// bra/ket bundles are permuted in place into their canonical order, and
+    /// SlotCanonicalizationMetadata::phase reports the parity of exactly
+    /// that reorder. The canonical order is then the _named_-index canonical
+    /// order (the order of get_indices(): coarse groups by
+    /// named_index_compare, canonical vertex ordinal within a group;
+    /// anonymous slots after the named ones by vertex ordinal), so a
+    /// respelled leaf keeps the space order of its bundles. (Without this
+    /// option the phase is relative to the raw canonical vertex order and
+    /// nothing is permuted.) Column-symmetric Nonsymm tensors and the
+    /// bra<->ket orientation are _not_ touched.
+    bool apply_slot_order = false;
+  };
+
+  /// @sa canonicalize_slots(const container::vector<std::wstring>&, const
+  ///     NamedIndexSet*, SlotCanonicalizationMetadata::named_index_compare_t,
+  ///     const tensor_network::NamedIndexColorMap*)
+  SlotCanonicalizationMetadata canonicalize_slots(
+      CanonicalizeSlotsOptions options);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -377,6 +422,13 @@ class TensorNetworkV3 {
     /// to be treated as topologically distinct (e.g. in WickTheorem) need to
     /// set this to true
     bool distinct_named_indices = false;
+
+    /// if false, BraKetSymmetry::Antisymm bundles keep distinct colours so
+    /// that no bra/ket interchange, which would carry a sign the caller
+    /// cannot record, is admitted. Set by canonicalize_graph(), which
+    /// consumes that sign into its phase byproduct; canonicalize_slots(),
+    /// which only reports, leaves it false
+    bool fold_signed_braket = false;
 
     /// if false, will not generate the labels
     bool make_labels = true;

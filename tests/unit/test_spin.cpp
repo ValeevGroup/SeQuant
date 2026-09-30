@@ -240,6 +240,48 @@ TEST_CASE("spin", "[spin]") {
                               "t{a3,a1,a2;i1,i2,i3} - t{a3,a2,a1;i1,i2,i3}"));
   }
 
+  SECTION("Tensor: expand_antisymm carries the core states") {
+    // expand_antisymm rebuilds each term on permuted slots with the source's
+    // traits and carries its two core states. The source is NonHermitian
+    // with an indefinite conjugation parity over complex slots, so neither
+    // state normalizes away and both must survive the rebuild.
+    constexpr TensorSymmetries antisymm_stateful{
+        .perm = Symmetry::Antisymm,
+        .hermiticity = Hermiticity::NonHermitian,
+        .conjugation_parity = ConjugationParity::None};
+
+    // one body: the single rebuilt tensor
+    Tensor t1(L"t", bra{L"a_1"}, ket{L"i_1"}, antisymm_stateful);
+    REQUIRE(t1.set_states(true, true) == 1);
+    REQUIRE(t1.adjointed());
+    REQUIRE(t1.kconjugated());
+    auto result1 = expand_antisymm(t1);
+    REQUIRE(result1->is<Tensor>());
+    REQUIRE(result1->as<Tensor>().symmetry() == Symmetry::Nonsymm);
+    REQUIRE(result1->as<Tensor>().adjointed());
+    REQUIRE(result1->as<Tensor>().kconjugated());
+
+    // two bodies: every term of the expansion
+    Tensor t2(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+              antisymm_stateful);
+    REQUIRE(t2.set_states(true, true) == 1);
+    REQUIRE(t2.adjointed());
+    REQUIRE(t2.kconjugated());
+    auto result2 = expand_antisymm(t2);
+    REQUIRE(result2->is<Sum>());
+    REQUIRE(result2->as<Sum>().summands().size() == 2);
+    for (auto&& summand : result2->as<Sum>().summands()) {
+      REQUIRE(summand->is<Product>());
+      const auto& factors = summand->as<Product>().factors();
+      REQUIRE(factors.size() == 1);
+      REQUIRE(factors[0]->is<Tensor>());
+      const auto& t = factors[0]->as<Tensor>();
+      REQUIRE(t.symmetry() == Symmetry::Nonsymm);
+      REQUIRE(t.adjointed());
+      REQUIRE(t.kconjugated());
+    }
+  }
+
   SECTION("Constant") {
     auto exprPtr = ex<Constant>(rational{1, 4});
     auto result = spintrace(exprPtr);
@@ -1916,4 +1958,128 @@ SECTION("ResultExpr") {
     }
   }
 }
+}
+
+TEST_CASE("spin trace over a real basis", "[spin]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  // A spin-free registry whose every space is declared real. The spin-labeled
+  // spaces the trace needs are not registered here, so
+  // make_index_with_spincase constructs them and must carry the source space's
+  // field over.
+  auto isr = make_sr_spaces(SpinConvention::None);
+  declare_real_basis(*isr);
+  auto resetter = set_scoped_default_context(
+      sequant::Context(get_default_context()).set(isr));
+
+  SECTION("add_fermi_spin mints the spin spaces over the parent's field") {
+    // the registry's own spin-labeled spaces come from add_fermi_spin, which
+    // derives them from the parent space and so inherits its field
+    auto real_parent = make_sr_spaces(SpinConvention::None);
+    declare_real_basis(*real_parent);
+    for (const auto& sp : *real_parent)
+      REQUIRE(sp.field() == Field::Real);  // the parent registry is real
+    add_fermi_spin(*real_parent);
+    const auto* i_up = real_parent->retrieve_ptr(L"i↑");
+    const auto* i_down = real_parent->retrieve_ptr(L"i↓");
+    REQUIRE(i_up);
+    REQUIRE(i_down);
+    REQUIRE(i_up->field() == Field::Real);
+    REQUIRE(i_down->field() == Field::Real);
+    for (const auto& sp : *real_parent) {
+      CAPTURE(toUtf8(sp.base_key()));
+      REQUIRE(sp.field() == Field::Real);
+    }
+  }
+
+  SECTION("a registered spin space of another field is not a match") {
+    // the registry lookup matches on the field too: this registry's
+    // spin-labeled spaces are complex, so an index over a locally real space of
+    // the same type and quantum numbers must not pick one of them up -- the
+    // mint path carries the source space's field instead
+    auto complex_isr = make_sr_spaces();
+    auto inner = set_scoped_default_context(
+        sequant::Context(get_default_context()).set(complex_isr));
+    const auto* registered_up = complex_isr->retrieve_ptr(L"i↑");
+    REQUIRE(registered_up);
+    REQUIRE(registered_up->field() == Field::Complex);
+
+    Index i(L"i_1");
+    IndexSpace real_space = i.space();
+    real_space.field(Field::Real);
+    const Index i_real(L"i_1", real_space);
+    REQUIRE(i_real.space().field() == Field::Real);
+    const Index i_real_alpha = make_spinalpha(i_real);
+    REQUIRE(i_real_alpha.space().base_key() == L"i↑");
+    REQUIRE(i_real_alpha.space().field() == Field::Real);
+  }
+
+  SECTION("a spin-labeled index space keeps the source space's field") {
+    const Index i(L"i_1");
+    REQUIRE(i.space().field() == Field::Real);
+    REQUIRE_FALSE(isr->retrieve_ptr(L"i↑"));  // the fallback is taken
+    const Index i_alpha = make_spinalpha(i);
+    REQUIRE(i_alpha.space().base_key() == L"i↑");
+    REQUIRE(i_alpha.space().field() == Field::Real);
+    const Index i_beta = make_spinbeta(i);
+    REQUIRE(i_beta.space().base_key() == L"i↓");
+    REQUIRE(i_beta.space().field() == Field::Real);
+    REQUIRE(make_spinfree(i_alpha).space().field() == Field::Real);
+  }
+
+  SECTION("every index of the traced expression stays real") {
+    const auto expr =
+        ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}, particle_symmetric) *
+        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, particle_symmetric);
+    const auto result =
+        spintrace(expr, {}, /* assume_spin_free_spaces */ false);
+    REQUIRE(result);
+    result->visit(
+        [](const ExprPtr& e) {
+          if (!e.is<Tensor>()) return;
+          for (const Index& ix : e->as<Tensor>().const_indices())
+            REQUIRE(ix.space().field() == Field::Real);
+        },
+        true);
+  }
+
+  SECTION("an adjointed amplitude is traced in its coset spelling") {
+    // Over a real basis the coset rule trades the '⁺' for a '꙳' on the slots
+    // as written, which the parity then keeps (None) or consumes (Even). The
+    // trace carries that spelling through, and no bare '⁺' comes back out.
+    auto traced_amplitudes = [](ConjugationParity parity) {
+      Tensor t(L"t", bra{L"a_1"}, ket{L"i_1"},
+               TensorSymmetries{.conjugation_parity = parity,
+                                .column = ColumnSymmetry::Symm});
+      REQUIRE(t.adjoint() == 1);
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE(t.kconjugated() == (parity == ConjugationParity::None));
+      const auto result = spintrace(
+          ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}, particle_symmetric) *
+          ex<Tensor>(t));
+      REQUIRE(result);
+      container::svector<Tensor> amplitudes;
+      result->visit(
+          [&amplitudes](const ExprPtr& e) {
+            if (e.is<Tensor>() && e->as<Tensor>().label() == L"t")
+              amplitudes.push_back(e->as<Tensor>());
+          },
+          true);
+      REQUIRE(!amplitudes.empty());
+      return amplitudes;
+    };
+    for (auto&& t : traced_amplitudes(ConjugationParity::None)) {
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE(t.kconjugated());
+      for (const Index& ix : t.const_indices())
+        REQUIRE(ix.space().field() == Field::Real);
+    }
+    for (auto&& t : traced_amplitudes(ConjugationParity::Even)) {
+      REQUIRE_FALSE(t.adjointed());
+      REQUIRE_FALSE(t.kconjugated());
+      for (const Index& ix : t.const_indices())
+        REQUIRE(ix.space().field() == Field::Real);
+    }
+  }
 }

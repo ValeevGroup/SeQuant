@@ -83,7 +83,10 @@ class Power : public Expr {
   ExprPtr clone() const override;
 
   /// @brief adjoint of Power: flips the conjugation flag.
-  void adjoint() override;
+  [[nodiscard]] std::int8_t adjoint() override;
+
+  /// @brief K-conjugate of Power: flips the conjugation flag.
+  [[nodiscard]] std::int8_t kconjugate() override;
 
   /// @brief Combines exponents when effective bases match:
   ///   - `b^e1 *= b^e2` → `b^(e1+e2)` when this and @p that share the same

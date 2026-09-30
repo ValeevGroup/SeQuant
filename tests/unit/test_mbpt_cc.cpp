@@ -21,17 +21,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  [[maybe_unused]] auto has_tensor = [](const ExprPtr& e,
-                                        const std::wstring& label) {
-    bool found = false;
-    e->visit(
-        [&](const ExprPtr& n) {
-          if (n.is<Tensor>() && n.as<Tensor>().label() == label) found = true;
-        },
-        /*atoms_only=*/true);
-    return found;
-  };
-
   SECTION("sr_tcc") {
     SECTION("t") {
       // TCC R1
@@ -194,7 +183,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     auto h0 = bernoulli::hbar(2, 0, false);
     auto h1 = bernoulli::hbar(2, 1, false);
     auto h2 = bernoulli::hbar(2, 2, false);
-    auto has_f = [&](const ExprPtr& e) { return has_tensor(e, L"f"); };
+    auto has_f = [&](const ExprPtr& e) { return sequant::has_tensor(e, L"f"); };
     REQUIRE(has_f(simplify(h1 - h0)));  // [F,σ]
     REQUIRE_FALSE(has_f(simplify(h2 - h1)));
     REQUIRE_THAT(h0,  // H̄⁰ = F + V, Eq. (46)
@@ -214,8 +203,8 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
         L"1/8 t{a_1,a_2;i_1,i_2}:A-N-S * g{i_1,i_2;a_1,a_2}:A-C-S "
         L"+ 1/8 t⁺{i_1,i_2;a_1,a_2}:A-N-S * g{a_1,a_2;i_1,i_2}:A-C-S");
     const auto E1_brillouin = simplify(E1_contrib - E1_g_closed);
-    REQUIRE_FALSE(has_tensor(E1_brillouin, L"g"));
-    REQUIRE(has_tensor(E1_brillouin, L"f"));
+    REQUIRE_FALSE(sequant::has_tensor(E1_brillouin, L"g"));
+    REQUIRE(sequant::has_tensor(E1_brillouin, L"f"));
 
     // <0|H̄²|0> = 1/12 <ij||ab> σ_i^a σ_j^b + h.c.
     REQUIRE_THAT(E2_contrib,
@@ -290,7 +279,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
 #ifndef SEQUANT_SKIP_LONG_TESTS
     const auto E = cc.energy(3);
     REQUIRE_THAT(E, !EquivalentTo(amps.at(0)));
-    REQUIRE(size(E) == 46);
+    // 23 summands, every one of them Re-wrapped: no term here is its own
+    // conjugate, so each wrapper stands for one conjugate pair
+    // (2*23 + 0 = 46 terms with every pair written out)
+    REQUIRE(size(E) == 23);
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
@@ -419,10 +411,13 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       // 94 terms is not worth spelling out, so check number of terms and
       // external indices
       const auto ext = get_unique_indices(G);
+      // a Conjugate δ's external index may end up in either bundle of the
+      // canonical spelling, so it is the set of externals that is fixed here,
+      // not which of bra/ket each one sits in
+      container::svector<Index> ext_all(ext.bra.begin(), ext.bra.end());
+      ext_all.insert(ext_all.end(), ext.ket.begin(), ext.ket.end());
       REQUIRE(std::ranges::is_permutation(
-          ext.ket, container::svector<Index>{L"p_1", L"p_2"}));
-      REQUIRE(std::ranges::is_permutation(
-          ext.bra, container::svector<Index>{L"p_3", L"p_4"}));
+          ext_all, container::svector<Index>{L"p_1", L"p_2", L"p_3", L"p_4"}));
       REQUIRE(ext.aux.empty());
       // an explicit comm_rank truncates early: cutting Γ at the 2nd nested
       // commutator drops the terms the default (4th, exact) picks up
@@ -618,8 +613,13 @@ SECTION("ucc") {
       // these are numerically verified against
       // http://arxiv.org/abs/2503.00617
       const auto energy_nterms = size(t_eqs[0]);
-      if (c == 2) REQUIRE(energy_nterms == 20);
-      if (c == 3) REQUIRE(energy_nterms == 74);
+      // c == 2: 14 summands = 6 Re wrappers + 8 self-conjugate terms
+      //         (2*6 + 8 = 20 terms with every pair written out)
+      // c == 3: 41 summands = 33 Re wrappers + 8 self-conjugate terms
+      //         (2*33 + 8 = 74)
+      // the self-conjugate 8 are the terms carrying both t and t⁺
+      if (c == 2) REQUIRE(energy_nterms == 14);
+      if (c == 3) REQUIRE(energy_nterms == 41);
     }
   }  // SECTION("t")
 }  // SECTION("ucc")

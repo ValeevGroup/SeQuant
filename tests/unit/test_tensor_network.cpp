@@ -48,6 +48,7 @@
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 
 #include <SeQuant/core/utility/timer.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/split.hpp>
@@ -68,6 +69,10 @@ TEST_CASE("tensor_network_shared", "[elements]") {
 
   SECTION("canonicalize_slots") {
     SECTION("TN isomorphism") {
+      // the bra-ket-symmetric networks below (`S` braket letter) are derivable
+      // only over a real basis; unannotated tensors deserialize NonHermitian,
+      // hence Nonsymm, over either
+      auto real_basis = tests::scoped_real_basis();
       enum EqEnum { Eq, NEq };
       enum SignEnum { Plus, Minus };
 
@@ -166,6 +171,16 @@ TEST_CASE("tensor_network_shared", "[elements]") {
               {L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
           };
 
+      // the two orientations of a Conjugate-braket tensor are two values
+      // (C{q;p} = conj(C{p;q})), so their bundles carry distinct colours and
+      // the networks are not isomorphic
+      tests.emplace_back(L"C{μ̃_1;a_3<i_3>}:N-C-N", L"C{a_1<i_2>;μ̃_1}:N-C-N",
+                         NEq, Plus);
+      // the Symm counterpart: the exchange is a free respelling, so the two
+      // orientations share one graph
+      tests.emplace_back(L"C{μ̃_1;a_3<i_3>}:N-S-N", L"C{a_1<i_2>;μ̃_1}:N-S-N", Eq,
+                         Plus);
+
       ///////////////////// TNs with braket symmetries
       tests.emplace_back(L"f{u3;u4}:N-S Y{u2,u3;u1,u5}",
                          L"f{u3;u4}:N-S Y{u2,u4;u5,u1}", Eq, Plus);
@@ -237,6 +252,93 @@ TEST_CASE("tensor_network_shared", "[elements]") {
       REQUIRE(canon1.phase != canon2.phase);
     }
 
+    SECTION("apply slot order") {
+      // an antisymmetric bundle spelled in its two slot orders: with the
+      // canonical slot order applied both networks leave in _one_ spelling
+      // and the reported phase is the parity of that reorder (the order
+      // the phase is defined against); by default the spelling is kept
+      const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+      TN tn12(deserialize(L"t{a_1,a_2;i_1,i_2}:A-N-S"));
+      TN tn21(deserialize(L"t{a_2,a_1;i_1,i_2}:A-N-S"));
+      const auto md12 = tn12.canonicalize_slots(
+          {.cardinal_tensor_labels = cardinal, .apply_slot_order = true});
+      const auto md21 = tn21.canonicalize_slots(
+          {.cardinal_tensor_labels = cardinal, .apply_slot_order = true});
+      REQUIRE(md12.hash_value() == md21.hash_value());
+      REQUIRE(md12.phase * md21.phase == -1);
+      const auto& t12 = *tn12.tensors()[0];
+      const auto& t21 = *tn21.tensors()[0];
+      REQUIRE(ranges::equal(t12._bra(), t21._bra()));
+      REQUIRE(ranges::equal(t12._ket(), t21._ket()));
+
+      TN tn21_asis(deserialize(L"t{a_2,a_1;i_1,i_2}:A-N-S"));
+      const auto md21_asis =
+          tn21_asis.canonicalize_slots({.cardinal_tensor_labels = cardinal});
+      REQUIRE(md21_asis.phase == md21.phase);
+      REQUIRE(md21_asis.hash_value() == md21.hash_value());
+      REQUIRE(tn21_asis.tensors()[0]->_bra()[0].label() == L"a_2");
+    }
+
+    SECTION("braket orientation fold") {
+      // Only a free or signed bra<->ket exchange is a respelling. A
+      // Hermitian (BraKetSymmetry::Conjugate) tensor satisfies
+      //   h{bra;ket} = conj(h{ket;bra}),
+      // so its two orientations are two values and canonicalization keeps
+      // each as written; a Symm tensor's two orientations fold onto one.
+      const auto cardinal = TensorCanonicalizer::cardinal_tensor_labels();
+      auto canonical_tensor = [&cardinal](const std::wstring& s) {
+        TN tn(deserialize(s));
+        tn.canonicalize(cardinal);
+        REQUIRE(ranges::size(tn.tensors()) == 1);
+        return std::dynamic_pointer_cast<Tensor>(ranges::front(tn.tensors()));
+      };
+      auto same_slots = [](const Tensor& a, const Tensor& b) {
+        return ranges::equal(a.bra(), b.bra()) &&
+               ranges::equal(a.ket(), b.ket());
+      };
+
+      // Conjugate: each orientation stays as written and stays unmarked.
+      {
+        auto a = canonical_tensor(L"h{a_1;i_1}:N-C-S");
+        auto b = canonical_tensor(L"h{i_1;a_1}:N-C-S");
+        INFO(toUtf8(to_latex(*a)) << " vs " << toUtf8(to_latex(*b)));
+        REQUIRE(!same_slots(*a, *b));
+        REQUIRE(a->bra()[0].label() == L"a_1");
+        REQUIRE(b->bra()[0].label() == L"i_1");
+        REQUIRE(!a->kconjugated());
+        REQUIRE(!b->kconjugated());
+      }
+
+      // Conjugate half-tensors: likewise kept apart.
+      {
+        auto a = canonical_tensor(L"h{a_1;}:N-C-S");
+        auto b = canonical_tensor(L"h{;a_1}:N-C-S");
+        INFO(toUtf8(to_latex(*a)) << " vs " << toUtf8(to_latex(*b)));
+        REQUIRE(a->bra_rank() == 1);
+        REQUIRE(b->ket_rank() == 1);
+        REQUIRE(!a->kconjugated());
+        REQUIRE(!b->kconjugated());
+      }
+
+      // Identical bra and ket bundles (a diagonal, hence real, block):
+      // nothing to decide, the spelling stands.
+      {
+        auto d = canonical_tensor(L"h{p_1,p_2;p_1,p_2}:N-C-S");
+        REQUIRE(!d->kconjugated());
+        REQUIRE(ranges::equal(d->bra(), d->ket()));
+      }
+
+      // Symm braket (a real array) folds and never marks.
+      {
+        auto real_basis = tests::scoped_real_basis();
+        auto a = canonical_tensor(L"h{a_1;i_1}:N-S-S");
+        auto b = canonical_tensor(L"h{i_1;a_1}:N-S-S");
+        REQUIRE(same_slots(*a, *b));
+        REQUIRE(!a->kconjugated());
+        REQUIRE(!b->kconjugated());
+      }
+    }
+
     SECTION("amazing hash collision") {
       auto _ = set_scoped_default_context(
           {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
@@ -268,6 +370,9 @@ TEST_CASE("tensor_network_shared", "[elements]") {
     }
 
     SECTION("Named index ordering") {
+      // the bra-ket-symmetric networks below (`S` braket letter) are derivable
+      // only over a real basis
+      auto real_basis = tests::scoped_real_basis();
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 
       using idxvec_t = std::vector<std::wstring>;
@@ -494,7 +599,7 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
 
       // must be covariant: no bra to bra or ket to ket
       if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
-        t2->adjoint();
+        REQUIRE(t2->adjoint() == 1);
         auto t1_x_t2_adjoint = t1 * t2;
         REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint).create_graph(), Exception);
       }
@@ -1116,4 +1221,36 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
                              L"2)(i_3,i_4)\n"));
     }
   }
+}
+
+TEST_CASE("braket orientation is part of the value", "[elements]") {
+  using namespace sequant;
+  // The Hermitian identity h{q;p} = conj(h{p;q}) relates two distinct
+  // arrays, so canonicalization, which is a function of the value, keeps the
+  // two orientations apart: a Hermitian 3-cycle and its reverse (which is its
+  // conjugate) get two canonical forms. A kept ꙳ state (parity None, the
+  // fourth annotation letter) is another distinct value, which the graph
+  // colouring must see as well.
+  auto canon = [](const wchar_t* s) {
+    auto e = deserialize(s);
+    canonicalize(e);
+    return to_latex(e);
+  };
+  const auto forward =
+      canon(L"h{p_1;p_2}:N-C-S * γ{p_2;p_3}:N-C-S * Z{p_3;p_1}:N-C-S");
+  const auto reverse =
+      canon(L"h{p_2;p_1}:N-C-S * γ{p_3;p_2}:N-C-S * Z{p_1;p_3}:N-C-S");
+  const auto unmarked_none =
+      canon(L"h{p_1;p_2}:N-C-S-N * γ{p_2;p_3}:N-C-S * Z{p_3;p_1}:N-C-S-N");
+  const auto marked = canon(
+      L"h꙳{p_1;p_2}:N-C-S-N * γ{p_2;p_3}:N-C-S * "
+      L"Z꙳{p_3;p_1}:N-C-S-N");
+  INFO(toUtf8(forward));
+  INFO(toUtf8(reverse));
+  INFO(toUtf8(unmarked_none));
+  INFO(toUtf8(marked));
+  REQUIRE(forward != reverse);
+  REQUIRE(marked != forward);
+  // the mark, not the parity letter, is what tells the two apart
+  REQUIRE(marked != unmarked_none);
 }

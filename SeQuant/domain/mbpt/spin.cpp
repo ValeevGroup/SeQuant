@@ -69,8 +69,11 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   const auto label = mbpt::spinannotation_replacе(idx.space().base_key(), s);
   if (auto isr = get_default_context().index_space_registry()) {
     auto* space_ptr = isr->retrieve_ptr(label);
+    // the field is part of the match: a registered space of another field is a
+    // basis the source index is not over, so it falls through to the mint path
+    // below, which carries the source space's field
     if (space_ptr && space_ptr->type() == idx.space().type() &&
-        space_ptr->qns() == qns) {
+        space_ptr->qns() == qns && space_ptr->field() == idx.space().field()) {
       space = *space_ptr;
     }
   }
@@ -78,7 +81,10 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   if (!space) {
     space = IndexSpace{label, idx.space().type(), qns,
                        // N.B. assume size does not depend on spin
-                       idx.space().approximate_size()};
+                       idx.space().approximate_size(),
+                       // the spin label does not change the basis, so the
+                       // source space's field carries over
+                       idx.space().field()};
   }
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
@@ -218,10 +224,11 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
-    return ex<Tensor>(tensor.label(), bra(tensor.ket().value()),
-                      ket(tensor.bra().value()), aux(tensor.aux().value()),
-                      tensor.symmetry(), tensor.braket_symmetry(),
-                      tensor.column_symmetry());
+    // in-place slot transpose on a copy: label, symmetries, aux slots, and
+    // the states are untouched by construction
+    auto copy = ex<Tensor>(tensor);
+    static_cast<AbstractTensor&>(copy->as<Tensor>())._swap_bra_ket();
+    return copy;
   };
 
   // Lambda for product
@@ -271,9 +278,12 @@ ExprPtr remove_spin(const ExprPtr& expr) {
         idx = make_spinfree(idx);
       }
     }
-    return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                      tensor.aux(), tensor.symmetry(), tensor.braket_symmetry(),
-                      tensor.column_symmetry());
+    // relabeling is slot-preserving, so it commutes with elementwise
+    // conjugation: rebuild via with_slots, which carries the label, the
+    // symmetries, and the states
+    container::svector<Index> a(tensor.aux().begin(), tensor.aux().end());
+    return ex<Tensor>(tensor.with_slots(bra(std::move(b)), ket(std::move(k)),
+                                        aux(std::move(a))));
   };
 
   auto remove_spin_from_product =
@@ -377,9 +387,16 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   SEQUANT_ASSERT(tensor.bra_rank() == tensor.ket_rank());
   // Return non-symmetric tensor if rank is 1
   if (tensor.bra_rank() <= 1) {
+    auto syms = tensor.symmetries();
+    syms.perm = Symmetry::Nonsymm;
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
-                      Symmetry::Nonsymm, tensor.braket_symmetry(),
-                      tensor.column_symmetry());
+                      syms);
+    // the rebuild keeps the source's traits and its slots' field, so its two
+    // core states carry over as they stand: the normalization is the identity
+    // here and consumes no sign, which a Tensor could not hold anyway
+    [[maybe_unused]] const auto sign =
+        new_tensor.set_states(tensor.adjointed(), tensor.kconjugated());
+    SEQUANT_ASSERT(sign == 1);
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -410,10 +427,16 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     auto expr_sum = std::make_shared<Sum>();
     do {
       // N.B. must copy
-      auto new_tensor =
-          Tensor(tensor.label(), bra(bra_list), ket(ket_list), tensor.aux(),
-                 Symmetry::Nonsymm, tensor.braket_symmetry(),
-                 tensor.column_symmetry());
+      auto syms = tensor.symmetries();
+      syms.perm = Symmetry::Nonsymm;
+      auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
+                               tensor.aux(), syms);
+      // the permuted slots are the source's own, over the same field and
+      // with the same traits, so its two core states carry over as they
+      // stand: the normalization is the identity here and consumes no sign
+      [[maybe_unused]] const auto sign =
+          new_tensor.set_states(tensor.adjointed(), tensor.kconjugated());
+      SEQUANT_ASSERT(sign == 1);
 
       if (ms_conserving_columns(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -1136,8 +1159,11 @@ Tensor swap_spin(const Tensor& t) {
     k.at(i) = spin_flipped_idx(t.ket().at(i));
   }
 
-  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),  t.aux(),
-          t.symmetry(), t.braket_symmetry(), t.column_symmetry()};
+  // slot-preserving relabeling: with_slots carries label, symmetries and
+  // the value modifier
+  return t.with_slots(
+      bra(std::move(b)), ket(std::move(k)),
+      aux(container::svector<Index>(t.aux().begin(), t.aux().end())));
 }
 
 ExprPtr swap_spin(const ExprPtr& expr) {

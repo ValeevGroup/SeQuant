@@ -8,6 +8,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
@@ -24,6 +25,8 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
+
+#include <range/v3/algorithm/equal.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -170,6 +173,9 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   Graph graph = create_graph(
       {.named_indices = &named_indices,
        .distinct_named_indices = !ignore_named_index_labels,
+       // this function consumes the sign of a bra/ket interchange (into the
+       // phase byproduct), so signed bundles may be coloured interchangeably
+       .fold_signed_braket = true,
        .make_labels = Logger::instance().canonicalize_input_graph ||
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
@@ -264,8 +270,12 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
         const auto bra = vertex_type == VertexType::TensorBraBundle;
         const std::size_t tensor_ord = tensor_count - 1;
         const AbstractTensor &tensor = *tensors_[tensor_ord];
-        const auto bksymm = braket_symmetry(tensor);
-        if (bksymm != BraKetSymmetry::Nonsymm) {
+        // Record the verdict for every tensor whose bundles the graph above
+        // coloured interchangeably, i.e. every braket_foldable() one; the
+        // signed states are among them because this function passes
+        // fold_signed_braket and takes the respelling's sign into the phase
+        // byproduct.
+        if (braket_foldable(tensor)) {
           canonical_bra_ket_bundle_order[tensor_ord][bra ? 0 : 1] =
               canonize_perm[vertex];
         }
@@ -362,25 +372,33 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   apply_index_replacements(tensors_, idxrepl, true);
 
   // Permute {bra, ket} or column slots of column-symmetric tensors as
-  // indicated by graph canonization
+  // indicated by graph canonization, then fold the bra/ket bundles of every
+  // foldable tensor: permuting slots within a bundle, or columns among
+  // themselves, needs the column symmetry; exchanging the two bundles whole
+  // does not, it needs only braket_foldable()
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
     AbstractTensor &tensor = *tensors_[i];
 
-    if (column_symmetry(tensor) != ColumnSymmetry::Symm) continue;
-    const auto asymm = symmetry(tensor) == Symmetry::Nonsymm;
+    // a lambda, so that a tensor the graph gives no slot verdict for returns
+    // from the permutation without skipping the bundle fold below
+    const auto permute_slots = [&]() {
+      const auto asymm = symmetry(tensor) == Symmetry::Nonsymm;
 
-    if (asymm) {  // asymmetric tensor? order column slots only
+      if (asymm) {  // asymmetric tensor? order column slots only
 
-      auto it = canonical_column_bundle_order.find(i);
-      if (it == canonical_column_bundle_order.end()) continue;
+        auto it = canonical_column_bundle_order.find(i);
+        if (it == canonical_column_bundle_order.end()) return;
 
-      auto &sorted_ordinals = it->second;
+        auto &sorted_ordinals = it->second;
 
-      tensor._permute_columns(
-          std::span(sorted_ordinals.data(), sorted_ordinals.size()));
-    } else {  // symmetric/antisymmetric bra
+        tensor._permute_columns(
+            std::span(sorted_ordinals.data(), sorted_ordinals.size()));
+        return;
+      }
+
+      // symmetric/antisymmetric bra
       auto it = canonical_slot_order.find(i);
-      if (it == canonical_slot_order.end()) continue;
+      if (it == canonical_slot_order.end()) return;
 
       auto &[braparslots, ketparslots] = it->second;
       auto &[braparity, braslots] = braparslots;
@@ -411,17 +429,45 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       if (symmetry(tensor) == Symmetry::Antisymm) {
         parity *= braparity.value_or(1) * ketparity.value_or(1);
       }
-    }
+    };
+    if (column_symmetry(tensor) == ColumnSymmetry::Symm) permute_slots();
 
-    // lastly permute bra with ket bundles, if needed
-    // TODO extend to support conjugate case
-    if (braket_symmetry(tensor) != BraKetSymmetry::Symm) continue;
+    // lastly permute bra with ket bundles, if needed; only a tensor whose
+    // bra<->ket exchange is a respelling qualifies, which excludes the
+    // reserved bookkeeping operators ((anti)symmetrizer, transposition),
+    // whose orientation defines/extracts the external indices, as well as the
+    // (anti)conjugate symmetries, whose two orientations are two values
+    if (!braket_foldable(tensor)) continue;
 
-    // swap bra and ket bundles
+    // Swap bra and ket bundles into the canonical (graph-dictated) order. The
+    // verdict is transferred as-is; where the graph carries no orientation
+    // information it is arbitrary but value-preserving up to the sign this
+    // records, and the pass after this loop settles those tensors
+    // deterministically.
     if (canonical_bra_ket_bundle_order[i][0] >
         canonical_bra_ket_bundle_order[i][1]) {
-      tensor._swap_bra_ket();
+      const auto swap_sign = *braket_swap_sign(braket_symmetry(tensor));
+      tensor._swap_bra_ket();  // Symm: +1, Antisymm: -1
+      parity *= swap_sign;
     }
+  }
+
+  // Second pass, for the tensors the graph cannot orient: a half-tensor
+  // (empty bra or ket bundle) has no vertex for the empty bundle, so its
+  // recorded bundle position is a value-initialized sentinel, and identical
+  // bra and ket bundles (diagonal trace T{p,q;p,q}) are automorphic. Their
+  // verdict above was arbitrary; decide them by content instead
+  // (DefaultTensorCanonicalizer::canonicalize_braket orients a half-tensor by
+  // its bundle spaces and never swaps identical bundles), which is
+  // label-independent, so it is a fixed point
+  // of the relabeling that follows.
+  for (auto &tensor_ptr : tensors_) {
+    AbstractTensor &tensor = *tensor_ptr;
+    if (!braket_foldable(tensor)) continue;
+    const bool half = bra_rank(tensor) == 0 || ket_rank(tensor) == 0;
+    const bool diagonal = ranges::equal(tensor._bra(), tensor._ket());
+    if (half || diagonal)
+      parity *= DefaultTensorCanonicalizer::canonicalize_braket(tensor);
   }
 
   // Less-than relationship for tensors. Tensors that do not commute are
@@ -596,11 +642,16 @@ ExprPtr TensorNetworkV3::canonicalize(
 
     container::map<Index, Index> idxrepl;
 
-    // Use the new order of edges as the canonical order of indices and relabel
-    // accordingly (but only anonymous indices, of course)
-    for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
+    // Relabel the anonymous indices: the canonical edge order defines the
+    // canonical index order, so walk the edges and hand each anonymous index
+    // a fresh label in that order. Named indices keep their labels. N.B. the
+    // anonymity check is per-index rather than per-edge-position because a
+    // named index need not appear as an edge at all -- it can occur purely as
+    // a proto index (see the "lexicographic rewrite with named non-edge (pure
+    // proto) indices" regression test).
+    for (std::size_t i = 0; i < edges_.size(); ++i) {
       const Index &index = edges_[i].idx();
-      SEQUANT_ASSERT(is_anonymous_index(index));
+      if (!is_anonymous_index(index)) continue;
       Index replacement = idxfac.make(index);
       if (index != replacement) idxrepl.emplace(index, std::move(replacement));
     }
@@ -643,10 +694,24 @@ ExprPtr TensorNetworkV3::canonicalize(
 TensorNetworkV3::SlotCanonicalizationMetadata
 TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
-    const NamedIndexSet *named_indices_ptr,
+    const NamedIndexSet *named_indices,
     TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
         named_index_compare,
     const tensor_network::NamedIndexColorMap *named_index_colors) {
+  return canonicalize_slots(CanonicalizeSlotsOptions{
+      .cardinal_tensor_labels = cardinal_tensor_labels,
+      .named_indices = named_indices,
+      .named_index_compare = std::move(named_index_compare),
+      .named_index_colors = named_index_colors});
+}
+
+TensorNetworkV3::SlotCanonicalizationMetadata
+TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
+  const auto &cardinal_tensor_labels = options.cardinal_tensor_labels;
+  const NamedIndexSet *named_indices_ptr = options.named_indices;
+  auto named_index_compare = std::move(options.named_index_compare);
+  const tensor_network::NamedIndexColorMap *named_index_colors =
+      options.named_index_colors;
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
                              const auto &idxptr_slottype_2) -> bool {
@@ -772,12 +837,11 @@ TensorNetworkV3::canonicalize_slots(
             slot_type = IndexSlotType::TensorAux;
           } else if (symm == BraKetSymmetry::Symm ||
                      edge_it->vertex(0).getOrigin() == Origin::Bra) {
-            // Note: we must not distinguis bra and ket indices in case braket
-            // symmetry is present Technically, this should (to some degree)
-            // also apply to BraKetSymmetry::Conjugate but this TN
-            // implementation currently doesn't exploit conjugate braket
-            // symmetry (as it is not entirely clear how to handle the required
-            // complex conjugation)
+            // Note: we must not distinguish bra and ket indices in case
+            // braket symmetry is present. BraKetSymmetry::Conjugate is not
+            // among them by design: its two orientations are two values
+            // (T{q;p} = conj(T{p;q})), so its bra and ket slots stay
+            // distinct.
             slot_type = IndexSlotType::TensorBra;
           } else {
             SEQUANT_ASSERT(edge_it->vertex(0).getOrigin() == Origin::Ket);
@@ -839,45 +903,88 @@ TensorNetworkV3::canonicalize_slots(
   // - Reordering indices into this canonical order incurs a phase change if the
   //   index bundle is antisymmetric.
   // - Determine this phase change by determining the parity of index
-  //   permutations required to arrive at canonical form
+  //   permutations required to arrive at canonical form; with
+  //   options.apply_slot_order the same permutations are applied to the
+  //   tensors (below), so the phase and the spelling come from _one_ sort.
   metadata.phase = 1;
-  container::svector<SwapCountable<std::size_t>> vertices;
-  for (const AbstractTensor &tensor : tensors_ | ranges::views::indirect) {
-    if (symmetry(tensor) != Symmetry::Antisymm) {
-      // Only antisymmetric tensors (or rather: their indices) can incur a phase
-      // change due to index permutation
+  // tensor ordinal -> {bra, ket} from-permutations to the canonical slot
+  // order (empty = identity or not an (anti)symmetric bundle)
+  container::svector<std::array<container::svector<std::size_t>, 2>>
+      slot_orders(options.apply_slot_order ? tensors_.size() : 0);
+  // With apply_slot_order the order applied (and the phase reported) is the
+  // _named_-index canonical order -- what get_indices() reports: coarse groups
+  // by named_index_compare (space-major), canonical vertex ordinal within a
+  // group -- so a respelled leaf keeps the space order of its bundles (the
+  // raw vertex ordinals order same-color cells by the color hash, which for
+  // a mixed-space bundle is arbitrary). Anonymous slots follow the named
+  // ones by vertex ordinal.
+  container::map<Index, std::size_t> named_rank;
+  if (options.apply_slot_order)
+    for (auto &&[r, it] :
+         ranges::views::enumerate(metadata.named_indices_canonical))
+      named_rank.emplace(*it, r);
+  const auto slot_key = [&](const Index &idx) -> std::size_t {
+    const std::size_t ord = canonize_perm[idx_to_vertex.at(idx)];
+    if (!options.apply_slot_order) return ord;
+    if (auto it = named_rank.find(idx); it != named_rank.end())
+      return it->second;
+    return named_rank.size() + ord;
+  };
+  for (auto &&[tensor_ord, tensor_ptr] : ranges::views::enumerate(tensors_)) {
+    const AbstractTensor &tensor = *tensor_ptr;
+    const auto symm = symmetry(tensor);
+    // only (anti)symmetric bundles have a canonical slot order (their slots
+    // are interchangeable up to a phase); only antisymmetric ones incur one
+    if (symm != Symmetry::Antisymm &&
+        !(options.apply_slot_order && symm == Symmetry::Symm))
       continue;
-    }
 
     // Note that the current assumption is that auxiliary indices don't have
     // permutational symmetry, let alone being antisymmetric. Hence, we don't
     // have to include them in the iteration.
-    // Note2: have to create dedicated container to hold ranges as an
-    // initializer list will only return const entries upon iteration and one
-    // can't iterate over const ranges.
-    std::vector index_groups = {tensor._bra(), tensor._ket()};
-    for (auto &indices : index_groups) {
+    for (const bool bra : {true, false}) {
+      // (the slot views are not const-iterable ranges)
+      auto indices = bra ? tensor._bra() : tensor._ket();
       using ranges::size;
-      std::size_t n_indices = size(indices);
+      const std::size_t n_indices = size(indices);
 
       if (n_indices < 2) {
         // If there are < 2 indices, no two indices could have been swapped
         continue;
       }
 
-      vertices.clear();
-      vertices.reserve(n_indices);
+      // canonical keys of the slots, in slot order ...
+      container::svector<std::size_t> perm;
+      perm.reserve(n_indices);
+      for (const Index &idx : indices) perm.emplace_back(slot_key(idx));
+      // ... sorted: perm becomes the from-permutation that puts the slots
+      // into canonical order, with its parity
+      const int parity = sort_then_replace_by_ordinals(perm);
+      if (symm == Symmetry::Antisymm) metadata.phase *= parity;
+      if (options.apply_slot_order && !ranges::is_sorted(perm))
+        slot_orders[tensor_ord][bra ? 0 : 1] = std::move(perm);
+    }
+  }
 
-      for (const Index &idx : indices) {
-        const std::size_t vertex = idx_to_vertex.at(idx);
-        vertices.emplace_back(canonize_perm[vertex]);
+  // apply the canonical slot order
+  if (options.apply_slot_order) {
+    bool applied = false;
+    for (auto &&[tensor_ord, orders] : ranges::views::enumerate(slot_orders)) {
+      auto &[bra_order, ket_order] = orders;
+      AbstractTensor &tensor = *tensors_[tensor_ord];
+      if (!bra_order.empty()) {
+        tensor._permute_bra(std::span(bra_order.data(), bra_order.size()));
+        applied = true;
       }
-
-      if (bubble_sort_parity(vertices) == -1) {
-        // Performed an uneven amount of pairwise exchanges -> this incurs a
-        // phase change
-        metadata.phase *= -1;
+      if (!ket_order.empty()) {
+        tensor._permute_ket(std::span(ket_order.data(), ket_order.size()));
+        applied = true;
       }
+    }
+    // the edges record slot positions: rebuild them on next use
+    if (applied) {
+      edges_.clear();
+      have_edges_ = false;
     }
   }
 
@@ -1011,7 +1118,15 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // 2-index columns
     const std::size_t num_paired_cols =
         std::min(bra_rank(tensor), ket_rank(tensor));
-    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::Symm;
+    // A tensor whose bra<->ket exchange is a respelling (see
+    // braket_foldable()) gets symmetric bra/ket bundle colors, so that the
+    // two orientations share one graph; Antisymm, whose respelling costs a
+    // sign, only where the caller can record it (see fold_signed_braket).
+    const auto tensor_bksymm = braket_symmetry(tensor);
+    const bool is_braket_symm =
+        braket_foldable(tensor) &&
+        (options.fold_signed_braket ||
+         braket_swap_sign(tensor_bksymm).value_or(1) == 1);
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
@@ -1266,7 +1381,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             [[maybe_unused]] std::size_t nbra = 0;
             [[maybe_unused]] std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;
-            [[maybe_unused]] BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
+            [[maybe_unused]] bool orientation_free = false;
             for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
               const Vertex &vertex = current_edge.vertex(v);
               switch (vertex.getOrigin()) {
@@ -1283,20 +1398,25 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                   SEQUANT_UNREACHABLE;
               }
 
-              if (symm != BraKetSymmetry::Symm) {
-                // We only care if at least one of the vertices has symmetric
-                // braket symm
-                symm = braket_symmetry(*tensors_[vertex.getTerminalIndex()]);
+              if (!orientation_free) {
+                // if the bundles are interchangeable (a foldable braket
+                // symmetry: Symm or Antisymm), the canonical braket
+                // orientation fold (canonicalize_braket /
+                // canonicalize_graph) may spell the tensor bra<->ket
+                // swapped, so a dummy may legally connect bra-bra or
+                // ket-ket. This relaxes for Antisymm independently of
+                // fold_signed_braket: the per-tensor canonicalize_braket
+                // folds it whatever options a graph is built with, so a
+                // bra-bra dummy edge is reachable on the slots path as well.
+                orientation_free =
+                    braket_foldable(*tensors_[vertex.getTerminalIndex()]);
               }
             }
 
-            // if braket symmetry == BraKetSymmetry::Symm there is no
-            // distinction between bra and ket, but still can have at most 2 of
-            // them total if braket symmetry != BraKetSymmetry::Symm at most 1
-            // bra and 1 ket can connect to aux
-            SEQUANT_ASSERT(symm == BraKetSymmetry::Symm
-                               ? (nbra + nket <= 2)
-                               : (nbra <= 1 && nket <= 1));
+            // an orientation-free incident tensor permits any bra/ket mix of
+            // up to 2 slots; rigid orientations allow at most 1 bra and 1 ket
+            SEQUANT_ASSERT(orientation_free ? (nbra + nket <= 2)
+                                            : (nbra <= 1 && nket <= 1));
           }
         }
       }

@@ -10,6 +10,7 @@
 #include <boost/core/demangle.hpp>
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -18,8 +19,12 @@
 
 namespace sequant {
 
-/// @brief the wchar used for labeling adjoints, i.e. the superscript + sign
-static const wchar_t adjoint_label = L'\u207A';
+/// the trailing label mark of the adjointed state, `t⁺{...}`
+inline constexpr wchar_t adjoint_label = L'⁺';
+/// the trailing label mark of the K-conjugated state, `t꙳{...}`, and of a
+/// conjugated Variable, `x꙳` (U+A673 SLAVONIC ASTERISK: Unicode has no
+/// spacing superscript asterisk; LaTeX renders it as `^{*}`)
+inline constexpr wchar_t conjugate_label = L'꙳';
 
 /// @return true if @p label ends with the adjoint marker ::adjoint_label
 inline bool is_adjoint_label(std::wstring_view label) {
@@ -246,8 +251,20 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return result;
   }
 
-  /// @brief changes this to its adjoint
-  virtual void adjoint() = 0;
+  /// @brief changes this to its adjoint and returns the sign byproduct: +1,
+  /// or −1 when the adjoint is minus the resulting object (an anti-Hermitian
+  /// Tensor); like canonicalize()'s byproduct it must be applied by the
+  /// caller, see sequant::adjoint(const ExprPtr&)
+  [[nodiscard]] virtual std::int8_t adjoint() = 0;
+
+  /// @brief complex conjugation of the represented operator, `K O K⁻¹`, with
+  /// `K` complex conjugation in the coordinate representation: on a scalar
+  /// the complex conjugate, on a Tensor the K-conjugated state (see
+  /// Tensor::kconjugate), on an operator string the identity (the
+  /// conjugation acts through the coefficients). Not the conjugate of a
+  /// matrix element's value, which is adjoint() with the slots exchanged.
+  /// @return the sign to apply, as for adjoint()
+  [[nodiscard]] virtual std::int8_t kconjugate() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the

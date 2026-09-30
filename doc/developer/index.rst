@@ -12,6 +12,7 @@ calls.
    documentation
    wick
    tnc
+   conjugation
    cost_model
    batched_evaluation
    export

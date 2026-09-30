@@ -914,7 +914,13 @@ class Operator : public Operator<void, S> {
 
   bool commutes_with_atom(const Expr& that) const override;
 
-  void adjoint() override;
+  [[nodiscard]] std::int8_t adjoint() override;
+
+  /// @brief K-conjugate of an mbpt Operator is the operator itself: complex
+  /// conjugation acts through the coefficients of its tensor form, see
+  /// sequant::kconjugate(const ExprPtr&)
+  /// @return +1
+  [[nodiscard]] std::int8_t kconjugate() override;
 
   /// @brief returns the batch ordinals if any
   std::optional<container::svector<std::size_t>> batch_ordinals() const {
