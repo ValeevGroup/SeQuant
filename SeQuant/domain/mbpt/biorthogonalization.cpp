@@ -888,6 +888,20 @@ std::vector<rational> make_triplet_combined_residual_weights(
 // (memoized) rational weight rows for the symbolic triplet primitives
 const std::vector<rational>& triplet_weights_rational(std::size_t n_particles,
                                                       TripletWeightKind kind) {
+  // unsupported ranks are rejected before memoize
+  const bool te_kind = kind == TripletWeightKind::TeNnsReconstruction ||
+                       kind == TripletWeightKind::TeReconstruction ||
+                       kind == TripletWeightKind::TeCombinedResidual;
+  const bool supported =
+      te_kind ? n_particles == 2
+              : n_particles == 2 || n_particles == 3 ||
+                    (n_particles == 1 &&
+                     kind == TripletWeightKind::CombinedResidual);
+  if (!supported)
+    throw Exception(
+        "triplet weights are not available for this kind at n_particles = " +
+        std::to_string(n_particles));
+
   using CacheKey = std::pair<std::size_t, TripletWeightKind>;
   // the rows are cached behind a pointer since the cache holds several keys
   // and flat_map insertions would invalidate references into it
