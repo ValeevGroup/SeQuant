@@ -6,6 +6,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/slotted_index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/memoize.hpp>
 
@@ -251,20 +252,27 @@ container::svector<size_t> compute_permuted_indices(
 /// \param n_particles The rank of external index pairs
 /// \param kind The weight row to provide
 ///
-/// \return (memoized) Vector of weights in flat perm order; empty unless
-///         \p n_particles is 2 or 3 (2 only for the bare-TE kinds)
+/// \return (memoized) Vector of weights in flat perm order
+///
+/// \throw Exception unless \p n_particles is 2 or 3 (2 only for the bare-TE
+///        kinds; CombinedResidual also 1)
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
 [[nodiscard]] const std::vector<T>& triplet_weights(std::size_t n_particles,
                                                     TripletWeightKind kind) {
-  static const std::vector<T> empty_vec{};
-
+  // unsupported ranks are rejected before memoize
   const bool te_kind = kind == TripletWeightKind::TeNnsReconstruction ||
                        kind == TripletWeightKind::TeReconstruction ||
                        kind == TripletWeightKind::TeCombinedResidual;
-  if ((n_particles != 2 && n_particles != 3) || (te_kind && n_particles != 2)) {
-    return empty_vec;
-  }
+  const bool supported =
+      te_kind ? n_particles == 2
+              : n_particles == 2 || n_particles == 3 ||
+                    (n_particles == 1 &&
+                     kind == TripletWeightKind::CombinedResidual);
+  if (!supported)
+    throw Exception(
+        "triplet weights are not available for this kind at n_particles = " +
+        std::to_string(n_particles));
 
   using CacheKey = std::pair<std::size_t, TripletWeightKind>;
   // the rows are cached behind a pointer since the cache holds several keys
@@ -673,17 +681,19 @@ auto triplet_perm_combine_ta(
 }
 
 /// \brief Applies the \p kind weight row over the triplet slot permutations of
-/// \p arr; no-op unless the array rank is 4 or 6 (n_particles = rank/2) and
-/// the row is available for that rank
+/// \p arr (n_particles = rank/2); no-op for rank 2 or less
+/// \throw Exception for an odd rank, or if the row is not available for
+///        rank/2 (see triplet_weights)
 template <typename... Args>
 auto triplet_perm_project_ta(TA::DistArray<Args...> const& arr,
                              std::string const& orig_layout,
                              TripletWeightKind kind) {
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
   const std::size_t rank = arr.trange().rank();
-  if (rank != 4 && rank != 6) return arr;
+  if (rank % 2 != 0)
+    throw Exception("triplet_perm_project_ta: the array rank must be even");
+  if (rank <= 2) return arr;
   const auto& weights = triplet_weights<numeric_type>(rank / 2, kind);
-  if (weights.empty()) return arr;
   return triplet_perm_combine_ta<Args...>(arr, orig_layout, rank / 2, weights);
 }
 
@@ -691,7 +701,7 @@ auto triplet_perm_project_ta(TA::DistArray<Args...> const& arr,
 
 /// \brief Idempotent null-space projector for the closed-shell triplet R:
 /// removes the metric-null component of the array. Apply to the Davidson
-/// trial vector each iteration; no-op unless the array rank is 4 or 6.
+/// trial vector each iteration; no-op for rank 2, throws beyond rank 6.
 template <typename... Args>
 auto triplet_nullspace_project_ta(TA::DistArray<Args...> const& arr,
                                   std::string const& orig_layout) {
@@ -709,7 +719,7 @@ auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
 /// residuals: rebuilds the full residual from the representatives kept by
 /// triplet_maxcoeff_compact (numerical analogue of
 /// triplet_symbolic_reconstruct). Apply to the H*R residual when the compact
-/// equations were evaluated; no-op unless the array rank is 4 or 6.
+/// equations were evaluated; no-op for rank 2, throws beyond rank 6.
 template <typename... Args>
 auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
                             std::string const& orig_layout) {
@@ -726,7 +736,7 @@ auto triplet_nns_project(TA::DistArray<Args...> const& arr,
 /// \brief Bare-TE undo-compact for compact triplet R2 residuals
 /// (TeNnsReconstruction row). Apply to the H*R residual when the compact
 /// te_only equations were evaluated, before triplet_te_reconstruct; no-op
-/// unless the array rank is 4.
+/// for rank 2, throws for ranks beyond 4.
 template <typename... Args>
 auto triplet_te_nns_project_ta(TA::DistArray<Args...> const& arr,
                                std::string const& orig_layout) {
@@ -804,9 +814,10 @@ auto triplet_perm_project_btas(btas::Tensor<Args...> const& arr,
                                TripletWeightKind kind) {
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
   const std::size_t rank = arr.rank();
-  if (rank != 4 && rank != 6) return arr;
+  if (rank % 2 != 0)
+    throw Exception("triplet_perm_project_btas: the array rank must be even");
+  if (rank <= 2) return arr;
   const auto& weights = triplet_weights<numeric_type>(rank / 2, kind);
-  if (weights.empty()) return arr;
   return triplet_perm_combine_btas<Args...>(arr, rank / 2, weights);
 }
 

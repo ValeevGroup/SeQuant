@@ -2611,9 +2611,4 @@ TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
   };
   require_normalized(2, 3.0 / 4.0);  // {3/4, -1/4, -1/4, -1/4}
   require_normalized(3, 1.0 / 4.0);  // w10[m]/20, identity op weight 5/20
-
-  // the bare-TE rows exist only for n = 2
-  REQUIRE(mbpt::detail::triplet_weights<double>(
-              3, TripletWeightKind::TeNnsReconstruction)
-              .empty());
 }
