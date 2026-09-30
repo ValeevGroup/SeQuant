@@ -333,7 +333,11 @@ struct ExprWithHash {
 void all_indices(IndexSet& result, ExprPtr const& expr) {
   if (!expr) return;
   if (expr->is<Tensor>())
-    for (auto&& ix : expr->as<Tensor>().const_indices()) result.emplace(ix);
+    for (auto&& ix : expr->as<Tensor>().const_indices()) {
+      result.emplace(ix);
+      // proto-only indices are still live outer modes of the ToT array
+      for (auto&& p : ix.proto_indices()) result.emplace(p);
+    }
   else if (expr->is<Sum>() && !expr->empty())
     all_indices(result, expr->front());
   else if (expr->is<Product>())
