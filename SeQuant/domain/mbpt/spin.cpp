@@ -82,7 +82,8 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   }
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
-  return Index{space, idx.ordinal(), protoindices};
+  return Index{space, idx.ordinal(), protoindices,
+               idx.symmetric_proto_indices()};
 }
 
 template <typename Container, typename TraceFunction, typename... Args>

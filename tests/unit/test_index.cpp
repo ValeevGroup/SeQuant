@@ -459,3 +459,13 @@ TEST_CASE("index", "[elements][index]") {
     }
   }
 }
+
+TEST_CASE("index-factory-keeps-proto-symmetry", "[elements][index]") {
+  using namespace sequant;
+
+  Index a(L"a_1", {Index(L"i_1"), Index(L"i_2")}, /*symmetric=*/false);
+  IndexFactory f;
+  auto b = f.make(a);
+  CHECK_FALSE(b.symmetric_proto_indices());
+  CHECK(b.proto_indices() == a.proto_indices());
+}

@@ -1170,7 +1170,7 @@ class IndexFactory {
       }
       result =
           Index(Index(space, ++(counter_it->second), Index::IndexFactoryTag{}),
-                idx.proto_indices());
+                idx.proto_indices(), idx.symmetric_proto_indices());
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
     return result;
