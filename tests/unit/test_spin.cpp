@@ -1969,3 +1969,11 @@ TEST_CASE("spin-traced densities", "[spin]") {
     }
   }
 }
+
+TEST_CASE("spincase-index-keeps-proto-symmetry", "[spin]") {
+  using namespace sequant;
+
+  Index a(L"a_1", {Index(L"i_1"), Index(L"i_2")}, /*symmetric=*/false);
+  auto b = mbpt::make_spinalpha(a);
+  CHECK_FALSE(b.symmetric_proto_indices());
+}
