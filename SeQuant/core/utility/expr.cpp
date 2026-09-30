@@ -535,8 +535,8 @@ ExprPtr transform_expr(const Expr &expr,
     return result;
   };
 
-  auto transform_product = [&transform_tensor,
-                            &scaling_factor](const Product &product) {
+  auto transform_product = [&transform_tensor, &scaling_factor,
+                            &index_replacements](const Product &product) {
     auto result = std::make_shared<Product>();
     result->scale(product.scalar());
     for (auto &&term : product) {
@@ -544,6 +544,9 @@ ExprPtr transform_expr(const Expr &expr,
         result->append(1, transform_tensor(*term));
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term->clone());
+      } else if (term->is<Sum>() || term->is<Product>()) {
+        result->append(1, transform_expr(term, index_replacements),
+                       Product::Flatten::No);
       } else {
         throw Exception("Invalid Expr type in transform_product");
       }
