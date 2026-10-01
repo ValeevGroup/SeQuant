@@ -32,6 +32,7 @@
 #include <range/v3/view/replace.hpp>
 
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -538,6 +539,49 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
           result_sf_latex | ranges::views::replace(L'E', L'a') |
           ranges::to<std::wstring>();
       REQUIRE(result_latex == result_sf_latex_with_E_replaced_by_a);
+    }
+
+    // use_topology treats two ops as equivalent only if swapping them alone
+    // is a symmetry, not merely if some symmetry maps one to the other
+    {
+      // @return the results with use_topology off and on
+      auto compute = [](const ExprPtr& expr) {
+        std::array<ExprPtr, 2> result;
+        for (const bool top : {false, true}) {
+          FWickTheorem wick{expr->clone()};
+          result[top] = wick.use_topology(top).compute();
+        }
+        REQUIRE(simplify(result[1] - result[0]) == ex<Constant>(0));
+        return result;
+      };
+      auto nop = [](IndexList c, IndexList a) {
+        return ex<FNOperator>(cre(c), ann(a), Vacuum::Physical);
+      };
+      // a†_p1 and a†_p2 are attached to distinct, equivalent tensors
+      auto X = [](std::wstring_view b, std::wstring_view k) {
+        return ex<Tensor>(L"X", bra{b}, ket{k}, Symmetry::Nonsymm);
+      };
+      auto x_result =
+          compute(X(L"p_1", L"p_3") * X(L"p_2", L"p_4") * nop({}, {L"p_3"}) *
+                  nop({}, {L"p_4"}) * nop({L"p_1", L"p_2"}, {}));
+      REQUIRE_THAT(x_result[1],
+                   EquivalentTo(X(L"p_1", L"p_2") * X(L"p_2", L"p_1") -
+                                X(L"p_1", L"p_1") * X(L"p_2", L"p_2")));
+      // the columns of h are only interchangeable together
+      auto h = [](IndexList b, IndexList k) {
+        return ex<Tensor>(L"h", bra(b), ket(k), Symmetry::Nonsymm,
+                          BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+      };
+      auto h_result = compute(
+          nop({}, {L"p_5", L"p_6"}) * h({L"p_1", L"p_2"}, {L"p_3", L"p_4"}) *
+          nop({L"p_1", L"p_2"}, {L"p_3", L"p_4"}) * nop({L"p_7", L"p_8"}, {}));
+      REQUIRE_THAT(h_result[1],
+                   EquivalentTo(h({L"p_5", L"p_6"}, {L"p_7", L"p_8"}) -
+                                h({L"p_5", L"p_6"}, {L"p_8", L"p_7"}) -
+                                h({L"p_6", L"p_5"}, {L"p_7", L"p_8"}) +
+                                h({L"p_6", L"p_5"}, {L"p_8", L"p_7"})));
+      // p_1 and p_2 are each shared by two operators
+      compute(nop({}, {L"p_1", L"p_2"}) * nop({L"p_1", L"p_2"}, {}));
     }
 
   }  // SECTION("physical vacuum")

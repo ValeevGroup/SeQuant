@@ -28,6 +28,10 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <numeric>
+#include <utility>
+#include <vector>
+
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
 #endif
@@ -731,7 +735,7 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
   auto g = tn.create_graph({.distinct_named_indices = true});
   const auto &graph = g.bliss_graph;
   const auto &vlabels = g.vertex_labels;
-  [[maybe_unused]] const auto &vcolors = g.vertex_colors;
+  const auto &vcolors = g.vertex_colors;
   const auto &vtypes = g.vertex_types;
   const auto n = vtypes.size();
   SEQUANT_ASSERT(vcolors.size() == n);
@@ -1030,8 +1034,8 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
   // Index partitions are constructed to *only* include Index
   // objects attached to the bra/ket of any NormalOperator! hence
   // need to use filter in computing partitions
-  auto exclude_index_vertex_pair = [&tn_tensors, &idx_vertex_to_edge_ptr](
-                                       size_t v1, size_t v2) {
+  auto exclude_index_vertex_pair = [&tn_tensors, &idx_vertex_to_edge_ptr, &g,
+                                    &vcolors, &graph, n](size_t v1, size_t v2) {
     const auto *edge1_ptr = idx_vertex_to_edge_ptr(v1);
     const auto *edge2_ptr = idx_vertex_to_edge_ptr(v2);
     if (!edge1_ptr || !edge2_ptr) return true;
@@ -1072,9 +1076,42 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
       }
       return false;
     };
-    const bool exclude =
-        !connected_to_bra_or_ket_of_same_symmetric_nop(edge1, edge2);
-    return exclude;
+    if (!connected_to_bra_or_ket_of_same_symmetric_nop(edge1, edge2))
+      return true;
+
+    // the pruning permutes the ops of a partition independently of anything
+    // else, so swapping the two ops alone must be a symmetry: each index must
+    // belong to that op only, and swapping the two index vertices together
+    // with the slots they occupy on each tensor, every other vertex fixed,
+    // must be an automorphism
+    auto nnop_slots = [&tn_tensors](const auto &edge) {
+      std::size_t count = 0;
+      for (auto i = 0; i != edge.vertex_count(); ++i)
+        if (std::dynamic_pointer_cast<NormalOperator<S>>(
+                tn_tensors.at(edge.vertex(i).getTerminalIndex())))
+          ++count;
+      return count;
+    };
+    if (nnop_slots(edge1) != 1 || nnop_slots(edge2) != 1) return true;
+    std::vector<unsigned int> swap(n);
+    std::iota(swap.begin(), swap.end(), 0u);
+    auto transpose = [&swap](unsigned int a, unsigned int b) {
+      swap[a] = b;
+      swap[b] = a;
+    };
+    transpose(v1, v2);
+    const auto &slots2 = graph->get_edges(v2);
+    for (const auto slot1 : graph->get_edges(v1)) {
+      const auto tensor = g.vertex_to_tensor_idx(slot1);
+      const auto slot2 = ranges::find_if(slots2, [&](const auto slot) {
+        return g.vertex_to_tensor_idx(slot) == tensor;
+      });
+      if (slot2 == ranges::end(slots2)) return true;
+      if (*slot2 != slot1) transpose(slot1, *slot2);
+    }
+    for (std::size_t v = 0; v != n; ++v)
+      if (vcolors[v] != vcolors[swap[v]]) return true;
+    return !graph->is_automorphism(swap);
   };
 
   // index_vidx2pidx maps vertex index (see
