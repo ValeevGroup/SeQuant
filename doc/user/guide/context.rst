@@ -12,10 +12,12 @@ The core ``Context``
 
 :class:`sequant::Context` bundles the settings that give meaning to an expression: the :class:`sequant::IndexSpaceRegistry` (the
 vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relative to which operators are normal-ordered
-(``Vacuum::Physical`` — the true, particle-free vacuum — or ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum), the
-``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis`` (spin-orbital vs. spin-free). It also
-owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is accessed and replaced through
-:func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and :func:`sequant::reset_default_context`.
+(``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
+``Vacuum::MultiProduct`` — a general reference state, for which Wick's theorem takes its *extended* form with density cumulants; see
+:func:`sequant::extended_wick`), the ``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis``
+(spin-orbital vs. spin-free). It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
+accessed and replaced through :func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and
+:func:`sequant::reset_default_context`.
 
 A ``Context`` owns its registry, which its copies share and which cannot change while any context uses it: a registry given by value
 is moved or copied in, and one given by ``std::shared_ptr`` is adopted if that is its only owner (e.g. a temporary, such as the result
