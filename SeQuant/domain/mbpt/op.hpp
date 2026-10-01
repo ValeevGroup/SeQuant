@@ -499,8 +499,8 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// Defines the behavior of expectation value methods.
 /// The struct is used by both tensor and operator level methods, but there are
 /// parameters in here which are only meaningful at the operator level.
-/// @note ref_av ignores connect and do_not_connect when the reference state
-///       differs from the Wick vacuum.
+/// @pre When used with ref_av and the reference differs from the Wick vacuum,
+///      connect and do_not_connect must both be empty.
 template <typename T>
 struct EVOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
@@ -526,6 +526,8 @@ namespace tensor {
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
+/// @pre When the reference differs from the Wick vacuum, opts.connect and
+///      opts.do_not_connect must both be empty.
 ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
@@ -1366,6 +1368,18 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k);
 
 }  // namespace op
+
+namespace detail {
+template <typename T>
+void validate_ref_av_connections(const EVOptions<T>& opts,
+                                 bool full_contractions) {
+  SEQUANT_ENFORCE(
+      full_contractions ||
+          (opts.connect.empty() && opts.do_not_connect.empty()),
+      "ref_av connectivity requires the reference to equal the Wick vacuum");
+}
+}  // namespace detail
+
 }  // namespace mbpt
 }  // namespace sequant
 

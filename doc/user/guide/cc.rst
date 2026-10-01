@@ -152,8 +152,8 @@ Using :math:`\bar{H}` outside the CC class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For BCH expansions, ``CC::hbar()`` uses explicit commutators when the reference differs from the Wick vacuum, since
-``ref_av`` ignores both ``connect`` and ``do_not_connect``. The connectivity rules below apply when the reference is the
-Wick vacuum.
+``ref_av`` requires empty ``connect`` and ``do_not_connect`` lists. The class supplies empty lists in this case.
+The connectivity rules below apply when the reference is the Wick vacuum.
 
 :func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz with the reference equal to the Wick
 vacuum, the expression it returns is **not** self-contained: each commutator is written as a connected product

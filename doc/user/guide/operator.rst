@@ -157,7 +157,8 @@ Each commutator can be written in two ways, and ``use_connected_form`` selects b
 - ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
 
 The connectivity discussion below assumes the reference is the Wick vacuum. When the reference differs from the Wick
-vacuum, both overloads of ``ref_av`` ignore ``connect`` and ``do_not_connect``; use explicit commutators in that case.
+vacuum, both overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists; use explicit commutators in that
+case. Non-empty lists are rejected even when assertions are disabled.
 
 Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
 
@@ -212,8 +213,8 @@ Vacuum averaging and final expression
 The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum average of an operator level expression.
 If reference state differs from the Wick vacuum ``sequant::mbpt::op::ref_av`` function should be used instead to
 compute the reference average.
-In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` ignore
-the ``connect`` and ``do_not_connect`` options. ``vac_av`` always computes full contractions and honors these options.
+In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` require
+empty ``connect`` and ``do_not_connect`` lists. ``vac_av`` always computes full contractions and honors these options.
 
 Operator-level connection pairs use labels and apply to every matching pair with the first operator to the left of the
 second. Tensor-level pairs use zero-based normal-operator positions. Both conventions apply to ``connect`` and

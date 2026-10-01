@@ -147,8 +147,8 @@ class CC {
   ///   commutator `mbpt::lst(..., {})` call. A unitary H̄ is self-contained,
   ///   so its connectivity must be empty. See the "Using H̄ outside the CC
   ///   class" section of the user guide.
-  /// @note ref_av ignores connect and do_not_connect when the reference differs
-  ///   from the Wick vacuum.
+  /// @note ref_av requires empty connect and do_not_connect when the reference
+  ///   differs from the Wick vacuum.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
