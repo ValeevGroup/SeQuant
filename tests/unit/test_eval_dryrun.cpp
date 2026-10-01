@@ -388,6 +388,23 @@ bool is_df_batchable(Index const& ix) {
 // aborted every CSV-CCk run at MPQC_ASSERT(is_valid(e)); the proto-aware
 // external-index comparison fixes it. This reuses the real C60 doubles residual
 // data file (a genuine proto-indexed CSV Sum).
+TEST_CASE("is_valid accepts Re/Im/Power nodes", "[utilities][is_valid]") {
+  using namespace sequant;
+  // The time-reversal fold of a complex network emits Re(...) summands; the
+  // production path validates every summand before binarization, so these
+  // node types must be accepted (they are valid iff their inner is).
+  auto prod = deserialize(L"t{a_1;i_1} g{i_1;a_1}");
+  std::string msg;
+  REQUIRE(is_valid(ex<RealPart>(prod), &msg));
+  REQUIRE(is_valid(ex<ImagPart>(prod), &msg));
+  REQUIRE(is_valid(ex<Power>(ex<Variable>(L"x"), 2), &msg));
+  auto sum = deserialize(L"t{a_1;i_1} g{i_1;a_1} + f{a_1;i_1} h{i_1;a_1}");
+  REQUIRE(is_valid(ex<RealPart>(sum), &msg));
+  // an invalid inner is still reported
+  auto bad = deserialize(L"t{a_1;i_1} g{i_1;a_1} f{a_1;i_2}");
+  REQUIRE(!is_valid(ex<RealPart>(bad), &msg));
+}
+
 TEST_CASE("is_valid accepts a CSV proto-indexed residual",
           "[utilities][is_valid][csv]") {
   using namespace sequant;
@@ -1315,7 +1332,67 @@ TEST_CASE("dryrun cost model memsize matches memsize_counter",
   auto direct = sequant::opt::detail::memsize_counter(
       r.idx_to_extent(), r.inner_pow_fn())(idx, container::svector<Index>{},
                                            container::svector<Index>{});
-  CHECK(cm.memsize(idx) == static_cast<std::size_t>(direct * 8.0));
+  // Bytes: the default registry is complex, so an element is two reals.
+  CHECK(cm.memsize(idx) == static_cast<std::size_t>(direct * 16.0));
+  CHECK(cm.numeric_size() == 8.0);
+}
+
+TEST_CASE("dryrun cost model sizes elements and flops by the field",
+          "[dryrun-costmodel]") {
+  auto r = backend_test_regime();
+  CostModel cm{r};
+  container::svector<Index> out{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> contracted{Index{L"i_2"}};
+  auto const madds =
+      sequant::opt::detail::flops_counter(r.idx_to_extent(), r.inner_pow_fn())(
+          out, contracted, container::svector<Index>{});
+  auto const elems = sequant::opt::detail::memsize_counter(
+      r.idx_to_extent(), r.inner_pow_fn())(out, container::svector<Index>{},
+                                           container::svector<Index>{});
+  // Complex (the default registry): two reals per element, four real
+  // multiply-adds per complex one.
+  CHECK(cm.memsize(out) == static_cast<std::size_t>(elems * 16.0));
+  CHECK(cm.flops(out, contracted) == Catch::Approx(madds * 4.0));
+
+  // Real spaces: one real per element, one multiply-add each.
+  auto ctx = get_default_context().clone();
+  auto reg = ctx.mutable_index_space_registry();
+  std::vector<std::wstring> keys;
+  for (auto const& space : *reg) keys.push_back(space.base_key());
+  for (auto const& key : keys)
+    if (auto* sp = reg->retrieve_ptr(key)) sp->field(Field::Real);
+  auto resetter = set_scoped_default_context(std::move(ctx));
+  container::svector<Index> rout{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> rcontracted{Index{L"i_2"}};
+  CHECK(cm.memsize(rout) == static_cast<std::size_t>(elems * 8.0));
+  CHECK(cm.flops(rout, rcontracted) == Catch::Approx(madds));
+  // exec_cost takes real flops and bytes; with no roofline it is the flops.
+  CHECK(cm.exec_cost(cm.flops(rout, rcontracted), Field::Real, cm.memsize(rout),
+                     cm.memsize(rcontracted),
+                     cm.memsize(rout)) == Catch::Approx(madds));
+  CHECK(cm.exec_cost(cm.flops(out, contracted), Field::Complex, cm.memsize(out),
+                     cm.memsize(contracted),
+                     cm.memsize(out)) == Catch::Approx(madds * 4.0));
+}
+
+TEST_CASE("dryrun result applies a canon transform as a relabel",
+          "[dryrun-costmodel]") {
+  // Every leaf fetch applies its CanonTransform (phase, conj, relabel) to
+  // the yielded result; the dry run must honor that hook (it used to throw
+  // "Not implemented: apply_transform" and abort the whole prediction). In
+  // the size model phase and conj are free, the relabel reorders modes.
+  auto r = backend_test_regime();
+  auto cm = std::make_shared<CostModel const>(r);
+  container::svector<Index> pre{Index{L"a_3"}, Index{L"i_1"}};
+  container::svector<Index> post{Index{L"i_1"}, Index{L"a_3"}};
+  ResultDryRun res{pre, cm};
+  Result const& base = res;  // the hooks are the Result interface's
+  auto out = base.apply_transform(
+      CanonTransform{}, std::array<std::any, 2>{std::any{pre}, std::any{post}});
+  REQUIRE(out);
+  REQUIRE(out->size_in_bytes() == base.size_in_bytes());
+  REQUIRE(out->is<ResultDryRun>());
+  REQUIRE(out->as<ResultDryRun>().indices() == post);
 }
 
 TEST_CASE("dryrun cost model memsize honors an extent override",
@@ -1341,7 +1418,7 @@ TEST_CASE("dryrun cost model flops and exec_cost are finite/positive",
   CHECK(f > 0.0);
   // exec_cost takes the op's FULL compulsory traffic: both operand footprints
   // plus the result's (see the roofline note on CostModel::exec_cost).
-  CHECK(cm.exec_cost(f, cm.memsize(out), cm.memsize(contracted),
+  CHECK(cm.exec_cost(f, Field::Complex, cm.memsize(out), cm.memsize(contracted),
                      cm.memsize(out)) > 0.0);
 }
 
@@ -1366,6 +1443,7 @@ TEST_CASE(
                              .fast_mem_elems = 1000000.0};
   auto const regime = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(regime, rp);
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
 
   Index const i1{L"i_1"}, i2{L"i_2"}, a3{L"a_3"}, a4{L"a_4"};
   // Deliberately lopsided operands: big = 20*20*10 = 4000 elements,

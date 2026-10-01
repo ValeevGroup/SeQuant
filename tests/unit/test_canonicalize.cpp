@@ -6,10 +6,12 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
@@ -703,6 +705,321 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   // Without braket symmetry the two forms must remain distinct.
   CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
 }
+
+TEST_CASE("csv_equivalent_tn_merge", "[algorithms][csv-canon]") {
+  // Reproducer: CSV (PNO/PNS) flavor-expansion terms that are identical up to
+  // DUMMY relabeling (large tmp-style ordinals, as minted by csv_transform)
+  // and factor order MUST canonicalize to identical expressions, or
+  // like-term merging cannot collapse the 2^N flavor Cartesian product.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_pao_spaces(sr_reg, mbpt::Spin::any);  // μ̃
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // the invariant that matters for like-term merging: with named-index labels
+  // treated as meaningful (as Sum::canonicalize_impl and transform_sum_expr
+  // do), equivalent TNs must canonicalize to IDENTICAL expressions
+  auto canon_str = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions::default_options().copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+
+  auto canon_str_m = [](std::wstring s, CanonicalizationMethod m) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions{.method = m}.copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+  const std::wstring sA =
+      L"g{i_1,i_2;μ̃_7,μ̃_8}:N-C-S"
+      L" * C{μ̃_7;a_1<i_1,i_2>}:N-C-S"
+      L" * C{μ̃_8;a_2<i_1,i_2>}:N-C-S";
+  const std::wstring sB =
+      L"C{μ̃_19;a_2<i_1,i_2>}:N-C-S"
+      L" * g{i_1,i_2;μ̃_17,μ̃_19}:N-C-S"
+      L" * C{μ̃_17;a_1<i_1,i_2>}:N-C-S";
+
+  SECTION("complete") {
+    auto A = canon_str(sA), B = canon_str(sB);
+    INFO("canon(A) = " << A);
+    INFO("canon(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("topological only") {
+    auto A = canon_str_m(sA, CanonicalizationMethod::Topological);
+    auto B = canon_str_m(sB, CanonicalizationMethod::Topological);
+    INFO("canonT(A) = " << A);
+    INFO("canonT(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("debug log A") {
+    sequant::Logger::instance().canonicalize = true;
+    sequant::Logger::instance().canonicalize_input_graph = true;
+    auto A = canon_str_m(sA, CanonicalizationMethod::Topological);
+    sequant::Logger::instance().canonicalize = false;
+    sequant::Logger::instance().canonicalize_input_graph = false;
+    std::cout << "FINAL_A: " << A << "\n";
+  }
+  SECTION("debug log B") {
+    sequant::Logger::instance().canonicalize = true;
+    sequant::Logger::instance().canonicalize_input_graph = true;
+    auto B = canon_str_m(sB, CanonicalizationMethod::Topological);
+    sequant::Logger::instance().canonicalize = false;
+    sequant::Logger::instance().canonicalize_input_graph = false;
+    std::cout << "FINAL_B: " << B << "\n";
+  }
+  SECTION("transform_sum_expr merges equivalent summands") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    std::vector<ExprPtr> summands{exA, exB};
+    auto merged = transform_sum_expr(
+        summands, [](ExprPtr const& x) { return x->clone(); });
+    INFO("merged = " << toUtf8(to_latex(merged)));
+    // the two summands are the same TN => must collapse to 2 * (one term)
+    REQUIRE(merged->is<Product>());
+    CHECK(merged->as<Product>().scalar() == rational{2});
+  }
+  SECTION("canonical graphs equal") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    TensorNetworkV3 tnA(exA), tnB(exB);
+    auto mdA = tnA.canonicalize_slots();
+    auto mdB = tnB.canonicalize_slots();
+    REQUIRE(mdA.graph);
+    REQUIRE(mdB.graph);
+    const int cmpAB = mdA.graph->cmp(*mdB.graph);
+    INFO("canonical bliss graph cmp(A,B) = " << cmpAB << " (0 = equal)");
+    CHECK(cmpAB == 0);
+  }
+  SECTION("lexicographic only") {
+    auto A = canon_str_m(sA, CanonicalizationMethod::Lexicographic);
+    auto B = canon_str_m(sB, CanonicalizationMethod::Lexicographic);
+    INFO("canonL(A) = " << A);
+    INFO("canonL(B) = " << B);
+    CHECK(A == B);
+  }
+}
+
+TEST_CASE("csv_proto_dummy_fold", "[algorithms][csv-canon][!shouldfail]") {
+  // Reproducer for the CSV/PNS term-count inflation (MPQC Kramers-traced
+  // energy): two terms identical under the dummy exchange i_1 <-> i_2 -- the
+  // symmetric proto bundle <i_1,i_2> maps onto itself, the g/t occupied legs
+  // map onto each other -- MUST canonicalize identically so like-term merging
+  // can fold them. Today they do NOT: in term A the bundle member i_1 occurs
+  // only as decoration and is promoted to a named (non-renameable) index by
+  // TensorNetworkV3::init_edges (pure-proto promotion), in term B it is i_2
+  // that gets pinned, so the canonical forms retain different labels.
+  // [!shouldfail] documents the current defect; drop the tag once bundle
+  // members rename with their legs.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // the traced-energy pair (spin decorations dropped: the third occupied
+  // dummy i_3 plays the role of i(down)_1)
+  const std::wstring sA =
+      L"g{a_1<i_1,i_2>,a_2<i_1,i_2>;i_2,i_3}:N-C-S"
+      L" * t{i_2,i_3;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-C-S";
+  const std::wstring sB =
+      L"g{a_1<i_1,i_2>,a_2<i_1,i_2>;i_1,i_3}:N-C-S"
+      L" * t{i_1,i_3;a_1<i_1,i_2>,a_2<i_1,i_2>}:N-C-S";
+
+  auto canon_str = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions::default_options().copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+
+  SECTION("canonical forms equal") {
+    auto A = canon_str(sA), B = canon_str(sB);
+    INFO("canon(A) = " << A);
+    INFO("canon(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("transform_sum_expr folds the pair") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    std::vector<ExprPtr> summands{exA, exB};
+    auto merged = transform_sum_expr(
+        summands, [](ExprPtr const& x) { return x->clone(); });
+    INFO("merged = " << toUtf8(to_latex(merged)));
+    REQUIRE(merged->is<Product>());
+    CHECK(merged->as<Product>().scalar() == rational{2});
+  }
+}
+
+TEST_CASE("csv_proto_dummy_fold_normalized", "[algorithms][csv-canon]") {
+  // The same pair as csv_proto_dummy_fold but with NORMALIZED proto bundles
+  // (each bundle = the tensor's own occupied legs, the reset_csv_protos
+  // invariant): no bundle member is decoration-only, so nothing is pinned by
+  // the pure-proto promotion, and folding must work with the machinery as is.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const std::wstring sA =
+      L"g{a_1<i_2,i_3>,a_2<i_2,i_3>;i_2,i_3}:N-C-S"
+      L" * t{i_2,i_3;a_1<i_2,i_3>,a_2<i_2,i_3>}:N-C-S";
+  const std::wstring sB =
+      L"g{a_1<i_1,i_3>,a_2<i_1,i_3>;i_1,i_3}:N-C-S"
+      L" * t{i_1,i_3;a_1<i_1,i_3>,a_2<i_1,i_3>}:N-C-S";
+
+  auto canon_str = [](std::wstring s) {
+    auto e = deserialize(s);
+    REQUIRE(e);
+    canonicalize(e, CanonicalizeOptions::default_options().copy_and_set(
+                        CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    return toUtf8(to_latex(e));
+  };
+
+  SECTION("canonical forms equal") {
+    auto A = canon_str(sA), B = canon_str(sB);
+    INFO("canon(A) = " << A);
+    INFO("canon(B) = " << B);
+    CHECK(A == B);
+  }
+  SECTION("transform_sum_expr folds the pair") {
+    auto exA = deserialize(sA), exB = deserialize(sB);
+    REQUIRE(exA);
+    REQUIRE(exB);
+    std::vector<ExprPtr> summands{exA, exB};
+    auto merged = transform_sum_expr(
+        summands, [](ExprPtr const& x) { return x->clone(); });
+    INFO("merged = " << toUtf8(to_latex(merged)));
+    REQUIRE(merged->is<Product>());
+    CHECK(merged->as<Product>().scalar() == rational{2});
+  }
+}
+
+// the deprecated fold is exercised on purpose: it is the reference for the
+// symmetric fold this suite compares against
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+TEST_CASE("fold_conjugate_pairs_of_real_sum", "[conjugate-fold]") {
+  // Symbolic-layer counterpart of the eval-layer Conjugate leaf fold:
+  // in a sum whose VALUE the caller asserts to be real, a summand and its
+  // adjoint contribute Re(s + s*) = Re(2 s), so the pair folds into a single
+  // summand with a doubled scalar. Adjointness is detected via canonical
+  // forms, so it is robust to dummy-index renaming and factor reordering.
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  ctx.set(AssertStrictBraKetSymmetry::No);
+  auto resetter = set_scoped_default_context(ctx);
+
+  // a fully-contracted (energy-like) summand of BraKetSymmetry::Conjugate
+  // tensors, and its adjoint written independently: real scalar kept,
+  // factor order reversed, bra<->ket swapped, dummies renamed
+  auto term = deserialize(L"1/2 h{i_1;a_1}:N-C-S t{a_1;i_1}:N-C-S");
+  auto term_adj = deserialize(L"1/2 t{i_2;a_2}:N-C-S h{a_2;i_2}:N-C-S");
+  // a manifestly real (self-adjoint) summand: its adjoint (factors reversed,
+  // each one's bundles exchanged) is itself
+  auto self_adj = deserialize(L"1/4 f{i_1;a_1}:N-C-S f{a_1;i_1}:N-C-S");
+
+  {  // a conjugate pair folds onto its first member with a doubled scalar
+    auto sum = term->clone() + term_adj->clone();
+    auto folded = fold_conjugate_pairs_of_real_sum(sum);
+    auto expected = ex<Constant>(2) * term->clone();
+    simplify(folded);
+    simplify(expected);
+    REQUIRE(folded == expected);
+  }
+
+  {  // unpaired and self-adjoint summands stay untouched (in particular the
+     // self-adjoint one must NOT be doubled)
+    auto sum = self_adj->clone() + term->clone();
+    auto folded = fold_conjugate_pairs_of_real_sum(sum);
+    auto expected = self_adj->clone() + term->clone();
+    simplify(folded);
+    simplify(expected);
+    REQUIRE(folded == expected);
+  }
+
+  {  // mixed sum: the pair folds, the self-adjoint bystander survives
+    auto sum = term->clone() + self_adj->clone() + term_adj->clone();
+    auto folded = fold_conjugate_pairs_of_real_sum(sum);
+    auto expected = ex<Constant>(2) * term->clone() + self_adj->clone();
+    simplify(folded);
+    simplify(expected);
+    REQUIRE(folded == expected);
+  }
+
+  {  // custom conjugate_op: a domain identity may express a summand's complex
+     // conjugate as an index RELABELING of another summand instead of the
+     // algebraic adjoint (e.g. leaves whose label-flipped blocks equal the
+     // complex conjugate). Such pairs are invisible to the default (adjoint)
+     // pairing and are recognized when the caller supplies the map.
+    auto spin_ctx = get_default_context();
+    spin_ctx.set(mbpt::make_min_sr_spaces());  // spin-annotated spaces
+    auto spin_resetter = set_scoped_default_context(spin_ctx);
+
+    auto term_up = deserialize(L"1/2 h{i↑_1;a↑_1}:N-C-S t{a↑_1;i↑_1}:N-C-S");
+    auto term_dn = deserialize(L"1/2 h{i↓_1;a↓_1}:N-C-S t{a↓_1;i↓_1}:N-C-S");
+
+    {  // default (adjoint) pairing finds nothing: the summands differ by a
+       // label flip, not by a bra<->ket swap
+      auto sum = term_up->clone() + term_dn->clone();
+      auto folded = fold_conjugate_pairs_of_real_sum(sum);
+      auto expected = term_up->clone() + term_dn->clone();
+      simplify(folded);
+      simplify(expected);
+      REQUIRE(folded == expected);
+    }
+    {  // with the label-flip map the pair folds onto the first member
+      auto sum = term_up->clone() + term_dn->clone();
+      auto folded = fold_conjugate_pairs_of_real_sum(
+          sum, CanonicalizeOptions::default_options(),
+          [](ExprPtr const& s) { return mbpt::swap_spin(s); });
+      auto expected = ex<Constant>(2) * term_up->clone();
+      simplify(folded);
+      simplify(expected);
+      REQUIRE(folded == expected);
+    }
+  }
+}
+SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+TEST_CASE("conjugate_fold_skips_operators", "[algorithms][conjugate]") {
+  // The Conjugate fold is a VALUE identity (T{q;p} = conj(T{p;q})) and only
+  // applies to c-number tensors. Operator-valued AbstractTensors (e.g.
+  // NormalOperator) also report BraKetSymmetry::Conjugate, but reorienting
+  // them would exchange creators and annihilators; the canonicalizer must
+  // leave them alone (regression: canonicalize_graph used to call
+  // _swap_bra_ket on a NormalOperator and abort).
+  using namespace sequant;
+  auto sr_reg = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  Context ctx = get_default_context();
+  ctx.set(sr_reg);
+  auto resetter = set_scoped_default_context(ctx);
+
+  auto ex_op = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) *
+               ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm);
+  REQUIRE_NOTHROW(canonicalize(ex_op));
+  // no tensor in the result acquired a conjugation marker
+  bool any_conj = false;
+  for (auto const& f : ex_op->as<Product>().factors())
+    if (f->is<Tensor>() && f->as<Tensor>().kconjugated()) any_conj = true;
+  REQUIRE_FALSE(any_conj);
+}
+
 TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
           "[canonicalize][proto]") {
   // Regression: the lexicographic dummy rewrite skipped "named" edges by
@@ -748,7 +1065,333 @@ TEST_CASE("lexicographic rewrite with named non-edge (pure proto) indices",
   CHECK(!duplicate);
 }
 
-TEST_CASE("canonicalize_options_equality", "[canonicalize][context]") {
+TEST_CASE("kramers_block_fold", "[canonicalize][kramers]") {
+  // single-tensor Kramers (time-reversal) fold: a down-first tensor is
+  // respelled as its all-flipped partner with the conjugation marker and
+  // phase (-1)^(#slots flipped from down); up-first and non-Kramers tensors
+  // are untouched; unflavored slots (e.g. a DF auxiliary) never flip
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  mbpt::add_df_spaces(isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const auto& a_up = isr->retrieve(L"a↑");
+  const auto& a_dn = isr->retrieve(L"a↓");
+  const auto& i_up = isr->retrieve(L"i↑");
+  const auto& i_dn = isr->retrieve(L"i↓");
+  auto mk = [](std::wstring_view lbl, std::wstring_view b, std::wstring_view k,
+               KramersSymmetry ks = KramersSymmetry::TimeReversal) {
+    return Tensor(lbl, bra{Index(b)}, ket{Index(k)}, Symmetry::Nonsymm,
+                  BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, ks);
+  };
+
+  SECTION("down-first, one down slot: flipped, marked, phase -1") {
+    auto f = mk(L"f", L"a↓_1", L"i↑_1");
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
+    // the mark is the adjoint state with the bundles exchanged: conj f{a↑;i↓}
+    // is spelled f⁺{i↓;a↑}
+    REQUIRE(f.adjointed());
+    REQUIRE(f.bra()[0].space() == i_dn);
+    REQUIRE(f.ket()[0].space() == a_up);
+    REQUIRE(ph);  // -1
+    // idempotent: the marked spelling is read in its value orientation
+    auto ph2 = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
+    REQUIRE(f.adjointed());
+    REQUIRE(f.bra()[0].space() == i_dn);
+    REQUIRE(f.ket()[0].space() == a_up);
+    REQUIRE(!ph2);
+  }
+  SECTION("down-first, two down slots: flipped, marked, phase +1") {
+    auto f = mk(L"f", L"a↓_1", L"i↓_1");
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
+    REQUIRE(f.adjointed());
+    REQUIRE(f.bra()[0].space() == i_up);
+    REQUIRE(f.ket()[0].space() == a_up);
+    REQUIRE(!ph);
+  }
+  SECTION("up-first: untouched") {
+    auto f = mk(L"f", L"a↑_1", L"i↓_1");
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
+    REQUIRE(!f.adjointed());
+    REQUIRE(f.bra()[0].space() == a_up);
+    REQUIRE(f.ket()[0].space() == i_dn);
+    REQUIRE(!ph);
+  }
+  SECTION("Hermitian tensor: the mark is the consumed exchange") {
+    // a definite hermiticity consumes the adjoint state into the bundle
+    // exchange (C{b;a} = conj C{a;b}), so the marked spelling is bare
+    auto C = Tensor(L"C", bra{Index(L"a↓_1")},
+                    ket{Index(L"a↑_1", {Index(L"i↑_1"), Index(L"i↑_2")})},
+                    Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                    ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    // one down slot in either orientation: a tie, decided by the flavor
+    // key, which orders the bundles canonically for such a tensor -- no fold
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(C);
+    REQUIRE(!C.adjointed());
+    REQUIRE(C.bra()[0].space() == a_dn);
+    REQUIRE(!ph);
+    // all-down: flipped, the mark exchanges the bundles, phase +1
+    auto D = Tensor(L"C", bra{Index(L"a↓_1")},
+                    ket{Index(L"a↓_2", {Index(L"i↓_1"), Index(L"i↓_2")})},
+                    Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                    ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto phD = TensorBlockCanonicalizer{}.fold_kramers(true).apply(D);
+    REQUIRE(!D.adjointed());
+    REQUIRE(D.bra()[0].space() == a_up);
+    REQUIRE(D.bra()[0].has_proto_indices());
+    REQUIRE(D.ket()[0].space() == a_up);
+    REQUIRE(!phD);
+  }
+  SECTION("up-row exchange: eval-boundary respelling of a Hermitian tensor") {
+    // the up-row bra of a Hermitian Kramers tensor is reached by the bundle
+    // exchange, which for such a tensor is the adjoint (consumed); the leaf
+    // normalization records {conj, swap} for it. Not a symbolic respelling:
+    // the two orientations are two values
+    auto C = Tensor(L"C", bra{Index(L"a↓_1")},
+                    ket{Index(L"a↑_1", {Index(L"i↑_1"), Index(L"i↑_2")})},
+                    Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                    ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    const auto [exchanged, sign] = kramers_uprow_exchange(C);
+    REQUIRE(exchanged);
+    REQUIRE(sign == 1);
+    REQUIRE(!C.adjointed());
+    REQUIRE(C.bra()[0].space() == a_up);
+    REQUIRE(C.ket()[0].space() == a_dn);
+    // idempotent
+    REQUIRE(!kramers_uprow_exchange(C).first);
+    // an up-row bra stays as written
+    auto g =
+        Tensor(L"g", bra{Index(L"a↑_1")}, ket{Index(L"i↓_1")},
+               aux{Index(L"Κ_1")}, Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+               ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    REQUIRE(!kramers_uprow_exchange(g).first);
+    REQUIRE(g.bra()[0].space() == a_up);
+    // the exchanged spelling of the same value swaps back to it
+    auto gs =
+        Tensor(L"g", bra{Index(L"i↓_1")}, ket{Index(L"a↑_1")},
+               aux{Index(L"Κ_1")}, Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+               ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    REQUIRE(kramers_uprow_exchange(gs).first);
+    REQUIRE(gs == g);
+    // a rigid tensor's two orientations are two arrays: never exchanged
+    auto f = mk(L"f", L"a↓_1", L"i↑_1");
+    REQUIRE(!kramers_uprow_exchange(f).first);
+    REQUIRE(f.bra()[0].space() == a_dn);
+    // no Kramers symmetry: untouched
+    auto Cn = Tensor(L"C", bra{Index(L"a↓_1")},
+                     ket{Index(L"a↑_1", {Index(L"i↑_1"), Index(L"i↑_2")})},
+                     Symmetry::Nonsymm, BraKetSymmetry::Conjugate,
+                     ColumnSymmetry::Nonsymm, KramersSymmetry::Nonsymm);
+    REQUIRE(!kramers_uprow_exchange(Cn).first);
+  }
+  SECTION("default block canonicalizer never folds (network safety)") {
+    // inside a network the per-tensor fold would flip one tensor's dummies
+    // but not its partner's, so the fold is opt-in at the block level
+    auto f = mk(L"f", L"a↓_1", L"i↑_1");
+    TensorBlockCanonicalizer{}.apply(f);
+    REQUIRE(!f.adjointed());
+    REQUIRE(f.bra()[0].space() == a_dn);
+    REQUIRE(f.ket()[0].space() == i_up);
+  }
+  SECTION("no Kramers symmetry: untouched") {
+    auto f = mk(L"f", L"a↓_1", L"i↑_1", KramersSymmetry::Nonsymm);
+    TensorBlockCanonicalizer{}.fold_kramers(true).apply(f);
+    REQUIRE(!f.adjointed());
+    REQUIRE(f.bra()[0].space() == a_dn);
+  }
+  SECTION("proto indices flip with their referent; unflavored aux stays") {
+    Index a2(L"a↑_2", {Index(L"i↑_1"), Index(L"i↓_1")});
+    Tensor C(L"C", bra{Index(L"a↓_1")}, ket{a2}, aux{Index(L"a_9")},
+             Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+             ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+    auto ph = TensorBlockCanonicalizer{}.fold_kramers(true).apply(C);
+    // flipped to C{a↑;a↓<i↓,i↑>;a_9}, marked as C⁺{a↓<i↓,i↑>;a↑;a_9}
+    REQUIRE(C.adjointed());
+    REQUIRE(C.bra()[0].space() == a_dn);
+    REQUIRE(C.ket()[0].space() == a_up);
+    const auto& protos = C.bra()[0].proto_indices();
+    REQUIRE(protos.size() == 2);
+    bool has_dn = false, has_up = false;
+    for (auto const& pr : protos) {
+      has_dn |= pr.space() == i_dn;
+      has_up |= pr.space() == i_up;
+    }
+    REQUIRE((has_dn && has_up));
+    REQUIRE(C.aux()[0].space() == isr->retrieve(L"a"));
+    REQUIRE(ph);  // one down slot flipped -> -1
+  }
+}
+
+TEST_CASE("kramers_network_fold", "[canonicalize][kramers]") {
+  // network Kramers (time-reversal) fold: a connected component of tensors
+  // joined by shared flavored dummies is ONE orientation unit (flipping a
+  // tensor flips every flavored slot, so every partner sharing a dummy
+  // flips too); components touching a named (external) index are pinned.
+  // A free component takes the orientation with fewer down-first leaves
+  // (tie: label/flavor fingerprint), every flipped tensor acquiring the
+  // conjugation marker and the phase (-1)^(#down slots) -- a closed
+  // component's phase is always +1 (each dummy is down in two slots).
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+  const auto& a_up = isr->retrieve(L"a↑");
+  const auto& a_dn = isr->retrieve(L"a↓");
+  const auto& i_up = isr->retrieve(L"i↑");
+  const auto& i_dn = isr->retrieve(L"i↓");
+  auto T = [](std::wstring_view lbl, std::vector<std::wstring_view> b,
+              std::vector<std::wstring_view> k) {
+    container::svector<Index> bv, kv;
+    for (auto l : b) bv.emplace_back(l);
+    for (auto l : k) kv.emplace_back(l);
+    return ex<Tensor>(lbl, bra(std::move(bv)), ket(std::move(kv)),
+                      Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                      ColumnSymmetry::Nonsymm, KramersSymmetry::TimeReversal);
+  };
+  auto leaves = [](const ExprPtr& e) {
+    std::vector<const Tensor*> out;
+    for (auto& f : e->as<Product>()) out.push_back(&f->as<Tensor>());
+    return out;
+  };
+  // the mark is the adjoint state with the bundles exchanged (an involution):
+  // toggle it off every factor
+  auto unmark = [](const ExprPtr& e) {
+    auto c = e->clone();
+    for (auto& f : c->as<Product>())
+      if (f->as<Tensor>().adjointed()) (void)f->as<Tensor>().adjoint();
+    return c;
+  };
+  // down-first leaves of the VALUE spelling (marks toggled off)
+  auto n_down_first = [&](const ExprPtr& e0) {
+    auto e = unmark(e0);
+    int n = 0;
+    for (auto* t : leaves(e))
+      for (auto& idx : t->const_slots())
+        if (isr->kramers_partner(idx.space())) {
+          if (!isr->kramers_canonical(idx.space())) ++n;
+          break;
+        }
+    return n;
+  };
+  const auto fold = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::FoldKramers::Yes);
+
+  SECTION("free component: all-down spelling folds onto all-up + conj") {
+    auto up = T(L"g", {L"i↑_1", L"i↑_2"}, {L"a↑_1", L"a↑_2"}) *
+              T(L"t", {L"a↑_1", L"a↑_2"}, {L"i↑_1", L"i↑_2"});
+    auto dn = T(L"g", {L"i↓_1", L"i↓_2"}, {L"a↓_1", L"a↓_2"}) *
+              T(L"t", {L"a↓_1", L"a↓_2"}, {L"i↓_1", L"i↓_2"});
+    canonicalize(up, fold);
+    canonicalize(dn, fold);
+    REQUIRE(n_down_first(dn) == 0);
+    for (auto* t : leaves(dn)) REQUIRE(t->adjointed());
+    for (auto* t : leaves(up)) REQUIRE(!t->adjointed());
+    REQUIRE(dn->as<Product>().scalar() == up->as<Product>().scalar());
+    // apart from the marks the two are the same network (the marked
+    // spelling exchanges every bundle, so relabel canonically to compare)
+    auto dn_unmarked = unmark(dn);
+    canonicalize(dn_unmarked);
+    REQUIRE(dn_unmarked == up);
+  }
+  SECTION("free component: mixed spelling picks the up-first orientation") {
+    auto up = T(L"g", {L"i↑_1", L"i↓_1"}, {L"a↑_1", L"a↓_1"}) *
+              T(L"t", {L"a↑_1", L"a↓_1"}, {L"i↑_1", L"i↓_1"});
+    auto dn = T(L"g", {L"i↓_1", L"i↑_1"}, {L"a↓_1", L"a↑_1"}) *
+              T(L"t", {L"a↓_1", L"a↑_1"}, {L"i↓_1", L"i↑_1"});
+    canonicalize(up, fold);
+    canonicalize(dn, fold);
+    // every invariant of this component coincides with its flip's, so the
+    // canonical-hash tie-break decides; whichever wins, both spellings
+    // land on it, one of them fully marked
+    bool up_marked = leaves(up)[0]->adjointed();
+    for (auto* t : leaves(up)) REQUIRE(t->adjointed() == up_marked);
+    for (auto* t : leaves(dn)) REQUIRE(t->adjointed() == !up_marked);
+    auto dn_unmarked = unmark(dn);
+    canonicalize(dn_unmarked);
+    auto up_unmarked = unmark(up);
+    canonicalize(up_unmarked);
+    REQUIRE((dn_unmarked == up || dn == up_unmarked));
+  }
+  SECTION("tied component: an unmarked flavor twin folds onto conj of it") {
+    // g{i↑,i↓;a↑,a↓} t{a↓,a↑;i↓,i↑} has ONE down-first tensor in either
+    // orientation (tie). Its twin in a traced sum is the flavor-flipped
+    // spelling WITHOUT markers (it equals phase*conj of the marked flip),
+    // so the tie-break must ignore markers for both to land on one
+    // orientation, i.e. twin == conj(canonical) up to the markers
+    auto A = T(L"g", {L"i↑_1", L"i↓_1"}, {L"a↑_1", L"a↓_1"}) *
+             T(L"t", {L"a↓_1", L"a↑_1"}, {L"i↓_1", L"i↑_1"});
+    auto B = T(L"g", {L"i↓_1", L"i↑_1"}, {L"a↓_1", L"a↑_1"}) *
+             T(L"t", {L"a↑_1", L"a↓_1"}, {L"i↑_1", L"i↓_1"});
+    canonicalize(A, fold);
+    canonicalize(B, fold);
+    REQUIRE(n_down_first(A) == 1);
+    REQUIRE(n_down_first(B) == 1);
+    bool a_marked = leaves(A)[0]->adjointed();
+    for (auto* t : leaves(A)) REQUIRE(t->adjointed() == a_marked);
+    for (auto* t : leaves(B)) REQUIRE(t->adjointed() == !a_marked);
+    auto B_toggled = B->clone();
+    for (auto& f : B_toggled->as<Product>()) (void)f->as<Tensor>().adjoint();
+    canonicalize(B_toggled);
+    REQUIRE(B_toggled == A);
+  }
+  SECTION("pinned component: externals fix the orientation") {
+    // a↑_1 and i↑_1 are external; f is down-first but shares a↓_2 with t,
+    // which holds the externals -> nothing may flip
+    auto e = T(L"f", {L"a↓_2"}, {L"a↑_1"}) * T(L"t", {L"i↑_1"}, {L"a↓_2"});
+    canonicalize(e, fold);
+    REQUIRE(n_down_first(e) == 1);
+    for (auto* t : leaves(e)) REQUIRE(!t->adjointed());
+  }
+  SECTION("default options do not fold") {
+    auto dn = T(L"g", {L"i↓_1", L"i↓_2"}, {L"a↓_1", L"a↓_2"}) *
+              T(L"t", {L"a↓_1", L"a↓_2"}, {L"i↓_1", L"i↓_2"});
+    canonicalize(dn);
+    REQUIRE(n_down_first(dn) == 2);
+    for (auto* t : leaves(dn)) REQUIRE(!t->adjointed());
+  }
+  SECTION("idempotent") {
+    auto dn = T(L"g", {L"i↓_1", L"i↑_1"}, {L"a↓_1", L"a↑_1"}) *
+              T(L"t", {L"a↓_1", L"a↑_1"}, {L"i↓_1", L"i↑_1"});
+    canonicalize(dn, fold);
+    auto once = dn->clone();
+    canonicalize(dn, fold);
+    REQUIRE(dn == once);
+  }
+  SECTION("canonicalize_slots: byproduct and hash") {
+    auto up = T(L"g", {L"i↑_1", L"i↑_2"}, {L"a↑_1", L"a↑_2"}) *
+              T(L"t", {L"a↑_1", L"a↑_2"}, {L"i↑_1", L"i↑_2"});
+    auto dn = T(L"g", {L"i↓_1", L"i↓_2"}, {L"a↓_1", L"a↓_2"}) *
+              T(L"t", {L"a↓_1", L"a↓_2"}, {L"i↓_1", L"i↓_2"});
+    // the value identity is dn = conj(up): compare against the MARKED up
+    for (auto& f : up->as<Product>()) (void)f->as<Tensor>().adjoint();
+    TensorNetworkV3 tn_up(up->as<Product>().factors());
+    TensorNetworkV3 tn_dn(dn->as<Product>().factors());
+    auto md_up = tn_up.canonicalize_slots(
+        TensorNetworkV3::CanonicalizeSlotsOptions{.fold_kramers = true});
+    auto md_dn = tn_dn.canonicalize_slots(
+        TensorNetworkV3::CanonicalizeSlotsOptions{.fold_kramers = true});
+    REQUIRE(md_up.kramers_flipped_tensors.empty());
+    REQUIRE(md_dn.kramers_flipped_tensors.size() == 2);
+    REQUIRE(md_dn.phase == md_up.phase);
+    REQUIRE(md_up.hash_value() == md_dn.hash_value());
+    // and without the fold the two stay distinct
+    TensorNetworkV3 tn_dn2(dn->as<Product>().factors());
+    auto md_dn2 =
+        tn_dn2.canonicalize_slots(TensorNetworkV3::CanonicalizeSlotsOptions{});
+    REQUIRE(md_dn2.kramers_flipped_tensors.empty());
+    REQUIRE(md_up.hash_value() != md_dn2.hash_value());
+  }
+  (void)a_up;
+  (void)a_dn;
+  (void)i_up;
+  (void)i_dn;
+}
+
+TEST_CASE("canonicalize_options_equality", "[canonicalize][kramers][context]") {
   using namespace sequant;
   // a scoped context that differs from the current one _only_ in a
   // CanonicalizeOptions field must take effect (set_scoped_implicit_context
@@ -773,4 +1416,47 @@ TEST_CASE("canonicalize_options_equality", "[canonicalize][context]") {
   auto so2 = so;
   so2.fold_conjugate_pairs = SimplifyOptions::FoldConjugatePairs::No;
   REQUIRE_FALSE(so == so2);
+  REQUIRE(CanonicalizeOptions::default_options().fold_kramers_eval_leaves ==
+          CanonicalizeOptions::FoldKramersEvalLeaves::No);
+}
+
+TEST_CASE("kramers_union_index", "[canonicalize][kramers]") {
+  // a union index is the spin-free parent of a Kramers-partnered pair of the
+  // SAME type whose quantum numbers differ from the parent's in the spin
+  // sector only; a flavoured index is never a union; a spin-free space that
+  // carries a different trait bit than every flavoured pair (an AO/PAO-like
+  // space without partners of its own) is not a union either
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  mbpt::add_df_spaces(isr);
+  const auto spin_any = IndexSpace::QuantumNumbers{mbpt::Spin::any};
+  const auto a = isr->retrieve(L"a");
+  // a PAO-type space with the pao trait bit and its flavoured, partnered
+  // clones
+  const IndexSpace pao{L"μ̃", a.type(), spin_any | mbpt::LCAOQNS::pao};
+  const IndexSpace pao_up{
+      L"μ̃↑", a.type(),
+      IndexSpace::QuantumNumbers{mbpt::Spin::alpha} | mbpt::LCAOQNS::pao};
+  const IndexSpace pao_dn{
+      L"μ̃↓", a.type(),
+      IndexSpace::QuantumNumbers{mbpt::Spin::beta} | mbpt::LCAOQNS::pao};
+  isr->add(pao);
+  isr->add(pao_up);
+  isr->add(pao_dn);
+  isr->add_kramers_partners(pao_up, pao_dn);
+  // an AO-like space of the same type with the ao trait bit and NO
+  // flavoured clones
+  const IndexSpace ao{L"x", a.type(), spin_any | mbpt::LCAOQNS::ao};
+  isr->add(ao);
+
+  CHECK(kramers_union_index(Index(L"a_1", a), *isr));
+  CHECK_FALSE(kramers_union_index(Index(L"a↑_1", isr->retrieve(L"a↑")), *isr));
+  CHECK(kramers_union_index(Index(L"μ̃_1", pao), *isr));
+  CHECK_FALSE(kramers_union_index(Index(L"μ̃↑_1", pao_up), *isr));
+  CHECK_FALSE(kramers_union_index(Index(L"μ̃↓_1", pao_dn), *isr));
+  // no partnered pair differs from x in the spin sector alone
+  CHECK_FALSE(kramers_union_index(Index(L"x_1", ao), *isr));
+  // a space with no spin sector at all
+  CHECK_FALSE(kramers_union_index(Index(L"Κ_1", isr->retrieve(L"Κ")), *isr));
 }

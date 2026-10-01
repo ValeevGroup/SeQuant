@@ -459,3 +459,73 @@ TEST_CASE("index", "[elements][index]") {
     }
   }
 }
+
+TEST_CASE("kramers_partner", "[elements][index][kramers]") {
+  using namespace sequant;
+  // Kramers partner spaces are registered when the spin clones are made
+  // (mbpt::add_fermi_spin); spaces without a partner (the DF aux, plain
+  // spin-free spaces) are unflavored and never flip
+  auto isr = mbpt::make_min_sr_spaces(mbpt::SpinConvention::None);
+  mbpt::add_fermi_spin(*isr);
+  Context ctx = get_default_context();
+  ctx.set(isr);
+  auto resetter = set_scoped_default_context(ctx);
+
+  const auto& a_up = isr->retrieve(L"a↑");
+  const auto& a_dn = isr->retrieve(L"a↓");
+  auto p = isr->kramers_partner(a_up);
+  REQUIRE(p.has_value());
+  REQUIRE(*p == a_dn);
+  auto q = isr->kramers_partner(a_dn);
+  REQUIRE(q.has_value());
+  REQUIRE(*q == a_up);
+  REQUIRE(!isr->kramers_partner(isr->retrieve(L"a")).has_value());
+  // orientation: the up flavor is canonical, down is not, unflavored is
+  REQUIRE(isr->kramers_canonical(a_up));
+  REQUIRE(!isr->kramers_canonical(a_dn));
+  REQUIRE(isr->kramers_canonical(isr->retrieve(L"a")));
+
+  // the registry copies/clones carry the partner map
+  auto cloned = isr->clone();
+  REQUIRE(cloned.kramers_partner(a_up).has_value());
+
+  // temporary (generated) indices flip too, keeping their tmp ordinal: the
+  // eval leaf folds trace-marked tensors whose CSV/expansion dummies are
+  // tmp indices (the non-tmp ctor would throw on such an ordinal)
+  {
+    auto tmp = Index::make_tmp_index(a_dn);
+    auto ftmp = kramers_flipped(tmp, *isr);
+    REQUIRE(ftmp.has_value());
+    REQUIRE(ftmp->space() == a_up);
+    REQUIRE(ftmp->ordinal() == tmp.ordinal());
+    auto tmp_proto =
+        Index::make_tmp_index(a_dn, Index::index_vector{Index(L"i↑_1")});
+    auto ftp = kramers_flipped(tmp_proto, *isr);
+    REQUIRE(ftp.has_value());
+    REQUIRE(ftp->ordinal() == tmp_proto.ordinal());
+    REQUIRE(ftp->proto_indices().size() == 1);
+    REQUIRE(ftp->proto_indices()[0].space() == isr->retrieve(L"i↓"));
+  }
+  // index flip: ordinal kept, protos mapped recursively, unflavored kept
+  Index i1(L"i↑_1"), i2(L"i↓_2");
+  Index a(L"a↓_3", {i1, i2});
+  auto f = kramers_flipped(a, *isr);
+  REQUIRE(f.has_value());
+  REQUIRE(f->space() == a_up);
+  REQUIRE(f->ordinal() == a.ordinal());
+  REQUIRE(f->proto_indices().size() == 2);
+  {  // symmetric proto bundles are canonically ordered: check membership
+    bool has_dn = false, has_up = false;
+    for (auto const& pr : f->proto_indices()) {
+      has_dn |= pr.space() == isr->retrieve(L"i↓");
+      has_up |= pr.space() == isr->retrieve(L"i↑");
+    }
+    REQUIRE((has_dn && has_up));
+  }
+  // twice = identity
+  auto ff = kramers_flipped(*f, *isr);
+  REQUIRE(ff.has_value());
+  REQUIRE(*ff == a);
+  // unflavored index: no flip
+  REQUIRE(!kramers_flipped(Index(L"a_1"), *isr).has_value());
+}

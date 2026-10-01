@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
@@ -577,6 +578,50 @@ TEST_CASE("optimize", "[optimize]") {
       auto const par = optimize(sum);
 
       REQUIRE(*seq == *par);
+    }
+
+    SECTION("parallel optimize of summands sharing a nested Sum factor") {
+      // Summands that hold ONE bracket object (the flavor bracket a CSV
+      // transform wraps around a projected leaf can be reused across the
+      // terms it appears in) are optimized on parallel threads, and the
+      // bracket itself is optimized too (opt_mixed_product). Index and Expr
+      // memoize labels and hashes lazily in mutable members, so the shared
+      // object must not be touched from several threads: optimize() works on
+      // a private clone of every summand. Cache-cold terms are built afresh
+      // for every run and the parallel result must equal the sequential one.
+      auto const nthreads_save = num_threads();
+      struct ThreadGuard {
+        int n;
+        ~ThreadGuard() { set_num_threads(n); }
+      } guard{nthreads_save};
+
+      auto make = []() {
+        auto bracket = deserialize(
+            L"g{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>} "
+            L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_4} "
+            L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}"
+            L" + f{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>} "
+            L"t{a_1<i_1,i_2>,a_2<i_1,i_2>;i_3,i_4} "
+            L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}",
+            {.def_perm_symm = Symmetry::Nonsymm});
+        auto lambda = deserialize(L"λ{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}",
+                                  {.def_perm_symm = Symmetry::Nonsymm});
+        std::vector<ExprPtr> terms;
+        for (int k = 0; k < 32; ++k)
+          terms.push_back(ex<Product>(ExprPtrList{lambda, bracket}));
+        return ex<Sum>(terms.begin(), terms.end());
+      };
+
+      // composite (proto-indexed) indices need an inner extent model
+      auto const opts = OptimizeOptions{
+          .inner_pow = [](Index const&, std::size_t) { return 8.0; }};
+      for (int rep = 0; rep < 8; ++rep) {
+        set_num_threads(1);
+        auto const seq = optimize(make(), opts);
+        set_num_threads(8);
+        auto const par = optimize(make(), opts);
+        REQUIRE(*seq == *par);
+      }
     }
 
     SECTION("subset_footprints") {
@@ -2799,6 +2844,7 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
            {L"i", 20}, {L"a", 20}, {L"μ̃", 200}, {L"Κ", 300}}) {
     reg->retrieve_ptr(k)->approximate_size(v);
   }
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto aux = reg->retrieve(L"Κ");
   auto pao = reg->retrieve(L"μ̃");
   auto idxsz = [](Index const& ix) -> std::size_t {
@@ -2856,6 +2902,7 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
   ctx_clone.mutable_index_space_registry()->add(L"F", IndexSpace::Type{0b10000},
                                                 4ul);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
   auto is_batchable = [](Index const& ix) {
     return ix.space().base_key() == L"F";
@@ -2953,6 +3000,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
       ->retrieve_ptr(L"a")
       ->approximate_size(3ul);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto idxsz = [](Index const& ix) { return ix.space().approximate_size(); };
   auto is_batchable = [](Index const& ix) {
     return ix.space().base_key() == L"F";
@@ -3302,6 +3350,7 @@ TEST_CASE("reconstruct_batched_modes_emits_external_per_node",
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 8}, {L"a", 8}, {L"Κ", 400}})
     reg->retrieve_ptr(k)->approximate_size(v);
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto aux_space = reg->retrieve(L"Κ");
   auto occ_space = reg->retrieve(L"i");
 
@@ -3480,6 +3529,7 @@ TEST_CASE("select_root_perf_first_ceiling", "[optimize][batch]") {
        std::initializer_list<std::pair<std::wstring_view, size_t>>{
            {L"i", 80}, {L"a", 12}, {L"μ̃", 860}, {L"Κ", 2360}})
     reg->retrieve_ptr(k)->approximate_size(v);
+  auto real_field = scoped_real_field_context();  // 8-byte real elements
   auto aux_space = reg->retrieve(L"Κ");
   auto idxsz = [](Index const& ix) -> std::size_t {
     return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
@@ -3930,23 +3980,6 @@ TEST_CASE("outer-product pruning: multi-component product falls back unpruned",
   CHECK(with == without);
 }
 
-// A2 PROBE (Phase A, order-aware multilevel batching). Measures what the DP
-// charges TODAY for the gC/middle-gap shape, on a small hand-built network, so
-// the RED assertion is written against ground truth rather than a predicted
-// failure direction.
-//
-// Network (spec's example): R{i1,a2} = (g{i1;F1} * h{F1;a1}) * (s{a1;F2} *
-// t{F2;a2}).  Batched set {F, i}. The right sub-intermediate carries F but NOT
-// i, so it is invariant to any i-loop -- the I2/gC class.
-//
-// NOTE the premise conflict this probe exists to settle: plan Task A2 asserts
-// "today's esc prices rf=1 (the phantom)" via the DP DROPPING a mode from B,
-// but Task A1 established B is tree-faithful (B at a node is exactly the set
-// of batched modes contracted at strict ancestors, by the C = B | aprime
-// descent), so that mechanism does not exist. If rf=1 shows up here it is for
-// a DIFFERENT reason -- i is EXTERNAL (free on the root, contracted nowhere),
-// so it never enters any aprime and hence never enters B on the emit walk,
-// which starts at B=0. Print the per-node charge and let the numbers decide.
 TEST_CASE("loop-tree recompute charge prices the middle gap",
           "[.][loop-tree]") {
   using namespace sequant;
@@ -4643,6 +4676,117 @@ TEST_CASE("batchability role-split building-block predicates",
   }
 }
 
+TEST_CASE("Nested product brackets: batch annotations align with binarize",
+          "[optimize][annotate][nested-product]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{20};
+  };
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto make_opts = [&](std::shared_ptr<AxesMap> const& axes_map) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = is_batch;
+    opts.batch_policy.batch_target_size = bts;
+    opts.batch_policy.peak_threshold = 1.0;  // force batching
+    opts.term_batch_axes = axes_map;
+    return opts;
+  };
+
+  // Two projection brackets, each a NESTED Product (Flatten::No, opaque to the
+  // outer contraction order) that keeps the aux index OPEN on its result,
+  // contracted over that aux index between the two placeholders, next to a
+  // third (flat) factor so the outer level is a genuine DP (a bare two-factor
+  // product has one realization and is never sliced):
+  //   [ (g{a1;a2;K1} C{a1;i1}) C{a2;i2} ] * [ (g{a3;a4;K1} C{a3;i3}) C{a4;i4} ]
+  //   * f{i_4;i_5}
+  // opt_mixed_product optimizes each bracket on its own (K1 is external
+  // there, so it is never a batch mode inside) and the outer DP contracts K1
+  // between the two placeholders. binarize builds the brackets' inner
+  // contraction nodes BEFORE the outer ones (left-first post-order), so the
+  // annotation list keyed on the optimized term must carry one entry per
+  // inner node too, or the outer contracted-K1 mark lands on an inner node
+  // whose result still carries K1 (runtime: per-batch partials of unequal
+  // extent are then accumulated, TA trange mismatch).
+  auto bracket = [](wchar_t const* g, wchar_t const* c1, wchar_t const* c2) {
+    auto inner = ex<Product>(Product{
+        1, ExprPtrList{deserialize(g), deserialize(c1)}, Product::Flatten::No});
+    return ex<Product>(
+        Product{1, ExprPtrList{inner, deserialize(c2)}, Product::Flatten::No});
+  };
+  auto b1 = bracket(L"g{a_1;a_2;Κ_1}", L"C{a_1;i_1}", L"C{a_2;i_2}");
+  auto b2 = bracket(L"g{a_3;a_4;Κ_1}", L"C{a_3;i_3}", L"C{a_4;i_4}");
+  auto term =
+      ex<Product>(Product{1, ExprPtrList{b1, b2, deserialize(L"f{i_4;i_5}")},
+                          Product::Flatten::No});
+
+  auto axes_map = std::make_shared<AxesMap>();
+  auto optimized = optimize(term, make_opts(axes_map));
+  REQUIRE(optimized);
+  auto it = axes_map->find(optimized.get());
+  REQUIRE(it != axes_map->end());
+  BinarizationOptions bopts;
+  bopts.node_batch_axes = it->second;
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize(optimized, {}, bopts);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+
+  auto carries_aux = [&aux](EvalExpr const& e) {
+    if (!e.is_tensor()) return false;
+    auto const& t = e.as_tensor();
+    for (auto const& ix : t.aux())
+      if (ix.space() == aux) return true;
+    for (auto const& ix : t.bra())
+      if (ix.space() == aux) return true;
+    for (auto const& ix : t.ket())
+      if (ix.space() == aux) return true;
+    return false;
+  };
+  auto has_aux_con = [&aux](EvalExpr const& e) {
+    for (auto const& [ix, kind] : e.node_slice_mask())
+      if (ix.space() == aux && kind == BatchModeType::Contracted) return true;
+    return false;
+  };
+  // the two brackets contribute 2 contraction nodes each, the outer level two
+  std::size_t n_dp = 0;
+  std::size_t n_aux_con = 0;
+  bool aux_con_on_aux_carrier = false;
+  bool aux_con_inside_bracket = false;
+  node.visit([&](auto const& n) {
+    if (n.leaf() || n->op_type() != EvalOp::Product) return;
+    ++n_dp;
+    if (has_aux_con(*n)) {
+      ++n_aux_con;
+      if (carries_aux(*n)) aux_con_on_aux_carrier = true;
+      // a bracket-internal node has a bracket's g leaf as a descendant AND a
+      // K1-carrying result (K1 is external inside a bracket)
+      if (carries_aux(*n)) aux_con_inside_bracket = true;
+    }
+  });
+  REQUIRE(n_dp == 6);
+  REQUIRE(it->second.size() == n_dp);
+  // exactly one outer node contracts K1: it is the ONLY node that may slice
+  // it, and it is never a bracket-internal node (whose result carries K1)
+  REQUIRE(n_aux_con == 1);
+  REQUIRE_FALSE(aux_con_on_aux_carrier);
+  REQUIRE_FALSE(aux_con_inside_bracket);
+}
+
 TEST_CASE("optimize sees through Re/Im wrappers", "[optimize]") {
   using namespace sequant;
   // A Re/Im wrapper must be transparent to optimization: the inner product
@@ -4736,5 +4880,157 @@ TEST_CASE("Re-wrapped product factor is optimized like the bare product",
       if (f->is<ImagPart>()) found = f->as<ImagPart>().inner();
     REQUIRE(found);
     REQUIRE(*found == *ref);
+  }
+}
+
+// T20 (round 2): the Re/Im-wrapped summand must also be BATCH-annotated like
+// the bare product: the optimizer records the inner product's per-node batch
+// axes under the summand pointer the caller keys on, and binarize consumes
+// them on the inner contraction nodes (shared node counter) -- for the
+// wrapper-at-root and scalar-siblings shapes the fold emits.
+TEST_CASE("Re-wrapped summand batch-annotates its inner product",
+          "[optimize][annotate][re_im]") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(get_default_context().clone());
+  auto reg = get_default_context().mutable_index_space_registry();
+  mbpt::add_df_spaces(reg);
+  for (auto&& [k, v] :
+       std::initializer_list<std::pair<std::wstring_view, size_t>>{
+           {L"i", 30}, {L"a", 30}, {L"Κ", 500}}) {
+    reg->retrieve_ptr(k)->approximate_size(v);
+  }
+  auto aux = reg->retrieve(L"Κ");
+  auto idxsz = [](Index const& ix) -> std::size_t {
+    return ix.nonnull() ? ix.space().approximate_size() : std::size_t{1};
+  };
+  auto is_batch = [aux](Index const& ix) { return ix.space() == aux; };
+  std::function<std::size_t(Index const&)> bts = [](Index const&) {
+    return std::size_t{20};
+  };
+  using AxesMap =
+      std::unordered_map<Expr const*, container::vector<NodeBatchAnnotation>>;
+  auto make_opts = [&](std::shared_ptr<AxesMap> const& axes_map) {
+    OptimizeOptions opts;
+    opts.objective_function = ObjectiveFunction::DensePeakSizeBatched;
+    opts.idx_to_extent = idxsz;
+    opts.batch_policy.is_batchable_contracted_index = is_batch;
+    opts.batch_policy.batch_target_size = bts;
+    opts.batch_policy.peak_threshold = 1.0;  // force batching
+    opts.term_batch_axes = axes_map;
+    return opts;
+  };
+  auto bare =
+      deserialize(L"g{a_1;i_1;Κ_1} g{a_2;i_2;Κ_1} f{i_1;i_3} f{i_2;i_4}");
+  auto ref_map = std::make_shared<AxesMap>();
+  auto ref = optimize(bare, make_opts(ref_map));
+  auto ref_it = ref_map->find(ref.get());
+  REQUIRE(ref_it != ref_map->end());
+  REQUIRE(!ref_it->second.empty());
+  auto const n_ref = ref_it->second.size();
+
+  auto check = [&](ExprPtr const& summand, const char* what) {
+    INFO(what);
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized = optimize(summand, make_opts(axes_map));
+    REQUIRE(optimized);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    REQUIRE(it->second.size() == n_ref);
+    BinarizationOptions bopts;
+    bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    auto node = binarize(optimized, {}, bopts);  // asserts the counter matches
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+    bool aux_found = false;
+    std::size_t n_re = 0;
+    node.visit([&](auto const& n) {
+      if (n->op_type() == EvalOp::RealPart) ++n_re;
+      for (auto const& entry : n->node_slice_mask())
+        if (entry.first.space() == aux) aux_found = true;
+    });
+    REQUIRE(n_re == 1);
+    REQUIRE(aux_found);
+  };
+  check(real_part(bare->clone()), "bare Re[A] summand");
+  check(ex<Constant>(2) * real_part(bare->clone()), "2 Re[A] summand");
+  {
+    // a Sum of two such summands: optimize() re-keys the per-summand
+    // annotations onto the whole Sum, in summand order (one entry per
+    // contraction node, both wrappers' inner nodes included)
+    auto sum = ex<Constant>(2) * real_part(bare->clone()) +
+               ex<Constant>(2) * real_part(bare->clone());
+    auto axes_map = std::make_shared<AxesMap>();
+    auto sopts = make_opts(axes_map);
+    sopts.reorder = ReorderSum::NoReorder;
+    auto optimized = optimize(sum, sopts);
+    REQUIRE(optimized->is<Sum>());
+    REQUIRE(optimized->as<Sum>().size() == 2);
+    auto it = axes_map->find(optimized.get());
+    REQUIRE(it != axes_map->end());
+    REQUIRE(it->second.size() == 2 * n_ref);
+  }
+  // a wrapper next to a TENSOR sibling keeps the opaque treatment (no inner
+  // entries, private counter) -- and binarize must not throw on it
+  {
+    auto mixed = deserialize(L"f{i_5;i_5}") * real_part(bare->clone());
+    auto axes_map = std::make_shared<AxesMap>();
+    auto optimized = optimize(mixed, make_opts(axes_map));
+    auto it = axes_map->find(optimized.get());
+    BinarizationOptions bopts;
+    if (it != axes_map->end()) bopts.node_batch_axes = it->second;
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+    REQUIRE_NOTHROW(binarize(optimized, {}, bopts));
+    SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  }
+}
+
+TEST_CASE("field cost factors", "[optimize][roofline]") {
+  using namespace sequant;
+  using sequant::opt::detail::field_cost_factors;
+  using sequant::opt::detail::roofline_op_cost;
+  using sequant::opt::detail::tensors_field;
+
+  // A real element is the unit: one real per element and one real
+  // multiply-add per counted multiply-add. A complex element stores two reals
+  // and a complex multiply-add is four real ones (what zgemm executes).
+  CHECK(field_cost_factors(Field::Real).elem_mult == 1.0);
+  CHECK(field_cost_factors(Field::Real).flop_factor == 1.0);
+  CHECK(field_cost_factors(Field::Complex).elem_mult == 2.0);
+  CHECK(field_cost_factors(Field::Complex).flop_factor == 4.0);
+
+  SECTION("roofline_op_cost scales flops and traffic by the field") {
+    // machine_balance == 0: pure flops, scaled by the flop factor only.
+    CHECK(roofline_op_cost(100, 10, 0, 0, 3, 1) == 100);
+    CHECK(roofline_op_cost(100, 10, 0, 0, 3, 1, 4.0, 2.0) == 400);
+    // machine_balance is calibrated per 8-byte element: complex traffic is
+    // twice as wide (elem_scale 2) while its flops count four times.
+    CHECK(roofline_op_cost(100, 10, 200, 0, 3, 1) == 2000);  // 200 * 10
+    CHECK(roofline_op_cost(100, 10, 200, 0, 3, 1, 4.0, 2.0) ==
+          4000);  // max(400, 200 * 20)
+    // Finite-cache re-read bound: the fast memory holds half as many complex
+    // elements and each element it moves is twice as wide.
+    // real: Q = max(1, 100 / sqrt(100 / 1)) = 10 -> 1000 * 10
+    CHECK(roofline_op_cost(100, 1, 1000, 100, 1, 1) == Catch::Approx(1e4));
+    // complex: Q = max(2, 2 * 100 / sqrt(50 / 1)) -> 1000 * 200 / sqrt(50)
+    CHECK(roofline_op_cost(100, 1, 1000, 100, 1, 1, 4.0, 2.0) ==
+          Catch::Approx(1000.0 * 200.0 / std::sqrt(50.0)));
+  }
+
+  SECTION("tensors_field is the OR of the tensors' base fields") {
+    // The default registry is complex.
+    auto const prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    CHECK(tensors_field(prod->as<Product>().factors()) == Field::Complex);
+    CHECK(tensors_field(std::vector<ExprPtr>{}) == Field::Real);
+
+    // A real-orbital computation marks every space real.
+    auto ctx = get_default_context().clone();
+    auto reg = ctx.mutable_index_space_registry();
+    std::vector<std::wstring> keys;
+    for (auto const& space : *reg) keys.push_back(space.base_key());
+    for (auto const& key : keys)
+      if (auto* sp = reg->retrieve_ptr(key)) sp->field(Field::Real);
+    auto resetter = set_scoped_default_context(std::move(ctx));
+    auto const real_prod = deserialize(L"g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    CHECK(tensors_field(real_prod->as<Product>().factors()) == Field::Real);
   }
 }

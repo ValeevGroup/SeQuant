@@ -1780,3 +1780,100 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(*gamma == *gamma_op);
 }
 }
+
+TEST_CASE("density_fit_metric_leaf", "[mbpt][df]") {
+  // density_fit with an explicit metric leaf: the factors are the RAW
+  // 3-centre integrals Z and the inverse metric is a leaf of its own,
+  //   g_{pq,rs} = Z^K_{pq} (M^-1)_{KL} Z^L_{rs}
+  using namespace sequant;
+  const IndexSpace aux_space =
+      get_default_context().index_space_registry()->retrieve(L"x");
+
+  SECTION("nonsymmetric") {
+    ExprPtr g = deserialize(L"g{i1,i2;a1,a2}");
+    ExprPtr r = mbpt::density_fit(g, aux_space, L"g", L"Z", {}, L"Minv");
+    REQUIRE(r->is<Product>());
+    const auto& prod = r->as<Product>();
+    REQUIRE(prod.factors().size() == 3);
+    const auto& z1 = prod.factor(0)->as<Tensor>();
+    const auto& m = prod.factor(1)->as<Tensor>();
+    const auto& z2 = prod.factor(2)->as<Tensor>();
+    CHECK(z1.label() == L"Z");
+    CHECK(m.label() == L"Minv");
+    CHECK(z2.label() == L"Z");
+    REQUIRE(m.bra_rank() == 1);
+    REQUIRE(m.ket_rank() == 1);
+    CHECK(m.aux_rank() == 0);
+    CHECK(ranges::front(m.bra()).space() == aux_space);
+    CHECK(ranges::front(m.ket()).space() == aux_space);
+    CHECK(ranges::front(m.bra()) != ranges::front(m.ket()));
+    REQUIRE(z1.aux_rank() == 1);
+    REQUIRE(z2.aux_rank() == 1);
+    CHECK(ranges::front(z1.aux()) == ranges::front(m.bra()));
+    CHECK(ranges::front(z2.aux()) == ranges::front(m.ket()));
+    CHECK(m.hermiticity() == Hermiticity::Hermitian);
+  }
+
+  SECTION("antisymmetric: two products, each with its own metric leaf") {
+    ExprPtr ga = deserialize(L"g{i1,i2;a1,a2}:A");
+    ExprPtr ra = mbpt::density_fit(ga, aux_space, L"g", L"Z", {}, L"Minv");
+    REQUIRE(ra->is<Sum>());
+    REQUIRE(ra->size() == 2);
+    for (const auto& term : *ra) {
+      REQUIRE(term->is<Product>());
+      CHECK(term->as<Product>().factors().size() == 3);
+    }
+  }
+
+  SECTION("two decomposed tensors of one term draw distinct aux labels") {
+    ExprPtr gg = deserialize(L"g{i1,i2;a1,a2} g{i3,i4;a3,a4}");
+    ExprPtr rr = mbpt::density_fit(gg, aux_space, L"g", L"Z", {}, L"Minv");
+    container::set<Index> auxs;
+    rr->visit(
+        [&auxs](const ExprPtr& e) {
+          if (e->is<Tensor>())
+            for (const auto& ix : e->as<Tensor>().aux()) auxs.insert(ix);
+        },
+        /* atoms_only = */ true);
+    CHECK(auxs.size() == 4);
+  }
+
+  SECTION("a second pass continues the aux numbering of the first") {
+    // two passes over one term (e.g. raw factors with a metric leaf for some
+    // integrals, folded factors for the rest) must not reuse an aux label
+    ExprPtr gg = deserialize(L"g{i1,i2;a1,a2} g{i3,i4;i5,i6}");
+    auto occ_only = [](const Tensor& t) {
+      const auto& isr = *get_default_context().index_space_registry();
+      for (const auto& ix : t.const_braket())
+        if (!isr.is_pure_occupied(ix.space())) return false;
+      return true;
+    };
+    auto not_occ_only = [occ_only](const Tensor& t) { return !occ_only(t); };
+    ExprPtr pass1 =
+        mbpt::density_fit(gg, aux_space, L"g", L"Z", not_occ_only, L"Minv");
+    ExprPtr pass2 = mbpt::density_fit(pass1, aux_space, L"g", L"B", occ_only);
+    container::set<Index> auxs;
+    std::size_t n_aux_slots = 0;
+    pass2->visit(
+        [&](const ExprPtr& e) {
+          if (e->is<Tensor>())
+            for (const auto& ix : e->as<Tensor>().aux()) {
+              auxs.insert(ix);
+              ++n_aux_slots;
+            }
+        },
+        /* atoms_only = */ true);
+    // aux SLOTS: one on each Z (the metric leaf carries its two aux-space
+    // indices in bra/ket) and one on each B; LABELS: two for Z Minv Z, a
+    // third for B B (not a reuse of the first)
+    CHECK(n_aux_slots == 4);
+    CHECK(auxs.size() == 3);
+  }
+
+  SECTION("without a metric label the folded form is unchanged") {
+    ExprPtr g = deserialize(L"g{i1,i2;a1,a2}");
+    ExprPtr r = mbpt::density_fit(g, aux_space, L"g", L"B");
+    REQUIRE(r->is<Product>());
+    CHECK(r->as<Product>().factors().size() == 2);
+  }
+}

@@ -9,6 +9,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -19,6 +20,7 @@
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/functional/not_fn.hpp>
 #include <range/v3/range/operations.hpp>
@@ -30,6 +32,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <iostream>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -47,6 +51,10 @@ size_t hash_terminal_tensor(Tensor const&) noexcept;
 bool is_tot(Tensor const& t) noexcept {
   return ranges::any_of(t.const_indices(), &Index::has_proto_indices);
 }
+
+// Slot-derived metadata -- an intermediate's bra/ket partition, which fixes
+// its result-column grouping -- must be computed on the unfolded spelling;
+// see sequant::value_oriented (core/expressions/tensor.hpp).
 
 }  // namespace
 
@@ -138,7 +146,18 @@ std::string EvalExpr::indices_annot() const noexcept {
 
 std::size_t EvalExpr::layout_fingerprint() const noexcept {
   if (layout_fingerprint_) return *layout_fingerprint_;
-  layout_fingerprint_ = layout_fingerprint_of(canon_indices_);
+  // A Kramers-folded leaf's slot holds the FOLDED (up-row) spelling, i.e.
+  // expr(), while canon_indices() keeps the as-written flavors (see the ctor):
+  // fingerprint the layout the slot carries, so the down-first leaf shares
+  // its up-first partner's slot (the flavor difference rides the transform).
+  if (kramers_folded_) {
+    index_vector folded = identity_indices();
+    if (const auto isr = get_default_context().index_space_registry())
+      kramers_flip(folded, *isr);
+    layout_fingerprint_ = layout_fingerprint_of(folded);
+  } else {
+    layout_fingerprint_ = layout_fingerprint_of(identity_indices());
+  }
   return *layout_fingerprint_;
 }
 
@@ -172,7 +191,45 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
   return canon_indices_;
 }
 
+void EvalExpr::set_identity_indices(index_vector ixs) {
+  identity_indices_ = std::move(ixs);
+  layout_fingerprint_.reset();
+  refresh_identity_tensor();
+}
+
+void EvalExpr::refresh_identity_tensor() {
+  identity_tensor_.reset();
+  if (identity_indices_.empty() || !expr_ || !expr_->is<Tensor>()) return;
+  SEQUANT_ASSERT(identity_indices_.size() == canon_indices_.size());
+  // the erased spelling of the result tensor (graph-less nodes -- Sum roots,
+  // scalar * tensor -- are compared by block on it, see
+  // TreeNodeEqualityComparator)
+  container::map<Index, Index> repl;
+  for (std::size_t k = 0; k < canon_indices_.size(); ++k)
+    if (canon_indices_[k] != identity_indices_[k])
+      repl.emplace(canon_indices_[k], identity_indices_[k]);
+  if (repl.empty()) return;
+  Tensor t = expr_->as<Tensor>();
+  t.transform_indices(repl);
+  t.reset_tags();
+  identity_tensor_ = std::move(t);
+}
+
 namespace {
+/// maps a folded leaf's canonical indices back to the as-written flavors
+/// (the Kramers flip is an involution; ordinals and order are kept)
+void kramers_flip_indices_as_written(EvalExpr::index_vector& ixs) {
+  if (const auto isr = get_default_context().index_space_registry())
+    kramers_flip(ixs, *isr);
+}
+
+/// the eval-leaf Kramers fold is an explicit context opt-in (see
+/// CanonicalizeOptions::fold_kramers_eval_leaves)
+bool fold_kramers_leaf() {
+  return CanonicalizeOptions::default_options().fold_kramers_eval_leaves ==
+         CanonicalizeOptions::FoldKramersEvalLeaves::Yes;
+}
+
 /// Decodes a leaf tensor's core states into its retrieval transform,
 /// respelling @p t as the array a leaf provider serves.
 ///
@@ -206,34 +263,86 @@ CanonTransform decode_leaf_states(Tensor& t) {
   return tr;
 }
 
-/// Respells a leaf tensor as the block-canonical array a provider serves and
-/// returns the retrieval transform: the state channels (decode_leaf_states)
-/// composed with the block canonicalization's phase. The whole transform is
-/// applied to the provider's array on retrieval, so the written spelling's
-/// value -- sign and all -- is what the engine hands up. A bra<->ket exchange
-/// that costs a sign is not folded (`fold_signed_braket = false`), so the two
-/// orientations of such a tensor are separate spellings, each asked of the
-/// provider as written.
-CanonTransform normalize_leaf(Tensor& t) {
-  const CanonTransform tr = decode_leaf_states(t);
+struct LeafNormalization {
+  CanonTransform transform;    ///< maps the stored spelling to the as-written
+  bool kramers_fired = false;  ///< the Kramers fold respelled the leaf
+};
+
+/// Respells a leaf tensor IN PLACE as the block-canonical array a provider
+/// serves and returns the retrieval transform, composing the channels in this
+/// order (their inverse, in reverse order, is EvalExpr::denoted_expr):
+///   1. the core states (decode_leaf_states): '⁺' -> {conj, swap}, a
+///      real-basis '꙳' -> {conj}; a complex-basis '꙳' stays on the stored
+///      spelling (an array of its own);
+///   2. the eval-leaf Kramers fold (explicit opt-in, T19 layer 2): a
+///      down-first leaf is respelled as its up-first partner; the served
+///      block is the elementwise conjugate of the as-written one, so the
+///      fold contributes a pure {conj} bit and its phase multiplies in;
+///   3. block canonicalization: the antisymmetric reorder phase multiplies
+///      in. A bra<->ket exchange that costs a sign is not folded
+///      (`fold_signed_braket = false`), so the two orientations of such a
+///      tensor are separate spellings, each asked of the provider as written.
+/// The whole transform is applied to the provider's array on retrieval, so
+/// the written spelling's value -- sign and all -- is what the engine hands
+/// up.
+LeafNormalization normalize_leaf(Tensor& t) {
+  LeafNormalization result;
+  auto& tr = result.transform;
+  tr = compose(tr, decode_leaf_states(t));
+  // a leaf with a Kramers-union slot has no elementwise time-reversal image
+  // (see kramers_union_index): served as written, never folded
+  int kramers_phase = 1;
+  if (fold_kramers_leaf() && !has_kramers_union_slot(t)) {
+    // a definite hermiticity: the up-row bra is reached by the bundle
+    // exchange, which for such a tensor is the adjoint (T{b;a} = s conj
+    // T{a;b}, the state consumed). The stored spelling is the exchanged one
+    // -- the up-row block a provider serves -- and the as-written value is
+    // served through {conj, swap} and the sign (denoted_expr() undoes it with
+    // the '⁺' channel's adjoint(), which for this tensor is the exchange)
+    if (const auto [exchanged, s] = kramers_uprow_exchange(t); exchanged)
+      tr = compose(tr, {.phase = s, .conj = true, .braket_swap = true});
+    // the flavor fold is detected by the respelling of the slots (an
+    // involution on the Kramers flavors); whatever marker
+    // canonicalize_kramers leaves on the tensor's states is consumed into the
+    // transform's conj bit and the states are restored, so the stored
+    // spelling keeps the states the decoder left on it
+    const bool adjointed0 = t.adjointed();
+    const bool kconjugated0 = t.kconjugated();
+    const auto slots0 = t.const_slots() | ranges::to<container::svector<Index>>;
+    kramers_phase = canonicalize_kramers(t, /*mark=*/false);
+    result.kramers_fired = !ranges::equal(t.const_slots(), slots0);
+    if (t.adjointed() != adjointed0 || t.kconjugated() != kconjugated0) {
+      [[maybe_unused]] const auto sign = t.set_states(adjointed0, kconjugated0);
+      SEQUANT_ASSERT(sign == 1);
+    }
+    if (result.kramers_fired) tr = compose(tr, {.conj = true});
+  }
   const auto block_byproduct =
       TensorBlockCanonicalizer{/*fold_signed_braket=*/false}.apply(t);
-  return compose(tr,
-                 {.phase = static_cast<std::int8_t>(block_byproduct ? -1 : 1)});
+  tr = compose(tr, {.phase = static_cast<std::int8_t>(
+                        (block_byproduct ? -1 : 1) * kramers_phase)});
+  return result;
 }
 }  // namespace
 
-EvalExpr::EvalExpr(Tensor const& tnsr)
+EvalExpr::EvalExpr(Tensor const& tnsr, eval::KramersBlindness const* blindness)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
   SEQUANT_ASSERT(!tnsr.indices().empty());
   // the stored spelling is the array a leaf provider serves: block-canonical,
-  // with the core states decoded into a CanonTransform applied on retrieval.
-  // A K-conjugated leaf over a complex basis is the exception the decoder
-  // names: its state stays on the stored spelling, that being an array of its
-  // own. Every route to one stored spelling lands on one slot.
-  canon_transform_ = normalize_leaf(expr_->as<Tensor>());
+  // up-row, with the core states decoded into a CanonTransform applied on
+  // retrieval. A K-conjugated leaf over a complex basis is the exception the
+  // decoder names: its state stays on the stored spelling, that being an
+  // array of its own. Every route to one stored spelling lands on one slot.
+  auto const [transform, kramers_fired] = normalize_leaf(expr_->as<Tensor>());
+  canon_transform_ = transform;
+  // Kramers-blind identity (kramers_blind.hpp): the indices of the normalized
+  // spelling whose flavour the served value does not depend on. Empty (the
+  // default, and whenever the hook is inactive) => identity exactly as below.
+  eval::ErasureMap erasure;
+  if (blindness && blindness->active())
+    erasure = eval::erasure_map(std::array{expr_}, *blindness);
   if (is_tot(tnsr)) {
     // slot identity: the canonical labeling of the block-canonical spelling.
     // The block canonicalizer is label-blind (same-space slots keep their
@@ -281,11 +390,56 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     for (auto const& ix : slot_ixs)
       if (ix.has_proto_indices()) canon_indices_.emplace_back(ix);
     connectivity_ = std::move(md.graph);
+    if (!erasure.empty()) {
+      // hash and graph from the erased spelling of the STORED (canonical)
+      // tensor; expr_ and canon_indices_ keep the as-written flavours. The
+      // erased network must canonicalize to the same slot order as the real
+      // one (the slot holds the real layout): if it does not, keep the
+      // unerased identity -- a missed fold, never a transposed one.
+      auto erased =
+          ex<Tensor>(eval::erase_indices(expr_->as<Tensor>(), erasure));
+      ExprPtrList elist{erased};
+      auto etn = TensorNetwork(elist);
+      auto emd = etn.canonicalize_slots(
+          {.cardinal_tensor_labels =
+               TensorCanonicalizer::cardinal_tensor_labels(),
+           .apply_slot_order = true});
+      auto const ecanon_e =
+          std::dynamic_pointer_cast<Expr>(etn.tensors().front());
+      SEQUANT_ASSERT(ecanon_e && ecanon_e->is<Tensor>());
+      auto const& ecanon = ecanon_e->as<Tensor>();
+      bool const same_order = ranges::equal(
+          ecanon.const_slots(), erased->as<Tensor>().const_slots(),
+          [](Index const& a, Index const& b) {
+            return a.full_label() == b.full_label();
+          });
+      if (same_order) {
+        hash_value_ = emd.hash_value();
+        connectivity_ = std::move(emd.graph);
+        identity_tensor_ = erased->as<Tensor>();
+        identity_indices_ = canon_indices_;
+        for (auto& ix : identity_indices_) ix = eval::erase_index(ix, erasure);
+      }
+    }
   } else {
     auto const& t = expr_->as<Tensor>();
-    hash_value_ = hash_terminal_tensor(t);
     canon_indices_ = t.const_indices() | ranges::to<index_vector>;
+    if (!erasure.empty()) {
+      identity_tensor_ = eval::erase_indices(t, erasure);
+      hash_value_ = hash_terminal_tensor(*identity_tensor_);
+      identity_indices_ =
+          identity_tensor_->const_indices() | ranges::to<index_vector>;
+    } else {
+      hash_value_ = hash_terminal_tensor(t);
+    }
   }
+  // T19 layer 2 contract: expr() keeps the FOLDED (up-row) spelling -- what
+  // a leaf provider fetches -- while canon_indices() (the parent's
+  // contraction labels; TA matches annotations, not spellings) carries the
+  // as-written flavors in the same canonical order, so the served up block
+  // + {conj, phase} denotes the as-written value
+  if (kramers_fired) kramers_flip_indices_as_written(canon_indices_);
+  kramers_folded_ = kramers_fired;
   fold_layout_into_hash();
 }
 
@@ -401,6 +555,12 @@ bool EvalExpr::is_primary() const noexcept { return !op_type(); }
 
 bool EvalExpr::is_sum() const noexcept { return op_type() == EvalOp::Sum; }
 
+bool EvalExpr::is_unary_op() const noexcept {
+  auto const op = op_type();
+  return op == EvalOp::RealPart || op == EvalOp::ImagPart ||
+         op == EvalOp::KramersFlip;
+}
+
 bool EvalExpr::is_product() const noexcept {
   return op_type() == EvalOp::Product;
 }
@@ -458,8 +618,15 @@ ExprPtr EvalExpr::denoted_expr() const {
   // Only a leaf's spelling names a user tensor whose states the decoder took
   // off; an internal node's placeholder is built in the denoted orientation
   // (see binarize(Product)'s scalar branch) and carries no state.
-  if (!op_type_.has_value())
-    if (const auto tr = canon_transform(); tr.conj) {
+  if (!op_type_.has_value()) {
+    const auto tr = canon_transform();
+    // a Kramers-folded leaf (T19 layer 2) stores the up-row partner of the
+    // as-written spelling: flip the flavors back. The fold's conj bit is
+    // consumed by that flip (the served block is the elementwise conjugate of
+    // the as-written one), so only a conj that came with a core state is
+    // re-materialized below -- the two conj toggles compose, hence the XOR.
+    if (kramers_folded_) kramers_flip_slots(static_cast<AbstractTensor&>(t));
+    if (tr.conj != kramers_folded_) {
       // the '⁺' channel came with the bundle exchange, the '꙳' channel
       // leaves the slots in place -- and the latter is produced by the
       // real-basis arm of the decoder alone
@@ -468,6 +635,7 @@ ExprPtr EvalExpr::denoted_expr() const {
           tr.braket_swap ? t.adjoint() : t.kconjugate();
       SEQUANT_ASSERT(sign == 1);
     }
+  }
   return ex<Tensor>(std::move(t));
 }
 
@@ -562,6 +730,9 @@ struct ExprWithHash {
   /// reorder), and hoistable() of it is the gate an enclosing hoist runs on
   /// (see collect_tensor_factors, binarize(Product))
   CanonTransform transform{};
+  /// whether the factor is a leaf (false: a Sum-rooted intermediate); see
+  /// eval::erasable_indices
+  bool leaf = true;
 };
 
 void all_indices(IndexSet& result, ExprPtr const& expr) {
@@ -609,19 +780,23 @@ template <typename Rng>
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() && (!op || *op == EvalOp::Sum)) {
+      node->is_tensor() &&
+      (!op || *op == EvalOp::Sum || *op == EvalOp::KramersFlip)) {
     // Leaf tensors enter in their denoted spelling (transform re-materialized
     // syntactically); a Sum-rooted subtree contributes its result tensor,
-    // which denoted_expr() hands over as a fresh Tensor too -- the collected
-    // factor is respelled in place by the caller's conj strip, and the node
-    // still owns its placeholder.
+    // and so does a KramersFlip wrapper (its expr() is the flipped-flavour
+    // spelling the parent contracts through); denoted_expr() hands every one
+    // of them over as a fresh Tensor -- the collected factor is respelled in
+    // place by the caller's conj strip, and the node still owns its
+    // placeholder.
     auto e = node->denoted_expr();
     // The spelling carries the factor's conj / bra-ket swap but not its
     // reorder phase (a sign is not a spelling), and a Sum root enters in its
     // slot spelling outright: the phase rides along for the product fold.
     collect.emplace_back(ExprWithHash{.expr = std::move(e),  //
                                       .hash = salted_hash(node),
-                                      .transform = node->canon_transform()});
+                                      .transform = node->canon_transform(),
+                                      .leaf = !op});
     return 1;
   } else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     // left before right: the collected order is part of the network's
@@ -647,11 +822,12 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Power const& p) { return EvalExprNode{EvalExpr{p}}; }
 
-EvalExprNode binarize(Tensor const& t) {
+EvalExprNode binarize(Tensor const& t, const BinarizationOptions& opts) {
   // The leaf constructor decodes every core state either into a
   // CanonTransform applied on retrieval or onto the array a provider serves
-  // (see decode_leaf_states), so a tensor leaf is a leaf.
-  return EvalExprNode{EvalExpr{t}};
+  // (see decode_leaf_states), and the Kramers-blind identity is derived from
+  // the options, so a tensor leaf is a leaf.
+  return EvalExprNode{EvalExpr{t, &opts.kramers_blindness}};
 }
 
 EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
@@ -659,10 +835,31 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
                       std::size_t& node_counter) {
   using ranges::views::move;
   using ranges::views::transform;
+  // SEQUANT_BATCH_AXES_DEBUG=1: one line per summand with the contraction
+  // nodes it consumed from opts.node_batch_axes, to align with the
+  // optimizer's per-summand entry counts (optimize.cpp rekey_onto)
+  static const bool debug = std::getenv("SEQUANT_BATCH_AXES_DEBUG");
+  std::size_t smand_idx = 0;
+  // a summand is added elementwise into the Sum's layout, so it must keep
+  // the Sum's labels: never a KramersFlip as a whole (the Sum folds as one)
+  BinarizationOptions sopts = opts;
+  sopts.kramers_fold_this = false;
   auto summands =
       sum.summands()  //
-      | transform([&uncontract, &opts, &node_counter](ExprPtr const& x) {
-          return impl::binarize(x, uncontract, opts, node_counter);
+      | transform([&uncontract, &opts, &sopts, &node_counter,
+                   &smand_idx](ExprPtr const& x) {
+          std::size_t const before = node_counter;
+          auto node = impl::binarize(x, uncontract, sopts, node_counter);
+          if (debug && !opts.node_batch_axes.empty())
+            std::cerr << "[batch-axes] binarize summand " << smand_idx << ": "
+                      << (node_counter - before) << " nodes"
+                      << " type="
+                      << (x->is<Product>() ? "Product"
+                          : x->is<Sum>()   ? "Sum"
+                                           : "other")
+                      << " | " << toUtf8(x->to_latex()).substr(0, 160) << "\n";
+          ++smand_idx;
+          return node;
         })  //
       | ranges::to_vector;
 
@@ -739,7 +936,9 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       // the layout is part of the value's identity (see layout_fingerprint):
       // the same summands led by a differently laid-out summand are another
       // slot, or a cached array would be served in the wrong mode order
-      hash::combine(h, EvalExpr::layout_fingerprint_of(left.canon_indices()));
+      // the sum hands up its first summand's layout, identity layout included
+      hash::combine(h,
+                    EvalExpr::layout_fingerprint_of(left.identity_indices()));
       EvalExpr result{
           EvalOp::Sum,         //
           ResultType::Tensor,  //
@@ -750,6 +949,8 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
           sum_transform,                                           //
           h,                                                       //
           nullptr};
+      if (left.has_identity_erasure())
+        result.set_identity_indices(left.identity_indices());
       result.set_accumulate_in_place(true);
       return result;
     } else {
@@ -793,9 +994,13 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
   // summand's DP nodes (mirrors optimize_impl's re-keying)
   const bool wrapper_shares_counter = ranges::all_of(
       prod.factors(), [](ExprPtr const& f) { return f->is_scalar(); });
+  // a factor is contracted through its own denoted labels, so it may fold
+  // as a whole even inside a summand that may not
+  BinarizationOptions fopts = opts;
+  fopts.kramers_fold_this = true;
   auto factors =
       prod.factors()  //
-      | transform([i = 0, &ltr_uncontr_idxs, &opts, &node_counter,
+      | transform([i = 0, &ltr_uncontr_idxs, &opts = fopts, &node_counter,
                    wrapper_shares_counter](ExprPtr const& x) mutable {
           auto const& uncontr = ltr_uncontr_idxs.children[i++];
           if (x->is<RealPart>())
@@ -903,11 +1108,13 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       // either salted into the hash or, in a hoisted prefix, the one tl's
       // transform already carries.
       auto const t = tl->denoted_expr()->as<Tensor>();
-      hash::combine(h, EvalExpr::layout_fingerprint_of(tl->canon_indices()));
+      // the identity layout follows the tensor operand's (Kramers-blind
+      // erased where it was)
+      hash::combine(h, EvalExpr::layout_fingerprint_of(tl->identity_indices()));
       CanonTransform transform = tl->canon_transform();
       transform.phase =
           static_cast<std::int8_t>(transform.phase * sc->canon_phase());
-      return {
+      EvalExpr result{
           EvalOp::Product,     //
           ResultType::Tensor,  //
           detail::make_tensor_wo_symmetries(opts, bra(t.bra()), ket(t.ket()),
@@ -916,6 +1123,9 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           transform,                                        //
           h,
           nullptr};
+      if (tl->has_identity_erasure())
+        result.set_identity_indices(tl->identity_indices());
+      return result;
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
@@ -967,9 +1177,26 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
         return result;
       }();
 
-      auto tn = TensorNetwork(ts);
+      // Kramers-blind identity (kramers_blind.hpp): the hash, the
+      // connectivity graph, the canonical result layout and the phase all
+      // come from the ERASED flattened network; only the result labels are
+      // mapped back to the as-written indices (the erasure is a renaming, so
+      // the map is a bijection). target_indices above keep the real slots.
+      eval::ErasureMap erasure;
+      if (opts.kramers_blindness.active()) {
+        container::svector<bool> leaf_flags;
+        for (auto const& f : subfacs) leaf_flags.push_back(f.leaf);
+        erasure = eval::erasure_map(ts, opts.kramers_blindness, leaf_flags);
+      }
+      container::svector<ExprPtr> ts_id;
+      for (ExprPtr const& e : ts)
+        ts_id.push_back(erasure.empty() ? e
+                                        : ex<Tensor>(eval::erase_indices(
+                                              e->as<Tensor>(), erasure)));
+      auto tn = TensorNetwork(ts_id);
       auto named_indices = tn.ext_indices();
-      for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
+      for (auto&& ix : uncontracted_idxs)
+        named_indices.emplace(eval::erase_index(ix, erasure));
 
       auto canon = tn.canonicalize_slots(
           {.cardinal_tensor_labels =
@@ -1001,9 +1228,20 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
           .conj = hoist_conj};
       auto result_indices = canon.get_indices<Index::index_vector>();
       // the result layout is part of a tensor-valued node's identity (see
-      // layout_fingerprint)
+      // layout_fingerprint); under erasure the identity layout is the erased
+      // one and the node's own labels are the as-written ones
+      Index::index_vector identity_indices;
+      if (!erasure.empty()) {
+        identity_indices = result_indices;
+        eval::ErasureMap unerase;
+        for (auto const& [real, placeholder] : erasure)
+          unerase.emplace(placeholder, real);
+        for (auto& ix : result_indices) ix = eval::erase_index(ix, unerase);
+      }
       if (!scalar_result)
-        hash::combine(h, EvalExpr::layout_fingerprint_of(result_indices));
+        hash::combine(h,
+                      EvalExpr::layout_fingerprint_of(
+                          erasure.empty() ? result_indices : identity_indices));
       EvalExpr result =
           scalar_result
               ? EvalExpr{EvalOp::Product,          //
@@ -1022,6 +1260,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
                          transform,                  //
                          h,
                          std::move(canon.graph)};
+      if (!scalar_result && !erasure.empty())
+        result.set_identity_indices(std::move(identity_indices));
       // This is a genuine contraction (DP) node: the optimizer's
       // node_batch_axes carries one entry per such node, in the same
       // left-first post-order (children -- built by the recursive
@@ -1123,7 +1363,171 @@ EvalExprNode binarize_re_im(ExprPtr const& inner, EvalOp op,
                       std::move(sentinel)};
 }
 
+/// slot occurrences (bra / ket / aux, not protos) of every index across the
+/// leaves of \p e; a Sum contributes its first summand (every summand has the
+/// same externals), a Re/Im wrapper nothing (scalar-valued: its indices are
+/// all contracted inside it)
+void count_slot_occurrences(ExprPtr const& e, container::map<Index, int>& cnt) {
+  if (e->is<Tensor>()) {
+    auto const& t = e->as<Tensor>();
+    for (auto const& ix : t.bra()) ++cnt[ix];
+    for (auto const& ix : t.ket()) ++cnt[ix];
+    for (auto const& ix : t.aux()) ++cnt[ix];
+  } else if (e->is<Sum>()) {
+    auto const& s = e->as<Sum>().summands();
+    if (!s.empty()) count_slot_occurrences(s.front(), cnt);
+  } else if (e->is<Product>()) {
+    for (auto const& f : e->as<Product>().factors())
+      count_slot_occurrences(f, cnt);
+  }
+}
+
+/// the flavour-blind key of an index: its full label (protos included) with
+/// the Kramers flavour marks removed, shared by the two partners of a pair
+std::wstring flavour_blind_label(Index const& ix) {
+  std::wstring s(ix.full_label());
+  std::erase_if(s, [](wchar_t c) { return c == L'↑' || c == L'↓'; });
+  return s;
+}
+
+/// Phase 2a (mpqc doc/dev/specs/2026-09-18-union-axis-time-reversal-fold.md):
+/// a Product / Sum whose flavoured externals (after the Kramers-blind erasure
+/// of the pair labels) are down-majority -- a tie resolved by the flavour
+/// string in the flavour-blind canonical order of the externals, so exactly
+/// one of two partners folds -- and whose leaves are all time-reversal
+/// symmetric is the time-reversal image of its flipped spelling: the flipped
+/// expression (the canonical partner, shared with the partner family) is
+/// binarized and wrapped in a KramersFlip over the union free legs with phase
+/// (-1)^{n_down}. Null when the fold does not apply.
+std::optional<EvalExprNode> maybe_kramers_fold(ExprPtr const& expr,
+                                               IndexSet const& uncontract,
+                                               BinarizationOptions const& opts,
+                                               std::size_t& node_counter) {
+  auto const isr = get_default_context().index_space_registry();
+  if (!isr) return std::nullopt;
+  container::svector<ExprPtr> leaves;
+  bool all_tr = true;
+  expr->visit(
+      [&](ExprPtr const& x) {
+        if (!x->is<Tensor>()) return;
+        leaves.push_back(x);
+        all_tr = all_tr && x->as<Tensor>().kramers_symmetry() ==
+                               KramersSymmetry::TimeReversal;
+      },
+      /*atoms_only=*/true);
+  if (!all_tr || leaves.empty()) return std::nullopt;
+
+  container::map<Index, int> cnt;
+  count_slot_occurrences(expr, cnt);
+  // the blind pair labels (kramers_blind.hpp): the node's value does not
+  // depend on their flavour, so they are not flavoured externals here
+  auto const blind = opts.kramers_blindness.active()
+                         ? eval::blind_indices(leaves, opts.kramers_blindness)
+                         : container::set<Index>{};
+  auto const down = [&isr](Index const& ix) {
+    return !isr->kramers_canonical(ix.space());
+  };
+  // the flavoured externals: used once across the leaves or kept
+  // uncontracted; the union legs, the spin-free indices and the blind pair
+  // labels do not count
+  container::svector<Index> flav;
+  for (auto const& [ix, n] : cnt) {
+    if (n != 1 && !uncontract.contains(ix)) continue;
+    // a nested (proto-carrying) union axis cannot be flipped by
+    // Result::kramers_flip, which acts on the outer modes
+    if (ix.has_proto_indices() && kramers_union_index(ix, *isr))
+      return std::nullopt;
+    if (blind.contains(ix) || !isr->kramers_partner(ix.space())) continue;
+    flav.push_back(ix);
+  }
+  if (flav.empty()) return std::nullopt;
+  auto const n_down = std::count_if(flav.begin(), flav.end(), down);
+  auto const n_up = static_cast<std::ptrdiff_t>(flav.size()) - n_down;
+  bool noncanonical = n_down > n_up;
+  if (n_down == n_up) {
+    std::sort(flav.begin(), flav.end(), [](Index const& x, Index const& y) {
+      return flavour_blind_label(x) < flavour_blind_label(y);
+    });
+    std::wstring own, flipped;
+    for (auto const& ix : flav) {
+      own += down(ix) ? L'b' : L'a';
+      flipped += down(ix) ? L'a' : L'b';
+    }
+    noncanonical = flipped < own;
+  }
+  if (!noncanonical) return std::nullopt;
+
+  // the canonical partner: every flavoured index occurrence flipped, the
+  // pair labels inside unflavoured (union) composites included
+  auto flipped_expr = expr->clone();
+  flipped_expr->visit(
+      [](ExprPtr& x) {
+        if (!x->is<Tensor>()) return;
+        auto& t = x->as<Tensor>();
+        kramers_flip_slots_deep(t);
+        t.reset_tags();
+      },
+      /*atoms_only=*/true);
+  IndexSet flipped_uncontract;
+  for (auto const& ix : uncontract)
+    flipped_uncontract.emplace(kramers_flipped_deep(ix, *isr));
+  auto inner =
+      impl::binarize(flipped_expr, flipped_uncontract, opts, node_counter);
+  SEQUANT_ASSERT(inner->is_tensor());
+  // the union free legs as OUTER mode positions (the proto-free indices in
+  // canonical order, see EvalExpr::indices_annot)
+  container::svector<std::size_t> modes;
+  std::size_t k = 0;
+  for (auto const& ix : inner->canon_indices()) {
+    if (ix.has_proto_indices()) continue;
+    if (kramers_union_index(ix, *isr)) modes.push_back(k);
+    ++k;
+  }
+  auto const phase = static_cast<std::int8_t>((n_down % 2) ? -1 : 1);
+  Tensor denoted = inner->as_tensor();
+  kramers_flip_slots_deep(denoted);
+  denoted.reset_tags();
+  return make_kramers_flip_node(std::move(inner), std::move(modes), phase,
+                                std::move(denoted));
+}
+
 }  // namespace
+
+EvalExprNode make_kramers_flip_node(EvalExprNode inner,
+                                    container::svector<std::size_t> modes,
+                                    std::int8_t phase, Tensor denoted) {
+  SEQUANT_ASSERT(inner->result_type() == ResultType::Tensor);
+  auto const isr = get_default_context().index_space_registry();
+  auto h = inner->hash_value();
+  if (auto salt = inner->canon_transform().structural_salt(); salt != 0)
+    hash::combine(h, salt);
+  hash::combine(h, static_cast<size_t>(EvalOp::KramersFlip));
+  for (auto m : modes) hash::combine(h, m);
+  hash::combine(h, static_cast<std::int64_t>(phase));
+  // the wrapper's labels: the child's layout with every flavoured index
+  // flipped (the denoted spelling)
+  auto ixs = inner->canon_indices();
+  if (isr) kramers_flip_deep(ixs, *isr);
+  hash::combine(h, EvalExpr::layout_fingerprint_of(ixs));
+  // the child's phase / conj hoist through F (linear, commutes with conj), as
+  // the inner phase hoists through Re/Im in binarize_re_im
+  auto const& itr = inner->canon_transform();
+  EvalExpr wrap{EvalOp::KramersFlip,
+                ResultType::Tensor,
+                ex<Tensor>(std::move(denoted)),
+                std::move(ixs),
+                CanonTransform{.phase = itr.phase, .conj = itr.conj},
+                h,
+                nullptr};
+  wrap.set_kramers_flip(std::move(modes), phase);
+  if (inner->has_identity_erasure()) {
+    auto id = inner->identity_indices();
+    if (isr) kramers_flip_deep(id, *isr);
+    wrap.set_identity_indices(std::move(id));
+  }
+  EvalExprNode sentinel{EvalExpr{Constant{1}}};
+  return EvalExprNode{std::move(wrap), std::move(inner), std::move(sentinel)};
+}
 
 namespace impl {
 
@@ -1140,6 +1544,11 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
                           uncontract, opts, node_counter,
                           /*shared_counter=*/true);
 
+  if (opts.kramers_fold_intermediates && opts.kramers_fold_this &&
+      (expr->is<Sum>() || expr->is<Product>()))
+    if (auto folded = maybe_kramers_fold(expr, uncontract, opts, node_counter))
+      return std::move(*folded);
+
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
 
@@ -1147,7 +1556,7 @@ EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract,
     return binarize(expr->as<Variable>());
 
   if (expr->is<Tensor>())  //
-    return binarize(expr->as<Tensor>());
+    return binarize(expr->as<Tensor>(), opts);
 
   if (expr->is<Sum>())  //
     return binarize(expr->as<Sum>(), uncontract, opts, node_counter);

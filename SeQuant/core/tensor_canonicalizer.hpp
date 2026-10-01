@@ -22,6 +22,16 @@
 
 namespace sequant {
 
+class AbstractTensor;
+
+/// @return true for reserved bookkeeping operators ((anti)symmetrizer,
+///         transposition) whose bra<->ket orientation defines/extracts
+///         external indices: canonicalization must never reorient them.
+///         Their Conjugate braket symmetry is the reserved Symm->Conjugate
+///         demotion sentinel (see Tensor's constructor), not a foldable
+///         value symmetry.
+bool braket_orientation_pinned(const AbstractTensor& t);
+
 /// @brief Base class for Tensor canonicalizers
 /// To make custom canonicalizer make a derived class and register an instance
 /// of that class with TensorCanonicalizer::register_instance
@@ -166,6 +176,108 @@ bool braket_orientation_pinned(const AbstractTensor& t);
 ///         returns.
 bool braket_foldable(const AbstractTensor& t);
 
+/// @brief the elementwise conjugation of @p t's array, spelled on the core
+/// conjugation model: the adjoint state with the bra/ket bundles exchanged,
+/// i.e. `conj T{a;b}` is spelled `T⁺{b;a}` (the definition of the adjoint
+/// state; the network contracts by labels, so the two are one labeled
+/// array). A definite hermiticity consumes the state in the exchange itself
+/// (`T{b;a} = s conj T{a;b}`), leaving the bundles exchanged; over a real
+/// basis the coset rule turns it into `꙳` with the slots in place. An
+/// involution. Used by the Kramers network/block fold and the Kramers
+/// tracer, whose time-reversal image is the conjugate of the flavor-flipped
+/// array. The Kramers orientation verdicts (kramers_flavor_key,
+/// kramers_noncanonical) read a marked tensor in its VALUE orientation, so a
+/// folded spelling is a fixed point of the fold.
+/// @return the sign consumed by a definite hermiticity (-1 for an
+///         anti-Hermitian @p t), +1 otherwise
+std::int8_t kramers_conjugate_mark(AbstractTensor& t);
+
+/// @return whether the Kramers fold may spell @p t's bra<->ket exchange: a
+///         c-number, not orientation-pinned, whose exchange is a bare swap
+///         (braket_foldable) or the adjoint itself (a definite hermiticity,
+///         BraKetSymmetry::Conjugate/AntiConjugate, the fold's own mark)
+bool kramers_orientation_free(const AbstractTensor& t);
+
+/// @brief eval-boundary respelling of a definite-hermiticity Kramers tensor
+/// whose bra carries more down-flavored slots than its ket: the bundles are
+/// exchanged through adjoint(), which such a hermiticity consumes
+/// (`T{b;a} = s conj T{a;b}`), so the tensor left behind is the up-row
+/// spelling a leaf provider serves and the as-written value is that spelling
+/// conjugated, transposed and scaled by the returned sign -- the caller
+/// records `{conj, braket_swap, s}` as the retrieval transform. Not a
+/// symbolic respelling: the two orientations of such a tensor are two values.
+/// No-op for any other tensor (kramers_foldable() false, no definite
+/// hermiticity, or a bra with no more down slots than the ket).
+/// @return {whether the exchange was made, the sign it consumed}
+std::pair<bool, std::int8_t> kramers_uprow_exchange(AbstractTensor& t);
+
+/// @return whether the Kramers (time-reversal) fold applies to @p t:
+///         KramersSymmetry::TimeReversal, a c-number, and not
+///         orientation-pinned (reserved operators never fold)
+bool kramers_foldable(const AbstractTensor& t);
+
+/// @brief Kramers (time-reversal) fold of a single tensor: if @p t's FIRST
+/// flavored slot (bra, ket, aux order) carries the non-canonical (down)
+/// flavor, every flavored slot index is replaced by its Kramers partner
+/// (proto indices flipped recursively, unflavored slots untouched) and, with
+/// @p mark, the elementwise conjugation is spelled on the tensor
+/// (kramers_conjugate_mark), preserving the value up to the returned phase:
+/// T = phase * conj(T_flipped), phase = (-1)^(#slots flipped from down) times
+/// the sign the mark consumes. With @p mark false only the slots are flipped
+/// and the caller owns the conjugation (the eval boundary records it as the
+/// leaf's retrieval transform). No-op (phase +1) if the fold does not apply
+/// or the first flavored slot is already canonical. Idempotent.
+/// @return the phase (+1 or -1)
+int canonicalize_kramers(AbstractTensor& t, bool mark = true);
+
+/// @brief flips every flavored slot index of @p t to its Kramers partner in
+/// place (proto indices recursively, unflavored slots untouched); no marker
+/// or phase bookkeeping -- an involution used by canonicalize_kramers() and
+/// by consumers that must restore a folded spelling
+/// @return whether any slot was flipped
+bool kramers_flip_slots(AbstractTensor& t);
+
+/// @brief the DEEP variant of kramers_flip_slots: every slot index is replaced
+/// by its kramers_flipped_deep image, so the flavoured proto indices of an
+/// unflavoured (e.g. Kramers-union) composite are flipped too -- the
+/// whole-expression time-reversal flip the KramersFlip fold builds its
+/// canonical partner with (eval_expr.cpp); no marker or phase bookkeeping
+/// @return whether any slot changed
+bool kramers_flip_slots_deep(AbstractTensor& t);
+
+/// @brief whether @p idx is a Kramers-UNION index: a spin-free index (its
+/// space has no Kramers partner) of a space whose flavoured subspaces ARE
+/// registered Kramers partners in @p isr, i.e. the union of the ↑ and ↓
+/// halves of one space (the expansion dummy of a Kramers-union CSV
+/// transform, a union-contracted integral leg). The time-reversal image of a
+/// tensor over such an axis permutes the axis (swaps the two halves, with a
+/// sign), so it is NOT an elementwise {conj, phase} of the tensor: a leaf
+/// with a union slot must not be Kramers-folded at the eval-leaf level (the
+/// network-level fold, which relabels the summed union dummy consistently
+/// across the term, is unaffected). Indices of spaces without flavoured
+/// partners (e.g. a density-fitting auxiliary index) are not union indices.
+bool kramers_union_index(const Index& idx, const IndexSpaceRegistry& isr);
+
+/// @return true if any slot (bra, ket, aux) of @p t is a Kramers-union index
+/// (see kramers_union_index) under the default context's registry
+bool has_kramers_union_slot(const AbstractTensor& t);
+
+/// @brief flavor key of @p t: label + per-bundle flavor characters
+/// ('a'/'b'/'-' for up/down/unflavored, so up orders first) SORTED within
+/// each bundle, the bra
+/// and ket bundles ordered canonically for braket-foldable tensors -- hence
+/// invariant under every symmetry the canonicalizer may exercise
+/// (within-bundle permutation, bra<->ket exchange) and under index
+/// relabeling
+/// @param flipped if true, the key of the Kramers-flipped spelling
+std::wstring kramers_flavor_key(const AbstractTensor& t, bool flipped = false);
+
+/// @return whether @p t is spelled in its non-canonical Kramers orientation:
+///         more down- than up-flavored slots, or (tie) the flipped flavor
+///         key orders before its own (see kramers_flavor_key); false for
+///         tensors without flavored slots
+bool kramers_noncanonical(const AbstractTensor& t);
+
 class DefaultTensorCanonicalizer : public TensorCanonicalizer {
  public:
   DefaultTensorCanonicalizer() = default;
@@ -300,8 +412,18 @@ class TensorBlockCanonicalizer : public DefaultTensorCanonicalizer {
 
   ExprPtr apply(AbstractTensor& t) const override;
 
+  /// @param fold_kramers if true, canonicalize_kramers() is applied; OFF by
+  ///        default: inside a network the per-tensor fold would flip one
+  ///        tensor's dummies but not its partner's (the network fold owns
+  ///        that decision); the eval leaf boundary opts in explicitly
+  TensorBlockCanonicalizer& fold_kramers(bool fold_kramers) {
+    fold_kramers_ = fold_kramers;
+    return *this;
+  }
+
  private:
   bool fold_signed_braket_ = true;
+  bool fold_kramers_ = false;
 };
 
 }  // namespace sequant

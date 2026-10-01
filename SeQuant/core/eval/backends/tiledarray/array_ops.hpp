@@ -62,6 +62,7 @@ template <typename FlatArray, typename ToTArray = FlatArray>
       FlatArray dest(world, otr);
       dest.fill_local(numeric_type(0));
       world.gop.fence();
+      ::sequant::detail::note_fence();
       return eval_result<ResultTensorTA<FlatArray>>(std::move(dest));
     };
     if constexpr (std::is_same_v<FlatArray, ToTArray>) {
@@ -80,6 +81,7 @@ template <typename FlatArray, typename ToTArray = FlatArray>
       for (auto it = dest.begin(); it != dest.end(); ++it)
         if (dest.is_local(it.index())) *it = OuterT{it.make_range()};
       world.gop.fence();
+      ::sequant::detail::note_fence();
       return eval_result<ResultTensorOfTensorTA<ToTArray>>(std::move(dest));
     }
   };

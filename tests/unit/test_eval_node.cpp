@@ -196,7 +196,11 @@ TEST_CASE("eval_node", "[EvalNode]") {
         L"* t{a3,a4;i1,i2}:A-N-S");
     auto node1 = eval_node(p1);
 
-    // the g leaf stays as written, unmarked
+    // the g leaf is stored unmarked in one of the two orientations; the
+    // transform records the written->canonical delta, which for a Conjugate
+    // leaf is either trivial (written canonically) or the fold map
+    // {conj, braket_swap} (an ARRAY map: conj + relabel on retrieval -- on
+    // Hermitian data exactly the written block)
     auto const gnode = node(node1, {L, L, L});
     auto const& gleaf = gnode.as_tensor();
     REQUIRE_FALSE(gleaf.kconjugated());

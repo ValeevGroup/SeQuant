@@ -7,6 +7,7 @@
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/hash.hpp>
@@ -29,6 +30,7 @@
 #include <range/v3/algorithm/equal.hpp>
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -573,12 +575,23 @@ ExprPtr TensorNetworkV3::canonicalize(
   }
 
   ExprPtr byproduct;
+  if (options.fold_kramers == CanonicalizeOptions::FoldKramers::Yes) {
+    // Kramers fold first: it fixes the flavors (hence colors) the graph
+    // canonicalization below sees
+    auto [kramers_phase, flipped] = kramers_orient(named_indices);
+    if (!flipped.empty()) {
+      edges_.clear();
+      have_edges_ = false;
+      init_edges();
+    }
+    if (kramers_phase < 0) byproduct = ex<Constant>(-1);
+  }
   if ((options.method & CanonicalizationMethod::Topological) ==
       CanonicalizationMethod::Topological) {
     // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
-    byproduct = canonicalize_graph(
+    byproduct *= canonicalize_graph(
         named_indices, static_cast<bool>(options.ignore_named_index_labels));
   }
 
@@ -744,6 +757,18 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
   metadata.named_indices = named_indices;
+
+  int kramers_phase = 1;
+  if (options.fold_kramers) {
+    auto [ph, flipped] = kramers_orient(named_indices);
+    kramers_phase = ph;
+    metadata.kramers_flipped_tensors = std::move(flipped);
+    if (!metadata.kramers_flipped_tensors.empty()) {
+      edges_.clear();
+      have_edges_ = false;
+      init_edges();
+    }
+  }
 
   // helper to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -988,7 +1013,155 @@ TensorNetworkV3::canonicalize_slots(CanonicalizeSlotsOptions options) {
     }
   }
 
+  metadata.phase *= kramers_phase;
   return metadata;
+}
+
+std::pair<int, container::svector<std::size_t>> TensorNetworkV3::kramers_orient(
+    const NamedIndexSet &named_indices) {
+  container::svector<std::size_t> flipped;
+  const auto isr = get_default_context().index_space_registry();
+  if (!isr) return {1, flipped};
+  const auto flavored = [&](const Index &idx) {
+    return isr->kramers_partner(idx.space()).has_value();
+  };
+  const std::size_t n = tensors_.size();
+
+  // flavored indices carried by each tensor: slots and proto indices
+  // (recursively); a proto index that is a dummy elsewhere ties the tensors
+  container::svector<container::svector<Index>> carried(n);
+  const auto collect = [&](const Index &idx, container::svector<Index> &out,
+                           const auto &self) -> void {
+    if (flavored(idx)) out.push_back(idx);
+    for (const auto &p : idx.proto_indices()) self(p, out, self);
+  };
+  const auto for_slots = [](const AbstractTensor &t, const auto &fn) {
+    for (const Index &idx : t._bra()) fn(idx);
+    for (const Index &idx : t._ket()) fn(idx);
+    for (const Index &idx : t._aux()) fn(idx);
+  };
+  for (std::size_t i = 0; i != n; ++i)
+    for_slots(*tensors_[i],
+              [&](const Index &idx) { collect(idx, carried[i], collect); });
+
+  // connected components (union-find) over shared flavored indices; a
+  // component is pinned by a named index or by a tensor that has no
+  // Kramers identity to flip with
+  container::svector<std::size_t> parent(n);
+  for (std::size_t i = 0; i != n; ++i) parent[i] = i;
+  const auto find = [&](std::size_t i) {
+    while (parent[i] != i) i = parent[i] = parent[parent[i]];
+    return i;
+  };
+  const auto unite = [&](std::size_t a, std::size_t b) {
+    a = find(a);
+    b = find(b);
+    if (a != b) parent[b] = a;
+  };
+  container::svector<bool> pinned(n, false);
+  container::map<Index, std::size_t> owner;
+  for (std::size_t i = 0; i != n; ++i) {
+    if (carried[i].empty()) continue;
+    if (!kramers_foldable(*tensors_[i])) pinned[i] = true;
+    for (const auto &idx : carried[i]) {
+      if (named_indices.find(idx) != named_indices.end()) pinned[i] = true;
+      auto it = owner.find(idx);
+      if (it == owner.end())
+        owner.emplace(idx, i);
+      else
+        unite(i, it->second);
+    }
+  }
+  container::map<std::size_t, bool> root_pinned;
+  for (std::size_t i = 0; i != n; ++i)
+    if (!carried[i].empty()) root_pinned[find(i)] |= pinned[i];
+
+  // per free component: down-first counts and fingerprints of both
+  // orientations (label + per-slot flavor; u<->d under the flip),
+  // label-independent so both spellings agree
+  struct Component {
+    int n_down_first_asis = 0, n_down_first_flipped = 0;
+    container::svector<std::wstring> fp_asis, fp_flipped;
+    container::svector<std::size_t> members;
+  };
+  container::map<std::size_t, Component> components;
+  for (std::size_t i = 0; i != n; ++i) {
+    if (carried[i].empty()) continue;
+    const auto root = find(i);
+    if (root_pinned[root]) continue;
+    auto &comp = components[root];
+    comp.members.push_back(i);
+    const AbstractTensor &t = *tensors_[i];
+    // symmetry-invariant per-tensor keys and orientation verdicts (see
+    // kramers_flavor_key / kramers_noncanonical). NB no marker in the key:
+    // a twin term of a traced sum is the flavor-flipped spelling WITHOUT
+    // markers (== phase*conj of the marked flip), and both must take the
+    // same orientation to pair as conjugates
+    std::wstring fp_asis = kramers_flavor_key(t, false);
+    std::wstring fp_flipped = kramers_flavor_key(t, true);
+    if (kramers_noncanonical(t)) ++comp.n_down_first_asis;
+    {
+      auto flipped_copy = t._clone_shared();
+      kramers_flip_slots(*flipped_copy);
+      if (kramers_noncanonical(*flipped_copy)) ++comp.n_down_first_flipped;
+    }
+    comp.fp_asis.push_back(std::move(fp_asis));
+    comp.fp_flipped.push_back(std::move(fp_flipped));
+  }
+
+  // canonical (graph) hash of a component's spelling, for the last-resort
+  // tie-break: a component whose every invariant coincides with its flip's
+  // (e.g. g{i↑,i↓;a↑,a↓} t{a↓,a↑;i↓,i↑}) is still a DIFFERENT network from
+  // its flip, and the flavor-aware canonical form tells them apart
+  // deterministically; both spellings compare the same two hashes
+  const auto component_hash = [&](const container::svector<std::size_t> &ms,
+                                  bool flipped) {
+    container::svector<ExprPtr> exprs;
+    for (const auto m : ms) {
+      auto copy = tensors_[m]->_clone_shared();
+      if (flipped) kramers_flip_slots(*copy);
+      auto e = std::dynamic_pointer_cast<Expr>(copy);
+      SEQUANT_ASSERT(e);
+      exprs.emplace_back(std::move(e));
+    }
+    TensorNetworkV3 sub(exprs);
+    return sub.canonicalize_slots(CanonicalizeSlotsOptions{}).hash_value();
+  };
+
+  int phase = 1;
+  for (auto &[root, comp] : components) {
+    std::sort(comp.fp_asis.begin(), comp.fp_asis.end());
+    std::sort(comp.fp_flipped.begin(), comp.fp_flipped.end());
+    bool flip;
+    if (comp.n_down_first_flipped != comp.n_down_first_asis)
+      flip = comp.n_down_first_flipped < comp.n_down_first_asis;
+    else if (comp.fp_flipped != comp.fp_asis)
+      flip = comp.fp_flipped < comp.fp_asis;
+    else
+      flip = component_hash(comp.members, true) <
+             component_hash(comp.members, false);
+    if (!flip) continue;
+    for (const auto m : comp.members) {
+      AbstractTensor &t = *tensors_[m];
+      int n_down = 0;
+      for_slots(t, [&](const Index &idx) {
+        if (flavored(idx) && !isr->kramers_canonical(idx.space())) ++n_down;
+      });
+      if (n_down % 2) phase = -phase;
+      kramers_flip_slots(t);
+      if (kramers_conjugate_mark(t) == -1) phase = -phase;
+      flipped.push_back(m);
+    }
+  }
+  std::sort(flipped.begin(), flipped.end());
+  if (!flipped.empty() && Logger::instance().canonicalize) {
+    std::wostringstream oss;
+    oss << "TensorNetworkV3::kramers_orient: flipped tensors";
+    for (auto m : flipped) oss << L' ' << m;
+    oss << L", phase " << phase << L"\n";
+    sequant::wprintf(oss.str());
+  }
+  return {phase, flipped};
 }
 
 TensorNetworkV3::Graph TensorNetworkV3::create_graph(
@@ -1195,8 +1368,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         graph.vertex_types.emplace_back(bra ? VertexType::TensorBraBundle
                                             : VertexType::TensorKetBundle);
         tensor_network::VertexColor color;
-        if (is_braket_symm) {  // if have bra<->ket symmetry (not conj!),
-                               // use same color for bra and ket
+        if (is_braket_symm) {  // bra<->ket foldable (Symm, or Conjugate when
+                               // Conjugate fold): same color for bra and ket
           color = colorizer(BraGroup{size});
         } else {
           color = bra ? colorizer(BraGroup{size}) : colorizer(KetGroup{size});
@@ -1372,8 +1545,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     if constexpr (assert_enabled()) {
       if (get_default_context().assert_strict_braket_symmetry()) {
         // dummy (anonymous) edges to
-        // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
-        // or 1 bra and 1 ket index
+        // - involve at most 2 bra and/or ket indices if some incident tensor's
+        // bra<->ket orientation is interchangeable, else 1 bra and 1 ket index
         // - can involve any number of aux indices
         if (current_edge.vertex_count() > 1) {
           // ignore if named index
@@ -1415,8 +1588,24 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
             // an orientation-free incident tensor permits any bra/ket mix of
             // up to 2 slots; rigid orientations allow at most 1 bra and 1 ket
-            SEQUANT_ASSERT(orientation_free ? (nbra + nket <= 2)
-                                            : (nbra <= 1 && nket <= 1));
+            if (!(orientation_free ? (nbra + nket <= 2)
+                                   : (nbra <= 1 && nket <= 1))) {
+              std::string slots;
+              for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
+                const Vertex &vertex = current_edge.vertex(v);
+                slots += (vertex.getOrigin() == Origin::Bra   ? " bra of "
+                          : vertex.getOrigin() == Origin::Ket ? " ket of "
+                                                              : " aux of ") +
+                         toUtf8(tensors_[vertex.getTerminalIndex()]->_label());
+              }
+              sequant::assert_failed(
+                  "SEQUANT_ASSERT(strict bra-ket check) failed: dummy index " +
+                  toUtf8(current_edge.idx().full_label()) + " meets " +
+                  std::to_string(nbra) + " bra, " + std::to_string(nket) +
+                  " ket, " + std::to_string(naux) + " aux slots (" +
+                  (orientation_free ? "orientation-free" : "rigid") +
+                  "):" + slots);
+            }
           }
         }
       }
