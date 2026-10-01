@@ -1,3 +1,4 @@
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
@@ -1303,26 +1304,16 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     // STEP1. replace NOPs by RDM
     auto replace_nop_with_rdm = [&rdm_label, spinor](ExprPtr& exptr) {
       auto replace = [&rdm_label, spinor](const auto& nop) -> ExprPtr {
-        using index_container = container::svector<Index>;
-        auto braidxs = nop.annihilators() |
-                       ranges::views::transform(
-                           [](const auto& op) { return op.index(); }) |
-                       ranges::to<index_container>();
-        auto ketidxs = nop.creators() |
-                       ranges::views::transform(
-                           [](const auto& op) { return op.index(); }) |
-                       ranges::to<index_container>();
-        SEQUANT_ASSERT(
-            braidxs.size() ==
-            ketidxs.size());  // need to handle particle # violating case?
-        const auto rank = braidxs.size();
-        // an RDM is Hermitian, and is particle (column) symmetric since it
-        // is over indistinguishable particles (which the Antisymm branch
-        // implies, but Nonsymm does not)
-        return ex<Tensor>(
-            rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
-            rank > 1 && spinor ? Symmetry::Antisymm : Symmetry::Nonsymm,
-            Hermiticity::Hermitian, ColumnSymmetry::Symm);
+        // spin-free RDMs are column symmetric but not antisymmetric
+        const auto syms =
+            nop.rank() > 1 && spinor
+                ? TensorSymmetries{.perm = Symmetry::Antisymm,
+                                   .hermiticity = Hermiticity::Hermitian,
+                                   .column = ColumnSymmetry::Symm}
+                : TensorSymmetries{.perm = Symmetry::Nonsymm,
+                                   .hermiticity = Hermiticity::Hermitian,
+                                   .column = ColumnSymmetry::Symm};
+        return density::rdm_from_nop(nop, rdm_label, syms);
       };
 
       if (exptr.template is<FNOperator>()) {
