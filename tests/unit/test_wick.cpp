@@ -128,6 +128,59 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                                         Vacuum::Physical));
     REQUIRE(!BWickTheorem::can_contract(bann(L"i_1"), bann(L"i_2"),
                                         Vacuum::Physical));
+
+    // MultiProduct vacuum: i = core (vacuum-occupied), u = active
+    // (reference-occupied, vacuum-unoccupied), a = virtual
+    {
+      auto ctx = get_default_context();
+      ctx.set(mbpt::make_mr_spaces());
+      ctx.set(Vacuum::MultiProduct);
+      auto ctx_resetter = set_scoped_default_context(ctx);
+      const auto isr = ctx.index_space_registry();
+      const auto MP = Vacuum::MultiProduct;
+
+      // core behaves as in SingleProduct
+      REQUIRE(is_pure_qpannihilator(fcre(L"i_1"), MP, isr));
+      REQUIRE(!is_qpcreator(fcre(L"i_1"), MP, isr));
+      REQUIRE(is_pure_qpcreator(fann(L"i_1"), MP, isr));
+      REQUIRE(!is_qpannihilator(fann(L"i_1"), MP, isr));
+      // virtual behaves as in SingleProduct
+      REQUIRE(is_pure_qpcreator(fcre(L"a_1"), MP, isr));
+      REQUIRE(!is_qpannihilator(fcre(L"a_1"), MP, isr));
+      REQUIRE(is_pure_qpannihilator(fann(L"a_1"), MP, isr));
+      REQUIRE(!is_qpcreator(fann(L"a_1"), MP, isr));
+      // active is both
+      REQUIRE(is_pure_qpcreator(fcre(L"u_1"), MP, isr));
+      REQUIRE(is_pure_qpannihilator(fcre(L"u_1"), MP, isr));
+      REQUIRE(is_pure_qpcreator(fann(L"u_1"), MP, isr));
+      REQUIRE(is_pure_qpannihilator(fann(L"u_1"), MP, isr));
+      // general p: both, but not pure
+      REQUIRE(is_qpcreator(fcre(L"p_1"), MP, isr));
+      REQUIRE(!is_pure_qpcreator(fcre(L"p_1"), MP, isr));
+      const auto p_qns = fcre(L"p_1").index().space().qns();
+      REQUIRE(qpcreator_space(fcre(L"p_1"), MP, isr) ==
+              isr->vacuum_unoccupied_space(p_qns));
+      REQUIRE(qpannihilator_space(fcre(L"p_1"), MP, isr) ==
+              isr->reference_occupied_space(p_qns));
+
+      // contractions: only cre·ann over R and ann·cre over U
+      REQUIRE(FWickTheorem::can_contract(fcre(L"i_1"), fann(L"i_2"), MP));
+      REQUIRE(!FWickTheorem::can_contract(fann(L"i_1"), fcre(L"i_2"), MP));
+      REQUIRE(FWickTheorem::can_contract(fann(L"a_1"), fcre(L"a_2"), MP));
+      REQUIRE(!FWickTheorem::can_contract(fcre(L"a_1"), fann(L"a_2"), MP));
+      REQUIRE(FWickTheorem::can_contract(fcre(L"u_1"), fann(L"u_2"), MP));
+      REQUIRE(FWickTheorem::can_contract(fann(L"u_1"), fcre(L"u_2"), MP));
+      REQUIRE(!FWickTheorem::can_contract(fcre(L"u_1"), fcre(L"u_2"), MP));
+      REQUIRE(!FWickTheorem::can_contract(fann(L"u_1"), fann(L"u_2"), MP));
+      REQUIRE(!FWickTheorem::can_contract(fcre(L"i_1"), fann(L"a_2"), MP));
+      REQUIRE(!FWickTheorem::can_contract(fcre(L"u_1"), fann(L"i_2"), MP));
+      REQUIRE(!FWickTheorem::can_contract(fann(L"u_1"), fcre(L"a_2"), MP));
+
+      // bosons stay Physical-only
+      REQUIRE_THROWS_AS(
+          BWickTheorem::can_contract(bann(L"i_1"), bcre(L"i_2"), MP),
+          Exception);
+    }
   }
 
   SECTION("constructors") {
