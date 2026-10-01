@@ -3,6 +3,7 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -11,6 +12,18 @@
 #include <filesystem>
 
 TEST_CASE("macros", "[elements]") {
+  SECTION("SEQUANT_ENFORCE") {
+    int evaluations = 0;
+    SEQUANT_ENFORCE(++evaluations == 1);
+    REQUIRE(evaluations == 1);
+
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS([] { SEQUANT_ENFORCE(false); }(), sequant::Exception);
+      REQUIRE_THROWS_WITH([] { SEQUANT_ENFORCE(false, "invalid input"); }(),
+                          Catch::Matchers::ContainsSubstring("invalid input"));
+    }
+  }
+
   SECTION("SEQUANT_ASSERT") {
     std::filesystem::path this_file("tests/unit/test_macros.cpp");
 

@@ -117,11 +117,13 @@ void assert_failed(
     std::source_location location = std::source_location::current());
 }  // namespace sequant
 
-#ifdef SEQUANT_ASSERT_ENABLED
-#define SEQUANT_ASSERT_MESSAGE(EXPR, ...)                          \
-  "SEQUANT_ASSERT(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
+#define SEQUANT_CHECK_MESSAGE(NAME, EXPR, ...)             \
+  #NAME "(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
       " with message '" __VA_ARGS__ "'")
+#define SEQUANT_ASSERT_MESSAGE(EXPR, ...) \
+  SEQUANT_CHECK_MESSAGE(SEQUANT_ASSERT, EXPR, __VA_ARGS__)
 
+#ifdef SEQUANT_ASSERT_ENABLED
 #define SEQUANT_ASSERT(EXPR, ...)                                        \
   do {                                                                   \
     if (!(EXPR)) {                                                       \
@@ -131,6 +133,20 @@ void assert_failed(
 #else
 #define SEQUANT_ASSERT(...) \
   do {                      \
+  } while (0)
+#endif
+
+/// Checks EXPR even when assertions are disabled. Uses the configured assertion
+/// behavior when enabled; otherwise throws sequant::Exception on failure.
+#ifdef SEQUANT_ASSERT_ENABLED
+#define SEQUANT_ENFORCE(EXPR, ...) SEQUANT_ASSERT(EXPR, __VA_ARGS__)
+#else
+#define SEQUANT_ENFORCE(EXPR, ...)                                    \
+  do {                                                                \
+    if (!(EXPR)) {                                                    \
+      throw sequant::Exception(                                       \
+          SEQUANT_CHECK_MESSAGE(SEQUANT_ENFORCE, EXPR, __VA_ARGS__)); \
+    }                                                                 \
   } while (0)
 #endif
 
