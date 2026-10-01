@@ -286,8 +286,8 @@ namespace {
 /// \param bk iterable of sequant Index
 /// \return combined hash values of the elements.
 ///
-/// @note An Index object's IndexSpace type and quantum numbers contribute to
-///       the hash.
+/// @note An Index object's IndexSpace type and quantum numbers, and its basis
+///       instance (if any), contribute to the hash.
 ///
 template <typename T>
 size_t hash_indices(T const& indices) noexcept {
@@ -295,6 +295,8 @@ size_t hash_indices(T const& indices) noexcept {
   for (auto const& idx : indices) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
     hash::combine(h, hash::value(idx.space().qns().to_int32()));
+    if (idx.basis().has_basis_instance())
+      hash::combine(h, hash::value(*idx.basis().basis_instance()));
     if (idx.has_proto_indices()) {
       hash::combine(h, hash::value(idx.proto_indices().size()));
       for (auto&& i : idx.proto_indices())

@@ -44,6 +44,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
+    "test_index_basis.cpp"
     "test_lifetime_mask.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
@@ -96,6 +97,7 @@ target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
 # OBJECT library: MBPT tests
 ##########################
 set(mbpt_test_sources
+    "csv_test_utils.hpp"
     "test_biorthogonalization.cpp"
     "test_mbpt.cpp"
     "test_mbpt_cc.cpp"

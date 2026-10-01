@@ -579,6 +579,17 @@ TEST_CASE("utilities", "[utilities]") {
         }
       }
     }
+
+    SECTION("basis instance") {
+      const Index a1(L"a_1", {L"i_1", L"i_2"});
+      const auto t = [&a1](IndexBasis::instance_type inst) {
+        return Tensor(L"t", bra{a1.replace_basis_instance(inst)},
+                      ket{Index(L"i_1")});
+      };
+      CHECK_FALSE(TensorBlockEqualComparator{}(t(1), t(2)));
+      CHECK(TensorBlockLessThanComparator{}(t(1), t(2)));
+      CHECK_FALSE(TensorBlockLessThanComparator{}(t(2), t(1)));
+    }
   }
 
   SECTION("ExprMatcher") {

@@ -218,7 +218,7 @@ ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B) {
   // Reindex B to fresh temporaries; canonicalization restores tidy labels.
   container::map<Index, Index> repl;
   for (const auto& idx : get_used_indices(B))
-    repl.emplace(idx, Index::make_tmp_index(idx.space()));
+    repl.emplace(idx, Index::make_tmp_index(idx.basis()));
   const auto Bd = repl.empty() ? B : transform_expr(B, repl);
   return wick_reduce(A * Bd - Bd * A);
 }

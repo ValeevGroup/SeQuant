@@ -1977,3 +1977,19 @@ TEST_CASE("spincase-index-keeps-proto-symmetry", "[spin]") {
   auto b = mbpt::make_spinalpha(a);
   CHECK_FALSE(b.symmetric_proto_indices());
 }
+
+TEST_CASE("spincase-index-keeps-basis-instance", "[spin][basis]") {
+  using namespace sequant;
+
+  for (bool symmetric : {false, true}) {
+    const Index x = Index(L"a_1", {Index(L"i_1"), Index(L"i_2")}, symmetric)
+                        .replace_basis_instance(1);
+    for (auto make :
+         {&mbpt::make_spinalpha, &mbpt::make_spinbeta, &mbpt::make_spinfree}) {
+      const Index s = make(x);
+      CHECK(s.basis().basis_instance() == 1);
+      CHECK(s.proto_indices().size() == 2);
+      CHECK(s.symmetric_proto_indices() == symmetric);
+    }
+  }
+}

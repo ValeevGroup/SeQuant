@@ -22,9 +22,10 @@ void Index::reset_tmp_index() noexcept {
 
 std::wstring Index::to_latex() const noexcept {
   std::wstring protos{};
-  if (has_proto_indices()) {
+  if (has_proto_indices() || basis_.has_basis_instance()) {
     protos += L"^{";
     for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
+    protos += basis_.instance_suffix();
     protos += L"}";
   }
   std::wstring sfx;

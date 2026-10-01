@@ -2,9 +2,12 @@
 // Created by Eduard Valeyev on 2023-12-06
 //
 
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
@@ -18,6 +21,7 @@
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
+#include "csv_test_utils.hpp"
 
 #include <array>
 
@@ -696,4 +700,33 @@ SECTION("ucc") {
   }  // SECTION("t")
 }  // SECTION("ucc")
 #endif
+}
+
+TEST_CASE("bernoulli-keeps-basis-instance", "[mbpt][basis]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using sequant::tests::csv::instance_histogram;
+
+  auto ctx = set_scoped_default_context(
+      sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+                        .vacuum = Vacuum::SingleProduct,
+                        .spbasis = SPBasis::Spinor}));
+  auto mbpt_ctx = set_scoped_default_mbpt_context(mbpt::Context(
+      {.csv = CSV::No, .op_registry_ptr = make_minimal_registry()}));
+
+  // t(2) as a grant of instance 3 on its virtual legs authors it, in one
+  // commutator [V, σ] of the Bernoulli UCC derivation
+  const auto& isr = get_default_context().index_space_registry();
+  const auto V = op::tensor::h(2);
+  const auto T2raw = op::tensor::t(2);
+  container::map<Index, Index> m;
+  for (const auto& idx : get_used_indices(T2raw))
+    if (isr->is_pure_unoccupied(idx.space()))
+      m.emplace(idx, idx.replace_basis_instance(3));
+  const auto T2 = transform_expr(T2raw, m);
+
+  const auto ab = bernoulli::detail::wick_commutator(V, T2);
+  CHECK(instance_histogram(ab)[3] > 0);
+  CHECK(simplify(ab + bernoulli::detail::wick_commutator(T2, V)) ==
+        ex<Constant>(0));
 }
