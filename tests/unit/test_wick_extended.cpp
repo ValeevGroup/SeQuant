@@ -274,6 +274,55 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         /*atoms_only=*/true);
   }
 
+  SECTION("extended_wick: an index shared by two operators") {
+    // ⟨{a†_u1 a†_u2}{a_u2 a_u1}⟩ is ⟨{a†_u1 a†_u2}{a_u3 a_u4}⟩ with u_3 = u_2
+    // and u_4 = u_1
+    const Index u1(L"u_1"), u2(L"u_2"), u3(L"u_3"), u4(L"u_4");
+    const container::map<Index, Index> identify{{u3, u2}, {u4, u1}};
+    auto rename = [&](ExprPtr expr) {
+      expr->visit(
+          [&](const ExprPtr& e) {
+            if (e->is<Tensor>()) {
+              e->as<Tensor>().transform_indices(identify);
+              e->as<Tensor>().reset_tags();
+            } else if (e->is<FNOperator>()) {
+              e->as<FNOperator>().transform_indices(identify);
+              for (const auto& op : e->as<FNOperator>()) op.index().reset_tag();
+            }
+          },
+          /*atoms_only=*/true);
+      return simplify(expr);
+    };
+    auto shared = ex<FNOperator>(cre({u1, u2}), ann({})) *
+                  ex<FNOperator>(cre({}), ann({u2, u1}));
+    auto distinct = ex<FNOperator>(cre({u1, u2}), ann({})) *
+                    ex<FNOperator>(cre({}), ann({u3, u4}));
+    for (const bool full : {true, false}) {
+      const ExtendedWickOptions opts{.full_contractions = full};
+      auto result = extended_wick<Statistics::FermiDirac>(shared, opts);
+      auto expected =
+          rename(extended_wick<Statistics::FermiDirac>(distinct, opts));
+      INFO("full=" << full << "\nresult: " << toUtf8(to_latex(result))
+                   << "\nexpected: " << toUtf8(to_latex(expected)));
+      REQUIRE(simplify(result - expected) == ex<Constant>(0));
+      bool has_kappa = false;
+      result->visit(
+          [&](const ExprPtr& e) {
+            if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
+              has_kappa = true;
+          },
+          /*atoms_only=*/true);
+      REQUIRE(has_kappa);
+    }
+    // the shared index alone does not connect the operators
+    auto two =
+        ex<FNOperator>(cre({u1}), ann({})) * ex<FNOperator>(cre({}), ann({u1}));
+    auto disconnected = extended_wick<Statistics::FermiDirac>(
+        two, {.full_contractions = false, .nop_avoided_connections = {{0, 1}}});
+    REQUIRE(disconnected->is<FNOperator>());
+    REQUIRE(disconnected->as<FNOperator>().size() == 2);
+  }
+
   SECTION("extended_wick: tensors commute with the theorem") {
     // operators carrying dummies of two different tensors: the result must
     // equal that of the same operators with external indices, times the

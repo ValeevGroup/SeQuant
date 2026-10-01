@@ -187,6 +187,42 @@ OpProvenance make_provenance(const Expr &expr) {
   return prov;
 }
 
+/// renames, in every NormalOperator<S> of @p term after the first one
+/// carrying it, an op index that an earlier one carries, so that each op index
+/// belongs to one operator
+/// @return the δs binding each new index to the one it replaces
+template <Statistics S>
+container::svector<ExprPtr> separate_shared_indices(Expr &term) {
+  container::svector<ExprPtr> deltas;
+  container::set<Index> seen;
+  auto separate = [&](NormalOperator<S> &nop) {
+    container::svector<Op<S>> ops;
+    bool renamed = false;
+    for (const auto &op : nop) {
+      const Index &idx = op.index();
+      if (!seen.contains(idx)) {
+        ops.push_back(op);
+        continue;
+      }
+      const auto j = Index::make_tmp_index(idx.space(), idx.proto_indices());
+      ops.emplace_back(j, op.action());
+      deltas.push_back(op.action() == Action::Create ? make_kronecker(j, idx)
+                                                     : make_kronecker(idx, j));
+      renamed = true;
+    }
+    for (const auto &op : nop) seen.insert(op.index());
+    if (renamed) nop = make_nop<S>(ops);
+  };
+  if (term.is<NormalOperatorSequence<S>>()) {
+    for (auto &nop : term.as<NormalOperatorSequence<S>>()) separate(nop);
+  } else if (term.is<Product>()) {
+    for (auto &f : term.as<Product>())
+      if (f->template is<NormalOperator<S>>())
+        separate(f->template as<NormalOperator<S>>());
+  }
+  return deltas;
+}
+
 /// @return registered spaces that partition @p type: the space of that type
 /// if registered, else its base spaces
 container::svector<IndexSpace> registered_pieces(
@@ -505,6 +541,9 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
       [[maybe_unused]] auto bp = term->rapid_canonicalize();
       SEQUANT_ASSERT(bp == nullptr);
     }
+    // a summed index shared by two operators is two indices bound by a δ,
+    // which multiplies the result so that it does not count as a connection
+    const auto shared_deltas = separate_shared_indices<S>(*term);
     const auto provenance = make_provenance<S>(*term);
 
     // WickTheorem sees only the operators, so every index is external to it
@@ -556,13 +595,18 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
         if (!reduced->is<Product>()) continue;  // vanished
         OpProvenance prov = provenance;
         extend_provenance(reduced->as<Product>(), prov);
-        result->append(cumulant_expand<S>(reduced, prov, opts));
+        ExprPtr expanded = cumulant_expand<S>(reduced, prov, opts);
+        for (const auto &d : shared_deltas) expanded = expanded * d;
+        expand(expanded);
+        result->append(expanded);
       }
     };
     if (raw->is<Sum>()) {
       for (const auto &t : *raw) process(t);
     } else if (raw->is<Constant>()) {
-      result->append(prefactor * raw);
+      ExprPtr value = prefactor * raw;
+      for (const auto &d : shared_deltas) value = value * d;
+      result->append(value);
     } else {
       process(raw);
     }
