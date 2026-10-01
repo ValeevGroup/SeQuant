@@ -72,10 +72,14 @@ Raw contraction output can contain chains of Kronecker deltas and overlaps intro
 and eliminating deltas wherever the internal/external status of the indices they bind allows it. The result is then, like any other
 :class:`sequant::Product`/:class:`sequant::Sum`, put into canonical form by :doc:`the tensor-network canonicalizer <tnc>` so that like
 terms collect correctly — Wick's-theorem correctness therefore also rests on canonicalization being correct.
+A basis instance (:class:`sequant::IndexBasis`) travels with its index through the reduction: a null destination (the index
+a delta or overlap is reduced to) takes its source's instance, two different instances leave the delta or overlap standing,
+and a null index with proto indices meeting another instance on its own proto indices stops the reduction by throwing
+:class:`sequant::Exception`.
 
 Debugging and tests
 ------------------------
 
 ``Logger::instance().wick_harness``, ``.wick_contract``, and ``.wick_reduce`` (``SeQuant/core/logger.hpp``) trace, respectively, the
 top-level expand/canonicalize/recurse flow, individual contraction attempts, and the delta/overlap reduction step. The algorithm's test
-coverage lives in ``tests/unit/test_wick.cpp``.
+coverage lives in ``tests/unit/test_wick.cpp``, that of the basis-instance rules in ``tests/unit/test_basis_wick.cpp``.

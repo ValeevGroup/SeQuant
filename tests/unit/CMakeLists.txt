@@ -97,6 +97,7 @@ target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
 ##########################
 set(mbpt_test_sources
     "csv_test_utils.hpp"
+    "test_basis_wick.cpp"
     "test_biorthogonalization.cpp"
     "test_mbpt.cpp"
     "test_mbpt_cc.cpp"

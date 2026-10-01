@@ -15,6 +15,7 @@
 #include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find.hpp>
@@ -143,7 +144,7 @@ compute_index_replacement_rules(
   // already has its own protoindices: <a_ij|p> = <a_ij|a_ij> (hence replace p
   // with a_ij), but <a_ij|p_kl> = <a_ij|a_kl> != <a_ij|a_ij> (hence replace
   // p_kl with a_kl)
-  auto proto = [](const Index &dst, const Index &src) {
+  auto domain_proto = [](const Index &dst, const Index &src) {
     if (src.has_proto_indices()) {
       if (dst.has_proto_indices()) {
         SEQUANT_ASSERT(dst.proto_indices() == src.proto_indices());
@@ -153,6 +154,29 @@ compute_index_replacement_rules(
     } else {
       return dst;
     }
+  };
+  // ... and the basis instance: a null dst takes src's
+  auto proto = [&domain_proto](const Index &dst, const Index &src) {
+    auto result = domain_proto(dst, src);
+    if (!result.basis().has_basis_instance()) {
+      if (src.basis().has_basis_instance())
+        result = result.replace_basis_instance(src.basis().basis_instance());
+    } else {
+      SEQUANT_ASSERT(!src.basis().has_basis_instance() ||
+                     src.basis().basis_instance() ==
+                         result.basis().basis_instance());
+      // a null index with proto indices is the instance-less pair basis of
+      // its proto indices
+      if (!src.basis().has_basis_instance() && src.has_proto_indices() &&
+          src.proto_indices() == result.proto_indices())
+        throw Exception(
+            "WickTheorem::reduce: " + toUtf8(src.full_label()) +
+            " carries proto indices and no basis instance; merging it with " +
+            toUtf8(result.full_label()) +
+            " on the same proto indices would silently project its "
+            "instance-less pair basis into another family");
+    }
+    return result;
   };
 
   // adds src->dst, optionally assigning proto indices from protosrc
@@ -297,8 +321,21 @@ compute_index_replacement_rules(
         !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
 
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      add_rule(src1, dst, dst1_proto);
-      add_rule(src2, dst, dst2_proto);
+      // one destination for both carries the basis instance of either, unless
+      // both have proto indices and they differ (one destination each)
+      if ((src1.basis().has_basis_instance() ||
+           src2.basis().has_basis_instance()) &&
+          !(src1.has_proto_indices() && src2.has_proto_indices() &&
+            src1.proto_indices() != src2.proto_indices())) {
+        const auto d = dst.replace_basis_instance(
+            src1.basis().has_basis_instance() ? src1.basis().basis_instance()
+                                              : src2.basis().basis_instance());
+        add_rule(src1, d, dst1_proto);
+        add_rule(src2, d, dst2_proto);
+      } else {
+        add_rule(src1, dst, dst1_proto);
+        add_rule(src2, dst, dst2_proto);
+      }
     } else if (has_src1_rule && !has_src2_rule) {
       // update the existing rule for src1
       SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT(
@@ -389,6 +426,11 @@ compute_index_replacement_rules(
           do_skip = do_skip || (noncovariant_indices.contains(bra) &&
                                 noncovariant_indices.contains(ket));
         }
+        // - two different basis instances: the relation stands
+        do_skip = do_skip || (bra.basis().has_basis_instance() &&
+                              ket.basis().has_basis_instance() &&
+                              bra.basis().basis_instance() !=
+                                  ket.basis().basis_instance());
         if (!do_skip) {
           const auto bra_is_ext = ranges::find(external_indices, bra) !=
                                   ranges::end(external_indices);
