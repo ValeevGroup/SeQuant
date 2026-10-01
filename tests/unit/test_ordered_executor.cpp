@@ -38,6 +38,7 @@
 #include <SeQuant/core/eval/slicing_signature.hpp>
 #include <SeQuant/core/eval/value_node_map.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -55,6 +56,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
@@ -5478,4 +5480,278 @@ TEST_CASE("ordered executor refuses a batched schedule with no backend ops",
                       sched, target, &ops));
   auto const& block = std::get<ScopeBlock>(sched.root.steps.front().value);
   CHECK(n_batches(block.level.key()) == 2);
+}
+
+// ===========================================================================
+// Kramers-blind values under loops of different flavour spaces: a value cell
+// is ONE frame. Under Kramers-blind identity (kramers_blind.hpp) the
+// t-independent CSV bracket of a doubles residual is one node id across the
+// four flavour blocks (↑↑, ↑↓, ↓↑, ↓↓). With both occupied flavours batchable
+// as external loops every block's occurrence is home-sliced on both pair
+// positions, by an i↑ loop at a position in one block and by an i↓ loop at
+// the same position in another. compute_dag_boulevard's cross-tree fold
+// united the positions without looking at the space, and its value key spelt
+// a sliced position as (position, within-space slot), so the four
+// occurrences keyed to ONE cell whose frame fit only the first block: the
+// cell table then read the bracket whole on a mode its partner leaf was
+// sliced on, and the dry-run `prod` check threw "shared label i↑_2 realizes
+// DIFFERENT ranges on the two operands: L[1]=[0,78) vs R[0]=[0,8)" (uranyl
+// PNS-CCD ladder, 2026-10-01; TA's own congruence asserts are elided in
+// Release, so the wet run has no equivalent guard). A loop iterates the
+// batches of one space, so occurrences whose sliced positions sit in
+// different spaces are different values.
+// ===========================================================================
+TEST_CASE(
+    "compute_dag_boulevard: Kramers-blind values sliced by loops of different "
+    "flavour spaces are one value per frame",
+    "[ordered-executor][kramers-blind][dag-slicing]") {
+  using sequant::Index;
+  using sequant::eval::dryrun::EvalExprDryRun;
+  using sequant::eval::dryrun::EvalNodeDryRun;
+  using Node = EvalNodeDryRun;
+
+  // the default registry carries the Kramers flavours (i↑, i↓, a↑); add the
+  // DF auxiliary space
+  auto ctx = sequant::get_default_context().clone();
+  ctx.set_first_dummy_index_ordinal(1000000);
+  auto isr = ctx.mutable_index_space_registry();
+  REQUIRE(isr != nullptr);
+  sequant::mbpt::add_df_spaces(isr);
+  auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
+
+  // The ladder's CSV bracket [g C C], then the (non-blind) amplitude, in the
+  // ↑↓ block and in its ↓↑ mirror, spelled as the CSV transform spells them:
+  // the pair labels are the residual head's own slots, protos of the
+  // projectors' composite slots (promoted to outer canon positions of every
+  // node that carries them) and explicit slots of t. The brackets are
+  // t-independent, so under the projector blindness below they share one
+  // node id; the roots are pinned apart by t and by the head.
+  auto const term = [](std::string const& i, std::string const& j) {
+    std::string const ij = i + "," + j;
+    return "R{" + ij + ";a\xe2\x86\x91_4<" + ij +
+           ">} = ((g{a_1,a_2;\xce\x9a_1} * C{a_1;a\xe2\x86\x91_3<" + ij +
+           ">}) * C{a_2;a\xe2\x86\x91_4<" + ij + ">}) * t{a\xe2\x86\x91_3<" +
+           ij + ">;" + ij + ",\xce\x9a_1}";
+  };
+  // the four flavour blocks of a Kramers-restricted doubles residual
+  std::string const up = "i\xe2\x86\x91", dn = "i\xe2\x86\x93";
+  std::vector<std::string> const blocks{
+      term(up + "_1", up + "_2"), term(up + "_1", dn + "_2"),
+      term(dn + "_1", up + "_2"), term(dn + "_1", dn + "_2")};
+
+  // MPQC's projector blindness (expression/sequant.cpp): C's pure-occupied
+  // outer slots and the pair protos of its composite slot are flavour-blind;
+  // ↑ is the representative flavour.
+  sequant::eval::KramersBlindness const kb{
+      .blind_slot =
+          [reg = sequant::get_default_context().index_space_registry()](
+              sequant::Tensor const& t, std::size_t slot) {
+            if (t.label() != L"C") return false;
+            auto const& ix = *(t.const_slots().begin() + slot);
+            if (!ix.has_proto_indices())
+              return reg->is_pure_occupied(ix.space());
+            bool blind = !ix.proto_indices().empty();
+            for (auto const& p : ix.proto_indices())
+              blind = blind && reg->is_pure_occupied(p.space());
+            return blind;
+          },
+      .erase_space =
+          [](sequant::IndexSpace const& s) {
+            if ((s.qns().to_int32() &
+                 sequant::mbpt::mask_v<sequant::mbpt::Spin>) == 0)
+              return s;
+            if (sequant::mbpt::to_spin(s.qns()) == sequant::mbpt::Spin::any)
+              return s;
+            return sequant::mbpt::make_spinalpha(sequant::Index(s, 1)).space();
+          }};
+
+  sequant::eval::dryrun::SizeRegime regime;
+  regime.space_extent = {
+      {L"i\x2191", 8u}, {L"i\x2193", 8u}, {L"a", 30u}, {L"\x39a", 20u}};
+  for (std::size_t k = 0; k <= 4; ++k)
+    regime.csv_pno_moment[k] = std::pow(4.0, double(k));
+  regime.csv_osv_moment = regime.csv_pno_moment;
+  auto cm = std::make_shared<sequant::eval::dryrun::CostModel const>(regime);
+
+  auto const is_occ = [](Index const& ix) {
+    auto const reg = sequant::get_default_context().index_space_registry();
+    return reg && ix.space() && reg->is_pure_occupied(ix.space()) &&
+           !ix.has_proto_indices();
+  };
+  // Both occupied flavours batchable as external (spectator) loops, as
+  // MPQC's batch:spaces:occ with the external role maps them.
+  sequant::BatchPolicy policy;
+  policy.is_batchable_contracted_index = [](Index const&) { return false; };
+  policy.is_batchable_external_index = is_occ;
+  policy.batch_spectator_indices = true;
+  policy.batch_target_size = [](Index const&) -> std::size_t { return 2; };
+  policy.is_volatile_leaf = [](sequant::Tensor const& t) {
+    return t.label() == L"t";
+  };
+  policy.accumulation_factor = 1.0;
+  policy.persistent_only = false;
+  policy.peak_threshold = 1e11;
+
+  std::vector<Node> forest;
+  for (auto const& spec : blocks) {
+    auto res = sequant::deserialize<sequant::ResultExpr>(spec);
+    sequant::BinarizationOptions bopts;
+    bopts.kramers_blindness = kb;
+    forest.push_back(sequant::binarize<EvalExprDryRun>(res, bopts));
+  }
+  REQUIRE(forest.size() == 4);
+
+  // The schedule the batched DP produced on uranyl for this block (dry-run
+  // trace, 2026-10-01): the root opens an external loop over each occupied
+  // flavour, and every internal node carrying a flavour is sliced on it.
+  for (auto& root : forest) {
+    sequant::container::svector<std::pair<Index, sequant::BatchModeType>> opens;
+    for (auto const& ix : root->canon_indices())
+      if (is_occ(ix)) opens.push_back({ix, sequant::BatchModeType::External});
+    REQUIRE(opens.size() == 2);
+    auto stamp = [&](auto&& self, Node& n) -> void {
+      if (n.leaf()) return;
+      sequant::container::svector<std::pair<Index, sequant::BatchModeType>>
+          mask;
+      for (auto const& [ix, k] : opens)
+        if (sequant::index_position(n, ix).has_value()) mask.push_back({ix, k});
+      if (!mask.empty()) n->set_node_slice_mask(mask);
+      self(self, n.left());
+      self(self, n.right());
+    };
+    stamp(stamp, root);
+    root->set_batch_loops_opened_here(opens);
+  }
+
+  // Precondition: the blindness folds the brackets -- some internal node id
+  // occurs in every block -- while the roots stay apart.
+  {
+    auto hashes = [](Node const& root) {
+      std::set<std::size_t> h;
+      auto walk = [&](auto&& self, Node const& n) -> void {
+        if (n.leaf()) return;
+        h.insert(n->hash_value());
+        self(self, n.left());
+        self(self, n.right());
+      };
+      walk(walk, root);
+      return h;
+    };
+    auto common = hashes(forest[0]);
+    for (std::size_t b = 1; b < forest.size(); ++b) {
+      auto const hb = hashes(forest[b]);
+      std::set<std::size_t> both;
+      for (auto h : common)
+        if (hb.count(h)) both.insert(h);
+      common = std::move(both);
+    }
+    INFO("internal node ids shared by all four blocks: " << common.size());
+    REQUIRE(common.size() >= 1);
+    std::set<std::size_t> roots;
+    for (auto const& r : forest) roots.insert(r->hash_value());
+    REQUIRE(roots.size() == 4);
+  }
+
+  auto const block_of = [](Index const&) -> std::size_t { return 2; };
+  auto rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
+  REQUIRE(!rich.cells.empty());
+
+  // Precondition: both flavours are realized as loops somewhere in the
+  // schedule (otherwise the fold under test never arises).
+  {
+    std::set<std::wstring> sliced_spaces;
+    for (auto const& c : rich.cells)
+      for (auto const& o : c.occurrences)
+        for (std::size_t p = 0; p < o.loop_slot.size(); ++p)
+          if (o.loop_slot[p] >= 0)
+            sliced_spaces.insert(std::wstring{o.carried[p].space().base_key()});
+    INFO("spaces sliced by some loop: " << sliced_spaces.size());
+    REQUIRE(sliced_spaces.count(L"i\x2191") == 1);
+    REQUIRE(sliced_spaces.count(L"i\x2193") == 1);
+  }
+
+  if (std::getenv("SEQUANT_UT_DAGSLICING_DEBUG"))
+    for (auto const& c : rich.cells) {
+      if (c.is_leaf) continue;
+      std::cerr << "[dag-slicing] value " << c.value_id << " ("
+                << c.occurrences.size() << " occ) carried:";
+      for (auto const& ix : c.carried)
+        std::cerr << " " << sequant::toUtf8(ix.full_label());
+      std::cerr << "\n";
+      for (auto const& o : c.occurrences) {
+        std::cerr << "    occurrence:";
+        for (std::size_t p = 0; p < o.carried.size(); ++p)
+          std::cerr << " " << sequant::toUtf8(o.carried[p].full_label()) << "@"
+                    << (p < o.loop_slot.size() ? o.loop_slot[p] : -9);
+        std::cerr << "\n";
+      }
+    }
+
+  // THE invariant: a value cell is one frame. Every occurrence's sliced
+  // position lives in the same space as the cell's own carried index there.
+  for (auto const& c : rich.cells)
+    for (auto const& o : c.occurrences)
+      for (std::size_t p = 0; p < o.loop_slot.size() && p < c.carried.size();
+           ++p) {
+        if (o.loop_slot[p] < 0) continue;
+        INFO("value " << c.value_id << " position " << p << ": cell carries "
+                      << sequant::toUtf8(c.carried[p].full_label())
+                      << ", occurrence carries "
+                      << sequant::toUtf8(o.carried[p].full_label()));
+        REQUIRE(o.carried[p].space() == c.carried[p].space());
+      }
+
+  // End to end: the schedule builds, its cell table validates, and the
+  // strict dry-run walk (shared-label range check in every prod) completes.
+  auto const legality = sequant::eval::analyze_legality(rich, forest, policy);
+  auto const ordered = sequant::eval::build_ordered_schedule(
+      rich, legality, policy, std::initializer_list<std::wstring>{});
+  REQUIRE(sequant::eval::well_formed(ordered));
+
+  using annot_t = std::remove_cvref_t<decltype(forest.front()->annot())>;
+  annot_t const layout{};
+  sequant::eval::dryrun::DryRunLeafEvaluator const yield{cm};
+  std::function<std::size_t(Index const&)> const target = block_of;
+  std::function<bool(Node const&)> const is_volatile_node =
+      [p = policy.is_volatile_leaf](Node const& n) -> bool {
+    if (!n.leaf() || !n->is_tensor()) return false;
+    return p && p(n->as_tensor());
+  };
+  auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
+  auto ordered_cache = sequant::cache_manager(forest);
+  ordered_cache.set_array_ops(&aops);
+  {
+    auto const sma =
+        sequant::eval::compute_sliced_mode_assignment(ordered, rich);
+    auto const vmap = sequant::eval::build_value_node_map(forest);
+    sequant::eval::CellTableInputs in;
+    in.ordered = &ordered;
+    in.rich = &rich;
+    in.sliced = &sma;
+    in.sliced_modes_of = [&](std::size_t vid) {
+      auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
+      REQUIRE(it != vmap.end());
+      return sequant::eval::detail::home_modes_in_cell_frame(rich, vid,
+                                                             *it->second);
+    };
+    in.volatile_of = [&](std::size_t vid) {
+      auto const it = vmap.find(sequant::eval::value_key_of(rich.cells[vid]));
+      return it != vmap.end() &&
+             sequant::subtree_any(*it->second, is_volatile_node);
+    };
+    in.n_batches_of = sequant::eval::detail::ordered_n_batches_by_loop(
+        ordered, target, &aops);
+    in.operands_of = orderedexec_per_leg_operands(rich, vmap);
+    auto const table = sequant::eval::build_cell_table(in);
+    auto const violations = sequant::eval::validate_cell_table(
+        table, ordered.root, in.n_batches_of);
+    for (auto const& v : violations)
+      UNSCOPED_INFO("[" << v.rule << "] " << v.what);
+    REQUIRE(violations.empty());
+    REQUIRE(table.unresolved.empty());
+  }
+  ordered_cache.set_strict_fill_once(true);
+  REQUIRE_NOTHROW(sequant::eval::evaluate_ordered_schedule<sequant::Trace::Off>(
+      forest, ordered, rich, layout, yield, ordered_cache, target, {},
+      is_volatile_node));
 }
