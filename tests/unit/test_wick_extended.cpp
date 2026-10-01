@@ -297,6 +297,112 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                  L"δ{p_2;u_2}:N-C-S"));
   }
 
+  SECTION("extended_wick: connectivity") {
+    // partial contractions: with full ones, connecting 0 to 1 but not to 2
+    // leaves 2 isolated, and no term survives
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    auto all =
+        extended_wick<Statistics::FermiDirac>(in, {.full_contractions = false});
+    auto filtered = extended_wick<Statistics::FermiDirac>(
+        in, {.full_contractions = false,
+             .nop_connections = {{0, 1}},
+             .nop_avoided_connections = {{0, 2}}});
+    REQUIRE(filtered->is<Sum>());
+    REQUIRE(filtered->size() > 0);
+    REQUIRE(filtered->size() < all->size());
+    auto ord = [](const Index& i) -> int {
+      const auto l = i.label();
+      if (l == L"u_1" || l == L"u_2") return 0;
+      if (l == L"u_3" || l == L"u_4") return 1;
+      return 2;
+    };
+    for (const auto& term : *filtered) {
+      bool e01 = false, e02 = false;
+      const ExprPtrList single{term};
+      for (const auto& f :
+           term->is<Product>() ? term->as<Product>().factors() : single) {
+        if (!f->is<Tensor>()) continue;
+        const auto& t = f->as<Tensor>();
+        container::set<int> ords;
+        for (const auto& idx : t.const_braket()) ords.insert(ord(idx));
+        if (ords.contains(0) && ords.contains(1)) e01 = true;
+        if (ords.contains(0) && ords.contains(2)) e02 = true;
+      }
+      REQUIRE(e01);
+      REQUIRE(!e02);
+    }
+  }
+
+  SECTION("extended_wick: connectivity through a cumulant") {
+    // partial contractions: a 0-2 connection can be realized by a cumulant
+    // block alone, which no pair of operators expresses
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    auto all =
+        extended_wick<Statistics::FermiDirac>(in, {.full_contractions = false});
+    auto filtered = extended_wick<Statistics::FermiDirac>(
+        in, {.full_contractions = false, .nop_connections = {{0, 2}}});
+    REQUIRE(filtered->is<Sum>());
+    REQUIRE(filtered->size() > 0);
+    REQUIRE(filtered->size() < all->size());
+    auto ord = [](const Index& i) -> int {
+      const auto l = i.label();
+      if (l == L"u_1" || l == L"u_2") return 0;
+      if (l == L"u_3" || l == L"u_4") return 1;
+      return 2;
+    };
+    bool kappa_only = false;
+    for (const auto& term : *filtered) {
+      bool by_pair = false, by_kappa = false;
+      const ExprPtrList single{term};
+      for (const auto& f :
+           term->is<Product>() ? term->as<Product>().factors() : single) {
+        if (!f->is<Tensor>()) continue;
+        const auto& t = f->as<Tensor>();
+        container::set<int> ords;
+        for (const auto& idx : t.const_braket()) ords.insert(ord(idx));
+        if (ords.contains(0) && ords.contains(2))
+          (t.label() == L"κ" ? by_kappa : by_pair) = true;
+      }
+      REQUIRE((by_pair || by_kappa));
+      if (by_kappa && !by_pair) kappa_only = true;
+    }
+    REQUIRE(kappa_only);
+  }
+
+  SECTION("extended_wick: a coefficient tensor is not a connection") {
+    // h{u_1;u_6} spans operators 0 and 2, but only the factors the theorem
+    // produces connect operators
+    auto h = ex<Tensor>(L"h", bra{L"u_1"}, ket{L"u_6"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    auto ops = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+               ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    for (const auto& opts : {ExtendedWickOptions{.full_contractions = false,
+                            .nop_avoided_connections = {{0, 2}}},
+                             ExtendedWickOptions{.full_contractions = false,
+                             .nop_connections = {{0, 2}}}}) {
+      auto without_h = extended_wick<Statistics::FermiDirac>(ops, opts);
+      REQUIRE(without_h->size() > 0);
+      auto lhs = extended_wick<Statistics::FermiDirac>(h * ops, opts);
+      REQUIRE(simplify(lhs - simplify(h * without_h)) == ex<Constant>(0));
+    }
+  }
+
+  SECTION("extended_wick: connection ordinals must name input operators") {
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    REQUIRE_THROWS_AS(extended_wick<Statistics::FermiDirac>(
+                          in, {.nop_connections = {{0, 2}}}),
+                      Exception);
+    REQUIRE_THROWS_AS(extended_wick<Statistics::FermiDirac>(
+                          in, {.nop_avoided_connections = {{2, 1}}}),
+                      Exception);
+  }
+
   SECTION("extended_wick: Sum input") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
                   ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) +

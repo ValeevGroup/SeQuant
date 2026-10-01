@@ -575,7 +575,7 @@ class WickTheorem {
   /// given by set_nop_connections and set_nop_avoided_connections; under a
   /// MultiProduct vacuum connectivity is a property of the cumulant-expanded
   /// result (cumulant blocks connect operators that no pair does), so the
-  /// filters are not applied by the engine
+  /// filters are not applied by the engine but by cumulant_expand
   bool pairwise_connectivity() const {
     return input_->vacuum() != Vacuum::MultiProduct;
   }
