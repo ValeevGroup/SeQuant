@@ -20,6 +20,7 @@
 #include <range/v3/view/indirect.hpp>
 
 #include <cstdlib>
+#include <functional>
 #include <iosfwd>
 #include <memory>
 #include <string>
@@ -251,7 +252,9 @@ class TensorNetworkV3 {
   /// @param options see CanonicalizeOptions for the meaning of this
   /// parameter; the default is given by CanonicalizeOptions::default_options()
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
-  /// nullptr
+  /// nullptr; Constant 0 if topological canonicalization finds the network
+  /// to be zero by symmetry (see automorphism_phase()), in which case the
+  /// tensors are left as they were
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const CanonicalizeOptions &options =
@@ -445,7 +448,29 @@ class TensorNetworkV3 {
   // clang-format on
   Graph create_graph(
       const CreateGraphOptions &options = make_default_graph_options()) const;
-  static const unsigned int *canonicalize_graph(const Graph &graph);
+  /// @param graph a graph produced by create_graph()
+  /// @param aut_hook if nonempty, called with each automorphism generator of
+  /// @p graph found by bliss, as `(n, aut)`
+  /// @return the canonical labeling of @p graph
+  static const unsigned int *canonicalize_graph(
+      const Graph &graph,
+      const std::function<void(unsigned int, const unsigned int *)> &aut_hook =
+          {});
+
+  /// Computes the phase that an automorphism of the graph of this network
+  /// incurs: an automorphism maps the term onto itself, up to the sign of
+  /// the permutations it induces on the slots of antisymmetric bra/ket
+  /// bundles. A term with an automorphism of phase -1 is identically zero.
+  /// @param graph the graph of this network, produced by create_graph()
+  ///        with the current tensors and edges
+  /// @param aut an automorphism of @p graph
+  /// @param named_indices the named indices; default is nullptr, which
+  ///        means use all external indices
+  /// @return the phase (+1 or -1) of @p aut, or 0 if @p aut moves a tensor,
+  ///         a named or external index, a protoindex bundle, or an aux slot;
+  ///         such automorphisms are not scored
+  int automorphism_phase(const Graph &graph, const unsigned int *aut,
+                         const NamedIndexSet *named_indices = nullptr) const;
 
  private:
   /// list of tensors
@@ -476,7 +501,8 @@ class TensorNetworkV3 {
   /// @param named_indices named indices
   /// @param ignore_named_index_labels whether to ignore labels of named
   /// indices, see CanonicalizeOptions for more info
-  /// @return The byproduct of canonicalization
+  /// @return The byproduct of canonicalization; Constant 0, with the network
+  /// unchanged, if the network has an automorphism of phase -1
   /// @note this produces canonical representation that is invariant with
   /// respect to the renaming of named indices
   [[nodiscard]] ExprPtr canonicalize_graph(

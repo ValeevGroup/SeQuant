@@ -735,7 +735,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       if (!skip_input_canonicalization) {
         // initial full canonicalization
         canonicalize(expr_input_);
-        SEQUANT_ASSERT(!expr_input_->as<Sum>().empty());
+        // every summand may have canonicalized to zero
+        if (expr_input_->as<Sum>().empty()) return ex<Constant>(0);
       }
 
       // NOW disable canonicalization of normal operators
