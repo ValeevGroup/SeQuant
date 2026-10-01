@@ -1000,6 +1000,33 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 #endif
   }  // SECTION("fermi vacuum")
 
+  // t:S ã{a1,a2;i1,i2} is identically zero (a1<->a2 is an automorphism of
+  // odd phase); topology pruning must not turn it into a nonzero result
+  SECTION("zero by symmetry") {
+    for (auto symm : {Symmetry::Symm, Symmetry::Antisymm}) {
+      ExprPtr results[2];
+      for (auto topology : {false, true}) {
+        auto input =
+            ex<FNOperator>(cre({L"i_3", L"i_4"}), ann({L"a_3", L"a_4"})) *
+            ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
+            ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+        auto wick = FWickTheorem{input};
+        wick.set_external_indices(IndexList{L"i_3", L"i_4", L"a_3", L"a_4"})
+            .use_topology(topology);
+        auto result = wick.compute();
+        simplify(result);
+        results[topology] = result;
+      }
+      if (symm == Symmetry::Symm) {
+        REQUIRE_THAT(results[false], EquivalentTo("0"));
+        REQUIRE_THAT(results[true], EquivalentTo("0"));
+      } else {
+        REQUIRE(!results[false]->is_zero());
+        REQUIRE_THAT(results[true], EquivalentTo(results[false]));
+      }
+    }
+  }
+
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
     // default vacuum is already spin-orbital Fermi vacuum
