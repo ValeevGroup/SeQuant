@@ -547,7 +547,8 @@ class WickTheorem {
 
   // the extended theorem runs the standard one on its operators
   friend ExprPtr detail::extended_wick<S>(ExprPtr,
-                                          const detail::ExtendedWickOptions &);
+                                          const detail::ExtendedWickOptions &,
+                                          WickTheorem &);
 
   mutable std::optional<container::set<Index>> all_indices_;
   mutable bool user_defined_external_indices_ = false;

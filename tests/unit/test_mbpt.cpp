@@ -1364,14 +1364,33 @@ SECTION("MRSO-MultiProduct") {
                       Exception);
   }
 
-  // use_topology has no effect under MultiProduct, so this only guards the
-  // dispatch
   SECTION("topology on/off agree") {
     auto a = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
     auto b = t::ref_av(t::h(2) * t::t(2),
                        {.connect = {{0, 1}}, .use_topology = false});
     REQUIRE(simplify(a - b) == ex<Constant>(0));
   }
+
+  SECTION("topology prunes contractions") {
+    auto attempted = [](bool top) {
+      FWickTheorem wick{simplify(t::h(2) * t::t(2))};
+      wick.use_topology(top).set_nop_connections({{0, 1}});
+      wick.compute();
+      return wick.stats().num_attempted_contractions.load();
+    };
+    const auto attempted_on = attempted(true);
+    REQUIRE(attempted_on > 0);
+    REQUIRE(attempted_on < attempted(false));
+  }
+
+#ifndef SEQUANT_SKIP_LONG_TESTS
+  SECTION("wick(H2**T2**T2) topology on/off agree") {
+    auto a = t::ref_av(t::h(2) * t::t(2) * t::t(2), {.connect = {{0, 1}}});
+    auto b = t::ref_av(t::h(2) * t::t(2) * t::t(2),
+                       {.connect = {{0, 1}}, .use_topology = false});
+    REQUIRE(simplify(a - b) == ex<Constant>(0));
+  }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
   SECTION("operator-level ref_av agrees with tensor-level") {
     auto result_op = o::ref_av(o::h(2) * o::t(2));

@@ -525,7 +525,8 @@ template ExprPtr cumulant_expand<Statistics::FermiDirac>(
     const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &);
 
 template <Statistics S>
-ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
+ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
+                      WickTheorem<S> &stats_sink) {
   const auto &ctx = get_default_context(S);
   SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
   const auto &isr = *ctx.index_space_registry();
@@ -538,6 +539,12 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
       [[maybe_unused]] auto bp = term->rapid_canonicalize();
       SEQUANT_ASSERT(bp == nullptr);
     }
+    // the operators' equivalences are those of the term itself, in which an
+    // index shared by two operators is a dummy; renaming it below leaves
+    // every op at its ordinal
+    std::optional<typename WickTheorem<S>::TopologicalPartitions> partitions;
+    if (opts.use_topology && term->is<Product>())
+      partitions = WickTheorem<S>::analyze_topology(term->as<Product>());
     // a summed index shared by two operators is two indices bound by a δ,
     // which multiplies the result so that it does not count as a connection
     const auto shared_deltas = separate_shared_indices<S>(*term);
@@ -577,9 +584,14 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
                           " input operators of a term");
 
     WickTheorem<S> wick{nopseq};
-    wick.full_contractions(false);
+    wick.full_contractions(false).use_topology(opts.use_topology);
+    if (partitions && !partitions->nop_partitions.empty())
+      wick.set_nop_partitions(partitions->nop_partitions);
+    if (partitions && !partitions->op_partitions.empty())
+      wick.set_op_partitions(partitions->op_partitions);
     const ExprPtr raw = wick.compute_contractions(
         /*count_only=*/false, /*skip_input_canonicalization=*/false);
+    stats_sink.stats() += wick.stats();
 
     auto result = std::make_shared<Sum>();
     auto process = [&](const ExprPtr &t) {
@@ -628,6 +640,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
 }
 
 template ExprPtr extended_wick<Statistics::FermiDirac>(
-    ExprPtr, const ExtendedWickOptions &);
+    ExprPtr, const ExtendedWickOptions &,
+    WickTheorem<Statistics::FermiDirac> &);
 
 }  // namespace sequant::detail

@@ -1154,10 +1154,12 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           {.full_contractions = full_contractions_,
            .max_cumulant_rank = max_cumulant_rank_,
            .eta_as_delta_minus_gamma = eta_as_delta_minus_gamma_,
+           .use_topology = use_topology_,
            .nop_connections =
                nop_pairs(nop_connections_, nop_connections_input_),
            .nop_avoided_connections = nop_pairs(
-               nop_avoided_connections_, nop_avoided_connections_input_)});
+               nop_avoided_connections_, nop_avoided_connections_input_)},
+          *this);
     } else {
       throw Exception(
           "WickTheorem<S>::compute: bosons are not supported under a "
