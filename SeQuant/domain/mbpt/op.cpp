@@ -1352,14 +1352,9 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     auto replace_nop_with_rdm = [&rdm_label, spinor](ExprPtr& exptr) {
       auto replace = [&rdm_label, spinor](const auto& nop) -> ExprPtr {
         // spin-free RDMs are column symmetric but not antisymmetric
-        const auto syms =
-            nop.rank() > 1 && spinor
-                ? TensorSymmetries{.perm = Symmetry::Antisymm,
-                                   .hermiticity = Hermiticity::Hermitian,
-                                   .column = ColumnSymmetry::Symm}
-                : TensorSymmetries{.perm = Symmetry::Nonsymm,
-                                   .hermiticity = Hermiticity::Hermitian,
-                                   .column = ColumnSymmetry::Symm};
+        const auto syms = nop.rank() > 1 && spinor
+                              ? density::cumulant_symmetries
+                              : density::rdm_symmetries;
         return density::rdm_from_nop(nop, rdm_label, syms);
       };
 
