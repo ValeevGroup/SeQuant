@@ -504,12 +504,13 @@ using OpConnections = std::vector<std::pair<T, T>>;
 template <typename T>
 struct EVOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  /// List of pairs of operator labels to be connected; connections are defined
-  /// left-to-right, i.e., pair `{opL,opR}` declares that `opL` and `opR` are to
-  /// be connected when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
+  /// Pairs of operators that must be directly contracted. Operator-level calls
+  /// use labels: `{opL,opR}` applies to every matching pair with `opL` to the
+  /// left of `opR`. Tensor-level calls use zero-based normal-operator
+  /// positions.
   OpConnections<T> connect = {};
-  /// List of pairs of operator labels that should not be connected, defined
-  /// left-to-right.
+  /// Pairs of operators that must not be directly contracted, using the same
+  /// label or position convention as connect.
   OpConnections<T> do_not_connect = {};
   /// If true, expressions are screened before lowering to Tensor level and
   /// calling WickTheorem. Only valid in Operator level calls

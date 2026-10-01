@@ -135,8 +135,8 @@ ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
     return op::tensor::ref_av(this->hbar(erank));
   }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
-  // truncation. No projector ⇒ this is the energy. ref_av applies the
-  // connectivity (empty for unitary, default otherwise).
+  // truncation. No projector ⇒ this is the energy. CC supplies empty
+  // connectivity for unitary ansätze and default connections otherwise.
   return this->unitary() ? this->ref_av(this->hbar(comm_rank),
                                         mbpt::OpConnections<std::wstring>{})
                          : this->ref_av(this->hbar(comm_rank));

@@ -1007,7 +1007,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     namespace t = sequant::mbpt::tensor;
 
     SECTION("expectation values default to empty connectivity") {
-      // Requiring each h to connect to both t's removes this nonzero product.
+      // Requiring the first h to connect to both t's
+      // removes this nonzero product.
       const auto unconstrained =
           o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1), {});
       REQUIRE(unconstrained != ex<Constant>(0));

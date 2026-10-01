@@ -316,6 +316,8 @@ class CC {
   /// @param[in] do_not_connect list of operator label pairs to never connect.
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
+  /// @note Connectivity defaults to default_op_connections(); both lists are
+  /// ignored when the reference differs from the Wick vacuum.
   auto ref_av(
       const ExprPtr& expr,
       const OpConnections<std::wstring>& connect = default_op_connections(),

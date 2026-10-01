@@ -215,6 +215,10 @@ compute the reference average.
 In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` ignore
 the ``connect`` and ``do_not_connect`` options. ``vac_av`` always computes full contractions and honors these options.
 
+Operator-level connection pairs use labels and apply to every matching pair with the first operator to the left of the
+second. Tensor-level pairs use zero-based normal-operator positions. Both conventions apply to ``connect`` and
+``do_not_connect`` in :class:`EVOptions <sequant::mbpt::op::EVOptions>`.
+
 .. literalinclude:: /examples/user/operator.cpp
    :language: cpp
    :start-after: start-snippet-4
