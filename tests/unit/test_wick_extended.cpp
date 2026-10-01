@@ -202,6 +202,26 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     require_active_densities(extended_wick<Statistics::FermiDirac>(
         in, {.full_contractions = false}));
     REQUIRE(result->size() == 7);
+    // projecting is substituting a_p = Σ_x δ(p,x) a_x, so every term keeps
+    // the + of γ{p_4;p_1}·η{p_2;p_3} + κ{p_2,p_4;p_1,p_3}, with γ over core
+    // = δ and η over virtual = δ
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            L"κ{u_3,u_4;u_1,u_2}:A-C-S * δ{u_1;p_1}:N-C-S * "
+            L"δ{u_2;p_3}:N-C-S * δ{p_2;u_3}:N-C-S * δ{p_4;u_4}:N-C-S "
+            L"+ γ{u_2;u_1}:N-C-S * δ{u_1;p_1}:N-C-S * δ{a_1;p_3}:N-C-S * "
+            L"δ{p_2;a_1}:N-C-S * δ{p_4;u_2}:N-C-S "
+            L"+ γ{u_2;u_1}:N-C-S * δ{u_1;p_1}:N-C-S * δ{g_1;p_3}:N-C-S * "
+            L"δ{p_2;g_1}:N-C-S * δ{p_4;u_2}:N-C-S "
+            L"+ η{u_2;u_1}:N-C-S * δ{u_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * "
+            L"δ{p_2;u_2}:N-C-S * δ{p_4;O_1}:N-C-S "
+            L"+ δ{a_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S * "
+            L"δ{p_4;O_1}:N-C-S "
+            L"+ δ{g_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * δ{p_2;g_1}:N-C-S * "
+            L"δ{p_4;O_1}:N-C-S "
+            L"+ η{u_3;u_1}:N-C-S * γ{u_4;u_2}:N-C-S * δ{u_1;p_3}:N-C-S * "
+            L"δ{u_2;p_1}:N-C-S * δ{p_2;u_3}:N-C-S * δ{p_4;u_4}:N-C-S"));
   }
 
   SECTION("extended_wick: dummy indices keep their provenance") {
@@ -247,6 +267,34 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
           simplify(tensors * extended_wick<Statistics::FermiDirac>(ops, opts));
       REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
     }
+  }
+
+  SECTION("extended_wick: projected survivors with partial contractions") {
+    // {a†_p1 a_p2}{a†_u3 a_u4}: projecting an op is substituting
+    // a_p = Σ_x δ(p,x) a_x over the active, core and virtual parts of p, so
+    // each term of the pure-active result (see "partial contractions leave a
+    // GNO remainder") reappears with its sign, its indices projected
+    auto in = ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto result =
+        extended_wick<Statistics::FermiDirac>(in, {.full_contractions = false});
+    // result contains `term` exactly once, with its sign
+    auto contains = [&](std::wstring_view term) {
+      return simplify(result - deserialize(term))->size() == result->size() - 1;
+    };
+    // a_p2·a†_u3 contracted (adjacent, so +), p_1 of the surviving
+    // {a†_p1 a_u4} projected onto active and onto virtual a
+    REQUIRE(
+        contains(L"η{u_2;u_3}:N-C-S * δ{u_1;p_1}:N-C-S * δ{p_2;u_2}:N-C-S * "
+                 L"ã{u_4;u_1}"));
+    REQUIRE(
+        contains(L"η{u_1;u_3}:N-C-S * δ{a_1;p_1}:N-C-S * δ{p_2;u_1}:N-C-S * "
+                 L"ã{u_4;a_1}"));
+    // nothing contracted, p_1 and p_2 projected onto active: the four legs
+    // form +κ{u_2,u_4;u_1,u_3} = -κ{u_4,u_2;u_1,u_3}
+    REQUIRE(
+        contains(L"-1 κ{u_4,u_2;u_1,u_3}:A-C-S * δ{u_1;p_1}:N-C-S * "
+                 L"δ{p_2;u_2}:N-C-S"));
   }
 
   SECTION("extended_wick: Sum input") {
