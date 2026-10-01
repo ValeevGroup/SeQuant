@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/index_basis.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -44,23 +45,28 @@ class OpRegistry {
   OpRegistry()
       : ops_(std::make_shared<container::map<std::wstring, OpClass>>()),
         herm_overrides_(
-            std::make_shared<container::map<std::wstring, Hermiticity>>()) {}
+            std::make_shared<container::map<std::wstring, Hermiticity>>()),
+        basis_grants_(std::make_shared<BasisGrants>()) {}
 
   /// constructs an OpRegistry from an existing map of operators and their
   /// classes
   OpRegistry(std::shared_ptr<container::map<std::wstring, OpClass>> ops)
       : ops_(std::move(ops)),
         herm_overrides_(
-            std::make_shared<container::map<std::wstring, Hermiticity>>()) {}
+            std::make_shared<container::map<std::wstring, Hermiticity>>()),
+        basis_grants_(std::make_shared<BasisGrants>()) {}
 
   /// copy constructor
   OpRegistry(const OpRegistry& other)
-      : ops_(other.ops_), herm_overrides_(other.herm_overrides_) {}
+      : ops_(other.ops_),
+        herm_overrides_(other.herm_overrides_),
+        basis_grants_(other.basis_grants_) {}
 
   /// move constructor
   OpRegistry(OpRegistry&& other) noexcept
       : ops_(std::move(other.ops_)),
-        herm_overrides_(std::move(other.herm_overrides_)) {}
+        herm_overrides_(std::move(other.herm_overrides_)),
+        basis_grants_(std::move(other.basis_grants_)) {}
 
   /// copy assignment operator
   OpRegistry& operator=(const OpRegistry& other);
@@ -96,6 +102,21 @@ class OpRegistry {
   /// @param hermiticity the operator's Hermiticity
   OpRegistry& set_hermiticity(const std::wstring& op, Hermiticity hermiticity);
 
+  /// @brief Grants the basis instance @p instance to the legs of @p op that
+  /// OpMaker mints in @p leg_space
+  /// @param op the operator label (must be a registered Ex or Deex operator)
+  /// @throw Exception if @p op is not registered or is a general operator
+  OpRegistry& grant_basis(const std::wstring& op, const IndexSpace& leg_space,
+                          IndexBasis::instance_type instance);
+
+  /// @return true if @p op has a basis grant on any leg space; never throws
+  [[nodiscard]] bool has_basis_grants(const std::wstring& op) const;
+
+  /// @return the basis instance granted to the legs of @p op in exactly
+  /// @p leg_space, if any; never throws
+  [[nodiscard]] IndexBasis::optional_instance basis_grant(
+      const std::wstring& op, const IndexSpace& leg_space) const;
+
   /// @brief Removes an operator from the registry
   OpRegistry& remove(const std::wstring& op);
 
@@ -119,10 +140,12 @@ class OpRegistry {
   /// @brief returns a view of registered operator labels
   [[nodiscard]] auto ops() const { return ranges::views::keys(*ops_); }
 
-  /// @brief clears all registered operators (and their Hermiticity overrides)
+  /// @brief clears all registered operators (and their Hermiticity overrides
+  /// and basis grants)
   void purge() {
     ops_->clear();
     herm_overrides_->clear();
+    basis_grants_->clear();
   }
 
  private:
@@ -130,6 +153,11 @@ class OpRegistry {
   /// sparse per-operator Hermiticity overrides; absence means
   /// default_hermiticity(to_class(op)). Shared (shallow copy) like ops_.
   std::shared_ptr<container::map<std::wstring, Hermiticity>> herm_overrides_;
+  /// sparse per-operator, per-leg-space basis grants. Shared like ops_.
+  using BasisGrants =
+      container::map<std::wstring,
+                     container::map<IndexSpace, IndexBasis::instance_type>>;
+  std::shared_ptr<BasisGrants> basis_grants_;
 
   /// @brief Validates that the operator label is not reserved and not already
   /// registered
@@ -140,7 +168,8 @@ class OpRegistry {
   /// @brief Equality operator for OpRegistry
   friend bool operator==(const OpRegistry& reg1, const OpRegistry& reg2) {
     return *reg1.ops_ == *reg2.ops_ &&
-           *reg1.herm_overrides_ == *reg2.herm_overrides_;
+           *reg1.herm_overrides_ == *reg2.herm_overrides_ &&
+           *reg1.basis_grants_ == *reg2.basis_grants_;
   }
 };  // class OpRegistry
 }  // namespace sequant::mbpt

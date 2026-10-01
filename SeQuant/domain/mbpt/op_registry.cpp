@@ -23,12 +23,14 @@ void OpRegistry::validate_op(const std::wstring& op) const {
 OpRegistry& OpRegistry::operator=(const OpRegistry& other) {
   ops_ = other.ops_;
   herm_overrides_ = other.herm_overrides_;
+  basis_grants_ = other.basis_grants_;
   return *this;
 }
 
 OpRegistry& OpRegistry::operator=(OpRegistry&& other) noexcept {
   ops_ = std::move(other.ops_);
   herm_overrides_ = std::move(other.herm_overrides_);
+  basis_grants_ = std::move(other.basis_grants_);
   return *this;
 }
 
@@ -56,6 +58,35 @@ OpRegistry& OpRegistry::set_hermiticity(const std::wstring& op,
   return *this;
 }
 
+OpRegistry& OpRegistry::grant_basis(const std::wstring& op,
+                                    const IndexSpace& leg_space,
+                                    IndexBasis::instance_type instance) {
+  if (!this->contains(op)) {
+    throw Exception("mbpt::OpRegistry::grant_basis: operator " + toUtf8(op) +
+                    " does not exist in registry");
+  }
+  if (this->to_class(op) == OpClass::Gen) {
+    throw Exception("mbpt::OpRegistry::grant_basis: operator " + toUtf8(op) +
+                    " is a general operator; only (de)excitation operators "
+                    "carry a basis instance");
+  }
+  (*basis_grants_)[op].insert_or_assign(leg_space, instance);
+  return *this;
+}
+
+bool OpRegistry::has_basis_grants(const std::wstring& op) const {
+  return basis_grants_->contains(op);
+}
+
+IndexBasis::optional_instance OpRegistry::basis_grant(
+    const std::wstring& op, const IndexSpace& leg_space) const {
+  auto it = basis_grants_->find(op);
+  if (it == basis_grants_->end()) return std::nullopt;
+  auto leg = it->second.find(leg_space);
+  if (leg == it->second.end()) return std::nullopt;
+  return leg->second;
+}
+
 OpRegistry& OpRegistry::remove(const std::wstring& op) {
   if (!this->contains(op)) {
     throw Exception("mbpt::OpRegistry::remove: operator " + toUtf8(op) +
@@ -63,6 +94,7 @@ OpRegistry& OpRegistry::remove(const std::wstring& op) {
   }
   ops_->erase(op);
   herm_overrides_->erase(op);
+  basis_grants_->erase(op);
   return *this;
 }
 
@@ -91,6 +123,7 @@ OpRegistry OpRegistry::clone() const {
   result.herm_overrides_ =
       std::make_shared<container::map<std::wstring, Hermiticity>>(
           *herm_overrides_);
+  result.basis_grants_ = std::make_shared<BasisGrants>(*basis_grants_);
   return result;
 }
 

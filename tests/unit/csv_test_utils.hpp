@@ -16,8 +16,12 @@
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -25,6 +29,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -160,6 +165,72 @@ class ScopedDefaultCardinalLabels {
  private:
   container::vector<std::wstring> saved_;
 };
+
+/// @p base with each of @p grants given on the particle space; a granted
+/// perturbed amplitude (t¹, λ¹) first registers t¹, λ¹ and h¹ where absent
+/// @pre the Context the registry will be used under is installed
+inline std::shared_ptr<mbpt::OpRegistry> granted_registry(
+    std::vector<std::pair<std::wstring, IndexBasis::instance_type>> const&
+        grants,
+    std::shared_ptr<mbpt::OpRegistry> base = mbpt::make_minimal_registry()) {
+  const auto particles = get_particle_space(mbpt::Spin::any);
+  for (auto const& [op, instance] : grants) {
+    if ((op == L"t¹" || op == L"λ¹") && !base->contains(L"t¹"))
+      base->add(L"t¹", mbpt::OpClass::Ex)
+          .add(L"λ¹", mbpt::OpClass::Deex)
+          .add(L"h¹", mbpt::OpClass::Gen);
+    base->grant_basis(op, particles, instance);
+  }
+  return base;
+}
+
+/// installs csv_cc_context() and an mbpt Context with @p csv over
+/// @p registry while this object lives
+class ScopedCsvContext {
+ public:
+  explicit ScopedCsvContext(std::shared_ptr<mbpt::OpRegistry> registry =
+                                mbpt::make_minimal_registry(),
+                            mbpt::CSV csv = mbpt::CSV::Yes)
+      : core_(sequant::set_scoped_default_context(csv_cc_context())),
+        mbpt_(mbpt::set_scoped_default_mbpt_context(mbpt::Context(
+            {.csv = csv, .op_registry_ptr = std::move(registry)}))) {}
+
+ private:
+  sequant::detail::ImplicitContextResetter<
+      sequant::container::map<sequant::Statistics, sequant::Context>>
+      core_;
+  sequant::detail::ImplicitContextResetter<mbpt::Context> mbpt_;
+};
+
+/// @p equations, each closed-shell spin-traced
+inline std::vector<ExprPtr> spintraced(std::vector<ExprPtr> const& equations) {
+  std::vector<ExprPtr> result;
+  for (auto const& eq : equations)
+    result.push_back(mbpt::closed_shell_CC_spintrace_v2(eq));
+  return result;
+}
+
+/// [E, R1, R2] of CC{2}.t(2, 0) under @p registry and the current CSV mode,
+/// closed-shell spin-traced
+inline std::vector<ExprPtr> derive_t(
+    std::shared_ptr<mbpt::OpRegistry> registry) {
+  Index::reset_tmp_index();
+  auto mbpt_ctx = mbpt::set_scoped_default_mbpt_context(
+      mbpt::Context({.csv = mbpt::get_default_mbpt_context().csv(),
+                     .op_registry_ptr = std::move(registry)}));
+  return spintraced(mbpt::CC{2}.t(2, 0));
+}
+
+/// CC{2}.λ() under @p registry and the current CSV mode, closed-shell
+/// spin-traced
+inline std::vector<ExprPtr> derive_λ(
+    std::shared_ptr<mbpt::OpRegistry> registry) {
+  Index::reset_tmp_index();
+  auto mbpt_ctx = mbpt::set_scoped_default_mbpt_context(
+      mbpt::Context({.csv = mbpt::get_default_mbpt_context().csv(),
+                     .op_registry_ptr = std::move(registry)}));
+  return spintraced(mbpt::CC{2}.λ());
+}
 
 }  // namespace sequant::tests::csv
 
