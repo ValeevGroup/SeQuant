@@ -968,6 +968,16 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // is canonical); a rejected fold (the two trees' loops would collapse two
   // distinct positions of some group) leaves the occurrences in different
   // instances, and the final key below tells them apart.
+  //
+  // A physical loop iterates the batches of ONE space, so two occurrences
+  // whose indices at a position (or whose reduced modes) live in different
+  // spaces are never sliced by one loop and are not united. The node id can
+  // group such occurrences: under Kramers-blind identity (kramers_blind.hpp)
+  // one id covers every flavour block of a t-independent CSV bracket, whose
+  // occurrences carry i↑ at a position in one block and i↓ in another
+  // (uranyl PNS-CCD ladder, 2026-10-01: the four blocks' brackets folded into
+  // one value cell whose frame fit only the first block, and the cell table
+  // read it whole on a mode its partner leaf was sliced on).
   {
     std::unordered_map<std::size_t, std::size_t> first_of_group;
     for (std::size_t i = 0; i < nrec; ++i) {
@@ -980,13 +990,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
            ++p) {
         if (!is_batched(ro, ro.carried[p]) || !is_batched(rf, rf.carried[p]))
           continue;
+        if (ro.carried[p].space() != rf.carried[p].space()) continue;
         (void)try_unite(encode(f, p), encode(i, p));
       }
       for (std::size_t j = 0;
            j < ro.contracted_batched.size() && j < rf.contracted_batched.size();
-           ++j)
+           ++j) {
+        if (ro.contracted_batched[j].space() !=
+            rf.contracted_batched[j].space())
+          continue;
         (void)try_unite(reduction_node(f, rf.contracted_batched[j]),
                         reduction_node(i, ro.contracted_batched[j]));
+      }
     }
   }
 
@@ -1028,10 +1043,17 @@ RichSchedule compute_dag_boulevard(R const& forest,
   }
 
   // Final value key, bottom-up (recs are in post-order: operands precede
-  // their consumer): node id combined with (position, slot) of every
-  // home-sliced position, (index, slot) of every mode reduced in batches,
-  // and the operands' keys -- the node id alone when nothing below is
-  // sliced. Stamped on the node so value_key_of(node) agrees everywhere.
+  // their consumer): node id combined with (position, space, slot) of every
+  // home-sliced position, (index, space, slot) of every mode reduced in
+  // batches, and the operands' keys -- the node id alone when nothing below
+  // is sliced. Stamped on the node so value_key_of(node) agrees everywhere.
+  // The slot is numbered within its space (above), so the space is part of
+  // the loop's identity: without it a value sliced at a position by the first
+  // i↑ loop and its Kramers-blind image sliced there by the first i↓ loop
+  // (slot 0 of either space) would key to one cell.
+  auto const space_hash = [](Index const& ix) {
+    return std::hash<std::wstring_view>{}(ix.space().base_key());
+  };
   container::svector<std::size_t> final_key(nrec);
   for (std::size_t i = 0; i < nrec; ++i) {
     NodeRec const& r = recs[i];
@@ -1042,11 +1064,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (r.loop_slot[pV] >= 0) {
         sliced = true;
         hash::combine(h, pV);
+        hash::combine(h, space_hash(r.carried[pV]));
         hash::combine(h, static_cast<std::size_t>(r.loop_slot[pV]));
       }
     for (std::size_t j = 0; j < r.reduced_slot.size(); ++j) {
       sliced = true;
       hash::combine(h, CONTRACTED_BASE + j);
+      hash::combine(h, space_hash(r.reduced_slot[j].first));
       hash::combine(h, static_cast<std::size_t>(r.reduced_slot[j].second));
     }
     container::svector<std::size_t> child_keys;
@@ -1199,9 +1223,18 @@ RichSchedule compute_dag_boulevard(R const& forest,
     if (a.hash != b.hash) return false;
     if (a.is_leaf != b.is_leaf || a.is_product != b.is_product) return false;
     if (a.loop_slot != b.loop_slot) return false;
+    // a slot names a loop within its space: a sliced position must sit in
+    // the same space in both (the Kramers-blind image of a value carries the
+    // other flavour there)
+    for (std::size_t p = 0; p < a.loop_slot.size(); ++p)
+      if (a.loop_slot[p] >= 0 && p < a.carried.size() && p < b.carried.size() &&
+          a.carried[p].space() != b.carried[p].space())
+        return false;
     if (a.reduced_slot.size() != b.reduced_slot.size()) return false;
     for (std::size_t i = 0; i < a.reduced_slot.size(); ++i)
-      if (a.reduced_slot[i].second != b.reduced_slot[i].second) return false;
+      if (a.reduced_slot[i].second != b.reduced_slot[i].second ||
+          a.reduced_slot[i].first.space() != b.reduced_slot[i].first.space())
+        return false;
     if (child_cells(a) != child_cells(b)) return false;
     if (a.node == nullptr || b.node == nullptr) return a.node == b.node;
     return node_eq(*a.node, *b.node);
