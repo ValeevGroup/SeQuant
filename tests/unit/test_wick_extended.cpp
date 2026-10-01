@@ -506,4 +506,158 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         /*atoms_only=*/true);
     REQUIRE(!has_eta);
   }
+
+  SECTION("extended_wick: single-reference limit") {
+    // without an active space (reference occupancy == vacuum occupancy)
+    // MultiProduct reduces to SingleProduct. The SR registry declares both
+    // occupancies, which MultiProduct requires.
+    auto sr_isr = mbpt::make_sr_spaces();
+    REQUIRE(sr_isr->reference_occupied_space() ==
+            sr_isr->vacuum_occupied_space());
+
+    // inputs carry their context's vacuum, so each is built per context
+    auto make_input = [](std::size_t k) {
+      return k == 0 ? ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) *
+                          ex<FNOperator>(cre({L"a_2"}), ann({L"i_2"}))
+                    : ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})) *
+                          ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"}));
+    };
+    auto sr_ctx = get_default_context();
+    sr_ctx.set(sr_isr);
+    auto with_vacuum = [&](Vacuum v) {
+      auto c = sr_ctx;
+      c.set(v);
+      return c;
+    };
+
+    for (bool full : {true, false}) {
+      for (std::size_t k = 0; k != 2; ++k) {
+        // extended_wick projects the survivors of general indices onto the
+        // core and virtual parts (see "projected survivors"), which the
+        // standard theorem does not: only full contractions compare
+        if (!full && k == 1) continue;
+        ExprPtr mp, sp;
+        {
+          auto r =
+              set_scoped_default_context(with_vacuum(Vacuum::MultiProduct));
+          mp = extended_wick<Statistics::FermiDirac>(
+              make_input(k), {.full_contractions = full});
+        }
+        {
+          auto r =
+              set_scoped_default_context(with_vacuum(Vacuum::SingleProduct));
+          FWickTheorem wick{make_input(k)};
+          sp = wick.full_contractions(full).compute();
+        }
+        mp = simplify(mp);
+        sp = simplify(sp);
+        // no active space: no γ, η or κ
+        mp->visit(
+            [&](const ExprPtr& e) {
+              if (e->is<Tensor>()) {
+                const auto l = e->as<Tensor>().label();
+                REQUIRE(l != L"γ");
+                REQUIRE(l != L"η");
+                REQUIRE(l != L"κ");
+              }
+            },
+            /*atoms_only=*/true);
+        INFO("full=" << full << " k=" << k << "\nMP: " << toUtf8(to_latex(mp))
+                     << "\nSP: " << toUtf8(to_latex(sp)));
+        // The standard theorem spells a contraction as the overlap s, the
+        // extended one as δ; they coincide for same-space indices.
+        sp->visit(
+            [](const ExprPtr& e) {
+              if (e->is<Tensor>() &&
+                  e->as<Tensor>().label() == reserved::overlap_label())
+                e->as<Tensor>().set_label(reserved::kronecker_label());
+            },
+            /*atoms_only=*/true);
+        // Surviving ã carry their context's vacuum tag, which keeps otherwise
+        // equal terms apart in mp - sp: rebuild them with a common vacuum.
+        for (auto* e : {&mp, &sp})
+          (*e)->visit(
+              [](const ExprPtr& x) {
+                if (x->is<FNOperator>()) {
+                  auto& nop = x->as<FNOperator>();
+                  x->as<FNOperator>() =
+                      FNOperator(cre(nop.creators()), ann(nop.annihilators()),
+                                 Vacuum::SingleProduct);
+                }
+              },
+              /*atoms_only=*/true);
+        REQUIRE(simplify(mp - sp) == ex<Constant>(0));
+      }
+    }
+  }
+
+  SECTION("extended_wick: GNO strings from elementary operators") {
+    // {a†_p a_q} = {a†_p}{a_q} - ⟨{a†_p}{a_q}⟩, so a product of 1-body GNO
+    // strings equals the product of these differences, each single-operator
+    // string its own input operator
+    auto single = [](const Index& p, const Index& q) {
+      return ex<FNOperator>(cre({p}), ann({})) *
+             ex<FNOperator>(cre({}), ann({q}));
+    };
+    // ⟨{a†_p}{a_q}⟩ with its dummies renamed apart from every other's
+    auto contraction = [&](const Index& p, const Index& q) {
+      auto e = extended_wick<Statistics::FermiDirac>(single(p, q));
+      container::map<Index, Index> fresh;
+      e->visit(
+          [&](const ExprPtr& x) {
+            if (x->is<Tensor>())
+              for (const auto& idx : x->as<Tensor>().const_braket())
+                if (idx != p && idx != q && !fresh.contains(idx))
+                  fresh.emplace(idx, Index::make_tmp_index(idx.space()));
+          },
+          /*atoms_only=*/true);
+      e->visit(
+          [&](const ExprPtr& x) {
+            if (x->is<Tensor>()) {
+              x->as<Tensor>().transform_indices(fresh);
+              x->as<Tensor>().reset_tags();
+            }
+          },
+          /*atoms_only=*/true);
+      return e;
+    };
+    using Pairs = container::svector<std::pair<std::wstring, std::wstring>>;
+    struct Case {
+      Pairs pairs;
+      bool full;
+      std::size_t nterms;
+    };
+    for (const auto& [pairs, full, nterms] :
+         {Case{Pairs{{L"u_1", L"u_2"}, {L"u_3", L"u_4"}, {L"u_5", L"u_6"}},
+               true, 9},
+          Case{Pairs{{L"p_1", L"p_2"}, {L"p_3", L"p_4"}}, true, 7},
+          Case{Pairs{{L"u_1", L"u_2"}, {L"u_3", L"u_4"}}, false, 5}}) {
+      ExprPtr gno = ex<Constant>(1), elementary = ex<Constant>(1);
+      for (const auto& [p, q] : pairs) {
+        gno = gno * ex<FNOperator>(cre({Index(p)}), ann({Index(q)}));
+        elementary = elementary * (single(Index(p), Index(q)) -
+                                   contraction(Index(p), Index(q)));
+      }
+      const ExtendedWickOptions opts{.full_contractions = full};
+      auto lhs = extended_wick<Statistics::FermiDirac>(gno, opts);
+      auto rhs = extended_wick<Statistics::FermiDirac>(elementary, opts);
+      INFO("lhs: " << toUtf8(to_latex(lhs))
+                   << "\nrhs: " << toUtf8(to_latex(rhs)));
+      REQUIRE(lhs->size() == nterms);
+      REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
+    }
+    // the three all-active strings have both a κ2 and a κ3
+    container::set<std::size_t> kappa_ranks;
+    extended_wick<Statistics::FermiDirac>(
+        ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+        ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+        ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"})))
+        ->visit(
+            [&](const ExprPtr& e) {
+              if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
+                kappa_ranks.insert(e->as<Tensor>().bra_rank());
+            },
+            /*atoms_only=*/true);
+    REQUIRE(kappa_ranks == container::set<std::size_t>{2, 3});
+  }
 }
