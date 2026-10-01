@@ -431,6 +431,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/topological.hpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/reserved.hpp
+        SeQuant/core/density.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wick.cpp

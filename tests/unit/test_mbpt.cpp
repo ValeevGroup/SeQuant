@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -1556,5 +1557,25 @@ SECTION("rdm-decomposition symmetries") {
                  Symmetry::Nonsymm, Hermiticity::Hermitian,
                  std::optional<ColumnSymmetry>(ColumnSymmetry::Symm));
   REQUIRE(*gamma == *gamma_op);
+
+  // the shared factory in SeQuant/core/density.hpp is the single source of
+  // these spellings
+  REQUIRE(*density::make_rdm(Index(L"i_1"), Index(L"i_2")) == *gamma_op);
+  const auto eta = density::make_hole_rdm(Index(L"i_1"), Index(L"i_2"));
+  REQUIRE(eta->as<Tensor>().label() == L"η");
+  REQUIRE(eta->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(eta->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+
+  // κ from a 2-body normal operator: bra = annihilators, ket = creators
+  const FNOperator nop2(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"}));
+  const auto kappa2 = density::make_cumulant(nop2);
+  REQUIRE(kappa2->as<Tensor>().label() == L"κ");
+  REQUIRE(kappa2->as<Tensor>().symmetry() == Symmetry::Antisymm);
+  REQUIRE(kappa2->as<Tensor>().bra()[0] == Index(L"i_3"));
+  REQUIRE(kappa2->as<Tensor>().bra()[1] == Index(L"i_4"));
+  REQUIRE(kappa2->as<Tensor>().ket()[0] == Index(L"i_1"));
+  REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
+  // η is a registered mbpt operator label
+  REQUIRE(mbpt::get_default_mbpt_context().op_registry()->contains(L"η"));
 }
 }

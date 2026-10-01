@@ -149,6 +149,7 @@ std::shared_ptr<OpRegistry> make_legacy_registry() {
       .add(L"C", OpClass::Gen)
       /// RDM and RDM Cumulant
       .add(L"γ", OpClass::Gen)
+      .add(L"η", OpClass::Gen)
       .add(L"κ", OpClass::Gen);
 
   return registry;

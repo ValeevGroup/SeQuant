@@ -1,30 +1,14 @@
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
 
-// anonymous namespace for holding specific labels used here
-namespace {
-std::wstring rdm_label() {
-  static const std::wstring label = L"γ";
-  return label;
-}
-
-std::wstring rdm_cumulant_label() {
-  static const std::wstring label = L"κ";
-  return label;
-}
-}  // namespace
-
 namespace sequant::mbpt::decompositions {
 
+using density::rdm_label;
+using density::rdm_symmetries;
+
 namespace {
-// RDMs and cumulants are over indistinguishable particles, hence are particle
-// (column) symmetric, and are Hermitian by definition. Both facts must be
-// stated: they participate in the tensor hash, so a γ built here that differed
-// in either from the γ built by expectation_value_impl() (see mbpt/op.cpp)
-// would keep otherwise-equal terms from merging.
-constexpr TensorSymmetries hermitian_particle_symmetric{
-    .hermiticity = Hermiticity::Hermitian, .column = ColumnSymmetry::Symm};
 // the placeholder tensors standing in for as-yet-undecomposed products of
 // densities and cumulants are column symmetric too, but their Hermiticity is
 // not a property we can assert, so it stays at the conservative default
@@ -34,19 +18,19 @@ constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 ExprPtr cumulant_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 1);
-  SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_cumulant_label());
+  SEQUANT_ASSERT(ex_->as<Tensor>().label() == density::cumulant_label());
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
 
-  auto density = ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0},
-                            hermitian_particle_symmetric);
+  auto density =
+      ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
   return density;
 }
 
 sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 2);
-  SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_cumulant_label());
+  SEQUANT_ASSERT(ex_->as<Tensor>().label() == density::cumulant_label());
 
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
@@ -54,11 +38,11 @@ sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
   auto up_1 = ex_->as<Tensor>().bra()[1];
 
   auto density2 = ex<Tensor>(rdm_label(), bra{up_0, up_1}, ket{down_0, down_1},
-                             hermitian_particle_symmetric);
-  auto density_1 = ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0},
-                              hermitian_particle_symmetric);
-  auto density_2 = ex<Tensor>(rdm_label(), bra{up_1}, ket{down_1},
-                              hermitian_particle_symmetric);
+                             rdm_symmetries);
+  auto density_1 =
+      ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
+  auto density_2 =
+      ex<Tensor>(rdm_label(), bra{up_1}, ket{down_1}, rdm_symmetries);
 
   auto d1_d2 = antisymmetrize(density_1 * density_2);
   return density2 + ex<Constant>(-1) * d1_d2.result;
@@ -67,7 +51,7 @@ sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
 ExprPtr cumulant3_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 3);
-  SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_cumulant_label());
+  SEQUANT_ASSERT(ex_->as<Tensor>().label() == density::cumulant_label());
 
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
@@ -76,18 +60,16 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
   auto down_2 = ex_->as<Tensor>().ket()[2];
   auto up_2 = ex_->as<Tensor>().bra()[2];
 
-  auto cumulant2 =
-      ex<Tensor>(rdm_cumulant_label(), bra{up_1, up_2}, ket{down_1, down_2},
-                 hermitian_particle_symmetric);
-  auto density_1 = ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0},
-                              hermitian_particle_symmetric);
-  auto density_2 = ex<Tensor>(rdm_label(), bra{up_1}, ket{down_1},
-                              hermitian_particle_symmetric);
-  auto density_3 = ex<Tensor>(rdm_label(), bra{up_2}, ket{down_2},
-                              hermitian_particle_symmetric);
-  auto density3 =
-      ex<Tensor>(rdm_label(), bra{up_0, up_1, up_2},
-                 ket{down_0, down_1, down_2}, hermitian_particle_symmetric);
+  auto cumulant2 = ex<Tensor>(density::cumulant_label(), bra{up_1, up_2},
+                              ket{down_1, down_2}, rdm_symmetries);
+  auto density_1 =
+      ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
+  auto density_2 =
+      ex<Tensor>(rdm_label(), bra{up_1}, ket{down_1}, rdm_symmetries);
+  auto density_3 =
+      ex<Tensor>(rdm_label(), bra{up_2}, ket{down_2}, rdm_symmetries);
+  auto density3 = ex<Tensor>(rdm_label(), bra{up_0, up_1, up_2},
+                             ket{down_0, down_1, down_2}, rdm_symmetries);
 
   auto d1_d2 =
       antisymmetrize(density_1 * density_2 * density_3 + density_1 * cumulant2);
@@ -96,7 +78,7 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
   for (auto&& product : temp_result->as<Sum>().summands()) {
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() &&
-          (factor->as<Tensor>().label() == rdm_cumulant_label()) &&
+          (factor->as<Tensor>().label() == density::cumulant_label()) &&
           (factor->as<Tensor>().rank() == 2)) {
         factor = cumulant2_to_density(factor);
       }
@@ -105,7 +87,7 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
   for (auto&& product : temp_result->as<Sum>().summands()) {
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() &&
-          factor->as<Tensor>().label() == rdm_cumulant_label() &&
+          factor->as<Tensor>().label() == density::cumulant_label() &&
           factor->as<Tensor>().rank() == 1) {
         factor = cumulant_to_density(factor);
       }
@@ -122,8 +104,8 @@ ExprPtr one_body_sub(ExprPtr ex_) {  // J. Chem. Phys. 132, 234107 (2010);
   auto up_0 = ex_->as<FNOperator>().creators()[0].index();
 
   const auto a = ex<FNOperator>(cre({up_0}), ann({down_0}));
-  const auto cumu1 = ex<Tensor>(rdm_cumulant_label(), bra{down_0}, ket{up_0},
-                                hermitian_particle_symmetric);
+  const auto cumu1 = ex<Tensor>(density::cumulant_label(), bra{down_0},
+                                ket{up_0}, rdm_symmetries);
 
   auto result = a + (ex<Constant>(-1) * cumu1);
   return (result);
@@ -142,15 +124,15 @@ ExprPtr two_body_decomp(
   auto up_0 = ex_->as<FNOperator>().creators()[0].index();
   auto up_1 = ex_->as<FNOperator>().creators()[1].index();
 
-  const auto cumu1 = ex<Tensor>(rdm_cumulant_label(), bra{down_0}, ket{up_0},
-                                hermitian_particle_symmetric);
-  const auto cumu2 = ex<Tensor>(rdm_cumulant_label(), bra{down_1}, ket{up_1},
-                                hermitian_particle_symmetric);
+  const auto cumu1 = ex<Tensor>(density::cumulant_label(), bra{down_0},
+                                ket{up_0}, rdm_symmetries);
+  const auto cumu2 = ex<Tensor>(density::cumulant_label(), bra{down_1},
+                                ket{up_1}, rdm_symmetries);
   const auto a = ex<FNOperator>(cre{up_1}, ann{down_1});
   const auto a2 = ex<FNOperator>(cre{up_0, up_1}, ann{down_0, down_1});
   const auto double_cumu =
-      ex<Tensor>(rdm_cumulant_label(), bra{down_0, down_1}, ket{up_0, up_1},
-                 hermitian_particle_symmetric);
+      ex<Tensor>(density::cumulant_label(), bra{down_0, down_1},
+                 ket{up_0, up_1}, rdm_symmetries);
 
   auto term1 = cumu1 * a;
   auto term2 = cumu1 * cumu2;
@@ -179,23 +161,23 @@ three_body_decomp(ExprPtr ex_, bool approx) {
 
   std::vector<Index> initial_upper{up_0, up_1, up_2};
 
-  const auto cumulant = ex<Tensor>(rdm_cumulant_label(), bra{down_0}, ket{up_0},
-                                   hermitian_particle_symmetric);
+  const auto cumulant = ex<Tensor>(density::cumulant_label(), bra{down_0},
+                                   ket{up_0}, rdm_symmetries);
   const auto a = ex<FNOperator>(cre{up_1, up_2}, ann{down_1, down_2});
   auto a_cumulant = cumulant * a;
 
-  auto cumulant2 = ex<Tensor>(rdm_cumulant_label(), bra{down_1}, ket{up_1},
-                              hermitian_particle_symmetric);
-  auto cumulant3 = ex<Tensor>(rdm_cumulant_label(), bra{down_2}, ket{up_2},
-                              hermitian_particle_symmetric);
+  auto cumulant2 = ex<Tensor>(density::cumulant_label(), bra{down_1}, ket{up_1},
+                              rdm_symmetries);
+  auto cumulant3 = ex<Tensor>(density::cumulant_label(), bra{down_2}, ket{up_2},
+                              rdm_symmetries);
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
 
   auto a1 = ex<FNOperator>(cre{up_0}, ann{down_0});
   auto a1_cumu1_cumu2 = a1 * cumulant2 * cumulant3;
 
   auto two_body_cumu =
-      ex<Tensor>(rdm_cumulant_label(), bra{down_1, down_2}, ket{up_1, up_2},
-                 hermitian_particle_symmetric);
+      ex<Tensor>(density::cumulant_label(), bra{down_1, down_2},
+                 ket{up_1, up_2}, rdm_symmetries);
   auto a1_cumu2 = a1 * two_body_cumu;
 
   auto cumu1_cumu2 = cumulant * two_body_cumu;
@@ -204,8 +186,8 @@ three_body_decomp(ExprPtr ex_, bool approx) {
 
   if (!approx) {
     auto cumu3 =
-        ex<Tensor>(rdm_cumulant_label(), bra{down_0, down_1, down_2},
-                   ket{up_0, up_1, up_2}, hermitian_particle_symmetric);
+        ex<Tensor>(density::cumulant_label(), bra{down_0, down_1, down_2},
+                   ket{up_0, up_1, up_2}, rdm_symmetries);
 
     sum_of_terms.result = cumu3 + sum_of_terms.result;
   }
@@ -261,18 +243,20 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
           if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
+            if (factor->as<Tensor>().label() == density::cumulant_label() &&
                 factor->as<Tensor>().rank() == 3) {
               factor = cumulant3_to_density(factor);
-            } else if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
+            } else if (factor->as<Tensor>().label() ==
+                           density::cumulant_label() &&
                        factor->as<Tensor>().rank() == 2) {
               factor = cumulant2_to_density(factor);
-            } else if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
+            } else if (factor->as<Tensor>().label() ==
+                           density::cumulant_label() &&
                        factor->as<Tensor>().rank() == 1) {
               factor = cumulant_to_density(factor);
             } else {
               SEQUANT_ASSERT(factor->as<Tensor>().label() !=
-                             rdm_cumulant_label());
+                             density::cumulant_label());
             }
           }
         }
@@ -316,17 +300,19 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
           if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
+            if (factor->as<Tensor>().label() == density::cumulant_label() &&
                 factor->as<Tensor>().rank() > 2) {
               factor = ex<Constant>(0);
-            } else if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
+            } else if (factor->as<Tensor>().label() ==
+                           density::cumulant_label() &&
                        factor->as<Tensor>().rank() == 2) {
               factor = cumulant2_to_density(factor);
-            } else if (factor->as<Tensor>().label() == rdm_cumulant_label()) {
+            } else if (factor->as<Tensor>().label() ==
+                       density::cumulant_label()) {
               factor = cumulant_to_density(factor);
             } else {
               SEQUANT_ASSERT(factor->as<Tensor>().label() !=
-                             rdm_cumulant_label());
+                             density::cumulant_label());
             }
           }
         }
@@ -344,14 +330,15 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
       if (product->is<Product>()) {
         for (auto&& factor : product->as<Product>().factors()) {
           if (factor->is<Tensor>()) {
-            if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
+            if (factor->as<Tensor>().label() == density::cumulant_label() &&
                 factor->as<Tensor>().rank() > 1) {
               factor = ex<Constant>(0);
-            } else if (factor->as<Tensor>().label() == rdm_cumulant_label()) {
+            } else if (factor->as<Tensor>().label() ==
+                       density::cumulant_label()) {
               factor = cumulant_to_density(factor);
             } else {
               SEQUANT_ASSERT(factor->as<Tensor>().label() !=
-                             rdm_cumulant_label());
+                             density::cumulant_label());
             }
           }
         }
