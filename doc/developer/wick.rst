@@ -63,7 +63,9 @@ When ``use_topology_`` is set, ``is_topologically_unique()`` restricts contracti
 ``use_topology()``'s automatic grouping, or an explicit ``set_op_partitions()``/``set_nop_partitions()``) to the group's first free
 member, skipping contractions that would only reproduce one already tried by symmetry. The corresponding combinatorial weight —
 equivalent to a multinomial coefficient over how many operators from each partition have already been paired off — is recovered by
-``op_permutational_degeneracy()``, so the pruned enumeration and the exhaustive one agree on the final coefficient.
+``op_permutational_degeneracy()``, so the pruned enumeration and the exhaustive one agree on the final coefficient. They also agree for
+an input that vanishes by symmetry, i.e. has an automorphism of phase -1 (see :doc:`tnc`), because such an input is returned as zero
+before any contraction is attempted: by the up-front canonicalization of a ``Sum`` input, or by the topology analysis for a ``Product``.
 
 For the spin-free case over a fermionic vacuum, an additional factor of :math:`2^{n}` is folded in per completed contraction, where
 :math:`n` is the number of creation/annihilation "partner" cycles formed by that contraction — the generalized Wick's theorem for
