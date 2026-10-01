@@ -141,7 +141,7 @@ class Context {
   /// `this->index_space_registry()` will return nullptr
   /// Example:
   /// ```cpp
-  ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::Spinfree});
+  ///   Context ctx({.vacuum = Vacuum::SingleProduct, .spbasis = SPBasis::Spinfree});
   /// ```
   Context(Options options = make_default_options());
 

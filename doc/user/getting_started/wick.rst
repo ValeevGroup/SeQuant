@@ -76,3 +76,29 @@ Same algebra can be performed for `bosons <https://en.wikipedia.org/wiki/Boson>`
      + {{s^{{p_6}}_{{p_3}}}{s^{{p_5}}_{{p_4}}}{b^{{p_2}{p_1}}_{␣\,{p_7}}}} \bigr)
 
 where :math:`b` denotes normal bosonic operators constructed analogously with the normal fermionic operators :math:`a`.
+
+Extended Wick's theorem
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With ``Vacuum::MultiProduct`` the reference is a general (e.g. multiconfigurational) state, and operators are normal-ordered relative
+to it (*generalized normal order*). :func:`sequant::extended_wick` evaluates products of such operators into one-body densities
+:math:`\gamma`, one-body hole densities :math:`\eta` and density cumulants :math:`\kappa_k` over the active (partially occupied)
+orbitals:
+
+.. literalinclude:: /examples/user/getting_started/extended_wick.cpp
+   :language: cpp
+   :start-after: start-snippet-1
+   :end-before: end-snippet-1
+   :dedent: 2
+
+This prints the reference expectation value
+
+.. math::
+   \bar{\kappa}^{u_1 u_3}_{u_2 u_4} + \gamma^{u_1}_{u_4} \eta^{u_3}_{u_2}
+
+followed by the generalized-normal-ordered form of the product, in which :math:`\tilde{a}` denotes operators normal-ordered relative
+to the reference:
+
+.. math::
+   \tilde{a}^{u_1 u_3}_{u_2 u_4} - \gamma^{u_1}_{u_4} \tilde{a}^{u_3}_{u_2} + \eta^{u_3}_{u_2} \tilde{a}^{u_1}_{u_4}
+   + \bar{\kappa}^{u_1 u_3}_{u_2 u_4} + \gamma^{u_1}_{u_4} \eta^{u_3}_{u_2}
