@@ -385,6 +385,21 @@ bool satisfies_connectivity(const Product &term, const OpProvenance &prov,
   return true;
 }
 
+/// rewrites every 1-body η of @p expr, a Sum, as δ - γ
+void rewrite_eta(ExprPtr &expr) {
+  expr->visit(
+      [](ExprPtr &e) {
+        if (e->is<Tensor>() &&
+            e->as<Tensor>().label() == density::hole_rdm_label()) {
+          const auto &t = e->as<Tensor>();
+          const Index &b = t.bra()[0], &k = t.ket()[0];
+          e = make_kronecker(b, k) - density::make_rdm(b, k);
+        }
+      },
+      /*atoms_only=*/true);
+  expand(expr);
+}
+
 }  // namespace
 
 template <Statistics S>
@@ -544,6 +559,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
     result->append(per_term(input));
   }
   ExprPtr out = result;
+  if (opts.eta_as_delta_minus_gamma) rewrite_eta(out);
   simplify(out);
   if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);
   return out;

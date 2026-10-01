@@ -412,4 +412,22 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_THAT(result, EquivalentTo(L"3 γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S "
                                       L"+ 3 κ{u_2,u_4;u_1,u_3}:A-H-S"));
   }
+
+  SECTION("extended_wick: η = δ - γ") {
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto result = extended_wick<Statistics::FermiDirac>(
+        in, {.eta_as_delta_minus_gamma = true});
+    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1}:N-H-S * δ{u_2;u_3} "
+                                      L"- γ{u_4;u_1}:N-H-S * γ{u_2;u_3}:N-H-S "
+                                      L"+ κ{u_2,u_4;u_1,u_3}:A-H-S"));
+    bool has_eta = false;
+    result->visit(
+        [&](const ExprPtr& e) {
+          if (e->is<Tensor>() && e->as<Tensor>().label() == L"η")
+            has_eta = true;
+        },
+        /*atoms_only=*/true);
+    REQUIRE(!has_eta);
+  }
 }
