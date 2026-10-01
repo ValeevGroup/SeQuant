@@ -89,10 +89,11 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
             new_kets.push_back(unique_kets_list[j].second[index_label_pos]);
             index_label_pos++;
           }
-          // mbpt tensors are particle (column) symmetric
           auto new_tensor = ex<Tensor>(
               label, bra(std::move(new_bras)), ket(std::move(new_kets)),
-              Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Symm);
+              TensorSymmetries{.perm = old_tensor.symmetry(),
+                               .hermiticity = old_tensor.hermiticity(),
+                               .column = old_tensor.column_symmetry()});
           new_product = new_tensor * new_product;
           new_product->canonicalize();
         }

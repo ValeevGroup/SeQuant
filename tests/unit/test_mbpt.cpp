@@ -1560,6 +1560,17 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(kappa2->as<Tensor>().bra()[1] == Index(L"i_4"));
   REQUIRE(kappa2->as<Tensor>().ket()[0] == Index(L"i_1"));
   REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
+  // every density a decomposition builds has these symmetries, including
+  // those that antisymmetrize() builds by permuting indices
+  const auto densities2 = mbpt::decompositions::cumulant2_to_density(kappa2);
+  densities2->visit(
+      [](const ExprPtr& e) {
+        if (!e->is<Tensor>()) return;
+        REQUIRE(e->as<Tensor>().label() == L"γ");
+        REQUIRE(e->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+        REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+      },
+      /*atoms_only=*/true);
   // η is a registered mbpt operator label
   REQUIRE(mbpt::get_default_mbpt_context().op_registry()->contains(L"η"));
 }
