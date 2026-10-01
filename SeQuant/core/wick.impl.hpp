@@ -696,6 +696,33 @@ void WickTheorem<S>::extract_indices(const Expr &expr,
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only,
                                 const bool skip_input_canonicalization) {
+  if (get_default_context(S).vacuum() == Vacuum::MultiProduct) {
+    if (count_only)
+      throw Exception(
+          "WickTheorem<S>::compute: count_only is not supported under a "
+          "MultiProduct vacuum");
+    if constexpr (S == Statistics::FermiDirac) {
+      return detail::extended_wick<S>(
+          expr_input_ ? expr_input_ : ExprPtr(input_),
+          {.full_contractions = full_contractions_,
+           .max_cumulant_rank = max_cumulant_rank_,
+           .eta_as_delta_minus_gamma = eta_as_delta_minus_gamma_,
+           .nop_connections =
+               nop_pairs(nop_connections_, nop_connections_input_),
+           .nop_avoided_connections = nop_pairs(
+               nop_avoided_connections_, nop_avoided_connections_input_)});
+    } else {
+      throw Exception(
+          "WickTheorem<S>::compute: bosons are not supported under a "
+          "MultiProduct vacuum");
+    }
+  }
+  return compute_contractions(count_only, skip_input_canonicalization);
+}
+
+template <Statistics S>
+ExprPtr WickTheorem<S>::compute_contractions(
+    const bool count_only, const bool skip_input_canonicalization) {
   // canonicalization of the operators produced by WickTheorem would undo
   // what NormalOperator<S>::normalize did, so the returned object scopes a
   // context in which they are not canonicalized; it installs nothing if the
@@ -780,7 +807,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       auto wick_task = [&result_acc, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input->clone(), *this);
-        auto task_result = wt.compute(
+        auto task_result = wt.compute_contractions(
             count_only, /* definitely skip input canonicalization */ true);
         stats() += wt.stats();
         if (task_result) {

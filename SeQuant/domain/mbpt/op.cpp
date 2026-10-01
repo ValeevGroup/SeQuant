@@ -1272,12 +1272,12 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
 
   // the expectation value in a MultiProduct vacuum is a full contraction
   if (get_default_context().vacuum() == Vacuum::MultiProduct) {
-    ExtendedWickOptions opts{.full_contractions = true,
-                             .use_topology = use_top};
+    sequant::detail::ExtendedWickOptions opts{.full_contractions = true};
     for (const auto& [a, b] : connect) opts.nop_connections.emplace_back(a, b);
     for (const auto& [a, b] : avoid)
       opts.nop_avoided_connections.emplace_back(a, b);
-    auto result = extended_wick<Statistics::FermiDirac>(expr, opts);
+    auto result =
+        sequant::detail::extended_wick<Statistics::FermiDirac>(expr, opts);
     restore_scalars(result);
     return result;
   }

@@ -51,11 +51,21 @@ struct WickTheorem<Statistics::FermiDirac>::access_by<WickAccessor> {
   auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
     return wick.compute_nontensor_wick(false);
   }
+  auto compute_contractions(WickTheorem<Statistics::FermiDirac>& wick) {
+    return wick.compute_contractions(false, false);
+  }
 };
 
 auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
   return WickTheorem<Statistics::FermiDirac>::access_by<WickAccessor>{}
       .compute_nontensor_wick(wick);
+}
+
+/// the standard theorem's contractions under any vacuum, bypassing the
+/// MultiProduct dispatch of WickTheorem::compute()
+auto compute_contractions(WickTheorem<Statistics::FermiDirac>& wick) {
+  return WickTheorem<Statistics::FermiDirac>::access_by<WickAccessor>{}
+      .compute_contractions(wick);
 }
 
 }  // namespace sequant
@@ -1094,7 +1104,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       auto opseq = ex<FNOperatorSeq>(FNOperator(cre({L"u_1"}), ann({L"u_2"})),
                                      FNOperator(cre({L"u_3"}), ann({L"u_4"})));
       auto wick = FWickTheorem{opseq};
-      auto result = wick.full_contractions(false).compute();
+      auto result = compute_contractions(wick.full_contractions(false));
       // = ã{u_2,u_4;u_1,u_3} - γ{u_4;u_1} ã{u_2;u_3} + η{u_2;u_3} ã{u_4;u_1}
       //   + γ{u_4;u_1} η{u_2;u_3}, built in code because deserialized ã
       //   carries a SingleProduct vacuum
@@ -1110,10 +1120,13 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // pair-based connectivity filters are not applied by the engine
       auto wick_connected = FWickTheorem{opseq};
       wick_connected.set_nop_connections({{0, 1}});
-      REQUIRE(wick_connected.full_contractions(false).compute()->size() == 4);
+      REQUIRE(compute_contractions(wick_connected.full_contractions(false))
+                  ->size() == 4);
       auto wick_avoided = FWickTheorem{opseq};
       wick_avoided.set_nop_avoided_connections({{0, 1}});
-      REQUIRE(wick_avoided.full_contractions(false).compute()->size() == 4);
+      REQUIRE(
+          compute_contractions(wick_avoided.full_contractions(false))->size() ==
+          4);
     }
 
     // general indices: the γ-type contraction is over R (core+active) and the
@@ -1123,7 +1136,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       auto opseq = ex<FNOperatorSeq>(FNOperator(cre({L"p_1"}), ann({L"p_2"})),
                                      FNOperator(cre({L"p_3"}), ann({L"p_4"})));
       auto wick = FWickTheorem{opseq};
-      auto result = wick.compute();
+      auto result = compute_contractions(wick);
       REQUIRE_THAT(result,
                    EquivalentTo(L"δ{p_4;M_1} * γ{M_1;M_2}:N-C-S * δ{M_2;p_1} * "
                                 L"δ{p_2;E_1} * η{E_1;E_2}:N-C-S * δ{E_2;p_3}"));
