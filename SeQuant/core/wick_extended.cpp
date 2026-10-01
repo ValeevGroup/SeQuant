@@ -1,9 +1,11 @@
 #include <SeQuant/core/wick_extended.hpp>
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -16,6 +18,21 @@ namespace sequant {
 namespace {
 
 using Blocks = container::svector<container::svector<std::size_t>>;
+
+/// the core (R minus U), active (R ∩ U) and virtual (U minus R) parts of
+/// the space, where R is the reference-occupied and U the vacuum-unoccupied
+/// space
+struct SpaceParts {
+  IndexSpace::Type core, active, virt;
+};
+
+SpaceParts space_parts(const IndexSpaceRegistry &isr,
+                       IndexSpace::QuantumNumbers qns) {
+  const auto r = isr.reference_occupied_space(qns).type();
+  const auto u = isr.vacuum_unoccupied_space(qns).type();
+  const auto active = r.intersection(u);
+  return {r.xOr(active), active, u.xOr(active)};
+}
 
 /// enumerates every way to group the ops of @p survivors into disjoint
 /// cumulant blocks and (unless @p full) a remainder, and reports each via
@@ -33,6 +50,12 @@ void for_each_block_assignment(const NormalOperator<S> &survivors,
 
   auto is_cre = [&](std::size_t i) {
     return survivors[i].action() == Action::Create;
+  };
+  const auto &isr = *get_default_context(S).index_space_registry();
+  // only active ops can be cumulant legs
+  auto is_active = [&](std::size_t i) {
+    const auto &sp = survivors[i].index().space();
+    return space_parts(isr, sp.qns()).active.includes(sp.type());
   };
   auto prov = [&](std::size_t i) {
     auto it = provenance.find(survivors[i].index());
@@ -74,11 +97,11 @@ void for_each_block_assignment(const NormalOperator<S> &survivors,
     // `first` stays in the remainder
     if (!full) recurse(first + 1);
     // `first` is the lowest leg of a new block
-    if (max_rank < 2) return;
+    if (max_rank < 2 || !is_active(first)) return;
     const std::size_t block_id = blocks.size();
     container::svector<std::size_t> cre_cands, ann_cands;
     for (std::size_t i = first + 1; i != n; ++i)
-      if (assignment[i] == npos)
+      if (assignment[i] == npos && is_active(i))
         (is_cre(i) ? cre_cands : ann_cands).push_back(i);
     const auto &same = is_cre(first) ? cre_cands : ann_cands;
     const auto &other = is_cre(first) ? ann_cands : cre_cands;

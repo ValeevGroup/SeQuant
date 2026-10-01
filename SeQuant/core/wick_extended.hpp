@@ -61,12 +61,13 @@ rational term_weight(
 /// @param provenance the input NormalOperator ordinal of every surviving Op
 /// @param opts only `full_contractions` and `max_cumulant_rank` are used
 /// @note a block has k creators and k annihilators, 2 <= k <=
-///       `max_cumulant_rank`, and legs from at least two input
+///       `max_cumulant_rank`, all active, and legs from at least two input
 ///       NormalOperators; its sign is the parity of moving each block's legs,
 ///       in order, to the front of the surviving operator string, and the
 ///       remaining operators (if `!opts.full_contractions`) are kept as a
 ///       MultiProduct-vacuum NormalOperator
-/// @pre every γ/η/surviving index is pure-active
+/// @pre every γ/η index is pure-active, and every surviving index is
+///      pure-active, pure core or pure virtual
 template <Statistics S>
 ExprPtr cumulant_expand(const ExprPtr &wick_output,
                         const OpProvenance &provenance,
