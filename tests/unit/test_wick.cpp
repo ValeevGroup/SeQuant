@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -1079,6 +1080,72 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       }
     }
   }
+
+  SECTION("multiproduct vacuum") {
+    auto ctx = get_default_context();
+    ctx.set(mbpt::make_mr_spaces());
+    ctx.set(Vacuum::MultiProduct);
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    // raw engine output: two active 1-body operators, partial contractions
+    // = {a†_u1 a_u2}{a†_u3 a_u4}: 4 terms, with active pairs emitted as γ
+    // (cre·ann) and η (ann·cre) rather than overlaps
+    {
+      auto opseq = ex<FNOperatorSeq>(FNOperator(cre({L"u_1"}), ann({L"u_2"})),
+                                     FNOperator(cre({L"u_3"}), ann({L"u_4"})));
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.full_contractions(false).compute();
+      // = ã{u_2,u_4;u_1,u_3} - γ{u_4;u_1} ã{u_2;u_3} + η{u_2;u_3} ã{u_4;u_1}
+      //   + γ{u_4;u_1} η{u_2;u_3}, built in code because deserialized ã
+      //   carries a SingleProduct vacuum
+      const Index u_1(L"u_1"), u_2(L"u_2"), u_3(L"u_3"), u_4(L"u_4");
+      const auto expected =
+          ex<FNOperator>(cre({u_1, u_3}), ann({u_2, u_4})) -
+          density::make_rdm(u_4, u_1) * ex<FNOperator>(cre({u_3}), ann({u_2})) +
+          density::make_hole_rdm(u_2, u_3) *
+              ex<FNOperator>(cre({u_1}), ann({u_4})) +
+          density::make_rdm(u_4, u_1) * density::make_hole_rdm(u_2, u_3);
+      REQUIRE_THAT(result, EquivalentTo(expected));
+
+      // pair-based connectivity filters are not applied by the engine
+      auto wick_connected = FWickTheorem{opseq};
+      wick_connected.set_nop_connections({{0, 1}});
+      REQUIRE(wick_connected.full_contractions(false).compute()->size() == 4);
+      auto wick_avoided = FWickTheorem{opseq};
+      wick_avoided.set_nop_avoided_connections({{0, 1}});
+      REQUIRE(wick_avoided.full_contractions(false).compute()->size() == 4);
+    }
+
+    // general indices: the γ-type contraction is over R (core+active) and the
+    // η-type over U (active+virtual); projections are spelled with δ as in
+    // the SingleProduct case
+    {
+      auto opseq = ex<FNOperatorSeq>(FNOperator(cre({L"p_1"}), ann({L"p_2"})),
+                                     FNOperator(cre({L"p_3"}), ann({L"p_4"})));
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.compute();
+      REQUIRE_THAT(result,
+                   EquivalentTo(L"δ{p_4;M_1} * γ{M_1;M_2}:N-C-S * δ{M_2;p_1} * "
+                                L"δ{p_2;E_1} * η{E_1;E_2}:N-C-S * δ{E_2;p_3}"));
+    }
+
+    // a protoindexed index may never reach the active space
+    {
+      const Index u1(L"u_1");
+      const Index a_u1(L"a_1", {u1});  // a_1 depends on u_1, lives in virtual
+      // fine: a virtual-only contraction does not reach the active space
+      REQUIRE(FWickTheorem::can_contract(fann(a_u1), fcre(L"a_2")));
+      REQUIRE_NOTHROW(FWickTheorem::contract(fann(a_u1), fcre(L"a_2")));
+      // not fine: a general index with protoindices projected onto R∩U
+      const Index p_u1(L"p_1", {u1});
+      if (sequant::assert_behavior() == sequant::AssertBehavior::Throw) {
+        REQUIRE_THROWS_AS(
+            FWickTheorem::contract(
+                Op<Statistics::FermiDirac>(p_u1, Action::Create), fann(L"u_2")),
+            Exception);
+      }
+    }
+  }  // SECTION("multiproduct vacuum")
 
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;

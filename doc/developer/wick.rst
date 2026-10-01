@@ -17,7 +17,8 @@ or a general :class:`sequant::Expr` (repeated indices assumed dummy), then tuned
   ``Expr`` — ``NormalOperator`` objects attached to the same tensor label, as topologically equivalent, so that contractions related by
   this equivalence are not separately enumerated when only the fully-contracted result (the vacuum average) is wanted.
 - ``set_nop_connections()`` / ``set_nop_avoided_connections()``: force, or forbid, contraction between specific pairs of normal-operator
-  ordinals.
+  ordinals. Under a ``Vacuum::MultiProduct`` vacuum the engine does not apply them, since a cumulant block can connect operators that no
+  single contraction pair connects.
 - ``set_nop_partitions()`` / ``set_op_partitions()`` / ``make_default_op_partitions()``: declare explicit equivalence groups of normal
   operators, or of individual ``Op``\ s, so that contractions related by permuting within a group are counted once with a combinatorial
   degeneracy factor rather than enumerated redundantly — the general form of what ``use_topology()`` infers automatically.
@@ -56,7 +57,9 @@ subspaces or not:
 - only the right space pure: :math:`\delta(L,l)\, s(l,R)`,
 
 where :math:`l = L \cap H` and :math:`r = R \cap P` (:math:`H`/:math:`P` the hole/particle subspaces), materialized via temporary indices
-from ``Index::make_tmp_index`` when a space needs projecting. For fermionic statistics, each contraction additionally picks up a sign of
+from ``Index::make_tmp_index`` when a space needs projecting. Under a ``Vacuum::MultiProduct`` vacuum the middle factor :math:`s` is
+replaced by the one-body density :math:`\gamma` when ``left`` is a creator and by the hole density :math:`\eta` when it is an annihilator
+(``SeQuant/core/density.hpp``). For fermionic statistics, each contraction additionally picks up a sign of
 :math:`-1` for every operator that sat strictly between ``left`` and ``right`` at the time of contraction — the usual anticommutation
 rule.
 

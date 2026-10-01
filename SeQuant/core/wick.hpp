@@ -6,6 +6,7 @@
 #define SEQUANT_WICK_HPP
 
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -568,6 +569,15 @@ class WickTheorem {
       });
       return std::nullopt;
     }
+  }
+
+  /// @return whether the engine applies the pair-based connectivity filters
+  /// given by set_nop_connections and set_nop_avoided_connections; under a
+  /// MultiProduct vacuum connectivity is a property of the cumulant-expanded
+  /// result (cumulant blocks connect operators that no pair does), so the
+  /// filters are not applied by the engine
+  bool pairwise_connectivity() const {
+    return input_->vacuum() != Vacuum::MultiProduct;
   }
 
   enum class TopologicalPartitionType { NormalOperator, Index };
@@ -1171,7 +1181,8 @@ class WickTheorem {
 
     // if computing everything, and the user does not insist on some
     // target contractions, include the contraction-free term
-    if (!full_contractions_ && nop_nconnections_total_ == 0) {
+    if (!full_contractions_ &&
+        (nop_nconnections_total_ == 0 || !pairwise_connectivity())) {
       if (count_only) {
         ++state.count;
       } else {
@@ -1216,6 +1227,12 @@ class WickTheorem {
 
     const auto &ctx = state.ctx;
     const auto &isr = ctx.index_space_registry();
+
+    static const container::svector<std::bitset<max_input_size>> unconstrained;
+    const auto &target_connections =
+        pairwise_connectivity() ? nop_connections_ : unconstrained;
+    const auto &avoided_connections =
+        pairwise_connectivity() ? nop_avoided_connections_ : unconstrained;
 
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)
@@ -1440,7 +1457,7 @@ class WickTheorem {
                            ctx.index_space_registry())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
-              if (state.connect(nop_connections_, nop_avoided_connections_,
+              if (state.connect(target_connections, avoided_connections,
                                 ranges::get_cursor(op_left_iter),
                                 ranges::get_cursor(op_right_iter))) {
                 if (Logger::instance().wick_contract) {
@@ -1595,7 +1612,7 @@ class WickTheorem {
                 ++state.nopseq_size;
                 ranges::get_cursor(op_right_iter).insert(std::move(right));
                 ++state.nopseq_size;
-                state.disconnect(nop_connections_,
+                state.disconnect(target_connections,
                                  ranges::get_cursor(op_left_iter),
                                  ranges::get_cursor(op_right_iter));
                 //            std::wcout << "  restored nopseq = " <<
@@ -1621,6 +1638,17 @@ class WickTheorem {
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ASSERT(vacuum == Vacuum::Physical);
     return sequant::can_contract(left, right, vacuum, isr);
+  }
+
+  /// the value of a single contraction between @p bra (the annihilator's
+  /// index) and @p ket (the creator's index), both already projected onto
+  /// the common quasiparticle space; this is where a spin-free variant
+  /// would substitute its own tensors
+  static ExprPtr contraction_value(const Index &bra, const Index &ket,
+                                   bool left_is_annihilator, Vacuum vacuum) {
+    if (vacuum != Vacuum::MultiProduct) return make_overlap(bra, ket);
+    return left_is_annihilator ? density::make_hole_rdm(bra, ket)
+                               : density::make_rdm(bra, ket);
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
@@ -1651,6 +1679,23 @@ class WickTheorem {
       qpspace_common = isr->intersection(qpspace_left, qpspace_right);
     }
 
+    if constexpr (S == Statistics::FermiDirac) {
+      if (vacuum == Vacuum::MultiProduct &&
+          (left.index().has_proto_indices() ||
+           right.index().has_proto_indices())) {
+        const auto &sp =
+            left_is_pure && right_is_pure
+                ? isr->intersection(left.index().space(), right.index().space())
+                : qpspace_common;
+        const auto qns = sp.qns();
+        const auto &active =
+            isr->intersection(isr->reference_occupied_space(qns),
+                              isr->vacuum_unoccupied_space(qns));
+        SEQUANT_ASSERT(!isr->intersection(sp, active) &&
+                       "protoindexed indices must not reach the active space");
+      }
+    }
+
     std::optional<Index> left_qp_idx;
     if (!left_is_pure) {
       left_qp_idx =
@@ -1674,13 +1719,14 @@ class WickTheorem {
     const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
 
     if (bra_is_pure && ket_is_pure) {
-      return make_overlap(bra_idx, ket_idx);
+      return contraction_value(bra_idx, ket_idx, left_is_ann, vacuum);
     } else {
       auto result = std::make_shared<Product>();
       SEQUANT_ASSERT(bra_is_pure || bra_qp_idx_opt);
       SEQUANT_ASSERT(ket_is_pure || ket_qp_idx_opt);
-      result->append(1, make_overlap(bra_qp_idx_opt.value_or(bra_idx),
-                                     ket_qp_idx_opt.value_or(ket_idx)));
+      result->append(1, contraction_value(bra_qp_idx_opt.value_or(bra_idx),
+                                          ket_qp_idx_opt.value_or(ket_idx),
+                                          left_is_ann, vacuum));
       if (!bra_is_pure)
         result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
       if (!ket_is_pure)
