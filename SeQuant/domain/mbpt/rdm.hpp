@@ -18,6 +18,12 @@ ExprPtr cumulant2_to_density(ExprPtr ex_);
 
 ExprPtr cumulant3_to_density(ExprPtr ex_);
 
+/// replaces every cumulant κ_k (k ≤ 3) in @p expr by its expansion in
+/// densities, then expands and simplifies
+/// @note a κ is recognized by its label alone, whatever its symmetries
+/// @throw Exception for a κ of rank > 3
+ExprPtr cumulants_to_densities(ExprPtr expr);
+
 ExprPtr one_body_sub(ExprPtr ex_);
 
 ExprPtr two_body_decomp(ExprPtr ex_, bool approx = false);

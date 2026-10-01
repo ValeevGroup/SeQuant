@@ -100,6 +100,39 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
   return temp_result;
 }
 
+ExprPtr cumulants_to_densities(ExprPtr expr) {
+  auto replace = [](ExprPtr& e) {
+    if (!e->is<Tensor>() ||
+        e->as<Tensor>().label() != density::cumulant_label())
+      return;
+    switch (e->as<Tensor>().rank()) {
+      case 1:
+        e = cumulant_to_density(e);
+        break;
+      case 2:
+        e = cumulant2_to_density(e);
+        break;
+      case 3:
+        e = cumulant3_to_density(e);
+        break;
+      default:
+        throw Exception(
+            "cumulants_to_densities: only cumulants of rank <= 3 are "
+            "supported");
+    }
+  };
+
+  expr = expr->clone();
+  // visit() does not replace the expression it is called on
+  if (expr->is_atom())
+    replace(expr);
+  else
+    expr->visit(replace, /*atoms_only=*/true);
+  expand(expr);
+  simplify(expr);
+  return expr;
+}
+
 ExprPtr one_body_sub(ExprPtr ex_) {  // J. Chem. Phys. 132, 234107 (2010);
   // https://doi.org/10.1063/1.3439395 eqn 15 for
   SEQUANT_ASSERT(ex_->is<FNOperator>());
