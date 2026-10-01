@@ -210,8 +210,13 @@ bool is_pure_qpcreator(const Op<S> &op,
              (isr->is_pure_unoccupied(op.index().space()) &&
               op.action() == Action::Create);
     }
-    case Vacuum::MultiProduct:
-      throw Exception("is_pure_qpcreator: cannot handle MultiProduct vacuum");
+    case Vacuum::MultiProduct: {
+      const auto &sp = op.index().space();
+      const auto &target = op.action() == Action::Create
+                               ? isr->vacuum_unoccupied_space(sp.qns())
+                               : isr->reference_occupied_space(sp.qns());
+      return isr->intersection(sp, target) == sp;
+    }
   }
 
   SEQUANT_UNREACHABLE;
@@ -232,8 +237,13 @@ bool is_qpcreator(const Op<S> &op,
               op.action() == Action::Annihilate) ||
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::Create);
-      case Vacuum::MultiProduct:
-        throw Exception("is_qpcreator: cannot handle MultiProduct vacuum");
+    }
+    case Vacuum::MultiProduct: {
+      const auto &sp = op.index().space();
+      const auto &target = op.action() == Action::Create
+                               ? isr->vacuum_unoccupied_space(sp.qns())
+                               : isr->reference_occupied_space(sp.qns());
+      return static_cast<bool>(isr->intersection(sp, target));
     }
   }
 
@@ -257,8 +267,13 @@ IndexSpace qpcreator_space(
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    case Vacuum::MultiProduct:
-      throw Exception("qpcreator_space: cannot handle MultiProduct vacuum");
+    case Vacuum::MultiProduct: {
+      const auto &sp = op.index().space();
+      return op.action() == Action::Create
+                 ? isr->intersection(sp, isr->vacuum_unoccupied_space(sp.qns()))
+                 : isr->intersection(sp,
+                                     isr->reference_occupied_space(sp.qns()));
+    }
   }
 
   SEQUANT_UNREACHABLE;
@@ -280,9 +295,13 @@ bool is_pure_qpannihilator(
              (isr->is_pure_occupied(op.index().space()) &&
               op.action() == Action::Create);
     }
-    case Vacuum::MultiProduct:
-      throw Exception(
-          "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
+    case Vacuum::MultiProduct: {
+      const auto &sp = op.index().space();
+      const auto &target = op.action() == Action::Annihilate
+                               ? isr->vacuum_unoccupied_space(sp.qns())
+                               : isr->reference_occupied_space(sp.qns());
+      return isr->intersection(sp, target) == sp;
+    }
   }
 
   SEQUANT_UNREACHABLE;
@@ -304,8 +323,13 @@ bool is_qpannihilator(const Op<S> &op,
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::Annihilate);
     }
-    case Vacuum::MultiProduct:
-      throw Exception("is_qpannihilator: cannot handle MultiProduct vacuum");
+    case Vacuum::MultiProduct: {
+      const auto &sp = op.index().space();
+      const auto &target = op.action() == Action::Annihilate
+                               ? isr->vacuum_unoccupied_space(sp.qns())
+                               : isr->reference_occupied_space(sp.qns());
+      return static_cast<bool>(isr->intersection(sp, target));
+    }
   }
 
   SEQUANT_UNREACHABLE;
@@ -328,8 +352,13 @@ IndexSpace qpannihilator_space(
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    case Vacuum::MultiProduct:
-      throw Exception("qpcreator_space: cannot handle MultiProduct vacuum");
+    case Vacuum::MultiProduct: {
+      const auto &sp = op.index().space();
+      return op.action() == Action::Annihilate
+                 ? isr->intersection(sp, isr->vacuum_unoccupied_space(sp.qns()))
+                 : isr->intersection(sp,
+                                     isr->reference_occupied_space(sp.qns()));
+    }
   }
 
   SEQUANT_UNREACHABLE;
@@ -343,6 +372,11 @@ bool can_contract(const Op<S> &left, const Op<S> &right,
                   Vacuum vacuum = get_default_context(S).vacuum(),
                   const std::shared_ptr<const IndexSpaceRegistry> &isr =
                       get_default_context(S).index_space_registry()) {
+  // only cre.ann and ann.cre have nonzero reference expectation values; an
+  // active op is both a qp creator and a qp annihilator, so the actions must
+  // be checked explicitly
+  if (vacuum == Vacuum::MultiProduct && left.action() == right.action())
+    return false;
   if (is_qpannihilator<S>(left, vacuum, isr) &&
       is_qpcreator<S>(right, vacuum, isr)) {
     const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
