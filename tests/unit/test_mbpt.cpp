@@ -1364,7 +1364,8 @@ SECTION("MRSO-MultiProduct") {
                       Exception);
   }
 
-  // extended_wick ignores use_topology, so this only guards the dispatch
+  // use_topology has no effect under MultiProduct, so this only guards the
+  // dispatch
   SECTION("topology on/off agree") {
     auto a = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
     auto b = t::ref_av(t::h(2) * t::t(2),
