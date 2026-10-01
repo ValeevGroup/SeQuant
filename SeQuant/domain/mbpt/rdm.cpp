@@ -31,7 +31,7 @@ constexpr TensorSymmetries hermitian_particle_symmetric{
 constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 }  // namespace
 
-ExprPtr cumu_to_density(ExprPtr ex_) {
+ExprPtr cumulant_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 1);
   SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_cumulant_label());
@@ -43,7 +43,7 @@ ExprPtr cumu_to_density(ExprPtr ex_) {
   return density;
 }
 
-sequant::ExprPtr cumu2_to_density(sequant::ExprPtr ex_) {
+sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 2);
   SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_cumulant_label());
@@ -64,7 +64,7 @@ sequant::ExprPtr cumu2_to_density(sequant::ExprPtr ex_) {
   return density2 + ex<Constant>(-1) * d1_d2.result;
 }
 
-ExprPtr cumu3_to_density(ExprPtr ex_) {
+ExprPtr cumulant3_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 3);
   SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_cumulant_label());
@@ -98,7 +98,7 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
       if (factor->is<Tensor>() &&
           (factor->as<Tensor>().label() == rdm_cumulant_label()) &&
           (factor->as<Tensor>().rank() == 2)) {
-        factor = cumu2_to_density(factor);
+        factor = cumulant2_to_density(factor);
       }
     }
   }
@@ -107,7 +107,7 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
       if (factor->is<Tensor>() &&
           factor->as<Tensor>().label() == rdm_cumulant_label() &&
           factor->as<Tensor>().rank() == 1) {
-        factor = cumu_to_density(factor);
+        factor = cumulant_to_density(factor);
       }
     }
   }
@@ -263,13 +263,13 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
           if (factor->is<Tensor>()) {
             if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
                 factor->as<Tensor>().rank() == 3) {
-              factor = cumu3_to_density(factor);
+              factor = cumulant3_to_density(factor);
             } else if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
                        factor->as<Tensor>().rank() == 2) {
-              factor = cumu2_to_density(factor);
+              factor = cumulant2_to_density(factor);
             } else if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
                        factor->as<Tensor>().rank() == 1) {
-              factor = cumu_to_density(factor);
+              factor = cumulant_to_density(factor);
             } else {
               SEQUANT_ASSERT(factor->as<Tensor>().label() !=
                              rdm_cumulant_label());
@@ -321,9 +321,9 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
               factor = ex<Constant>(0);
             } else if (factor->as<Tensor>().label() == rdm_cumulant_label() &&
                        factor->as<Tensor>().rank() == 2) {
-              factor = cumu2_to_density(factor);
+              factor = cumulant2_to_density(factor);
             } else if (factor->as<Tensor>().label() == rdm_cumulant_label()) {
-              factor = cumu_to_density(factor);
+              factor = cumulant_to_density(factor);
             } else {
               SEQUANT_ASSERT(factor->as<Tensor>().label() !=
                              rdm_cumulant_label());
@@ -348,7 +348,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
                 factor->as<Tensor>().rank() > 1) {
               factor = ex<Constant>(0);
             } else if (factor->as<Tensor>().label() == rdm_cumulant_label()) {
-              factor = cumu_to_density(factor);
+              factor = cumulant_to_density(factor);
             } else {
               SEQUANT_ASSERT(factor->as<Tensor>().label() !=
                              rdm_cumulant_label());
