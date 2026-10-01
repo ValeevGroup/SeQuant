@@ -731,7 +731,12 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
 
   // construct graph representation of the tensor product
   using TN = TensorNetwork;
-  TN tn(product.factors());
+  // index-free factors (e.g. Variable) are not tensors and cannot affect the
+  // graph
+  TN tn(product.factors() | ranges::views::filter([](const ExprPtr &factor) {
+          return factor->is<AbstractTensor>();
+        }) |
+        ranges::to<container::svector<ExprPtr>>);
   auto g = tn.create_graph({.distinct_named_indices = true});
   const auto &graph = g.bliss_graph;
   const auto &vlabels = g.vertex_labels;

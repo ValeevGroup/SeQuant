@@ -539,6 +539,15 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(attempted_on < attempted_off);
     }
 
+    // an index-free factor does not take part in the topology analysis
+    {
+      const auto c_g_t = ex<Variable>(L"c") * g_op * t_op;
+      ExprPtr on, off;
+      REQUIRE_NOTHROW(on = run(c_g_t, true, true).first);
+      off = run(c_g_t, true, false).first;
+      REQUIRE(simplify(on - off) == ex<Constant>(0));
+    }
+
     // operators 1 and 2 are equivalent, but only 1 must connect to 0
     auto t1_op = [&](std::wstring_view b, std::wstring_view k) {
       return ex<Tensor>(L"t", bra{b}, ket{k}, Symmetry::Nonsymm,

@@ -584,6 +584,28 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       compute(nop({}, {L"p_1", L"p_2"}) * nop({L"p_1", L"p_2"}, {}));
     }
 
+    // an index-free factor does not take part in the topology analysis
+    {
+      auto expr = ex<Variable>(L"c") *
+                  ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"},
+                             Symmetry::Antisymm) *
+                  ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"})) *
+                  ex<Tensor>(L"g", bra{L"i_5", L"i_6"}, ket{L"i_7", L"i_8"},
+                             Symmetry::Antisymm) *
+                  ex<FNOperator>(cre({L"i_5", L"i_6"}), ann({L"i_7", L"i_8"}));
+      std::array<ExprPtr, 2> result;
+      std::array<std::size_t, 2> attempted;
+      for (const bool top : {false, true}) {
+        FWickTheorem wick{expr->clone()};
+        REQUIRE_NOTHROW(
+            result[top] =
+                wick.full_contractions(false).use_topology(top).compute());
+        attempted[top] = wick.stats().num_attempted_contractions;
+      }
+      REQUIRE(simplify(result[1] - result[0]) == ex<Constant>(0));
+      REQUIRE(attempted[1] < attempted[0]);
+    }
+
   }  // SECTION("physical vacuum")
 
   SECTION("fermi vacuum") {
