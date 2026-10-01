@@ -101,6 +101,7 @@ set(mbpt_test_sources
     "test_basis_wick.cpp"
     "test_biorthogonalization.cpp"
     "test_csv_mbpt.cpp"
+    "test_csv_rules.cpp"
     "test_mbpt.cpp"
     "test_mbpt_cc.cpp"
     "test_spin.cpp"
