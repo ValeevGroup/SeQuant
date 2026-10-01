@@ -129,10 +129,11 @@ int permutation_parity(std::span<T> p, bool overwrite = false) {
   for (std::size_t k = 0; k != N; ++k) {
     if (p[k] >= N) continue;
     std::size_t i = k;
-    std::size_t cycle_length = 1;
+    std::size_t cycle_length = 0;
     do {
-      i = p[i];
+      const std::size_t next = p[i];
       p[i] += N;
+      i = next;
       ++cycle_length;
     } while (p[i] < N);
     if (cycle_length % 2 == 0) parity *= -1;

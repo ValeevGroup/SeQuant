@@ -16,6 +16,7 @@
 #include <SeQuant/core/utility/expr_matcher.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -23,9 +24,12 @@
 
 #include <range/v3/view/transform.hpp>
 
+#include <algorithm>
 #include <compare>
 #include <limits>
+#include <numeric>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -108,6 +112,31 @@ TEST_CASE("bubble_sort_parity", "[utilities]") {
   auto descending = make({1, 2, 3});
   REQUIRE(bubble_sort_parity(descending, std::greater<>{}) == -1);
   REQUIRE(as_ints(descending) == std::vector<int>{3, 2, 1});
+}
+
+TEST_CASE("permutation_parity", "[utilities]") {
+  using namespace sequant;
+
+  // reference: parity of the number of inversions
+  auto inversion_parity = [](const std::vector<std::size_t>& p) {
+    std::size_t ninv = 0;
+    for (std::size_t i = 0; i < p.size(); ++i)
+      for (std::size_t j = i + 1; j < p.size(); ++j)
+        if (p[i] > p[j]) ++ninv;
+    return ninv % 2 == 0 ? 1 : -1;
+  };
+
+  for (std::size_t n = 0; n <= 5; ++n) {
+    std::vector<std::size_t> p(n);
+    std::iota(p.begin(), p.end(), 0);
+    do {
+      auto copy = p;
+      REQUIRE(permutation_parity(std::span(copy)) == inversion_parity(p));
+      copy = p;
+      REQUIRE(permutation_parity(std::span(copy), true) == inversion_parity(p));
+      REQUIRE(copy == p);
+    } while (std::next_permutation(p.begin(), p.end()));
+  }
 }
 
 TEST_CASE("reset_tags", "[utilities]") {
