@@ -1560,6 +1560,24 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(kappa2->as<Tensor>().bra()[1] == Index(L"i_4"));
   REQUIRE(kappa2->as<Tensor>().ket()[0] == Index(L"i_1"));
   REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
+  // antisymmetrize() generates each distinct pairing once, also under the
+  // topological canonicalization that the test suite defaults to
+  {
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizationMethod::Topological));
+    auto topological = set_scoped_default_context(ctx);
+    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
+    const auto kappa = ex<Tensor>(L"κ", bra{i1, i3}, ket{i2, i4},
+                                  density::cumulant_symmetries);
+    const auto expected =
+        ex<Tensor>(L"γ", bra{i1, i3}, ket{i2, i4},
+                   density::cumulant_symmetries) -
+        density::make_rdm(i1, i2) * density::make_rdm(i3, i4) +
+        density::make_rdm(i1, i4) * density::make_rdm(i3, i2);
+    REQUIRE(simplify(mbpt::decompositions::cumulant2_to_density(kappa) -
+                     expected) == ex<Constant>(0));
+  }
   // every density a decomposition builds has these symmetries, including
   // those that antisymmetrize() builds by permuting indices
   const auto densities2 =
