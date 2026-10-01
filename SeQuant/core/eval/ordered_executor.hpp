@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/forest_combine.hpp>
+#include <SeQuant/core/eval/loop_space_key.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
@@ -587,7 +588,7 @@ template <typename Modes>
 [[nodiscard]] std::string dag_scope(Modes&& modes) {
   return join_strings<std::string>(
       std::forward<Modes>(modes), ",",
-      [](Index const& m) { return toUtf8(m.space().base_key()); });
+      [](Index const& m) { return toUtf8(loop_space_key(m)); });
 }
 
 /// value id -> forest node: the node of \p vmap whose value key is that of
