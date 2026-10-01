@@ -68,6 +68,11 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
         return value;
       };
 
+  // each index occurs once, so canonicalize treats all of them as named;
+  // ordering by their labels makes equal products canonicalize identically,
+  // so that summand_exists finds the repeats
+  const auto canon_opts = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::IgnoreNamedIndexLabel::No);
   for (int i = 0; i < unique_bras_list.size(); i++) {
     for (int j = 0; j < unique_kets_list.size(); j++) {  // product level
 
@@ -95,7 +100,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
                                .hermiticity = old_tensor.hermiticity(),
                                .column = old_tensor.column_symmetry()});
           new_product = new_tensor * new_product;
-          new_product->canonicalize();
+          new_product->canonicalize(canon_opts);
         }
 
         else if (it->get()->is<FNOperator>()) {
@@ -110,7 +115,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
           auto new_Nop = ex<FNOperator>(cre(new_crea), ann(new_anni));
           new_product = new_product * new_Nop;
           // std::wcout << "product:  " << to_latex(new_product) << std::endl;
-          new_product->canonicalize();
+          new_product->canonicalize(canon_opts);
         }
 
         else {
