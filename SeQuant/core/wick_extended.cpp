@@ -18,7 +18,7 @@
 #include <optional>
 #include <string>
 
-namespace sequant {
+namespace sequant::detail {
 
 namespace {
 
@@ -527,10 +527,7 @@ template ExprPtr cumulant_expand<Statistics::FermiDirac>(
 template <Statistics S>
 ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
   const auto &ctx = get_default_context(S);
-  if (ctx.vacuum() != Vacuum::MultiProduct)
-    throw Exception(
-        "extended_wick: the default context's vacuum must be "
-        "Vacuum::MultiProduct");
+  SEQUANT_ASSERT(ctx.vacuum() == Vacuum::MultiProduct);
   const auto &isr = *ctx.index_space_registry();
 
   // provenance is per input term
@@ -574,14 +571,15 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
          {opts.nop_connections, opts.nop_avoided_connections})
       for (const auto &[a, b] : pairs)
         if (std::max(a, b) >= nopseq->size())
-          throw Exception("extended_wick: connection ordinal " +
+          throw Exception("WickTheorem::compute: connection ordinal " +
                           std::to_string(std::max(a, b)) + " exceeds the " +
                           std::to_string(nopseq->size()) +
                           " input operators of a term");
 
     WickTheorem<S> wick{nopseq};
     wick.full_contractions(false);
-    const ExprPtr raw = wick.compute();
+    const ExprPtr raw = wick.compute_contractions(
+        /*count_only=*/false, /*skip_input_canonicalization=*/false);
 
     auto result = std::make_shared<Sum>();
     auto process = [&](const ExprPtr &t) {
@@ -638,4 +636,4 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
 template ExprPtr extended_wick<Statistics::FermiDirac>(
     ExprPtr, const ExtendedWickOptions &);
 
-}  // namespace sequant
+}  // namespace sequant::detail

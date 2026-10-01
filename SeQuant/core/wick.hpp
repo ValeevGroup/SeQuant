@@ -17,6 +17,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/wick_extended.hpp>
 
 #include <range/v3/algorithm/adjacent_find.hpp>
 #include <range/v3/algorithm/any_of.hpp>
@@ -46,6 +47,11 @@
 namespace sequant {
 
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
+///
+/// Under a Vacuum::MultiProduct default context the operators are
+/// normal-ordered relative to a multideterminantal reference and compute()
+/// applies the extended (generalized-normal-order) theorem, whose result is
+/// expressed in terms of the reference's densities γ, η and cumulants κ.
 ///
 /// @tparam S particle statistics
 template <Statistics S>
@@ -133,6 +139,27 @@ class WickTheorem {
     return *this;
   }
 
+  /// Controls the largest cumulant formed by the next call to compute();
+  /// only matters under a Vacuum::MultiProduct vacuum. By default cumulants of
+  /// every rank are formed.
+  /// @param rank the largest rank of a cumulant; std::nullopt means no bound,
+  /// 0 or 1 means that no cumulant is formed
+  /// @return reference to @c *this , for daisy-chaining
+  WickTheorem &max_cumulant_rank(std::optional<std::size_t> rank) {
+    max_cumulant_rank_ = rank;
+    return *this;
+  }
+
+  /// Controls whether the next call to compute() spells every hole density η
+  /// as δ - γ; only matters under a Vacuum::MultiProduct vacuum. By default η
+  /// is kept.
+  /// @param edmg if true, will rewrite every η as δ - γ
+  /// @return reference to @c *this , for daisy-chaining
+  WickTheorem &eta_as_delta_minus_gamma(bool edmg) {
+    eta_as_delta_minus_gamma_ = edmg;
+    return *this;
+  }
+
   /// Controls whether next call to compute() will assume spin-free or
   /// spin-orbital normal-ordered operators By default compute() assumes
   /// spin-orbital operators.
@@ -165,6 +192,9 @@ class WickTheorem {
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is enabled.
+  /// @note has no effect under a Vacuum::MultiProduct vacuum: there every
+  /// operator index is kept named, so that the operator it came from is
+  /// known, and named operators are never topologically equivalent
   /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
@@ -177,6 +207,8 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
+  /// @note under a Vacuum::MultiProduct vacuum a cumulant connects every
+  /// operator its indices come from
   /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
@@ -207,6 +239,8 @@ class WickTheorem {
   /// avoided pair is rejected.
   /// @param op_index_pairs the list of pairs of op indices that must not be
   /// directly contracted
+  /// @note under a Vacuum::MultiProduct vacuum a cumulant connects every
+  /// operator its indices come from
   /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
@@ -382,8 +416,12 @@ class WickTheorem {
   /// Product, or a Sum
   /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
+  /// @note under a Vacuum::MultiProduct vacuum the input is always
+  /// canonicalized
   /// @throw Exception if input's vacuum does not match the current
   /// context vacuum
+  /// @throw Exception under a Vacuum::MultiProduct vacuum if @p count_only is
+  /// true or @p S is Statistics::BoseEinstein
   ExprPtr compute(bool count_only = false,
                   bool skip_input_canonicalization = false);
 
@@ -441,7 +479,17 @@ class WickTheorem {
   mutable ExprPtr prefactor_;
   bool full_contractions_ = true;
   bool use_topology_ = true;
+  std::optional<std::size_t> max_cumulant_rank_;
+  bool eta_as_delta_minus_gamma_ = false;
   mutable Stats stats_;
+
+  // the standard theorem's contractions under any vacuum
+  ExprPtr compute_contractions(bool count_only,
+                               bool skip_input_canonicalization);
+
+  // the extended theorem runs the standard one on its operators
+  friend ExprPtr detail::extended_wick<S>(ExprPtr,
+                                          const detail::ExtendedWickOptions &);
 
   // the index counts of the input, see extract_indices(); the input, not a
   // result, since the kronecker deltas of a result double every external
@@ -530,6 +578,21 @@ class WickTheorem {
       });
       return std::nullopt;
     }
+  }
+
+  /// @return the pairs given to set_nop_connections (@p mask =
+  /// nop_connections_, @p cache = nop_connections_input_) or to
+  /// set_nop_avoided_connections, whether or not they were recorded in
+  /// @p mask yet
+  static container::svector<std::pair<std::size_t, std::size_t>> nop_pairs(
+      const container::svector<std::bitset<max_input_size>> &mask,
+      const container::svector<std::pair<size_t, size_t>> &cache) {
+    if (!cache.empty()) return cache;
+    container::svector<std::pair<std::size_t, std::size_t>> pairs;
+    for (std::size_t i = 0; i != mask.size(); ++i)
+      for (std::size_t j = i + 1; j != mask.size(); ++j)
+        if (!mask[i].test(j)) pairs.emplace_back(i, j);
+    return pairs;
   }
 
   /// @return whether the engine applies the pair-based connectivity filters
