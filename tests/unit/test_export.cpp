@@ -1033,3 +1033,54 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
   }
 }
+
+TEST_CASE("export-rejects-basis-instance", "[export][basis]") {
+  auto resetter = to_export_context();
+  const Index y = Index(L"a_7").replace_basis_instance(1);
+
+  auto registry = get_default_context().index_space_registry();
+  const IndexSpace occ = registry->retrieve("i");
+  const IndexSpace virt = registry->retrieve("a");
+  const Tensor t(L"t", bra{y}, ket{L"i_1"});
+  const Tensor t_null(L"t", bra{L"a_7"}, ket{L"i_1"});
+
+  // ITF, Julia and text print a tensor's indices through represent(Index)
+  auto rejects = [&](auto const &generator, auto ctx,
+                     std::string const &format) {
+    if constexpr (requires { ctx.set_tag(occ, "o"); }) {
+      ctx.set_tag(occ, "o");
+      ctx.set_tag(virt, "v");
+    }
+    CHECK_THROWS_MATCHES(
+        generator.represent(t, ctx), Exception,
+        Catch::Matchers::Message(format + " does not support basis instances"));
+    CHECK_NOTHROW(generator.represent(t_null, ctx));
+  };
+  rejects(TextGenerator<TextGeneratorContext>{}, TextGeneratorContext{},
+          "Text export");
+  rejects(JuliaTensorOperationsGenerator<>{},
+          JuliaTensorOperationsGeneratorContext{}, "Julia");
+  rejects(ItfGenerator<ItfContext>{}, ItfContext{}, "ITF");
+  CHECK_THROWS_MATCHES(
+      NumPyEinsumGenerator{}.represent(y, NumPyEinsumGeneratorContext{}),
+      Exception,
+      Catch::Matchers::Message(
+          "Python einsum does not support basis instances"));
+
+  // the einsum exporters name tensors and subscripts without represent(Index)
+  auto export_rejects = [&](auto generator, auto ctx) {
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ResultExpr result(Tensor(L"R", bra{L"a_1"}, ket{L"i_1"}),
+                      ex<Tensor>(L"f", bra{L"a_1"}, ket{y}) *
+                          ex<Tensor>(L"t", bra{y}, ket{L"i_1"}));
+    CHECK_THROWS_MATCHES(
+        export_expression(to_export_tree(result), generator, ctx), Exception,
+        Catch::Matchers::Message(
+            "Python einsum does not support basis instances"));
+  };
+  export_rejects(NumPyEinsumGenerator{}, NumPyEinsumGeneratorContext{});
+  export_rejects(PyTorchEinsumGenerator{}, PyTorchEinsumGeneratorContext{});
+}

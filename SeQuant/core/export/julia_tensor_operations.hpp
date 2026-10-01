@@ -84,6 +84,9 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     if (idx.has_proto_indices()) {
       throw Exception("Proto Indices are not (yet) supported!");
     }
+    if (idx.basis().has_basis_instance()) {
+      throw Exception("Julia does not support basis instances");
+    }
 
     return toUtf8(idx.full_label());
   }

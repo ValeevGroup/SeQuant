@@ -144,6 +144,9 @@ class ItfGenerator : public Generator<Context> {
     if (idx.has_proto_indices()) {
       throw Exception("ITF doesn't support proto indices");
     }
+    if (idx.basis().has_basis_instance()) {
+      throw Exception("ITF does not support basis instances");
+    }
 
     const std::size_t ordinal = idx.ordinal().value();
 

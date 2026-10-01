@@ -140,7 +140,7 @@ class SubexpressionReplacer {
         // as we retain the relative order of indices that belong to the same
         // space.
         std::ranges::stable_sort(indices, std::less<>{},
-                                 [](const Index &idx) { return idx.space(); });
+                                 [](const Index &idx) { return idx.basis(); });
 
         return ex<Tensor>(label, bra(), ket(), aux(std::move(indices)),
                           Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,

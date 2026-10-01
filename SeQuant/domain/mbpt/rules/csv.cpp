@@ -54,9 +54,8 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
     SEQUANT_ASSERT(bra_has_proto_indices || ket_has_proto_indices);
 
     if (bra_has_proto_indices && ket_has_proto_indices) {
-      auto dummy_idx = ordinal_compare(bra_idx, ket_idx)   //
-                           ? bra_idx.drop_proto_indices()  //
-                           : ket_idx.drop_proto_indices();
+      const Index& end = ordinal_compare(bra_idx, ket_idx) ? bra_idx : ket_idx;
+      auto dummy_idx = Index(end.space(), end.ordinal());
 
       return ex<Product>(
           1,

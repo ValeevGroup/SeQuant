@@ -24,7 +24,7 @@ to a permutation the network's declared symmetries allow. Concretely:
   get matching colors across their braket-bundle vertices instead.
 - ``Index`` vertices are added last and connected to whichever slot vertices reference them: an internal (contracted) index connects to
   exactly two slot vertices, an external one to a single slot vertex, and a shared auxiliary index (e.g. a Laplace-transform or
-  density-fitting index) can connect to more than two. Indices are colored by their space plus their protoindices' colors, via
+  density-fitting index) can connect to more than two. Indices are colored by their space, protoindices' colors and basis instance, via
   ``VertexPainter`` (``SeQuant/core/tensor_network/vertex_painter.hpp``), which also deduplicates colors across a run. Vertex colors are a
   32-bit integer (``Graph::VertexColor``) because bliss maps them into RGB internally, which caps how many distinct colors a single graph
   can use.

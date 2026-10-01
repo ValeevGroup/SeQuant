@@ -468,19 +468,24 @@ inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
 /// their full labels.
 ///   eg. [a_1^{i_1,i_2},a_2^{i_2,i_3}] -> "a_1i_1i_2,a_2i_2i_3"
 ///   eg. [i_1, i_2] -> "i_1,i_2"
+/// A basis instance N appends "#N" to its index's label:
+///   eg. [a_1<i_1<;5>, i_2<;5>;7>] -> "a_1i_1#5i_2#5#7"
 ///
 std::string csv_labels(meta::range_of<Index> auto&& idxs) {
-  using ranges::views::concat;
   using ranges::views::intersperse;
   using ranges::views::join;
-  using ranges::views::single;
   using ranges::views::transform;
 
-  auto str = [](Index const& i) {
-    auto v = concat(single(i.label()),                             //
-                    i.proto_indices() | transform(&Index::label))  //
-             | join;
-    return toUtf8(v | ranges::to<std::wstring>);
+  auto instance_suffix = [](Index const& i) {
+    return i.basis().has_basis_instance()
+               ? L"#" + std::to_wstring(*i.basis().basis_instance())
+               : std::wstring{};
+  };
+  auto str = [&instance_suffix](Index const& i) {
+    std::wstring result(i.label());
+    for (Index const& p : i.proto_indices())
+      result += std::wstring(p.label()) + instance_suffix(p);
+    return toUtf8(result + instance_suffix(i));
   };
 
   return std::forward<decltype(idxs)>(idxs)  //

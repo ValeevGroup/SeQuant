@@ -32,6 +32,7 @@
 #include <sstream>
 #include <string>
 
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/is_sorted.hpp>
@@ -140,6 +141,29 @@ std::optional<std::size_t> TensorNetworkV3::Graph::vertex_to_tensor_idx(
   return tensor_idx - 1;
 }
 
+namespace {
+
+/// @return @p is_anonymous, false also for an Index that differs from a named
+/// one only by basis instance: a fresh index must not take a named label
+template <typename IsAnonymous>
+auto fresh_anonymous_index_validator(
+    const tensor_network::NamedIndexSet &named_indices,
+    IsAnonymous is_anonymous) {
+  const bool named_has_instances = ranges::any_of(
+      named_indices,
+      [](const Index &named) { return named.basis().has_basis_instance(); });
+  return [&named_indices, named_has_instances, is_anonymous](const Index &idx) {
+    if (!is_anonymous(idx)) return false;
+    if (!named_has_instances && !idx.basis().has_basis_instance()) return true;
+    return ranges::none_of(named_indices, [&idx](const Index &named) {
+      return named.space() == idx.space() && named.ordinal() == idx.ordinal() &&
+             named.proto_indices() == idx.proto_indices();
+    });
+  };
+}
+
+}  // namespace
+
 ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
                                             bool ignore_named_index_labels) {
   int parity = 1;
@@ -164,7 +188,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   };
 
   // index factory to generate anonymous indices
-  IndexFactory idxfac(is_anonymous_index, 1);
+  IndexFactory idxfac(
+      fresh_anonymous_index_validator(named_indices, is_anonymous_index), 1);
 
   // make the graph
   Graph graph = create_graph(
@@ -592,7 +617,8 @@ ExprPtr TensorNetworkV3::canonicalize(
 
     // index factory to generate anonymous indices
     // -> start reindexing anonymous indices from 1
-    IndexFactory idxfac(is_anonymous_index, 1);
+    IndexFactory idxfac(
+        fresh_anonymous_index_validator(named_indices, is_anonymous_index), 1);
 
     container::map<Index, Index> idxrepl;
 
@@ -652,7 +678,7 @@ TensorNetworkV3::canonicalize_slots(
                              const auto &idxptr_slottype_2) -> bool {
       const auto &[idxptr1, slottype1] = idxptr_slottype_1;
       const auto &[idxptr2, slottype2] = idxptr_slottype_2;
-      return idxptr1->space() < idxptr2->space();
+      return idxptr1->basis() < idxptr2->basis();
     };
 
   TensorNetworkV3::SlotCanonicalizationMetadata metadata;
