@@ -23,7 +23,8 @@ struct ExtendedWickOptions {
   std::optional<std::size_t> max_cumulant_rank;
   /// rewrite every η as δ - γ
   bool eta_as_delta_minus_gamma = false;
-  /// forwarded to WickTheorem::use_topology
+  /// no effect: extended_wick keeps every operator index named, so that its
+  /// origin is known, and named operators are never topologically equivalent
   bool use_topology = true;
   /// pairs of input NormalOperator ordinals that must end up connected
   container::svector<std::pair<std::size_t, std::size_t>> nop_connections;
@@ -75,6 +76,21 @@ ExprPtr cumulant_expand(const ExprPtr &wick_output,
 
 extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
     const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &);
+
+/// applies the extended (generalized-normal-order) Wick theorem to @p input
+/// @param input a Product or Sum of Products with NormalOperator<S> factors
+///        normal-ordered relative to Vacuum::MultiProduct, or an
+///        ExprPtr to a NormalOperatorSequence<S>
+/// @param opts `use_topology`, `nop_connections`, `nop_avoided_connections`
+///        and `eta_as_delta_minus_gamma` are not used
+/// @return the result in which every γ, η and κ index is active; the
+///         core (virtual) part of a contraction is a Kronecker delta
+/// @throw Exception if the default context's vacuum is not MultiProduct
+template <Statistics S>
+ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts = {});
+
+extern template ExprPtr extended_wick<Statistics::FermiDirac>(
+    ExprPtr, const ExtendedWickOptions &);
 
 }  // namespace sequant
 
