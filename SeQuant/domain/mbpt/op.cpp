@@ -483,9 +483,10 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
 }
 
 template <Statistics S>
-ExprPtr OpMaker<S>::operator()(
-    std::optional<UseDepIdx> dep, std::optional<Symmetry> opsymm_opt,
-    std::optional<Normalization> normalization) const {
+ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
+                               std::optional<Symmetry> opsymm_opt,
+                               std::optional<Normalization> normalization,
+                               std::optional<std::wstring> grants_of) const {
   auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
 
   // if not given dep, use mbpt::Context::CSV to determine whether to use
@@ -524,6 +525,17 @@ ExprPtr OpMaker<S>::operator()(
   }
   const auto full_label = detail::decorate_with_pert_order(label_, order_);
 
+  BasisGrant grant;
+  // only (de)excitation operators carry grants; a projector names one
+  if (grants_of || opclass != OpClass::Gen) {
+    const auto registry = get_default_mbpt_context().op_registry();
+    const std::wstring& grant_label = grants_of ? *grants_of : full_label;
+    if (registry->has_basis_grants(grant_label))
+      grant = [registry, grant_label](const IndexSpace& space) {
+        return registry->basis_grant(grant_label, space);
+      };
+  }
+
   if (!normalization) {
     normalization =
         label_ == reserved::antisymm_label() || label_ == reserved::symm_label()
@@ -544,7 +556,7 @@ ExprPtr OpMaker<S>::operator()(
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
                             op_herm, ColumnSymmetry::Symm);
         },
-        dep ? *dep : UseDepIdx::None, normalization.value());
+        dep ? *dep : UseDepIdx::None, normalization.value(), grant);
   }
   // else no batching
   return make(
@@ -557,7 +569,7 @@ ExprPtr OpMaker<S>::operator()(
                           opsymm_opt ? *opsymm_opt : opsymm, op_herm,
                           ColumnSymmetry::Symm);
       },
-      dep ? *dep : UseDepIdx::None, normalization.value());
+      dep ? *dep : UseDepIdx::None, normalization.value(), grant);
 }
 
 template class OpMaker<Statistics::FermiDirac>;
@@ -718,17 +730,19 @@ ExprPtr l(nₚ np, nₕ nh, Normalization norm) {
                                          nann(np.value()))({}, {}, norm);
 }
 
-ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm,
+          std::optional<std::wstring> grants_of) {
   if (np != nh)
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "Spinfree basis does not support non-particle conserving projectors");
   return get_default_context().spbasis() == SPBasis::Spinfree
-             ? tensor::S(-nh /* nh == np */, norm)
-             : tensor::A(-np, -nh, norm);
+             ? tensor::S(-nh /* nh == np */, norm, std::move(grants_of))
+             : tensor::A(-np, -nh, norm, std::move(grants_of));
 }
 
-ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm,
+          std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(!(np == 0 && nh == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (np != 0 && nh != 0) {
@@ -757,10 +771,11 @@ ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
                              : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(reserved::antisymm_label(),
                                          cre(creators), ann(annihilators))(
-      dep, {Symmetry::Antisymm}, norm);
+      dep, {Symmetry::Antisymm}, norm, std::move(grants_of));
 }
 
-ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
+ExprPtr S(std::int64_t K, std::optional<Normalization> norm,
+          std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -783,7 +798,7 @@ ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(reserved::symm_label(), cre(creators),
                                          ann(annihilators))(
-      dep, {Symmetry::Nonsymm}, norm);
+      dep, {Symmetry::Nonsymm}, norm, std::move(grants_of));
 }
 
 ExprPtr Hʼ(std::size_t R, const OpParams& params) {
@@ -988,7 +1003,8 @@ ExprPtr F(bool use_f_tensor, const IndexSpace& occupied_density) {
   }
 }
 
-ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm,
+          std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(!(nh == 0 && np == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (nh != 0 && np != 0) {
@@ -1001,7 +1017,7 @@ ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
   auto hole_space = get_hole_space(Spin::any);
   return ex<op_t>(
       []() -> std::wstring_view { return reserved::antisymm_label(); },
-      [=]() -> ExprPtr { return tensor::A(np, nh, norm); },
+      [=]() -> ExprPtr { return tensor::A(np, nh, norm, grants_of); },
       [=](qnc_t& qns) {
         const std::size_t abs_nh = std::abs(nh);
         const std::size_t abs_np = std::abs(np);
@@ -1017,10 +1033,11 @@ ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
       });
 }
 
-ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
+ExprPtr S(std::int64_t K, std::optional<Normalization> norm,
+          std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return reserved::symm_label(); },
-                  [=]() -> ExprPtr { return tensor::S(K, norm); },
+                  [=]() -> ExprPtr { return tensor::S(K, norm, grants_of); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_K = std::abs(K);
                     if (K < 0) {
@@ -1033,17 +1050,18 @@ ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
                   });
 }
 
-ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm,
+          std::optional<std::wstring> grants_of) {
   if (get_default_context().spbasis() == SPBasis::Spinfree) {
     SEQUANT_ASSERT(
         nh == np &&
         "Only particle number conserving cases are supported with spinfree "
         "basis for now");
     const auto K = np;  // K = np = nh
-    return S(-K, norm);
+    return S(-K, norm, std::move(grants_of));
   } else {
     SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
-    return A(-np, -nh, norm);
+    return A(-np, -nh, norm, std::move(grants_of));
   }
 }
 

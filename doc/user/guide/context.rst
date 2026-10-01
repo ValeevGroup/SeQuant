@@ -131,6 +131,14 @@ expands such CSV-dependent tensors into an explicit basis (standard unoccupieds,
    :end-before: end-snippet-4
    :dedent: 2
 
+Several bases of one space can meet in an expression, e.g. the cluster-specific virtuals of the ground-state and of the
+perturbed amplitudes. An :class:`sequant::Index` can therefore carry an optional *basis instance*, an opaque integer
+written after its proto indices, ``a_1<i_1,i_2;1>`` (``a_1<;1>`` without proto indices); an index without one is in its
+space's own basis, as before. Instances are granted per operator label and leg space with
+:func:`sequant::mbpt::OpRegistry::grant_basis`, :class:`sequant::mbpt::OpMaker` mints a granted operator's legs with
+them, and the projectors of the :doc:`CC <cc>` equations carry the grants of the amplitude being solved for. Integrals
+are never granted: in Wick's theorem their legs take the instance of the leg they are contracted with.
+
 .. _context-scoped:
 
 Scoped context changes
