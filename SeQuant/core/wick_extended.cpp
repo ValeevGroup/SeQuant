@@ -5,13 +5,17 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/wick.hpp>
 
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace sequant {
 
@@ -137,18 +141,211 @@ void for_each_block_assignment(const NormalOperator<S> &survivors,
   recurse(0);
 }
 
+/// @return @p ops, given in storage order, as a MultiProduct-vacuum
+/// NormalOperator
+template <Statistics S>
+NormalOperator<S> make_nop(const container::svector<Op<S>> &ops) {
+  container::svector<Op<S>> cre_ops, ann_ops;
+  for (const auto &op : ops)
+    (op.action() == Action::Create ? cre_ops : ann_ops).push_back(op);
+  // the ctor takes annihilators in particle order, the reverse of storage
+  std::reverse(ann_ops.begin(), ann_ops.end());
+  return NormalOperator<S>(cre(std::move(cre_ops)), ann(std::move(ann_ops)),
+                           Vacuum::MultiProduct);
+}
+
 /// @return the ops of @p nop at storage positions @p positions as a
 /// MultiProduct-vacuum NormalOperator
 template <Statistics S>
 NormalOperator<S> subset(const NormalOperator<S> &nop,
                          const container::svector<std::size_t> &positions) {
-  container::svector<Op<S>> cre_ops, ann_ops;
-  for (auto i : positions)
-    (nop[i].action() == Action::Create ? cre_ops : ann_ops).push_back(nop[i]);
-  // the ctor takes annihilators in particle order, the reverse of storage
-  std::reverse(ann_ops.begin(), ann_ops.end());
-  return NormalOperator<S>(cre(std::move(cre_ops)), ann(std::move(ann_ops)),
-                           Vacuum::MultiProduct);
+  container::svector<Op<S>> ops;
+  for (auto i : positions) ops.push_back(nop[i]);
+  return make_nop<S>(ops);
+}
+
+/// @return the index of every Op of @p expr (a Product, NormalOperator<S> or
+/// NormalOperatorSequence<S>) mapped to the ordinal of its NormalOperator
+template <Statistics S>
+OpProvenance make_provenance(const Expr &expr) {
+  OpProvenance prov;
+  std::size_t ord = 0;
+  auto record = [&](const NormalOperator<S> &nop) {
+    for (const auto &op : nop) prov.emplace(op.index(), ord);
+    ++ord;
+  };
+  if (expr.is<NormalOperatorSequence<S>>()) {
+    for (const auto &nop : expr.as<NormalOperatorSequence<S>>()) record(nop);
+  } else if (expr.is<Product>()) {
+    for (const auto &f : expr.as<Product>())
+      if (f->template is<NormalOperator<S>>())
+        record(f->template as<NormalOperator<S>>());
+  } else if (expr.is<NormalOperator<S>>()) {
+    record(expr.as<NormalOperator<S>>());
+  }
+  return prov;
+}
+
+/// @return registered spaces that partition @p type: the space of that type
+/// if registered, else its base spaces
+container::svector<IndexSpace> registered_pieces(
+    const IndexSpaceRegistry &isr, IndexSpace::Type type,
+    IndexSpace::QuantumNumbers qns) {
+  container::svector<IndexSpace> result;
+  if (!type) return result;
+  if (const auto *sp = isr.retrieve_ptr(type, qns)) {
+    result.push_back(*sp);
+    return result;
+  }
+  for (const auto &t : isr.base_space_types())
+    if (type.includes(t)) result.push_back(isr.retrieve(t, qns));
+  return result;
+}
+
+/// a sum of products, each held as its list of factors
+using Alternatives = container::svector<container::svector<ExprPtr>>;
+
+/// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
+/// a δ over its core (γ) or virtual (η) part and a γ/η over its active
+/// part, or nullopt if both indices are already active
+std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
+                                          const Index &bra, const Index &ket,
+                                          bool is_gamma) {
+  const auto parts = space_parts(isr, bra.space().qns());
+  if (parts.active.includes(bra.space().type()) &&
+      parts.active.includes(ket.space().type()))
+    return std::nullopt;
+  const auto &common = isr.intersection(bra.space(), ket.space());
+  const auto inactive = is_gamma ? parts.core : parts.virt;
+  SEQUANT_ASSERT(inactive.unIon(parts.active).includes(common.type()));
+  Alternatives result;
+  for (const auto &sp : registered_pieces(
+           isr, common.type().intersection(inactive), common.qns())) {
+    const auto d = Index::make_tmp_index(sp);
+    result.push_back({make_kronecker(bra, d), make_kronecker(d, ket)});
+  }
+  if (const auto active = common.type().intersection(parts.active)) {
+    const auto &sp = isr.retrieve(active, common.qns());
+    const auto b = Index::make_tmp_index(sp);
+    const auto k = Index::make_tmp_index(sp);
+    result.push_back(
+        {make_kronecker(bra, b),
+         is_gamma ? density::make_rdm(b, k) : density::make_hole_rdm(b, k),
+         make_kronecker(k, ket)});
+  }
+  return result;
+}
+
+/// @return the projections of @p nop in which every op is active or, unless
+/// @p full, pure core or pure virtual; each is the projected NormalOperator
+/// preceded by the δs binding projected indices to the original ones
+template <Statistics S>
+Alternatives split_survivors(const IndexSpaceRegistry &isr,
+                             const NormalOperator<S> &nop, bool full) {
+  // the projections so far: their ops and the δs they need
+  container::svector<
+      std::pair<container::svector<Op<S>>, container::svector<ExprPtr>>>
+      partials(1);
+  for (const auto &op : nop) {
+    const Index &idx = op.index();
+    const auto type = idx.space().type();
+    const auto qns = idx.space().qns();
+    const auto parts = space_parts(isr, qns);
+    container::svector<IndexSpace::Type> allowed{parts.active};
+    if (!full) allowed.insert(allowed.end(), {parts.core, parts.virt});
+    const bool keep = std::any_of(allowed.begin(), allowed.end(),
+                                  [&](auto t) { return t.includes(type); });
+    container::svector<IndexSpace> targets;
+    if (!keep)
+      for (const auto &t : allowed)
+        for (const auto &sp : registered_pieces(isr, type.intersection(t), qns))
+          targets.push_back(sp);
+    decltype(partials) next;
+    for (const auto &[ops, deltas] : partials) {
+      if (keep) {
+        next.emplace_back(ops, deltas).first.push_back(op);
+        continue;
+      }
+      for (const auto &sp : targets) {
+        const auto j = Index::make_tmp_index(sp, idx.proto_indices());
+        auto &[ops2, deltas2] = next.emplace_back(ops, deltas);
+        ops2.emplace_back(j, op.action());
+        deltas2.push_back(op.action() == Action::Create
+                              ? make_kronecker(j, idx)
+                              : make_kronecker(idx, j));
+      }
+    }
+    partials = std::move(next);
+  }
+  Alternatives result;
+  for (auto &[ops, deltas] : partials) {
+    deltas.push_back(ex<NormalOperator<S>>(make_nop<S>(ops)));
+    result.push_back(std::move(deltas));
+  }
+  return result;
+}
+
+/// rewrites @p term so that every γ and η index is active and every
+/// surviving op index is active or, unless @p full, pure core or pure
+/// virtual
+/// @return the rewritten term as a list of Products
+template <Statistics S>
+container::svector<std::shared_ptr<Product>> split_mixed_spaces(
+    const ExprPtr &term, const IndexSpaceRegistry &isr, bool full) {
+  const auto product =
+      term->is<Product>()
+          ? std::static_pointer_cast<Product>(term->clone().as_shared_ptr())
+          : std::make_shared<Product>(ExprPtrList{term->clone()});
+  container::svector<std::shared_ptr<Product>> partials{
+      std::make_shared<Product>(product->scalar(), ExprPtrList{})};
+  for (const auto &f : product->factors()) {
+    std::optional<Alternatives> alternatives;
+    if (f->is<Tensor>()) {
+      const auto &t = f->as<Tensor>();
+      const bool is_gamma = t.label() == density::rdm_label();
+      if ((is_gamma || t.label() == density::hole_rdm_label()) &&
+          t.bra_rank() == 1 && t.ket_rank() == 1)
+        alternatives = split_density(isr, t.bra()[0], t.ket()[0], is_gamma);
+    } else if (f->is<NormalOperator<S>>()) {
+      alternatives = split_survivors<S>(isr, f->as<NormalOperator<S>>(), full);
+    }
+    if (!alternatives) {
+      for (auto &p : partials) p->append(1, f);
+      continue;
+    }
+    decltype(partials) next;
+    for (const auto &p : partials)
+      for (const auto &alt : *alternatives) {
+        auto q = std::static_pointer_cast<Product>(p->clone().as_shared_ptr());
+        for (const auto &x : alt) q->append(1, x);
+        next.push_back(std::move(q));
+      }
+    partials = std::move(next);
+  }
+  return partials;
+}
+
+/// adds to @p prov every index bound by a chain of Kronecker deltas of
+/// @p product to an index already in @p prov
+void extend_provenance(const Product &product, OpProvenance &prov) {
+  bool extended;
+  do {
+    extended = false;
+    for (const auto &f : product.factors()) {
+      if (!f->is<Tensor>()) continue;
+      const auto &t = f->as<Tensor>();
+      if (t.label() != reserved::kronecker_label()) continue;
+      const Index &b = t.bra()[0], &k = t.ket()[0];
+      const auto b_it = prov.find(b), k_it = prov.find(k);
+      if (b_it != prov.end() && k_it == prov.end()) {
+        prov.emplace(k, b_it->second);
+        extended = true;
+      } else if (k_it != prov.end() && b_it == prov.end()) {
+        prov.emplace(b, k_it->second);
+        extended = true;
+      }
+    }
+  } while (extended);
 }
 
 }  // namespace
@@ -211,5 +408,95 @@ ExprPtr cumulant_expand(const ExprPtr &wick_output,
 
 template ExprPtr cumulant_expand<Statistics::FermiDirac>(
     const ExprPtr &, const OpProvenance &, const ExtendedWickOptions &);
+
+template <Statistics S>
+ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
+  const auto &ctx = get_default_context(S);
+  if (ctx.vacuum() != Vacuum::MultiProduct)
+    throw Exception(
+        "extended_wick: the default context's vacuum must be "
+        "Vacuum::MultiProduct");
+  const auto &isr = *ctx.index_space_registry();
+
+  // provenance is per input term
+  auto per_term = [&](ExprPtr term) -> ExprPtr {
+    if (term->is<NormalOperator<S>>()) term = ex<Product>(ExprPtrList{term});
+    // canonicalize first, so that the provenance sees the final indices
+    if (term->is<Product>()) {
+      [[maybe_unused]] auto bp = term->rapid_canonicalize();
+      SEQUANT_ASSERT(bp == nullptr);
+    }
+    const auto provenance = make_provenance<S>(*term);
+
+    // WickTheorem sees only the operators, so every index is external to it
+    // and none is renamed; the c-number factors multiply its result. reduce
+    // keeps every input index too, so every projected index stays δ-bound to
+    // an input op index; the final simplify treats the true dummies as such
+    auto nopseq = std::make_shared<NormalOperatorSequence<S>>();
+    ExprPtr prefactor = ex<Constant>(1);
+    container::set<Index> fixed_indices;
+    for (const auto &[idx, ord] : provenance) fixed_indices.insert(idx);
+    if (term->is<NormalOperatorSequence<S>>()) {
+      *nopseq = term->as<NormalOperatorSequence<S>>();
+    } else if (term->is<Product>()) {
+      prefactor = ex<Constant>(term->as<Product>().scalar());
+      for (const auto &f : term->as<Product>()) {
+        if (f->is<NormalOperator<S>>()) {
+          nopseq->push_back(f->as<NormalOperator<S>>());
+          continue;
+        }
+        prefactor = prefactor * f;
+        if (f->is<Tensor>())
+          for (const auto &idx : f->as<Tensor>().const_braket())
+            fixed_indices.insert(idx);
+      }
+    }
+    if (nopseq->empty()) return term;
+
+    WickTheorem<S> wick{nopseq};
+    wick.full_contractions(false);
+    const ExprPtr raw = wick.compute();
+
+    auto result = std::make_shared<Sum>();
+    auto process = [&](const ExprPtr &t) {
+      for (const auto &p :
+           split_mixed_spaces<S>(ex<Product>(ExprPtrList{prefactor, t}), isr,
+                                 opts.full_contractions)) {
+        ExprPtr reduced = p;
+        WickTheorem<S> reducer{reduced};
+        reducer.set_external_indices(fixed_indices);
+        reducer.reduce(reduced);
+        if (!reduced->is<Product>()) continue;  // vanished
+        OpProvenance prov = provenance;
+        extend_provenance(reduced->as<Product>(), prov);
+        result->append(cumulant_expand<S>(reduced, prov, opts));
+      }
+    };
+    if (raw->is<Sum>()) {
+      for (const auto &t : *raw) process(t);
+    } else if (raw->is<Constant>()) {
+      result->append(prefactor * raw);
+    } else {
+      process(raw);
+    }
+    return result;
+  };
+
+  input = input->clone();
+  expand(input);
+  auto result = std::make_shared<Sum>();
+  if (input->is<Sum>()) {
+    for (const auto &t : *input) result->append(per_term(t));
+  } else {
+    result->append(per_term(input));
+  }
+  ExprPtr out = result;
+  simplify(out);
+  if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);
+  return out;
+}
+
+template ExprPtr extended_wick<Statistics::FermiDirac>(
+    ExprPtr, const ExtendedWickOptions &);
 
 }  // namespace sequant

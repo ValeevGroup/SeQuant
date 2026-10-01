@@ -151,4 +151,111 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         wick_out, prov, {.full_contractions = false});
     REQUIRE(simplify(partial - wick_out) == ex<Constant>(0));
   }
+
+  SECTION("extended_wick: vacuum must be MultiProduct") {
+    auto sr_ctx = get_default_context();
+    sr_ctx.set(Vacuum::SingleProduct);
+    auto sr_resetter = set_scoped_default_context(sr_ctx);
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    REQUIRE_THROWS_AS(extended_wick<Statistics::FermiDirac>(in), Exception);
+  }
+
+  SECTION("extended_wick: the input is not modified") {
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<Tensor>(L"h", bra{L"u_2"}, ket{L"u_1"}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    extended_wick<Statistics::FermiDirac>(in);
+    REQUIRE(in->as<Product>().factor(0)->is<FNOperator>());
+  }
+
+  SECTION("extended_wick: pure-active identities via the wrapper") {
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto result = extended_wick<Statistics::FermiDirac>(in);
+    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S "
+                                      L"+ κ{u_2,u_4;u_1,u_3}:A-H-S"));
+  }
+
+  SECTION("extended_wick: general indices split into core δ + active γ") {
+    // ⟨{a†_p1 a_p2}{a†_p3 a_p4}⟩ with p = M ∪ E = {o,i,u,a,g}:
+    // cre·ann pair over R = M: δ on core O + γ on active u;
+    // ann·cre pair over U = E: δ on virtual {a,g} + η on active u, where
+    // {a,g} is not a registered space, so its δ splits into δ on a + δ on g;
+    // plus κ2 on the all-active projection: 2 × 3 + 1 = 7 terms
+    auto in = ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})) *
+              ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"}));
+    auto result = extended_wick<Statistics::FermiDirac>(in);
+    // every γ/η/κ index is active, also with partial contractions
+    auto require_active_densities = [](const ExprPtr& expr) {
+      REQUIRE(expr->is<Sum>());
+      for (const auto& term : *expr)
+        for (const auto& f : *term)
+          if (f->is<Tensor>()) {
+            const auto& t = f->as<Tensor>();
+            if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
+              for (const auto& idx : t.const_braket())
+                REQUIRE(idx.space() == Index(L"u_1").space());
+          }
+    };
+    require_active_densities(result);
+    require_active_densities(extended_wick<Statistics::FermiDirac>(
+        in, {.full_contractions = false}));
+    REQUIRE(result->size() == 7);
+  }
+
+  SECTION("extended_wick: dummy indices keep their provenance") {
+    // a one-body h summed against its operator's indices, times an active
+    // one-body operator: every op index of the first factor is a dummy
+    const Index p1(L"p_1"), p2(L"p_2");
+    auto in = ex<Tensor>(L"h", bra{p1}, ket{p2}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+              ex<FNOperator>(cre({p1}), ann({p2})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = extended_wick<Statistics::FermiDirac>(in));
+    // every γ/η/κ index is active
+    for (const auto& term : *result)
+      for (const auto& f : *term)
+        if (f->is<Tensor>()) {
+          const auto& t = f->as<Tensor>();
+          if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
+            for (const auto& idx : t.const_braket())
+              REQUIRE(idx.space() == Index(L"u_1").space());
+        }
+    REQUIRE_NOTHROW(extended_wick<Statistics::FermiDirac>(
+        in, {.full_contractions = false}));
+  }
+
+  SECTION("extended_wick: tensors commute with the theorem") {
+    // operators carrying dummies of two different tensors: the result must
+    // equal that of the same operators with external indices, times the
+    // tensors
+    auto tensors = ex<Tensor>(L"h", bra{L"u_1", L"u_2"}, ket{L"u_3", L"u_4"},
+                              Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                              ColumnSymmetry::Symm) *
+                   ex<Tensor>(L"g", bra{L"u_5", L"u_6"}, ket{L"u_7", L"u_8"},
+                              Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+                              ColumnSymmetry::Symm);
+    auto ops = ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"})) *
+               ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"})) *
+               ex<FNOperator>(cre({L"u_9"}), ann({L"u_10"}));
+    for (const bool full : {true, false}) {
+      const ExtendedWickOptions opts{.full_contractions = full};
+      auto lhs = extended_wick<Statistics::FermiDirac>(tensors * ops, opts);
+      auto rhs =
+          simplify(tensors * extended_wick<Statistics::FermiDirac>(ops, opts));
+      REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
+    }
+  }
+
+  SECTION("extended_wick: Sum input") {
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+                  ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) +
+              ex<Constant>(2) * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+                  ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto result = extended_wick<Statistics::FermiDirac>(in);
+    REQUIRE_THAT(result, EquivalentTo(L"3 γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S "
+                                      L"+ 3 κ{u_2,u_4;u_1,u_3}:A-H-S"));
+  }
 }
