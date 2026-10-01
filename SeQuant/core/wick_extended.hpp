@@ -26,16 +26,16 @@ struct ExtendedWickOptions {
   /// keep only terms with no surviving operators
   bool full_contractions = true;
   /// largest cumulant rank to form; nullopt = no bound; 0 or 1 = no cumulants
-  std::optional<std::size_t> max_cumulant_rank;
+  std::optional<std::size_t> max_cumulant_rank = std::nullopt;
   /// rewrite every η as δ - γ
   bool eta_as_delta_minus_gamma = false;
   /// prune the contractions of topologically equivalent operators
   bool use_topology = true;
   /// pairs of input NormalOperator ordinals that must end up connected
-  container::svector<std::pair<std::size_t, std::size_t>> nop_connections;
+  container::svector<std::pair<std::size_t, std::size_t>> nop_connections = {};
   /// pairs of input NormalOperator ordinals that must not be connected
   container::svector<std::pair<std::size_t, std::size_t>>
-      nop_avoided_connections;
+      nop_avoided_connections = {};
 };
 
 /// maps the index of a surviving Op to the ordinal of the input
