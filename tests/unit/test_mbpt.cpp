@@ -10,7 +10,9 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/timer.hpp>
+#include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -50,6 +52,83 @@ namespace {
   return sequant::mbpt::set_scoped_default_mbpt_context(
       {.csv = sequant::mbpt::get_default_mbpt_context().csv(),
        .op_registry = std::move(reg)});
+}
+
+/// @return @p expr spelled so that two reference expectation values that
+/// differ only in how they write the same sums compare equal: every η is
+/// δ - γ, every δ over a dummy is applied, and every index in a non-base
+/// space (e.g. E, or O) is split into a sum over the base spaces it spans
+sequant::ExprPtr in_base_spaces(sequant::ExprPtr expr) {
+  using namespace sequant;
+  const auto isr = get_default_context().index_space_registry();
+  auto terms_of = [](const ExprPtr& e) {
+    return e->is<Sum>() ? e->as<Sum>().summands() | ranges::to_vector
+                        : std::vector<ExprPtr>{e};
+  };
+  auto first_index = [](const ExprPtr& term, auto&& pred) {
+    std::optional<Index> found;
+    auto look = [&](const ExprPtr& f) {
+      if (found || !f->is<Tensor>()) return;
+      for (const auto& idx : f->as<Tensor>().const_braket())
+        if (pred(idx)) {
+          found = idx;
+          return;
+        }
+    };
+    if (term->is<Tensor>())
+      look(term);
+    else
+      term->visit(look, /*atoms_only=*/true);
+    return found;
+  };
+
+  expr = expr->clone();
+  expand(expr);
+  for (bool split = true; split;) {
+    split = false;
+    auto result = std::make_shared<Sum>();
+    for (const auto& term : terms_of(expr)) {
+      const auto idx = first_index(
+          term, [&](const Index& i) { return !isr->is_base(i.space()); });
+      if (!idx) {
+        result->append(term);
+        continue;
+      }
+      split = true;
+      for (const auto& base : isr->base_spaces())
+        if (base.qns() == idx->space().qns() &&
+            idx->space().type().includes(base.type()))
+          result->append(
+              transform_expr(term, {{*idx, Index::make_tmp_index(base)}}));
+    }
+    expr = result;
+    expand(expr);
+  }
+
+  expr->visit(
+      [](ExprPtr& f) {
+        if (f->is<Tensor>() &&
+            f->as<Tensor>().label() == density::hole_rdm_label()) {
+          const auto& t = f->as<Tensor>();
+          f = make_kronecker(t.bra()[0], t.ket()[0]) -
+              density::make_rdm(t.bra()[0], t.ket()[0]);
+        }
+      },
+      /*atoms_only=*/true);
+  expand(expr);
+  auto result = std::make_shared<Sum>();
+  for (auto term : terms_of(expr)) {
+    if (term->is<Product>()) {
+      FWickTheorem reducer{term};
+      reducer.reduce(term);
+    }
+    // canonicalize as a Product so that a lone tensor's dummies are renamed
+    if (!term->is<Product>() && !term->is<Constant>())
+      term = ex<Product>(ExprPtrList{term});
+    result->append(canonicalize(term));
+  }
+  ExprPtr out = result;
+  return simplify(out);
 }
 }  // namespace
 
@@ -1232,6 +1311,88 @@ SECTION("MRSO") {
     }
 #endif
 }  // SECTION("MRSO")
+
+SECTION("MRSO-MultiProduct") {
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  ctx.set(Vacuum::MultiProduct);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  // one-body: same expectation as the core-vacuum path at MRSO
+  SECTION("ref_av of non-normal-ordered one-body product") {
+    const Index p{L"p_1"};
+    const Index q{L"p_2"};
+    auto H1 = ex<Tensor>(L"h", bra{p}, ket{q}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+              fcrex(p) * fannx(q);
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = t::ref_av(H1));
+    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
+                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
+  }
+
+  // the mbpt operators (ã) are normal-ordered relative to the context vacuum,
+  // i.e. to the reference here and to the core under SingleProduct, so
+  // t::h(k)·t::t(k) is a different operator on the two paths; only products
+  // of elementary operators, whose normal order is immaterial, are compared.
+  // connect is not used: it means different things on the two paths (a core
+  // or virtual δ between the operators vs any density linking them)
+  SECTION("elementary operators match the core-vacuum path") {
+    const Index p1{L"p_1"}, p2{L"p_2"}, p3{L"p_3"}, p4{L"p_4"}, p5{L"p_5"},
+        p6{L"p_6"};
+    auto coeff = [](IndexList b, IndexList k) {
+      return ex<Tensor>(L"h", bra(b), ket(k), Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    };
+    auto check = [](const ExprPtr& x) {
+      const auto mp =
+          mbpt::decompositions::cumulants_to_densities(t::ref_av(x));
+      ExprPtr sp;
+      {
+        auto sp_ctx = get_default_context();
+        sp_ctx.set(Vacuum::SingleProduct);
+        auto sp_resetter = set_scoped_default_context(sp_ctx);
+        sp = t::ref_av(x);
+      }
+      // the two paths spell the same sums differently, e.g. h{E;O} vs
+      // h{a;O} + h{g;O} + h{u;O}, and η vs δ - γ
+      REQUIRE(simplify(in_base_spaces(mp) - in_base_spaces(sp)) ==
+              ex<Constant>(0));
+    };
+    // one-body
+    check(coeff({p1}, {p2}) * fcrex(p1) * fannx(p2));
+    // two-body: up to κ₂
+    check(coeff({p1, p2}, {p3, p4}) * fcrex(p1) * fcrex(p2) * fannx(p4) *
+          fannx(p3));
+    // a two-body times a one-body string: up to κ₃
+    check(coeff({p1, p2, p5}, {p3, p4, p6}) * fcrex(p1) * fcrex(p2) *
+          fannx(p4) * fannx(p3) * fcrex(p5) * fannx(p6));
+  }
+
+  SECTION("wick(H2**T2) runs in generalized normal order") {
+    ExprPtr result;
+    REQUIRE_NOTHROW(result =
+                        t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}}));
+    REQUIRE(!result->is<Constant>());
+    // the product reaches κ₄, which the rank <= 3 decompositions do not cover
+    REQUIRE_THROWS_AS(mbpt::decompositions::cumulants_to_densities(result),
+                      Exception);
+  }
+
+  // extended_wick ignores use_topology, so this only guards the dispatch
+  SECTION("topology on/off agree") {
+    auto a = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
+    auto b = t::ref_av(t::h(2) * t::t(2),
+                       {.connect = {{0, 1}}, .use_topology = false});
+    REQUIRE(simplify(a - b) == ex<Constant>(0));
+  }
+
+  SECTION("operator-level ref_av agrees with tensor-level") {
+    auto result_op = o::ref_av(o::h(2) * o::t(2));
+    auto result_t = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
+    REQUIRE(simplify(result_op - result_t) == ex<Constant>(0));
+  }
+}  // SECTION("MRSO-MultiProduct")
 
 SECTION("MRSF") {
   // now compute using (closed) Fermi vacuum + spinfree basis

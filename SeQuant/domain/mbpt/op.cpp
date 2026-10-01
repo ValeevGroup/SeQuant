@@ -8,6 +8,7 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/core/wick_extended.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
@@ -176,17 +177,31 @@ qns_t combine(qns_t a, qns_t b) {
     result[0] = nc;
     result[1] = na;
     return result;
-  } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
+  } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
+             get_default_context().vacuum() == Vacuum::MultiProduct) {
+    const bool multiproduct =
+        get_default_context().vacuum() == Vacuum::MultiProduct;
     auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
       auto ann = (i * 2) + 1;
+      const auto qns = base_spaces[i].qns();
+      // an active space is both reference-occupied and vacuum-unoccupied; its
+      // ops can also end up in cumulants, which take any equal number of
+      // creators and annihilators from the two sides
+      const bool active =
+          multiproduct &&
+          isr->intersection(base_spaces[i],
+                            isr->reference_occupied_space(qns)) &&
+          isr->intersection(base_spaces[i], isr->vacuum_unoccupied_space(qns));
       auto base_is_fermi_occupied = isr->is_pure_occupied(
           base_spaces[i]);  // need to distinguish particle and hole
                             // contractions.
       auto ncontr_space =
-          base_is_fermi_occupied
+          active ? qninterval_t{0, std::min(a[cre].upper() + b[cre].upper(),
+                                            a[ann].upper() + b[ann].upper())}
+          : base_is_fermi_occupied
               ? qninterval_t{0, std::min(b[ann].upper(), a[cre].upper())}
               : qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
       auto nc_space = nonnegative(b[cre] + a[cre] - ncontr_space);
@@ -1294,6 +1309,26 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   }
 
   simplify(expr);
+
+  auto restore_scalars = [&scalar_factors](ExprPtr& r) {
+    if (!scalar_factors.empty()) {
+      ranges::for_each(scalar_factors, [&r](const auto& s) { r = r * s; });
+      simplify(r);
+    }
+  };
+
+  // the expectation value in a MultiProduct vacuum is a full contraction
+  if (get_default_context().vacuum() == Vacuum::MultiProduct) {
+    ExtendedWickOptions opts{.full_contractions = true,
+                             .use_topology = use_top};
+    for (const auto& [a, b] : connect) opts.nop_connections.emplace_back(a, b);
+    for (const auto& [a, b] : avoid)
+      opts.nop_avoided_connections.emplace_back(a, b);
+    auto result = extended_wick<Statistics::FermiDirac>(expr, opts);
+    restore_scalars(result);
+    return result;
+  }
+
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
@@ -1317,13 +1352,6 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
                                 did simplification above */
                              true);
   simplify(result);
-
-  auto restore_scalars = [&scalar_factors](ExprPtr& r) {
-    if (!scalar_factors.empty()) {
-      ranges::for_each(scalar_factors, [&r](const auto& s) { r = r * s; });
-      simplify(r);
-    }
-  };
 
   if (Logger::instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
