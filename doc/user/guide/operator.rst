@@ -161,9 +161,11 @@ vacuum, both overloads of ``ref_av`` ignore ``connect`` and ``do_not_connect``; 
 
 Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
 
-Mind which overload you reach: the operator-level ``op::vac_av``/``op::ref_av`` default to ``default_op_connections()``, which connects the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) with the cluster operator ``t``. Their tensor-level counterparts, ``op::tensor::vac_av``/``op::tensor::ref_av``, default to *empty* connections. Pairing ``use_connected_form = true`` with empty connectivity silently keeps the disconnected terms the commutator would have cancelled, so the result is wrong rather than merely more verbose.
-
-Mind also that omitting the options argument is not the same as passing ``{}``: ``default_op_connections()`` is the default of the *parameter*, whereas ``EVOptions::connect`` is itself empty by default, so ``op::ref_av(expr)`` connects the operators and ``op::ref_av(expr, {})`` does not.
+Both the operator-level and tensor-level ``vac_av``/``ref_av`` overloads default to empty connectivity constraints.
+Omitting the options argument is equivalent to passing ``{}``. To use the connected-product form, supply the required
+connections explicitly through ``EVOptions::connect``. ``default_op_connections()`` provides conventional CC connections
+between the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) and the cluster operator ``t``. Pairing ``use_connected_form = true`` with
+empty connectivity keeps disconnected terms that the commutator would have cancelled, so the result is wrong.
 
 The same trade-off shows up in :func:`CC::hbar() <sequant::mbpt::CC::hbar>`, which returns the connected form for a non-unitary ansatz; see :ref:`cc-hbar-connectivity`.
 

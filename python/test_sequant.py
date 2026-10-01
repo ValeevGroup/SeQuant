@@ -32,9 +32,9 @@ class TestSequant(unittest.TestCase):
   def test_ccsd(self):
     from _sequant.mbpt import A,H,T,t,VacuumAverage,EVOptions
     opts = EVOptions()
-    opts.connect = [("h", "t")]
-    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), opts );  # explicit operator connections via EVOptions ..
-    ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2));                  # .. is not needed since H and T are connected by default
+    opts.connect = [("h", "t"), ("f", "t"), ("g", "t")]
+    ccd = VacuumAverage( A(-2) * H() * t(2) * t(2), opts );
+    ccsd = VacuumAverage( A(-2) * H() * T(2) * T(2), opts );
     print (ccsd.latex)
 
     class String:

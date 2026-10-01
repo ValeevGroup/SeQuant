@@ -154,34 +154,18 @@ Using :math:`\bar{H}` outside the CC class
 The connectivity rules in this section assume the reference is the Wick vacuum. Otherwise ``ref_av`` ignores connectivity,
 so use explicit commutators from ``mbpt::lst`` instead of the non-unitary connected-product expression from ``CC::hbar``.
 
-:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz the expression it returns is **not** self-contained: each commutator is written as a connected product (see :ref:`mbpt-lst`), which only equals the commutator once you connect the operators when taking the expectation value. The class always does this for you — every non-unitary path passes ``default_op_connections()`` (or a superset) to ``ref_av``. A caller who does not will silently retain the disconnected terms:
+:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz the expression it returns is **not**
+self-contained: each commutator is written as a connected product (see :ref:`mbpt-lst`), which only equals the commutator
+once you connect the operators when taking the expectation value. The class supplies ``default_op_connections()`` (or a
+superset) internally for its non-unitary equations.
 
-.. code-block:: cpp
+The public operator-level and tensor-level ``ref_av`` and ``vac_av`` functions default to empty connectivity constraints.
+When evaluating a non-unitary ``CC::hbar()`` expression outside the class, explicitly set ``EVOptions::connect`` to
+``default_op_connections()``; otherwise disconnected terms survive. Alternatively, build H̄ with explicit commutators using
+``mbpt::lst`` with its default options. Omitting the expectation-value options argument is equivalent to passing ``{}``.
 
-   using namespace sequant::mbpt;
-
-   CC cc{2};
-
-   // correct: op::ref_av defaults to default_op_connections()
-   auto eqs = op::ref_av(op::P(nₚ(2)) * cc.hbar());
-
-   // WRONG: empty connectivity keeps terms the commutator would have cancelled
-   auto bad = op::ref_av(op::P(nₚ(2)) * cc.hbar(), {.connect = {}});
-
-   // also correct: ask lst for the explicit commutator form, which needs
-   // no connectivity
-   auto hbar = lst(op::H(), op::T(2), 4);
-
-Note that ``op::ref_av(expr)`` and ``op::ref_av(expr, {})`` are *not* the same call: the connectivity defaults to ``default_op_connections()`` only when the argument is omitted entirely, since ``EVOptions::connect`` is itself empty by default.
-
-For a unitary ansatz, the roles of the two ``ref_av`` calls above swap: :func:`CC::hbar() <sequant::mbpt::CC::hbar>` already returns explicit commutators, and imposing connectivity on top of them would drop terms that must survive; a caller must therefore pass empty connections explicitly, as the class does internally:
-
-.. code-block:: cpp
-
-   CC ucc{2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 3}};
-
-   // correct for a unitary ansatz: hbar is already self-contained
-   auto ueqs = op::ref_av(op::P(nₚ(2)) * ucc.hbar(), {.connect = {}});
+For a unitary BCH ansatz, ``CC::hbar()`` already returns explicit commutators. The public expectation-value functions'
+empty connectivity defaults are appropriate; imposing connectivity would drop terms that must survive.
 
 .. _cc-spin-tracing:
 

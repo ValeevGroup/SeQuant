@@ -140,8 +140,8 @@ class CC {
   ///     reaches `CC::ref_av`, so `screen` and `use_topology` have no effect.
   /// @warning A non-unitary H̄ is not self-contained. Evaluating it with empty
   ///   connectivity, e.g. `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
-  ///   retains disconnected terms. Pass `default_op_connections()` (the default
-  ///   when the options argument is omitted), or build H̄ with an explicit
+  ///   retains disconnected terms. Pass `default_op_connections()` explicitly
+  ///   in EVOptions::connect, or build H̄ with an explicit
   ///   commutator `mbpt::lst(..., {})` call. A unitary H̄ is self-contained,
   ///   so its connectivity must be empty. See the "Using H̄ outside the CC
   ///   class" section of the user guide.

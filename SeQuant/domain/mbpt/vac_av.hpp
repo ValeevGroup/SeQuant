@@ -12,7 +12,7 @@
 namespace sequant::mbpt {
 inline namespace op {
 
-/// defines the default op connections
+/// defines the conventional coupled-cluster op connections
 inline OpConnections<std::wstring> default_op_connections() {
   static const OpConnections<std::wstring> defaults = {
       {L"h", L"t"},
@@ -68,19 +68,17 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 ///       i.e. if `get_default_context().index_space_registry()->reference_occupied_space() == get_default_context().index_space_registry()->vacuum_occupied_space()`
 /// @param[in] expr input expression
 /// @param[in] opts controls the behavior, @see EVOptions
-/// @note Uses `op::default_op_connections()` as default connectivity
+/// @note Connectivity constraints are empty by default.
 // clang-format on
-ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {
-                                 .connect = default_op_connections()});
+ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
 
 /// @brief computes the vacuum expectation value
 /// @internal evaluates only full contractions in  WickTheorem
 /// @param[in] expr input expression
 /// @param[in] opts controls the behavior, @see EVOptions
-/// @note Uses `op::default_op_connections()` as default connectivity
+/// @note Connectivity constraints are empty by default.
 /// @return the VEV
-ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts = {
-                                 .connect = default_op_connections()});
+ExprPtr vac_av(ExprPtr expr, EVOptions<std::wstring> opts = {});
 
 }  // namespace op
 }  // namespace sequant::mbpt

@@ -1006,6 +1006,19 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     namespace o = sequant::mbpt::op;
     namespace t = sequant::mbpt::tensor;
 
+    SECTION("expectation values default to empty connectivity") {
+      // Requiring each h to connect to both t's removes this nonzero product.
+      const auto unconstrained =
+          o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1), {});
+      REQUIRE(unconstrained != ex<Constant>(0));
+      CHECK_THAT(o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1)),
+                 EquivalentTo(unconstrained));
+      CHECK_THAT(o::ref_av(o::h(1) * o::t(1) * o::h(1) * o::t(1)),
+                 EquivalentTo(unconstrained));
+      CHECK(o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1),
+                      {.connect = {{L"f", L"t"}}}) == ex<Constant>(0));
+    }
+
     SECTION("ref_av retains connectivity when reference equals vacuum") {
       REQUIRE(t::ref_av(t::h(1) * t::t(1) * t::h(1) * t::t(1),
                         {.connect = {{0, 3}}}) == ex<Constant>(0));
@@ -1023,7 +1036,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     {
       // check against op
-      auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o ::T(2) * o::T(2));
+      auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o ::T(2) * o::T(2),
+                                 {.connect = default_op_connections()});
       REQUIRE(result_op->size() == result->size());  // as compact as result ..
       REQUIRE(simplify(result_op - result) ==
               ex<Constant>(0));  // .. and equivalent to it
@@ -1343,7 +1357,8 @@ SECTION("manuscript-examples") {
   };
 
   SECTION("CCD Term") {
-    auto expr = ref_av(P(2) * H() * t(2) * t(2));
+    auto expr = ref_av(P(2) * H() * t(2) * t(2),
+                       {.connect = {{L"f", L"t"}, {L"g", L"t"}}});
     REQUIRE(expr.size() == 4);
   }
 
