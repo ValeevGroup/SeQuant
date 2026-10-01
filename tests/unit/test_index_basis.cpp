@@ -22,6 +22,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <range/v3/view/single.hpp>
 
@@ -295,4 +296,69 @@ TEST_CASE("index-basis-annotation-and-hash", "[EvalExpr][basis]") {
   REQUIRE_NOTHROW(binarize(bare1));
   CHECK(binarize(bare0)->hash_value() != binarize(bare1)->hash_value());
   SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+}
+
+TEST_CASE("index-basis-serialization", "[serialization][basis]") {
+  auto ctx = scoped_min_sr_context();
+
+  SECTION("round trips") {
+    const std::vector<std::wstring> expressions = {
+        L"t{i_1;a_1<i_1;1>}:N-C-S",
+        L"t{i_1;a_1<i_1,i_2;7>}:N-C-S",
+        L"t{i_1;a_1<;-2>}:N-C-S",
+        L"t{i_1;a_1<i_1<;3>,i_2;1>}:N-C-S",
+        L"t{i_1<;3>;a_1<i_1<;3>>}:N-C-S",
+        L"t{i_1;a_1<;0>}:N-C-S",
+        L"g{i_1,i_2;a_1<;1>,a_2<;2>}:N-C-S",
+    };
+
+    for (const std::wstring& current : expressions) {
+      ExprPtr expression = deserialize<ExprPtr>(current);
+      REQUIRE(serialize(expression, {.annot_symm = true}) == current);
+      CHECK(deserialize<ExprPtr>(serialize(expression)) == expression);
+    }
+  }
+
+  SECTION("';0' is legal and distinct from no instance") {
+    auto zero = deserialize<ExprPtr>(L"t{i_1;a_1<;0>}:N-C-S");
+    auto null = deserialize<ExprPtr>(L"t{i_1;a_1}:N-C-S");
+    const Index& a_zero = zero->as<Tensor>().ket().at(0);
+    const Index& a_null = null->as<Tensor>().ket().at(0);
+    REQUIRE(a_zero.basis().has_basis_instance());
+    CHECK(*a_zero.basis().basis_instance() == 0);
+    CHECK(!a_null.basis().has_basis_instance());
+    CHECK(a_zero != a_null);
+  }
+
+  SECTION("whitespace inside a domain is skipped") {
+    auto with_space = deserialize<ExprPtr>(L"t{a_1<i_1 ; 10>;i_1}");
+    auto without_space = deserialize<ExprPtr>(L"t{a_1<i_1;10>;i_1}");
+    REQUIRE(with_space == without_space);
+    CHECK(serialize(with_space) == serialize(without_space));
+  }
+
+  SECTION("spin-labelled index with a basis instance") {
+    auto spin_ctx = get_default_context();
+    spin_ctx.set(mbpt::make_sr_spaces());
+    auto resetter = set_scoped_default_context(spin_ctx);
+
+    auto expr = deserialize<ExprPtr>(L"t{a↓_1;i↑_1<;2>}:N-C-S");
+    REQUIRE(serialize(expr, {.annot_symm = true}) == L"t{a↓_1;i↑_1<;2>}:N-C-S");
+    CHECK(expr->as<Tensor>().ket().at(0).basis().basis_instance() == 2);
+  }
+
+  SECTION("malformed or out-of-range domains throw SerializationError") {
+    CHECK_THROWS_AS(deserialize<ExprPtr>(L"t{i1;a1<i1;x>}"),
+                    io::serialization::SerializationError);
+    CHECK_THROWS_AS(deserialize<ExprPtr>(L"t{i1;a1<;2147483648>}"),
+                    io::serialization::SerializationError);
+
+    try {
+      deserialize<ExprPtr>(L"t{i1;a1<>}");
+      FAIL("expected a SerializationError");
+    } catch (const io::serialization::SerializationError& e) {
+      CHECK(std::string(e.what()).find("empty index domain") !=
+            std::string::npos);
+    }
+  }
 }

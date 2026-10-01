@@ -5,6 +5,8 @@
 #ifndef SEQUANT_CORE_PARSE_V1_AST_HPP
 #define SEQUANT_CORE_PARSE_V1_AST_HPP
 
+#include <SeQuant/core/index_basis.hpp>
+
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/optional.hpp>
@@ -26,12 +28,33 @@ struct IndexLabel : boost::spirit::x3::position_tagged {
       : label(std::move(label)), id(id) {}
 };
 
+/// a proto label may itself carry a domainless basis instance: `i_1<;3>`
+struct ProtoLabel : boost::spirit::x3::position_tagged {
+  IndexLabel label;
+  boost::optional<IndexBasis::instance_type> instance;
+
+  ProtoLabel(IndexLabel label = {},
+             boost::optional<IndexBasis::instance_type> instance = {})
+      : label(std::move(label)), instance(std::move(instance)) {}
+};
+
+/// `<protos[;N]>` or `<;N>` decoration; x3 needs the optional in its own
+/// struct
+struct IndexDomain : boost::spirit::x3::position_tagged {
+  std::vector<ProtoLabel> protoLabels;
+  boost::optional<IndexBasis::instance_type> instance;
+
+  IndexDomain(std::vector<ProtoLabel> protoLabels = {},
+              boost::optional<IndexBasis::instance_type> instance = {})
+      : protoLabels(std::move(protoLabels)), instance(std::move(instance)) {}
+};
+
 struct Index : boost::spirit::x3::position_tagged {
   IndexLabel label;
-  std::vector<IndexLabel> protoLabels;
+  boost::optional<IndexDomain> domain;
 
-  Index(IndexLabel label = {}, std::vector<IndexLabel> protoLabels = {})
-      : label(std::move(label)), protoLabels(std::move(protoLabels)) {}
+  Index(IndexLabel label = {}, boost::optional<IndexDomain> domain = {})
+      : label(std::move(label)), domain(std::move(domain)) {}
 };
 
 struct Number : boost::spirit::x3::position_tagged {
@@ -149,8 +172,12 @@ struct ResultExpr : boost::spirit::x3::position_tagged {
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexLabel,
                           label, id);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::ProtoLabel,
+                          label, instance);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexDomain,
+                          protoLabels, instance);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Index, label,
-                          protoLabels);
+                          domain);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Number,
                           numerator, denominator);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Variable, name,
