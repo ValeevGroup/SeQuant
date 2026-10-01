@@ -1562,7 +1562,8 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
   // every density a decomposition builds has these symmetries, including
   // those that antisymmetrize() builds by permuting indices
-  const auto densities2 = mbpt::decompositions::cumulant2_to_density(kappa2);
+  const auto densities2 =
+      simplify(mbpt::decompositions::cumulant2_to_density(kappa2));
   densities2->visit(
       [](const ExprPtr& e) {
         if (!e->is<Tensor>()) return;
@@ -1571,6 +1572,11 @@ SECTION("rdm-decomposition symmetries") {
         REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
       },
       /*atoms_only=*/true);
+  // a spin-orbital multi-body density is antisymmetric, like the one
+  // expectation_value_impl() builds from a leftover normal operator
+  const auto gamma2 = density::rdm_from_nop(nop2, density::rdm_label(),
+                                            density::cumulant_symmetries);
+  REQUIRE(simplify(densities2 - gamma2)->size() == densities2->size() - 1);
   // η is a registered mbpt operator label
   REQUIRE(mbpt::get_default_mbpt_context().op_registry()->contains(L"η"));
 }
@@ -1592,6 +1598,7 @@ SECTION("cumulant-to-density decompositions") {
     if (term->is<Tensor>()) {
       REQUIRE(term->as<Tensor>().label() == L"γ");
       REQUIRE(term->as<Tensor>().rank() == 3);
+      REQUIRE(term->as<Tensor>().symmetry() == Symmetry::Antisymm);
       ++n_gamma3;
       continue;
     }

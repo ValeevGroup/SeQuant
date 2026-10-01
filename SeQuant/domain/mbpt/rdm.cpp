@@ -38,7 +38,7 @@ sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
   auto up_1 = ex_->as<Tensor>().bra()[1];
 
   auto density2 = ex<Tensor>(rdm_label(), bra{up_0, up_1}, ket{down_0, down_1},
-                             rdm_symmetries);
+                             density::cumulant_symmetries);
   auto density_1 =
       ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
   auto density_2 =
@@ -68,8 +68,9 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
       ex<Tensor>(rdm_label(), bra{up_1}, ket{down_1}, rdm_symmetries);
   auto density_3 =
       ex<Tensor>(rdm_label(), bra{up_2}, ket{down_2}, rdm_symmetries);
-  auto density3 = ex<Tensor>(rdm_label(), bra{up_0, up_1, up_2},
-                             ket{down_0, down_1, down_2}, rdm_symmetries);
+  auto density3 =
+      ex<Tensor>(rdm_label(), bra{up_0, up_1, up_2},
+                 ket{down_0, down_1, down_2}, density::cumulant_symmetries);
 
   auto d1_d2 =
       antisymmetrize(density_1 * density_2 * density_3 + density_1 * cumulant2);
