@@ -1529,7 +1529,7 @@ SECTION("rdm-decomposition symmetries") {
   const auto kappa =
       ex<Tensor>(L"κ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
                  TensorSymmetries{.column = ColumnSymmetry::Symm});
-  const auto gamma = mbpt::decompositions::cumu_to_density(kappa);
+  const auto gamma = mbpt::decompositions::cumulant_to_density(kappa);
   REQUIRE(gamma->is<Tensor>());
   REQUIRE(gamma->as<Tensor>().label() == L"γ");
   REQUIRE(gamma->as<Tensor>().hermiticity() == Hermiticity::Hermitian);

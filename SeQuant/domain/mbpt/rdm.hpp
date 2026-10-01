@@ -12,11 +12,11 @@ namespace sequant {
 namespace mbpt {
 namespace decompositions {
 
-ExprPtr cumu_to_density(ExprPtr ex_);
+ExprPtr cumulant_to_density(ExprPtr ex_);
 
-ExprPtr cumu2_to_density(ExprPtr ex_);
+ExprPtr cumulant2_to_density(ExprPtr ex_);
 
-ExprPtr cumu3_to_density(ExprPtr ex_);
+ExprPtr cumulant3_to_density(ExprPtr ex_);
 
 ExprPtr one_body_sub(ExprPtr ex_);
 
