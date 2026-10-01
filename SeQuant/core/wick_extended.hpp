@@ -60,7 +60,8 @@ rational term_weight(
 /// WickTheorem output (partial contractions) into cumulant blocks
 /// @param wick_output the WickTheorem output
 /// @param provenance the input NormalOperator ordinal of every surviving Op
-/// @param opts only `full_contractions` and `max_cumulant_rank` are used
+/// @param opts `full_contractions`, `max_cumulant_rank`, `nop_connections`
+///        and `nop_avoided_connections` are used
 /// @note a block has k creators and k annihilators, 2 <= k <=
 ///       `max_cumulant_rank`, all active, and legs from at least two input
 ///       NormalOperators; its sign is the parity of moving each block's legs,
@@ -81,11 +82,13 @@ extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
 /// @param input a Product or Sum of Products with NormalOperator<S> factors
 ///        normal-ordered relative to Vacuum::MultiProduct, or an
 ///        ExprPtr to a NormalOperatorSequence<S>
-/// @param opts `use_topology`, `nop_connections`, `nop_avoided_connections`
-///        and `eta_as_delta_minus_gamma` are not used
+/// @param opts `use_topology` and `eta_as_delta_minus_gamma` are not used
 /// @return the result in which every γ, η and κ index is active; the
 ///         core (virtual) part of a contraction is a Kronecker delta
-/// @throw Exception if the default context's vacuum is not MultiProduct
+/// @throw Exception if the default context's vacuum is not MultiProduct, or
+///        if an ordinal of `opts.nop_connections` or
+///        `opts.nop_avoided_connections` is not that of an input
+///        NormalOperator of a term
 template <Statistics S>
 ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts = {});
 

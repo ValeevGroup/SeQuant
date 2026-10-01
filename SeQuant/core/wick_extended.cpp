@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 
 namespace sequant {
 
@@ -348,6 +349,42 @@ void extend_provenance(const Product &product, OpProvenance &prov) {
   } while (extended);
 }
 
+/// @return whether @p term realizes every `opts.nop_connections` pair and no
+/// `opts.nop_avoided_connections` pair; a γ, η, κ, δ or overlap, i.e. a factor
+/// the theorem produces, connects the input operators of all its indices;
+/// other tensors, e.g. coefficients, connect nothing
+bool satisfies_connectivity(const Product &term, const OpProvenance &prov,
+                            const ExtendedWickOptions &opts) {
+  if (opts.nop_connections.empty() && opts.nop_avoided_connections.empty())
+    return true;
+  using Edge = std::pair<std::size_t, std::size_t>;
+  const auto edge = [](std::size_t a, std::size_t b) {
+    return Edge{std::min(a, b), std::max(a, b)};
+  };
+  const container::set<std::wstring> connecting{
+      density::rdm_label(), density::hole_rdm_label(),
+      density::cumulant_label(), reserved::kronecker_label(),
+      reserved::overlap_label()};
+  container::set<Edge> edges;
+  for (const auto &f : term.factors()) {
+    if (!f->is<Tensor>() ||
+        !connecting.contains(std::wstring(f->as<Tensor>().label())))
+      continue;
+    container::svector<std::size_t> ords;
+    for (const auto &idx : f->as<Tensor>().const_braket())
+      if (const auto it = prov.find(idx); it != prov.end())
+        ords.push_back(it->second);
+    for (std::size_t i = 0; i != ords.size(); ++i)
+      for (std::size_t j = i + 1; j != ords.size(); ++j)
+        if (ords[i] != ords[j]) edges.insert(edge(ords[i], ords[j]));
+  }
+  for (const auto &[a, b] : opts.nop_connections)
+    if (!edges.contains(edge(a, b))) return false;
+  for (const auto &[a, b] : opts.nop_avoided_connections)
+    if (edges.contains(edge(a, b))) return false;
+  return true;
+}
+
 }  // namespace
 
 template <Statistics S>
@@ -371,7 +408,8 @@ ExprPtr cumulant_expand(const ExprPtr &wick_output,
         factors.begin(), factors.end(),
         [](const ExprPtr &f) { return f->is<NormalOperator<S>>(); });
     if (nop_it == factors.end()) {
-      result->append(product);
+      if (satisfies_connectivity(*product, provenance, opts))
+        result->append(product);
       return;
     }
     const auto &survivors = (*nop_it)->template as<NormalOperator<S>>();
@@ -391,6 +429,7 @@ ExprPtr cumulant_expand(const ExprPtr &wick_output,
           if (!remainder.empty())
             summand->append(
                 1, ex<NormalOperator<S>>(subset(survivors, remainder)));
+          if (!satisfies_connectivity(*summand, provenance, opts)) return;
           result->append(summand);
         });
   };
@@ -452,6 +491,14 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
       }
     }
     if (nopseq->empty()) return term;
+    for (const auto &pairs :
+         {opts.nop_connections, opts.nop_avoided_connections})
+      for (const auto &[a, b] : pairs)
+        if (std::max(a, b) >= nopseq->size())
+          throw Exception("extended_wick: connection ordinal " +
+                          std::to_string(std::max(a, b)) + " exceeds the " +
+                          std::to_string(nopseq->size()) +
+                          " input operators of a term");
 
     WickTheorem<S> wick{nopseq};
     wick.full_contractions(false);
