@@ -13,7 +13,12 @@
 #include <optional>
 #include <utility>
 
-namespace sequant::detail {
+namespace sequant {
+
+template <Statistics S>
+class WickTheorem;
+
+namespace detail {
 
 /// controls extended_wick() and cumulant_expand(); see the WickTheorem setters
 /// of the same names
@@ -24,6 +29,8 @@ struct ExtendedWickOptions {
   std::optional<std::size_t> max_cumulant_rank;
   /// rewrite every η as δ - γ
   bool eta_as_delta_minus_gamma = false;
+  /// prune the contractions of topologically equivalent operators
+  bool use_topology = true;
   /// pairs of input NormalOperator ordinals that must end up connected
   container::svector<std::pair<std::size_t, std::size_t>> nop_connections;
   /// pairs of input NormalOperator ordinals that must not be connected
@@ -77,6 +84,8 @@ extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
 /// @param input a Product or Sum of Products with NormalOperator<S> factors
 ///        normal-ordered relative to Vacuum::MultiProduct, or an
 ///        ExprPtr to a NormalOperatorSequence<S>
+/// @param stats_sink the WickTheorem whose stats() accumulate those of the
+///        standard theorem's runs
 /// @return the result in which every γ, η and κ index is active; the
 ///         core (virtual) part of a contraction is a Kronecker delta, applied
 ///         unless both of its indices are external
@@ -85,11 +94,15 @@ extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
 ///        `opts.nop_avoided_connections` is not that of an input
 ///        NormalOperator of a term
 template <Statistics S>
-ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts);
+ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
+                      WickTheorem<S> &stats_sink);
 
 extern template ExprPtr extended_wick<Statistics::FermiDirac>(
-    ExprPtr, const ExtendedWickOptions &);
+    ExprPtr, const ExtendedWickOptions &,
+    WickTheorem<Statistics::FermiDirac> &);
 
-}  // namespace sequant::detail
+}  // namespace detail
+
+}  // namespace sequant
 
 #endif  // SEQUANT_CORE_WICK_EXTENDED_HPP

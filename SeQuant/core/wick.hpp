@@ -512,7 +512,8 @@ class WickTheorem {
 
   // the extended theorem runs the standard one on its operators
   friend ExprPtr detail::extended_wick<S>(ExprPtr,
-                                          const detail::ExtendedWickOptions &);
+                                          const detail::ExtendedWickOptions &,
+                                          WickTheorem &);
 
   // the index counts of the input, see extract_indices(); the input, not a
   // result, since the kronecker deltas of a result double every external

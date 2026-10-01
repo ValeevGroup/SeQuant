@@ -209,8 +209,9 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
   }
 
   SECTION("WickTheorem: the input is not modified") {
+    // the coefficient's bra is paired with the creator, as mbpt builds them
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
-              ex<Tensor>(L"h", bra{L"u_2"}, ket{L"u_1"}, Symmetry::Nonsymm,
+              ex<Tensor>(L"h", bra{L"u_1"}, ket{L"u_2"}, Symmetry::Nonsymm,
                          BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
     wick_mp(in);
     REQUIRE(in->as<Product>().factor(0)->is<FNOperator>());
@@ -504,6 +505,69 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(without_h->size() > 0);
       auto lhs = wick_mp(h * ops, opts);
       REQUIRE(simplify(lhs - simplify(h * without_h)) == ex<Constant>(0));
+    }
+  }
+
+  SECTION("WickTheorem: use_topology") {
+    // WickTheorem under the MultiProduct vacuum with use_topology(@p top);
+    // returns the result and the number of attempted contractions
+    auto run = [](const ExprPtr& in, bool full, bool top,
+                  const container::svector<std::pair<std::size_t, std::size_t>>&
+                      connections = {}) {
+      FWickTheorem wick{in};
+      wick.full_contractions(full).use_topology(top).set_nop_connections(
+          connections);
+      auto result = wick.compute();
+      return std::pair{result, wick.stats().num_attempted_contractions.load()};
+    };
+    auto coeff = [](std::wstring_view label, IndexList b, IndexList k) {
+      return ex<Tensor>(label, bra(b), ket(k), Symmetry::Antisymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    };
+    // antisymmetric 2-body coefficients summed against all-active operators:
+    // the creators (annihilators) of each operator are equivalent
+    auto g_op = coeff(L"g", {L"u_1", L"u_2"}, {L"u_3", L"u_4"}) *
+                ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"}));
+    auto t_op = coeff(L"t", {L"u_5", L"u_6"}, {L"u_7", L"u_8"}) *
+                ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"}));
+    for (const bool full : {true, false}) {
+      INFO("full=" << full);
+      const auto [on, attempted_on] = run(g_op * t_op, full, true);
+      const auto [off, attempted_off] = run(g_op * t_op, full, false);
+      REQUIRE(simplify(on - off) == ex<Constant>(0));
+      REQUIRE(attempted_on > 0);
+      REQUIRE(attempted_on < attempted_off);
+    }
+
+    // operators 1 and 2 are equivalent, but only 1 must connect to 0
+    auto t1_op = [&](std::wstring_view b, std::wstring_view k) {
+      return ex<Tensor>(L"t", bra{b}, ket{k}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm) *
+             ex<FNOperator>(cre({b}), ann({k}));
+    };
+    auto three = g_op * t1_op(L"u_5", L"u_6") * t1_op(L"u_7", L"u_8");
+    for (const bool full : {true, false}) {
+      INFO("full=" << full);
+      const auto [on, attempted_on] = run(three, full, true, {{0, 1}});
+      const auto [off, attempted_off] = run(three, full, false, {{0, 1}});
+      REQUIRE(simplify(on - off) == ex<Constant>(0));
+      REQUIRE(attempted_on < attempted_off);
+    }
+
+    // a†_u1 and a†_u2 are only equivalent together with the tensors they
+    // are attached to, so nothing is pruned
+    auto X = [](std::wstring_view b, std::wstring_view k) {
+      return ex<Tensor>(L"X", bra{b}, ket{k}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    };
+    auto xx = X(L"u_1", L"u_3") * X(L"u_2", L"u_4") *
+              ex<FNOperator>(cre({}), ann({L"u_3"})) *
+              ex<FNOperator>(cre({}), ann({L"u_4"})) *
+              ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({}));
+    for (const bool full : {true, false}) {
+      INFO("full=" << full);
+      REQUIRE(simplify(run(xx, full, true).first -
+                       run(xx, full, false).first) == ex<Constant>(0));
     }
   }
 
