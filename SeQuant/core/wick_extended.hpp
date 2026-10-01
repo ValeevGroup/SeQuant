@@ -84,7 +84,8 @@ extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
 ///        ExprPtr to a NormalOperatorSequence<S>
 /// @param opts `use_topology` is not used
 /// @return the result in which every γ, η and κ index is active; the
-///         core (virtual) part of a contraction is a Kronecker delta
+///         core (virtual) part of a contraction is a Kronecker delta, applied
+///         unless both of its indices are external
 /// @throw Exception if the default context's vacuum is not MultiProduct, or
 ///        if an ordinal of `opts.nop_connections` or
 ///        `opts.nop_avoided_connections` is not that of an input

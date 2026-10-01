@@ -247,6 +247,33 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         in, {.full_contractions = false}));
   }
 
+  SECTION("extended_wick: δs over summed indices are applied") {
+    // ⟨h^p_q a†_p a_q⟩: the δ binding each summed op index to its projection
+    // is applied, the external ones (see "general indices split into core δ +
+    // active γ") are kept
+    auto h = [](const Index& b, const Index& k) {
+      return ex<Tensor>(L"h", bra{b}, ket{k}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+    };
+    const Index p1(L"p_1"), p2(L"p_2"), O1(L"O_1"), u1(L"u_1"), u2(L"u_2"),
+        u3(L"u_3");
+    auto in = h(p1, p2) * ex<FNOperator>(cre({p1}), ann({})) *
+              ex<FNOperator>(cre({}), ann({p2}));
+    auto result = extended_wick<Statistics::FermiDirac>(in);
+    REQUIRE(simplify(result - h(O1, O1) -
+                     h(u2, u1) * density::make_rdm(u1, u2)) == ex<Constant>(0));
+    // ... also for a δ that η = δ - γ introduces
+    auto in2 = h(u3, u2) * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    auto result2 = extended_wick<Statistics::FermiDirac>(
+        in2, {.eta_as_delta_minus_gamma = true});
+    result2->visit(
+        [](const ExprPtr& e) {
+          if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != L"δ");
+        },
+        /*atoms_only=*/true);
+  }
+
   SECTION("extended_wick: tensors commute with the theorem") {
     // operators carrying dummies of two different tensors: the result must
     // equal that of the same operators with external indices, times the
