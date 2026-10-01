@@ -34,8 +34,8 @@ The design serves 2; milestone 1 is a filter on it.
 - **Implemented as post-processing of the standard Wick theorem**, not as a
   new engine. The engine changes are confined to the quasiparticle
   classifiers, the middle factor of `contract`, and skipping the pair-based
-  connectivity filters. The recursion, topology and `reduce` logic are not
-  modified.
+  connectivity filters. The recursion and `reduce` logic are not modified;
+  the topology analysis is reused on each input term (B.1).
 - Nonorthogonal active orbitals are out of scope: spaces carrying protoindices
   must be disjoint from the active space.
 
@@ -80,8 +80,7 @@ contraction term: the one carrying exactly its pair contractions. Cumulant
 blocks are built **only from operators that survive standard Wick**; a γ/η
 pair emitted by Wick is never absorbed into a block, and a rank-1 "block" is
 never formed in the pass. This makes the mapping one-to-one, so no 1/k!
-weights are needed. (The rule would also keep topological folding valid, but
-the extended theorem does not fold: see B.1.)
+weights are needed. The rule also keeps topological folding valid (B.1).
 
 Checks: ⟨{a†ₚa†_q a_r}{a_s}⟩ → the uncontracted term gives κ^{rs}_{pq}; the
 p-s term leaves a rank-1 remainder and is dropped. ⟨{a†ₚa_q}{a†_r a_s}⟩ →
@@ -159,8 +158,16 @@ expanded and handled summand by summand. Per input term:
    is renamed; running on the full Product would canonicalize the terms that
    carry c-number factors and rename the operator indices that are dummies
    of those factors, and `set_external_indices` does not prevent that.
-   Consequence: **`use_topology` has no effect.** Topological pruning needs
-   equivalent operators, i.e. dummy indices; provenance needs named ones.
+   **Topology.** Topological pruning needs equivalent operators, i.e. dummy
+   indices, while provenance needs named ones. So with `use_topology` the
+   wrapper analyzes the topology of the canonicalized term *before* renaming
+   its shared indices (a shared index is a dummy the analysis must see as
+   such; renaming leaves every op at its ordinal) and hands the partitions to
+   the bare-sequence run via `set_nop_partitions`/`set_op_partitions`. An op
+   partition holds ops of one bra or ket of one operator, of the same
+   provenance, any two of which can be swapped alone as a symmetry of the
+   term, so each pruned contraction cumulant-expands, and passes the
+   connectivity filters (6), exactly like its representative.
 2. **Split mixed-space γ/η.** Pure core index → δ; pure active → keep;
    mixed (e.g. general `p`) → sum via the `δ(p,u)·γ(u,…)` projection idiom.
    Likewise η with virtual ↔ core. Afterwards every γ/η is pure-active.
@@ -227,8 +234,8 @@ WickTheorem& eta_as_delta_minus_gamma(bool);                 // default false
 
 Both only matter under `MultiProduct`. `full_contractions`,
 `set_nop_connections` and `set_nop_avoided_connections` keep their meaning
-(connectivity is enforced per cumulant block, B.6); `use_topology` has no
-effect under `MultiProduct` (B.1). `compute(/*count_only=*/true)` and bosons
+(connectivity is enforced per cumulant block, B.6), as does `use_topology`
+(B.1). `compute(/*count_only=*/true)` and bosons
 throw `sequant::Exception` under `MultiProduct`.
 
 The pass is the implementation, not API:
@@ -334,9 +341,11 @@ Unit tests (`tests/unit/test_wick.cpp` section "multiproduct vacuum";
 5. Single-reference limit: with an empty active space, `MultiProduct` output
    equals `SingleProduct` output. (Not yet covered by a test.)
 
-There is no `use_topology` on/off test under `MultiProduct`, since the option
-has no effect there (B.1); the mbpt "topology on/off agree" section only
-guards `ref_av`'s dispatch.
+`use_topology` on and off agree under `MultiProduct`, with fewer attempted
+contractions when on, for two antisymmetric two-body operators, for
+operators made equivalent only by the tensors they are attached to (nothing
+is pruned), with a connectivity constraint naming one of two equivalent
+operators, and for mbpt `h(2)·t(2)` and `h(2)·t(2)·t(2)` (B.1).
 
 Docs: section "The extended Wick theorem" in `doc/developer/wick.rst`
 (engine changes, the pass, no-double-counting rule); `MultiProduct` in the
@@ -366,8 +375,9 @@ Relative to the design as first approved:
   function (C).
 - `detail::extended_wick` runs `WickTheorem` on the bare operator sequence, not on
   the canonicalized Product with `skip_input_canonicalization`, because the
-  latter renames surviving indices and breaks provenance; as a result
-  `use_topology` has no effect (B.1).
+  latter renames surviving indices and breaks provenance; the topology is
+  therefore analyzed on the input term and handed to that run as explicit
+  partitions (B.1).
 - Cumulant legs are active operators only; mixed-space γ/η and survivors are
   split into pure pieces, over base spaces where a part is not registered
   (B.2-B.4).
@@ -379,9 +389,10 @@ Relative to the design as first approved:
 - A deserialized tilde operator takes the context's vacuum (C).
 - Under `MultiProduct` `ref_av` evaluates generalized-normal-ordered mbpt
   operators, so the cross-check with the core-vacuum path holds for
-  elementary operators only (C, D.3); the `use_topology` test is dropped and
-  the h(2)·t(2) test added (D).
+  elementary operators only (C, D.3); the h(2)·t(2) test is added (D).
 - Found along the way and fixed: `antisymmetrize` preserves tensor
   symmetries and recognizes repeated products by index labels;
   `cumulant3_to_density` returns γ₃ minus its factorizable part; multi-body γ
-  from the cumulant decompositions are antisymmetric.
+  from the cumulant decompositions are antisymmetric; the topology analysis
+  grouped two ops whenever some automorphism mapped one to the other, now
+  only when swapping them alone is one.

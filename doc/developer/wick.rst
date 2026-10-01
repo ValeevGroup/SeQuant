@@ -13,9 +13,10 @@ or a general :class:`sequant::Expr` (repeated indices assumed dummy), then tuned
 ``compute()``:
 
 - ``full_contractions(bool)`` (default ``true``): full contractions only, versus all contractions including partial ones.
-- ``use_topology(bool)`` (default ``true``): treats ``Op``\ s of the same type within a ``NormalOperator``, and — when the input is an
-  ``Expr`` — ``NormalOperator`` objects attached to the same tensor label, as topologically equivalent, so that contractions related by
-  this equivalence are not separately enumerated when only the fully-contracted result (the vacuum average) is wanted.
+- ``use_topology(bool)`` (default ``true``): when the input is an ``Expr``, treats the ``Op``\ s within a bra or ket of a
+  ``NormalOperator`` that can be swapped as a symmetry of the input (see :ref:`below <wick-topology>`), and ``NormalOperator`` objects
+  attached to the same tensor label, as topologically equivalent, so that contractions related by this equivalence are not separately
+  enumerated.
 - ``set_nop_connections()`` / ``set_nop_avoided_connections()``: force, or forbid, contraction between specific pairs of normal-operator
   ordinals. Under a ``Vacuum::MultiProduct`` vacuum the engine does not apply them (see :ref:`below <wick-extended>`).
 - ``set_nop_partitions()`` / ``set_op_partitions()`` / ``make_default_op_partitions()``: declare explicit equivalence groups of normal
@@ -61,12 +62,17 @@ returns :math:`s` except under ``Vacuum::MultiProduct`` (see :ref:`below <wick-e
 additionally picks up a sign of :math:`-1` for every operator that sat strictly between ``left`` and ``right`` at the time of
 contraction — the usual anticommutation rule.
 
+.. _wick-topology:
+
 Topological pruning and degeneracy
 ---------------------------------------
 
 When ``use_topology_`` is set, ``is_topologically_unique()`` restricts contraction attempts within a partition group (from
 ``use_topology()``'s automatic grouping, or an explicit ``set_op_partitions()``/``set_nop_partitions()``) to the group's first free
-member, skipping contractions that would only reproduce one already tried by symmetry. The corresponding combinatorial weight —
+member, skipping contractions that would only reproduce one already tried by symmetry. The automatic grouping puts two ``Op``\ s
+in one partition only if swapping them alone — their index vertices together with the tensor slots these occupy, every other
+vertex of the tensor network graph fixed — is an automorphism; an automorphism that also moves other indices, tensors or operators
+does not make the ``Op``\ s independently interchangeable. The corresponding combinatorial weight —
 equivalent to a multinomial coefficient over how many operators from each partition have already been paired off — is recovered by
 ``op_permutational_degeneracy()``, so the pruned enumeration and the exhaustive one agree on the final coefficient. They also agree for
 an input that vanishes by symmetry, i.e. has an automorphism of phase -1 (see :doc:`tnc`), because such an input is returned as zero
@@ -106,8 +112,10 @@ input term it canonicalizes, records which input ``NormalOperator`` every operat
 shared by two operators is renamed apart, the :math:`\delta` binding the names multiplying the result), and runs the standard theorem
 (the private ``WickTheorem::compute_contractions``) with partial contractions on the bare operator sequence, multiplying the c-number
 factors back in afterwards. In that run every operator index is external, so no term is canonicalized and no surviving index is
-renamed, which keeps the provenance valid. For the same reason ``WickTheorem::use_topology`` has no effect here: topological
-equivalence needs dummy indices, provenance needs named ones. Each resulting term then
+renamed, which keeps the provenance valid. Topological equivalence needs dummy indices, though, so with ``use_topology`` the
+partitions are computed on the canonicalized term before its shared indices are renamed (renaming leaves every operator at its
+ordinal) and passed to that run with ``set_nop_partitions()``/``set_op_partitions()``; the statistics of the run accumulate in the
+dispatching ``WickTheorem``'s ``stats()``. Each resulting term then
 
 - has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an active
   ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η``, a survivor onto its active part and, with partial contractions,

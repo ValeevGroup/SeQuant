@@ -185,9 +185,10 @@ class WickTheorem {
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is enabled.
-  /// @note has no effect under a Vacuum::MultiProduct vacuum: there every
-  /// operator index is kept named, so that the operator it came from is
-  /// known, and named operators are never topologically equivalent
+  /// @note two Op objects are treated as equivalent only if swapping them
+  /// alone is a symmetry of the input
+  /// @note under a Vacuum::MultiProduct vacuum the equivalences are those of
+  /// each input term, in which an index shared by two operators is a dummy
   /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
