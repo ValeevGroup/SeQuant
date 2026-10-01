@@ -385,6 +385,31 @@ bool satisfies_connectivity(const Product &term, const OpProvenance &prov,
   return true;
 }
 
+/// @return @p expr with every δ over an index summed within its term applied
+template <Statistics S>
+ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
+  auto result = std::make_shared<Sum>();
+  const auto terms = expr->is<Sum>() ? expr : ex<Sum>(ExprPtrList{expr});
+  for (const auto &term : *terms) {
+    if (!term->is<Product>()) {
+      result->append(term);
+      continue;
+    }
+    // the term's own index counts tell its dummies from its externals
+    ExprPtr reduced = term->clone();
+    WickTheorem<S> reducer{reduced};
+    reducer.reduce(reduced);
+    if (!reduced->is<Product>()) continue;  // vanished
+    // an applied δ is left as a factor of 1; append() folds it into the scalar
+    const auto &product = reduced->as<Product>();
+    ExprPtr folded = std::make_shared<Product>(product.scalar(), ExprPtrList{});
+    for (const auto &f : product) folded->as<Product>().append(1, f);
+    // a lone tensor left by simplify would keep the reducer's dummy names
+    result->append(canonicalize(folded));
+  }
+  return result;
+}
+
 /// rewrites every 1-body η of @p expr, a Sum, as δ - γ
 void rewrite_eta(ExprPtr &expr) {
   expr->visit(
@@ -485,7 +510,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
     // WickTheorem sees only the operators, so every index is external to it
     // and none is renamed; the c-number factors multiply its result. reduce
     // keeps every input index too, so every projected index stays δ-bound to
-    // an input op index; the final simplify treats the true dummies as such
+    // an input op index; apply_dummy_deltas applies the δs over true dummies
     auto nopseq = std::make_shared<NormalOperatorSequence<S>>();
     ExprPtr prefactor = ex<Constant>(1);
     container::set<Index> fixed_indices;
@@ -554,6 +579,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts) {
   }
   ExprPtr out = result;
   if (opts.eta_as_delta_minus_gamma) rewrite_eta(out);
+  out = apply_dummy_deltas<S>(out);
   simplify(out);
   if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);
   return out;
