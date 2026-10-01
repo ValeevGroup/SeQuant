@@ -885,6 +885,9 @@ class Graph : public AbstractGraph {
    */
   unsigned int get_nof_vertices() const { return vertices.size(); }
 
+  /// @return the vertices adjacent to vertex @p v
+  const auto& get_edges(unsigned int v) const { return vertices[v].edges; }
+
   /**
    * \copydoc AbstractGraph::permute(const unsigned int* const perm) const
    */
