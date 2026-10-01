@@ -82,7 +82,7 @@ extern template ExprPtr cumulant_expand<Statistics::FermiDirac>(
 /// @param input a Product or Sum of Products with NormalOperator<S> factors
 ///        normal-ordered relative to Vacuum::MultiProduct, or an
 ///        ExprPtr to a NormalOperatorSequence<S>
-/// @param opts `use_topology` and `eta_as_delta_minus_gamma` are not used
+/// @param opts `use_topology` is not used
 /// @return the result in which every γ, η and κ index is active; the
 ///         core (virtual) part of a contraction is a Kronecker delta
 /// @throw Exception if the default context's vacuum is not MultiProduct, or
