@@ -137,4 +137,18 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         if (f->is<FNOperator>())
           REQUIRE(f->as<FNOperator>().vacuum() == Vacuum::MultiProduct);
   }
+
+  SECTION("cumulant_expand: an inactive survivor is not a cumulant leg") {
+    // {a†_u1 a_i1}{a†_u2 a_u3}: the only balanced set of legs from both nops
+    // includes the core annihilator i_1, so no κ forms
+    FNOperatorSeq in{FNOperator(cre({L"u_1"}), ann({L"i_1"})),
+                     FNOperator(cre({L"u_2"}), ann({L"u_3"}))};
+    OpProvenance prov;
+    auto wick_out = wick_partial(in, prov);
+    REQUIRE(cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {}) ==
+            ex<Constant>(0));
+    auto partial = cumulant_expand<Statistics::FermiDirac>(
+        wick_out, prov, {.full_contractions = false});
+    REQUIRE(simplify(partial - wick_out) == ex<Constant>(0));
+  }
 }
