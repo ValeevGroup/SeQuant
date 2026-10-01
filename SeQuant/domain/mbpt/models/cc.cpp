@@ -112,9 +112,9 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   if (opts_.hbar_expansion == HbarExpansion::Bernoulli)
     return bernoulli::hbar(N, truncation, skip_singles());
 
-  // for a non-unitary ansatz this is the cheaper connected-product form, which
-  // is only equivalent to the commutator once the caller supplies operator
-  // connectivity to ref_av (see lst_options() and the @warning on hbar())
+  // Connected products require connectivity enforced by ref_av, so
+  // lst_options() uses explicit commutators when the reference differs from
+  // the Wick vacuum (see the @warning on hbar()).
   auto result = mbpt::lst(H(), T(N, skip_singles()), truncation, lst_options());
 
   // Apply the optional singles-only transform after the primary BCH series.
@@ -219,8 +219,8 @@ std::vector<ExprPtr> CC::λ() const {
 
   // element 0: λ pseudoenergy, computed as the CC energy with T → Λ⁺.
   {
-    // connected form; the ref_av below supplies the connectivity that makes it
-    // equivalent to the commutator, here {h,f,f̃,g} with λ⁺ rather than with t
+    // For connected products, ref_av connects {h,f,f̃,g} with λ⁺ rather than
+    // with t to make the result equivalent to the commutator.
     const auto hbar_λ = mbpt::lst(H(), adjoint(Λ(N, skip_singles())),
                                   commutator_rank, lst_options());
     result.at(0) = this->ref_av(
@@ -272,9 +272,9 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // quasi-creators must be absorbed by ã's 2r plus Λ's 2N legs (k <= r + N).
   // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
   // there is no safe default; use the engine's hbar_comm_rank (the ctor
-  // guarantees it is set). The traditional branch takes lst_options()'s
-  // connected-product form; the {ã,t} connectivity handed to ref_av below is
-  // what makes it equivalent to the explicit commutator.
+  // guarantees it is set). When the reference is the Wick vacuum, the
+  // traditional branch uses connected products; the {ã,t} connectivity handed
+  // to ref_av below makes them equivalent to the explicit commutator.
   const auto commutator_rank = comm_rank.value_or(
       unitary() ? opts_.hbar_comm_rank.value() : std::min(2 * rank, rank + N));
   auto bar =
