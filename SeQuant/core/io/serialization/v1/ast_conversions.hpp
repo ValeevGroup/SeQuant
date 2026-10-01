@@ -263,6 +263,13 @@ ExprPtr ast_to_expr(const io::serialization::v1::ast::Sum &sum,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms);
 
+/// the vacuum of a tilde-labelled NormalOperator: NormalOperator::label()
+/// is the tilde label for every non-Physical vacuum
+inline Vacuum tilde_vacuum(Statistics s) {
+  const auto vac = get_default_context(s).vacuum();
+  return vac == Vacuum::Physical ? Vacuum::SingleProduct : vac;
+}
+
 template <typename PositionCache, typename Iterator>
 struct Transformer {
   std::reference_wrapper<const PositionCache> position_cache;
@@ -301,7 +308,7 @@ struct Transformer {
                        tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = fit == ranges::begin(FNOperator::labels())
                        ? Vacuum::Physical
-                       : Vacuum::SingleProduct;
+                       : tilde_vacuum(Statistics::FermiDirac);
       return ex<FNOperator>(cre(std::move(ketIndices)),
                             ann(std::move(braIndices)), vac);
     }
@@ -318,7 +325,7 @@ struct Transformer {
                        tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = bit == ranges::begin(BNOperator::labels())
                        ? Vacuum::Physical
-                       : Vacuum::SingleProduct;
+                       : tilde_vacuum(Statistics::BoseEinstein);
       return ex<BNOperator>(cre(std::move(ketIndices)),
                             ann(std::move(braIndices)), vac);
     }
