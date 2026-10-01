@@ -8,7 +8,6 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
-#include <SeQuant/core/wick_extended.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
@@ -1317,17 +1316,10 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     }
   };
 
-  // the expectation value in a MultiProduct vacuum is a full contraction
-  if (get_default_context().vacuum() == Vacuum::MultiProduct) {
-    sequant::detail::ExtendedWickOptions opts{.full_contractions = true};
-    for (const auto& [a, b] : connect) opts.nop_connections.emplace_back(a, b);
-    for (const auto& [a, b] : avoid)
-      opts.nop_avoided_connections.emplace_back(a, b);
-    auto result =
-        sequant::detail::extended_wick<Statistics::FermiDirac>(expr, opts);
-    restore_scalars(result);
-    return result;
-  }
+  // relative to a MultiProduct vacuum WickTheorem expresses the reference
+  // expectation value in γ, η and κ, leaving no operators to replace by RDMs
+  const bool multiproduct =
+      get_default_context().vacuum() == Vacuum::MultiProduct;
 
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
@@ -1346,7 +1338,9 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(connect);
   if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
-  wick.full_contractions(full_contractions);
+  // a partial contraction relative to a MultiProduct vacuum is not
+  // proportional to the reference expectation value
+  wick.full_contractions(multiproduct || full_contractions);
   auto result = wick.compute(/* count_only = */ false,
                              /* skip_input_canonicalization? true since already
                                 did simplification above */
@@ -1364,7 +1358,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   // including a density occupied partition using a "single-reference" method
   // will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacement rules
   // work in the limit of one reference.
-  if (isr->reference_occupied_space() == IndexSpace::Type{} ||
+  if (multiproduct || isr->reference_occupied_space() == IndexSpace::Type{} ||
       isr->reference_occupied_space(Spin::any) ==
           isr->vacuum_occupied_space(Spin::any)) {
     restore_scalars(result);
