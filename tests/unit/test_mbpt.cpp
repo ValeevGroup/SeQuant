@@ -1574,4 +1574,46 @@ SECTION("rdm-decomposition symmetries") {
   // η is a registered mbpt operator label
   REQUIRE(mbpt::get_default_mbpt_context().op_registry()->contains(L"η"));
 }
+
+SECTION("cumulant-to-density decompositions") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+               .vacuum = Vacuum::SingleProduct}));
+
+  // κ₃ = γ₃ - Σ γ₁γ₂ (9 terms) + 2 Σ γ₁γ₁γ₁ (6 terms)
+  const FNOperator nop3(cre({L"i_1", L"i_2", L"i_3"}),
+                        ann({L"i_4", L"i_5", L"i_6"}));
+  const auto densities3 = simplify(
+      mbpt::decompositions::cumulant3_to_density(density::make_cumulant(nop3)));
+  REQUIRE(densities3->is<Sum>());
+  std::size_t n_gamma3 = 0, n_gamma1_gamma2 = 0, n_gamma1_cubed = 0;
+  for (const auto& term : *densities3) {
+    if (term->is<Tensor>()) {
+      REQUIRE(term->as<Tensor>().label() == L"γ");
+      REQUIRE(term->as<Tensor>().rank() == 3);
+      ++n_gamma3;
+      continue;
+    }
+    const auto& product = term->as<Product>();
+    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == L"γ");
+    if (product.size() == 2) {
+      REQUIRE(abs(product.scalar()) == 1);
+      ++n_gamma1_gamma2;
+    } else {
+      REQUIRE(product.size() == 3);
+      REQUIRE(abs(product.scalar()) == 2);
+      ++n_gamma1_cubed;
+    }
+  }
+  REQUIRE(n_gamma3 == 1);
+  REQUIRE(n_gamma1_gamma2 == 9);
+  REQUIRE(n_gamma1_cubed == 6);
+  // the identity pairing of γ₁γ₁γ₁ comes with +2
+  const auto identity = ex<Constant>(2) *
+                        density::make_rdm(Index(L"i_4"), Index(L"i_1")) *
+                        density::make_rdm(Index(L"i_5"), Index(L"i_2")) *
+                        density::make_rdm(Index(L"i_6"), Index(L"i_3"));
+  REQUIRE(simplify(densities3 - identity)->size() == densities3->size() - 1);
+}
 }

@@ -73,9 +73,11 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
 
   auto d1_d2 =
       antisymmetrize(density_1 * density_2 * density_3 + density_1 * cumulant2);
-  auto temp_result = density3 * ex<Constant>(-1) * d1_d2.result;
+  auto temp_result = density3 + ex<Constant>(-1) * d1_d2.result;
+  expand(temp_result);
 
   for (auto&& product : temp_result->as<Sum>().summands()) {
+    if (!product->is<Product>()) continue;
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() &&
           (factor->as<Tensor>().label() == density::cumulant_label()) &&
@@ -85,6 +87,7 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
     }
   }
   for (auto&& product : temp_result->as<Sum>().summands()) {
+    if (!product->is<Product>()) continue;
     for (auto&& factor : product->as<Product>().factors()) {
       if (factor->is<Tensor>() &&
           factor->as<Tensor>().label() == density::cumulant_label() &&
