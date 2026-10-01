@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
+#include <SeQuant/core/eval/loop_space_key.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -121,7 +122,7 @@ struct LegalitySchedule {
   container::svector<Index> out;
   for (Index const& ix : cell.forced_split_axes) {
     auto const same_type = [&](Index const& o) {
-      return o.basis().base_key() == ix.basis().base_key();
+      return same_loop_space(o, ix);
     };
     if (std::find_if(out.begin(), out.end(), same_type) == out.end())
       out.push_back(ix);
@@ -230,7 +231,7 @@ struct LegalitySchedule {
     std::function<int(OccurrenceRec const&, Index const&)> const&
         enclosing_slot = {}) {
   auto const same_type = [&](Index const& ix) {
-    return ix.basis().base_key() == axis.basis().base_key();
+    return same_loop_space(ix, axis);
   };
   // A carried same-key index is a batched loop mode (subject to the lockstep
   // test below) iff it is one of the value's sliced modes; otherwise it is a
