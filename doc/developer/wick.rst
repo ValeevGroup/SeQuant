@@ -101,38 +101,40 @@ Rather than a second engine, this is layered on the standard one, which changes 
 - the engine skips the pair-based connectivity filters (``WickTheorem::pairwise_connectivity()``), since a cumulant can connect
   operators that no pair does.
 
-:func:`sequant::extended_wick` drives the rest. For each input term it canonicalizes, records which input ``NormalOperator`` every
-operator index comes from (its *provenance*; an index shared by two operators is renamed apart, the :math:`\delta` binding the
-names multiplying the result), and runs the standard theorem with partial contractions on the bare operator sequence,
-multiplying the c-number factors back in afterwards. In that run every operator index is external, so no term is canonicalized and no
-surviving index is renamed, which keeps the provenance valid. For the same reason ``ExtendedWickOptions::use_topology`` has no effect:
-topological equivalence needs dummy indices, provenance needs named ones. Each resulting term then
+Under this vacuum ``WickTheorem::compute`` hands its input and options to ``detail::extended_wick``
+(``SeQuant/core/wick_extended.hpp``), which drives the rest; ``count_only`` and bosonic statistics are not supported there. For each
+input term it canonicalizes, records which input ``NormalOperator`` every operator index comes from (its *provenance*; an index
+shared by two operators is renamed apart, the :math:`\delta` binding the names multiplying the result), and runs the standard theorem
+(the private ``WickTheorem::compute_contractions``) with partial contractions on the bare operator sequence, multiplying the c-number
+factors back in afterwards. In that run every operator index is external, so no term is canonicalized and no surviving index is
+renamed, which keeps the provenance valid. For the same reason ``WickTheorem::use_topology`` has no effect here: topological
+equivalence needs dummy indices, provenance needs named ones. Each resulting term then
 
 - has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an active
   ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η``, a survivor onto its active part and, with partial contractions,
   its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are reduced with the
   operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and inherits its provenance;
-- is handed to :func:`sequant::cumulant_expand`, which groups the surviving *active* operators into disjoint blocks of :math:`k`
-  creators and :math:`k` annihilators, :math:`2 \le k \le` ``ExtendedWickOptions::max_cumulant_rank``, with legs from at least two
+- is handed to ``detail::cumulant_expand``, which groups the surviving *active* operators into disjoint blocks of :math:`k`
+  creators and :math:`k` annihilators, :math:`2 \le k \le` ``WickTheorem::max_cumulant_rank``, with legs from at least two
   input operators. Each block is valued :math:`\kappa_k` (``detail::block_value``), the term takes the parity of the permutation that
   pulls each block's legs, in order, to the front of the survivor string, and any remaining operators (partial contractions only) stay
   as a ``MultiProduct``-vacuum ``NormalOperator``. Terms that miss a required ``nop_connections`` pair or realize a
   ``nop_avoided_connections`` pair are dropped; a factor the theorem produces (a :math:`\gamma`, :math:`\eta`, :math:`\kappa`,
   :math:`\delta` or overlap) connects all the input operators its indices came from, any other tensor (e.g. a coefficient) none.
 
-Finally every ``η`` is optionally rewritten as :math:`\delta - \gamma` (``eta_as_delta_minus_gamma``), the :math:`\delta`\ s over
-summed indices are applied, and the result is simplified. In it ``γ{ann;cre}`` and ``η{ann;cre}`` are one-body, Hermitian and
-column-symmetric, ``κ{ann…;cre…}`` is of rank :math:`\ge 2`, antisymmetric, Hermitian and column-symmetric, and all their indices are
-active.
+Finally every ``η`` is optionally rewritten as :math:`\delta - \gamma` (``WickTheorem::eta_as_delta_minus_gamma``), the
+:math:`\delta`\ s over summed indices are applied, and the result is simplified. In it ``γ{ann;cre}`` and ``η{ann;cre}`` are
+one-body, Hermitian and column-symmetric, ``κ{ann…;cre…}`` is of rank :math:`\ge 2`, antisymmetric, Hermitian and
+column-symmetric, and all their indices are active.
 
 The no-double-counting rule is that a block is only ever built from operators that survive the standard theorem: each extended term
 descends from exactly one partial-contraction term (the one carrying its pair contractions), so no :math:`1/k!` weights are needed.
 Spin-free evaluation is not supported for this vacuum (``WickTheorem::compute`` throws); the hooks for it are
 ``WickTheorem::contraction_value`` and ``detail::block_value``/``detail::term_weight`` in ``SeQuant/core/wick_extended.hpp``.
 
-``mbpt::ref_av`` dispatches to :func:`sequant::extended_wick`, with full contractions, when the context's vacuum is ``MultiProduct``.
-There the mbpt operators (``ã``) are normal-ordered relative to the reference, so it evaluates a different quantity than the
-``SingleProduct`` path, which normal-orders them relative to the core; the two agree for products of elementary operators.
+``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions. There the mbpt operators (``ã``) are
+normal-ordered relative to the reference, so it evaluates a different quantity than the ``SingleProduct`` path, which
+normal-orders them relative to the core; the two agree for products of elementary operators.
 :func:`sequant::mbpt::decompositions::cumulants_to_densities` converts cumulants up to :math:`\kappa_3` to densities. Tests:
 ``tests/unit/test_wick_extended.cpp``, the ``multiproduct vacuum`` section of ``tests/unit/test_wick.cpp`` and the
 ``MRSO-MultiProduct`` section of ``tests/unit/test_mbpt.cpp``.
