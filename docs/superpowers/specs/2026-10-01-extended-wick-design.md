@@ -81,7 +81,7 @@ blocks are built **only from operators that survive standard Wick**; a γ/η
 pair emitted by Wick is never absorbed into a block, and a rank-1 "block" is
 never formed in the pass. This makes the mapping one-to-one, so no 1/k!
 weights are needed. (The rule would also keep topological folding valid, but
-`extended_wick` does not fold: see B.1.)
+the extended theorem does not fold: see B.1.)
 
 Checks: ⟨{a†ₚa†_q a_r}{a_s}⟩ → the uncontracted term gives κ^{rs}_{pq}; the
 p-s term leaves a rank-1 remainder and is dropped. ⟨{a†ₚa_q}{a†_r a_s}⟩ →
@@ -140,9 +140,9 @@ no pair connects.
 A "full contractions, but emit terms whose survivors are all active" engine
 mode would prune earlier than running partial + filter. Not in milestone 1.
 
-## B. The pass: `extended_wick` and `cumulant_expand`
+## B. The pass: `detail::extended_wick` and `detail::cumulant_expand`
 
-`extended_wick` runs the standard theorem with `full_contractions(false)` and
+`detail::extended_wick` runs the standard theorem with `full_contractions(false)` and
 post-processes its output, a Sum of Products `scalar × tensors × ≤1
 NormalOperator` (survivors merged and phased by `normalize`). Sum inputs are
 expanded and handled summand by summand. Per input term:
@@ -214,30 +214,50 @@ Spin-free itself is unsupported: `WickTheorem::compute` throws for a
 
 ## C. API and output tensors
 
+Wick's theorem has one entry point for every vacuum: `WickTheorem::compute()`
+applies the extended theorem when the default context's vacuum is
+`Vacuum::MultiProduct`, for either constructor (an `ExprPtr` or a
+`NormalOperatorSequence`).
+
 ```cpp
-// SeQuant/core/wick_extended.hpp (symb target)
+// SeQuant/core/wick.hpp, next to full_contractions() and use_topology()
+WickTheorem& max_cumulant_rank(std::optional<std::size_t>);  // nullopt = unbounded
+WickTheorem& eta_as_delta_minus_gamma(bool);                 // default false
+```
+
+Both only matter under `MultiProduct`. `full_contractions`,
+`set_nop_connections` and `set_nop_avoided_connections` keep their meaning
+(connectivity is enforced per cumulant block, B.6); `use_topology` has no
+effect under `MultiProduct` (B.1). `compute(/*count_only=*/true)` and bosons
+throw `sequant::Exception` under `MultiProduct`.
+
+The pass is the implementation, not API:
+
+```cpp
+// SeQuant/core/wick_extended.hpp (symb target), included by wick.hpp
+namespace sequant::detail {
 struct ExtendedWickOptions {
   bool full_contractions = true;
   std::optional<std::size_t> max_cumulant_rank;  // nullopt = unbounded
   bool eta_as_delta_minus_gamma = false;
-  bool use_topology = true;  // documented as having no effect (B.1)
   container::svector<std::pair<std::size_t, std::size_t>> nop_connections;
   container::svector<std::pair<std::size_t, std::size_t>>
       nop_avoided_connections;
 };
 using OpProvenance = container::map<Index, std::size_t>;
 template <Statistics S>
-ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions& = {});
+ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions&);
 template <Statistics S>
 ExprPtr cumulant_expand(const ExprPtr& wick_output,
                         const OpProvenance& provenance,
                         const ExtendedWickOptions&);  // exposed for tests
+}
 ```
 
-Requires `ctx.vacuum() == Vacuum::MultiProduct`, else throws
-`sequant::Exception`. Bosons unsupported (as today). `use_topology` is kept
-in the struct so that callers (e.g. `ref_av`) can forward their setting, but
-it is not used.
+`WickTheorem::compute()` fills `ExtendedWickOptions` from its members and
+calls `detail::extended_wick`, a friend, which runs the standard theorem
+through the private `WickTheorem::compute_contractions()` (the former body
+of `compute()`, applying the standard theorem under any vacuum).
 
 **Tensors.** Labels shared with `mbpt/rdm.cpp` so its decompositions work on
 the output unchanged: `γ{ann;cre}` (1-RDM; Hermitian, column-symmetric),
@@ -260,10 +280,13 @@ and `cumu3_to_density` follow the same spelling (`cumulant2_to_density`,
 `cumulant3_to_density`). Users: `rdm.{hpp,cpp}`, `tests/unit/test_mbpt.cpp`.
 Own commit.
 
-**mbpt.** `ref_av` (and `vac_av`, at the tensor and operator level) dispatch
-on the context vacuum: `MultiProduct` → `extended_wick` with
-`full_contractions = true`, forwarding the required and avoided
-connections; `SingleProduct` → the core-vacuum path, untouched. The result
+**mbpt.** `ref_av` (and `vac_av`, at the tensor and operator level) need no
+branch of their own: the `FWickTheorem` that `tensor::expectation_value_impl`
+configures applies the extended theorem under `MultiProduct`. There it forces
+`full_contractions = true` (`ref_av` would otherwise ask for partial
+contractions, since reference and vacuum occupancies differ) and skips the
+RDM replacement, as no operators survive; the `SingleProduct` path is
+untouched. The result
 keeps its cumulants. `mbpt::decompositions::cumulants_to_densities(expr)`
 rewrites every κ (recognized by label) of rank ≤ 3 into densities via
 `cumulant_to_density`/`cumulant2_to_density`/`cumulant3_to_density`, then
@@ -311,9 +334,9 @@ Unit tests (`tests/unit/test_wick.cpp` section "multiproduct vacuum";
 5. Single-reference limit: with an empty active space, `MultiProduct` output
    equals `SingleProduct` output. (Not yet covered by a test.)
 
-There is no `use_topology` on/off test for `extended_wick`, since the option
-has no effect (B.1); the mbpt "topology on/off agree" section only guards
-`ref_av`'s dispatch.
+There is no `use_topology` on/off test under `MultiProduct`, since the option
+has no effect there (B.1); the mbpt "topology on/off agree" section only
+guards `ref_av`'s dispatch.
 
 Docs: section "The extended Wick theorem" in `doc/developer/wick.rst`
 (engine changes, the pass, no-double-counting rule); `MultiProduct` in the
@@ -328,7 +351,8 @@ vacuum list of `doc/user/guide/context.rst`; `ref_av`'s dispatch in
 Separate commits, in order: rename `cumu*_to_density`; move RDM/cumulant
 label helpers to a shared header and add `η`; `MultiProduct` classifiers;
 `contract` middle-factor policy and connectivity skip; `cumulant_expand`
-pass; `extended_wick` wrapper; `ref_av` dispatch; docs.
+pass; `extended_wick` wrapper; `ref_av` dispatch; docs. The wrapper was
+later folded into `WickTheorem::compute()` (C).
 
 ## Deviations found during implementation
 
@@ -337,7 +361,10 @@ Relative to the design as first approved:
 - `can_contract` is not unchanged: under `MultiProduct` it also requires
   opposite actions, since an active operator is both a qp creator and a qp
   annihilator (A).
-- `extended_wick` runs `WickTheorem` on the bare operator sequence, not on
+- the extended theorem is applied by `WickTheorem::compute()` under a
+  `MultiProduct` vacuum rather than by a separate public `extended_wick`
+  function (C).
+- `detail::extended_wick` runs `WickTheorem` on the bare operator sequence, not on
   the canonicalized Product with `skip_input_canonicalization`, because the
   latter renames surviving indices and breaks provenance; as a result
   `use_topology` has no effect (B.1).
