@@ -1622,5 +1622,35 @@ SECTION("cumulant-to-density decompositions") {
                         density::make_rdm(Index(L"i_5"), Index(L"i_2")) *
                         density::make_rdm(Index(L"i_6"), Index(L"i_3"));
   REQUIRE(simplify(densities3 - identity)->size() == densities3->size() - 1);
+
+  // cumulants_to_densities rewrites every κ in an expression, recognizing κ
+  // by its label alone
+  using mbpt::decompositions::cumulants_to_densities;
+  const FNOperator nop2(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"}));
+  const auto kappa2 = density::make_cumulant(nop2);
+  const auto kappa1_nonsymm =
+      ex<Tensor>(L"κ", bra{Index(L"i_5")}, ket{Index(L"i_6")});
+  const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"},
+                            Symmetry::Antisymm);
+  const auto h = ex<Tensor>(L"h", bra{L"i_6"}, ket{L"i_5"});
+  const auto expr = g * kappa2 + h * kappa1_nonsymm;
+  const auto expected =
+      g * mbpt::decompositions::cumulant2_to_density(kappa2) +
+      h * mbpt::decompositions::cumulant_to_density(kappa1_nonsymm);
+  const auto result = cumulants_to_densities(expr);
+  result->visit(
+      [](const ExprPtr& e) {
+        if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != L"κ");
+      },
+      /*atoms_only=*/true);
+  REQUIRE(simplify(result - expected) == ex<Constant>(0));
+  // ... including a κ that is the whole expression
+  REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop3)) -
+                   densities3) == ex<Constant>(0));
+  // κ₄ is not supported
+  const FNOperator nop4(cre({L"i_1", L"i_2", L"i_3", L"i_4"}),
+                        ann({L"i_5", L"i_6", L"i_7", L"i_8"}));
+  REQUIRE_THROWS_AS(cumulants_to_densities(density::make_cumulant(nop4)),
+                    Exception);
 }
 }
