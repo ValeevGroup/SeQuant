@@ -48,34 +48,52 @@ std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
 template <typename PositionCache, typename Iterator>
 Index to_index(const io::serialization::v1::ast::Index &index,
                const PositionCache &position_cache, const Iterator &begin) {
-  container::vector<Index> protoIndices;
-  protoIndices.reserve(index.protoLabels.size());
+  const io::serialization::v1::ast::IndexDomain no_domain;
+  const auto &domain = index.domain ? *index.domain : no_domain;
 
-  for (const io::serialization::v1::ast::IndexLabel &current :
-       index.protoLabels) {
+  if (index.domain && domain.protoLabels.empty() && !domain.instance) {
+    auto [offset, length] = get_pos(index.label, position_cache, begin);
+    throw SerializationError(offset, length, "empty index domain");
+  }
+
+  container::vector<Index> protoIndices;
+  protoIndices.reserve(domain.protoLabels.size());
+
+  for (const io::serialization::v1::ast::ProtoLabel &current :
+       domain.protoLabels) {
     try {
-      std::wstring label = current.label + L"_" + std::to_wstring(current.id);
+      std::wstring label =
+          current.label.label + L"_" + std::to_wstring(current.label.id);
       IndexSpace space =
           get_default_context().index_space_registry()->retrieve(label);
-      protoIndices.push_back(Index(std::move(label), std::move(space)));
+      IndexBasis::optional_instance inst =
+          current.instance ? IndexBasis::optional_instance(*current.instance)
+                           : std::nullopt;
+      protoIndices.push_back(
+          Index(IndexBasis{std::move(space), inst}, current.label.id));
     } catch (const IndexSpace::bad_key &) {
-      auto [offset, length] = get_pos(current, position_cache, begin);
+      auto [offset, length] = get_pos(current.label, position_cache, begin);
       throw SerializationError(offset, length,
-                               "Unknown index space '" + toUtf8(current.label) +
+                               "Unknown index space '" +
+                                   toUtf8(current.label.label) +
                                    "' in proto index specification");
     } catch (const Exception &e) {
-      auto [offset, length] = get_pos(current, position_cache, begin);
+      auto [offset, length] = get_pos(current.label, position_cache, begin);
       throw SerializationError(offset, length,
-                               "Invalid index '" + toUtf8(current.label) + "_" +
-                                   std::to_string(current.id) + ": " +
-                                   e.what());
+                               "Invalid index '" + toUtf8(current.label.label) +
+                                   "_" + std::to_string(current.label.id) +
+                                   ": " + e.what());
     }
   }
 
   try {
     IndexSpace space = get_default_context().index_space_registry()->retrieve(
         index.label.label);
-    return Index(std::move(space), index.label.id, std::move(protoIndices));
+    IndexBasis::optional_instance inst =
+        domain.instance ? IndexBasis::optional_instance(*domain.instance)
+                        : std::nullopt;
+    return Index(IndexBasis{std::move(space), inst}, index.label.id,
+                 std::move(protoIndices));
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
     throw SerializationError(offset, length,
