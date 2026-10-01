@@ -151,6 +151,9 @@ For unitary BCH expansions, ``Options::hbar_singles_comm_rank`` applies an addit
 Using :math:`\bar{H}` outside the CC class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+The connectivity rules in this section assume the reference is the Wick vacuum. Otherwise ``ref_av`` ignores connectivity,
+so use explicit commutators from ``mbpt::lst`` instead of the non-unitary connected-product expression from ``CC::hbar``.
+
 :func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz the expression it returns is **not** self-contained: each commutator is written as a connected product (see :ref:`mbpt-lst`), which only equals the commutator once you connect the operators when taking the expectation value. The class always does this for you — every non-unitary path passes ``default_op_connections()`` (or a superset) to ``ref_av``. A caller who does not will silently retain the disconnected terms:
 
 .. code-block:: cpp

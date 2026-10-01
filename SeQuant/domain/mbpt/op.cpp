@@ -1259,8 +1259,12 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   }
 
   FWickTheorem wick{expr};
-  wick.use_topology(use_top).set_nop_connections(connect);
-  if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
+  wick.use_topology(use_top);
+  // Residual operators can connect through RDMs without direct contractions.
+  if (full_contractions) {
+    wick.set_nop_connections(connect);
+    if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
+  }
   wick.full_contractions(full_contractions);
   auto result = wick.compute(/* count_only = */ false,
                              /* skip_input_canonicalization? true since already

@@ -499,6 +499,8 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// Defines the behavior of expectation value methods.
 /// The struct is used by both tensor and operator level methods, but there are
 /// parameters in here which are only meaningful at the operator level.
+/// @note ref_av ignores connect and do_not_connect when the reference state
+///       differs from the Wick vacuum.
 template <typename T>
 struct EVOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;

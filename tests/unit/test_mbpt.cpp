@@ -1006,6 +1006,11 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     namespace o = sequant::mbpt::op;
     namespace t = sequant::mbpt::tensor;
 
+    SECTION("ref_av retains connectivity when reference equals vacuum") {
+      REQUIRE(t::ref_av(t::h(1) * t::t(1) * t::h(1) * t::t(1),
+                        {.connect = {{0, 3}}}) == ex<Constant>(0));
+    }
+
     SECTION("SRSO"){
         // H**T12**T12 -> R2
         SECTION("wick(H**T12**T12 -> R2)"){
@@ -1148,6 +1153,16 @@ SECTION("MRSO") {
   auto ctx = get_default_context();
   ctx.set(mbpt::make_mr_spaces());
   auto ctx_resetter = set_scoped_default_context(ctx);
+
+  SECTION("ref_av ignores connectivity when reference differs from vacuum") {
+    const auto unconstrained = t::ref_av(t::h(1) * t::t(1));
+    REQUIRE(unconstrained != ex<Constant>(0));
+    REQUIRE_THAT(t::ref_av(t::h(1) * t::t(1), {.connect = {{0, 1}}}),
+                 EquivalentTo(unconstrained));
+    REQUIRE_THAT(
+        o::ref_av(o::h(1) * o::t(1), {.do_not_connect = {{L"f", L"t"}}}),
+        EquivalentTo(unconstrained));
+  }
 
   SECTION("wick(H2**T2 -> 0)") {
     {

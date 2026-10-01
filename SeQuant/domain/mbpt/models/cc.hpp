@@ -145,6 +145,9 @@ class CC {
   ///   commutator `mbpt::lst(..., {})` call. A unitary H̄ is self-contained,
   ///   so its connectivity must be empty. See the "Using H̄ outside the CC
   ///   class" section of the user guide.
+  /// @note The connectivity rules above assume the reference is the Wick
+  ///   vacuum. Otherwise ref_av ignores connectivity; use explicit commutators
+  ///   from mbpt::lst instead of the connected-product H̄.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -296,7 +299,8 @@ class CC {
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note The choice of commutator representation is really a question of
   /// whether the caller supplies operator connectivity downstream; for this
-  /// engine the two coincide. Every non-unitary path hands `ref_av` a
+  /// engine the two coincide when the reference is the Wick vacuum.
+  /// Every non-unitary path hands `ref_av` a
   /// connectivity map (`default_op_connections()`, or the λ⁺/perturbed
   /// supersets thereof), which is what makes the cheaper connected-product
   /// form equivalent to the explicit commutator. The unitary paths hand

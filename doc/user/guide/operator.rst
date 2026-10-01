@@ -156,6 +156,9 @@ Each commutator can be written in two ways, and ``use_connected_form`` selects b
 
 - ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
 
+The connectivity discussion below assumes the reference is the Wick vacuum. When the reference differs from the Wick
+vacuum, both overloads of ``ref_av`` ignore ``connect`` and ``do_not_connect``; use explicit commutators in that case.
+
 Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
 
 Mind which overload you reach: the operator-level ``op::vac_av``/``op::ref_av`` default to ``default_op_connections()``, which connects the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) with the cluster operator ``t``. Their tensor-level counterparts, ``op::tensor::vac_av``/``op::tensor::ref_av``, default to *empty* connections. Pairing ``use_connected_form = true`` with empty connectivity silently keeps the disconnected terms the commutator would have cancelled, so the result is wrong rather than merely more verbose.
@@ -207,6 +210,8 @@ Vacuum averaging and final expression
 The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum average of an operator level expression.
 If reference state differs from the Wick vacuum ``sequant::mbpt::op::ref_av`` function should be used instead to
 compute the reference average.
+In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` ignore
+the ``connect`` and ``do_not_connect`` options. ``vac_av`` always computes full contractions and honors these options.
 
 .. literalinclude:: /examples/user/operator.cpp
    :language: cpp
