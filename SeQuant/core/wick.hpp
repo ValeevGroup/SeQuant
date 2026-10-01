@@ -487,6 +487,29 @@ class WickTheorem {
   ExprPtr compute_contractions(bool count_only,
                                bool skip_input_canonicalization);
 
+  /// partitions of topologically equivalent objects, in the form
+  /// set_nop_partitions() and set_op_partitions() take
+  struct TopologicalPartitions {
+    /// true if the product is zero by symmetry, i.e. has an automorphism of
+    /// phase -1; the partitions are then not computed
+    bool zero = false;
+    /// partitions of NormalOperator ordinals; empty if none is nontrivial
+    container::svector<container::svector<size_t>> nop_partitions;
+    /// partitions of Op ordinals in the flattened operator sequence; empty
+    /// if there are none
+    container::svector<container::svector<size_t>> op_partitions;
+  };
+
+  /// @return the partitions of the topologically equivalent NormalOperator
+  /// and Op objects of @p product, deduced from the automorphisms of its
+  /// tensor network; an Op partition only holds Op objects of the bra or the
+  /// ket of one (anti)symmetric NormalOperator
+  /// @param declared_external_indices if non-null, indices that no
+  /// automorphism may permute, even if contracted
+  static TopologicalPartitions analyze_topology(
+      const Product &product,
+      const container::set<Index> *declared_external_indices = nullptr);
+
   // the extended theorem runs the standard one on its operators
   friend ExprPtr detail::extended_wick<S>(ExprPtr,
                                           const detail::ExtendedWickOptions &);
