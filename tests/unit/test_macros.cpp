@@ -19,8 +19,17 @@ TEST_CASE("macros", "[elements]") {
 
     if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
       REQUIRE_THROWS_AS([] { SEQUANT_ENFORCE(false); }(), sequant::Exception);
-      REQUIRE_THROWS_WITH([] { SEQUANT_ENFORCE(false, "invalid input"); }(),
-                          Catch::Matchers::ContainsSubstring("invalid input"));
+      const auto fail_with_message = [] {
+      // clang-format off
+#line 3000
+        SEQUANT_ENFORCE(1 == 0, "invalid input");
+        // clang-format on
+      };
+      REQUIRE_THROWS_WITH(
+          fail_with_message(),
+          Catch::Matchers::ContainsSubstring("invalid input") &&
+              Catch::Matchers::ContainsSubstring("1 == 0") &&
+              Catch::Matchers::ContainsSubstring("test_macros.cpp:3000"));
     }
   }
 

@@ -114,6 +114,7 @@ Useful CMake Variables
        assertions, whereas the former keep them active and either abort the program or throw an exception on violation respectively.
        ``SEQUANT_ENFORCE`` checks remain active in all three modes: they follow the configured assertion behavior, except that
        ``IGNORE`` makes them throw ``sequant::Exception`` on failure.
+       Failure diagnostics include the checked condition, source file, and line number.
        On the first configure of a build directory this also seeds the corresponding option of the dependencies SeQuant builds
        from source: ``TA_ASSERT_POLICY`` of TiledArray (which in turn seeds ``BTAS_ASSERT_POLICY`` of the BTAS it builds), or
        ``BTAS_ASSERT_POLICY`` of BTAS when SeQuant builds BTAS itself (``SEQUANT_TILEDARRAY=OFF``). As with any cached option,

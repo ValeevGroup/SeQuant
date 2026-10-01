@@ -10,13 +10,18 @@
 
 namespace sequant {
 
+[[noreturn]] void throw_failure(const std::string &errmsg,
+                                const std::source_location location) {
+  std::ostringstream oss;
+  oss << errmsg << " at " << location.file_name() << ":" << location.line()
+      << " in function '" << location.function_name() << "'";
+  throw sequant::Exception(oss.str());
+}
+
 void assert_failed(const std::string &errmsg,
                    const std::source_location location) {
   if constexpr (assert_behavior() == AssertBehavior::Throw) {
-    std::ostringstream oss;
-    oss << errmsg << " at " << location.file_name() << ":" << location.line()
-        << " in function '" << location.function_name() << "'";
-    throw sequant::Exception(oss.str());
+    throw_failure(errmsg, location);
   } else if constexpr (assert_behavior() == AssertBehavior::Abort) {
     std::cerr << errmsg << " at " << location.file_name() << ":"
               << location.line() << " in function '" << location.function_name()

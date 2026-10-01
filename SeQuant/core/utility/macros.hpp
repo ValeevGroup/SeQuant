@@ -115,15 +115,20 @@ constexpr AssertBehavior assert_behavior() {
 void assert_failed(
     const std::string &errmsg,
     std::source_location location = std::source_location::current());
+
+[[noreturn]] void throw_failure(
+    const std::string &errmsg,
+    std::source_location location = std::source_location::current());
 }  // namespace sequant
 
 #define SEQUANT_CHECK_MESSAGE(NAME, EXPR, ...)             \
   #NAME "(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
       " with message '" __VA_ARGS__ "'")
+
+#ifdef SEQUANT_ASSERT_ENABLED
 #define SEQUANT_ASSERT_MESSAGE(EXPR, ...) \
   SEQUANT_CHECK_MESSAGE(SEQUANT_ASSERT, EXPR, __VA_ARGS__)
 
-#ifdef SEQUANT_ASSERT_ENABLED
 #define SEQUANT_ASSERT(EXPR, ...)                                        \
   do {                                                                   \
     if (!(EXPR)) {                                                       \
@@ -144,7 +149,7 @@ void assert_failed(
 #define SEQUANT_ENFORCE(EXPR, ...)                                    \
   do {                                                                \
     if (!(EXPR)) {                                                    \
-      throw sequant::Exception(                                       \
+      sequant::throw_failure(                                         \
           SEQUANT_CHECK_MESSAGE(SEQUANT_ENFORCE, EXPR, __VA_ARGS__)); \
     }                                                                 \
   } while (0)
