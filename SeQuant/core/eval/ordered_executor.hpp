@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/forest_combine.hpp>
+#include <SeQuant/core/eval/loop_space_key.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/ordered_schedule.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
@@ -1919,7 +1920,7 @@ inline std::function<std::string(std::size_t)> make_node_meta(
     std::string s;
     for (auto const& m : modes) {
       if (!s.empty()) s += ",";
-      s += toUtf8(m.space().base_key());
+      s += toUtf8(loop_space_key(m));
     }
     return s;
   };
@@ -1930,7 +1931,7 @@ inline std::function<std::string(std::size_t)> make_node_meta(
       std::string sc;
       for (auto const& e : occ.ectx) {
         if (!sc.empty()) sc += ",";
-        sc += toUtf8(e.first.space().base_key());
+        sc += toUtf8(loop_space_key(e.first));
       }
       uses += std::format("{{{}}}", sc);
     }

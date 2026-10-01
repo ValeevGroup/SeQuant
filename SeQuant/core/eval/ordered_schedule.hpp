@@ -6,6 +6,7 @@
 #include <SeQuant/core/eval/dag_scope.hpp>
 #include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/eval/legality.hpp>
+#include <SeQuant/core/eval/loop_space_key.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/eval/peak_profile.hpp>
 #include <SeQuant/core/eval/slicing_signature.hpp>
@@ -968,7 +969,7 @@ namespace detail {
 /// being classified, silently misclassifying an External mode as Contracted.
 ///
 inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
-  auto const& mode_bk = mode.space().base_key();
+  auto const mode_bk = loop_space_key(mode);
   for (auto const& cell : rich.cells) {
     bool const is_root =
         std::any_of(cell.occurrences.begin(), cell.occurrences.end(),
@@ -982,7 +983,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // plainly too, so no space is reachable only through a proto.
     bool const has_type = std::any_of(
         cell.carried.begin(), cell.carried.end(),
-        [&](Index const& ix) { return ix.space().base_key() == mode_bk; });
+        [&](Index const& ix) { return loop_space_key(ix) == mode_bk; });
     if (has_type) return true;
   }
   return false;
@@ -1086,7 +1087,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   std::map<std::wstring, Index> rep;  // space -> representative axis
   for (CellLegality const& cl : legality.cells)
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{loop_space_key(cl.per_axis[pos].axis)};
       rep.emplace(bk, cl.per_axis[pos].axis);
       int const s = fusion_slot(cl, pos);
       slots_of_space[bk].insert(s >= 0 ? s : 0);
@@ -1126,7 +1127,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     std::size_t const nn = types.size();
     std::map<std::pair<std::wstring, int>, std::size_t> item_of;
     for (std::size_t d = 0; d < nn; ++d)
-      item_of[{std::wstring{types[d].space().base_key()}, type_slot[d]}] = d;
+      item_of[{loop_space_key(types[d]), type_slot[d]}] = d;
     container::svector<container::svector<std::size_t>> succ(nn);
     container::svector<std::size_t> indeg(nn, 0);
     for (auto const& [pair, witness] : rich.loop_order) {
@@ -1192,9 +1193,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
   auto const depth_of_instance = [&](std::wstring const& bk,
                                      int slot) -> std::optional<std::size_t> {
     for (std::size_t d = 0; d < n; ++d)
-      if (std::wstring(types[d].space().base_key()) == bk &&
-          type_slot[d] == slot)
-        return d;
+      if (loop_space_key(types[d]) == bk && type_slot[d] == slot) return d;
     return std::nullopt;
   };
 
@@ -1216,17 +1215,27 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     }
     return x;
   };
+  bool const dump_joins = detail::dump_enabled("SEQUANT_DUMP_SCHEDULE");
   for (CellLegality const& cl : legality.cells) {
     std::optional<std::size_t> anchor;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       int const fs = fusion_slot(cl, pos);
       if (fs < 0) continue;
-      auto const dd = depth_of_instance(
-          std::wstring{cl.per_axis[pos].axis.space().base_key()}, fs);
+      auto const dd =
+          depth_of_instance(loop_space_key(cl.per_axis[pos].axis), fs);
       if (!dd) continue;
-      if (anchor)
+      if (anchor) {
+        // `[sched-join]`: which cell makes two loop members co-occur (and so
+        // chains their nests), with the role of each member on that cell
+        if (dump_joins && mfind(*dd) != mfind(*anchor))
+          std::wcerr << L"[sched-join] v" << cl.hash << L" joins d" << *anchor
+                     << L" (" << types[*anchor].space().base_key() << L"#"
+                     << type_slot[*anchor] << L") with d" << *dd << L" ("
+                     << types[*dd].space().base_key() << L"#" << type_slot[*dd]
+                     << L" role=" << static_cast<int>(cl.per_axis[pos].role)
+                     << L")\n";
         mem_parent[mfind(*dd)] = mfind(*anchor);
-      else
+      } else
         anchor = dd;
     }
   }
@@ -1299,7 +1308,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{loop_space_key(cl.per_axis[pos].axis)};
       int const fs = fusion_slot(cl, pos);
       auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
       if (!d) continue;
@@ -1331,7 +1340,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       [&](CellLegality const& cl) -> std::optional<std::size_t> {
     std::optional<std::size_t> target;
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-      std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{loop_space_key(cl.per_axis[pos].axis)};
       int const fs = fusion_slot(cl, pos);
       if (fs < 0) continue;  // unresolved: never guess slot 0
       auto const d = depth_of_instance(bk, fs);
@@ -1366,7 +1375,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     if (!rd) return false;
     for (std::size_t pos = 0; pos < scl.per_axis.size(); ++pos) {
       if (scl.per_axis[pos].role != LoopRole::Reduction) continue;
-      std::wstring const bk{scl.per_axis[pos].axis.space().base_key()};
+      std::wstring const bk{loop_space_key(scl.per_axis[pos].axis)};
       int const fs = fusion_slot(scl, pos);
       if (fs < 0) continue;
       auto const d = depth_of_instance(bk, fs);
@@ -1412,7 +1421,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         std::wcerr << L"root";
       std::wcerr << L" axes={";
       for (std::size_t p2 = 0; p2 < c2.per_axis.size(); ++p2) {
-        std::wstring const bk2{c2.per_axis[p2].axis.space().base_key()};
+        std::wstring const bk2{loop_space_key(c2.per_axis[p2].axis)};
         int const fs2 = fusion_slot(c2, p2);
         auto const d2 = depth_of_instance(bk2, fs2 >= 0 ? fs2 : 0);
         std::wcerr << c2.per_axis[p2].axis.full_label() << L":"
@@ -1469,7 +1478,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
       AxisClass const& ac = cl.per_axis[pos];
       if (ac.role == LoopRole::LoopLocal) continue;
-      std::wstring const bk{ac.axis.space().base_key()};
+      std::wstring const bk{loop_space_key(ac.axis)};
       int const fs = fusion_slot(cl, pos);
       // A Reduction mode with no fusion slot has no loop identity at all
       // (peak_profile's union-find never numbered a component for it) --
@@ -1515,8 +1524,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       bool collapse = false;
       for (std::size_t a = 0; a < nonlocal.size() && !collapse; ++a)
         for (std::size_t b = a + 1; b < nonlocal.size(); ++b)
-          if (nonlocal[a].first.space().base_key() ==
-              nonlocal[b].first.space().base_key()) {
+          if (same_loop_space(nonlocal[a].first, nonlocal[b].first)) {
             collapse = true;
             break;
           }
@@ -1552,7 +1560,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       std::size_t const home_nest = type_cluster[*home_depth];
       for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
         if (cl.per_axis[pos].role != LoopRole::LoopLocal) continue;
-        std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+        std::wstring const bk{loop_space_key(cl.per_axis[pos].axis)};
         int const fs = fusion_slot(cl, pos);
         auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
         if (!d || type_cluster[*d] != home_nest) continue;
@@ -1600,7 +1608,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
         // completeness then falls out for free, since the value is sliced
         // by exactly the instances this loop escapes.
         for (std::size_t pos = 0; pos < cl.per_axis.size(); ++pos) {
-          std::wstring const bk{cl.per_axis[pos].axis.space().base_key()};
+          std::wstring const bk{loop_space_key(cl.per_axis[pos].axis)};
           int const fs = fusion_slot(cl, pos);
           auto const d = depth_of_instance(bk, fs >= 0 ? fs : 0);
           if (!d || type_cluster[*d] != nest) continue;
@@ -1813,7 +1821,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     block.axis = axis;
     block.latitude_ordinal = latitude_ordinal;
     block.level = DagScopeLevel{.depth = depth,
-                                .space = std::wstring{axis.space().base_key()},
+                                .space = loop_space_key(axis),
                                 .loop_slot = loop_slot,
                                 .latitude_ordinal = latitude_ordinal};
     // The block's kind is the kind of its loop instance (the open that
@@ -1821,8 +1829,7 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // space can hold both a contracted-in-batches instance and an external
     // one, so the per-space test (does the space appear on a root result?)
     // is only the fallback for an instance no open recorded.
-    if (auto const kit = rich.loop_kind.find(
-            {std::wstring{axis.space().base_key()}, loop_slot});
+    if (auto const kit = rich.loop_kind.find({loop_space_key(axis), loop_slot});
         kit != rich.loop_kind.end())
       block.kind = kit->second;
     else
@@ -2467,8 +2474,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
                   ? occ.loop_slot[pos]
                   : vs[pos];
           if (occ_slot != lvl.loop_slot) continue;
-          if (std::wstring(occ.carried[pos].space().base_key()) != lvl.space)
-            continue;
+          if (loop_space_key(occ.carried[pos]) != lvl.space) continue;
           result.occ_facts.push_back(
               std::make_tuple(w_vid, pos, id_of(lvl), oit->second, leg));
           self_sliced = true;
@@ -2508,8 +2514,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           else
             c_sliced = cvs[cp] == lvl.loop_slot;
           if (!c_sliced) continue;
-          if (std::wstring(c_carried[cp].space().base_key()) != lvl.space)
-            continue;
+          if (loop_space_key(c_carried[cp]) != lvl.space) continue;
           Index const& M = c_carried[cp];  // the mode C is sliced on here
           // W carries M at some own-occurrence position (shared external,
           // canonical-label match for a direct operand)?
@@ -2547,7 +2552,7 @@ inline void enumerate_realized_levels(ScopeBlock const& block,
           for (auto const& cocc : rich.cells[c_vid].occurrences) {
             for (auto const& [rm, rs] : cocc.reduced_slot) {
               if (rs != lvl.loop_slot) continue;
-              if (std::wstring(rm.space().base_key()) != lvl.space) continue;
+              if (loop_space_key(rm) != lvl.space) continue;
               std::size_t pos_a = occ.carried.size();
               for (std::size_t pa = 0; pa < occ.carried.size(); ++pa)
                 if (occ.carried[pa] == rm) {

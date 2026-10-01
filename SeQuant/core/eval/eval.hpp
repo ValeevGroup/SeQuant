@@ -2,6 +2,7 @@
 #define SEQUANT_EVAL_EVAL_HPP
 
 #include <SeQuant/core/eval/fwd.hpp>
+#include <SeQuant/core/eval/loop_space_key.hpp>
 
 #include <SeQuant/core/batch_policy.hpp>
 #include <SeQuant/core/container.hpp>
@@ -422,7 +423,7 @@ std::string scope_annot(BatchContext const& active) {
   std::string scope;
   for (auto const& e : active) {
     if (!scope.empty()) scope += ",";
-    scope += toUtf8(e.axis.space().base_key());
+    scope += toUtf8(eval::loop_space_key(e.axis));
   }
   return std::format("scope={{{}}}", scope);
 }
@@ -2316,7 +2317,7 @@ template <Trace EvalTrace = Trace::Default, typename F,
     // push site below).
     auto const synth_level = [&cache](Index const& ax) -> DagScopeLevel {
       return DagScopeLevel{.depth = cache.batch_context().size() + 1,
-                           .space = std::wstring(ax.space().base_key())};
+                           .space = eval::loop_space_key(ax)};
     };
     // Mode selection is sliceability-aware and realizes the optimizer's
     // multi-mode nesting one mode per depth level. candidate_axes lists this

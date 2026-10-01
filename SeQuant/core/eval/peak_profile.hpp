@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval/backends/dryrun/cost_model_object.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/lifetime_mask.hpp>
+#include <SeQuant/core/eval/loop_space_key.hpp>
 #include <SeQuant/core/eval/ordered_dump.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -1000,14 +1001,14 @@ RichSchedule compute_dag_boulevard(R const& forest,
            ++p) {
         if (!is_batched(ro, ro.carried[p]) || !is_batched(rf, rf.carried[p]))
           continue;
-        if (ro.carried[p].space() != rf.carried[p].space()) continue;
+        if (!same_loop_space(ro.carried[p], rf.carried[p])) continue;
         (void)try_unite(encode(f, p), encode(i, p));
       }
       for (std::size_t j = 0;
            j < ro.contracted_batched.size() && j < rf.contracted_batched.size();
            ++j) {
-        if (ro.contracted_batched[j].space() !=
-            rf.contracted_batched[j].space())
+        if (!same_loop_space(ro.contracted_batched[j],
+                             rf.contracted_batched[j]))
           continue;
         (void)try_unite(reduction_node(f, rf.contracted_batched[j]),
                         reduction_node(i, ro.contracted_batched[j]));
@@ -1024,13 +1025,13 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!is_batched(recs[i], recs[i].carried[pV])) continue;
       std::size_t const root = find(encode(i, pV));
       if (root_slot.find(root) != root_slot.end()) continue;
-      std::wstring const sp{recs[i].carried[pV].space().base_key()};
+      std::wstring const sp{loop_space_key(recs[i].carried[pV])};
       root_slot.emplace(root, next_slot[sp]++);
     }
   for (auto const& [idx, m] : reduction_stamps) {
     std::size_t const root = find(reduction_node(idx, m));
     if (root_slot.find(root) != root_slot.end()) continue;
-    std::wstring const sp{m.space().base_key()};
+    std::wstring const sp{loop_space_key(m)};
     root_slot.emplace(root, next_slot[sp]++);
   }
 
@@ -1062,7 +1063,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
   // i↑ loop and its Kramers-blind image sliced there by the first i↓ loop
   // (slot 0 of either space) would key to one cell.
   auto const space_hash = [](Index const& ix) {
-    return std::hash<std::wstring_view>{}(ix.space().base_key());
+    return std::hash<std::wstring>{}(loop_space_key(ix));
   };
   container::svector<std::size_t> final_key(nrec);
   for (std::size_t i = 0; i < nrec; ++i) {
@@ -1242,12 +1243,12 @@ RichSchedule compute_dag_boulevard(R const& forest,
     // other flavour there)
     for (std::size_t p = 0; p < a.loop_slot.size(); ++p)
       if (a.loop_slot[p] >= 0 && p < a.carried.size() && p < b.carried.size() &&
-          a.carried[p].space() != b.carried[p].space())
+          !same_loop_space(a.carried[p], b.carried[p]))
         return false;
     if (a.reduced_slot.size() != b.reduced_slot.size()) return false;
     for (std::size_t i = 0; i < a.reduced_slot.size(); ++i)
       if (a.reduced_slot[i].second != b.reduced_slot[i].second ||
-          a.reduced_slot[i].first.space() != b.reduced_slot[i].first.space())
+          !same_loop_space(a.reduced_slot[i].first, b.reduced_slot[i].first))
         return false;
     if (child_cells(a) != child_cells(b)) return false;
     if (a.node == nullptr || b.node == nullptr) return a.node == b.node;
@@ -1359,7 +1360,7 @@ RichSchedule compute_dag_boulevard(R const& forest,
       if (!root) return std::nullopt;
       auto const rit = root_slot.find(*root);
       if (rit == root_slot.end()) return std::nullopt;
-      return std::make_pair(std::wstring{ix.space().base_key()}, rit->second);
+      return std::make_pair(loop_space_key(ix), rit->second);
     };
     for (ValueCell const& c : out.cells)
       for (OccurrenceRec const& occ : c.occurrences)
