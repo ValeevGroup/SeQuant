@@ -102,10 +102,16 @@ void for_each(SizedRange& rng, const UnaryOp& op) {
   using ranges::end;
   const auto overlays = detail::implicit_context_overlays();
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
-  std::for_each(std::execution::par, begin(rng), end(rng),
-                [&overlays, &op](auto&& item) {
+  // the parallel STL's TBB backend partitions over tbb::blocked_range, which
+  // rejects iterators whose difference is not a plain integer (e.g. range-v3
+  // views), so the algorithm runs over a vector of the range's iterators
+  std::vector<decltype(begin(rng))> iterators;
+  iterators.reserve(static_cast<std::size_t>(ranges::size(rng)));
+  for (auto it = begin(rng); it != end(rng); ++it) iterators.push_back(it);
+  std::for_each(std::execution::par, iterators.begin(), iterators.end(),
+                [&overlays, &op](auto it) {
                   detail::ImplicitContextOverlaysScope scope(overlays);
-                  op(std::forward<decltype(item)>(item));
+                  op(*it);
                 });
 #else
   std::atomic<size_t> work = 0;
@@ -159,11 +165,15 @@ T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
   using ranges::end;
   const auto overlays = detail::implicit_context_overlays();
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
+  // see for_each() for why the algorithm runs over the range's iterators
+  std::vector<decltype(begin(rng))> iterators;
+  iterators.reserve(static_cast<std::size_t>(ranges::size(rng)));
+  for (auto it = begin(rng); it != end(rng); ++it) iterators.push_back(it);
   return std::transform_reduce(
-      std::execution::par, begin(rng), end(rng), init, reduce,
-      [&overlays, &map](auto&& item) {
+      std::execution::par, iterators.begin(), iterators.end(), init, reduce,
+      [&overlays, &map](auto it) {
         detail::ImplicitContextOverlaysScope scope(overlays);
-        return map(std::forward<decltype(item)>(item));
+        return map(*it);
       });
 #else
   std::atomic<size_t> work = 0;
