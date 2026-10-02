@@ -773,7 +773,12 @@ class Index : public Taggable {
   }
   /// drops the proto indices from this Index
   /// @return a copy of this Index without proto indices
-  Index drop_proto_indices() const noexcept { return Index(basis_, ordinal_); }
+  Index drop_proto_indices() const noexcept {
+    // the factory-tag constructor skips the reserved-ordinal check, which a
+    // temporary index would trip
+    return ordinal_ ? Index(basis_, *ordinal_, IndexFactoryTag{})
+                    : Index(basis_);
+  }
 
   std::wstring to_latex() const noexcept;
 
