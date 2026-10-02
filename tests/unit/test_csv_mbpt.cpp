@@ -118,6 +118,10 @@ inline void check_externals(ExprPtr const& eq,
       (isr->is_pure_occupied(idx.space()) ? occ : virt)
           .insert(idx.basis().basis_instance());
     REQUIRE(!virt.empty());
+    std::string seen;
+    for (auto const& i : virt) seen += (i ? std::to_string(*i) : "none") + " ";
+    INFO("virtual externals carry: " << seen << "in "
+                                     << toUtf8(to_latex(term)));
     CHECK(virt == Instances{expected});
     CHECK(occ == Instances{std::nullopt});
   }
@@ -513,6 +517,33 @@ TEST_CASE("basis-grants-validator", "[mbpt][csv][valgrind_skip]") {
         absorbed += idx.basis().basis_instance() == 7;
     CHECK(absorbed == 38);
     CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(r1));
+  }
+}
+
+TEST_CASE("basis-grants-cc-eom", "[mbpt][csv][valgrind_skip]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using namespace sequant::tests::csv;
+  using namespace sequant::tests::csv_mbpt;
+
+  auto ctx = set_scoped_default_context(csv_cc_context());
+
+  SECTION("projector legs carry the eigenvector amplitude's grant") {
+    for (auto const& inst :
+         {IndexBasis::optional_instance{}, IndexBasis::optional_instance{10}}) {
+      ScopedCsvContext scoped{
+          inst ? granted_registry({{L"t", 1}, {L"R", *inst}, {L"L", *inst}})
+               : granted_registry({})};
+      Index::reset_tmp_index();
+      const auto r = CC{2}.eom_r(nₚ(1), nₕ(1));
+      Index::reset_tmp_index();
+      const auto l = CC{2}.eom_l(nₚ(1), nₕ(1));
+      INFO("instance " << (inst ? std::to_string(*inst) : "none"));
+      check_externals(r.at(1), inst);
+      check_externals(l.at(1), inst);
+      CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(r.at(1)));
+      CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(l.at(1)));
+    }
   }
 }
 

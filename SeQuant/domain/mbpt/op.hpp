@@ -1173,9 +1173,11 @@ ExprPtr Λʼ(std::size_t K,
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle creators
 /// @param nh number of hole annihilators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δr(nₚ np, nₕ nh);
+ExprPtr δr(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 
 // clang-format off
@@ -1183,9 +1185,11 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle annihilators
 /// @param nh number of hole creators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δl(nₚ np, nₕ nh);
+ExprPtr δl(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
 
 }  // namespace tensor
@@ -1393,9 +1397,11 @@ ExprPtr Λʼ(std::size_t K,
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle creators
 /// @param nh number of hole annihilators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δr(nₚ np, nₕ nh);
+ExprPtr δr(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 
 // clang-format off
@@ -1403,9 +1409,11 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle annihilators
 /// @param nh number of hole creators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δl(nₚ np, nₕ nh);
+ExprPtr δl(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
 
 /// @brief computes the quantum number change effected by a given Operator or

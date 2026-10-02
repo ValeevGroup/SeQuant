@@ -502,7 +502,8 @@ std::vector<ExprPtr> CC::eom_r_ucc(
           bernoulli::detail::R_part(it->second, N, skip_singles() ? 2 : 1);
   }
   auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
-    return tensor_level ? op::tensor::δl(nₚ(p), nₕ(h)) : op::δl(nₚ(p), nₕ(h));
+    return tensor_level ? op::tensor::δl(nₚ(p), nₕ(h), L"R")
+                        : op::δl(nₚ(p), nₕ(h), L"R");
   };
   auto ket_of = [tensor_level](std::int64_t p, std::int64_t h) {
     return tensor_level ? op::tensor::r(nₚ(p), nₕ(h), eom_norm)
@@ -557,7 +558,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
   using std::min;
   std::vector<ExprPtr> result(min(np, nh) + 1);
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
-    result.at(min(rp, rh)) = ref_av(δl(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    result.at(min(rp, rh)) =
+        ref_av(δl(nₚ(rp), nₕ(rh), L"R") * hbar_R, op_connect);
 
   return result;
 }
@@ -593,7 +595,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   // right project with |rp,rh> (i.e., multiply δr(rp, rh)) and compute VEV
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh)), op_connect);
+        this->ref_av(L_hbar * δr(nₚ(rp), nₕ(rh), L"L"), op_connect);
 
   return result;
 }
