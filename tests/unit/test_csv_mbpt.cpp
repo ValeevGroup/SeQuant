@@ -325,7 +325,9 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     }
   }
 
-  SECTION("a grant stamps only its decorated label") {
+  SECTION("a grant stamps the labels that stand for its entry") {
+    // t¹ stands for t unless registered itself (granted_registry registers
+    // the label it grants), t never stands for t¹
     const std::vector<std::wstring> amplitudes{L"t", L"λ", L"t¹", L"λ¹"};
     auto make = [](std::wstring_view label) {
       return label == L"t"    ? t::t(2)
@@ -340,7 +342,9 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
         std::size_t n = 0;
         for (Index const& idx : slots_of(make(label), label))
           n += idx.basis().basis_instance() == 7;
-        CHECK(n == (label == granted ? 2 : 0));
+        const bool stamped = label == granted ||
+                             mbpt::detail::strip_pert_order(label) == granted;
+        CHECK(n == (stamped ? 2 : 0));
       }
     }
   }
@@ -516,6 +520,51 @@ TEST_CASE("basis-grants-validator", "[mbpt][csv][valgrind_skip]") {
         absorbed += idx.basis().basis_instance() == 7;
     CHECK(absorbed == 38);
     CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(r1));
+  }
+}
+
+TEST_CASE("basis-grants-decorated-labels", "[mbpt][csv][valgrind_skip]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using namespace sequant::tests::csv;
+  using namespace sequant::tests::csv_mbpt;
+
+  auto ctx = set_scoped_default_context(csv_cc_context());
+  auto const& isr = get_default_context().index_space_registry();
+  const auto a = get_particle_space(Spin::any);
+
+  SECTION("a perturbation-order label stands for its base entry") {
+    const auto reg = granted_registry({{L"t", 1}});
+    CHECK_FALSE(reg->contains(L"t¹"));
+    CHECK(reg->resolve(L"t¹") == std::wstring(L"t"));
+    CHECK(reg->resolve(L"t") == std::wstring(L"t"));
+    CHECK_FALSE(reg->resolve(L"x¹").has_value());
+    CHECK(reg->has_basis_grants(L"t¹"));
+    CHECK(reg->basis_grant(L"t¹", a) == 1);
+    // an entry of its own wins
+    const auto own = granted_registry({{L"t", 1}, {L"t¹", 10}});
+    CHECK(own->resolve(L"t¹") == std::wstring(L"t¹"));
+    CHECK(own->basis_grant(L"t¹", a) == 10);
+  }
+
+  SECTION("t¹ legs carry t's grant and t¹ counts as an amplitude") {
+    ScopedCsvContext scoped{granted_registry({{L"t", 1}}), CSV::No};
+    Index::reset_tmp_index();
+    const auto eqs = CC{2}.tʼ(1, 1);
+    auto const& reg = *get_default_mbpt_context().op_registry();
+    std::size_t seen = 0;
+    for (std::size_t p : {1u, 2u}) {
+      INFO("R" << p);
+      for (auto const* t1 : tensors_labelled(eqs.at(p), L"t¹")) {
+        ++seen;
+        CHECK(is_amplitude_tensor(*t1, reg));
+        for (Index const& idx : t1->_slots())
+          if (isr->is_pure_unoccupied(idx.space()))
+            CHECK(idx.basis().basis_instance() == 1);
+      }
+      check_externals(eqs.at(p), 1);
+    }
+    CHECK(seen > 0);
   }
 }
 

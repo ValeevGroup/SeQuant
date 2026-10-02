@@ -229,9 +229,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
   // now remove perturbation order decoration if any
   SEQUANT_ASSERT(!base_lbl.empty());
-  if (ranges::contains(mbpt::detail::pert_superscripts, base_lbl.back())) {
-    base_lbl.pop_back();
-  }
+  base_lbl = std::wstring(mbpt::detail::strip_pert_order(base_lbl));
 
   auto registry = mbpt::get_default_mbpt_context().op_registry();
   // if it is not a reserved label, make sure it is registered
