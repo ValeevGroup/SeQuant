@@ -2,13 +2,21 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tree_index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
+#include <atomic>
+#include <cstdint>
+#include <optional>
 #include <sstream>
 
 namespace sequant {
@@ -79,6 +87,85 @@ const ExprPtr &Expr::front() const { return at(0); }
 ExprPtr &Expr::back() { return at(size() - 1); }
 
 const ExprPtr &Expr::back() const { return at(size() - 1); }
+
+namespace {
+
+bool is_full(const CanonicalizeOptions &opts) {
+  return (opts.method & CanonicalizationMethod::Topological) ==
+         CanonicalizationMethod::Topological;
+}
+
+/// @return the digest of everything other than the expression itself that
+/// canonical form depends on
+std::size_t canonicalization_key(const CanonicalizeOptions &opts,
+                                 std::uint64_t contexts_version) {
+  auto key = hash::value(contexts_version);
+  hash::combine(key, static_cast<int>(opts.method));
+  hash::combine(key, static_cast<bool>(opts.ignore_named_index_labels));
+  hash::combine(key, opts.named_indices.has_value());
+  if (opts.named_indices) {
+    hash::combine(key, opts.named_indices->size());
+    for (const auto &idx : *opts.named_indices) hash::combine(key, idx);
+  }
+  return key;
+}
+
+std::uint64_t next_canonical_stamp() {
+  static std::atomic<std::uint64_t> counter{0};
+  return ++counter;
+}
+
+}  // namespace
+
+bool Expr::is_canonical(const CanonicalizeOptions &opts) const {
+  if (!is_full(opts)) return false;
+  const auto seal = canonical_mark_.seal.load(std::memory_order_relaxed);
+  if (seal == 0) return false;
+  const auto digest = canonical_subtree_digest();
+  if (!digest) return false;
+  auto expected_seal = canonicalization_key(opts, current_contexts_version());
+  hash::combine(expected_seal, *digest);
+  return seal == expected_seal;
+}
+
+void Expr::mark_canonical(const CanonicalizeOptions &opts,
+                          std::uint64_t contexts_version) const {
+  if (!is_full(opts)) return;
+  stamp_canonical_subtree();
+  const auto digest = canonical_subtree_digest();
+  if (!digest) return;
+  auto seal = canonicalization_key(opts, contexts_version);
+  hash::combine(seal, *digest);
+  canonical_mark_.seal.store(seal, std::memory_order_relaxed);
+}
+
+void Expr::stamp_canonical_subtree() const {
+  std::uint64_t unstamped = 0;
+  if (canonical_mark_.stamp.load(std::memory_order_relaxed) == unstamped)
+    canonical_mark_.stamp.compare_exchange_strong(
+        unstamped, next_canonical_stamp(), std::memory_order_relaxed);
+  for (const auto &subexpr : *this) subexpr->stamp_canonical_subtree();
+}
+
+std::optional<std::size_t> Expr::canonical_subtree_digest() const {
+  const auto stamp = canonical_mark_.stamp.load(std::memory_order_relaxed);
+  if (stamp == 0) return std::nullopt;
+  // a mutation of a leaf that does not reset its stamp does not reset its
+  // memoized hash either, which memoizing_hash() checks when assertions are
+  // enabled; N.B. the memoized hash of a non-leaf is legitimately stale after
+  // in-place mutation of a subexpression
+  if constexpr (assert_enabled()) {
+    if (hash_value_ && size() == 0) memoizing_hash();
+  }
+  auto digest = hash::value(stamp);
+  hash::combine(digest, size());
+  for (const auto &subexpr : *this) {
+    const auto subdigest = subexpr->canonical_subtree_digest();
+    if (!subdigest) return std::nullopt;
+    hash::combine(digest, *subdigest);
+  }
+  return digest;
+}
 
 std::wstring Expr::to_latex() const {
   throw Exception("to_latex not implemented for " + type_name());

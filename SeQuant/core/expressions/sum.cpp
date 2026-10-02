@@ -149,7 +149,10 @@ ExprPtr Sum::clone() const {
   auto cloned_summands =
       summands() |
       ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-  return ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
+  auto result =
+      ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
+  result->as<Sum>().copy_canonical_mark(*this);
+  return result;
 }
 
 void Sum::adjoint() {
@@ -236,8 +239,10 @@ Sum &Sum::operator-=(const Expr &that) {
 }
 
 ExprIterator Sum::begin_subexpr() {
+  // N.B. the canonical mark need not be reset: changes of the summands are
+  // detected by Expr::is_canonical()
   if (!summands_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{summands_.data()};
@@ -248,7 +253,7 @@ ExprIterator Sum::end_subexpr() {
   // memoized hash, regardless of which end of the range it points at
   // (`*(--end())` mutates just as `*begin()` does)
   if (!summands_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{summands_.data() + summands_.size()};
