@@ -145,7 +145,7 @@ Spin-free evaluation is not supported for this vacuum (``WickTheorem::compute`` 
 ``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions. There the mbpt operators (``ã``) are
 normal-ordered relative to the reference, so it evaluates a different quantity than the ``SingleProduct`` path, which
 normal-orders them relative to the core; the two agree for products of elementary operators, which the tests verify for results
-with cumulants up to :math:`\kappa_3`. :func:`sequant::mbpt::decompositions::cumulants_to_densities` converts cumulants of
+with cumulants up to :math:`\kappa_4`. :func:`sequant::mbpt::decompositions::cumulants_to_densities` converts cumulants of
 every rank to densities. The tests are in ``tests/unit/test_wick_extended.cpp``, ``tests/unit/test_wick.cpp`` and the
 ``MRSO-MultiProduct`` section of ``tests/unit/test_mbpt.cpp``.
 

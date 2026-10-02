@@ -1352,6 +1352,13 @@ SECTION("MRSO-MultiProduct") {
     // a two-body times a one-body string: up to κ₃
     check(coeff({p1, p2, p5}, {p3, p4, p6}) * fcrex(p1) * fcrex(p2) *
           fannx(p4) * fannx(p3) * fcrex(p5) * fannx(p6));
+#ifndef SEQUANT_SKIP_LONG_TESTS
+    // two two-body strings: up to κ₄
+    const Index p7{L"p_7"}, p8{L"p_8"};
+    check(coeff({p1, p2, p5, p6}, {p3, p4, p7, p8}) * fcrex(p1) * fcrex(p2) *
+          fannx(p4) * fannx(p3) * fcrex(p5) * fcrex(p6) * fannx(p8) *
+          fannx(p7));
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 
   SECTION("wick(H2**T2) runs in generalized normal order") {
