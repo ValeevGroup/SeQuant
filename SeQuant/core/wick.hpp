@@ -274,6 +274,8 @@ class WickTheorem {
   /// @param nop_partitions list of normal operator partitions
   /// @note if this partitions are not given, every operator is assumed to be in
   /// its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum: there the
+  /// partitions are those of each input term's topology (see use_topology())
   /// @internal this performs only the first phase of initialization of
   /// nop_topological_partition_
   ///           since the number of operators is not guaranteed to be known
@@ -326,6 +328,8 @@ class WickTheorem {
   /// @param op_partitions list of index partitions
   /// @note if this partitions are not given, every Index is assumed to be in
   /// its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum: there the
+  /// partitions are those of each input term's topology (see use_topology())
   ///
   ///@{
 
@@ -399,6 +403,8 @@ class WickTheorem {
   }
 
   /// makes a default set of partitions with each Op is in its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum, like
+  /// set_op_partitions()
   auto &make_default_op_partitions() const {
     return set_op_partitions(ranges::views::iota(0ul, input_->opsize()) |
                              ranges::views::transform([](const std::size_t v) {
