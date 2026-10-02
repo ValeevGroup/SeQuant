@@ -798,10 +798,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     // ...
     else if (expr_input_->is<Product>()) {
       if (!skip_input_canonicalization) {  // canonicalize, unless told to skip
-        auto canon_byproduct = expr_input_->rapid_canonicalize();
-        SEQUANT_ASSERT(
-            canon_byproduct ==
-            nullptr);  // canonicalization of Product always returns nullptr
+        canonicalize(expr_input_);
+        // canonicalization of Product absorbs its byproduct
+        SEQUANT_ASSERT(expr_input_->is<Product>());
       }
       // NOW disable canonicalization of normal operators
       // N.B. even if skipped initial input canonicalization need to disable
