@@ -313,11 +313,15 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
           }
         }
         if (new_pairs > og_pairs) {
-          factor = ex<Constant>(-1) *
-                   ex<Tensor>(factor->as<Tensor>().label(),
-                              bra(std::move(current_lower)),
-                              ket(std::move(current_upper)), Symmetry::Nonsymm,
-                              std::nullopt, ColumnSymmetry::Symm);
+          factor =
+              ex<Constant>(-1) *
+              ex<Tensor>(factor->as<Tensor>().label(),
+                         bra(std::move(current_lower)),
+                         ket(std::move(current_upper)),
+                         TensorSymmetries{
+                             .perm = Symmetry::Nonsymm,
+                             .hermiticity = factor->as<Tensor>().hermiticity(),
+                             .column = ColumnSymmetry::Symm});
         }
       } else if (factor->is<FNOperator>()) {
         std::vector<Index> current_upper;
