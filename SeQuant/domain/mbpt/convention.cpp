@@ -45,7 +45,7 @@ void load(Convention conv, SpinConvention spconv) {
       isr = make_legacy_spaces(spconv);
       break;
   }
-  Context ctx = get_default_context();
+  sequant::Context ctx = get_default_context();
   ctx.set(isr);
   ctx.set(Vacuum::SingleProduct);
   set_default_context(std::move(ctx));
