@@ -118,7 +118,8 @@ std::size_t count_cycles(Seq0&& v0, Seq1&& v1) {
 /// computes parity of a permutation of 0 ... N-1
 ///
 /// @param p permutation
-/// @param overwrite if true, will overwrite @p p
+/// @param overwrite if true, @p p is restored to its input value on return;
+///        if false, it is left with N added to each element (the cycle marks)
 template <std::integral T>
 int permutation_parity(std::span<T> p, bool overwrite = false) {
   // https://stackoverflow.com/a/20703469
@@ -129,10 +130,11 @@ int permutation_parity(std::span<T> p, bool overwrite = false) {
   for (std::size_t k = 0; k != N; ++k) {
     if (p[k] >= N) continue;
     std::size_t i = k;
-    std::size_t cycle_length = 1;
+    std::size_t cycle_length = 0;
     do {
-      i = p[i];
+      const std::size_t next = p[i];
       p[i] += N;
+      i = next;
       ++cycle_length;
     } while (p[i] < N);
     if (cycle_length % 2 == 0) parity *= -1;

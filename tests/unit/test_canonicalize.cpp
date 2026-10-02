@@ -7,6 +7,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -783,5 +784,124 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
       CHECK(canonical_labels() == z_first);
     }
     CHECK(canonical_labels() == y_first);
+  }
+}
+
+TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
+  using namespace sequant;
+
+  auto isr = sequant::mbpt::make_legacy_spaces();
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  auto is_zero = [](const ExprPtr& expr) {
+    return expr->is<Constant>() && expr->as<Constant>().is_zero();
+  };
+
+  // a1<->a2 is an automorphism; it permutes the (symmetric) bra of t and
+  // the (antisymmetric) creators of the operator, so the term equals minus
+  // itself
+  SECTION("symmetric tensor contracted with fermionic operator") {
+    auto make = [](Symmetry symm) {
+      return ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
+             ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+    };
+    auto zero = make(Symmetry::Symm);
+    canonicalize(zero);
+    REQUIRE(zero->is_zero());
+    simplify(zero);
+    REQUIRE(is_zero(zero));
+
+    auto nonzero = make(Symmetry::Antisymm);
+    simplify(nonzero);
+    REQUIRE(!nonzero->is_zero());
+  }
+
+  SECTION("symmetric tensor contracted with antisymmetric tensor") {
+    // dummy indices only
+    {
+      auto expr = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"h", bra{L"p_3", L"p_4"}, ket{L"p_1", L"p_2"},
+                             Symmetry::Symm);
+      simplify(expr);
+      REQUIRE(is_zero(expr));
+    }
+    // named indices are not permuted, the contracted pair is
+    {
+      auto make = [] {
+        return ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                          Symmetry::Antisymm) *
+               ex<Tensor>(L"s", bra{L"p_5", L"p_6"}, ket{L"p_1", L"p_2"},
+                          Symmetry::Symm);
+      };
+      auto expr = make();
+      simplify(expr);
+      REQUIRE(is_zero(expr));
+
+      // in a sum named index labels are meaningful
+      auto sum = make() + ex<Tensor>(L"f", bra{L"p_3", L"p_4"},
+                                     ket{L"p_5", L"p_6"}, Symmetry::Antisymm);
+      simplify(sum);
+      REQUIRE_THAT(sum, EquivalentTo("f{p3,p4;p5,p6}:A"));
+    }
+  }
+
+  SECTION("nonzero terms are unchanged") {
+    // swapping identical antisymmetric tensors (with their slots) is even
+    {
+      auto expr = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                             Symmetry::Antisymm);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo("t{a1,a2;i1,i2}:A t{i1,i2;a1,a2}:A"));
+    }
+    // CCD quadratic term: nontrivial automorphisms, all of them even
+    {
+      auto expr = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_4"},
+                             Symmetry::Antisymm);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo("g{i3,i4;a3,a4}:A t{a3,a4;i1,i2}:A "
+                                      "t{a1,a2;i3,i4}:A"));
+    }
+    // a lone antisymmetric tensor: swapping its named indices is not a
+    // symmetry of the term
+    {
+      auto expr = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                             Symmetry::Antisymm);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo("g{p1,p2;p3,p4}:A"));
+    }
+    // automorphisms permuting antisymmetric bundles of unequal or odd size
+    // in pairs are even
+    for (std::wstring spec :
+         {L"t{a1,a2;i1}:A u{;a1,a2}:A", L"X{a1,a2,a3;i1}:A Y{;a1,a2,a3}:A"}) {
+      auto expr = deserialize(spec);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo(spec));
+    }
+    {
+      auto sum = deserialize(L"t{a1,a2;i1}:A u{;a1,a2}:A + w{;i1}:A");
+      simplify(sum);
+      REQUIRE(sum->is<Sum>());
+      REQUIRE(sum->size() == 2);
+    }
+  }
+
+  // odd-size bundles: antisymmetric in a1,a2,a3 against symmetric
+  SECTION("odd-size antisymmetric bundle contracted with symmetric one") {
+    auto expr = deserialize(L"X{a1,a2,a3;i1}:A Y{;a1,a2,a3}:S");
+    simplify(expr);
+    REQUIRE(is_zero(expr));
   }
 }

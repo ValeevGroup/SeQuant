@@ -32,9 +32,10 @@ to a permutation the network's declared symmetries allow. Concretely:
 Computing the canonical form
 ---------------------------------
 
-The static ``TensorNetworkV3::canonicalize_graph(const Graph&)`` hands the constructed graph to bliss's ``canonical_form()`` (with the
-``shs_fsm`` splitting heuristic), which returns a permutation of vertex ordinals that is invariant under the graph's automorphism group —
-this permutation *is* the canonical form; two isomorphic networks (under the coloring/topology rules above) always produce the same one.
+The static ``TensorNetworkV3::canonicalize_graph(const Graph&, aut_hook)`` hands the constructed graph to bliss's ``canonical_form()``
+(with the ``shs_fsm`` splitting heuristic), which returns a permutation of vertex ordinals that is invariant under the graph's
+automorphism group — this permutation *is* the canonical form; two isomorphic networks (under the coloring/topology rules above) always
+produce the same one.
 
 Translating that permutation back into an actual relabeling is the job of the (differently overloaded, same-named) *member* function
 ``canonicalize_graph(named_indices, ...)``. It walks the graph's vertices in canonical-rank order and, from each ``TensorBra``/
@@ -52,6 +53,16 @@ The by-product of all this sign bookkeeping is returned as ``nullptr`` (no sign 
 ``canonicalize_slots()``, builds and canonicalizes the same graph but stops short of physically reordering anything — it instead returns
 ``SlotCanonicalizationMetadata`` (a canonical named-index ordering plus the underlying ``bliss::Graph``, comparable via graph isomorphism)
 for callers that only need to test two networks for equivalence, such as term matching or :doc:`Wick's theorem <wick>`.
+
+The bliss call of the member ``canonicalize_graph`` also reports the generators of the automorphism group, which detect networks that
+vanish by symmetry. An automorphism maps the network onto itself up to a phase, ``TensorNetworkV3::automorphism_phase()``: the product,
+over the bra and ket bundles of every antisymmetric tensor (including fermionic normal operators), of the parity of the slot permutation
+it induces. If that phase is -1 the network equals minus itself, so it is zero; e.g. in ``t{a1,a2;i1,i2}:S ã{a1,a2;i1,i2}`` the swap
+:math:`a_1 \leftrightarrow a_2` has phase :math:`(+1)(-1)`. Since the phase is a homomorphism of the group to :math:`\{\pm 1\}`,
+a scored generator of phase -1 is enough to detect a zero. Generators that move a tensor, a named or external index, a protoindex bundle, or an aux slot are not
+scored, so a zero can go undetected but is never invented. When a generator of phase -1 is found the member ``canonicalize_graph``
+returns ``ex<Constant>(0)`` and leaves the tensors as they were. :doc:`Wick's theorem <wick>` applies the same test to the input of its
+topology analysis.
 
 Topological vs. lexicographic canonicalization
 ----------------------------------------------------

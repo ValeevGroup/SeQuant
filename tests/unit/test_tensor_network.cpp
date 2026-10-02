@@ -3,6 +3,7 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -565,6 +566,34 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   }  // SECTION("accessors")
 
   SECTION("canonicalizer") {
+    {  // non-covariant pairings are rejected, covariant ones are not
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto canonicalize = [](const ExprPtr& product) {
+        TN tn(product->as<Product>().factors());
+        tn.canonicalize(get_default_context().cardinal_tensor_labels(),
+                        {.method = CanonicalizationMethod::Complete});
+      };
+
+      // coefficient bra on the operator's annihilator (operator bra)
+      auto h = ex<Tensor>(L"h", bra{L"i_2"}, ket{L"i_3"});
+      auto op = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      REQUIRE_THROWS_AS(canonicalize(h * op), Exception);
+      try {
+        canonicalize(h * op);
+      } catch (const Exception& e) {
+        REQUIRE_THAT(e.what(), Catch::Matchers::ContainsSubstring("i_2"));
+      }
+
+      // coefficient bra on the creator, ket on the annihilator
+      auto h_ok = ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_2"});
+      REQUIRE_NOTHROW(canonicalize(h_ok * op));
+
+      // bra-ket symmetric coefficient can pair bra to bra
+      auto h_symm = ex<Tensor>(L"h", bra{L"i_2"}, ket{L"i_3"}, aux{},
+                               Symmetry::Nonsymm, BraKetSymmetry::Symm);
+      REQUIRE_NOTHROW(canonicalize(h_symm * op));
+    }
+
     {  // with no external indices, hence no named indices whatsoever
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
@@ -661,12 +690,16 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     }
 
     SECTION("non-symmetric") {
+      // a ket-less column-symmetric I1 (or bra-less I2) would be symmetric in
+      // its bra (ket), making the term vanish against Â
       const auto input =
-          deserialize(L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+          deserialize(
+              L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N-N-N I2{;i9,i12;x5}:N-N-N")
               .as<Product>()
               .factors();
       const std::wstring expected =
-          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
+          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N-N-N * "
+          L"I2{;i_1,i_2;x_1}:N-N-N";
 
       for (auto method :
            {CanonicalizationMethod::Rapid, CanonicalizationMethod::Complete}) {
@@ -971,7 +1004,8 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
     SECTION("idempotency") {
       const std::vector<std::wstring> inputs = {
           L"F{i1;i8} g{i8,i9;i1,i7}",
-          L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
+          // column Nonsymm I1, I2: see SECTION("non-symmetric")
+          L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N-N-N I2{;i9,i12;x5}:N-N-N",
           L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N Ŝ{i1,i2,i3;a1,a2,a3}:N",
           L"P{a1,a3;} k{i8;i2}",
           L"L{x6;;x2} P{;a1,a3}",
