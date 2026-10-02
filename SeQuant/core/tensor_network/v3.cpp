@@ -1506,9 +1506,9 @@ int TensorNetworkV3::automorphism_phase(
         const auto bundle = is_bra ? bra_bundle : ket_bundle;
         if (bundle != npos) {
           const AbstractTensor &tensor = *tensors_[tensor_count - 1];
-          const Index &idx =
-              is_bra ? tensor._bra()[slot_ord] : tensor._ket()[slot_ord];
-          if (idx.nonnull()) {
+          // the view is held in a local so no reference binds to a temporary
+          auto slots = is_bra ? tensor._bra() : tensor._ket();
+          if (slots[slot_ord].nonnull()) {
             slot_pos[v] = {bundle, bundles[bundle].size()};
             bundles[bundle].push_back(v);
           }
