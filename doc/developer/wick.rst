@@ -111,8 +111,10 @@ Rather than a second engine, this is layered on the standard one, which changes 
 
 Under this vacuum ``WickTheorem::compute`` hands its input and options to ``detail::extended_wick``
 (``SeQuant/core/wick_extended.hpp``), which drives the rest; ``count_only`` and bosonic statistics are not supported there. For each
-input term it canonicalizes, records which input ``NormalOperator`` every operator index comes from (its *provenance*; an index
-shared by two operators is renamed apart, the :math:`\delta` binding the names multiplying the result), and runs the standard theorem
+input term it applies the term's own :math:`\delta`\ s and overlaps over summed indices, since identifying two indices is not a
+contraction (one may leave an index shared by two operators, and one left carries the indices of at most one operator),
+canonicalizes, records which input ``NormalOperator`` every operator index comes from (its *provenance*; an index shared by two
+operators is renamed apart, the :math:`\delta` binding the names multiplying the result), and runs the standard theorem
 (the private ``WickTheorem::compute_contractions``) with partial contractions on the bare operator sequence, multiplying the c-number
 factors back in afterwards. In that run every operator index is external, so no term is canonicalized and no surviving index is
 renamed, which keeps the provenance valid. Topological equivalence needs dummy indices, though, so with ``use_topology`` the

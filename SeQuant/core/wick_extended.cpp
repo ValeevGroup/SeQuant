@@ -534,6 +534,22 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
 
   // provenance is per input term
   auto per_term = [&](ExprPtr term) -> ExprPtr {
+    // an input δ or overlap identifies indices rather than connects
+    // operators, so the ones over summed indices are applied first, which
+    // may leave an index shared by two operators; one that survives carries
+    // the indices of at most one operator, so it connects none
+    if (term->is<Product>() &&
+        std::any_of(
+            term->as<Product>().begin(), term->as<Product>().end(),
+            [](const ExprPtr &f) {
+              return f->is<Tensor>() &&
+                     (f->as<Tensor>().label() == reserved::kronecker_label() ||
+                      f->as<Tensor>().label() == reserved::overlap_label());
+            })) {
+      const ExprPtr resolved = apply_dummy_deltas<S>(term);
+      if (resolved->as<Sum>().empty()) return ex<Constant>(0);
+      term = resolved->as<Sum>().summand(0);
+    }
     if (term->is<NormalOperator<S>>()) term = ex<Product>(ExprPtrList{term});
     // canonicalize first, so that the provenance sees the final indices
     if (term->is<Product>()) {
