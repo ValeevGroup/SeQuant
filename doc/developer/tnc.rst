@@ -99,6 +99,34 @@ Subtleties for contributors
   using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee about
   using swaps to get there.
 
+Recorded canonical form
+----------------------------
+
+A fully canonicalized expression carries a mark that makes canonicalizing it again a no-op, so callers can request full
+canonicalization without tracking whether it was already done. The free ``canonicalize()``, as well as ``Product::canonicalize()``,
+``Sum::canonicalize()`` and ``Tensor::canonicalize()``, record their result with ``Expr::mark_canonical(opts)`` and return at once, with
+no byproduct, for an expression that ``Expr::is_canonical(opts)``; rapid (``Lexicographic``-only) canonicalization never marks. Since the
+summands of a ``Sum`` are marked by their own canonicalization, re-canonicalizing a ``Sum`` after some of its summands changed
+canonicalizes only those.
+
+A mark is valid only for the ``CanonicalizeOptions`` it was recorded under (named indices included) and only while the contexts in
+effect are the ones it was recorded under, as reported by ``current_contexts_version()`` (``SeQuant/core/context.hpp``): it combines the
+versions of the contexts in effect on the calling thread for all statistics, which change when a default context is set or reset, a
+scoped one begins or ends, or a context setter runs ((de)registering a ``TensorCanonicalizer``, setting the index comparers or the
+cardinal tensor labels, ...). It is a function of the contexts, not a counter, so marks recorded before a scoped context are valid again
+once it ends. Canonicalization seals its result with the value at which it started, so a change of the contexts while it runs leaves the
+result unmarked. In-place changes of objects owned by a context, such as an ``IndexSpaceRegistry`` shared with the default context, are
+not tracked.
+
+The contract with ``Expr`` types is that every mutation of a node's own data clears its mark: ``Expr::reset_hash_value()`` does so, and
+mutations that do not reset the hash, such as those of the ``Product`` scalar, call ``Expr::reset_canonical_mark()``; a new ``Expr``
+type must do the same in each of its mutators. ``Operator`` and ``NormalOperatorSequence``, which are vectors of their elements, honor
+it by resetting in their mutable element accessors (``operator[]``, ``at``, ``begin``, ``end``, ``push_back``, ``emplace_back``).
+Mutation or replacement of a subexpression needs no such call: each node carries a stamp of its own data, and a mark digests the stamps
+of the whole subtree, so merely iterating mutably, as ``visit()`` and ``expand()`` do, leaves marks intact. With assertions enabled,
+checking a mark also revalidates the memoized hash of each leaf, which catches a leaf mutator that resets neither (the memoized hash
+of a non-leaf is legitimately stale after in-place mutation of a subexpression). ``clone()`` keeps the mark.
+
 Debugging and tests
 ------------------------
 
