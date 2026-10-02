@@ -18,7 +18,8 @@ or a general :class:`sequant::Expr` (repeated indices assumed dummy), then tuned
   attached to the same tensor label, as topologically equivalent, so that contractions related by this equivalence are not separately
   enumerated.
 - ``set_nop_connections()`` / ``set_nop_avoided_connections()``: force, or forbid, contraction between specific pairs of normal-operator
-  ordinals. Under a ``Vacuum::MultiProduct`` vacuum the engine does not apply them (see :ref:`below <wick-extended>`).
+  ordinals. Under a ``Vacuum::MultiProduct`` vacuum they are enforced after cumulant expansion rather than during the contraction
+  recursion, since a cumulant connects operators that no pair does (see :ref:`below <wick-extended>`).
 - ``set_nop_partitions()`` / ``set_op_partitions()`` / ``make_default_op_partitions()``: declare explicit equivalence groups of normal
   operators, or of individual ``Op``\ s, so that contractions related by permuting within a group are counted once with a combinatorial
   degeneracy factor rather than enumerated redundantly — the general form of what ``use_topology()`` infers automatically.
