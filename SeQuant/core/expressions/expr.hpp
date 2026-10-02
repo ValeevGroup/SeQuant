@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_EXPR_HPP
 #define SEQUANT_EXPRESSIONS_EXPR_HPP
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
@@ -9,7 +10,9 @@
 
 #include <boost/core/demangle.hpp>
 
+#include <atomic>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -77,6 +80,40 @@ constexpr std::string compiler_type_name() {
   return __PRETTY_FUNCTION__;
 #endif
 }
+
+/// the canonical mark of an Expr (see Expr::is_canonical()); copying copies
+/// it, moving moves it out of the source
+struct CanonicalMark {
+  /// identifies the state of the own data of an Expr (not of its
+  /// subexpressions) since its last mutation; 0 if not assigned
+  std::atomic<std::uint64_t> stamp{0};
+  /// if nonzero, the digest of the validity key of the canonicalization that
+  /// produced the Expr and of the stamps of its subtree
+  std::atomic<std::size_t> seal{0};
+
+  CanonicalMark() = default;
+  CanonicalMark(const CanonicalMark &other) noexcept { *this = other; }
+  CanonicalMark(CanonicalMark &&other) noexcept { *this = std::move(other); }
+  CanonicalMark &operator=(const CanonicalMark &other) noexcept {
+    stamp.store(other.stamp.load(std::memory_order_relaxed),
+                std::memory_order_relaxed);
+    seal.store(other.seal.load(std::memory_order_relaxed),
+               std::memory_order_relaxed);
+    return *this;
+  }
+  CanonicalMark &operator=(CanonicalMark &&other) noexcept {
+    if (this != &other) {
+      *this = static_cast<const CanonicalMark &>(other);
+      other.reset();
+    }
+    return *this;
+  }
+
+  void reset() noexcept {
+    stamp.store(0, std::memory_order_relaxed);
+    seal.store(0, std::memory_order_relaxed);
+  }
+};
 
 }  // namespace detail
 
@@ -206,6 +243,31 @@ class Expr : public std::enable_shared_from_this<Expr> {
           CanonicalizationMethod::Rapid)) {
     return this->canonicalize({.method = CanonicalizationMethod::Rapid});
   }
+
+  /// @param opts the canonicalization options
+  /// @return true if this is the full canonical form that canonicalization
+  /// with @p opts produced, and since then neither this nor any of its
+  /// subexpressions has been mutated or replaced, nor have the contexts in
+  /// effect changed (see current_contexts_version())
+  /// @note always false if @p opts does not request topological (i.e., full)
+  /// canonicalization
+  bool is_canonical(const CanonicalizeOptions &opts =
+                        CanonicalizeOptions::default_options()) const;
+
+  /// records that this, with its subexpressions as they are now, is the full
+  /// canonical form for @p opts, so that is_canonical(opts) holds until this
+  /// or any of its subexpressions is mutated or replaced, or the contexts in
+  /// effect change
+  /// @param opts the canonicalization options
+  /// @param contexts_version the value of current_contexts_version() when the
+  /// canonicalization started; if it has changed since, the mark is not valid
+  /// @note no-op if @p opts does not request topological (i.e., full)
+  /// canonicalization
+  /// @warning only to be called with the result of canonicalization with
+  /// @p opts: canonicalization leaves an expression marked as canonical alone
+  void mark_canonical(
+      const CanonicalizeOptions &opts,
+      std::uint64_t contexts_version = current_contexts_version()) const;
 
   // clang-format off
   /// recursively visit this expression, i.e. call visitor on each subexpression
@@ -529,7 +591,25 @@ class Expr : public std::enable_shared_from_this<Expr> {
     else
       return default_hash_value;
   }
-  virtual void reset_hash_value() const { hash_value_.reset(); }
+  /// invalidates the memoized hash and the canonical mark
+  /// @note to be called by every mutation of this object's own data
+  virtual void reset_hash_value() const {
+    hash_value_.reset();
+    reset_canonical_mark();
+  }
+
+  /// invalidates the canonical mark, see is_canonical()
+  /// @note to be called by every mutation of this object's own data that does
+  /// not call reset_hash_value() (mutations of subexpressions, and their
+  /// replacement, are detected without it)
+  void reset_canonical_mark() const { canonical_mark_.reset(); }
+
+  /// copies the canonical mark of @p other
+  /// @pre the own data of @c *this is identical to that of @p other , and its
+  /// subexpressions are copies (or clones) of those of @p other
+  void copy_canonical_mark(const Expr &other) const {
+    canonical_mark_ = other.canonical_mark_;
+  }
 
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
@@ -562,6 +642,14 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// another mangled name
   static void register_type_id(type_id_type id, const std::string &name,
                                std::type_index type);
+  mutable detail::CanonicalMark canonical_mark_;
+
+  /// assigns a stamp to every node of this subtree that lacks one
+  void stamp_canonical_subtree() const;
+
+  /// @return the digest of the stamps of this subtree, or null if any of its
+  /// nodes lacks a stamp
+  std::optional<std::size_t> canonical_subtree_digest() const;
 };  // class Expr
 
 /// ranks (`type_rank`) of SeQuant's own Expr types; Expr::operator< orders

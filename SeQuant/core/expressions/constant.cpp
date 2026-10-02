@@ -15,7 +15,11 @@ Expr::type_id_type Constant::type_id() const { return get_type_id<Constant>(); }
 
 bool Constant::is_scalar() const { return true; }
 
-ExprPtr Constant::clone() const { return ex<Constant>(this->value()); }
+ExprPtr Constant::clone() const {
+  auto result = ex<Constant>(this->value());
+  result->as<Constant>().copy_canonical_mark(*this);
+  return result;
+}
 
 void Constant::adjoint() {
   value_ = conj(value_);

@@ -53,7 +53,9 @@ Product::factors_type &Product::factors() {
   // `!factors_.empty()`: those hand out iterators, and an empty range yields
   // nothing to dereference, whereas the caller can grow an empty factors_
   // through this reference (e.g. push_back()).
-  reset_hash_value();
+  // N.B. the canonical mark need not be reset: changes of the factors are
+  // detected by Expr::is_canonical()
+  hash_value_.reset();
   return factors_;
 }
 
@@ -73,6 +75,8 @@ bool Product::is_commutative() const {
 }
 
 ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
+  reset_canonical_mark();
+
   // recursively canonicalize non-tensor subfactors (tensors will be
   // canonicalized as part of the TN built of all tensor factors of this) ...
   ranges::for_each(factors_, [this, opts](auto &factor) {
@@ -293,6 +297,7 @@ Product Product::deep_copy() const {
   ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
     result.append(1, std::move(cloned_factor), Flatten::No);
   });
+  result.copy_canonical_mark(*this);
   return result;
 }
 
@@ -301,6 +306,7 @@ Product &Product::operator*=(const Expr &that) {
     this->append(1, const_cast<Expr &>(that).shared_from_this());
   } else {
     scalar_ *= that.as<Constant>().value();
+    reset_canonical_mark();
   }
   return *this;
 }
@@ -308,11 +314,13 @@ Product &Product::operator*=(const Expr &that) {
 void Product::add_identical(const Product &other) {
   SEQUANT_ASSERT(ranges::equal(this->factors(), other.factors()));
   scalar_ += other.scalar_;
+  reset_canonical_mark();
 }
 
 void Product::add_identical(const std::shared_ptr<Product> &other) {
   SEQUANT_ASSERT(ranges::equal(this->factors(), other->factors()));
   scalar_ += other->scalar_;
+  reset_canonical_mark();
 }
 
 void Product::add_identical(const ExprPtr &other) {
@@ -321,11 +329,14 @@ void Product::add_identical(const ExprPtr &other) {
   // only makes sense if this has a single factor
   SEQUANT_ASSERT(this->factors_.size() == 1 && this->factors_[0] == other);
   scalar_ += 1;
+  reset_canonical_mark();
 }
 
 ExprIterator Product::begin_subexpr() {
+  // N.B. the canonical mark need not be reset: changes of the factors are
+  // detected by Expr::is_canonical()
   if (!factors_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{factors_.data()};
@@ -336,7 +347,7 @@ ExprIterator Product::end_subexpr() {
   // memoized hash, regardless of which end of the range it points at
   // (`*(--end())` mutates just as `*begin()` does)
   if (!factors_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{factors_.data() + factors_.size()};

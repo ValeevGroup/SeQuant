@@ -131,6 +131,7 @@ class Product : public Expr {
   template <typename T>
   Product &scale(T scalar) {
     scalar_ *= scalar;
+    reset_canonical_mark();
     return *this;
   }
 
@@ -144,6 +145,7 @@ class Product : public Expr {
                   Flatten flatten_tag = Flatten::Yes) {
     SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
+    reset_canonical_mark();
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
         auto factor_constant = factor->as<Constant>();
@@ -215,6 +217,7 @@ class Product : public Expr {
                    Flatten flatten_tag = Flatten::Yes) {
     SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
+    reset_canonical_mark();
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
         auto factor_constant = std::static_pointer_cast<Constant>(factor);
