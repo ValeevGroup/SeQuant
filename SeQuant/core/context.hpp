@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -357,8 +358,12 @@ bool operator==(const Context& ctx1, const Context& ctx2);
 bool operator!=(const Context& ctx1, const Context& ctx2);
 
 /// \name manipulation of implicit context for SeQuant
-/// \warning all of these are thread-safe only if
-/// default_context_manipulation_threadsafe() returns true
+/// \warning set_default_context(), reset_default_context() and the reads of
+/// the process-wide context (by get_default_context() and
+/// set_scoped_modified_default_context() on a thread without scoped contexts)
+/// are thread-safe only if default_context_manipulation_threadsafe() returns
+/// true; set_scoped_default_context(), and the readers on a thread with scoped
+/// contexts, touch only thread-local state
 
 /// @{
 
@@ -401,9 +406,13 @@ void reset_default_context();
 /// } // leaving scope, resetter is destroyed, default context is reset back to
 /// the old value
 /// ```
+/// @note the scoped contexts are seen only by the calling thread and by the
+/// workers of the parallel primitives (sequant::for_each, etc.) it launches;
+/// set_default_context() is not seen by this thread until the scope ends
+/// @note scopes must end in the reverse order of their creation
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
-set_scoped_default_context(const container::map<Statistics, Context>& ctx);
+set_scoped_default_context(container::map<Statistics, Context> ctx);
 
 /// @brief changes default context for arbitrary statistics
 /// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
@@ -418,6 +427,16 @@ set_scoped_default_context(Context ctx);
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(Context::Options ctx_options);
+
+/// @brief changes the default contexts for all statistics by a modification
+/// @param modify applied to a copy of each current default context
+/// @return a move-only ContextResetter object whose destruction will reset the
+/// default contexts to the previous values
+/// @note see the notes of set_scoped_default_context()
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_modified_default_context(
+    const std::function<void(Context&)>& modify);
 
 ///@}
 
