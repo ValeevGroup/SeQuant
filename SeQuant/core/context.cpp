@@ -1,12 +1,46 @@
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/context.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+
+#include <utility>
 
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 #include <mutex>
 #endif
 
 namespace sequant {
+
+namespace {
+
+// process-wide immutable defaults, shared so that default-constructed
+// contexts compare equal
+const std::shared_ptr<TensorCanonicalizer>& default_tensor_canonicalizer() {
+  static const std::shared_ptr<TensorCanonicalizer> result =
+      std::make_shared<DefaultTensorCanonicalizer>();
+  return result;
+}
+
+const std::shared_ptr<const tensor_index_comparer_t>& default_index_comparer() {
+  static const std::shared_ptr<const tensor_index_comparer_t> result =
+      std::make_shared<const tensor_index_comparer_t>(
+          TensorCanonicalizer::default_index_comparer());
+  return result;
+}
+
+const std::shared_ptr<const tensor_index_pair_comparer_t>&
+default_index_pair_comparer() {
+  static const std::shared_ptr<const tensor_index_pair_comparer_t> result =
+      std::make_shared<const tensor_index_pair_comparer_t>(
+          TensorCanonicalizer::default_index_pair_comparer());
+  return result;
+}
+
+}  // namespace
 
 bool default_context_manipulation_threadsafe() {
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
@@ -36,6 +70,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
                ctx2.deserialization_hermiticity() &&
            ctx1.deserialization_column_symmetry() ==
                ctx2.deserialization_column_symmetry() &&
+           ctx1.tensor_canonicalizers_ == ctx2.tensor_canonicalizers_ &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
@@ -141,7 +176,24 @@ Context::Context(Options options)
       deserialization_symmetry_(options.deserialization_symmetry),
       deserialization_hermiticity_(options.deserialization_hermiticity),
       deserialization_column_symmetry_(
-          options.deserialization_column_symmetry) {}
+          options.deserialization_column_symmetry) {
+  if (options.tensor_canonicalizers)
+    tensor_canonicalizers_.map = std::move(*options.tensor_canonicalizers);
+  else
+    tensor_canonicalizers_.map.emplace(L"", default_tensor_canonicalizer());
+  tensor_canonicalizers_.index_comparer = default_index_comparer();
+  if (options.index_comparer)
+    set_index_comparer(std::move(*options.index_comparer));
+  tensor_canonicalizers_.index_pair_comparer = default_index_pair_comparer();
+  if (options.index_pair_comparer)
+    set_index_pair_comparer(std::move(*options.index_pair_comparer));
+  set_cardinal_tensor_labels(
+      options.cardinal_tensor_labels
+          ? std::move(*options.cardinal_tensor_labels)
+          : container::vector<std::wstring>{reserved::antisymm_label(),
+                                            reserved::symm_label(),
+                                            reserved::transposition_label()});
+}
 
 Context Context::clone() const {
   Context ctx(*this);
@@ -195,6 +247,43 @@ Hermiticity Context::deserialization_hermiticity() const {
 
 ColumnSymmetry Context::deserialization_column_symmetry() const {
   return deserialization_column_symmetry_;
+}
+
+std::shared_ptr<TensorCanonicalizer> Context::tensor_canonicalizer_ptr(
+    std::wstring_view label) const {
+  auto result = nondefault_tensor_canonicalizer_ptr(label);
+  if (!result) result = nondefault_tensor_canonicalizer_ptr(L"");
+  return result;
+}
+
+std::shared_ptr<TensorCanonicalizer>
+Context::nondefault_tensor_canonicalizer_ptr(std::wstring_view label) const {
+  const auto& map = tensor_canonicalizers_.map;
+  auto it = map.find(std::wstring{label});
+  return it != map.end() ? it->second : nullptr;
+}
+
+const TensorCanonicalizer& Context::tensor_canonicalizer(
+    std::wstring_view label) const {
+  auto ptr = tensor_canonicalizer_ptr(label);
+  if (!ptr)
+    throw Exception(
+        "Context::tensor_canonicalizer: no canonicalizer for this label nor "
+        "for the empty label");
+  // the map entry keeps *ptr alive
+  return *ptr;
+}
+
+const tensor_index_comparer_t& Context::index_comparer() const {
+  return *tensor_canonicalizers_.index_comparer;
+}
+
+const tensor_index_pair_comparer_t& Context::index_pair_comparer() const {
+  return *tensor_canonicalizers_.index_pair_comparer;
+}
+
+const container::vector<std::wstring>& Context::cardinal_tensor_labels() const {
+  return tensor_canonicalizers_.cardinal_labels;
 }
 
 Context& Context::set(Vacuum vacuum) {
@@ -262,6 +351,43 @@ Context& Context::set(Hermiticity hermiticity) {
 
 Context& Context::set(ColumnSymmetry column_symmetry) {
   deserialization_column_symmetry_ = column_symmetry;
+  return *this;
+}
+
+Context& Context::set_tensor_canonicalizer(
+    std::wstring_view label,
+    std::shared_ptr<TensorCanonicalizer> canonicalizer) {
+  SEQUANT_ASSERT(canonicalizer);
+  tensor_canonicalizers_.map.insert_or_assign(std::wstring{label},
+                                              std::move(canonicalizer));
+  return *this;
+}
+
+Context& Context::unset_tensor_canonicalizer(std::wstring_view label) {
+  tensor_canonicalizers_.map.erase(std::wstring{label});
+  return *this;
+}
+
+Context& Context::set_index_comparer(tensor_index_comparer_t comparer) {
+  SEQUANT_ASSERT(comparer);
+  tensor_canonicalizers_.index_comparer =
+      std::make_shared<const tensor_index_comparer_t>(std::move(comparer));
+  return *this;
+}
+
+Context& Context::set_index_pair_comparer(
+    tensor_index_pair_comparer_t comparer) {
+  SEQUANT_ASSERT(comparer);
+  tensor_canonicalizers_.index_pair_comparer =
+      std::make_shared<const tensor_index_pair_comparer_t>(std::move(comparer));
+  return *this;
+}
+
+Context& Context::set_cardinal_tensor_labels(
+    container::vector<std::wstring> labels) {
+  SEQUANT_ASSERT(!has_duplicates(labels) &&
+                 "cardinal tensor labels must not contain duplicates");
+  tensor_canonicalizers_.cardinal_labels = std::move(labels);
   return *this;
 }
 

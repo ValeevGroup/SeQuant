@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/for_each.hpp>
@@ -26,12 +27,17 @@ namespace sequant {
 /// of that class with TensorCanonicalizer::register_instance
 class TensorCanonicalizer {
  public:
-  using index_comparer_t = std::function<bool(const Index&, const Index&)>;
-  using index_pair_t = std::pair<const Index, const Index>;
-  using index_pair_comparer_t =
-      std::function<bool(const index_pair_t&, const index_pair_t)>;
+  using index_comparer_t = tensor_index_comparer_t;
+  using index_pair_t = tensor_index_pair_t;
+  using index_pair_comparer_t = tensor_index_pair_comparer_t;
 
   virtual ~TensorCanonicalizer();
+
+  /// @return a TensorIndexComparer, the default index comparer
+  static index_comparer_t default_index_comparer();
+
+  /// @return a TensorIndexComparer, the default index pair comparer
+  static index_pair_comparer_t default_index_pair_comparer();
 
   /// @return ptr to the TensorCanonicalizer object, if any, that had been
   /// previously registered via TensorCanonicalizer::register_instance()

@@ -169,6 +169,16 @@ struct TensorIndexComparer {
 
 TensorCanonicalizer::~TensorCanonicalizer() = default;
 
+TensorCanonicalizer::index_comparer_t
+TensorCanonicalizer::default_index_comparer() {
+  return TensorIndexComparer{};
+}
+
+TensorCanonicalizer::index_pair_comparer_t
+TensorCanonicalizer::default_index_pair_comparer() {
+  return TensorIndexComparer{};
+}
+
 std::pair<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>*,
           std::unique_lock<std::recursive_mutex>>
 TensorCanonicalizer::instance_map_accessor() {
@@ -289,10 +299,10 @@ void TensorCanonicalizer::deregister_instance(std::wstring_view label) {
 }
 
 TensorCanonicalizer::index_comparer_t TensorCanonicalizer::index_comparer_ =
-    TensorIndexComparer{};
+    default_index_comparer();
 
 TensorCanonicalizer::index_pair_comparer_t
-    TensorCanonicalizer::index_pair_comparer_ = TensorIndexComparer{};
+    TensorCanonicalizer::index_pair_comparer_ = default_index_pair_comparer();
 
 const TensorCanonicalizer::index_comparer_t&
 TensorCanonicalizer::index_comparer() {
