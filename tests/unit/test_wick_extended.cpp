@@ -338,25 +338,36 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
           /*atoms_only=*/true);
       return simplify(expr);
     };
-    auto shared = ex<FNOperator>(cre({u1, u2}), ann({})) *
-                  ex<FNOperator>(cre({}), ann({u2, u1}));
-    auto distinct = ex<FNOperator>(cre({u1, u2}), ann({})) *
-                    ex<FNOperator>(cre({}), ann({u3, u4}));
-    for (const bool full : {true, false}) {
-      const detail::ExtendedWickOptions opts{.full_contractions = full};
-      auto result = wick_mp(shared, opts);
-      auto expected = rename(wick_mp(distinct, opts));
-      INFO("full=" << full << "\nresult: " << toUtf8(to_latex(result))
-                   << "\nexpected: " << toUtf8(to_latex(expected)));
-      REQUIRE(simplify(result - expected) == ex<Constant>(0));
-      bool has_kappa = false;
-      result->visit(
-          [&](const ExprPtr& e) {
-            if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
-              has_kappa = true;
-          },
-          /*atoms_only=*/true);
-      REQUIRE(has_kappa);
+    // the shared indices are annihilators, then creators, of the later
+    // operator: ⟨{a_u1 a_u2}{a†_u2 a†_u1}⟩ is ⟨{a_u1 a_u2}{a†_u3 a†_u4}⟩ with
+    // the same identification
+    const std::pair<ExprPtr, ExprPtr> shared_distinct[] = {
+        {ex<FNOperator>(cre({u1, u2}), ann({})) *
+             ex<FNOperator>(cre({}), ann({u2, u1})),
+         ex<FNOperator>(cre({u1, u2}), ann({})) *
+             ex<FNOperator>(cre({}), ann({u3, u4}))},
+        {ex<FNOperator>(cre({}), ann({u1, u2})) *
+             ex<FNOperator>(cre({u2, u1}), ann({})),
+         ex<FNOperator>(cre({}), ann({u1, u2})) *
+             ex<FNOperator>(cre({u3, u4}), ann({}))}};
+    for (const auto& [shared, distinct] : shared_distinct) {
+      for (const bool full : {true, false}) {
+        const detail::ExtendedWickOptions opts{.full_contractions = full};
+        auto result = wick_mp(shared, opts);
+        auto expected = rename(wick_mp(distinct, opts));
+        INFO("input: " << toUtf8(to_latex(shared)) << "\nfull=" << full
+                       << "\nresult: " << toUtf8(to_latex(result))
+                       << "\nexpected: " << toUtf8(to_latex(expected)));
+        REQUIRE(simplify(result - expected) == ex<Constant>(0));
+        bool has_kappa = false;
+        result->visit(
+            [&](const ExprPtr& e) {
+              if (e->is<Tensor>() && e->as<Tensor>().label() == L"κ")
+                has_kappa = true;
+            },
+            /*atoms_only=*/true);
+        REQUIRE(has_kappa);
+      }
     }
     // the shared index alone does not connect the operators
     auto two =
