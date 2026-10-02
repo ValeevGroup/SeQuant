@@ -453,6 +453,7 @@ void rewrite_eta(ExprPtr &expr) {
         if (e->is<Tensor>() &&
             e->as<Tensor>().label() == density::hole_rdm_label()) {
           const auto &t = e->as<Tensor>();
+          SEQUANT_ASSERT(t.rank() == 1);
           const Index &b = t.bra()[0], &k = t.ket()[0];
           e = make_kronecker(b, k) - density::make_rdm(b, k);
         }
