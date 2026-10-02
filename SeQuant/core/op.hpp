@@ -356,11 +356,68 @@ bool can_contract(const Op<S> &left, const Op<S> &right,
 template <Statistics S = Statistics::FermiDirac>
 class NormalOperator;
 
+namespace detail {
+
+/// element access to an Expr @p Derived that is a @p Vector : the mutable
+/// accessors invalidate the memoized hash of @p Derived , which must befriend
+/// this class
+/// @note declares no member types, which would make those of @p Vector
+/// ambiguous in @p Derived
+template <typename Derived, typename Vector>
+class VectorExprAccess {
+ public:
+  const typename Vector::value_type &operator[](std::size_t i) const {
+    return vector()[i];
+  }
+  typename Vector::value_type &operator[](std::size_t i) {
+    return mutable_vector()[i];
+  }
+  const typename Vector::value_type &at(std::size_t i) const {
+    return vector().at(i);
+  }
+  typename Vector::value_type &at(std::size_t i) {
+    return mutable_vector().at(i);
+  }
+  auto begin() const { return vector().begin(); }
+  auto begin() { return mutable_vector().begin(); }
+  auto end() const { return vector().end(); }
+  auto end() { return mutable_vector().end(); }
+  void push_back(const typename Vector::value_type &value) {
+    mutable_vector().push_back(value);
+  }
+  void push_back(typename Vector::value_type &&value) {
+    mutable_vector().push_back(std::move(value));
+  }
+  template <typename... Args>
+  typename Vector::value_type &emplace_back(Args &&...args) {
+    return mutable_vector().emplace_back(std::forward<Args>(args)...);
+  }
+
+ private:
+  const Vector &vector() const {
+    return static_cast<const Vector &>(static_cast<const Derived &>(*this));
+  }
+  Vector &mutable_vector() {
+    auto &derived = static_cast<Derived &>(*this);
+    derived.reset_hash_value();
+    return static_cast<Vector &>(derived);
+  }
+};
+
+}  // namespace detail
+
 /// @brief Operator is a sequence of Op objects
 ///
 /// @tparam S specifies the particle statistics
 template <Statistics S = Statistics::FermiDirac>
-class Operator : public container::svector<Op<S>>, public Expr {
+class Operator
+    : public container::svector<Op<S>>,
+      public Expr,
+      public detail::VectorExprAccess<Operator<S>, container::svector<Op<S>>> {
+  using access_type =
+      detail::VectorExprAccess<Operator<S>, container::svector<Op<S>>>;
+  friend access_type;
+
  public:
   using base_type = container::svector<Op<S>>;
   static constexpr Statistics statistics = S;
@@ -369,14 +426,16 @@ class Operator : public container::svector<Op<S>>, public Expr {
   using iterator = typename base_type::iterator;
   using const_iterator = typename base_type::const_iterator;
 
-  using base_type::at;
-  using base_type::begin;
+  using access_type::at;
+  using access_type::begin;
+  using access_type::emplace_back;
+  using access_type::end;
+  using access_type::push_back;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
-  using base_type::end;
   using base_type::size;
-  using base_type::operator[];
+  using access_type::operator[];
 
   Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops) : base_type(ops) {}
@@ -522,8 +581,10 @@ class NormalOperator : public Operator<S>,
   using base_type::begin;
   using base_type::cbegin;
   using base_type::cend;
+  using base_type::emplace_back;
   using base_type::empty;
   using base_type::end;
+  using base_type::push_back;
   using base_type::size;
   using base_type::operator[];
 
@@ -1000,20 +1061,30 @@ bool NormalOperator<S>::static_equal(const Expr &that) const {
 ///
 /// @tparam S specifies the particle statistics
 template <Statistics S = Statistics::FermiDirac>
-class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
-                               public Expr {
+class NormalOperatorSequence
+    : public container::svector<NormalOperator<S>>,
+      public Expr,
+      public detail::VectorExprAccess<NormalOperatorSequence<S>,
+                                      container::svector<NormalOperator<S>>> {
+  using access_type =
+      detail::VectorExprAccess<NormalOperatorSequence<S>,
+                               container::svector<NormalOperator<S>>>;
+  friend access_type;
+
  public:
   using base_type = container::svector<NormalOperator<S>>;
   static constexpr Statistics statistics = S;
 
-  using base_type::at;
-  using base_type::begin;
+  using access_type::at;
+  using access_type::begin;
+  using access_type::emplace_back;
+  using access_type::end;
+  using access_type::push_back;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
-  using base_type::end;
   using base_type::size;
-  using base_type::operator[];
+  using access_type::operator[];
 
   /// constructs an empty sequence
   NormalOperatorSequence() { check_vacuum(); }

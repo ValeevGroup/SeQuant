@@ -340,6 +340,12 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(nop.hash_value() != nop_hash);
     nop.insert(nop.begin(), fcre(L"i_1"));
     REQUIRE(nop.hash_value() == nop_hash);
+
+    // so does mutable element access
+    nop[0] = fcre(L"i_2");
+    REQUIRE(nop.hash_value() != nop_hash);
+    *nop.begin() = fcre(L"i_1");
+    REQUIRE(nop.hash_value() == nop_hash);
   }
 
   SECTION("hug") {
