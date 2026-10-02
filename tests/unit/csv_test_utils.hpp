@@ -5,11 +5,11 @@
 #ifndef SEQUANT_TESTS_UNIT_CSV_TEST_UTILS_HPP
 #define SEQUANT_TESTS_UNIT_CSV_TEST_UTILS_HPP
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/index_basis.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>

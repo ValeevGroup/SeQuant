@@ -5,7 +5,7 @@
 #ifndef SEQUANT_CORE_PARSE_V1_AST_HPP
 #define SEQUANT_CORE_PARSE_V1_AST_HPP
 
-#include <SeQuant/core/index_basis.hpp>
+#include <SeQuant/core/basis.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/fusion/include/adapt_struct.hpp>

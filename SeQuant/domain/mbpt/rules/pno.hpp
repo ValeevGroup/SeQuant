@@ -7,8 +7,8 @@
 #ifndef SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
 #define SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/index_basis.hpp>
 
 #include <cstdint>
 #include <functional>

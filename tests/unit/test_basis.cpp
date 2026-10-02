@@ -2,12 +2,12 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/index_basis.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/indices.hpp>

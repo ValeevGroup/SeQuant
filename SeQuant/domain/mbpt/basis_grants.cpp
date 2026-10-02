@@ -2,8 +2,8 @@
 // Amplitude tensors and the check that they carry their basis grants.
 //
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/index_basis.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/basis_grants.hpp>
