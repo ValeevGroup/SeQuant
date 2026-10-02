@@ -36,6 +36,11 @@ canonicalizes it and recurses per summand in parallel before merging results. Th
 Under ``full_contractions_`` (the default) it only ever extends a contraction starting from the leftmost still-free operator — the
 standard recursive formulation of full-contraction enumeration; with it disabled, all pairs are considered.
 
+Because canonicalizing the produced normal operators would undo their normalization, a top-level ``compute()`` installs, after
+canonicalizing its input, a scoped :class:`sequant::Context` in which the normal-operator labels map to ``NullTensorCanonicalizer``
+for every statistics; a canonicalizer registered by the user for those labels is shadowed for the duration, not removed. The parallel
+workers of the per-summand ``WickTheorem`` instances see that scope.
+
 A candidate pair ``(left, right)`` contracts (``can_contract``) iff ``left`` is a quasiparticle annihilator, ``right`` is a quasiparticle
 creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpcreator``/``IndexSpaceRegistry::intersection``, from
 ``SeQuant/core/op.hpp``). The contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle

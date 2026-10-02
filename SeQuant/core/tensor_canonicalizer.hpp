@@ -29,10 +29,10 @@ class TensorCanonicalizer {
 
   virtual ~TensorCanonicalizer();
 
-  /// @return a TensorIndexComparer, the default index comparer
+  /// @return the default index comparer
   static index_comparer_t default_index_comparer();
 
-  /// @return a TensorIndexComparer, the default index pair comparer
+  /// @return the default index pair comparer
   static index_pair_comparer_t default_index_pair_comparer();
 
   /// @return a side effect of canonicalization (e.g. phase), or nullptr if none
