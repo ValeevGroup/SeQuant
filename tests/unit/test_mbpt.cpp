@@ -1793,6 +1793,32 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(simplify(densities2 - gamma2)->size() == densities2->size() - 1);
   // η is a registered mbpt operator label
   REQUIRE(mbpt::get_default_mbpt_context().op_registry()->contains(L"η"));
+
+  // every multi-body κ that a decomposition builds is the κ that the extended
+  // Wick theorem builds
+  {
+    const FNOperator nop3(cre({L"i_1", L"i_2", L"i_3"}),
+                          ann({L"i_4", L"i_5", L"i_6"}));
+    const auto decomp =
+        simplify(mbpt::decompositions::three_body_decomp(ex<FNOperator>(nop3),
+                                                         /*approx=*/false)
+                     .first);
+    std::size_t n_multibody_kappa = 0;
+    decomp->visit(
+        [&n_multibody_kappa](const ExprPtr& e) {
+          if (!e->is<Tensor>() || e->as<Tensor>().label() != L"κ" ||
+              e->as<Tensor>().rank() < 2)
+            return;
+          ++n_multibody_kappa;
+          REQUIRE(e->as<Tensor>().symmetry() == Symmetry::Antisymm);
+          REQUIRE(e->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+          REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+        },
+        /*atoms_only=*/true);
+    REQUIRE(n_multibody_kappa > 0);
+    REQUIRE(simplify(decomp - density::make_cumulant(nop3))->size() ==
+            decomp->size() - 1);
+  }
 }
 
 SECTION("cumulant-to-density decompositions") {
