@@ -19,9 +19,10 @@
 namespace sequant::density {
 
 /// labels of the reference-state density tensors produced by the extended
-/// Wick theorem and consumed by mbpt::decompositions (see
-/// reserved::density_labels()). Construct densities with the factories below,
-/// which give them the symmetries() every producer must agree on.
+/// Wick theorem and consumed by mbpt::decompositions. They are reserved (see
+/// reserved::density_labels()): a density's symmetries take part in the tensor
+/// hash, so a γ built by hand with other symmetries would not merge with the
+/// γ the engine builds. Construct densities with the factories below.
 inline const std::wstring &rdm_label() { return reserved::rdm_label(); }
 inline const std::wstring &hole_rdm_label() {
   return reserved::hole_rdm_label();
@@ -46,6 +47,8 @@ inline constexpr TensorSymmetries cumulant_symmetries{
 /// @return the defining symmetries of the density tensor @p label of rank
 /// @p rank: a multi-body spin-orbital density (γ, η, κ) is antisymmetric,
 /// a spin-free one (Γ) and a 1-body one are not
+/// @note a multi-body spin-orbital density may also be perm-nonsymmetric: that
+///       is a spin component of it, as spin tracing produces
 inline TensorSymmetries symmetries(std::wstring_view label, std::size_t rank) {
   return rank > 1 && label != spinfree_rdm_label() ? cumulant_symmetries
                                                    : rdm_symmetries;

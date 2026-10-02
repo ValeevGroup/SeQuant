@@ -1818,8 +1818,8 @@ SECTION("ResultExpr") {
       L"R{a1,a2;i1,u1}:A = g{a1,a2;i1,u1}:A",
       L"R{a1,u1;i1,i2}:A = g{a1,u1;i1,i2}:A",
       L"R{a1,u1;i1,u2}:A = g{a1,u1;i1,u2}:A",
-      L"R{a1,u1;i1,u2}:A = f{a1;i1}:A γ{u1;u2}:A + g{a1,u1;i1,u3}:A "
-      L"γ{u3;u2}:A",
+      L"R{a1,u1;i1,u2}:A = f{a1;i1}:A γ{u1;u2} + g{a1,u1;i1,u3}:A "
+      L"γ{u3;u2}",
   };
   const std::vector<std::vector<std::wstring>> expected_outputs = {
       {L"R = 1/4"},

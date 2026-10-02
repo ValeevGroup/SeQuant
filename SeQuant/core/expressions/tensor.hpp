@@ -1017,7 +1017,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             "symmetric");
       column_symmetry_ = ColumnSymmetry::Symm;
     }
+
+    if (ranges::contains(reserved::density_labels(), label_))
+      check_density_symmetries();
   }
+
+  /// @throw Exception unless this reference density (see
+  ///        reserved::density_labels()) has the defining symmetries that
+  ///        density::symmetries() gives for its label and rank
+  void check_density_symmetries() const;
 
   hash_type memoizing_hash() const override {
     auto compute_hash = [this]() {
