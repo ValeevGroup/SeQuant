@@ -1,3 +1,4 @@
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
@@ -168,6 +169,14 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
+  // options of the full canonicalization of the summands in the last pass of
+  // multipass canonicalization; summands already in that canonical form are
+  // left alone by every pass
+  auto summand_full_opts = opts;
+  summand_full_opts.ignore_named_index_labels =
+      CanonicalizeOptions::IgnoreNamedIndexLabel::No;
+  summand_full_opts.method = opts.method | CanonicalizationMethod::Topological;
+
   const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
     const auto rapid = (pass % 2 == 0);
@@ -184,9 +193,11 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
 
     // recursively canonicalize summands ...
     // using for_each and direct access to summands
-    sequant::for_each(summands_, [&opts_copy, &rapid](ExprPtr &summand) {
+    sequant::for_each(summands_, [&opts_copy, &rapid, &multipass,
+                                  &summand_full_opts](ExprPtr &summand) {
       ExprPtr bp;
       if (rapid) {
+        if (multipass && summand->is_canonical(summand_full_opts)) return;
         bp = summand->rapid_canonicalize(opts_copy);
       } else {
         bp = summand->canonicalize(opts_copy);
@@ -292,7 +303,11 @@ Expr::hash_type Sum::memoizing_hash() const {
 }
 
 ExprPtr Sum::canonicalize(CanonicalizeOptions opt) {
-  return canonicalize_impl(true, opt);
+  if (is_canonical(opt)) return {};
+  const auto contexts_version = current_contexts_version();
+  auto byproduct = canonicalize_impl(true, opt);
+  mark_canonical(opt, contexts_version);
+  return byproduct;
 }
 ExprPtr Sum::rapid_canonicalize(CanonicalizeOptions opts) {
   SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
