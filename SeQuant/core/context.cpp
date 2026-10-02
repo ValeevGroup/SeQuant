@@ -7,6 +7,8 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <atomic>
+#include <cstdint>
 #include <utility>
 
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
@@ -39,6 +41,8 @@ default_index_pair_comparer() {
           TensorCanonicalizer::default_index_pair_comparer());
   return result;
 }
+
+std::atomic<std::uint64_t> last_context_version{0};
 
 }  // namespace
 
@@ -218,13 +222,25 @@ Context::Context(Options options)
           : container::vector<std::wstring>{reserved::antisymm_label(),
                                             reserved::symm_label(),
                                             reserved::transposition_label()});
+  bump_version();
 }
 
 Context Context::clone() const {
   Context ctx(*this);
   ctx.idx_space_reg_ =
       std::make_shared<IndexSpaceRegistry>(idx_space_reg_->clone());
+  ctx.bump_version();
   return ctx;
+}
+
+std::uint64_t Context::version() const { return version_; }
+
+void Context::bump_version() {
+  version_ = last_context_version.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+std::uint64_t current_context_version(Statistics s) {
+  return get_default_context(s).version();
 }
 
 Vacuum Context::vacuum() const { return vacuum_; }
@@ -313,21 +329,25 @@ const container::vector<std::wstring>& Context::cardinal_tensor_labels() const {
 
 Context& Context::set(Vacuum vacuum) {
   vacuum_ = vacuum;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(IndexSpaceRegistry ISR) {
   idx_space_reg_ = std::make_shared<IndexSpaceRegistry>(ISR);
+  bump_version();
   return *this;
 }
 
 Context& Context::set(std::shared_ptr<IndexSpaceRegistry> ISR) {
   idx_space_reg_ = std::move(ISR);
+  bump_version();
   return *this;
 }
 
 Context& Context::set(IndexSpaceMetric metric) {
   metric_ = metric;
+  bump_version();
   return *this;
 }
 
@@ -335,47 +355,56 @@ Context& Context::set(
     AssertStrictBraKetSymmetry assert_strict_braket_symmetry) {
   assert_strict_braket_symmetry_ =
       assert_strict_braket_symmetry == AssertStrictBraKetSymmetry::Yes;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(SPBasis spbasis) {
   spbasis_ = spbasis;
+  bump_version();
   return *this;
 }
 
 Context& Context::set_first_dummy_index_ordinal(
     std::size_t first_dummy_index_ordinal) {
   first_dummy_index_ordinal_ = first_dummy_index_ordinal;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(CanonicalizeOptions copt) {
   canonicalization_options_ = copt;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(BraKetTypesetting bkt) {
   braket_typesetting_ = bkt;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(BraKetSlotTypesetting bkst) {
   braket_slot_typesetting_ = bkst;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(Symmetry symmetry) {
   deserialization_symmetry_ = symmetry;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(Hermiticity hermiticity) {
   deserialization_hermiticity_ = hermiticity;
+  bump_version();
   return *this;
 }
 
 Context& Context::set(ColumnSymmetry column_symmetry) {
   deserialization_column_symmetry_ = column_symmetry;
+  bump_version();
   return *this;
 }
 
@@ -385,11 +414,13 @@ Context& Context::set_tensor_canonicalizer(
   SEQUANT_ASSERT(canonicalizer);
   tensor_canonicalizers_.map.insert_or_assign(std::wstring{label},
                                               std::move(canonicalizer));
+  bump_version();
   return *this;
 }
 
 Context& Context::unset_tensor_canonicalizer(std::wstring_view label) {
   tensor_canonicalizers_.map.erase(std::wstring{label});
+  bump_version();
   return *this;
 }
 
@@ -397,6 +428,7 @@ Context& Context::set_index_comparer(tensor_index_comparer_t comparer) {
   SEQUANT_ASSERT(comparer);
   tensor_canonicalizers_.index_comparer =
       std::make_shared<const tensor_index_comparer_t>(std::move(comparer));
+  bump_version();
   return *this;
 }
 
@@ -405,6 +437,7 @@ Context& Context::set_index_pair_comparer(
   SEQUANT_ASSERT(comparer);
   tensor_canonicalizers_.index_pair_comparer =
       std::make_shared<const tensor_index_pair_comparer_t>(std::move(comparer));
+  bump_version();
   return *this;
 }
 
@@ -413,6 +446,7 @@ Context& Context::set_cardinal_tensor_labels(
   SEQUANT_ASSERT(!has_duplicates(labels) &&
                  "cardinal tensor labels must not contain duplicates");
   tensor_canonicalizers_.cardinal_labels = std::move(labels);
+  bump_version();
   return *this;
 }
 
