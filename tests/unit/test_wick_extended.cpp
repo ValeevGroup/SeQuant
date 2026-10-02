@@ -540,6 +540,59 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     }
   }
 
+  SECTION("WickTheorem: an input δ is an identification, not a connection") {
+    // δ{u_2;u_5} (or s{u_2;u_5}) makes operators 0 and 2 share an index,
+    // which neither realizes nor avoids a 0-2 connection
+    const Index u2(L"u_2"), u5(L"u_5");
+    auto ops = [](const Index& i5) {
+      return ex<FNOperator>(cre({Index(L"u_1")}), ann({Index(L"u_2")})) *
+             ex<FNOperator>(cre({Index(L"u_3")}), ann({Index(L"u_4")})) *
+             ex<FNOperator>(cre({i5}), ann({Index(L"u_6")}));
+    };
+    for (const auto& opts :
+         {detail::ExtendedWickOptions{.full_contractions = false,
+         .nop_avoided_connections = {{0, 2}}},
+          detail::ExtendedWickOptions{.full_contractions = false,
+          .nop_connections = {{0, 2}}}}) {
+      auto shared = wick_mp(ops(u2), opts);
+      REQUIRE(shared->size() > 0);
+      for (const auto& id : {make_kronecker(u2, u5), make_overlap(u2, u5)}) {
+        auto result = wick_mp(id * ops(u5), opts);
+        INFO("δ: " << toUtf8(to_latex(id))
+                   << "\nresult: " << toUtf8(to_latex(result))
+                   << "\nexpected: " << toUtf8(to_latex(shared)));
+        // compared as is: simplify does not cancel a remainder carrying an
+        // index as both a creator and an annihilator against itself
+        REQUIRE(*result == *shared);
+      }
+    }
+    // a δ binding an op index to a coefficient's is a rename
+    auto h = [](const Index& b) {
+      return ex<Tensor>(L"h", bra{b}, ket{L"p_2"}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    };
+    const Index p1(L"p_1"), p7(L"p_7");
+    auto pops = ex<FNOperator>(cre({p1}), ann({Index(L"p_2")})) *
+                ex<FNOperator>(cre({Index(L"u_3")}), ann({Index(L"u_4")}));
+    for (const bool full : {true, false}) {
+      const detail::ExtendedWickOptions opts{.full_contractions = full};
+      auto renamed = wick_mp(h(p1) * pops, opts);
+      auto result = wick_mp(make_kronecker(p1, p7) * h(p7) * pops, opts);
+      REQUIRE(simplify(result - renamed) == ex<Constant>(0));
+    }
+    // a δ between external indices multiplies the result
+    const auto ext = make_kronecker(Index(L"p_8"), Index(L"p_9"));
+    for (const auto& opts :
+         {detail::ExtendedWickOptions{.full_contractions = false,
+         .nop_avoided_connections = {{0, 2}}},
+          detail::ExtendedWickOptions{.full_contractions = false,
+          .nop_connections = {{0, 2}}}}) {
+      auto without = wick_mp(ops(u5), opts);
+      auto result = wick_mp(ext * ops(u5), opts);
+      REQUIRE(simplify(result - simplify(ext * without)) == ex<Constant>(0));
+    }
+  }
+
   SECTION("WickTheorem: use_topology") {
     // WickTheorem under the MultiProduct vacuum with use_topology(@p top);
     // returns the result and the number of attempted contractions
