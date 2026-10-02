@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -163,6 +164,15 @@ class Context {
   Context clone() const;
 
   Context(Context&&) = default;
+
+  /// @return the version of this context: a nonzero number, unique among all
+  /// versions ever assigned in this process, that changes whenever the context
+  /// is constructed, cloned or modified through a setter (including the
+  /// `Options` constructor); copies keep the version of their source
+  /// @note the version does not track in-place mutation of an
+  /// IndexSpaceRegistry shared with other contexts, nor of a
+  /// TensorCanonicalizer or comparer object that this context refers to
+  std::uint64_t version() const;
 
   /// \return Vacuum of this context
   Vacuum vacuum() const;
@@ -327,6 +337,11 @@ class Context {
 
   friend bool operator==(const Context& ctx1, const Context& ctx2);
 
+  /// assigns a new, never before used version to this
+  void bump_version();
+
+  std::uint64_t version_ = 0;
+
   std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
   IndexSpaceMetric metric_ = Defaults::metric;
@@ -352,6 +367,7 @@ class Context {
 /// \note index space registries and cardinal tensor labels are compared by
 /// value; tensor canonicalizers and index comparers by identity, hence
 /// a comparer replaced by a behaviourally identical one compares unequal
+/// \note the versions of the contexts are ignored
 bool operator==(const Context& ctx1, const Context& ctx2);
 
 /// Context object inequality comparison
@@ -373,6 +389,12 @@ bool operator!=(const Context& ctx1, const Context& ctx2);
 
 /// \return whether context manipulation functions are thread-safe
 bool default_context_manipulation_threadsafe();
+
+/// @brief the version of the default Context for the given Statistics
+/// @param s Statistics
+/// @return `get_default_context(s).version()`, i.e. the version of the context
+/// in effect on the calling thread (see Context::version())
+std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
 
 /// @brief access default Context for the given Statistics
 /// @param s Statistics

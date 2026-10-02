@@ -18,6 +18,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <iostream>
 #include <latch>
@@ -47,6 +48,14 @@ TEST_CASE("context", "[runtime]") {
     CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
     CHECK(get_default_context().spbasis() == SPBasis::Spinfree);
 
+    // the version of the installed default context is the current version
+    {
+      Context modified({.vacuum = Vacuum::SingleProduct});
+      modified.set(SPBasis::Spinfree);
+      set_default_context(modified);
+      CHECK(current_context_version() == modified.version());
+    }
+
     // set distinct contexts for fermi and bose statistics
     auto [fermi_isr, bose_isr] = mbpt::make_fermi_and_bose_spaces();
     CHECK(fermi_isr->spaces() ==
@@ -75,6 +84,7 @@ TEST_CASE("context", "[runtime]") {
     CHECK_NOTHROW(set_default_context(initial_ctx));
     CHECK(get_default_context() == initial_ctx);
     CHECK(!(get_default_context() != initial_ctx));
+    CHECK(current_context_version() == initial_ctx.version());
 
     // scoped changes to default context
     {
@@ -206,6 +216,69 @@ TEST_CASE("context", "[runtime]") {
     CHECK(ctx_opts.index_comparer());
     CHECK(ctx_opts.index_pair_comparer());
     CHECK(ctx_opts != ctx);
+  }
+
+  SECTION("version") {
+    Context ctx;
+    const auto v0 = ctx.version();
+    CHECK(v0 != 0);
+    CHECK(Context{}.version() != Context{}.version());
+
+    // copies keep the version, clones do not
+    const Context copy(ctx);
+    CHECK(copy.version() == v0);
+    Context assigned;
+    assigned = ctx;
+    CHECK(assigned.version() == v0);
+    const Context with_registry({.index_space_registry = IndexSpaceRegistry{}});
+    CHECK(with_registry.clone().version() != with_registry.version());
+    CHECK(Context({.vacuum = Vacuum::SingleProduct}).version() != 0);
+
+    // equality ignores the version
+    const Context same_registry(
+        {.index_space_registry_shared_ptr =
+             with_registry.mutable_index_space_registry()});
+    CHECK(with_registry.version() != same_registry.version());
+    CHECK(with_registry == same_registry);
+
+    // every setter assigns a new version
+    auto bumps = [&ctx](auto&& set) {
+      const auto before = ctx.version();
+      set(ctx);
+      return ctx.version() > before;
+    };
+    CHECK(bumps([](Context& c) { c.set(Vacuum::SingleProduct); }));
+    CHECK(bumps([](Context& c) { c.set(IndexSpaceRegistry{}); }));
+    CHECK(bumps(
+        [](Context& c) { c.set(std::make_shared<IndexSpaceRegistry>()); }));
+    CHECK(bumps([](Context& c) { c.set(IndexSpaceMetric::General); }));
+    CHECK(bumps([](Context& c) { c.set(AssertStrictBraKetSymmetry::No); }));
+    CHECK(bumps([](Context& c) { c.set(SPBasis::Spinfree); }));
+    CHECK(bumps([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
+    CHECK(bumps([](Context& c) { c.set(CanonicalizeOptions{}); }));
+    CHECK(bumps([](Context& c) { c.set(BraKetTypesetting::KetSub); }));
+    CHECK(bumps([](Context& c) { c.set(BraKetSlotTypesetting::Naive); }));
+    CHECK(bumps([](Context& c) { c.set(Symmetry::Symm); }));
+    CHECK(bumps([](Context& c) { c.set(Hermiticity::Hermitian); }));
+    CHECK(bumps([](Context& c) { c.set(ColumnSymmetry::Symm); }));
+    CHECK(bumps([](Context& c) {
+      c.set_tensor_canonicalizer(L"Q",
+                                 std::make_shared<NullTensorCanonicalizer>());
+    }));
+    CHECK(bumps([](Context& c) { c.unset_tensor_canonicalizer(L"Q"); }));
+    CHECK(bumps([](Context& c) {
+      c.set_index_comparer(TensorCanonicalizer::default_index_comparer());
+    }));
+    CHECK(bumps([](Context& c) {
+      c.set_index_pair_comparer(
+          TensorCanonicalizer::default_index_pair_comparer());
+    }));
+    CHECK(bumps([](Context& c) {
+      c.set_cardinal_tensor_labels(container::vector<std::wstring>{L"Z"});
+    }));
+
+    // the copy was not affected
+    CHECK(copy.version() == v0);
   }
 }
 
@@ -339,5 +412,32 @@ TEST_CASE("scoped contexts", "[runtime]") {
     CHECK(labels(Statistics::FermiDirac) == fermi_labels);
     CHECK(!q_canonicalizer_of(Statistics::Arbitrary));
     CHECK(!q_canonicalizer_of(Statistics::FermiDirac));
+  }
+
+  SECTION("the current version follows the effective context") {
+    const auto v0 = current_context_version();
+    CHECK(v0 == get_default_context().version());
+
+    const Context other;
+    {
+      auto scoped = set_scoped_default_context(other);
+      CHECK(current_context_version() == other.version());
+      CHECK(current_context_version() != v0);
+      {
+        auto modified = set_scoped_modified_default_context(
+            [](Context& ctx) { ctx.set(Vacuum::SingleProduct); });
+        CHECK(current_context_version() != other.version());
+        CHECK(current_context_version() != v0);
+        CHECK(current_context_version(Statistics::FermiDirac) ==
+              current_context_version());
+      }
+      CHECK(current_context_version() == other.version());
+
+      // a thread without the scope sees the process-wide default
+      std::uint64_t seen = 0;
+      std::thread([&seen] { seen = current_context_version(); }).join();
+      CHECK(seen == v0);
+    }
+    CHECK(current_context_version() == v0);
   }
 }
