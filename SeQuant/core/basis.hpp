@@ -46,10 +46,7 @@ class IndexBasis {
   }
 
   /// @return `L";N"` for a non-null instance `N`, else an empty string
-  std::wstring instance_suffix() const {
-    return basis_instance_ ? L";" + std::to_wstring(*basis_instance_)
-                           : std::wstring{};
-  }
+  std::wstring instance_suffix() const;
 
   friend bool operator==(const IndexBasis&,
                          const IndexBasis&) noexcept = default;
@@ -73,11 +70,7 @@ class IndexBasis {
 /// @return true if @p basis includes @p subbasis, i.e. its space includes the
 /// space of @p subbasis and it is either the space's own basis (which includes
 /// every instance of the space) or the same instance as @p subbasis
-inline bool includes(const IndexBasis& basis, const IndexBasis& subbasis) {
-  return includes(basis.space(), subbasis.space()) &&
-         (!basis.has_basis_instance() ||
-          basis.basis_instance() == subbasis.basis_instance());
-}
+bool includes(const IndexBasis& basis, const IndexBasis& subbasis);
 
 /// what an Index runs over: an IndexSpace or an IndexBasis. An IndexSpace
 /// stands for the space's own basis, so an Index made from one is
