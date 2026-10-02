@@ -3,6 +3,7 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -565,6 +566,34 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   }  // SECTION("accessors")
 
   SECTION("canonicalizer") {
+    {  // non-covariant pairings are rejected, covariant ones are not
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto canonicalize = [](const ExprPtr& product) {
+        TN tn(product->as<Product>().factors());
+        tn.canonicalize(get_default_context().cardinal_tensor_labels(),
+                        {.method = CanonicalizationMethod::Complete});
+      };
+
+      // coefficient bra on the operator's annihilator (operator bra)
+      auto h = ex<Tensor>(L"h", bra{L"i_2"}, ket{L"i_3"});
+      auto op = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      REQUIRE_THROWS_AS(canonicalize(h * op), Exception);
+      try {
+        canonicalize(h * op);
+      } catch (const Exception& e) {
+        REQUIRE_THAT(e.what(), Catch::Matchers::ContainsSubstring("i_2"));
+      }
+
+      // coefficient bra on the creator, ket on the annihilator
+      auto h_ok = ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_2"});
+      REQUIRE_NOTHROW(canonicalize(h_ok * op));
+
+      // bra-ket symmetric coefficient can pair bra to bra
+      auto h_symm = ex<Tensor>(L"h", bra{L"i_2"}, ket{L"i_3"}, aux{},
+                               Symmetry::Nonsymm, BraKetSymmetry::Symm);
+      REQUIRE_NOTHROW(canonicalize(h_symm * op));
+    }
+
     {  // with no external indices, hence no named indices whatsoever
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
