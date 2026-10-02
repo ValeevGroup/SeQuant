@@ -1374,9 +1374,11 @@ SECTION("MRSO-MultiProduct") {
     REQUIRE_NOTHROW(result =
                         t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}}));
     REQUIRE(!result->is<Constant>());
-    // the product reaches κ₄, which the rank <= 3 decompositions do not cover
-    REQUIRE_THROWS_AS(mbpt::decompositions::cumulants_to_densities(result),
-                      Exception);
+    // the product reaches κ₄
+    ExprPtr densities;
+    REQUIRE_NOTHROW(densities =
+                        mbpt::decompositions::cumulants_to_densities(result));
+    REQUIRE(!densities->is<Constant>());
   }
 
   SECTION("topology on/off agree") {
@@ -1826,6 +1828,12 @@ SECTION("cumulant-to-density decompositions") {
   auto ctx_resetter = set_scoped_default_context(
       Context({.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
                .vacuum = Vacuum::SingleProduct}));
+  auto gamma = [](std::vector<Index> b, std::vector<Index> k) {
+    return b.size() == 1
+               ? density::make_rdm(b[0], k[0])
+               : ex<Tensor>(L"γ", bra(std::move(b)), ket(std::move(k)),
+                            density::cumulant_symmetries);
+  };
 
   // κ₃ = γ₃ - Σ γ₁γ₂ (9 terms) + 2 Σ γ₁γ₁γ₁ (6 terms)
   const FNOperator nop3(cre({L"i_1", L"i_2", L"i_3"}),
@@ -1863,6 +1871,28 @@ SECTION("cumulant-to-density decompositions") {
                         density::make_rdm(Index(L"i_6"), Index(L"i_3"));
   REQUIRE(simplify(densities3 - identity)->size() == densities3->size() - 1);
 
+  // the general cumulant_to_density reproduces the hand-derived κ₂ and κ₃
+  {
+    using mbpt::antisymmetrize;
+    using mbpt::decompositions::cumulant_to_density;
+    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4"), i5(L"i_5"),
+        i6(L"i_6");
+    const auto kappa2_ref =
+        gamma({i3, i4}, {i1, i2}) -
+        antisymmetrize(gamma({i3}, {i1}) * gamma({i4}, {i2})).result;
+    REQUIRE(simplify(cumulant_to_density(density::make_cumulant(
+                         FNOperator(cre({i1, i2}), ann({i3, i4})))) -
+                     kappa2_ref) == ex<Constant>(0));
+    const auto kappa3_ref =
+        gamma({i4, i5, i6}, {i1, i2, i3}) -
+        antisymmetrize(gamma({i4}, {i1}) * gamma({i5, i6}, {i2, i3})).result +
+        ex<Constant>(2) * antisymmetrize(gamma({i4}, {i1}) * gamma({i5}, {i2}) *
+                                         gamma({i6}, {i3}))
+                              .result;
+    REQUIRE(simplify(cumulant_to_density(density::make_cumulant(nop3)) -
+                     kappa3_ref) == ex<Constant>(0));
+  }
+
   // cumulants_to_densities rewrites every κ in an expression, recognizing κ
   // by its label alone
   using mbpt::decompositions::cumulants_to_densities;
@@ -1887,10 +1917,67 @@ SECTION("cumulant-to-density decompositions") {
   // ... including a κ that is the whole expression
   REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop3)) -
                    densities3) == ex<Constant>(0));
-  // κ₄ is not supported
+
+  // κ₄ = γ₄ - Σ γ₁γ₃ (4·4 terms) - Σ γ₂γ₂ (6·6/2 terms)
+  //      + 2 Σ γ₁γ₁γ₂ (12·12/2 terms) - 6 Σ γ₁γ₁γ₁γ₁ (4!·4!/4! terms)
   const FNOperator nop4(cre({L"i_1", L"i_2", L"i_3", L"i_4"}),
                         ann({L"i_5", L"i_6", L"i_7", L"i_8"}));
-  REQUIRE_THROWS_AS(cumulants_to_densities(density::make_cumulant(nop4)),
-                    Exception);
+  const auto densities4 = simplify(
+      mbpt::decompositions::cumulant_to_density(density::make_cumulant(nop4)));
+  REQUIRE(densities4->is<Sum>());
+  std::size_t n_gamma4 = 0, n_gamma1_gamma3 = 0, n_gamma2_gamma2 = 0,
+              n_gamma1_gamma1_gamma2 = 0, n_gamma1_fourth = 0;
+  for (const auto& term : *densities4) {
+    if (term->is<Tensor>()) {
+      REQUIRE(term->as<Tensor>().label() == L"γ");
+      REQUIRE(term->as<Tensor>().rank() == 4);
+      REQUIRE(term->as<Tensor>().symmetry() == Symmetry::Antisymm);
+      ++n_gamma4;
+      continue;
+    }
+    const auto& product = term->as<Product>();
+    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == L"γ");
+    switch (product.size()) {
+      case 2:
+        REQUIRE(abs(product.scalar()) == 1);
+        if (product.factors()[0]->as<Tensor>().rank() == 2)
+          ++n_gamma2_gamma2;
+        else
+          ++n_gamma1_gamma3;
+        break;
+      case 3:
+        REQUIRE(abs(product.scalar()) == 2);
+        ++n_gamma1_gamma1_gamma2;
+        break;
+      default:
+        REQUIRE(product.size() == 4);
+        REQUIRE(abs(product.scalar()) == 6);
+        ++n_gamma1_fourth;
+    }
+  }
+  REQUIRE(n_gamma4 == 1);
+  REQUIRE(n_gamma1_gamma3 == 16);
+  REQUIRE(n_gamma2_gamma2 == 18);
+  REQUIRE(n_gamma1_gamma1_gamma2 == 72);
+  REQUIRE(n_gamma1_fourth == 24);
+  // the identity pairing of each product comes with (-1)^(m-1) (m-1)!
+  {
+    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4"), i5(L"i_5"),
+        i6(L"i_6"), i7(L"i_7"), i8(L"i_8");
+    for (const auto& identity :
+         {ex<Constant>(-1) * gamma({i5}, {i1}) *
+              gamma({i6, i7, i8}, {i2, i3, i4}),
+          ex<Constant>(-1) * gamma({i5, i6}, {i1, i2}) *
+              gamma({i7, i8}, {i3, i4}),
+          ex<Constant>(2) * gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+              gamma({i7, i8}, {i3, i4}),
+          ex<Constant>(-6) * gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+              gamma({i7}, {i3}) * gamma({i8}, {i4})}) {
+      REQUIRE(simplify(densities4 - identity)->size() ==
+              densities4->size() - 1);
+    }
+  }
+  REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop4)) -
+                   densities4) == ex<Constant>(0));
 }
 }
