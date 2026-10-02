@@ -3,6 +3,10 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
 
+#include <algorithm>
+#include <cstddef>
+#include <vector>
+
 namespace sequant::mbpt::decompositions {
 
 using density::rdm_label;
@@ -17,81 +21,68 @@ constexpr TensorSymmetries particle_symmetric{.column = ColumnSymmetry::Symm};
 
 ExprPtr cumulant_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
-  SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 1);
   SEQUANT_ASSERT(ex_->as<Tensor>().label() == density::cumulant_label());
-  auto down_0 = ex_->as<Tensor>().ket()[0];
-  auto up_0 = ex_->as<Tensor>().bra()[0];
+  const auto& kappa = ex_->as<Tensor>();
+  SEQUANT_ASSERT(kappa.bra_rank() == kappa.ket_rank());
+  const std::size_t k = kappa.bra_rank();
+  SEQUANT_ASSERT(k >= 1);
 
-  return density::make_rdm(up_0, down_0);
+  // γ over particles [first, first + n) of κ
+  auto gamma = [&kappa](std::size_t first, std::size_t n) -> ExprPtr {
+    if (n == 1)
+      return density::make_rdm(kappa.bra()[first], kappa.ket()[first]);
+    return ex<Tensor>(rdm_label(),
+                      bra(std::vector<Index>(kappa.bra().begin() + first,
+                                             kappa.bra().begin() + first + n)),
+                      ket(std::vector<Index>(kappa.ket().begin() + first,
+                                             kappa.ket().begin() + first + n)),
+                      density::cumulant_symmetries);
+  };
+
+  // κ_k = Σ_λ (-1)^(m-1) (m-1)! A[γ_λ₁ ⋯ γ_λₘ] over the integer partitions λ
+  // of k into m parts; antisymmetrize() generates each distinct term of A once
+  auto result = ex<Constant>(0);
+  std::vector<std::size_t> parts;
+  auto add_terms = [&](auto&& self, std::size_t remaining,
+                       std::size_t max_part) -> void {
+    if (remaining == 0) {
+      const auto m = parts.size();
+      if (m == 1) {
+        result = result + gamma(0, k);
+        return;
+      }
+      rational coeff = (m % 2 == 1) ? 1 : -1;
+      for (std::size_t f = 2; f < m; ++f) coeff *= f;
+      auto product = gamma(0, parts[0]);
+      std::size_t first = parts[0];
+      for (std::size_t b = 1; b < m; ++b) {
+        product = product * gamma(first, parts[b]);
+        first += parts[b];
+      }
+      result = result + ex<Constant>(coeff) * antisymmetrize(product).result;
+      return;
+    }
+    for (auto n = std::min(remaining, max_part); n >= 1; --n) {
+      parts.push_back(n);
+      self(self, remaining - n, n);
+      parts.pop_back();
+    }
+  };
+  add_terms(add_terms, k, k);
+  expand(result);
+  return result;
 }
 
-sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
+ExprPtr cumulant2_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 2);
-  SEQUANT_ASSERT(ex_->as<Tensor>().label() == density::cumulant_label());
-
-  auto down_0 = ex_->as<Tensor>().ket()[0];
-  auto up_0 = ex_->as<Tensor>().bra()[0];
-  auto down_1 = ex_->as<Tensor>().ket()[1];
-  auto up_1 = ex_->as<Tensor>().bra()[1];
-
-  auto density2 = ex<Tensor>(rdm_label(), bra{up_0, up_1}, ket{down_0, down_1},
-                             density::cumulant_symmetries);
-  auto density_1 = density::make_rdm(up_0, down_0);
-  auto density_2 = density::make_rdm(up_1, down_1);
-
-  auto d1_d2 = antisymmetrize(density_1 * density_2);
-  return density2 + ex<Constant>(-1) * d1_d2.result;
+  return cumulant_to_density(ex_);
 }
 
 ExprPtr cumulant3_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 3);
-  SEQUANT_ASSERT(ex_->as<Tensor>().label() == density::cumulant_label());
-
-  auto down_0 = ex_->as<Tensor>().ket()[0];
-  auto up_0 = ex_->as<Tensor>().bra()[0];
-  auto down_1 = ex_->as<Tensor>().ket()[1];
-  auto up_1 = ex_->as<Tensor>().bra()[1];
-  auto down_2 = ex_->as<Tensor>().ket()[2];
-  auto up_2 = ex_->as<Tensor>().bra()[2];
-
-  auto cumulant2 =
-      ex<Tensor>(density::cumulant_label(), bra{up_1, up_2},
-                 ket{down_1, down_2}, density::cumulant_symmetries);
-  auto density_1 = density::make_rdm(up_0, down_0);
-  auto density_2 = density::make_rdm(up_1, down_1);
-  auto density_3 = density::make_rdm(up_2, down_2);
-  auto density3 =
-      ex<Tensor>(rdm_label(), bra{up_0, up_1, up_2},
-                 ket{down_0, down_1, down_2}, density::cumulant_symmetries);
-
-  auto d1_d2 =
-      antisymmetrize(density_1 * density_2 * density_3 + density_1 * cumulant2);
-  auto temp_result = density3 + ex<Constant>(-1) * d1_d2.result;
-  expand(temp_result);
-
-  for (auto&& product : temp_result->as<Sum>().summands()) {
-    if (!product->is<Product>()) continue;
-    for (auto&& factor : product->as<Product>().factors()) {
-      if (factor->is<Tensor>() &&
-          (factor->as<Tensor>().label() == density::cumulant_label()) &&
-          (factor->as<Tensor>().rank() == 2)) {
-        factor = cumulant2_to_density(factor);
-      }
-    }
-  }
-  for (auto&& product : temp_result->as<Sum>().summands()) {
-    if (!product->is<Product>()) continue;
-    for (auto&& factor : product->as<Product>().factors()) {
-      if (factor->is<Tensor>() &&
-          factor->as<Tensor>().label() == density::cumulant_label() &&
-          factor->as<Tensor>().rank() == 1) {
-        factor = cumulant_to_density(factor);
-      }
-    }
-  }
-  return temp_result;
+  return cumulant_to_density(ex_);
 }
 
 ExprPtr cumulants_to_densities(ExprPtr expr) {
@@ -99,21 +90,7 @@ ExprPtr cumulants_to_densities(ExprPtr expr) {
     if (!e->is<Tensor>() ||
         e->as<Tensor>().label() != density::cumulant_label())
       return;
-    switch (e->as<Tensor>().rank()) {
-      case 1:
-        e = cumulant_to_density(e);
-        break;
-      case 2:
-        e = cumulant2_to_density(e);
-        break;
-      case 3:
-        e = cumulant3_to_density(e);
-        break;
-      default:
-        throw Exception(
-            "cumulants_to_densities: only cumulants of rank <= 3 are "
-            "supported");
-    }
+    e = cumulant_to_density(e);
   };
 
   expr = expr->clone();
