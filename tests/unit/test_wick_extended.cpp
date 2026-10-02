@@ -73,7 +73,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto wick_out = wick_partial(in, prov);
     auto result =
         detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
-    REQUIRE_THAT(result, EquivalentTo(L"κ{u_4,u_3;u_1,u_2}:A-H-S"));
+    REQUIRE_THAT(result, EquivalentTo(L"κ{u_4,u_3;u_1,u_2}"));
   }
 
   SECTION("cumulant_expand: ⟨{a†a}{a†a}⟩ = γη + κ2") {
@@ -83,8 +83,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto wick_out = wick_partial(in, prov);
     auto result =
         detail::cumulant_expand<Statistics::FermiDirac>(wick_out, prov, {});
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S "
-                                      L"+ κ{u_2,u_4;u_1,u_3}:A-H-S"));
+    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3} "
+                                      L"+ κ{u_2,u_4;u_1,u_3}"));
   }
 
   SECTION("cumulant_expand: max_cumulant_rank = 1 means pairs only") {
@@ -94,7 +94,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto wick_out = wick_partial(in, prov);
     auto result = detail::cumulant_expand<Statistics::FermiDirac>(
         wick_out, prov, {.max_cumulant_rank = 1});
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S"));
+    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3}"));
     auto result0 = detail::cumulant_expand<Statistics::FermiDirac>(
         wick_out, prov, {.max_cumulant_rank = 0});
     REQUIRE(simplify(result - result0) == ex<Constant>(0));
@@ -118,7 +118,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(bare != ex<Constant>(0));
     REQUIRE(bare == detail::cumulant_expand<Statistics::FermiDirac>(
                         ex<Product>(ExprPtrList{nop}), prov, {}));
-    REQUIRE_THAT(bare, EquivalentTo(L"κ{u_3,u_4;u_1,u_2}:A-H-S"));
+    REQUIRE_THAT(bare, EquivalentTo(L"κ{u_3,u_4;u_1,u_2}"));
   }
 
   SECTION("cumulant_expand: unbalanced survivors vanish") {
@@ -174,7 +174,7 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
         wick_out, prov, {.max_cumulant_rank = 2});
     auto diff = simplify(full - trunc);
     // exactly the κ3 term
-    REQUIRE_THAT(diff, EquivalentTo(L"-κ{u_5,u_6,u_3;u_1,u_2,u_4}:A-H-S"));
+    REQUIRE_THAT(diff, EquivalentTo(L"-κ{u_5,u_6,u_3;u_1,u_2,u_4}"));
   }
 
   SECTION("cumulant_expand: partial contractions leave a GNO remainder") {
@@ -188,10 +188,10 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // nothing else, because a block needs ≥2 ops from ≥2 nops and the only
     // such balanced set is all four legs
     REQUIRE_THAT(result, EquivalentTo(L"ã{u_2,u_4;u_1,u_3} "
-                                      L"- γ{u_4;u_1}:N-H-S * ã{u_2;u_3} "
-                                      L"+ η{u_2;u_3}:N-H-S * ã{u_4;u_1} "
-                                      L"+ γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S "
-                                      L"+ κ{u_2,u_4;u_1,u_3}:A-H-S"));
+                                      L"- γ{u_4;u_1} * ã{u_2;u_3} "
+                                      L"+ η{u_2;u_3} * ã{u_4;u_1} "
+                                      L"+ γ{u_4;u_1} * η{u_2;u_3} "
+                                      L"+ κ{u_2,u_4;u_1,u_3}"));
     for (const auto& term : *result)
       for (const auto& f : *term)
         if (f->is<FNOperator>())
@@ -242,8 +242,8 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
     auto result = wick_mp(in);
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S "
-                                      L"+ κ{u_2,u_4;u_1,u_3}:A-H-S"));
+    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * η{u_2;u_3} "
+                                      L"+ κ{u_2,u_4;u_1,u_3}"));
   }
 
   SECTION("WickTheorem: general indices split into core δ + active γ") {
@@ -276,19 +276,19 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"κ{u_3,u_4;u_1,u_2}:A-C-S * δ{u_1;p_1}:N-C-S * "
+            L"κ{u_3,u_4;u_1,u_2} * δ{u_1;p_1}:N-C-S * "
             L"δ{u_2;p_3}:N-C-S * δ{p_2;u_3}:N-C-S * δ{p_4;u_4}:N-C-S "
-            L"+ γ{u_2;u_1}:N-C-S * δ{u_1;p_1}:N-C-S * δ{a_1;p_3}:N-C-S * "
+            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-C-S * δ{a_1;p_3}:N-C-S * "
             L"δ{p_2;a_1}:N-C-S * δ{p_4;u_2}:N-C-S "
-            L"+ γ{u_2;u_1}:N-C-S * δ{u_1;p_1}:N-C-S * δ{g_1;p_3}:N-C-S * "
+            L"+ γ{u_2;u_1} * δ{u_1;p_1}:N-C-S * δ{g_1;p_3}:N-C-S * "
             L"δ{p_2;g_1}:N-C-S * δ{p_4;u_2}:N-C-S "
-            L"+ η{u_2;u_1}:N-C-S * δ{u_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * "
+            L"+ η{u_2;u_1} * δ{u_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * "
             L"δ{p_2;u_2}:N-C-S * δ{p_4;O_1}:N-C-S "
             L"+ δ{a_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * δ{p_2;a_1}:N-C-S * "
             L"δ{p_4;O_1}:N-C-S "
             L"+ δ{g_1;p_3}:N-C-S * δ{O_1;p_1}:N-C-S * δ{p_2;g_1}:N-C-S * "
             L"δ{p_4;O_1}:N-C-S "
-            L"+ η{u_3;u_1}:N-C-S * γ{u_4;u_2}:N-C-S * δ{u_1;p_3}:N-C-S * "
+            L"+ η{u_3;u_1} * γ{u_4;u_2} * δ{u_1;p_3}:N-C-S * "
             L"δ{u_2;p_1}:N-C-S * δ{p_2;u_3}:N-C-S * δ{p_4;u_4}:N-C-S"));
   }
 
@@ -435,15 +435,15 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     // a_p2·a†_u3 contracted (adjacent, so +), p_1 of the surviving
     // {a†_p1 a_u4} projected onto active and onto virtual a
     REQUIRE(
-        contains(L"η{u_2;u_3}:N-C-S * δ{u_1;p_1}:N-C-S * δ{p_2;u_2}:N-C-S * "
+        contains(L"η{u_2;u_3} * δ{u_1;p_1}:N-C-S * δ{p_2;u_2}:N-C-S * "
                  L"ã{u_4;u_1}"));
     REQUIRE(
-        contains(L"η{u_1;u_3}:N-C-S * δ{a_1;p_1}:N-C-S * δ{p_2;u_1}:N-C-S * "
+        contains(L"η{u_1;u_3} * δ{a_1;p_1}:N-C-S * δ{p_2;u_1}:N-C-S * "
                  L"ã{u_4;a_1}"));
     // nothing contracted, p_1 and p_2 projected onto active: the four legs
     // form +κ{u_2,u_4;u_1,u_3} = -κ{u_4,u_2;u_1,u_3}
     REQUIRE(
-        contains(L"-1 κ{u_4,u_2;u_1,u_3}:A-C-S * δ{u_1;p_1}:N-C-S * "
+        contains(L"-1 κ{u_4,u_2;u_1,u_3} * δ{u_1;p_1}:N-C-S * "
                  L"δ{p_2;u_2}:N-C-S"));
   }
 
@@ -673,17 +673,17 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
               ex<Constant>(2) * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
                   ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
     auto result = wick_mp(in);
-    REQUIRE_THAT(result, EquivalentTo(L"3 γ{u_4;u_1}:N-H-S * η{u_2;u_3}:N-H-S "
-                                      L"+ 3 κ{u_2,u_4;u_1,u_3}:A-H-S"));
+    REQUIRE_THAT(result, EquivalentTo(L"3 γ{u_4;u_1} * η{u_2;u_3} "
+                                      L"+ 3 κ{u_2,u_4;u_1,u_3}"));
   }
 
   SECTION("WickTheorem: η = δ - γ") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
     auto result = wick_mp(in, {.eta_as_delta_minus_gamma = true});
-    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1}:N-H-S * δ{u_2;u_3} "
-                                      L"- γ{u_4;u_1}:N-H-S * γ{u_2;u_3}:N-H-S "
-                                      L"+ κ{u_2,u_4;u_1,u_3}:A-H-S"));
+    REQUIRE_THAT(result, EquivalentTo(L"γ{u_4;u_1} * δ{u_2;u_3} "
+                                      L"- γ{u_4;u_1} * γ{u_2;u_3} "
+                                      L"+ κ{u_2,u_4;u_1,u_3}"));
     bool has_eta = false;
     result->visit(
         [&](const ExprPtr& e) {

@@ -1281,7 +1281,7 @@ SECTION("MRSO") {
     // the active-first comparer is scoped to ref_av
     CHECK(&get_default_context().index_comparer() == index_comparer);
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
-                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
+                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 
 #if 0
@@ -1313,7 +1313,7 @@ SECTION("MRSO-MultiProduct") {
     ExprPtr result;
     REQUIRE_NOTHROW(result = t::ref_av(H1));
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
-                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
+                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 
   // the mbpt operators (ã) are normal-ordered relative to the context vacuum,

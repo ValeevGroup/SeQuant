@@ -1206,8 +1206,8 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       auto wick = FWickTheorem{opseq};
       auto result = compute_contractions(wick);
       REQUIRE_THAT(result,
-                   EquivalentTo(L"δ{p_4;M_1} * γ{M_1;M_2}:N-C-S * δ{M_2;p_1} * "
-                                L"δ{p_2;E_1} * η{E_1;E_2}:N-C-S * δ{E_2;p_3}"));
+                   EquivalentTo(L"δ{p_4;M_1} * γ{M_1;M_2} * δ{M_2;p_1} * "
+                                L"δ{p_2;E_1} * η{E_1;E_2} * δ{E_2;p_3}"));
     }
 
     // a protoindexed index may never reach the active space
