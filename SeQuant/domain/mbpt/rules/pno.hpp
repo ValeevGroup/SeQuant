@@ -95,9 +95,12 @@ struct ProjectionOptions {
 /// @return @p expr itself if nothing changed
 /// @note the result holds fresh temporary indices: canonicalize it before
 /// serializing (deserialization rejects ordinals >= Index::min_tmp_index())
+/// A leg shared by two integrals of one term moves once per integral, each
+/// to a fresh index, so the overlaps chain through the leg: `x' s{x';x}`
+/// ... `s{x;x''} x''`.
 /// @throw Exception if an integral of an R2 term carries auxiliary indices,
-/// `Integral` lacks `cell_instance`, `PartnerPair` is combined with
-/// `Amplitude`, or two integrals of a term claim one leg for different targets
+/// `Integral` lacks `cell_instance`, or `PartnerPair` is combined with
+/// `Amplitude`
 [[nodiscard]] ExprPtr project_integral_domains(ExprPtr const& expr,
                                                ProjectionOptions const& opts);
 

@@ -445,6 +445,28 @@ TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
               tt_ss);
   }
 
+  // a leg shared by two integrals of one term moves once per integral, each
+  // to its own fresh index; the overlaps chain through the leg
+  {
+    const std::wstring shared = S2 +
+                                L"g{i_3,a_4<i_1,i_2>;a_3<i_1,i_2>,i_4} * "
+                                L"g{i_5,i_6;a_4<i_1,i_2>,a_5<i_1,i_2>}"
+                                L" * t{a_3<i_1,i_2>,a_5<i_1,i_2>;i_1,i_2}";
+    const ExprPtr input = deserialize(shared);
+    const auto out = project(input, own_pair(All));
+    CHECK(terse(out) == S2 + L"g{i_3,a_100<i_3,i_4;1>;a_101<i_3,i_4;1>,i_4}"
+                             L" * s{a_4<i_1,i_2>;a_100<i_3,i_4;1>}"
+                             L" * s{a_101<i_3,i_4;1>;a_3<i_1,i_2>}"
+                             L" * g{i_5,i_6;a_102<i_5,i_6;1>,a_103<i_5,i_6;1>}"
+                             L" * s{a_102<i_5,i_6;1>;a_4<i_1,i_2>}"
+                             L" * s{a_103<i_5,i_6;1>;a_5<i_1,i_2>}"
+                             L" * t{a_3<i_1,i_2>,a_5<i_1,i_2>;i_1,i_2}");
+    CHECK(overlaps(out) == 4);
+    CHECK(minted_bra_legs(out) == 1);
+    CHECK(mbpt::project_integral_domains(out, own_pair(All)).get() ==
+          out.get());
+  }
+
   // malformed input throws: density fitting already ran
   const IndexSpace aux =
       get_default_context().index_space_registry()->retrieve(L"Κ");
