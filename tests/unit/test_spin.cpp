@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -1916,4 +1917,55 @@ SECTION("ResultExpr") {
     }
   }
 }
+}
+
+TEST_CASE("spin-traced densities", "[spin]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  // a spin-traced density is a spin component of it, like a spin-traced t: its
+  // label is kept and it becomes perm-nonsymmetric
+  const auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"i_1", L"i_2"},
+                            Symmetry::Antisymm);
+  for (const auto& label :
+       {reserved::rdm_label(), reserved::cumulant_label()}) {
+    CAPTURE(toUtf8(label));
+    const auto expr = g * density::make_density(label, bra{L"i_1", L"i_2"},
+                                                ket{L"i_3", L"i_4"});
+    for (bool closed_shell : {true, false}) {
+      CAPTURE(closed_shell);
+      ExprPtr result;
+      REQUIRE_NOTHROW(result = closed_shell ? closed_shell_spintrace(expr)
+                                            : spintrace(expr));
+      std::size_t n_density = 0;
+      result->visit(
+          [&n_density, &label](const ExprPtr& e) {
+            if (!e->is<Tensor>()) return;
+            const auto& t = e->as<Tensor>();
+            REQUIRE(t.label() != reserved::spinfree_rdm_label());
+            if (t.label() != label) return;
+            ++n_density;
+            REQUIRE(t.rank() == 2);
+            REQUIRE(t.symmetry() == Symmetry::Nonsymm);
+            REQUIRE(t.hermiticity() == Hermiticity::Hermitian);
+            REQUIRE(t.column_symmetry() == ColumnSymmetry::Symm);
+          },
+          /*atoms_only=*/true);
+      REQUIRE(n_density > 0);
+    }
+    // open-shell spin tracing keeps a single-spin block antisymmetric, and
+    // never produces Γ either
+    for (const auto& block : open_shell_spintrace(expr, {})) {
+      block->visit(
+          [&label](const ExprPtr& e) {
+            if (!e->is<Tensor>()) return;
+            const auto& t = e->as<Tensor>();
+            REQUIRE(t.label() != reserved::spinfree_rdm_label());
+            if (t.label() != label) return;
+            REQUIRE(t.hermiticity() == Hermiticity::Hermitian);
+            REQUIRE(t.column_symmetry() == ColumnSymmetry::Symm);
+          },
+          /*atoms_only=*/true);
+    }
+  }
 }
