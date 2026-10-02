@@ -296,6 +296,8 @@ TEST_CASE("serialization", "[serialization]") {
         auto resetter = set_scoped_default_context(ctx_phys);
         REQUIRE(deserialize<ExprPtr>(L"ã{i1;i2}")->as<FNOperator>().vacuum() ==
                 Vacuum::SingleProduct);
+        REQUIRE(deserialize<ExprPtr>(L"b̃{i1;i2}")->as<BNOperator>().vacuum() ==
+                Vacuum::SingleProduct);
       }
     }
 

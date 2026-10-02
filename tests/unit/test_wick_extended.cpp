@@ -100,6 +100,27 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(simplify(result - result0) == ex<Constant>(0));
   }
 
+  SECTION("cumulant_expand: input shapes") {
+    // a c-number passes through unchanged
+    REQUIRE(detail::cumulant_expand<Statistics::FermiDirac>(
+                ex<Constant>(3), {}, {}) == ex<Constant>(3));
+    REQUIRE(detail::cumulant_expand<Statistics::FermiDirac>(
+                ex<Constant>(0), {}, {}) == ex<Constant>(0));
+    // a bare NormalOperator is expanded like a Product holding it
+    const auto nop =
+        ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"}));
+    const detail::OpProvenance prov{{Index(L"u_1"), 0},
+                                    {Index(L"u_3"), 0},
+                                    {Index(L"u_2"), 1},
+                                    {Index(L"u_4"), 1}};
+    const auto bare =
+        detail::cumulant_expand<Statistics::FermiDirac>(nop, prov, {});
+    REQUIRE(bare != ex<Constant>(0));
+    REQUIRE(bare == detail::cumulant_expand<Statistics::FermiDirac>(
+                        ex<Product>(ExprPtrList{nop}), prov, {}));
+    REQUIRE_THAT(bare, EquivalentTo(L"κ{u_3,u_4;u_1,u_2}:A-H-S"));
+  }
+
   SECTION("cumulant_expand: unbalanced survivors vanish") {
     FNOperatorSeq in{FNOperator(cre({L"u_1", L"u_2"}), ann({})),
                      FNOperator(cre({}), ann({L"u_3"}))};
