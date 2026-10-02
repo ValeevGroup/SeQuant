@@ -77,7 +77,7 @@ Subtleties for contributors
   ``DefaultTensorCanonicalizer::apply`` (marked with a ``TODO`` in both places).
 - ``TensorNetworkV3::factorize()`` is unimplemented (aborts).
 - Canonicalizing a *single* tensor's own bra/ket order — as opposed to a whole network — is a separate, deliberately pluggable concern:
-  :class:`sequant::TensorCanonicalizer` is a registry base class (``register_instance``/``instance_ptr``, keyed by tensor label) that a
+  :class:`sequant::TensorCanonicalizer` is a base class (instances are installed in a :class:`sequant::Context`, keyed by tensor label) that a
   contributor can implement against to customize how one tensor's slots get ordered, without touching the network-wide bliss machinery
   above. ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort
   (rather than using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee
