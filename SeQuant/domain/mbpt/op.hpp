@@ -6,6 +6,7 @@
 #define SEQUANT_DOMAIN_MBPT_OP_HPP
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -55,24 +56,6 @@ namespace sequant {
 namespace mbpt {
 
 namespace detail {
-inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
-
-/// @brief decorates a base label with perturbation order as superscript
-/// @param base_label the base label to decorate
-/// @param pert_order the perturbation order to decorate with
-/// @return the decorated label
-inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
-                                             int pert_order = 0) {
-  if (pert_order == 0) return std::wstring(base_label);
-  SEQUANT_ASSERT(
-      pert_order >= 0 && pert_order <= 9,
-      "decorate_with_pert_order: perturbation order out of range [0,9]");
-
-  std::wstring result(base_label);
-  result += detail::pert_superscripts[pert_order];
-  return result;
-}
-
 /// @brief the rank pairs of a sum of operators truncated at ranks
 /// (@p n1, @p n2), highest first
 /// @return `(n1, n2), (n1-1, n2-1), ...`, stopping before `(0, 0)` and after
@@ -555,6 +538,11 @@ enum class Normalization {
   SquareRoot  /// Include sqrt(1/c! a!) prefactor
 };
 
+/// the basis instance an operator's leg minted in the given IndexSpace
+/// carries; an empty BasisGrant mints every leg without one
+using BasisGrant =
+    std::function<IndexBasis::optional_instance(const IndexSpace&)>;
+
 // clang-format off
 /// @brief makes a tensor-level many-body operator
 
@@ -649,10 +637,13 @@ class OpMaker {
   /// tensor is returned; if \p opsymm_opt is not given then the default is
   /// determined by the MBPT context.
   /// @param[in] normalization if given, controls the normalization behavior, else uses internal defaults. @see Normalization
+  /// @param[in] grants_of the operator label whose basis grants (see OpRegistry::grant_basis) the legs carry;
+  /// if not given, this operator's own (perturbation-order decorated) label
   // clang-format on
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
                      std::optional<Symmetry> opsymm_opt = {},
-                     std::optional<Normalization> normalization = {}) const;
+                     std::optional<Normalization> normalization = {},
+                     std::optional<std::wstring> grants_of = {}) const;
 
   /// @brief Creates an OpInfo struct containing creator and annihilator
   /// indices, normalization factor, symmetry, and dependency information.
@@ -661,11 +652,13 @@ class OpMaker {
   /// @param ann_spaces A container of IndexSpace objects representing the
   /// annihilator indices
   /// @param dep An optional parameter specifying the dependency of indices.
+  /// @param grant the basis instance of each minted index, by its space
   /// @return An OpInfo struct containing the created indices, normalization
   /// factor, symmetry, and dependency information.
   static OpInfo build_op_info(const IndexSpaceContainer& cre_spaces,
                               const IndexSpaceContainer& ann_spaces,
-                              UseDepIdx dep = UseDepIdx::None) {
+                              UseDepIdx dep = UseDepIdx::None,
+                              const BasisGrant& grant = {}) {
     const bool symm = get_default_context().spbasis() ==
                       SPBasis::Spinor;  // antisymmetrize if spinor basis
     const auto dep_bra = dep == UseDepIdx::Bra;
@@ -675,18 +668,25 @@ class OpMaker {
     if (!symm)
       SEQUANT_ASSERT(ranges::size(cre_spaces) == ranges::size(ann_spaces));
 
-    auto make_idx_vector = [](const auto& spaces) {
-      return spaces | ranges::views::transform([](const IndexSpace& space) {
-               return Index::make_tmp_index(space);
+    auto make_idx_vector = [&grant](const auto& spaces) {
+      return spaces |
+             ranges::views::transform([&grant](const IndexSpace& space) {
+               return grant ? Index::make_tmp_index(
+                                  IndexBasis{space, grant(space)})
+                            : Index::make_tmp_index(space);
              }) |
              ranges::to<container::svector<Index>>();
     };
 
-    auto make_depidx_vector = [](const auto& spaces, auto&& protoidxs) {
+    auto make_depidx_vector = [&grant](const auto& spaces, auto&& protoidxs) {
       return spaces |
-             ranges::views::transform([&protoidxs](const IndexSpace& space) {
-               return Index::make_tmp_index(space, protoidxs, true);
-             }) |
+             ranges::views::transform(
+                 [&grant, &protoidxs](const IndexSpace& space) {
+                   return grant ? Index::make_tmp_index(
+                                      IndexBasis{space, grant(space)},
+                                      protoidxs, true)
+                                : Index::make_tmp_index(space, protoidxs, true);
+                 }) |
              ranges::to<container::svector<Index>>();
     };
 
@@ -740,13 +740,16 @@ class OpMaker {
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
   /// @param[in] normalization the normalization convention, see Normalization
+  /// @param[in] grant the basis instance of each minted index, see
+  /// build_op_info
   template <typename TensorGenerator>
   static ExprPtr make(const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None,
-                      Normalization normalization = Normalization::Default) {
-    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+                      Normalization normalization = Normalization::Default,
+                      const BasisGrant& grant = {}) {
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep, grant);
 
     const auto t =
         tensor_generator(op_info.creidxs, op_info.annidxs, op_info.opsymm);
@@ -788,13 +791,16 @@ class OpMaker {
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
   /// @param[in] normalization the normalization convention, see Normalization
+  /// @param[in] grant the basis instance of each minted index, see
+  /// build_op_info
   template <typename TensorGenerator>
   static ExprPtr make(const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       const IndexContainer& batch_indices,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None,
-                      Normalization normalization = Normalization::Default) {
+                      Normalization normalization = Normalization::Default,
+                      const BasisGrant& grant = {}) {
     mbpt::check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
     [[maybe_unused]] auto batch_space =
@@ -804,7 +810,7 @@ class OpMaker {
       SEQUANT_ASSERT(idx.space() == batch_space);
     }
 
-    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep, grant);
     const auto t = tensor_generator(op_info.creidxs, op_info.annidxs,
                                     batch_indices, op_info.opsymm);
 
@@ -1034,10 +1040,13 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
+ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm = {},
+          std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1046,16 +1055,21 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// (default is to set \p np to \p nh)
 /// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
+/// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
+ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm = {},
+          std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 /// @param norm normalization convention; if unset, uses the intrinsic Implicit
 /// normalization. @see Normalization
-ExprPtr S(std::int64_t K, std::optional<Normalization> norm = {});
+/// @param grants_of if given, the operator label whose basis grants the legs
+/// carry
+ExprPtr S(std::int64_t K, std::optional<Normalization> norm = {},
+          std::optional<std::wstring> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
@@ -1101,9 +1115,11 @@ ExprPtr Λʼ(std::size_t K,
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle creators
 /// @param nh number of hole annihilators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δr(nₚ np, nₕ nh);
+ExprPtr δr(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 
 // clang-format off
@@ -1111,9 +1127,11 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle annihilators
 /// @param nh number of hole creators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δl(nₚ np, nₕ nh);
+ExprPtr δl(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
 
 }  // namespace tensor
@@ -1247,10 +1265,13 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
+ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm = {},
+          std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
@@ -1258,16 +1279,21 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @param norm normalization convention; if unset, uses the intrinsic Implicit normalization. @see Normalization
+/// @param grants_of if given, the operator label whose basis grants the legs carry
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm = {});
+ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm = {},
+          std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 /// @param norm normalization convention; if unset, uses the intrinsic Implicit
 /// normalization. @see Normalization
-ExprPtr S(std::int64_t K, std::optional<Normalization> norm = {});
+/// @param grants_of if given, the operator label whose basis grants the legs
+/// carry
+ExprPtr S(std::int64_t K, std::optional<Normalization> norm = {},
+          std::optional<std::wstring> grants_of = {});
 
 /// @brief Makes perturbation operator
 /// @param R rank of the perturbation operator
@@ -1313,9 +1339,11 @@ ExprPtr Λʼ(std::size_t K,
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle creators
 /// @param nh number of hole annihilators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δr(nₚ np, nₕ nh);
+ExprPtr δr(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 
 // clang-format off
@@ -1323,9 +1351,11 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δr);
 /// Unlike P, uses SquareRoot normalization (in the spin-orbital basis includes the 1/√(np! nh!) prefactor).
 /// @param np number of particle annihilators
 /// @param nh number of hole creators
+/// @param grants_of if given, the operator label whose basis grants the projector's legs carry
+/// (the amplitude the projected equation is solved for); else the legs carry none
 /// @note if using spin-free basis, only supports particle-number-conserving operators (\p np == \p nh), and the prefactor is 1/√(np!) (= 1/√(K!) with K = np = nh)
 // clang-format on
-ExprPtr δl(nₚ np, nₕ nh);
+ExprPtr δl(nₚ np, nₕ nh, std::optional<std::wstring> grants_of = {});
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(δl);
 
 /// @brief computes the quantum number change effected by a given Operator or

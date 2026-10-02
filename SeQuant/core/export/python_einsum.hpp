@@ -62,6 +62,9 @@ class PythonEinsumGeneratorContext : public ReorderingContext {
     for (const Index &idx : tensor.const_indices()) {
       if (!first) shape += ", ";
       shape += get_shape(idx.space());
+      // each basis of a space has its own extent
+      if (const auto tag = detail::basis_instance_tag(idx); !tag.empty())
+        shape += "_" + tag;
       first = false;
     }
     shape += ")";
@@ -318,7 +321,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     if (tensor.num_indices() > 0) {
       std::string tags;
       for (const Index &idx : tensor.const_indices()) {
-        tags += ctx.get_tag(idx.space());
+        tags += ctx.get_tag(idx.space()) + detail::basis_instance_tag(idx);
       }
       if (!tags.empty()) {
         name += "_" + tags;

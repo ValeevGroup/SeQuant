@@ -121,7 +121,7 @@ class TensorNetworkV3 {
       }
 
       SEQUANT_ASSERT(index && other.index);
-      return index->space() < other.index->space();
+      return index->basis() < other.index->basis();
     }
 
     bool operator==(const Edge &other) const {

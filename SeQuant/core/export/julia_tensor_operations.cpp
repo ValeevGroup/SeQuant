@@ -41,7 +41,7 @@ std::string JuliaTensorOperationsGeneratorContext::get_tags(
   std::string tags;
 
   for (const Index &idx : tensor.const_indices()) {
-    tags += get_tag(idx.space());
+    tags += get_tag(idx.space()) + detail::basis_instance_tag(idx);
   }
 
   return tags;

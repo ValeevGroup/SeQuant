@@ -252,10 +252,16 @@ std::wstring to_string(const ResultExpr& result,
 std::wstring to_string(const Index& index, const SerializationOptions&) {
   std::wstring serialized(index.label());
 
-  if (index.has_proto_indices()) {
+  if (index.has_proto_indices() || index.basis().has_basis_instance()) {
     serialized += L"<";
-    serialized +=
-        join_strings<std::wstring>(index.proto_indices(), L",", &Index::label);
+    serialized += join_strings<std::wstring>(
+        index.proto_indices(), L",", [](const Index& proto) -> std::wstring {
+          std::wstring label(proto.label());
+          if (proto.basis().has_basis_instance())
+            label += L"<" + proto.basis().instance_suffix() + L">";
+          return label;
+        });
+    serialized += index.basis().instance_suffix();
     serialized += L">";
   }
 

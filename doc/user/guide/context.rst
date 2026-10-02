@@ -59,6 +59,30 @@ expands such CSV-dependent tensors into an explicit basis (standard unoccupieds,
    :end-before: end-snippet-4
    :dedent: 2
 
+Several bases of one space can meet in an expression: the canonical and the localized orbitals of a perturbation theory,
+the cluster-specific virtuals of the ground-state and of the perturbed amplitudes, and so on. An :class:`sequant::Index`
+can therefore carry an optional *basis instance*, an opaque integer written after its proto indices, ``a_1<i_1,i_2;1>``
+(``a_1<;1>`` without proto indices); an index without one is in its space's own basis, as before. Instances are granted
+per operator label and leg space with
+:func:`sequant::mbpt::OpRegistry::grant_basis`, :class:`sequant::mbpt::OpMaker` mints a granted operator's legs with
+them, and the projectors of the :doc:`CC <cc>` equations carry the grants of the amplitude being solved for. Integrals
+are never granted: in Wick's theorem their legs take the instance of the leg they are contracted with.
+
+.. literalinclude:: /examples/user/context.cpp
+   :language: cpp
+   :start-after: start-snippet-5
+   :end-before: end-snippet-5
+   :dedent: 2
+
+Integral projection approximations (e.g. PNO pair-pair coupling) are a separate, opt-in rewrite; with them off nothing
+runs. :func:`sequant::mbpt::project_integral_domains` acts on R2 terms only, after spin tracing and before density
+fitting. The :enum:`sequant::mbpt::ProjectionTerms` cells select (ov|ov) exchange and (oo|vv) Coulomb integrals in
+linear or non-linear terms, singly or through the composites ``Exchange``, ``Coulomb``, ``Linear``, ``Nonlinear`` and
+``All``; each contracted virtual leg of a selected integral moves to its partner's pair or the integral's own pair
+(:enum:`sequant::mbpt::ProjectionDomain`), in its partner's or the cell's basis instance
+(:enum:`sequant::mbpt::ProjectionBasis`), and an overlap ``s{x';x}`` (``s{x;x'}`` for a bra leg) is inserted per moved
+leg.
+
 Scoped context changes
 ------------------------
 

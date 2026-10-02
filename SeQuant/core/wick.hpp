@@ -1654,13 +1654,15 @@ class WickTheorem {
     std::optional<Index> left_qp_idx;
     if (!left_is_pure) {
       left_qp_idx =
-          Index::make_tmp_index(qpspace_common, left.index().proto_indices());
+          Index::make_tmp_index(qpspace_common, left.index().proto_indices(),
+                                left.index().symmetric_proto_indices());
     }
 
     std::optional<Index> right_qp_idx;
     if (!right_is_pure) {
       right_qp_idx =
-          Index::make_tmp_index(qpspace_common, right.index().proto_indices());
+          Index::make_tmp_index(qpspace_common, right.index().proto_indices(),
+                                right.index().symmetric_proto_indices());
     }
 
     // preserve bra/ket positions of left & right

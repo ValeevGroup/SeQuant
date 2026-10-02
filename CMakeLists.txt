@@ -360,6 +360,8 @@ set(SeQuant_symb_src
         SeQuant/core/hugenholtz.hpp
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
+        SeQuant/core/basis.cpp
+        SeQuant/core/basis.hpp
         SeQuant/core/index_space_registry.cpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
@@ -461,6 +463,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/csv.hpp
         SeQuant/domain/mbpt/rules/df.cpp
         SeQuant/domain/mbpt/rules/df.hpp
+        SeQuant/domain/mbpt/rules/pno.cpp
+        SeQuant/domain/mbpt/rules/pno.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp
         SeQuant/domain/mbpt/space_qns.hpp

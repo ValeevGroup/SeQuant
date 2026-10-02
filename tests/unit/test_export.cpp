@@ -1033,3 +1033,63 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
   }
 }
+
+TEST_CASE("export-basis-instance", "[export][basis]") {
+  using Catch::Matchers::ContainsSubstring;
+  auto resetter = to_export_context();
+  const Index y = Index(L"a_7").replace_basis_instance(1);
+
+  auto registry = get_default_context().index_space_registry();
+  const IndexSpace occ = registry->retrieve("i");
+  const IndexSpace virt = registry->retrieve("a");
+  const Tensor t(L"t", bra{y}, ket{L"i_1"});
+  const Tensor t_null(L"t", bra{L"a_7"}, ket{L"i_1"});
+
+  // a mode in a basis instance appends the instance to its block tag; the
+  // generic block is named as before
+  SECTION("ITF") {
+    ItfContext ctx;
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    const ItfGenerator<ItfContext> generator;
+    CHECK_THAT(generator.represent(t, ctx), ContainsSubstring("t:v1o["));
+    CHECK_THAT(generator.represent(t_null, ctx), ContainsSubstring("t:vo["));
+  }
+  SECTION("Julia") {
+    JuliaTensorOperationsGeneratorContext ctx;
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    const JuliaTensorOperationsGenerator<> generator;
+    CHECK_THAT(generator.represent(t, ctx),
+               ContainsSubstring("t_v1o[") && ContainsSubstring("a_7_1"));
+    CHECK_THAT(generator.represent(t_null, ctx),
+               ContainsSubstring("t_vo[") && ContainsSubstring("a_7"));
+  }
+  SECTION("text") {
+    const TextGenerator<TextGeneratorContext> generator;
+    CHECK(generator.represent(t, TextGeneratorContext{}) == "t[a_7<;1>, i_1]");
+    CHECK(generator.represent(t_null, TextGeneratorContext{}) == "t[a_7, i_1]");
+  }
+  // the einsum exporters name blocks and shapes per mode, too
+  SECTION("Python einsum") {
+    auto exported = [&](auto generator, auto ctx) {
+      ctx.set_shape(occ, "nocc");
+      ctx.set_shape(virt, "nvirt");
+      ctx.set_tag(occ, "o");
+      ctx.set_tag(virt, "v");
+      // the result is in basis 1, so its allocation shows the basis' extent
+      ResultExpr result(Tensor(L"R", bra{y}, ket{L"i_1"}),
+                        ex<Tensor>(L"f", bra{y}, ket{L"a_1"}) *
+                            ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+      export_expression(to_export_tree(result), generator, ctx);
+      return generator.get_generated_code();
+    };
+    for (auto const &code :
+         {exported(NumPyEinsumGenerator{}, NumPyEinsumGeneratorContext{}),
+          exported(PyTorchEinsumGenerator{}, PyTorchEinsumGeneratorContext{})})
+      CHECK_THAT(code, ContainsSubstring("f_v1v") &&
+                           ContainsSubstring("t_vo") &&
+                           ContainsSubstring("R_v1o") &&
+                           ContainsSubstring("(nvirt_1, nocc)"));
+  }
+}

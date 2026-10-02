@@ -32,7 +32,7 @@ struct default_idxptr_slottype_lesscompare {
       if (slottype1 != slottype2)
         return slottype1 < slottype2;
       else  // in same types of slots order by space
-        return idxptr1->space() < idxptr2->space();
+        return idxptr1->basis() < idxptr2->basis();
     }
   }
 };

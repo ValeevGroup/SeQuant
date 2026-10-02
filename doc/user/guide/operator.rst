@@ -105,6 +105,11 @@ Custom operators can be registered to extend SeQuant's vocabulary. Once register
    :end-before: end-snippet-5
    :dedent: 2
 
+A registered (de)excitation operator can also be granted a basis instance per leg space with
+:func:`grant_basis() <sequant::mbpt::OpRegistry::grant_basis>`, which :class:`OpMaker <sequant::mbpt::OpMaker>` then gives
+its legs in that space (see :doc:`context`); :func:`basis_grant() <sequant::mbpt::OpRegistry::basis_grant>` looks a grant
+up. General operators cannot be granted one.
+
 The registry is stored in the :class:`mbpt::Context <sequant::mbpt::Context>`. See the unit test cases for further manipulations with :class:`mbpt::Context <sequant::mbpt::Context>` and :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>`.
 
 .. _mbpt-lst:

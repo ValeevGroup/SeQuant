@@ -21,6 +21,10 @@
 
 namespace sequant::detail {
 
+/// @return the basis instance of @p idx in decimal, to append to a block tag
+/// or dimension name of a mode in that basis; empty if @p idx is basis-generic
+std::string basis_instance_tag(const Index &idx);
+
 /// Formats a Power exponent for export framework
 /// @param exponent the rational exponent
 /// @param double_slash if true, use Julia's `//` rational syntax; otherwise
