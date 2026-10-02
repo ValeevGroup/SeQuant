@@ -135,7 +135,12 @@ dispatching ``WickTheorem``'s ``stats()``. Each resulting term then
 Finally every ``η`` is optionally rewritten as :math:`\delta - \gamma` (``WickTheorem::eta_as_delta_minus_gamma``), the
 :math:`\delta`\ s over summed indices are applied, and the result is simplified. In it ``γ{ann;cre}`` and ``η{ann;cre}`` are
 one-body, Hermitian and column-symmetric, ``κ{ann…;cre…}`` is of rank :math:`\ge 2`, antisymmetric, Hermitian and
-column-symmetric, and all their indices are active.
+column-symmetric, and all their indices are active. These symmetries take part in the tensor hash, so a density spelled
+differently would not merge with the engine's; hence ``γ``, ``η``, ``κ`` and the spin-free ``Γ`` are reserved labels
+(``reserved::density_labels()``): a ``Tensor`` carrying one must have the symmetries ``density::symmetries()`` gives for its
+label and rank, or its constructor throws, and the parser supplies them. The one alternative is a perm-nonsymmetric
+multi-body ``γ``, ``η`` or ``κ``, a spin component such as spin tracing produces. The factories in
+``SeQuant/core/density.hpp`` build densities with them.
 
 The no-double-counting rule is that a block is only ever built from operators that survive the standard theorem: each extended term
 descends from exactly one partial-contraction term (the one carrying its pair contractions), so no :math:`1/k!` weights are needed.

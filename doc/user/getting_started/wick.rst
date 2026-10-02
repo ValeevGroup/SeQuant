@@ -103,3 +103,6 @@ to the reference:
 .. math::
    \tilde{a}^{u_1 u_3}_{u_2 u_4} - \gamma^{u_1}_{u_4} \tilde{a}^{u_3}_{u_2} + \eta^{u_3}_{u_2} \tilde{a}^{u_1}_{u_4}
    + \bar{\kappa}^{u_1 u_3}_{u_2 u_4} + \gamma^{u_1}_{u_4} \eta^{u_3}_{u_2}
+
+The labels ``γ``, ``η`` and ``κ`` are reserved: build such tensors with the factories in ``SeQuant/core/density.hpp`` (or
+parse them, e.g. ``γ{u_1;u_2}``), which give them their fixed symmetries.
