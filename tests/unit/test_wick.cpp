@@ -1327,16 +1327,18 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
           density::make_rdm(u_4, u_1) * density::make_hole_rdm(u_2, u_3);
       REQUIRE_THAT(result, EquivalentTo(expected));
 
-      // pair-based connectivity filters are not applied by the engine
+      // the required-connectivity filter is not applied by the engine ...
       auto wick_connected = FWickTheorem{opseq};
       wick_connected.set_nop_connections({{0, 1}});
       REQUIRE(compute_contractions(wick_connected.full_contractions(false))
                   ->size() == 4);
+      // ... but an avoided pair is rejected as soon as a contraction between
+      // it is attempted, leaving only the contraction-free term
       auto wick_avoided = FWickTheorem{opseq};
       wick_avoided.set_nop_avoided_connections({{0, 1}});
-      REQUIRE(
-          compute_contractions(wick_avoided.full_contractions(false))->size() ==
-          4);
+      REQUIRE_THAT(
+          compute_contractions(wick_avoided.full_contractions(false)),
+          EquivalentTo(ex<FNOperator>(cre({u_1, u_3}), ann({u_2, u_4}))));
     }
 
     // general indices: the γ-type contraction is over R (core+active) and the

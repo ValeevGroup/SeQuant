@@ -620,11 +620,13 @@ class WickTheorem {
     return pairs;
   }
 
-  /// @return whether the engine applies the pair-based connectivity filters
-  /// given by set_nop_connections and set_nop_avoided_connections; under a
-  /// MultiProduct vacuum connectivity is a property of the cumulant-expanded
-  /// result (cumulant blocks connect operators that no pair does), so the
-  /// filters are not applied by the engine but by cumulant_expand
+  /// @return whether the engine applies the required-connectivity filter
+  /// given by set_nop_connections; under a MultiProduct vacuum connectivity is
+  /// a property of the cumulant-expanded result (cumulant blocks connect
+  /// operators that no pair does), so the filter is applied by
+  /// cumulant_expand instead. Avoided pairs (set_nop_avoided_connections) are
+  /// rejected by the engine under every vacuum: a pair contraction between
+  /// them is fatal no matter what a cumulant adds later.
   bool pairwise_connectivity() const {
     return input_->vacuum() != Vacuum::MultiProduct;
   }
@@ -1306,8 +1308,7 @@ class WickTheorem {
     static const container::svector<std::bitset<max_input_size>> unconstrained;
     const auto &target_connections =
         pairwise_connectivity() ? nop_connections_ : unconstrained;
-    const auto &avoided_connections =
-        pairwise_connectivity() ? nop_avoided_connections_ : unconstrained;
+    const auto &avoided_connections = nop_avoided_connections_;
 
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)

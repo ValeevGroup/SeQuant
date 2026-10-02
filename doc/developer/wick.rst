@@ -18,8 +18,9 @@ an index that appears once in the input is external and a repeated one is a dumm
   attached to the same tensor label, as topologically equivalent, so that contractions related by this equivalence are not separately
   enumerated.
 - ``set_nop_connections()`` / ``set_nop_avoided_connections()``: force, or forbid, contraction between specific pairs of normal-operator
-  ordinals. Under a ``Vacuum::MultiProduct`` vacuum they are enforced after cumulant expansion rather than during the contraction
-  recursion, since a cumulant connects operators that no pair does (see :ref:`below <wick-extended>`).
+  ordinals. Under a ``Vacuum::MultiProduct`` vacuum a required connection is enforced after cumulant expansion rather than during
+  the contraction recursion, since a cumulant connects operators that no pair does; an avoided pair is still rejected the moment a
+  contraction between it is attempted (see :ref:`below <wick-extended>`).
 - ``set_nop_partitions()`` / ``set_op_partitions()`` / ``make_default_op_partitions()``: declare explicit equivalence groups of normal
   operators, or of individual ``Op``\ s, so that contractions related by permuting within a group are counted once with a combinatorial
   degeneracy factor rather than enumerated redundantly — the general form of what ``use_topology()`` infers automatically.
@@ -105,8 +106,9 @@ Rather than a second engine, this is layered on the standard one, which changes 
   ``SeQuant/core/density.hpp``, as the middle factor of ``contract``. A ``γ`` over :math:`R` thus stands for :math:`\delta` on the core
   plus :math:`\gamma` on the active space, and likewise an ``η`` over :math:`U` for :math:`\delta` on the virtual space plus :math:`\eta`
   on the active space. An index with protoindices must not reach the active space (nonorthogonal active orbitals are not supported);
-- the engine skips the pair-based connectivity filters (``WickTheorem::pairwise_connectivity()``), since a cumulant can connect
-  operators that no pair does.
+- the engine skips the required-connectivity filter (``WickTheorem::pairwise_connectivity()``), since a cumulant can connect
+  operators that no pair does; it keeps rejecting contractions between avoided pairs early, because no cumulant can undo a direct
+  contraction, and ``cumulant_expand`` filters the cumulant-mediated connections of both kinds.
 
 Under this vacuum ``WickTheorem::compute`` hands its input and options to ``detail::extended_wick``
 (``SeQuant/core/wick_extended.hpp``), which drives the rest; ``count_only`` and bosonic statistics are not supported there. For each

@@ -580,6 +580,53 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     }
   }
 
+  SECTION("WickTheorem: an avoided pair is rejected during contraction") {
+    // a pair contraction between an avoided pair of operators is fatal the
+    // moment it is attempted (no later cumulant can undo it), so the engine
+    // rejects it early and attempts fewer contractions; the result must still
+    // be exactly what filtering the unconstrained result would give
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"})) *
+              ex<FNOperator>(cre({L"u_5"}), ann({L"u_6"}));
+    auto run = [](const ExprPtr& in,
+                  const container::svector<std::pair<std::size_t, std::size_t>>&
+                      avoided) {
+      FWickTheorem wick{in};
+      wick.full_contractions(false).set_nop_avoided_connections(avoided);
+      auto result = wick.compute();
+      return std::pair{result, wick.stats().num_attempted_contractions.load()};
+    };
+    auto [all, attempted_all] = run(in, {});
+    auto [avoided, attempted_avoided] = run(in, {{0, 2}});
+    REQUIRE(attempted_avoided < attempted_all);
+
+    // the terms of the unconstrained result without a 0-2 edge
+    auto ord = [](const Index& i) -> int {
+      const auto l = i.label();
+      if (l == L"u_1" || l == L"u_2") return 0;
+      if (l == L"u_3" || l == L"u_4") return 1;
+      return 2;
+    };
+    auto expected = std::make_shared<Sum>();
+    for (const auto& term : *all) {
+      bool e02 = false;
+      auto check = [&](const ExprPtr& f) {
+        if (!f->is<Tensor>()) return;
+        container::set<int> ords;
+        for (const auto& idx : f->as<Tensor>().const_braket())
+          ords.insert(ord(idx));
+        if (ords.contains(0) && ords.contains(2)) e02 = true;
+      };
+      if (term->is<Product>())
+        for (const auto& f : *term) check(f);
+      else
+        check(term);
+      if (!e02) expected->append(term);
+    }
+    REQUIRE(expected->size() > 0);
+    REQUIRE(simplify(avoided - ExprPtr(expected)) == ex<Constant>(0));
+  }
+
   SECTION("WickTheorem: connection ordinals must name input operators") {
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
