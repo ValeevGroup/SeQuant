@@ -1786,10 +1786,7 @@ class WickTheorem {
                 ? isr->intersection(left.index().space(), right.index().space())
                 : qpspace_common;
         const auto qns = sp.qns();
-        [[maybe_unused]] const auto &active =
-            isr->intersection(isr->reference_occupied_space(qns),
-                              isr->vacuum_unoccupied_space(qns));
-        SEQUANT_ASSERT(!isr->intersection(sp, active) &&
+        SEQUANT_ASSERT(!isr->intersection(sp, isr->active_space(qns)) &&
                        "protoindexed indices must not reach the active space");
       }
     }

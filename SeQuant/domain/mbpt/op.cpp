@@ -186,9 +186,7 @@ qns_t combine(qns_t a, qns_t b) {
       // creators and annihilators from the two sides
       const bool active =
           multiproduct &&
-          isr->intersection(base_spaces[i],
-                            isr->reference_occupied_space(qns)) &&
-          isr->intersection(base_spaces[i], isr->vacuum_unoccupied_space(qns));
+          isr->intersection(base_spaces[i], isr->active_space(qns));
       auto base_is_fermi_occupied = isr->is_pure_occupied(
           base_spaces[i]);  // need to distinguish particle and hole
                             // contractions.
