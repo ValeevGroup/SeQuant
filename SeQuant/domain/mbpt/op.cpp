@@ -833,14 +833,14 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
 // indexed by nonnegative ranks (think "derivative wrt r/l"). δl is the
 // deexcitation/bra projector P(np,nh); δr is the excitation/ket projector
 // P(-np,-nh).
-ExprPtr δr(nₚ np, nₕ nh) {
+ExprPtr δr(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return tensor::P(-np, -nh, Normalization::SquareRoot);
+  return tensor::P(-np, -nh, Normalization::SquareRoot, std::move(grants_of));
 }
 
-ExprPtr δl(nₚ np, nₕ nh) {
+ExprPtr δl(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return tensor::P(np, nh, Normalization::SquareRoot);
+  return tensor::P(np, nh, Normalization::SquareRoot, std::move(grants_of));
 }
 }  // namespace tensor
 
@@ -1178,14 +1178,14 @@ ExprPtr L(nₚ np, nₕ nh, Normalization norm) {
 // indexed by nonnegative ranks (think "derivative wrt r/l"). δl is the
 // deexcitation/bra projector P(np,nh); δr is the excitation/ket projector
 // P(-np,-nh).
-ExprPtr δr(nₚ np, nₕ nh) {
+ExprPtr δr(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return P(-np, -nh, Normalization::SquareRoot);
+  return P(-np, -nh, Normalization::SquareRoot, std::move(grants_of));
 }
 
-ExprPtr δl(nₚ np, nₕ nh) {
+ExprPtr δl(nₚ np, nₕ nh, std::optional<std::wstring> grants_of) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return P(np, nh, Normalization::SquareRoot);
+  return P(np, nh, Normalization::SquareRoot, std::move(grants_of));
 }
 
 qns_t apply_to_vac(const ExprPtr& expr) {
