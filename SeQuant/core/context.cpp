@@ -83,11 +83,19 @@ static std::recursive_mutex ctx_mtx;  // used to protect the context
 #endif
 
 const Context& get_default_context(Statistics s) {
+  // a scoped context is thread-local, hence needs no lock
+  if (const auto* overlay = detail::implicit_context_overlay<
+          container::map<Statistics, Context>>()) {
+    auto it = overlay->find(s);
+    if (it == overlay->end()) it = overlay->find(Statistics::Arbitrary);
+    SEQUANT_ASSERT(it != overlay->end());
+    return it->second;
+  }
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
 #endif
   auto& contexts =
-      detail::get_implicit_context<container::map<Statistics, Context>>();
+      detail::implicit_context_instance<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
   /// default for arbitrary statistics is initialized lazily here
   if (it == contexts.end() && s == Statistics::Arbitrary) {
@@ -134,27 +142,44 @@ void reset_default_context() {
 
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
-set_scoped_default_context(const container::map<Statistics, Context>& ctx) {
-#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
-  std::scoped_lock lock(ctx_mtx);
-#endif
-  return detail::set_scoped_implicit_context(ctx);
+set_scoped_default_context(container::map<Statistics, Context> ctx) {
+  // a scoped context is a thread-local overlay that leaves the process-wide
+  // contexts alone, hence needs no lock
+  // get_default_context() falls back to the context for arbitrary statistics
+  ctx.try_emplace(Statistics::Arbitrary);
+  return detail::set_scoped_implicit_context(std::move(ctx));
 }
 
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(Context ctx) {
-  return detail::set_scoped_implicit_context(
-      container::map<Statistics, Context>{
-          {Statistics::Arbitrary, std::move(ctx)}});
+  return set_scoped_default_context(container::map<Statistics, Context>{
+      {Statistics::Arbitrary, std::move(ctx)}});
 }
 
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(Context::Options ctx_options) {
-  return detail::set_scoped_implicit_context(
-      container::map<Statistics, Context>{
-          {Statistics::Arbitrary, Context(std::move(ctx_options))}});
+  return set_scoped_default_context(Context(std::move(ctx_options)));
+}
+
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_modified_default_context(
+    const std::function<void(Context&)>& modify) {
+  auto ctxs = [] {
+    if (const auto* overlay = detail::implicit_context_overlay<
+            container::map<Statistics, Context>>())
+      return *overlay;
+    get_default_context();  // ensures that the arbitrary statistics has one
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+    std::scoped_lock lock(ctx_mtx);
+#endif
+    return detail::implicit_context_instance<
+        container::map<Statistics, Context>>();
+  }();
+  for (auto& [s, ctx] : ctxs) modify(ctx);
+  return set_scoped_default_context(std::move(ctxs));
 }
 
 Context::Context(Options options)

@@ -11,13 +11,22 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
+#include <atomic>
+#include <functional>
 #include <iostream>
+#include <latch>
 #include <memory>
+#include <mutex>
+#include <set>
 #include <string>
+#include <thread>
+#include <vector>
 
 TEST_CASE("context", "[runtime]") {
   using namespace sequant;
@@ -197,5 +206,138 @@ TEST_CASE("context", "[runtime]") {
     CHECK(ctx_opts.index_comparer());
     CHECK(ctx_opts.index_pair_comparer());
     CHECK(ctx_opts != ctx);
+  }
+}
+
+TEST_CASE("scoped contexts", "[runtime]") {
+  using namespace sequant;
+
+  auto q_canonicalizer = [] {
+    return get_default_context().nondefault_tensor_canonicalizer_ptr(L"Q");
+  };
+  auto with_q_canonicalizer =
+      [](std::shared_ptr<TensorCanonicalizer> canonicalizer) {
+        return Context(get_default_context())
+            .set_tensor_canonicalizer(L"Q", std::move(canonicalizer));
+      };
+  REQUIRE(!q_canonicalizer());
+
+  SECTION("each thread sees only its own") {
+    constexpr int nthreads = 6;
+    std::latch all_scoped(nthreads);
+    std::atomic<int> mismatches = 0;
+    std::vector<std::thread> threads;
+    for (int t = 0; t != nthreads; ++t) {
+      threads.emplace_back([&] {
+        const auto mine = std::make_shared<NullTensorCanonicalizer>();
+        {
+          auto scoped = set_scoped_default_context(with_q_canonicalizer(mine));
+          all_scoped.arrive_and_wait();
+          for (int i = 0; i != 1000; ++i)
+            if (q_canonicalizer() != mine) ++mismatches;
+        }
+        if (q_canonicalizer()) ++mismatches;
+      });
+    }
+    for (auto& thread : threads) thread.join();
+    CHECK(mismatches == 0);
+    CHECK(!q_canonicalizer());
+  }
+
+  SECTION("parallel workers see the scoped context of the caller") {
+    const auto mine = std::make_shared<NullTensorCanonicalizer>();
+    std::vector<int> items(64);
+    std::atomic<int> mismatches = 0;
+    {
+      auto scoped = set_scoped_default_context(with_q_canonicalizer(mine));
+      auto scoped_mbpt = mbpt::set_scoped_default_mbpt_context(
+          mbpt::Context({.csv = mbpt::CSV::Yes}));
+      sequant::for_each(items, [&](int&) {
+        if (q_canonicalizer() != mine) ++mismatches;
+        if (mbpt::get_default_mbpt_context().csv() != mbpt::CSV::Yes)
+          ++mismatches;
+        // nested scopes compose
+        const auto inner = std::make_shared<NullTensorCanonicalizer>();
+        {
+          auto scoped = set_scoped_default_context(with_q_canonicalizer(inner));
+          if (q_canonicalizer() != inner) ++mismatches;
+        }
+        if (q_canonicalizer() != mine) ++mismatches;
+      });
+      CHECK(sequant::transform_reduce(items, 0, std::plus<int>{}, [&](int) {
+              return q_canonicalizer() == mine ? 0 : 1;
+            }) == 0);
+      CHECK(q_canonicalizer() == mine);
+    }
+    CHECK(mismatches == 0);
+
+    // after the scope workers see the process-wide context again
+    sequant::for_each(items, [&](int&) {
+      if (q_canonicalizer()) ++mismatches;
+    });
+    CHECK(mismatches == 0);
+  }
+
+  // unlike for_each, whose execution-policy backend may run serially,
+  // parallel_do always runs on num_threads() distinct threads
+  SECTION("parallel_do threads see the scoped context of the caller") {
+    const auto mine = std::make_shared<NullTensorCanonicalizer>();
+    std::atomic<int> invocations = 0;
+    std::atomic<int> mismatches = 0;
+    std::mutex thread_ids_mtx;
+    std::set<std::thread::id> thread_ids;
+    {
+      auto scoped = set_scoped_default_context(with_q_canonicalizer(mine));
+      sequant::parallel_do([&](int) {
+        ++invocations;
+        {
+          std::scoped_lock lock(thread_ids_mtx);
+          thread_ids.insert(std::this_thread::get_id());
+        }
+        if (q_canonicalizer() != mine) ++mismatches;
+      });
+      CHECK(q_canonicalizer() == mine);
+    }
+    CHECK(invocations == num_threads());
+    CHECK(mismatches == 0);
+    if (num_threads() > 1) CHECK(thread_ids.size() > 1);
+
+    sequant::parallel_do([&](int) {
+      if (q_canonicalizer()) ++mismatches;
+    });
+    CHECK(mismatches == 0);
+  }
+
+  SECTION("a modification applies to the context of every statistics") {
+    const auto labels = [](Statistics s) {
+      return get_default_context(s).cardinal_tensor_labels();
+    };
+    const container::vector<std::wstring> arbitrary_labels{L"A"};
+    const container::vector<std::wstring> fermi_labels{L"F"};
+    auto scoped =
+        set_scoped_default_context(container::map<Statistics, Context>{
+            {Statistics::Arbitrary,
+             Context(get_default_context())
+                 .set_cardinal_tensor_labels(arbitrary_labels)},
+            {Statistics::FermiDirac,
+             Context(get_default_context())
+                 .set_cardinal_tensor_labels(fermi_labels)}});
+    const auto mine = std::make_shared<NullTensorCanonicalizer>();
+    auto q_canonicalizer_of = [](Statistics s) {
+      return get_default_context(s).nondefault_tensor_canonicalizer_ptr(L"Q");
+    };
+    {
+      auto modified = set_scoped_modified_default_context(
+          [&mine](Context& ctx) { ctx.set_tensor_canonicalizer(L"Q", mine); });
+      CHECK(labels(Statistics::Arbitrary) == arbitrary_labels);
+      CHECK(labels(Statistics::FermiDirac) == fermi_labels);
+      CHECK(labels(Statistics::BoseEinstein) == arbitrary_labels);
+      CHECK(q_canonicalizer_of(Statistics::Arbitrary) == mine);
+      CHECK(q_canonicalizer_of(Statistics::FermiDirac) == mine);
+    }
+    CHECK(labels(Statistics::Arbitrary) == arbitrary_labels);
+    CHECK(labels(Statistics::FermiDirac) == fermi_labels);
+    CHECK(!q_canonicalizer_of(Statistics::Arbitrary));
+    CHECK(!q_canonicalizer_of(Statistics::FermiDirac));
   }
 }

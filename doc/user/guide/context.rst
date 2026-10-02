@@ -64,7 +64,9 @@ Scoped context changes
 
 Both context types support `RAII <https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization>`_-style, scoped overrides via :func:`sequant::set_scoped_default_context` (and its ``mbpt`` counterpart
 :func:`sequant::mbpt::set_scoped_default_mbpt_context`): the returned resetter object restores the previous default context when it goes
-out of scope, which is the safest way to temporarily change context for a single calculation without affecting surrounding code:
+out of scope, which is the safest way to temporarily change context for a single calculation without affecting surrounding code.
+A scoped context is seen only by the thread that installed it and by the parallel work it launches through SeQuant (e.g.
+``sequant::for_each``), never by other threads; scopes must end in the reverse order of their creation:
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp

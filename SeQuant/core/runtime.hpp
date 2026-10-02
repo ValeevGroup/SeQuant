@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <SeQuant/core/ranges.hpp>
+#include <SeQuant/core/utility/context.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 
@@ -59,15 +60,22 @@ inline int num_threads() { return detail::nthreads_accessor(); }
 /// lambda(thread_id) where @c thread_id is an integer in
 ///        @c [0,nthreads) .
 /// @sa get_num_threads()
+/// @note each instance is invoked on its own copy of @p lambda and sees the
+/// scoped contexts of the calling thread
 template <typename Lambda>
 void parallel_do(Lambda&& lambda) {
   std::vector<std::thread> threads;
   const auto nthreads = num_threads();
+  const auto overlays = detail::implicit_context_overlays();
+  auto task = [&overlays, lambda](int thread_id) mutable {
+    detail::ImplicitContextOverlaysScope scope(overlays);
+    lambda(thread_id);
+  };
   for (int thread_id = 0; thread_id != nthreads; ++thread_id) {
     if (thread_id != nthreads - 1)
-      threads.push_back(std::thread(std::forward<Lambda>(lambda), thread_id));
+      threads.push_back(std::thread(task, thread_id));
     else
-      std::forward<Lambda>(lambda)(thread_id);
+      task(thread_id);
   }  // threads_id
   for (int thread_id = 0; thread_id < nthreads - 1; ++thread_id)
     threads[thread_id].join();
@@ -85,16 +93,24 @@ void parallel_do(Lambda&& lambda) {
 ///        @c [0,size(rng)) . @c op(t1) will be commenced not
 /// after @c op(t2) if @c t1<t2 .
 /// @note The load is balanced dynamically.
+/// @note each invocation of @p op sees the scoped contexts of the calling
+/// thread
 /// @sa get_num_threads()
 template <typename SizedRange, typename UnaryOp>
 void for_each(SizedRange& rng, const UnaryOp& op) {
   using ranges::begin;
   using ranges::end;
+  const auto overlays = detail::implicit_context_overlays();
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
-  std::for_each(std::execution::par_unseq, begin(rng), end(rng), op);
+  std::for_each(std::execution::par, begin(rng), end(rng),
+                [&overlays, &op](auto&& item) {
+                  detail::ImplicitContextOverlaysScope scope(overlays);
+                  op(std::forward<decltype(item)>(item));
+                });
 #else
   std::atomic<size_t> work = 0;
-  auto task = [&work, &op, &rng, ntasks = ranges::size(rng)]() {
+  auto task = [&work, &op, &rng, &overlays, ntasks = ranges::size(rng)]() {
+    detail::ImplicitContextOverlaysScope scope(overlays);
     auto it = ranges::begin(rng);
     size_t prev_task_id = 0;
     size_t task_id = work.fetch_add(1);
@@ -132,6 +148,8 @@ void for_each(SizedRange& rng, const UnaryOp& op) {
 /// @param init the initial value for reduction
 /// @param reduce the \p ReduceLambda object
 /// @param map the \p MapLambda object
+/// @note each invocation of @p map sees the scoped contexts of the calling
+/// thread
 /// @sa get_num_threads()
 template <typename SizedRange, typename T, typename BinaryReductionOp,
           typename UnaryMapOp>
@@ -139,15 +157,21 @@ T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
                    const UnaryMapOp& map) {
   using ranges::begin;
   using ranges::end;
+  const auto overlays = detail::implicit_context_overlays();
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
-  return std::transform_reduce(std::execution::par_unseq, begin(rng), end(rng),
-                               init, reduce, map);
+  return std::transform_reduce(
+      std::execution::par, begin(rng), end(rng), init, reduce,
+      [&overlays, &map](auto&& item) {
+        detail::ImplicitContextOverlaysScope scope(overlays);
+        return map(std::forward<decltype(item)>(item));
+      });
 #else
   std::atomic<size_t> work = 0;
   std::mutex mtx;
   T result = init;
-  auto task = [&work, &map, &reduce, &rng, &mtx, &result,
+  auto task = [&work, &map, &reduce, &rng, &mtx, &result, &overlays,
                ntasks = ranges::size(rng)]() {
+    detail::ImplicitContextOverlaysScope scope(overlays);
     size_t task_id = work.fetch_add(1);
     while (task_id < ntasks) {
       const auto& item = rng[task_id];
