@@ -9,9 +9,6 @@
 
 namespace sequant::mbpt::decompositions {
 
-using density::rdm_label;
-using density::rdm_symmetries;
-
 namespace {
 // the placeholder tensors standing in for as-yet-undecomposed products of
 // densities and cumulants are column symmetric too, but their Hermiticity is
@@ -31,12 +28,11 @@ ExprPtr cumulant_to_density(ExprPtr ex_) {
   auto gamma = [&kappa](std::size_t first, std::size_t n) -> ExprPtr {
     if (n == 1)
       return density::make_rdm(kappa.bra()[first], kappa.ket()[first]);
-    return ex<Tensor>(rdm_label(),
-                      bra(std::vector<Index>(kappa.bra().begin() + first,
-                                             kappa.bra().begin() + first + n)),
-                      ket(std::vector<Index>(kappa.ket().begin() + first,
-                                             kappa.ket().begin() + first + n)),
-                      density::cumulant_symmetries);
+    return density::make_rdm(
+        bra(std::vector<Index>(kappa.bra().begin() + first,
+                               kappa.bra().begin() + first + n)),
+        ket(std::vector<Index>(kappa.ket().begin() + first,
+                               kappa.ket().begin() + first + n)));
   };
 
   // κ_k = Σ_λ (-1)^(m-1) (m-1)! A[γ_λ₁ ⋯ γ_λₘ] over the integer partitions λ
@@ -125,8 +121,7 @@ ExprPtr one_body_sub(ExprPtr ex_) {  // J. Chem. Phys. 132, 234107 (2010);
   auto up_0 = ex_->as<FNOperator>().creators()[0].index();
 
   const auto a = ex<FNOperator>(cre({up_0}), ann({down_0}));
-  const auto cumu1 = ex<Tensor>(density::cumulant_label(), bra{down_0},
-                                ket{up_0}, rdm_symmetries);
+  const auto cumu1 = density::make_cumulant(bra{down_0}, ket{up_0});
 
   auto result = a + (ex<Constant>(-1) * cumu1);
   return (result);
@@ -145,15 +140,12 @@ ExprPtr two_body_decomp(
   auto up_0 = ex_->as<FNOperator>().creators()[0].index();
   auto up_1 = ex_->as<FNOperator>().creators()[1].index();
 
-  const auto cumu1 = ex<Tensor>(density::cumulant_label(), bra{down_0},
-                                ket{up_0}, rdm_symmetries);
-  const auto cumu2 = ex<Tensor>(density::cumulant_label(), bra{down_1},
-                                ket{up_1}, rdm_symmetries);
+  const auto cumu1 = density::make_cumulant(bra{down_0}, ket{up_0});
+  const auto cumu2 = density::make_cumulant(bra{down_1}, ket{up_1});
   const auto a = ex<FNOperator>(cre{up_1}, ann{down_1});
   const auto a2 = ex<FNOperator>(cre{up_0, up_1}, ann{down_0, down_1});
   const auto double_cumu =
-      ex<Tensor>(density::cumulant_label(), bra{down_0, down_1},
-                 ket{up_0, up_1}, density::cumulant_symmetries);
+      density::make_cumulant(bra{down_0, down_1}, ket{up_0, up_1});
 
   auto term1 = cumu1 * a;
   auto term2 = cumu1 * cumu2;
@@ -182,23 +174,19 @@ three_body_decomp(ExprPtr ex_, bool approx) {
 
   std::vector<Index> initial_upper{up_0, up_1, up_2};
 
-  const auto cumulant = ex<Tensor>(density::cumulant_label(), bra{down_0},
-                                   ket{up_0}, rdm_symmetries);
+  const auto cumulant = density::make_cumulant(bra{down_0}, ket{up_0});
   const auto a = ex<FNOperator>(cre{up_1, up_2}, ann{down_1, down_2});
   auto a_cumulant = cumulant * a;
 
-  auto cumulant2 = ex<Tensor>(density::cumulant_label(), bra{down_1}, ket{up_1},
-                              rdm_symmetries);
-  auto cumulant3 = ex<Tensor>(density::cumulant_label(), bra{down_2}, ket{up_2},
-                              rdm_symmetries);
+  auto cumulant2 = density::make_cumulant(bra{down_1}, ket{up_1});
+  auto cumulant3 = density::make_cumulant(bra{down_2}, ket{up_2});
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
 
   auto a1 = ex<FNOperator>(cre{up_0}, ann{down_0});
   auto a1_cumu1_cumu2 = a1 * cumulant2 * cumulant3;
 
   auto two_body_cumu =
-      ex<Tensor>(density::cumulant_label(), bra{down_1, down_2},
-                 ket{up_1, up_2}, density::cumulant_symmetries);
+      density::make_cumulant(bra{down_1, down_2}, ket{up_1, up_2});
   auto a1_cumu2 = a1 * two_body_cumu;
 
   auto cumu1_cumu2 = cumulant * two_body_cumu;
@@ -206,9 +194,8 @@ three_body_decomp(ExprPtr ex_, bool approx) {
                                      a1_cumu2 + cumu1_cumu2);
 
   if (!approx) {
-    auto cumu3 =
-        ex<Tensor>(density::cumulant_label(), bra{down_0, down_1, down_2},
-                   ket{up_0, up_1, up_2}, density::cumulant_symmetries);
+    auto cumu3 = density::make_cumulant(bra{down_0, down_1, down_2},
+                                        ket{up_0, up_1, up_2});
 
     sum_of_terms.result = cumu3 + sum_of_terms.result;
   }

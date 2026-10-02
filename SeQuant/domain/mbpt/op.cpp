@@ -1322,7 +1322,8 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
-  const auto rdm_label = spinor ? L"γ" : L"Γ";
+  const auto& rdm_label =
+      spinor ? density::rdm_label() : density::spinfree_rdm_label();
 
   // N.B. reference < vacuum is not yet supported
   if (isr->reference_occupied_space().intersection(
@@ -1369,13 +1370,9 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             : isr->reference_occupied_space(Spin::any);
 
     // STEP1. replace NOPs by RDM
-    auto replace_nop_with_rdm = [&rdm_label, spinor](ExprPtr& exptr) {
-      auto replace = [&rdm_label, spinor](const auto& nop) -> ExprPtr {
-        // spin-free RDMs are column symmetric but not antisymmetric
-        const auto syms = nop.rank() > 1 && spinor
-                              ? density::cumulant_symmetries
-                              : density::rdm_symmetries;
-        return density::rdm_from_nop(nop, rdm_label, syms);
+    auto replace_nop_with_rdm = [&rdm_label](ExprPtr& exptr) {
+      auto replace = [&rdm_label](const auto& nop) -> ExprPtr {
+        return density::rdm_from_nop(nop, rdm_label);
       };
 
       if (exptr.template is<FNOperator>()) {
