@@ -60,11 +60,21 @@ template <typename T>
 concept range_of_castables_to_index =
     (meta::is_statically_castable_v<meta::range_value_t<T>, Index>);
 
-// clang-format off
-/// @brief Index = IndexSpace + nonnegative integer ordinal
+/// what an Index runs over: an IndexSpace or an IndexBasis. An IndexSpace
+/// stands for the space's own basis, so an Index made from one is
+/// basis-generic (null basis instance); an IndexBasis names the basis exactly.
+/// Functions templated on this default it to IndexSpace, so a braced list in
+/// that position still initializes an IndexSpace
+template <typename T>
+concept space_or_basis = std::is_same_v<std::remove_cvref_t<T>, IndexSpace> ||
+                         std::is_same_v<std::remove_cvref_t<T>, IndexBasis>;
 
-/// Index is defined by an IndexSpace (IndexSpace::base_key())
-/// and a non-negative ordinal (by default can be null).
+// clang-format off
+/// @brief Index = IndexBasis + nonnegative integer ordinal
+
+/// Index is defined by an IndexBasis (an IndexSpace, IndexSpace::base_key(),
+/// plus an optional basis instance; an Index made from an IndexSpace alone is
+/// basis-generic) and a non-negative ordinal (by default can be null).
 /// Indices with ordinals greater or
 /// equal to the value returned by min_tmp_label() cannot be constructed directly.
 /// Unlike SeQuant1's ParticleIndex, Index supports dependencies
@@ -207,144 +217,135 @@ class Index : public Taggable {
     return *this;
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
-  explicit Index(const IndexSpace &space) : Taggable(), basis_(space) {
+  // clang-format off
+  /// @name constructors from an IndexSpace or an IndexBasis
+  /// @p space_or_basis is what the Index runs over: an IndexSpace produces a
+  /// basis-generic Index (null basis instance, i.e. the space's own basis), an
+  /// IndexBasis an Index in exactly that basis
+  /// @{
+  // clang-format on
+
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  explicit Index(const SpaceOrBasis &space_or_basis)
+      : Taggable(), basis_(space_or_basis) {
     check_nonreserved();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param ord the index ordinal
-  Index(const IndexSpace &space, meta::integral auto ord)
-      : basis_(space), ordinal_(to_ordinal(ord)) {
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  Index(const SpaceOrBasis &space_or_basis, meta::integral auto ord)
+      : basis_(space_or_basis), ordinal_(to_ordinal(ord)) {
     check_nonreserved();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param ord the index ordinal
-  template <meta::integral I>
-  Index(const IndexSpace &space, std::optional<I> ord)
-      : basis_(space), ordinal_(ord) {
+  template <space_or_basis SpaceOrBasis = IndexSpace, meta::integral I>
+  Index(const SpaceOrBasis &space_or_basis, std::optional<I> ord)
+      : basis_(space_or_basis), ordinal_(ord) {
     check_nonreserved();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  Index(const IndexSpace &space, container::vector<Index> proto_indices,
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  Index(const SpaceOrBasis &space_or_basis,
+        container::vector<Index> proto_indices,
         bool symmetric_proto_indices = true)
-      : Index(space) {
+      : Index(space_or_basis) {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
     validate_proto_indices();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param ord the index ordinal
   /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  Index(const IndexSpace &space, meta::integral auto ord,
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  Index(const SpaceOrBasis &space_or_basis, meta::integral auto ord,
         IndexList proto_indices, bool symmetric_proto_indices = true)
-      : Index(space, ord) {
+      : Index(space_or_basis, ord) {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
     validate_proto_indices();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param ord the index ordinal
   /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  template <meta::integral I>
-  Index(const IndexSpace &space, std::optional<I> ord, IndexList proto_indices,
-        bool symmetric_proto_indices = true)
-      : Index(space, ord) {
+  template <space_or_basis SpaceOrBasis = IndexSpace, meta::integral I>
+  Index(const SpaceOrBasis &space_or_basis, std::optional<I> ord,
+        IndexList proto_indices, bool symmetric_proto_indices = true)
+      : Index(space_or_basis, ord) {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
     validate_proto_indices();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  Index(const IndexSpace &space, IndexList proto_indices,
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  Index(const SpaceOrBasis &space_or_basis, IndexList proto_indices,
         bool symmetric_proto_indices = true)
-      : Index(space) {
+      : Index(space_or_basis) {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
     validate_proto_indices();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param ord the index ordinal
   /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  Index(const IndexSpace &space, meta::integral auto ord,
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  Index(const SpaceOrBasis &space_or_basis, meta::integral auto ord,
         container::vector<Index> proto_indices,
         bool symmetric_proto_indices = true)
-      : Index(space, ord) {
+      : Index(space_or_basis, ord) {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
     validate_proto_indices();
   }
 
-  /// @param space (a const ref to) the IndexSpace object that specifies to this
-  /// space this object belongs
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param ord the index ordinal
   /// @param proto_indices labels of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  template <meta::integral I>
-  Index(const IndexSpace &space, std::optional<I> ord,
+  template <space_or_basis SpaceOrBasis = IndexSpace, meta::integral I>
+  Index(const SpaceOrBasis &space_or_basis, std::optional<I> ord,
         container::vector<Index> proto_indices,
         bool symmetric_proto_indices = true)
-      : Index(space, ord) {
+      : Index(space_or_basis, ord) {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
     validate_proto_indices();
   }
 
-  /// @param basis the IndexBasis (space and basis instance) of this object
-  /// @param ord the index ordinal
-  /// @param proto_indices proto indices (all must be unique,
-  /// i.e. duplicates are not allowed)
-  /// @param symmetric_proto_indices if true, proto_indices can be permuted at
-  /// will and will always be sorted
-  explicit Index(const IndexBasis &basis, std::optional<ordinal_type> ord = {},
-                 index_vector proto_indices = {},
-                 bool symmetric_proto_indices = true)
-      : basis_(basis),
-        ordinal_(ord),
-        proto_indices_(std::move(proto_indices)),
-        symmetric_proto_indices_(symmetric_proto_indices) {
-    check_nonreserved();
-    canonicalize_proto_indices();
-    validate_proto_indices();
-  }
+  /// @}
 
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance ); if @p label
@@ -504,10 +505,11 @@ class Index : public Taggable {
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
   /// make neater temporary indices unique in a given scope (e.g. a single term
   /// in an expression) use IndexFactory.
-  /// @param space an IndexSpace object
-  /// @return a unique temporary index in space @c space
-  static Index make_tmp_index(const IndexSpace &space) {
-    return Index(space, next_tmp_index(), IndexFactoryTag{});
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
+  /// @return a unique temporary index in @c space_or_basis
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  static Index make_tmp_index(const SpaceOrBasis &space_or_basis) {
+    return Index(space_or_basis, next_tmp_index(), IndexFactoryTag{});
   }
 
   /// creates a globaly-unique temporary index in space @c space . The label of
@@ -516,18 +518,19 @@ class Index : public Taggable {
   /// Each call increments the current tmp counter (see next_tmp_index() ) . To
   /// make neater temporary indices unique in a given scope (e.g. a single term
   /// in an expression) use IndexFactory.
-  /// @param space an IndexSpace object
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
   /// @param proto_indices list of proto indices (all must be unique,
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   ///  will and will always be sorted
-  /// @return a unique temporary index in space @c space
-  template <typename IndexRange, typename = std::enable_if_t<meta::is_range_v<
-                                     std::remove_reference_t<IndexRange>>>>
-  static Index make_tmp_index(const IndexSpace &space,
+  /// @return a unique temporary index in @c space_or_basis
+  template <space_or_basis SpaceOrBasis = IndexSpace, typename IndexRange,
+            typename = std::enable_if_t<
+                meta::is_range_v<std::remove_reference_t<IndexRange>>>>
+  static Index make_tmp_index(const SpaceOrBasis &space_or_basis,
                               IndexRange &&proto_indices,
                               bool symmetric_proto_indices = true) {
-    Index result(space, next_tmp_index(), IndexFactoryTag{});
+    Index result(space_or_basis, next_tmp_index(), IndexFactoryTag{});
     if constexpr (std::is_convertible_v<std::remove_reference_t<IndexRange>,
                                         Index::index_vector>) {
       result.proto_indices_ = std::forward<IndexRange>(proto_indices);
@@ -538,24 +541,6 @@ class Index : public Taggable {
     result.canonicalize_proto_indices();
     result.validate_proto_indices();
     return result;
-  }
-
-  /// same as make_tmp_index(const IndexSpace&), with basis instance
-  /// `basis.basis_instance()`
-  static Index make_tmp_index(const IndexBasis &basis) {
-    return Index(basis, next_tmp_index(), IndexFactoryTag{});
-  }
-
-  /// same as make_tmp_index(const IndexSpace&, IndexRange&&, bool), with basis
-  /// instance `basis.basis_instance()`
-  template <typename IndexRange, typename = std::enable_if_t<meta::is_range_v<
-                                     std::remove_reference_t<IndexRange>>>>
-  static Index make_tmp_index(const IndexBasis &basis,
-                              IndexRange &&proto_indices,
-                              bool symmetric_proto_indices = true) {
-    return Index(make_tmp_index(basis),
-                 proto_indices | ranges::to<Index::index_vector>,
-                 symmetric_proto_indices);
   }
 
   template <std::ranges::contiguous_range View>
@@ -1057,10 +1042,10 @@ class Index : public Taggable {
 
   // this ctor is only used by make_tmp_index and IndexFactory and bypasses
   // check for nontmp index
-  Index(const IndexSpace &space, ordinal_type ordinal, IndexFactoryTag) noexcept
-      : basis_(space), ordinal_(ordinal), proto_indices_() {}
-  Index(const IndexBasis &basis, ordinal_type ordinal, IndexFactoryTag) noexcept
-      : basis_(basis), ordinal_(ordinal), proto_indices_() {}
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  Index(const SpaceOrBasis &space_or_basis, ordinal_type ordinal,
+        IndexFactoryTag) noexcept
+      : basis_(space_or_basis), ordinal_(ordinal), proto_indices_() {}
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
   /// the same space, they have the same label, the same proto-indices (if
@@ -1183,21 +1168,20 @@ class IndexFactory {
     SEQUANT_ASSERT(min_index_ > 0);
   }
 
-  /// creates a temporary index in space @c space . The label of the resulting
-  /// index =
-  /// @c IndexSpace::base_key(space) + '_' + temporary counter.
+  /// creates a temporary index in @c space_or_basis . The label of the
+  /// resulting index = @c IndexSpace::base_key(space) + '_' + temporary
+  /// counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
-  /// @param space an IndexSpace object
-  /// @return a unique temporary index in space @c space
-  Index make(const IndexSpace &space) { return make(IndexBasis(space)); }
-
-  /// creates a temporary index in basis @c basis . The label of the resulting
-  /// index = @c IndexSpace::base_key(basis.space()) + '_' + temporary counter.
-  /// Each call increments the current tmp counter (see next_tmp_index() ) .
-  /// @param basis an IndexBasis object
-  /// @return a unique temporary index in basis @c basis
-  Index make(const IndexBasis &basis) {
-    const auto &space = basis.space();
+  /// @param space_or_basis the IndexSpace (basis-generic) or IndexBasis
+  /// @return a unique temporary index in @c space_or_basis
+  template <space_or_basis SpaceOrBasis = IndexSpace>
+  Index make(const SpaceOrBasis &space_or_basis) {
+    const IndexSpace &space = [&]() -> const IndexSpace & {
+      if constexpr (std::is_same_v<SpaceOrBasis, IndexBasis>)
+        return space_or_basis.space();
+      else
+        return space_or_basis;
+    }();
     Index result;
     bool valid = false;
     do {
@@ -1213,7 +1197,8 @@ class IndexFactory {
           SEQUANT_ASSERT(inserted);
         }
       }
-      result = Index(basis, ++(counter_it->second), Index::IndexFactoryTag{});
+      result = Index(space_or_basis, ++(counter_it->second),
+                     Index::IndexFactoryTag{});
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
     return result;
