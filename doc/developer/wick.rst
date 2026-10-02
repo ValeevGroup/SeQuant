@@ -187,10 +187,12 @@ delta between them, which is applied, it then stands. These rules apply only if 
 indices; otherwise every overlap is applied. The result is then, like any other
 :class:`sequant::Product`/:class:`sequant::Sum`, put into canonical form by :doc:`the tensor-network canonicalizer <tnc>` so that like
 terms collect correctly — Wick's-theorem correctness therefore also rests on canonicalization being correct.
-A basis instance (:class:`sequant::IndexBasis`) travels with its index through the reduction: a null destination (the index
-a delta or overlap is reduced to) takes its source's instance, two different instances leave the delta or overlap standing,
-and a null index with proto indices meeting another instance on its own proto indices stops the reduction by throwing
-:class:`sequant::Exception`.
+The reduction treats a basis instance (:class:`sequant::IndexBasis`) like a subspace: an index without one runs over the
+space's own basis, which includes every instance of the space, so a delta or overlap between a generic and a specific index
+replaces the generic one by the specific one, and a specific index is never replaced by a generic one. Two different
+instances are not related by an identity: an overlap between them (or between indices that the rules collected so far
+reduce to different instances) stands and yields no rule, and a Kronecker delta between them throws
+:class:`sequant::Exception`, since basis functions of different bases cannot be compared for equality.
 
 Debugging and tests
 ------------------------

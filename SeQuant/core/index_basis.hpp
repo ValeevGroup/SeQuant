@@ -67,6 +67,15 @@ class IndexBasis {
   optional_instance basis_instance_;
 };
 
+/// @return true if @p basis includes @p subbasis, i.e. its space includes the
+/// space of @p subbasis and it is either the space's own basis (which includes
+/// every instance of the space) or the same instance as @p subbasis
+inline bool includes(const IndexBasis& basis, const IndexBasis& subbasis) {
+  return includes(basis.space(), subbasis.space()) &&
+         (!basis.has_basis_instance() ||
+          basis.basis_instance() == subbasis.basis_instance());
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_INDEX_BASIS_HPP
