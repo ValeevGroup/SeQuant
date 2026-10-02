@@ -464,8 +464,8 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/csv.hpp
         SeQuant/domain/mbpt/rules/df.cpp
         SeQuant/domain/mbpt/rules/df.hpp
-        SeQuant/domain/mbpt/rules/dlpno.cpp
-        SeQuant/domain/mbpt/rules/dlpno.hpp
+        SeQuant/domain/mbpt/rules/pno.cpp
+        SeQuant/domain/mbpt/rules/pno.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp
         SeQuant/domain/mbpt/space_qns.hpp

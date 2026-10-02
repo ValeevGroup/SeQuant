@@ -1,5 +1,5 @@
 //
-// The integral projection pass (mbpt/rules/dlpno.hpp) on terms SeQuant's CC
+// The integral projection pass (mbpt/rules/pno.hpp) on terms SeQuant's CC
 // derivations produce.
 //
 
@@ -19,7 +19,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
-#include <SeQuant/domain/mbpt/rules/dlpno.hpp>
+#include <SeQuant/domain/mbpt/rules/pno.hpp>
 
 #include <algorithm>
 #include <array>
@@ -295,7 +295,7 @@ TEST_CASE("csv-projection-partner-pair-integral-basis",
                          message_contains("PartnerPair with"));
 }
 
-TEST_CASE("csv-dlpno-projection-fixtures", "[mbpt][csv]") {
+TEST_CASE("csv-pno-projection-fixtures", "[mbpt][csv]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
   using namespace sequant::tests::csv_rules;
@@ -458,7 +458,7 @@ TEST_CASE("csv-dlpno-projection-fixtures", "[mbpt][csv]") {
                          message_contains("needs a cell_instance"));
 }
 
-TEST_CASE("csv-dlpno-projection-ccsd", "[mbpt][csv][valgrind_skip]") {
+TEST_CASE("csv-pno-projection-ccsd", "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
   using namespace sequant::tests::csv_rules;
@@ -519,7 +519,7 @@ TEST_CASE("csv-dlpno-projection-ccsd", "[mbpt][csv][valgrind_skip]") {
   }
 }
 
-TEST_CASE("csv-dlpno-mixed-class-and-opaque-ordinals",
+TEST_CASE("csv-pno-mixed-class-and-opaque-ordinals",
           "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
@@ -579,7 +579,7 @@ TEST_CASE("csv-dlpno-mixed-class-and-opaque-ordinals",
   CHECK(mbpt::project_integral_domains(r2, {}).get() == r2.get());
 }
 
-TEST_CASE("csv-dlpno-amplitude-basis-follows-the-partner",
+TEST_CASE("csv-pno-amplitude-basis-follows-the-partner",
           "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
@@ -607,7 +607,7 @@ TEST_CASE("csv-dlpno-amplitude-basis-follows-the-partner",
   CHECK(n > 0);
 }
 
-TEST_CASE("csv-dlpno-order-counts-every-amplitude-family",
+TEST_CASE("csv-pno-order-counts-every-amplitude-family",
           "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
@@ -631,7 +631,7 @@ TEST_CASE("csv-dlpno-order-counts-every-amplitude-family",
   CHECK(probed > 0);
 }
 
-TEST_CASE("csv-dlpno-projection-lambda-canonicalizes",
+TEST_CASE("csv-pno-projection-lambda-canonicalizes",
           "[mbpt][csv][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::tests::csv;
