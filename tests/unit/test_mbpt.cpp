@@ -1718,8 +1718,7 @@ SECTION("rdm-decomposition symmetries") {
                .vacuum = Vacuum::SingleProduct}));
 
   const auto kappa =
-      ex<Tensor>(L"κ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
-                 TensorSymmetries{.column = ColumnSymmetry::Symm});
+      density::make_cumulant(bra{Index(L"i_1")}, ket{Index(L"i_2")});
   const auto gamma = mbpt::decompositions::cumulant_to_density(kappa);
   REQUIRE(gamma->is<Tensor>());
   REQUIRE(gamma->as<Tensor>().label() == L"γ");
@@ -1758,11 +1757,9 @@ SECTION("rdm-decomposition symmetries") {
         CanonicalizationMethod::Topological));
     auto topological = set_scoped_default_context(ctx);
     const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
-    const auto kappa = ex<Tensor>(L"κ", bra{i1, i3}, ket{i2, i4},
-                                  density::cumulant_symmetries);
+    const auto kappa = density::make_cumulant(bra{i1, i3}, ket{i2, i4});
     const auto expected =
-        ex<Tensor>(L"γ", bra{i1, i3}, ket{i2, i4},
-                   density::cumulant_symmetries) -
+        density::make_rdm(bra{i1, i3}, ket{i2, i4}) -
         density::make_rdm(i1, i2) * density::make_rdm(i3, i4) +
         density::make_rdm(i1, i4) * density::make_rdm(i3, i2);
     REQUIRE(simplify(mbpt::decompositions::cumulant2_to_density(kappa) -
@@ -1782,8 +1779,7 @@ SECTION("rdm-decomposition symmetries") {
       /*atoms_only=*/true);
   // a spin-orbital multi-body density is antisymmetric, like the one
   // expectation_value_impl() builds from a leftover normal operator
-  const auto gamma2 = density::rdm_from_nop(nop2, density::rdm_label(),
-                                            density::cumulant_symmetries);
+  const auto gamma2 = density::rdm_from_nop(nop2, density::rdm_label());
   REQUIRE(simplify(densities2 - gamma2)->size() == densities2->size() - 1);
   // η is a registered mbpt operator label
   REQUIRE(mbpt::get_default_mbpt_context().op_registry()->contains(L"η"));
@@ -1823,8 +1819,7 @@ SECTION("cumulant-to-density decompositions") {
   auto gamma = [](std::vector<Index> b, std::vector<Index> k) {
     return b.size() == 1
                ? density::make_rdm(b[0], k[0])
-               : ex<Tensor>(L"γ", bra(std::move(b)), ket(std::move(k)),
-                            density::cumulant_symmetries);
+               : density::make_rdm(bra(std::move(b)), ket(std::move(k)));
   };
 
   // κ₃ = γ₃ - Σ γ₁γ₂ (9 terms) + 2 Σ γ₁γ₁γ₁ (6 terms)
@@ -1885,20 +1880,18 @@ SECTION("cumulant-to-density decompositions") {
                      kappa3_ref) == ex<Constant>(0));
   }
 
-  // cumulants_to_densities rewrites every κ in an expression, recognizing κ
-  // by its label alone
+  // cumulants_to_densities rewrites every κ in an expression
   using mbpt::decompositions::cumulants_to_densities;
   const FNOperator nop2(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"}));
   const auto kappa2 = density::make_cumulant(nop2);
-  const auto kappa1_nonsymm =
-      ex<Tensor>(L"κ", bra{Index(L"i_5")}, ket{Index(L"i_6")});
+  const auto kappa1 =
+      density::make_cumulant(bra{Index(L"i_5")}, ket{Index(L"i_6")});
   const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"},
                             Symmetry::Antisymm);
   const auto h = ex<Tensor>(L"h", bra{L"i_6"}, ket{L"i_5"});
-  const auto expr = g * kappa2 + h * kappa1_nonsymm;
-  const auto expected =
-      g * mbpt::decompositions::cumulant2_to_density(kappa2) +
-      h * mbpt::decompositions::cumulant_to_density(kappa1_nonsymm);
+  const auto expr = g * kappa2 + h * kappa1;
+  const auto expected = g * mbpt::decompositions::cumulant2_to_density(kappa2) +
+                        h * mbpt::decompositions::cumulant_to_density(kappa1);
   const auto result = cumulants_to_densities(expr);
   result->visit(
       [](const ExprPtr& e) {
@@ -1972,8 +1965,7 @@ SECTION("cumulant-to-density decompositions") {
     // cumulants, γ₄ = κ₄ + A[γ₁κ₃] + A[κ₂κ₂] + A[γ₁γ₁κ₂] + A[γ₁γ₁γ₁γ₁]
     using mbpt::antisymmetrize;
     auto kappa = [](std::vector<Index> b, std::vector<Index> k) {
-      return ex<Tensor>(L"κ", bra(std::move(b)), ket(std::move(k)),
-                        density::cumulant_symmetries);
+      return density::make_cumulant(bra(std::move(b)), ket(std::move(k)));
     };
     const auto moments =
         kappa({i5, i6, i7, i8}, {i1, i2, i3, i4}) +

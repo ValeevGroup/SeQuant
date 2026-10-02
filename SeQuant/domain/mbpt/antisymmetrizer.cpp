@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
@@ -396,9 +397,9 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
             new_upper.push_back(factor->as<Tensor>().ket()[i]);
             new_lower.push_back(factor->as<Tensor>().bra()[i]);
           }
-          factor = ex<Tensor>(L"Γ", factor->as<Tensor>().bra(),
-                              factor->as<Tensor>().ket(), Symmetry::Nonsymm,
-                              std::nullopt, ColumnSymmetry::Symm);
+          factor = density::make_density(density::spinfree_rdm_label(),
+                                         bra(factor->as<Tensor>().bra()),
+                                         ket(factor->as<Tensor>().ket()));
         } else if (factor->is<FNOperator>()) {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;
