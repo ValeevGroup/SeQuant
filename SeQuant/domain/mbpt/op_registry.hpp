@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -172,6 +173,12 @@ class OpRegistry {
            *reg1.basis_grants_ == *reg2.basis_grants_;
   }
 };  // class OpRegistry
+
+/// @return true if the label of @p t, without its adjoint marker, is a
+/// registered Ex or Deex operator of @p reg (perturbation-order decorated
+/// labels such as `t¹` must be registered as such)
+bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg);
+
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
