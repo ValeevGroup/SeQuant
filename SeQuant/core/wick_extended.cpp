@@ -585,6 +585,11 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
 
     WickTheorem<S> wick{nopseq};
     wick.full_contractions(false).use_topology(opts.use_topology);
+    // the engine rejects a pair contraction between an avoided pair as soon
+    // as it is attempted; cumulant_expand still filters the rest (a cumulant
+    // block can connect an avoided pair too)
+    if (!opts.nop_avoided_connections.empty())
+      wick.set_nop_avoided_connections(opts.nop_avoided_connections);
     if (partitions && !partitions->nop_partitions.empty())
       wick.set_nop_partitions(partitions->nop_partitions);
     if (partitions && !partitions->op_partitions.empty())
