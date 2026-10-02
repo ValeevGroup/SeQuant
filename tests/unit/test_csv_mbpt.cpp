@@ -289,15 +289,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
         INFO("K" << k);
         const auto g = product(k, granted);
         const auto s = product(k, stamped);
-        if (k == 5 && yes) {
-          // the guard through grants: λ ungranted next to a granted t
-          CHECK_THROWS_MATCHES(
-              vac_av(g), Exception,
-              message_contains("carries proto indices and no basis instance"));
-          CHECK_THROWS_AS(vac_av(s), Exception);
-        } else {
-          CHECK(serialize(vac_av(g)) == serialize(vac_av(s)));
-        }
+        CHECK(serialize(vac_av(g)) == serialize(vac_av(s)));
       }
     }
   }

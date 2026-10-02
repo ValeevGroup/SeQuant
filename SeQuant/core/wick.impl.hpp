@@ -144,7 +144,7 @@ compute_index_replacement_rules(
   // already has its own protoindices: <a_ij|p> = <a_ij|a_ij> (hence replace p
   // with a_ij), but <a_ij|p_kl> = <a_ij|a_kl> != <a_ij|a_ij> (hence replace
   // p_kl with a_kl)
-  auto domain_proto = [](const Index &dst, const Index &src) {
+  auto proto = [](const Index &dst, const Index &src) {
     if (src.has_proto_indices()) {
       if (dst.has_proto_indices()) {
         SEQUANT_ASSERT(dst.proto_indices() == src.proto_indices());
@@ -155,28 +155,31 @@ compute_index_replacement_rules(
       return dst;
     }
   };
-  // ... and the basis instance: a null dst takes src's
-  auto proto = [&domain_proto](const Index &dst, const Index &src) {
-    auto result = domain_proto(dst, src);
-    if (!result.basis().has_basis_instance()) {
-      if (src.basis().has_basis_instance())
-        result = result.replace_basis_instance(src.basis().basis_instance());
-    } else {
-      SEQUANT_ASSERT(!src.basis().has_basis_instance() ||
-                     src.basis().basis_instance() ==
-                         result.basis().basis_instance());
-      // a null index with proto indices is the instance-less pair basis of
-      // its proto indices
-      if (!src.basis().has_basis_instance() && src.has_proto_indices() &&
-          src.proto_indices() == result.proto_indices())
-        throw Exception(
-            "WickTheorem::reduce: " + toUtf8(src.full_label()) +
-            " carries proto indices and no basis instance; merging it with " +
-            toUtf8(result.full_label()) +
-            " on the same proto indices would silently project its "
-            "instance-less pair basis into another family");
-    }
-    return result;
+
+  // the basis of the index that a delta/overlap between indices in bases b1
+  // and b2 reduces to: the intersection of their spaces (null if disjoint) in
+  // their basis instance. A null instance is the space's own basis and
+  // includes every instance of the space; two different instances are not
+  // related by an identity, so the caller never asks for their intersection
+  auto intersection = [&isr](const IndexBasis &b1,
+                             const IndexBasis &b2) -> IndexBasis {
+    SEQUANT_ASSERT(!b1.has_basis_instance() || !b2.has_basis_instance() ||
+                   b1.basis_instance() == b2.basis_instance());
+    return IndexBasis(
+        b1.space() == b2.space() ? b1.space()
+                                 : isr->intersection(b1.space(), b2.space()),
+        b1.has_basis_instance() ? b1.basis_instance() : b2.basis_instance());
+  };
+
+  // the basis of idx as far as the rules collected so far go: its own space,
+  // in the instance of its current destination (a rule can only sharpen a
+  // source's instance, never drop it)
+  auto resolved_basis = [&src2dst](const Index &idx) -> IndexBasis {
+    auto it = src2dst.find(idx);
+    return IndexBasis(idx.space(),
+                      it == src2dst.end()
+                          ? idx.basis().basis_instance()
+                          : it->second->dst().basis().basis_instance());
   };
 
   // adds src->dst, optionally assigning proto indices from protosrc
@@ -244,18 +247,18 @@ compute_index_replacement_rules(
   };
 
   // changes src->current_dst to src->intersection(dst,current_dst)
-  auto update_rule = [&src2dst, &proto, &isr, &idxfac, &zero_result](
+  auto update_rule = [&src2dst, &proto, &intersection, &idxfac, &zero_result](
                          auto src_it, const Index &src, const Index &dst,
                          std::optional<const Index> protosrc = std::nullopt) {
     SEQUANT_ASSERT(src_it != src2dst.end());
     auto &old_dst = src_it->second->dst();
 
-    // do we need to change space of dst?
-    const bool change_dst_space = (dst.space() != old_dst.space());
-    const IndexSpace &new_dst_space =
-        change_dst_space ? isr->intersection(old_dst.space(), dst.space())
-                         : dst.space();
-    if (!new_dst_space) return zero_result();
+    // do we need to change basis of dst?
+    const bool change_dst_basis = (dst.basis() != old_dst.basis());
+    const IndexBasis new_dst_basis =
+        change_dst_basis ? intersection(old_dst.basis(), dst.basis())
+                         : dst.basis();
+    if (!new_dst_basis.space()) return zero_result();
 
     // do we need to change protoindices?
     bool change_dst_protoindices = false;
@@ -272,8 +275,8 @@ compute_index_replacement_rules(
       change_dst_protoindices = protosrc.value_or(src).has_proto_indices();
     }
 
-    if (change_dst_space || change_dst_protoindices) {
-      auto plain_dst = idxfac.make(new_dst_space);
+    if (change_dst_basis || change_dst_protoindices) {
+      auto plain_dst = idxfac.make(new_dst_basis);
       const auto real_dst = change_dst_protoindices
                                 ? proto(plain_dst, protosrc.value_or(src))
                                 : proto(plain_dst, old_dst);
@@ -301,9 +304,9 @@ compute_index_replacement_rules(
   auto add_or_update_rules = [&add_rule, &update_rule, &add_src_to_existing_dst,
                               &replace_dst_index, &merge_dst2_into_dst1,
                               &src2dst, &idxfac, &proto, &zero_result,
-                              &zero_result_status,
-                              &isr](const Index &src1, const Index &src2,
-                                    const Index &dst) {
+                              &zero_result_status, &intersection](
+                                 const Index &src1, const Index &src2,
+                                 const Index &dst) {
     // are there replacement rules already for src{1,2}?
     auto src1_it = src2dst.find(src1);
     auto src2_it = src2dst.find(src2);
@@ -321,21 +324,8 @@ compute_index_replacement_rules(
         !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
 
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      // one destination for both carries the basis instance of either, unless
-      // both have proto indices and they differ (one destination each)
-      if ((src1.basis().has_basis_instance() ||
-           src2.basis().has_basis_instance()) &&
-          !(src1.has_proto_indices() && src2.has_proto_indices() &&
-            src1.proto_indices() != src2.proto_indices())) {
-        const auto d = dst.replace_basis_instance(
-            src1.basis().has_basis_instance() ? src1.basis().basis_instance()
-                                              : src2.basis().basis_instance());
-        add_rule(src1, d, dst1_proto);
-        add_rule(src2, d, dst2_proto);
-      } else {
-        add_rule(src1, dst, dst1_proto);
-        add_rule(src2, dst, dst2_proto);
-      }
+      add_rule(src1, dst, dst1_proto);
+      add_rule(src2, dst, dst2_proto);
     } else if (has_src1_rule && !has_src2_rule) {
       // update the existing rule for src1
       SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT(
@@ -355,31 +345,30 @@ compute_index_replacement_rules(
       // - repoint old rules to the new target
       const auto &old_dst1 = src1_it->second->dst();
       const auto &old_dst2 = src2_it->second->dst();
-      const auto new_dst_space =
-          (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
-              ? isr->intersection(
-                    isr->intersection(old_dst1.space(), old_dst2.space()),
-                    dst.space())
-              : dst.space();
-      if (!new_dst_space) return zero_result();
+      const auto new_dst_basis =
+          (dst.basis() != old_dst1.basis() || dst.basis() != old_dst2.basis())
+              ? intersection(intersection(old_dst1.basis(), old_dst2.basis()),
+                             dst.basis())
+              : dst.basis();
+      if (!new_dst_basis.space()) return zero_result();
       Index new_dst;
-      if (new_dst_space == old_dst1.space()) {
+      if (new_dst_basis == old_dst1.basis()) {
         new_dst = old_dst1;
-        if (new_dst_space == old_dst2.space() && old_dst2 < new_dst) {
+        if (new_dst_basis == old_dst2.basis() && old_dst2 < new_dst) {
           new_dst = old_dst2;
         }
-        if (new_dst_space == dst.space() && dst < new_dst) {
+        if (new_dst_basis == dst.basis() && dst < new_dst) {
           new_dst = dst;
         }
-      } else if (new_dst_space == old_dst2.space()) {
+      } else if (new_dst_basis == old_dst2.basis()) {
         new_dst = old_dst2;
-        if (new_dst_space == dst.space() && dst < new_dst) {
+        if (new_dst_basis == dst.basis() && dst < new_dst) {
           new_dst = dst;
         }
-      } else if (new_dst_space == dst.space()) {
+      } else if (new_dst_basis == dst.basis()) {
         new_dst = dst;
       } else
-        new_dst = idxfac.make(new_dst_space);
+        new_dst = idxfac.make(new_dst_basis);
 
       // update dst1 and dst2 with new_dst, then merge them
       auto new_real_dst = proto(new_dst, dst1_proto);
@@ -426,45 +415,55 @@ compute_index_replacement_rules(
           do_skip = do_skip || (noncovariant_indices.contains(bra) &&
                                 noncovariant_indices.contains(ket));
         }
-        // - two different basis instances: the relation stands
-        do_skip = do_skip || (bra.basis().has_basis_instance() &&
-                              ket.basis().has_basis_instance() &&
-                              bra.basis().basis_instance() !=
-                                  ket.basis().basis_instance());
+        // - overlap between 2 different basis instances: not an identity, the
+        //   overlap stands. A Kronecker delta between them is an error: basis
+        //   functions of different bases cannot be compared for equality
+        const auto bra_basis = resolved_basis(bra);
+        const auto ket_basis = resolved_basis(ket);
+        if (bra_basis.has_basis_instance() && ket_basis.has_basis_instance() &&
+            bra_basis.basis_instance() != ket_basis.basis_instance()) {
+          if (is_kronecker)
+            throw Exception(
+                "WickTheorem::reduce: Kronecker delta between " +
+                toUtf8(bra.full_label()) + " and " + toUtf8(ket.full_label()) +
+                ", which are in different basis instances (" +
+                std::to_string(*bra_basis.basis_instance()) + " and " +
+                std::to_string(*ket_basis.basis_instance()) + ")");
+          do_skip = true;
+        }
         if (!do_skip) {
           const auto bra_is_ext = ranges::find(external_indices, bra) !=
                                   ranges::end(external_indices);
           const auto ket_is_ext = ranges::find(external_indices, ket) !=
                                   ranges::end(external_indices);
 
-          const auto intersection_space =
-              isr->intersection(bra.space(), ket.space());
+          const auto intersection_basis = intersection(bra_basis, ket_basis);
 
           // if overlap's indices are from non-overlapping spaces, return zero
-          if (!intersection_space) {
+          if (!intersection_basis.space()) {
             return std::nullopt;
           }
 
           if (!bra_is_ext && !ket_is_ext) {
             // int + int
-            const auto new_dummy = idxfac.make(intersection_space);
+            const auto new_dummy = idxfac.make(intersection_basis);
             SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
                 add_or_update_rules(bra, ket, new_dummy));
           } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-            if (includes(ket.space(), bra.space())) {
+            if (includes(ket_basis, bra_basis)) {
               SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
                   add_or_update_rule(ket, bra));
             } else {
               SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
-                  add_or_update_rule(ket, idxfac.make(intersection_space)));
+                  add_or_update_rule(ket, idxfac.make(intersection_basis)));
             }
           } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-            if (includes(bra.space(), ket.space())) {
+            if (includes(bra_basis, ket_basis)) {
               SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
                   add_or_update_rule(bra, ket));
             } else {
               SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
-                  add_or_update_rule(bra, idxfac.make(intersection_space)));
+                  add_or_update_rule(bra, idxfac.make(intersection_basis)));
             }
           }
           // ext + ext => leave overlap as is

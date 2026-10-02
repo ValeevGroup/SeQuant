@@ -1189,7 +1189,15 @@ class IndexFactory {
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param space an IndexSpace object
   /// @return a unique temporary index in space @c space
-  Index make(const IndexSpace &space) {
+  Index make(const IndexSpace &space) { return make(IndexBasis(space)); }
+
+  /// creates a temporary index in basis @c basis . The label of the resulting
+  /// index = @c IndexSpace::base_key(basis.space()) + '_' + temporary counter.
+  /// Each call increments the current tmp counter (see next_tmp_index() ) .
+  /// @param basis an IndexBasis object
+  /// @return a unique temporary index in basis @c basis
+  Index make(const IndexBasis &basis) {
+    const auto &space = basis.space();
     Index result;
     bool valid = false;
     do {
@@ -1205,7 +1213,7 @@ class IndexFactory {
           SEQUANT_ASSERT(inserted);
         }
       }
-      result = Index(space, ++(counter_it->second), Index::IndexFactoryTag{});
+      result = Index(basis, ++(counter_it->second), Index::IndexFactoryTag{});
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
     return result;
