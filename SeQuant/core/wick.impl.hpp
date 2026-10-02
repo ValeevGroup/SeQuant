@@ -6,6 +6,7 @@
 #define SEQUANT_WICK_IMPL_HPP
 
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/reserved.hpp>
@@ -16,6 +17,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/find_if.hpp>
@@ -648,15 +650,6 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
   return true;
 }
 
-template <Statistics S>
-struct NullNormalOperatorCanonicalizerDeregister {
-  void operator()(void *) {
-    const auto nop_labels = NormalOperator<S>::labels();
-    TensorCanonicalizer::deregister_instance(nop_labels[0]);
-    TensorCanonicalizer::deregister_instance(nop_labels[1]);
-  }
-};
-
 }  // namespace detail
 
 template <Statistics S>
@@ -702,28 +695,29 @@ void WickTheorem<S>::extract_indices(const Expr &expr,
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only,
                                 const bool skip_input_canonicalization) {
-  // need to avoid recanonicalization of operators produced by WickTheorem
-  // by rapid canonicalization to avoid undoing all the good
-  // the NormalOperator<S>::normalize did ... use RAII
-  // 1. detail::NullNormalOperatorCanonicalizerDeregister<S> will restore state
-  // of tensor canonicalizer
-  // 2. this is the RAII object whose destruction will restore state of
-  // the tensor canonicalizer
-  std::unique_ptr<void, detail::NullNormalOperatorCanonicalizerDeregister<S>>
-      raii_null_nop_canonicalizer;
-  // 3. this makes the RAII object  ... NOT reentrant, only to be called in
-  // top-level WickTheorem after initial canonicalization
-  auto disable_nop_canonicalization = [&raii_null_nop_canonicalizer]() {
-    if (!raii_null_nop_canonicalizer) {
-      const auto nop_labels = NormalOperator<S>::labels();
-      SEQUANT_ASSERT(nop_labels.size() == 2);
-      TensorCanonicalizer::try_register_instance(
-          std::make_shared<NullTensorCanonicalizer>(), nop_labels[0]);
-      TensorCanonicalizer::try_register_instance(
-          std::make_shared<NullTensorCanonicalizer>(), nop_labels[1]);
-      raii_null_nop_canonicalizer = decltype(raii_null_nop_canonicalizer)(
-          (void *)&raii_null_nop_canonicalizer, {});
-    }
+  // canonicalization of the operators produced by WickTheorem would undo
+  // what NormalOperator<S>::normalize did, so the returned object scopes a
+  // context in which they are not canonicalized; it installs nothing if the
+  // current context already does that, as in the per-summand WickTheorems,
+  // whose parallel workers see the scope of the top-level one
+  auto disable_nop_canonicalization = []() {
+    const auto nop_labels = NormalOperator<S>::labels();
+    SEQUANT_ASSERT(nop_labels.size() == 2);
+    // the canonicalizers are looked up in the context for arbitrary statistics
+    const auto &current_ctx = get_default_context();
+    if (ranges::all_of(nop_labels, [&current_ctx](const auto &label) {
+          return std::dynamic_pointer_cast<NullTensorCanonicalizer>(
+                     current_ctx.nondefault_tensor_canonicalizer_ptr(label)) !=
+                 nullptr;
+        }))
+      return detail::ImplicitContextResetter<
+          container::map<Statistics, Context>>{};
+    const auto null_canonicalizer = std::make_shared<NullTensorCanonicalizer>();
+    return set_scoped_modified_default_context(
+        [&nop_labels, &null_canonicalizer](Context &ctx) {
+          for (const auto &label : nop_labels)
+            ctx.set_tensor_canonicalizer(label, null_canonicalizer);
+        });
   };
 
   // have an Expr as input? Apply recursively ...
@@ -747,7 +741,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       // NOW disable canonicalization of normal operators
       // N.B. even if skipped initial input canonicalization need to disable
       // subsequent nop canonicalization
-      disable_nop_canonicalization();
+      const auto nop_canonicalization_disabled = disable_nop_canonicalization();
 
       // parallelize over summands
       HashingAccumulator result_acc;
@@ -810,7 +804,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       // NOW disable canonicalization of normal operators
       // N.B. even if skipped initial input canonicalization need to disable
       // subsequent nop canonicalization
-      disable_nop_canonicalization();
+      const auto nop_canonicalization_disabled = disable_nop_canonicalization();
 
       if (!all_indices_) {
         extract_indices(*(expr_input_.as_shared_ptr<Product>()));

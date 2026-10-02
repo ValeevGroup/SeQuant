@@ -2,10 +2,19 @@
 #define SEQUANT_CORE_CONTEXT_HPP
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
+
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace sequant {
 
@@ -47,6 +56,18 @@ namespace sequant {
 ///   `tensor` LaTeX package (`BraKetSlotTypesetting::TensorPackage`, default)
 ///   or native typesetting (`BraKetSlotTypesetting::Naive`); the former is
 ///   preferred for alignment of superscript with subscript slots.
+/// - `tensor_canonicalizers`: the TensorCanonicalizer objects applied to
+///   tensors, keyed by tensor label; the one keyed by the empty label applies
+///   to tensors without a label-specific canonicalizer. The canonicalizer
+///   objects are shared by copies of the context and must not be mutated.
+///   Defaults to a DefaultTensorCanonicalizer for the empty label.
+/// - `index_comparer`, `index_pair_comparer`: the objects that order Index
+///   objects (and pairs thereof) during tensor canonicalization; default to
+///   TensorCanonicalizer::default_index_comparer() and
+///   TensorCanonicalizer::default_index_pair_comparer().
+/// - `cardinal_tensor_labels`: Tensor labels with lexicographic preference
+///   (in order); default to `{reserved::antisymm_label(),
+///   reserved::symm_label(), reserved::transposition_label()}`.
 // clang-format off
 class Context {
  public:
@@ -103,6 +124,14 @@ class Context {
       /// deserialized tensors
       ColumnSymmetry deserialization_column_symmetry =
         Defaults::deserialization_column_symmetry;
+      /// label -> TensorCanonicalizer map; if not set, maps the empty label to a DefaultTensorCanonicalizer
+      std::optional<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>> tensor_canonicalizers = std::nullopt;
+      /// the Index comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_comparer()
+      std::optional<tensor_index_comparer_t> index_comparer = std::nullopt;
+      /// the Index pair comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_pair_comparer()
+      std::optional<tensor_index_pair_comparer_t> index_pair_comparer = std::nullopt;
+      /// the cardinal Tensor labels; if not set, the reserved labels
+      std::optional<container::vector<std::wstring>> cardinal_tensor_labels = std::nullopt;
   };
   static Options make_default_options() { return {}; }
 
@@ -136,6 +165,15 @@ class Context {
   Context clone() const;
 
   Context(Context&&) = default;
+
+  /// @return the version of this context: a nonzero number, unique among all
+  /// versions ever assigned in this process, that changes whenever the context
+  /// is constructed, cloned or modified through a setter (including the
+  /// `Options` constructor); copies keep the version of their source
+  /// @note the version does not track in-place mutation of an
+  /// IndexSpaceRegistry shared with other contexts, nor of a
+  /// TensorCanonicalizer or comparer object that this context refers to
+  std::uint64_t version() const;
 
   /// \return Vacuum of this context
   Vacuum vacuum() const;
@@ -182,6 +220,32 @@ class Context {
   /// \return the default ColumnSymmetry (particle-permutation symmetry) for
   /// deserialized tensors; programmatic Tensor construction is unaffected by it
   ColumnSymmetry deserialization_column_symmetry() const;
+  /// @param label a Tensor label
+  /// @return the TensorCanonicalizer for @p label if any, else the one for
+  /// the empty label; null if neither exists
+  std::shared_ptr<TensorCanonicalizer> tensor_canonicalizer_ptr(
+      std::wstring_view label) const;
+  /// @param label a Tensor label
+  /// @return the TensorCanonicalizer for exactly @p label, or null
+  /// @sa tensor_canonicalizer_ptr
+  std::shared_ptr<TensorCanonicalizer> nondefault_tensor_canonicalizer_ptr(
+      std::wstring_view label) const;
+  /// @param label a Tensor label
+  /// @return the TensorCanonicalizer that `tensor_canonicalizer_ptr(label)`
+  /// points to
+  /// @throw Exception if `tensor_canonicalizer_ptr(label)` is null
+  /// @warning the reference is valid only while the map entry that holds it
+  /// exists in this context; use tensor_canonicalizer_ptr() if this context
+  /// may change
+  const TensorCanonicalizer& tensor_canonicalizer(
+      std::wstring_view label) const;
+  /// \return the object used by tensor canonicalizers to compare Index objects
+  const tensor_index_comparer_t& index_comparer() const;
+  /// \return the object used by tensor canonicalizers to compare pairs of
+  /// Index objects
+  const tensor_index_pair_comparer_t& index_pair_comparer() const;
+  /// \return Tensor labels with lexicographic preference (in order)
+  const container::vector<std::wstring>& cardinal_tensor_labels() const;
 
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
@@ -232,8 +296,53 @@ class Context {
   /// Sets the default ColumnSymmetry for deserialized tensors
   /// \return ref to `*this`, for chaining
   Context& set(ColumnSymmetry column_symmetry);
+  /// Sets the TensorCanonicalizer for Tensor objects labeled @p label ,
+  /// replacing the existing one, if any; the empty label applies to Tensor
+  /// objects without a label-specific canonicalizer
+  /// \param canonicalizer a nonnull TensorCanonicalizer
+  /// \return ref to `*this`, for chaining
+  Context& set_tensor_canonicalizer(
+      std::wstring_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);
+  /// Removes the TensorCanonicalizer for @p label , if any
+  /// \return ref to `*this`, for chaining
+  Context& unset_tensor_canonicalizer(std::wstring_view label);
+  /// Sets the Index comparer used by tensor canonicalizers
+  /// \param comparer a nonempty Index comparer
+  /// \return ref to `*this`, for chaining
+  Context& set_index_comparer(tensor_index_comparer_t comparer);
+  /// Sets the Index pair comparer used by tensor canonicalizers
+  /// \param comparer a nonempty Index pair comparer
+  /// \return ref to `*this`, for chaining
+  Context& set_index_pair_comparer(tensor_index_pair_comparer_t comparer);
+  /// Sets the cardinal Tensor labels
+  /// \param labels the complete list of cardinal labels, without duplicates;
+  /// the default labels (reserved::antisymm_label(), reserved::symm_label(),
+  /// reserved::transposition_label()) are not prepended, so include them where
+  /// they should keep their precedence (mbpt::cardinal_tensor_labels() returns
+  /// such a complete list)
+  /// \return ref to `*this`, for chaining
+  Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
 
  private:
+  /// the tensor canonicalization state; comparers are held by shared_ptr so
+  /// that equality can be decided by identity
+  struct TensorCanonicalizers {
+    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> map;
+    std::shared_ptr<const tensor_index_comparer_t> index_comparer;
+    std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer;
+    container::vector<std::wstring> cardinal_labels;
+
+    /// canonicalizers and comparers compare by identity, labels by value
+    bool operator==(const TensorCanonicalizers&) const = default;
+  };
+
+  friend bool operator==(const Context& ctx1, const Context& ctx2);
+
+  /// assigns a new, never before used version to this
+  void bump_version();
+
+  std::uint64_t version_ = 0;
+
   std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
   IndexSpaceMetric metric_ = Defaults::metric;
@@ -249,30 +358,44 @@ class Context {
       Defaults::deserialization_hermiticity;
   ColumnSymmetry deserialization_column_symmetry_ =
       Defaults::deserialization_column_symmetry;
+  TensorCanonicalizers tensor_canonicalizers_;
 };
 
 /// Context object equality comparison
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are equal
-/// \warning does not compare index registries
+/// \note index space registries and cardinal tensor labels are compared by
+/// value; tensor canonicalizers and index comparers by identity, hence
+/// a comparer replaced by a behaviourally identical one compares unequal
+/// \note the versions of the contexts are ignored
 bool operator==(const Context& ctx1, const Context& ctx2);
 
 /// Context object inequality comparison
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are not equal
-/// \warning does not compare index registries
+/// \sa operator==(const Context&, const Context&)
 bool operator!=(const Context& ctx1, const Context& ctx2);
 
 /// \name manipulation of implicit context for SeQuant
-/// \warning all of these are thread-safe only if
-/// default_context_manipulation_threadsafe() returns true
+/// \warning set_default_context(), reset_default_context() and the reads of
+/// the process-wide context (by get_default_context() and
+/// set_scoped_modified_default_context() on a thread without scoped contexts)
+/// are thread-safe only if default_context_manipulation_threadsafe() returns
+/// true; set_scoped_default_context(), and the readers on a thread with scoped
+/// contexts, touch only thread-local state
 
 /// @{
 
 /// \return whether context manipulation functions are thread-safe
 bool default_context_manipulation_threadsafe();
+
+/// @brief the version of the default Context for the given Statistics
+/// @param s Statistics
+/// @return `get_default_context(s).version()`, i.e. the version of the context
+/// in effect on the calling thread (see Context::version())
+std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
 
 /// @brief access default Context for the given Statistics
 /// @param s Statistics
@@ -310,9 +433,13 @@ void reset_default_context();
 /// } // leaving scope, resetter is destroyed, default context is reset back to
 /// the old value
 /// ```
+/// @note the scoped contexts are seen only by the calling thread and by the
+/// workers of the parallel primitives (sequant::for_each, etc.) it launches;
+/// set_default_context() is not seen by this thread until the scope ends
+/// @note scopes must end in the reverse order of their creation
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
-set_scoped_default_context(const container::map<Statistics, Context>& ctx);
+set_scoped_default_context(container::map<Statistics, Context> ctx);
 
 /// @brief changes default context for arbitrary statistics
 /// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
@@ -327,6 +454,16 @@ set_scoped_default_context(Context ctx);
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(Context::Options ctx_options);
+
+/// @brief changes the default contexts for all statistics by a modification
+/// @param modify applied to a copy of each current default context
+/// @return a move-only ContextResetter object whose destruction will reset the
+/// default contexts to the previous values
+/// @note see the notes of set_scoped_default_context()
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_modified_default_context(
+    const std::function<void(Context&)>& modify);
 
 ///@}
 

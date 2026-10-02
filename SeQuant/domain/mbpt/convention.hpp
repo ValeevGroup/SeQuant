@@ -33,6 +33,13 @@ enum class SpinConvention {
   Legacy,  //!< all particles are assumed spin-free, spin bits set to Spin::null
 };
 
+/// @brief installs the index space registry of a convention and the
+///        single-product vacuum into the default Context
+///
+/// Every other setting of the current default Context, including the
+/// canonicalizer configuration, is kept. On a thread with an active scoped
+/// context, load() copies that (effective) context and installs the result
+/// process-wide.
 void load(Convention conv = Convention::Minimal,
           SpinConvention spconv = SpinConvention::Default);
 

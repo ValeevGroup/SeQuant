@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace sequant {
@@ -44,8 +45,10 @@ void load(Convention conv, SpinConvention spconv) {
       isr = make_legacy_spaces(spconv);
       break;
   }
-  set_default_context({.index_space_registry_shared_ptr = isr,
-                       .vacuum = Vacuum::SingleProduct});
+  sequant::Context ctx = get_default_context();
+  ctx.set(isr);
+  ctx.set(Vacuum::SingleProduct);
+  set_default_context(std::move(ctx));
 }
 
 void add_fermi_spin(IndexSpaceRegistry& isr) {

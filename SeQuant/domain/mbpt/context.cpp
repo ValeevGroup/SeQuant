@@ -72,10 +72,13 @@ bool operator!=(Context const& left, Context const& right) {
 }
 
 const Context& get_default_mbpt_context() {
+  if (const auto* overlay =
+          sequant::detail::implicit_context_overlay<Context>())
+    return *overlay;
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(mbpt_ctx_mtx);
 #endif
-  return sequant::detail::get_implicit_context<Context>();
+  return sequant::detail::implicit_context_instance<Context>();
 }
 
 void set_default_mbpt_context(const Context& ctx) {
@@ -98,9 +101,8 @@ void reset_default_mbpt_context() {
 
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& f) {
-#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
-  std::scoped_lock lock(mbpt_ctx_mtx);
-#endif
+  // a scoped context is a thread-local overlay that leaves the process-wide
+  // context alone, hence needs no lock
   return sequant::detail::set_scoped_implicit_context(f);
 }
 

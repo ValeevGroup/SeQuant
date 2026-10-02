@@ -5,6 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_OP_IPP
 #define SEQUANT_DOMAIN_MBPT_OP_IPP
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -88,7 +89,7 @@ bool Operator<QuantumNumbers, S>::static_less_than(const Expr& that) const {
   auto& that_op = that.as<this_type>();
 
   // compare cardinal tensor labels first, then QN ranks
-  auto& cardinal_tensor_labels = TensorCanonicalizer::cardinal_tensor_labels();
+  auto& cardinal_tensor_labels = get_default_context().cardinal_tensor_labels();
   const auto this_label = this->label();
   const auto that_label = that_op.label();
   if (this_label == that_label) return this->less_than_rank_of(that_op);
