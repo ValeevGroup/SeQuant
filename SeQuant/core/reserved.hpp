@@ -45,33 +45,35 @@ inline const std::wstring& kronecker_label() {
   return label;
 }
 
-/// @brief the (spin-orbital) 1- and multi-body reduced density matrix label,
-/// which the extended Wick theorem and mbpt produce with fixed symmetries.
-/// Users can create one using the factories in SeQuant/core/density.hpp
+/// @brief the (spin-orbital) 1- and multi-body reduced density matrix label
+/// is reserved since the extended Wick theorem and mbpt produce it with fixed
+/// symmetries, which a Tensor with this label must have. Users can create one
+/// using the factories in SeQuant/core/density.hpp
 inline const std::wstring& rdm_label() {
   static const std::wstring label = L"γ";
   return label;
 }
 
-/// @brief the 1-hole reduced density matrix label; see rdm_label()
+/// @brief the 1-hole reduced density matrix label; reserved like rdm_label()
 inline const std::wstring& hole_rdm_label() {
   static const std::wstring label = L"η";
   return label;
 }
 
-/// @brief the density cumulant label; see rdm_label()
+/// @brief the density cumulant label; reserved like rdm_label()
 inline const std::wstring& cumulant_label() {
   static const std::wstring label = L"κ";
   return label;
 }
 
-/// @brief the spin-free reduced density matrix label; see rdm_label()
+/// @brief the spin-free reduced density matrix label; reserved like
+/// rdm_label()
 inline const std::wstring& spinfree_rdm_label() {
   static const std::wstring label = L"Γ";
   return label;
 }
 
-/// @brief returns a list of the reference-density tensor labels
+/// @brief returns a list of the reserved reference-density tensor labels
 inline const auto& density_labels() {
   static const std::array reserved{rdm_label(), hole_rdm_label(),
                                    cumulant_label(), spinfree_rdm_label()};
@@ -80,9 +82,10 @@ inline const auto& density_labels() {
 
 /// @brief returns a list of all reserved operator labels
 inline const auto& labels() {
-  static const std::array reserved{antisymm_label(), symm_label(),
-                                   transposition_label(), kronecker_label(),
-                                   overlap_label()};
+  static const std::array reserved{
+      antisymm_label(),  symm_label(),     transposition_label(),
+      kronecker_label(), overlap_label(),  rdm_label(),
+      hole_rdm_label(),  cumulant_label(), spinfree_rdm_label()};
   return reserved;
 }
 

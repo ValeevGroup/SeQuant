@@ -1781,8 +1781,8 @@ SECTION("rdm-decomposition symmetries") {
   // expectation_value_impl() builds from a leftover normal operator
   const auto gamma2 = density::rdm_from_nop(nop2, density::rdm_label());
   REQUIRE(simplify(densities2 - gamma2)->size() == densities2->size() - 1);
-  // η is a registered mbpt operator label
-  REQUIRE(mbpt::get_default_mbpt_context().op_registry()->contains(L"η"));
+  // η is a reserved label, hence an mbpt operator label
+  REQUIRE(mbpt::to_op_class(L"η") == mbpt::OpClass::Gen);
 
   // every multi-body κ that a decomposition builds is the κ that the extended
   // Wick theorem builds
