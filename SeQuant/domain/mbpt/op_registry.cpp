@@ -2,6 +2,7 @@
 // Created by Ajay Melekamburath on 12/14/25.
 //
 
+#include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
@@ -125,6 +126,13 @@ OpRegistry OpRegistry::clone() const {
           *herm_overrides_);
   result.basis_grants_ = std::make_shared<BasisGrants>(*basis_grants_);
   return result;
+}
+
+bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg) {
+  const std::wstring label(strip_adjoint_label(t._label()));
+  if (!reg.contains(label)) return false;
+  const auto cls = reg.to_class(label);
+  return cls == OpClass::Ex || cls == OpClass::Deex;
 }
 
 }  // namespace sequant::mbpt

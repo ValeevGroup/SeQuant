@@ -13,9 +13,11 @@
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
@@ -78,6 +80,44 @@ inline ExprPtr with_leg_instance(ExprPtr const& op,
                  : isr->is_pure_unoccupied(idx.space()))
       m.emplace(idx, idx.replace_basis_instance(inst));
   return m.empty() ? op : transform_expr(op, m);
+}
+
+/// Checks that every granted bra/ket slot of every amplitude tensor of
+/// @p expr (mbpt::is_amplitude_tensor under the default mbpt::Context's
+/// registry) carries its grant, `basis_grant(label, slot.space())` with the
+/// adjoint marker stripped: a granted leg is minted in a specific basis, which
+/// nothing downstream may replace by another basis or by the space's own one.
+/// An ungranted slot is unchecked: Wick lets it take a partner's instance,
+/// which is exact. Grants are looked up by exact IndexSpace, so @p expr must
+/// be spin-free or closed-shell spin-traced, as the granted spaces are.
+/// @throw Exception naming the offending tensor and slot
+inline void assert_amplitudes_carry_granted_basis(ExprPtr const& expr) {
+  auto const& reg = *mbpt::get_default_mbpt_context().op_registry();
+  auto instance_text = [](IndexBasis::optional_instance const& i) {
+    return i ? std::to_string(*i) : std::string("none");
+  };
+  auto check_slot = [&](AbstractTensor const& t, std::wstring const& label,
+                        Index const& idx) {
+    const auto grant = reg.basis_grant(label, idx.space());
+    const auto& instance = idx.basis().basis_instance();
+    if (!grant || instance == grant) return;
+    throw Exception("assert_amplitudes_carry_granted_basis: slot " +
+                    toUtf8(idx.full_label()) + " of " +
+                    toUtf8(std::wstring(t._label())) +
+                    " carries basis instance " + instance_text(instance) +
+                    " but the grant of " + toUtf8(label) + " on its space is " +
+                    instance_text(grant));
+  };
+  expr->visit(
+      [&](ExprPtr const& x) {
+        if (!x->is<AbstractTensor>()) return;
+        auto const& t = x->as<AbstractTensor>();
+        if (!mbpt::is_amplitude_tensor(t, reg)) return;
+        const std::wstring label(strip_adjoint_label(t._label()));
+        for (Index const& idx : t._bra()) check_slot(t, label, idx);
+        for (Index const& idx : t._ket()) check_slot(t, label, idx);
+      },
+      /* atoms_only = */ true);
 }
 
 /// matches an exception whose message contains @p text

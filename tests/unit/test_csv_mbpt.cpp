@@ -18,7 +18,6 @@
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <SeQuant/domain/mbpt/basis_grants.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
