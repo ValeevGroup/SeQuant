@@ -188,9 +188,9 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
 
   // a network with an automorphism of phase -1 equals minus itself, i.e. is
   // zero; phase is a homomorphism from the automorphism group to {+1,-1}, so
-  // such an automorphism exists iff a generator has phase -1. Generators that
-  // are not scored (see automorphism_phase) can only make a zero go
-  // undetected.
+  // if a scored generator has phase -1 the term is zero. Generators that are
+  // not scored (see automorphism_phase) can only hide a zero, never invent
+  // one.
   bool has_odd_automorphism = false;
   const unsigned int *canonize_perm =
       canonicalize_graph(graph, [&](unsigned int, const unsigned int *aut) {
