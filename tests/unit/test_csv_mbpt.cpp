@@ -426,7 +426,7 @@ TEST_CASE("basis-grants-validator", "[mbpt][csv][valgrind_skip]") {
     assert_amplitudes_carry_granted_basis(expr);
   };
 
-  SECTION("slots with proto indices carry exactly their grant") {
+  SECTION("granted slots with proto indices carry their grant") {
     const auto t0 = first_tensor(derive_r1(ungranted, CSV::Yes), L"t");
     const auto t1 = first_tensor(derive_r1(t_granted, CSV::Yes), L"t");
     REQUIRE((t0 && t1));
@@ -435,14 +435,14 @@ TEST_CASE("basis-grants-validator", "[mbpt][csv][valgrind_skip]") {
     REQUIRE(a1.basis().basis_instance() == 1);
     CHECK_NOTHROW(validate(ungranted, t0));
     CHECK_NOTHROW(validate(t_granted, t1));
-    CHECK_THROWS_MATCHES(validate(ungranted, with_slot_instance(t0, a0, 1)),
-                         Exception, message_contains("the grant of t"));
+    // an ungranted slot may take any instance from a partner
+    CHECK_NOTHROW(validate(ungranted, with_slot_instance(t0, a0, 1)));
     // a copy path that lost the instance
-    CHECK_THROWS_AS(validate(t_granted, with_slot_instance(t1, a1, {})),
-                    Exception);
+    CHECK_THROWS_MATCHES(validate(t_granted, with_slot_instance(t1, a1, {})),
+                         Exception, message_contains("the grant of t"));
   }
 
-  SECTION("domainless slots carry their grant when one exists") {
+  SECTION("granted domainless slots carry their grant") {
     const auto t0 = first_tensor(derive_r1(ungranted, CSV::No), L"t");
     const auto t1 = first_tensor(derive_r1(t_granted, CSV::No), L"t");
     REQUIRE((t0 && t1));
@@ -483,27 +483,21 @@ TEST_CASE("basis-grants-validator", "[mbpt][csv][valgrind_skip]") {
     REQUIRE(la.basis().basis_instance() == 1);
     CHECK_NOTHROW(validate(all, ladj));
     CHECK_THROWS_AS(validate(all, with_slot_instance(ladj, la, 2)), Exception);
-    CHECK_THROWS_AS(validate(ungranted, ladj), Exception);
+    CHECK_NOTHROW(validate(ungranted, ladj));
   }
 
-  SECTION("a partial grant set throws") {
-    // R1 externals mix the granted and the ungranted family's basis
+  SECTION("a partial grant set is accepted") {
+    // the ungranted t¹ legs take t's instance where they meet it, exactly
     auto partial = granted_registry({{L"t", 1}});
     partial->add(L"t¹", OpClass::Ex);
     const auto full = granted_registry({{L"t", 1}, {L"t¹", 10}});
-    for (auto const& [reg, ok] :
-         {std::pair{partial, false}, std::pair{full, true}}) {
+    for (auto const& reg : {partial, full}) {
       ScopedCsvContext scoped{reg, CSV::No};
       Index::reset_tmp_index();
       const auto eqs = CC{2}.tʼ(1, 1);
       for (std::size_t p : {1u, 2u}) {
-        INFO("ok " << ok << ", R" << p);
-        if (ok)
-          CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(eqs.at(p)));
-        else
-          CHECK_THROWS_MATCHES(
-              assert_amplitudes_carry_granted_basis(eqs.at(p)), Exception,
-              message_contains("amplitude t¹ has no basis grant"));
+        INFO("R" << p);
+        CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(eqs.at(p)));
       }
     }
   }
@@ -518,9 +512,7 @@ TEST_CASE("basis-grants-validator", "[mbpt][csv][valgrind_skip]") {
       for (Index const& idx : tn->_braket())
         absorbed += idx.basis().basis_instance() == 7;
     CHECK(absorbed == 38);
-    // every slot rule passes; the partial-grant rule names t
-    CHECK_THROWS_MATCHES(assert_amplitudes_carry_granted_basis(r1), Exception,
-                         message_contains("amplitude t has no basis grant"));
+    CHECK_NOTHROW(assert_amplitudes_carry_granted_basis(r1));
   }
 }
 

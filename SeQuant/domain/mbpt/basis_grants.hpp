@@ -16,19 +16,17 @@ namespace sequant::mbpt {
 /// labels such as `t¹` must be registered as such)
 bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg);
 
-/// Checks that every bra/ket slot of every amplitude tensor of @p expr (see
-/// is_amplitude_tensor, default mbpt::Context's registry) carries its grant,
-/// `basis_grant(label, slot.space())` with the adjoint marker stripped:
-/// - a slot with proto indices carries exactly its grant (none if ungranted);
-/// - a slot without proto indices carries its grant if one exists, and is
-///   otherwise unchecked: Wick lets an ungranted domainless leg take a
-///   partner's instance, which is exact;
-/// - if any amplitude label in @p expr has grants, every one present must.
+/// Checks that every granted bra/ket slot of every amplitude tensor of
+/// @p expr (see is_amplitude_tensor, default mbpt::Context's registry) carries
+/// its grant, `basis_grant(label, slot.space())` with the adjoint marker
+/// stripped: a granted leg is minted in a specific basis, which nothing
+/// downstream may replace by another basis or by the space's own one. An
+/// ungranted slot is unchecked: Wick lets it take a partner's instance, which
+/// is exact.
 ///
 /// The grant is looked up by the slot's exact IndexSpace, so @p expr must be
 /// spin-free (or closed-shell spin-traced), as the granted spaces are.
-/// @throw Exception naming the offending tensor and slot, or the ungranted
-/// label
+/// @throw Exception naming the offending tensor and slot
 void assert_amplitudes_carry_granted_basis(const ExprPtr& expr);
 
 }  // namespace sequant::mbpt
