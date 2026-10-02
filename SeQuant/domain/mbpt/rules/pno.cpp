@@ -57,8 +57,11 @@ struct projection_scope {
   std::size_t order = 0;
   /// the residual's external indices (the symmetrizer's slots)
   container::svector<Index> externals = {};
-  /// moved leg -> its replacement, shared by the term's integrals
+  /// moved leg -> its replacement, shared by sibling summands' integrals
   container::map<Index, Index> moved = {};
+  /// the legs the enclosing products' integrals have moved so far: another
+  /// integral of the same product holding one moves it to a fresh index
+  container::set<Index> moved_here = {};
   /// the flat product being rewritten, null inside a Sum's summands
   Product const* product = nullptr;
 };
@@ -137,32 +140,22 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
              idx.basis().basis_instance() == target_instance;
     };
     if (on_target(x)) continue;
+    // sibling summands share a leg's replacement; two integrals of one
+    // product do not (x' s{x';x} ... s{x;x''} x''), nor do two targets
     auto it = scope.moved.find(x);
-    if (it == scope.moved.end())
-      it = scope.moved
-               .emplace(x,
-                        Index::make_tmp_index(
-                            IndexBasis{x.space(), target_instance}, target_pair,
-                            own_pair || x.symmetric_proto_indices()))
-               .first;
-    else if (!on_target(it->second))
-      throw Exception("mbpt::project_integral_domains: the leg " +
-                      toUtf8(x.full_label()) +
-                      " is claimed by two integrals with different targets");
-    else  // only sibling summands may share a leg
-      SEQUANT_ASSERT(!scope.product ||
-                     std::ranges::count_if(
-                         scope.product->factors(), [&](ExprPtr const& f) {
-                           return f->is<AbstractTensor>() &&
-                                  f->as<AbstractTensor>()._label() ==
-                                      opts.integral_label &&
-                                  ranges::contains(
-                                      f->as<AbstractTensor>()._braket(), x);
-                         }) == 1);
-    replacements.emplace(x, it->second);
+    const bool reuse = it != scope.moved.end() && on_target(it->second) &&
+                       !scope.moved_here.contains(x);
+    const Index replacement =
+        reuse ? it->second
+              : Index::make_tmp_index(IndexBasis{x.space(), target_instance},
+                                      target_pair,
+                                      own_pair || x.symmetric_proto_indices());
+    if (it == scope.moved.end()) scope.moved.emplace(x, replacement);
+    if (scope.product) scope.moved_here.insert(x);
+    replacements.emplace(x, replacement);
     // keeps x' and x each in one bra and one ket
-    overlaps.push_back(bra_leg ? make_overlap(x, it->second)
-                               : make_overlap(it->second, x));
+    overlaps.push_back(bra_leg ? make_overlap(x, replacement)
+                               : make_overlap(replacement, x));
   }
   if (replacements.empty()) return node;
 
@@ -188,6 +181,7 @@ ExprPtr projection_rewrite(ExprPtr const& x, projection_scope& scope) {
 
   auto const& prod = x->as<Product>();
   scope.product = &prod;
+  const auto moved_before = scope.moved_here;
   auto result = std::make_shared<Product>();
   result->scale(prod.scalar());
   bool changed = false;
@@ -202,6 +196,7 @@ ExprPtr projection_rewrite(ExprPtr const& x, projection_scope& scope) {
                        : Product::Flatten::No);
   }
   scope.product = enclosing;
+  scope.moved_here = moved_before;
   return changed ? result : x;
 }
 
