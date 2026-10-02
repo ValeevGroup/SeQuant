@@ -10,6 +10,9 @@
 
 namespace sequant {
 namespace mbpt {
+/// decompositions of reference densities and normal-ordered operators; they
+/// are spin-orbital: every density they build is a spin-orbital γ
+/// (antisymmetric if multi-body), never a spin-free Γ
 namespace decompositions {
 
 ExprPtr cumulant_to_density(ExprPtr ex_);
