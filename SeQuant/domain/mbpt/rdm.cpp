@@ -60,8 +60,9 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
   auto down_2 = ex_->as<Tensor>().ket()[2];
   auto up_2 = ex_->as<Tensor>().bra()[2];
 
-  auto cumulant2 = ex<Tensor>(density::cumulant_label(), bra{up_1, up_2},
-                              ket{down_1, down_2}, rdm_symmetries);
+  auto cumulant2 =
+      ex<Tensor>(density::cumulant_label(), bra{up_1, up_2},
+                 ket{down_1, down_2}, density::cumulant_symmetries);
   auto density_1 =
       ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
   auto density_2 =
@@ -182,7 +183,7 @@ ExprPtr two_body_decomp(
   const auto a2 = ex<FNOperator>(cre{up_0, up_1}, ann{down_0, down_1});
   const auto double_cumu =
       ex<Tensor>(density::cumulant_label(), bra{down_0, down_1},
-                 ket{up_0, up_1}, rdm_symmetries);
+                 ket{up_0, up_1}, density::cumulant_symmetries);
 
   auto term1 = cumu1 * a;
   auto term2 = cumu1 * cumu2;
@@ -227,7 +228,7 @@ three_body_decomp(ExprPtr ex_, bool approx) {
 
   auto two_body_cumu =
       ex<Tensor>(density::cumulant_label(), bra{down_1, down_2},
-                 ket{up_1, up_2}, rdm_symmetries);
+                 ket{up_1, up_2}, density::cumulant_symmetries);
   auto a1_cumu2 = a1 * two_body_cumu;
 
   auto cumu1_cumu2 = cumulant * two_body_cumu;
@@ -237,7 +238,7 @@ three_body_decomp(ExprPtr ex_, bool approx) {
   if (!approx) {
     auto cumu3 =
         ex<Tensor>(density::cumulant_label(), bra{down_0, down_1, down_2},
-                   ket{up_0, up_1, up_2}, rdm_symmetries);
+                   ket{up_0, up_1, up_2}, density::cumulant_symmetries);
 
     sum_of_terms.result = cumu3 + sum_of_terms.result;
   }
