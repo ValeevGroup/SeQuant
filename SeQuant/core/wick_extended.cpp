@@ -35,7 +35,7 @@ SpaceParts space_parts(const IndexSpaceRegistry &isr,
                        IndexSpace::QuantumNumbers qns) {
   const auto r = isr.reference_occupied_space(qns).type();
   const auto u = isr.vacuum_unoccupied_space(qns).type();
-  const auto active = r.intersection(u);
+  const auto active = isr.active_space(qns).type();
   return {r.xOr(active), active, u.xOr(active)};
 }
 
