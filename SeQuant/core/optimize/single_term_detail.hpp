@@ -587,6 +587,8 @@ inline SubnetMetadata build_subnet_metadata(
                            SubNetHash, SubNetEqual>
       meta_to_id;
 
+  const auto& cardinal_tensor_labels =
+      get_default_context().cardinal_tensor_labels();
   for (size_t n = 0; n < results.size(); ++n) {
     if (std::popcount(n) < 2) continue;
     if (!connected[n]) continue;  // outer-product subset, never an intermediate
@@ -596,8 +598,8 @@ inline SubnetMetadata build_subnet_metadata(
       ts_expr.emplace_back(std::dynamic_pointer_cast<Tensor>(t)->clone());
 
     auto tn = TensorNetwork{ts_expr};
-    auto meta = tn.canonicalize_slots(
-        TensorCanonicalizer::cardinal_tensor_labels(), &results[n].indices);
+    auto meta =
+        tn.canonicalize_slots(cardinal_tensor_labels, &results[n].indices);
 
     auto [it, inserted] = meta_to_id.try_emplace(std::move(meta), 0);
     if (inserted) it->second = meta_to_id.size() - 1;

@@ -135,7 +135,8 @@ struct OpParams {
   }
 };
 
-/// @return the tensor labels in the cardinal order
+/// @return the tensor labels in the cardinal order, starting with the
+/// reserved labels that Context uses by default
 std::vector<std::wstring> cardinal_tensor_labels();
 
 //////////////////////////////

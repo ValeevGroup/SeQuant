@@ -304,7 +304,11 @@ class Context {
   /// \return ref to `*this`, for chaining
   Context& set_index_pair_comparer(tensor_index_pair_comparer_t comparer);
   /// Sets the cardinal Tensor labels
-  /// \param labels the complete list of cardinal labels, without duplicates
+  /// \param labels the complete list of cardinal labels, without duplicates;
+  /// the default labels (reserved::antisymm_label(), reserved::symm_label(),
+  /// reserved::transposition_label()) are not prepended, so include them where
+  /// they should keep their precedence (mbpt::cardinal_tensor_labels() returns
+  /// such a complete list)
   /// \return ref to `*this`, for chaining
   Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
 

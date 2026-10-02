@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -378,8 +379,8 @@ ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
 
   canonicalize_braket(t);
 
-  auto result =
-      this->apply(t, this->index_comparer_, this->index_pair_comparer_);
+  const auto& ctx = get_default_context();
+  auto result = this->apply(t, ctx.index_comparer(), ctx.index_pair_comparer());
 
   reset_tags(t);
 
