@@ -22,9 +22,7 @@ ExprPtr cumulant_to_density(ExprPtr ex_) {
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
 
-  auto density =
-      ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
-  return density;
+  return density::make_rdm(up_0, down_0);
 }
 
 sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
@@ -39,10 +37,8 @@ sequant::ExprPtr cumulant2_to_density(sequant::ExprPtr ex_) {
 
   auto density2 = ex<Tensor>(rdm_label(), bra{up_0, up_1}, ket{down_0, down_1},
                              density::cumulant_symmetries);
-  auto density_1 =
-      ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
-  auto density_2 =
-      ex<Tensor>(rdm_label(), bra{up_1}, ket{down_1}, rdm_symmetries);
+  auto density_1 = density::make_rdm(up_0, down_0);
+  auto density_2 = density::make_rdm(up_1, down_1);
 
   auto d1_d2 = antisymmetrize(density_1 * density_2);
   return density2 + ex<Constant>(-1) * d1_d2.result;
@@ -63,12 +59,9 @@ ExprPtr cumulant3_to_density(ExprPtr ex_) {
   auto cumulant2 =
       ex<Tensor>(density::cumulant_label(), bra{up_1, up_2},
                  ket{down_1, down_2}, density::cumulant_symmetries);
-  auto density_1 =
-      ex<Tensor>(rdm_label(), bra{up_0}, ket{down_0}, rdm_symmetries);
-  auto density_2 =
-      ex<Tensor>(rdm_label(), bra{up_1}, ket{down_1}, rdm_symmetries);
-  auto density_3 =
-      ex<Tensor>(rdm_label(), bra{up_2}, ket{down_2}, rdm_symmetries);
+  auto density_1 = density::make_rdm(up_0, down_0);
+  auto density_2 = density::make_rdm(up_1, down_1);
+  auto density_3 = density::make_rdm(up_2, down_2);
   auto density3 =
       ex<Tensor>(rdm_label(), bra{up_0, up_1, up_2},
                  ket{down_0, down_1, down_2}, density::cumulant_symmetries);
