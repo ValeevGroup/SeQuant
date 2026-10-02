@@ -737,6 +737,7 @@ class NormalOperator : public Operator<S>,
   iterator erase(const_iterator it) {
     if (it->action() == Action::Create) --ncreators_;
     if (hug_) hug_->erase(it - begin(), *it);
+    this->reset_hash_value();
     return Operator<S>::erase(it);
   }
 
@@ -746,6 +747,7 @@ class NormalOperator : public Operator<S>,
     if (value.action() == Action::Create) ++ncreators_;
     auto result = Operator<S>::insert(it, std::forward<T>(value));
     if (hug_) hug_->insert(result - begin(), *result);
+    this->reset_hash_value();
     return result;
   }
 
