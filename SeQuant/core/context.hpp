@@ -63,7 +63,8 @@ namespace sequant {
 ///   Defaults to a DefaultTensorCanonicalizer for the empty label.
 /// - `index_comparer`, `index_pair_comparer`: the objects that order Index
 ///   objects (and pairs thereof) during tensor canonicalization; default to
-///   TensorIndexComparer.
+///   TensorCanonicalizer::default_index_comparer() and
+///   TensorCanonicalizer::default_index_pair_comparer().
 /// - `cardinal_tensor_labels`: Tensor labels with lexicographic preference
 ///   (in order); default to `{reserved::antisymm_label(),
 ///   reserved::symm_label(), reserved::transposition_label()}`.
@@ -125,9 +126,9 @@ class Context {
         Defaults::deserialization_column_symmetry;
       /// label -> TensorCanonicalizer map; if not set, maps the empty label to a DefaultTensorCanonicalizer
       std::optional<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>> tensor_canonicalizers = std::nullopt;
-      /// the Index comparer used by tensor canonicalizers; if not set, TensorIndexComparer
+      /// the Index comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_comparer()
       std::optional<tensor_index_comparer_t> index_comparer = std::nullopt;
-      /// the Index pair comparer used by tensor canonicalizers; if not set, TensorIndexComparer
+      /// the Index pair comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_pair_comparer()
       std::optional<tensor_index_pair_comparer_t> index_pair_comparer = std::nullopt;
       /// the cardinal Tensor labels; if not set, the reserved labels
       std::optional<container::vector<std::wstring>> cardinal_tensor_labels = std::nullopt;
