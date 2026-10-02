@@ -1278,7 +1278,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // strict bra-ket sanity checks
-    if constexpr (assert_enabled()) {
+    {
       if (get_default_context().assert_strict_braket_symmetry()) {
         // dummy (anonymous) edges to
         // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
@@ -1287,10 +1287,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         if (current_edge.vertex_count() > 1) {
           // ignore if named index
           if (!this->ext_indices_.contains(current_edge.idx())) {
-            [[maybe_unused]] std::size_t nbra = 0;
-            [[maybe_unused]] std::size_t nket = 0;
+            std::size_t nbra = 0;
+            std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;
-            [[maybe_unused]] BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
+            BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
             for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
               const Vertex &vertex = current_edge.vertex(v);
               switch (vertex.getOrigin()) {
@@ -1318,9 +1318,15 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             // distinction between bra and ket, but still can have at most 2 of
             // them total if braket symmetry != BraKetSymmetry::Symm at most 1
             // bra and 1 ket can connect to aux
-            SEQUANT_ASSERT(symm == BraKetSymmetry::Symm
-                               ? (nbra + nket <= 2)
-                               : (nbra <= 1 && nket <= 1));
+            if (symm == BraKetSymmetry::Symm ? (nbra + nket > 2)
+                                             : (nbra > 1 || nket > 1)) {
+              throw Exception(
+                  "TensorNetworkV3: index " +
+                  toUtf8(current_edge.idx().full_label()) +
+                  " is contracted between two bra slots (or two ket slots) "
+                  "of tensors without bra-ket symmetry; a contraction pairs a "
+                  "bra slot with a ket slot");
+            }
           }
         }
       }
