@@ -1723,9 +1723,9 @@ SECTION("avoided-connections") {
 SECTION("rdm-decomposition symmetries") {
   using namespace sequant;
 
-  // an RDM is Hermitian and particle (column) symmetric by definition, and the
-  // decompositions in mbpt/rdm.cpp must spell out both: the γ they build has
-  // to equal the γ that expectation_value_impl() (mbpt/op.cpp) builds, or
+  // an RDM is Hermitian and particle (column) symmetric by definition: the γ
+  // that the decompositions in mbpt/rdm.cpp build has to equal the γ that
+  // expectation_value_impl() (mbpt/op.cpp) and the parser build, or
   // otherwise-equal terms stop merging. The symmetries take part in the tensor
   // hash, so a mismatch in either attribute is enough to break it.
   auto ctx_resetter = set_scoped_default_context(
@@ -1740,16 +1740,13 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(gamma->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
   REQUIRE(gamma->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
 
-  // ... and the two spellings do compare equal
-  const auto gamma_op =
-      ex<Tensor>(L"γ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
-                 Symmetry::Nonsymm, Hermiticity::Hermitian,
-                 std::optional<ColumnSymmetry>(ColumnSymmetry::Symm));
-  REQUIRE(*gamma == *gamma_op);
+  // the decomposition, the factory in SeQuant/core/density.hpp and the parser
+  // agree on the spelling
+  const auto gamma_factory = density::make_rdm(Index(L"i_1"), Index(L"i_2"));
+  REQUIRE(*gamma == *gamma_factory);
+  REQUIRE(*deserialize(L"γ{i_1;i_2}") == *gamma_factory);
+  REQUIRE(*deserialize(L"κ{i_1;i_2}") == *kappa);
 
-  // the shared factory in SeQuant/core/density.hpp is the single source of
-  // these spellings
-  REQUIRE(*density::make_rdm(Index(L"i_1"), Index(L"i_2")) == *gamma_op);
   const auto eta = density::make_hole_rdm(Index(L"i_1"), Index(L"i_2"));
   REQUIRE(eta->as<Tensor>().label() == L"η");
   REQUIRE(eta->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
@@ -1764,6 +1761,7 @@ SECTION("rdm-decomposition symmetries") {
   REQUIRE(kappa2->as<Tensor>().bra()[1] == Index(L"i_4"));
   REQUIRE(kappa2->as<Tensor>().ket()[0] == Index(L"i_1"));
   REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
+  REQUIRE(*deserialize(L"κ{i_3,i_4;i_1,i_2}") == *kappa2);
   // antisymmetrize() generates each distinct pairing once, also under the
   // topological canonicalization that the test suite defaults to
   {
