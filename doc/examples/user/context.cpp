@@ -1,9 +1,13 @@
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 int main() {
   using namespace sequant;
@@ -39,6 +43,36 @@ int main() {
       {.csv = mbpt::CSV::Yes, .op_registry_ptr = mbpt::make_legacy_registry()});
   SEQUANT_ASSERT(mbpt::get_default_mbpt_context().csv() == mbpt::CSV::Yes);
   // end-snippet-4
+
+  // start-snippet-5
+  // several bases of one space can meet in one expression, e.g. canonical and
+  // localized occupied orbitals. An Index made from an IndexSpace is
+  // basis-generic (it runs over the space's own basis); one made from an
+  // IndexBasis with a basis instance runs over that basis of the space. The
+  // instance is written after the proto indices: i_1<;1>
+  const auto& isr = get_default_context().index_space_registry();
+  const IndexSpace occ = isr->retrieve(L"i");
+  const Index i_canonical(occ, 1);
+  const Index i_localized(IndexBasis(occ, 1), 1);
+  SEQUANT_ASSERT(i_canonical.space() == i_localized.space());
+  SEQUANT_ASSERT(i_canonical != i_localized);
+  SEQUANT_ASSERT(i_localized.full_label() == L"i_1<;1>");
+
+  // a (de)excitation operator's legs take an instance through its registry
+  // entry: here the unoccupied legs of t are in basis instance 1, so the
+  // amplitudes OpMaker builds, and the projectors of the equations solved for
+  // them, carry it
+  auto granted_registry = mbpt::make_legacy_registry();
+  granted_registry->grant_basis(L"t", isr->retrieve(L"a"), 1);
+  auto grant_resetter = mbpt::set_scoped_default_mbpt_context(
+      {.op_registry_ptr = granted_registry});
+  const ExprPtr t1 = mbpt::op::tensor::t(1);
+  for (const Index& idx : get_used_indices(t1))
+    SEQUANT_ASSERT(idx.basis().basis_instance() ==
+                   (isr->is_pure_unoccupied(idx.space())
+                        ? IndexBasis::optional_instance{1}
+                        : IndexBasis::optional_instance{}));
+  // end-snippet-5
 
   // start-snippet-3
   // temporarily switching context (e.g. to a spin-free basis for a single

@@ -68,6 +68,12 @@ per operator label and leg space with
 them, and the projectors of the :doc:`CC <cc>` equations carry the grants of the amplitude being solved for. Integrals
 are never granted: in Wick's theorem their legs take the instance of the leg they are contracted with.
 
+.. literalinclude:: /examples/user/context.cpp
+   :language: cpp
+   :start-after: start-snippet-5
+   :end-before: end-snippet-5
+   :dedent: 2
+
 Integral projection approximations (e.g. PNO pair-pair coupling) are a separate, opt-in rewrite; with them off nothing
 runs. :func:`sequant::mbpt::project_integral_domains` acts on R2 terms only, after spin tracing and before density
 fitting. The :enum:`sequant::mbpt::ProjectionTerms` cells select (ov|ov) exchange and (oo|vv) Coulomb integrals in
