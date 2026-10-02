@@ -62,6 +62,9 @@ class PythonEinsumGeneratorContext : public ReorderingContext {
     for (const Index &idx : tensor.const_indices()) {
       if (!first) shape += ", ";
       shape += get_shape(idx.space());
+      // each basis of a space has its own extent
+      if (const auto tag = detail::basis_instance_tag(idx); !tag.empty())
+        shape += "_" + tag;
       first = false;
     }
     shape += ")";
@@ -148,7 +151,6 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     if (idx.has_proto_indices()) {
       throw Exception("Proto Indices are not (yet) supported!");
     }
-    reject_basis_instance(idx);
 
     // Convert index label to a single character for einsum notation
     // For einsum, we need single characters
@@ -309,12 +311,6 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
   std::string m_generated;
   std::string m_indent;
 
-  static void reject_basis_instance(const Index &idx) {
-    if (idx.basis().has_basis_instance()) {
-      throw Exception("Python einsum does not support basis instances");
-    }
-  }
-
   /// Get the tensor name (without indices)
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
     // For Python variable names, start with sanitized tensor label
@@ -325,9 +321,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     if (tensor.num_indices() > 0) {
       std::string tags;
       for (const Index &idx : tensor.const_indices()) {
-        // block names are keyed by space, so they cannot tell bases apart
-        reject_basis_instance(idx);
-        tags += ctx.get_tag(idx.space());
+        tags += ctx.get_tag(idx.space()) + detail::basis_instance_tag(idx);
       }
       if (!tags.empty()) {
         name += "_" + tags;

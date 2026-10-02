@@ -84,11 +84,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     if (idx.has_proto_indices()) {
       throw Exception("Proto Indices are not (yet) supported!");
     }
-    if (idx.basis().has_basis_instance()) {
-      throw Exception("Julia does not support basis instances");
-    }
 
-    return toUtf8(idx.full_label());
+    return toUtf8(idx.label()) + instance_suffix(idx);
   }
 
   std::string represent(const Tensor &tensor,
@@ -303,7 +300,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
     for (const Index &idx : tensor.const_indices()) {
       m_generated += ", ";
-      m_generated += ctx.get_dim(idx.space());
+      m_generated += dim(idx, ctx);
     }
 
     m_generated += "), ";
@@ -332,6 +329,18 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     m_generated += ")\n";
   }
 
+  /// @return `_N` for an index in basis instance `N`, else empty
+  static std::string instance_suffix(const Index &idx) {
+    const auto tag = detail::basis_instance_tag(idx);
+    return tag.empty() ? tag : "_" + tag;
+  }
+
+  /// @return the dimension variable of @p idx: the space's, suffixed by the
+  /// basis instance (if any) since each basis has its own extent
+  static std::string dim(const Index &idx, const Context &ctx) {
+    return ctx.get_dim(idx.space()) + instance_suffix(idx);
+  }
+
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
     std::string representation = toUtf8(tensor.label());
 
@@ -348,7 +357,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
     for (const Index &idx : tensor.const_indices()) {
       code += ", ";
-      code += ctx.get_dim(idx.space());
+      code += dim(idx, ctx);
     }
 
     code += ")";

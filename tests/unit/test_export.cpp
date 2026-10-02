@@ -1064,7 +1064,8 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
   }
 }
 
-TEST_CASE("export-rejects-basis-instance", "[export][basis]") {
+TEST_CASE("export-basis-instance", "[export][basis]") {
+  using Catch::Matchers::ContainsSubstring;
   auto resetter = to_export_context();
   const Index y = Index(L"a_7").replace_basis_instance(1);
 
@@ -1074,43 +1075,51 @@ TEST_CASE("export-rejects-basis-instance", "[export][basis]") {
   const Tensor t(L"t", bra{y}, ket{L"i_1"});
   const Tensor t_null(L"t", bra{L"a_7"}, ket{L"i_1"});
 
-  // ITF, Julia and text print a tensor's indices through represent(Index)
-  auto rejects = [&](auto const &generator, auto ctx,
-                     std::string const &format) {
-    if constexpr (requires { ctx.set_tag(occ, "o"); }) {
-      ctx.set_tag(occ, "o");
-      ctx.set_tag(virt, "v");
-    }
-    CHECK_THROWS_MATCHES(
-        generator.represent(t, ctx), Exception,
-        Catch::Matchers::Message(format + " does not support basis instances"));
-    CHECK_NOTHROW(generator.represent(t_null, ctx));
-  };
-  rejects(TextGenerator<TextGeneratorContext>{}, TextGeneratorContext{},
-          "Text export");
-  rejects(JuliaTensorOperationsGenerator<>{},
-          JuliaTensorOperationsGeneratorContext{}, "Julia");
-  rejects(ItfGenerator<ItfContext>{}, ItfContext{}, "ITF");
-  CHECK_THROWS_MATCHES(
-      NumPyEinsumGenerator{}.represent(y, NumPyEinsumGeneratorContext{}),
-      Exception,
-      Catch::Matchers::Message(
-          "Python einsum does not support basis instances"));
-
-  // the einsum exporters name tensors and subscripts without represent(Index)
-  auto export_rejects = [&](auto generator, auto ctx) {
-    ctx.set_shape(occ, "nocc");
-    ctx.set_shape(virt, "nvirt");
+  // a mode in a basis instance appends the instance to its block tag; the
+  // generic block is named as before
+  SECTION("ITF") {
+    ItfContext ctx;
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
-    ResultExpr result(Tensor(L"R", bra{L"a_1"}, ket{L"i_1"}),
-                      ex<Tensor>(L"f", bra{L"a_1"}, ket{y}) *
-                          ex<Tensor>(L"t", bra{y}, ket{L"i_1"}));
-    CHECK_THROWS_MATCHES(
-        export_expression(to_export_tree(result), generator, ctx), Exception,
-        Catch::Matchers::Message(
-            "Python einsum does not support basis instances"));
-  };
-  export_rejects(NumPyEinsumGenerator{}, NumPyEinsumGeneratorContext{});
-  export_rejects(PyTorchEinsumGenerator{}, PyTorchEinsumGeneratorContext{});
+    const ItfGenerator<ItfContext> generator;
+    CHECK_THAT(generator.represent(t, ctx), ContainsSubstring("t:v1o["));
+    CHECK_THAT(generator.represent(t_null, ctx), ContainsSubstring("t:vo["));
+  }
+  SECTION("Julia") {
+    JuliaTensorOperationsGeneratorContext ctx;
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    const JuliaTensorOperationsGenerator<> generator;
+    CHECK_THAT(generator.represent(t, ctx),
+               ContainsSubstring("t_v1o[") && ContainsSubstring("a_7_1"));
+    CHECK_THAT(generator.represent(t_null, ctx),
+               ContainsSubstring("t_vo[") && ContainsSubstring("a_7"));
+  }
+  SECTION("text") {
+    const TextGenerator<TextGeneratorContext> generator;
+    CHECK(generator.represent(t, TextGeneratorContext{}) == "t[a_7<;1>, i_1]");
+    CHECK(generator.represent(t_null, TextGeneratorContext{}) == "t[a_7, i_1]");
+  }
+  // the einsum exporters name blocks and shapes per mode, too
+  SECTION("Python einsum") {
+    auto exported = [&](auto generator, auto ctx) {
+      ctx.set_shape(occ, "nocc");
+      ctx.set_shape(virt, "nvirt");
+      ctx.set_tag(occ, "o");
+      ctx.set_tag(virt, "v");
+      // the result is in basis 1, so its allocation shows the basis' extent
+      ResultExpr result(Tensor(L"R", bra{y}, ket{L"i_1"}),
+                        ex<Tensor>(L"f", bra{y}, ket{L"a_1"}) *
+                            ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}));
+      export_expression(to_export_tree(result), generator, ctx);
+      return generator.get_generated_code();
+    };
+    for (auto const &code :
+         {exported(NumPyEinsumGenerator{}, NumPyEinsumGeneratorContext{}),
+          exported(PyTorchEinsumGenerator{}, PyTorchEinsumGeneratorContext{})})
+      CHECK_THAT(code, ContainsSubstring("f_v1v") &&
+                           ContainsSubstring("t_vo") &&
+                           ContainsSubstring("R_v1o") &&
+                           ContainsSubstring("(nvirt_1, nocc)"));
+  }
 }

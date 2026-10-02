@@ -14,6 +14,12 @@
 
 namespace sequant::detail {
 
+std::string basis_instance_tag(const Index &idx) {
+  return idx.basis().has_basis_instance()
+             ? std::to_string(*idx.basis().basis_instance())
+             : std::string{};
+}
+
 std::string format_power_exponent(const Power::exponent_type &exponent,
                                   bool double_slash) {
   std::stringstream ss;

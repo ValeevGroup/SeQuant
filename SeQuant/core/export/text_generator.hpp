@@ -82,10 +82,10 @@ class TextGenerator : public Generator<Context> {
   }
 
   std::string represent(const Index &idx, const Context &) const override {
-    if (idx.basis().has_basis_instance()) {
-      throw Exception("Text export does not support basis instances");
-    }
-    return toUtf8(idx.label());
+    std::string result = toUtf8(idx.label());
+    if (idx.basis().has_basis_instance())
+      result += "<" + toUtf8(idx.basis().instance_suffix()) + ">";
+    return result;
   }
 
   std::string represent(const Tensor &tensor,

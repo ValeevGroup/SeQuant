@@ -144,9 +144,6 @@ class ItfGenerator : public Generator<Context> {
     if (idx.has_proto_indices()) {
       throw Exception("ITF doesn't support proto indices");
     }
-    if (idx.basis().has_basis_instance()) {
-      throw Exception("ITF does not support basis instances");
-    }
 
     const std::size_t ordinal = idx.ordinal().value();
 
@@ -166,7 +163,7 @@ class ItfGenerator : public Generator<Context> {
     if (tensor.num_indices() > 0) {
       name += ":";
       for (const Index &idx : tensor.const_indices()) {
-        name += ctx.get_tag(idx.space());
+        name += ctx.get_tag(idx.space()) + detail::basis_instance_tag(idx);
       }
 
       if (name.back() == ':') {
