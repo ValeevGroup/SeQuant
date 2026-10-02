@@ -7,10 +7,10 @@
 #include "catch2_sequant.hpp"
 #include "csv_test_utils.hpp"
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/index_basis.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/wick.hpp>

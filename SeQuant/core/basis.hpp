@@ -1,5 +1,5 @@
-#ifndef SEQUANT_CORE_INDEX_BASIS_HPP
-#define SEQUANT_CORE_INDEX_BASIS_HPP
+#ifndef SEQUANT_CORE_BASIS_HPP
+#define SEQUANT_CORE_BASIS_HPP
 
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/space.hpp>
@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace sequant {
@@ -78,6 +79,15 @@ inline bool includes(const IndexBasis& basis, const IndexBasis& subbasis) {
           basis.basis_instance() == subbasis.basis_instance());
 }
 
+/// what an Index runs over: an IndexSpace or an IndexBasis. An IndexSpace
+/// stands for the space's own basis, so an Index made from one is
+/// basis-generic (null basis instance); an IndexBasis names the basis exactly.
+/// Functions templated on this default it to IndexSpace, so a braced list in
+/// that position still initializes an IndexSpace
+template <typename T>
+concept space_or_basis = std::is_same_v<std::remove_cvref_t<T>, IndexSpace> ||
+                         std::is_same_v<std::remove_cvref_t<T>, IndexBasis>;
+
 }  // namespace sequant
 
-#endif  // SEQUANT_CORE_INDEX_BASIS_HPP
+#endif  // SEQUANT_CORE_BASIS_HPP

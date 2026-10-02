@@ -43,7 +43,7 @@ target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
 set(eval_test_sources
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
-    "test_index_basis.cpp"
+    "test_basis.cpp"
     "test_lifetime_mask.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})

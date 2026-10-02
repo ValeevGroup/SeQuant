@@ -5,9 +5,9 @@
 #ifndef SEQUANT_INDEX_H
 #define SEQUANT_INDEX_H
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/index_basis.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tag.hpp>
@@ -59,15 +59,6 @@ concept index_or_index_label =
 template <typename T>
 concept range_of_castables_to_index =
     (meta::is_statically_castable_v<meta::range_value_t<T>, Index>);
-
-/// what an Index runs over: an IndexSpace or an IndexBasis. An IndexSpace
-/// stands for the space's own basis, so an Index made from one is
-/// basis-generic (null basis instance); an IndexBasis names the basis exactly.
-/// Functions templated on this default it to IndexSpace, so a braced list in
-/// that position still initializes an IndexSpace
-template <typename T>
-concept space_or_basis = std::is_same_v<std::remove_cvref_t<T>, IndexSpace> ||
-                         std::is_same_v<std::remove_cvref_t<T>, IndexBasis>;
 
 // clang-format off
 /// @brief Index = IndexBasis + nonnegative integer ordinal

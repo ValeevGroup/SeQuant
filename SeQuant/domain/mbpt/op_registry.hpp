@@ -5,9 +5,9 @@
 #ifndef SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
 #define SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
 
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
-#include <SeQuant/core/index_basis.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
