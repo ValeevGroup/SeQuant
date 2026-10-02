@@ -8,6 +8,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -15,6 +16,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -721,5 +723,34 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
     REQUIRE(S.column_symmetry() == ColumnSymmetry::Symm);
     REQUIRE(S == make_symmetrizer(bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"})
                      ->as<Tensor>());
+  }
+}
+
+TEST_CASE("density labels", "[elements]") {
+  using namespace sequant;
+
+  SECTION("deserialization gives a density its defining symmetries") {
+    // bra = annihilators = the first index group
+    REQUIRE(*deserialize<ExprPtr>(L"γ{i_1;i_2}") ==
+            *density::make_rdm(Index(L"i_1"), Index(L"i_2")));
+    REQUIRE(*deserialize<ExprPtr>(L"η{i_1;i_2}") ==
+            *density::make_hole_rdm(Index(L"i_1"), Index(L"i_2")));
+    REQUIRE(*deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}") ==
+            *density::make_cumulant(bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"}));
+    REQUIRE(*deserialize<ExprPtr>(L"Γ{i_1,i_3;i_2,i_4}") ==
+            *density::make_density(reserved::spinfree_rdm_label(),
+                                   bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"}));
+    // a spelled-out symmetry may restate the defining one ...
+    REQUIRE(*deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}:A-C-S") ==
+            *deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}"));
+    // ... or spell a multi-body spin component
+    REQUIRE(deserialize<ExprPtr>(L"κ{i_1,i_3;i_2,i_4}:N")
+                ->as<Tensor>()
+                .symmetry() == Symmetry::Nonsymm);
+    // ... and a factory-built density round-trips
+    for (const auto& d :
+         {density::make_rdm(Index(L"i_1"), Index(L"i_2")),
+          density::make_cumulant(bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"})})
+      REQUIRE(*deserialize<ExprPtr>(serialize(d)) == *d);
   }
 }
