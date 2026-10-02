@@ -672,11 +672,6 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
   }
 }
 
-void generalSetup() {
-  TensorCanonicalizer::set_cardinal_tensor_labels(
-      mbpt::cardinal_tensor_labels());
-}
-
 }  // namespace sequant::util::extint
 
 int main(int argc, char **argv) {
@@ -690,8 +685,8 @@ int main(int argc, char **argv) {
   // indices are tracked externally (e.g. ResultExpr) as those won't get updated
   // to use the new names.
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  ctx.set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels());
   set_default_context(ctx);
-  util::extint::generalSetup();
 
   CLI::App app(
       "Interface for reading in equations generated outside of SeQuant");

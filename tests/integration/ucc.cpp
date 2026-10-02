@@ -105,8 +105,8 @@ int main(int argc, char* argv[]) {
                        .vacuum = Vacuum::SingleProduct,
                        .metric = IndexSpaceMetric::Unit,
                        .spbasis = SPBasis::Spinor,
-                       .first_dummy_index_ordinal = 100});
-  TensorCanonicalizer::set_cardinal_tensor_labels(cardinal_tensor_labels());
+                       .first_dummy_index_ordinal = 100,
+                       .cardinal_tensor_labels = cardinal_tensor_labels()});
   set_default_mbpt_context(
       {.csv = mbpt::CSV::No, .op_registry_ptr = make_legacy_registry()});
 
