@@ -1968,6 +1968,28 @@ SECTION("cumulant-to-density decompositions") {
       REQUIRE(simplify(densities4 - identity)->size() ==
               densities4->size() - 1);
     }
+    // ... and the expansions of κ₂, κ₃ and κ₄ invert the expansion of γ₄ in
+    // cumulants, γ₄ = κ₄ + A[γ₁κ₃] + A[κ₂κ₂] + A[γ₁γ₁κ₂] + A[γ₁γ₁γ₁γ₁]
+    using mbpt::antisymmetrize;
+    auto kappa = [](std::vector<Index> b, std::vector<Index> k) {
+      return ex<Tensor>(L"κ", bra(std::move(b)), ket(std::move(k)),
+                        density::cumulant_symmetries);
+    };
+    const auto moments =
+        kappa({i5, i6, i7, i8}, {i1, i2, i3, i4}) +
+        antisymmetrize(gamma({i5}, {i1}) * kappa({i6, i7, i8}, {i2, i3, i4}))
+            .result +
+        antisymmetrize(kappa({i5, i6}, {i1, i2}) * kappa({i7, i8}, {i3, i4}))
+            .result +
+        antisymmetrize(gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+                       kappa({i7, i8}, {i3, i4}))
+            .result +
+        antisymmetrize(gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+                       gamma({i7}, {i3}) * gamma({i8}, {i4}))
+            .result;
+    REQUIRE(simplify(cumulants_to_densities(moments) -
+                     gamma({i5, i6, i7, i8}, {i1, i2, i3, i4})) ==
+            ex<Constant>(0));
   }
   REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop4)) -
                    densities4) == ex<Constant>(0));
