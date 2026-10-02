@@ -1,8 +1,8 @@
 //
-// Integral projection -- see dlpno.hpp
+// Integral projection -- see pno.hpp
 //
 
-#include <SeQuant/domain/mbpt/rules/dlpno.hpp>
+#include <SeQuant/domain/mbpt/rules/pno.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>

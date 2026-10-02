@@ -1,11 +1,11 @@
 //
-// Integral projection (DLPNO domain projection and integral-basis stamps): a
+// Integral projection (PNO domain projection and integral-basis stamps): a
 // post-Wick rewrite of R2 terms; run after spintrace, before density fitting.
 // Riplinger & Neese, JCP 138, 034106 (2013); Jiang et al., JCP 161, 082502.
 //
 
-#ifndef SEQUANT_DOMAIN_MBPT_RULES_DLPNO_HPP
-#define SEQUANT_DOMAIN_MBPT_RULES_DLPNO_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
+#define SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index_basis.hpp>
@@ -69,7 +69,7 @@ enum class ProjectionTerms : std::uint32_t {
 }
 
 /// where a moved leg lands: its partner's pair (a basis stamp) or the
-/// integral's own pair, its two distinct occupied indices (DLPNO)
+/// integral's own pair, its two distinct occupied indices (PNO)
 enum class ProjectionDomain { PartnerPair, OwnPair };
 
 /// the basis instance a moved leg takes: its partner's (the amplitude family)
@@ -103,4 +103,4 @@ struct ProjectionOptions {
 
 }  // namespace sequant::mbpt
 
-#endif  // SEQUANT_DOMAIN_MBPT_RULES_DLPNO_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_RULES_PNO_HPP
