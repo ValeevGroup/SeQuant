@@ -15,8 +15,40 @@
 #include <range/v3/view/map.hpp>
 
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace sequant::mbpt {
+
+namespace detail {
+inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/// @brief decorates a base label with perturbation order as superscript
+/// @param base_label the base label to decorate
+/// @param pert_order the perturbation order to decorate with
+/// @return the decorated label
+inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
+                                             int pert_order = 0) {
+  if (pert_order == 0) return std::wstring(base_label);
+  SEQUANT_ASSERT(
+      pert_order >= 0 && pert_order <= 9,
+      "decorate_with_pert_order: perturbation order out of range [0,9]");
+
+  std::wstring result(base_label);
+  result += detail::pert_superscripts[pert_order];
+  return result;
+}
+
+/// @return @p label without its trailing perturbation-order superscript, if
+/// any (the inverse of decorate_with_pert_order)
+inline std::wstring_view strip_pert_order(std::wstring_view label) {
+  if (!label.empty() &&
+      pert_superscripts.find(label.back()) != std::wstring_view::npos)
+    label.remove_suffix(1);
+  return label;
+}
+}  // namespace detail
 
 /// Operator character relative to Fermi vacuum
 enum class OpClass { Ex, Deex, Gen };
@@ -110,11 +142,18 @@ class OpRegistry {
   OpRegistry& grant_basis(const std::wstring& op, const IndexSpace& leg_space,
                           IndexBasis::instance_type instance);
 
-  /// @return true if @p op has a basis grant on any leg space; never throws
+  /// @return the registered label that @p op stands for: @p op itself if
+  /// registered, else its base label (perturbation-order superscript
+  /// stripped) if that is, e.g. `t¹` stands for `t` unless `t¹` is registered;
+  /// null if neither is. Never throws
+  [[nodiscard]] std::optional<std::wstring> resolve(std::wstring_view op) const;
+
+  /// @return true if the label @p op stands for (see resolve) has a basis
+  /// grant on any leg space; never throws
   [[nodiscard]] bool has_basis_grants(const std::wstring& op) const;
 
-  /// @return the basis instance granted to the legs of @p op in exactly
-  /// @p leg_space, if any; never throws
+  /// @return the basis instance granted to the legs of the label @p op stands
+  /// for (see resolve) in exactly @p leg_space, if any; never throws
   [[nodiscard]] IndexBasis::optional_instance basis_grant(
       const std::wstring& op, const IndexSpace& leg_space) const;
 
@@ -174,9 +213,8 @@ class OpRegistry {
   }
 };  // class OpRegistry
 
-/// @return true if the label of @p t, without its adjoint marker, is a
-/// registered Ex or Deex operator of @p reg (perturbation-order decorated
-/// labels such as `t¹` must be registered as such)
+/// @return true if the label of @p t, without its adjoint marker, stands for
+/// (see OpRegistry::resolve) an Ex or Deex operator of @p reg
 bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg);
 
 }  // namespace sequant::mbpt

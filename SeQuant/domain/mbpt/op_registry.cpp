@@ -75,13 +75,24 @@ OpRegistry& OpRegistry::grant_basis(const std::wstring& op,
   return *this;
 }
 
+std::optional<std::wstring> OpRegistry::resolve(std::wstring_view op) const {
+  if (ops_->contains(std::wstring(op))) return std::wstring(op);
+  const auto base = detail::strip_pert_order(op);
+  if (base.size() != op.size() && ops_->contains(std::wstring(base)))
+    return std::wstring(base);
+  return std::nullopt;
+}
+
 bool OpRegistry::has_basis_grants(const std::wstring& op) const {
-  return basis_grants_->contains(op);
+  const auto label = resolve(op);
+  return label && basis_grants_->contains(*label);
 }
 
 IndexBasis::optional_instance OpRegistry::basis_grant(
     const std::wstring& op, const IndexSpace& leg_space) const {
-  auto it = basis_grants_->find(op);
+  const auto label = resolve(op);
+  if (!label) return std::nullopt;
+  auto it = basis_grants_->find(*label);
   if (it == basis_grants_->end()) return std::nullopt;
   auto leg = it->second.find(leg_space);
   if (leg == it->second.end()) return std::nullopt;
@@ -129,9 +140,9 @@ OpRegistry OpRegistry::clone() const {
 }
 
 bool is_amplitude_tensor(const AbstractTensor& t, const OpRegistry& reg) {
-  const std::wstring label(strip_adjoint_label(t._label()));
-  if (!reg.contains(label)) return false;
-  const auto cls = reg.to_class(label);
+  const auto label = reg.resolve(strip_adjoint_label(t._label()));
+  if (!label) return false;
+  const auto cls = reg.to_class(*label);
   return cls == OpClass::Ex || cls == OpClass::Deex;
 }
 

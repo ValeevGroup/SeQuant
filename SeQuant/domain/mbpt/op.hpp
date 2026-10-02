@@ -6,6 +6,7 @@
 #define SEQUANT_DOMAIN_MBPT_OP_HPP
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -56,24 +57,6 @@ namespace sequant {
 namespace mbpt {
 
 namespace detail {
-inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
-
-/// @brief decorates a base label with perturbation order as superscript
-/// @param base_label the base label to decorate
-/// @param pert_order the perturbation order to decorate with
-/// @return the decorated label
-inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
-                                             int pert_order = 0) {
-  if (pert_order == 0) return std::wstring(base_label);
-  SEQUANT_ASSERT(
-      pert_order >= 0 && pert_order <= 9,
-      "decorate_with_pert_order: perturbation order out of range [0,9]");
-
-  std::wstring result(base_label);
-  result += detail::pert_superscripts[pert_order];
-  return result;
-}
-
 /// @brief the rank pairs of a sum of operators truncated at ranks
 /// (@p n1, @p n2), highest first
 /// @return `(n1, n2), (n1-1, n2-1), ...`, stopping before `(0, 0)` and after
