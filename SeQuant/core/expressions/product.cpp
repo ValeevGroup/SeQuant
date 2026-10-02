@@ -237,7 +237,11 @@ void Product::adjoint() {
 }
 
 ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
-  return this->canonicalize_impl(opt);
+  if (this->is_canonical(opt)) return {};
+  const auto contexts_version = current_contexts_version();
+  auto byproduct = this->canonicalize_impl(opt);
+  this->mark_canonical(opt, contexts_version);
+  return byproduct;
 }
 
 ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {

@@ -39,14 +39,18 @@ void Tensor::adjoint() {
   reset_hash_value();
 }
 
-ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
+ExprPtr Tensor::canonicalize(CanonicalizeOptions opts) {
+  if (is_canonical(opts)) return {};
+  const auto contexts_version = current_contexts_version();
   const auto canonicalizer =
       get_default_context().tensor_canonicalizer_ptr(L"");
   if (!canonicalizer)
     throw Exception(
         "Tensor::canonicalize: the current context has no default tensor "
         "canonicalizer");
-  return canonicalizer->apply(*this);
+  auto byproduct = canonicalizer->apply(*this);
+  mark_canonical(opts, contexts_version);
+  return byproduct;
 }
 
 }  // namespace sequant
