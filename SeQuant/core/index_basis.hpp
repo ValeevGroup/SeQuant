@@ -17,9 +17,11 @@ namespace sequant {
 /// instance
 
 /// The instance is an opaque integer that distinguishes several bases of the
-/// same IndexSpace (e.g. pair-specific virtuals of different amplitudes). A
-/// null instance (the default) is the IndexSpace's own basis; every integer,
-/// 0 and negative ones included, is an ordinary instance distinct from null.
+/// same IndexSpace that meet in one expression, e.g. the canonical and the
+/// localized orbitals of a perturbation theory, or the pair-specific virtuals
+/// of two amplitudes. A null instance (the default) is the IndexSpace's own
+/// basis; every integer, 0 and negative ones included, is an ordinary instance
+/// distinct from null.
 class IndexBasis {
  public:
   using instance_type = std::int32_t;
