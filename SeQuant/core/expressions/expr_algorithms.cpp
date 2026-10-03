@@ -1,3 +1,4 @@
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
@@ -90,18 +91,18 @@ std::size_t size(const ExprPtr& exprptr) {
 }
 
 ExprPtr& canonicalize(ExprPtr& expr, CanonicalizeOptions opts) {
+  if (expr->is_canonical(opts)) return expr;
+  const auto contexts_version = current_contexts_version();
   const auto byproduct = expr->canonicalize(opts);
   if (byproduct && byproduct->is<Constant>()) {
     expr = byproduct * expr;
   }
+  expr->mark_canonical(opts, contexts_version);
   return expr;
 }
 
 ExprPtr canonicalize(ExprPtr&& expr_rv, CanonicalizeOptions opts) {
-  const auto byproduct = expr_rv->canonicalize(opts);
-  if (byproduct && byproduct->is<Constant>()) {
-    expr_rv = byproduct * expr_rv;
-  }
+  canonicalize(expr_rv, std::move(opts));
   return std::move(expr_rv);
 }
 

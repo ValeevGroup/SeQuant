@@ -1,6 +1,7 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/context.hpp>
@@ -8,6 +9,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -241,6 +243,14 @@ void Context::bump_version() {
 
 std::uint64_t current_context_version(Statistics s) {
   return get_default_context(s).version();
+}
+
+std::uint64_t current_contexts_version() {
+  std::size_t result = 0;
+  for (auto s : {Statistics::FermiDirac, Statistics::BoseEinstein,
+                 Statistics::Arbitrary})
+    hash::combine(result, current_context_version(s));
+  return result;
 }
 
 Vacuum Context::vacuum() const { return vacuum_; }

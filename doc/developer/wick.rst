@@ -30,9 +30,13 @@ current :class:`sequant::Context`'s.
 The contraction algorithm
 ------------------------------
 
-``compute()`` (``SeQuant/core/wick.impl.hpp``) expands a general expression input into normal-operator-sequence form and, for a ``Sum``,
-canonicalizes it and recurses per summand in parallel before merging results. The actual enumeration happens in
-``compute_nontensor_wick``/``recursive_nontensor_wick``: it walks pairs of ``Op`` s across the flattened operator sequence, left to right.
+``compute()`` (``SeQuant/core/wick.impl.hpp``) expands a general expression input into normal-operator-sequence form and fully
+canonicalizes it, unless ``skip_input_canonicalization`` is set; for a ``Sum`` it then recurses per summand in parallel before merging
+results. Canonicalization leaves an expression it already canonicalized alone (see :doc:`tnc`), so an input the caller has simplified
+costs nothing to canonicalize again. After canonicalizing the input, ``compute()`` scopes a context that registers null canonicalizers
+for normal operators; a mark recorded outside that context is not valid within it, and is valid again once ``compute()`` returns. The
+actual enumeration happens in ``compute_nontensor_wick``/``recursive_nontensor_wick``: it walks pairs of ``Op`` s across the flattened operator
+sequence, left to right.
 Under ``full_contractions_`` (the default) it only ever extends a contraction starting from the leftmost still-free operator — the
 standard recursive formulation of full-contraction enumeration; with it disabled, all pairs are considered.
 

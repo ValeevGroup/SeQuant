@@ -331,6 +331,21 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(hash_value(fa1) !=
             hash_value(ba1));  // hash is depends on statistics
     REQUIRE(hash_value(fc1) == hash_value(adjoint(fa1)));
+
+    // NormalOperator::erase() and NormalOperator::insert() invalidate the
+    // memoized hash
+    auto nop = FNOperator(cre({L"i_1"}), ann({L"a_1"}));
+    const auto nop_hash = nop.hash_value();
+    nop.erase(nop.begin());
+    REQUIRE(nop.hash_value() != nop_hash);
+    nop.insert(nop.begin(), fcre(L"i_1"));
+    REQUIRE(nop.hash_value() == nop_hash);
+
+    // so does mutable element access
+    nop[0] = fcre(L"i_2");
+    REQUIRE(nop.hash_value() != nop_hash);
+    *nop.begin() = fcre(L"i_1");
+    REQUIRE(nop.hash_value() == nop_hash);
   }
 
   SECTION("hug") {

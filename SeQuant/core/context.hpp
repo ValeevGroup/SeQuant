@@ -397,6 +397,13 @@ bool default_context_manipulation_threadsafe();
 /// in effect on the calling thread (see Context::version())
 std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
 
+/// @return a value that changes whenever the effective context of any
+/// Statistics changes: the versions of the FermiDirac, BoseEinstein and
+/// Arbitrary contexts in effect on the calling thread (see
+/// current_context_version()) combined with hash::combine. The canonical mark
+/// (see Expr::is_canonical()) is keyed on it.
+std::uint64_t current_contexts_version();
+
 /// @brief access default Context for the given Statistics
 /// @param s Statistics
 /// @return the default context used for Statistics @p s

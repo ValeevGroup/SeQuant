@@ -26,6 +26,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -903,5 +904,225 @@ TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
     auto expr = deserialize(L"X{a1,a2,a3;i1}:A Y{;a1,a2,a3}:S");
     simplify(expr);
     REQUIRE(is_zero(expr));
+  }
+}
+
+TEST_CASE("current_contexts_version", "[algorithms]") {
+  using namespace sequant;
+  const auto version = current_contexts_version();
+
+  // any change to the context in effect for any Statistics changes the
+  // version, for as long as it is in effect
+  auto changed_by = [&](auto&& modify, Statistics s = Statistics::Arbitrary) {
+    Context ctx(get_default_context(s));
+    modify(ctx);
+    auto resetter = set_scoped_default_context({{s, ctx}});
+    return current_contexts_version() != version;
+  };
+  CHECK(
+      changed_by([](Context& ctx) { ctx.set_cardinal_tensor_labels({L"Z"}); }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_tensor_canonicalizer(L"version_test",
+                                 std::make_shared<NullTensorCanonicalizer>());
+  }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_index_comparer(TensorCanonicalizer::default_index_comparer());
+  }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set(ctx.spbasis() == SPBasis::Spinor ? SPBasis::Spinfree
+                                             : SPBasis::Spinor);
+  }));
+  for (auto s : {Statistics::FermiDirac, Statistics::BoseEinstein,
+                 Statistics::Arbitrary}) {
+    CHECK(changed_by(
+        [](Context& ctx) {
+          ctx.set(ctx.vacuum() == Vacuum::Physical ? Vacuum::SingleProduct
+                                                   : Vacuum::Physical);
+        },
+        s));
+  }
+  // the scoped contexts have ended
+  CHECK(current_contexts_version() == version);
+
+  // an unmodified copy of a context keeps the version
+  CHECK(!changed_by([](Context&) {}));
+
+  // a change of the default context changes it until the default is restored
+  const auto bose_einstein = get_default_context(Statistics::BoseEinstein);
+  set_default_context(bose_einstein.clone(), Statistics::BoseEinstein);
+  CHECK(current_contexts_version() != version);
+  set_default_context(bose_einstein, Statistics::BoseEinstein);
+  CHECK(current_contexts_version() == version);
+}
+
+TEST_CASE("canonicalize_canonical", "[algorithms]") {
+  using namespace sequant;
+
+  auto make_product = [] {
+    return ex<Constant>(rational{1, 2}) *
+           ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      Symmetry::Antisymm) *
+           ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_1"},
+                      Symmetry::Antisymm);
+  };
+  auto make_sum = [&] {
+    return make_product() +
+           ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) *
+               ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) +
+           ex<Constant>(3);
+  };
+  const auto opts = CanonicalizeOptions::default_options();
+
+  SECTION("canonicalize marks its result") {
+    for (auto e : {make_product(), make_sum()}) {
+      canonicalize(e);
+      REQUIRE(e->is_canonical());
+      REQUIRE(e->is_canonical(opts));
+    }
+    // also when the byproduct is absorbed into a new Product
+    auto t = ex<Tensor>(L"g", bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"},
+                        Symmetry::Antisymm);
+    canonicalize(t);
+    REQUIRE(t.is<Product>());
+    REQUIRE(t->is_canonical());
+    REQUIRE(t->as<Product>().factor(0)->is_canonical());
+  }
+
+  SECTION("rapid canonicalization does not mark") {
+    auto e = make_sum();
+    canonicalize(e, opts.copy_and_set(CanonicalizationMethod::Rapid));
+    REQUIRE(!e->is_canonical());
+    e->rapid_canonicalize();
+    REQUIRE(!e->is_canonical());
+    // and invalidates the mark
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    e->rapid_canonicalize();
+    REQUIRE(!e->is_canonical());
+  }
+
+  SECTION("mutation invalidates, canonicalize marks again") {
+    auto e = make_product();
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    e->as<Product>().append(1, ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    e->as<Product>().scale(2);
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    // in-place mutation of a factor leaves the memoized hash of the Product
+    // stale, but must neither throw nor leave the mark valid
+    e->hash_value();
+    auto& t = e->as<Product>().factor(1)->as<Tensor>();
+    t.transform_indices(
+        container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_5"}}});
+    t.reset_tags();
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+  }
+
+  SECTION("in-place mutation of a summand's factor invalidates") {
+    auto e = make_sum();
+    canonicalize(e);
+    e->hash_value();
+    auto& t = e->as<Sum>().summand(0)->as<Product>().factor(0)->as<Tensor>();
+    t.transform_indices(
+        container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_5"}}});
+    t.reset_tags();
+    REQUIRE(!e->is_canonical());
+    REQUIRE_NOTHROW(canonicalize(e));
+    REQUIRE(e->is_canonical());
+  }
+
+  SECTION("canonicalizing a canonical expression is a no-op") {
+    for (auto e : {make_product(), make_sum()}) {
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) > 0);
+      const auto* ptr = e.get();
+      const auto latex = to_latex(e);
+      const auto hash = e->hash_value();
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) == 0);
+      REQUIRE(count_product_canonicalizations([&] { e->canonicalize(); }) == 0);
+      REQUIRE(e.get() == ptr);
+      REQUIRE(to_latex(e) == latex);
+      REQUIRE(e->hash_value() == hash);
+    }
+    // simplify() canonicalizes, so a simplified expression is not
+    // canonicalized again
+    auto e = make_sum();
+    simplify(e);
+    REQUIRE(e->is_canonical());
+    REQUIRE(count_product_canonicalizations([&] { simplify(e); }) == 0);
+  }
+
+  SECTION("canonicalizing a Sum leaves its canonical summands alone") {
+    auto e = make_sum();
+    canonicalize(e);
+    const auto extra = ex<Tensor>(L"h", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+    e->as<Sum>().append(extra);
+    REQUIRE(!e->is_canonical());
+    // only the new summand is canonicalized, in the rapid and in the full pass
+    REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) == 2);
+    REQUIRE(e->is_canonical());
+    // the result is that of canonicalizing from scratch
+    auto reference = make_sum() + extra->clone();
+    canonicalize(reference);
+    REQUIRE(to_latex(e) == to_latex(reference));
+  }
+
+  SECTION("a change of global state invalidates") {
+    auto e = make_sum();
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    {
+      auto ctx = get_default_context();
+      ctx.set(ctx.spbasis() == SPBasis::Spinor ? SPBasis::Spinfree
+                                               : SPBasis::Spinor);
+      auto _ = set_scoped_default_context(ctx);
+      REQUIRE(!e->is_canonical());
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) > 0);
+      REQUIRE(e->is_canonical());
+    }
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+
+    {
+      auto _ = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(
+                  L"canonical_test",
+                  std::make_shared<DefaultTensorCanonicalizer>()));
+      REQUIRE(!e->is_canonical());
+      canonicalize(e);
+      REQUIRE(e->is_canonical());
+    }
+    REQUIRE(!e->is_canonical());
+  }
+
+  SECTION("different options invalidate") {
+    auto e = make_sum();
+    canonicalize(e);
+    const auto other_opts =
+        opts.copy_and_set(container::set<Index>{Index{L"i_1"}});
+    REQUIRE(!e->is_canonical(other_opts));
+    REQUIRE(count_product_canonicalizations(
+                [&] { canonicalize(e, other_opts); }) > 0);
+    REQUIRE(e->is_canonical(other_opts));
+    REQUIRE(!e->is_canonical(opts));
+  }
+
+  SECTION("a clone of a canonical expression is canonical") {
+    for (auto e : {make_product(), make_sum()}) {
+      canonicalize(e);
+      auto c = e->clone();
+      REQUIRE(c->is_canonical());
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(c); }) == 0);
+      REQUIRE(c == e);
+    }
   }
 }
