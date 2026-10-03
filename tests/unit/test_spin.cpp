@@ -2263,13 +2263,14 @@ TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  const auto layouts = mbpt::detail::slot_perm_annots("a_1,a_2,i_1,i_2", 2);
-  REQUIRE(layouts.size() == 4);
-  std::vector<std::string> sorted(layouts.begin(), layouts.end());
+  using ords_t = container::svector<std::size_t>;
+  std::vector<ords_t> sorted;
+  for (std::size_t p = 0; p != 4; ++p)
+    sorted.push_back(mbpt::detail::compute_bra_ket_permuted_indices(p, 2));
   std::sort(sorted.begin(), sorted.end());
   REQUIRE(sorted ==
-          std::vector<std::string>{"a_1,a_2,i_1,i_2", "a_1,a_2,i_2,i_1",
-                                   "a_2,a_1,i_1,i_2", "a_2,a_1,i_2,i_1"});
+          std::vector<ords_t>{
+              {0, 1, 2, 3}, {0, 1, 3, 2}, {1, 0, 2, 3}, {1, 0, 3, 2}});
 }
 
 TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
@@ -2368,20 +2369,20 @@ TEST_CASE("triplet_triples_swap_layouts", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
-  const auto layouts =
-      mbpt::detail::slot_perm_annots("a_1,a_2,a_3,i_1,i_2,i_3", 3);
-  REQUIRE(layouts.size() == 36);
-  std::vector<std::string> all(layouts.begin(), layouts.end());
+  using ords_t = container::svector<std::size_t>;
+  std::vector<ords_t> all;
+  for (std::size_t p = 0; p != 36; ++p)
+    all.push_back(mbpt::detail::compute_bra_ket_permuted_indices(p, 3));
   std::sort(all.begin(), all.end());
   REQUIRE(std::adjacent_find(all.begin(), all.end()) == all.end());
 
-  auto contains = [&](const std::string& ann) {
-    return std::binary_search(all.begin(), all.end(), ann);
+  auto contains = [&](const ords_t& ords) {
+    return std::binary_search(all.begin(), all.end(), ords);
   };
-  REQUIRE(contains("a_1,a_2,a_3,i_1,i_2,i_3"));  // identity
-  REQUIRE(contains("a_1,a_3,a_2,i_1,i_3,i_2"));  // E-leg pair swap
-  REQUIRE(contains("a_2,a_1,a_3,i_2,i_1,i_3"));  // whole-pair swap 0,1
-  REQUIRE(contains("a_1,a_2,a_3,i_1,i_3,i_2"));  // ket-only swap 1,2
+  REQUIRE(contains({0, 1, 2, 3, 4, 5}));  // identity
+  REQUIRE(contains({0, 2, 1, 3, 5, 4}));  // E-leg pair swap
+  REQUIRE(contains({1, 0, 2, 4, 3, 5}));  // whole-pair swap 0,1
+  REQUIRE(contains({0, 1, 2, 3, 5, 4}));  // ket-only swap 1,2
 }
 
 TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
