@@ -905,3 +905,51 @@ TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
     REQUIRE(is_zero(expr));
   }
 }
+
+TEST_CASE("current_contexts_version", "[algorithms]") {
+  using namespace sequant;
+  const auto version = current_contexts_version();
+
+  // any change to the context in effect for any Statistics changes the
+  // version, for as long as it is in effect
+  auto changed_by = [&](auto&& modify, Statistics s = Statistics::Arbitrary) {
+    Context ctx(get_default_context(s));
+    modify(ctx);
+    auto resetter = set_scoped_default_context({{s, ctx}});
+    return current_contexts_version() != version;
+  };
+  CHECK(
+      changed_by([](Context& ctx) { ctx.set_cardinal_tensor_labels({L"Z"}); }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_tensor_canonicalizer(L"version_test",
+                                 std::make_shared<NullTensorCanonicalizer>());
+  }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_index_comparer(TensorCanonicalizer::default_index_comparer());
+  }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set(ctx.spbasis() == SPBasis::Spinor ? SPBasis::Spinfree
+                                             : SPBasis::Spinor);
+  }));
+  for (auto s : {Statistics::FermiDirac, Statistics::BoseEinstein,
+                 Statistics::Arbitrary}) {
+    CHECK(changed_by(
+        [](Context& ctx) {
+          ctx.set(ctx.vacuum() == Vacuum::Physical ? Vacuum::SingleProduct
+                                                   : Vacuum::Physical);
+        },
+        s));
+  }
+  // the scoped contexts have ended
+  CHECK(current_contexts_version() == version);
+
+  // an unmodified copy of a context keeps the version
+  CHECK(!changed_by([](Context&) {}));
+
+  // a change of the default context changes it until the default is restored
+  const auto bose_einstein = get_default_context(Statistics::BoseEinstein);
+  set_default_context(bose_einstein.clone(), Statistics::BoseEinstein);
+  CHECK(current_contexts_version() != version);
+  set_default_context(bose_einstein, Statistics::BoseEinstein);
+  CHECK(current_contexts_version() == version);
+}
