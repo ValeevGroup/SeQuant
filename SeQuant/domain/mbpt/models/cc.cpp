@@ -199,6 +199,8 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
 
 std::vector<ExprPtr> CC::λ() const {
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λ for unitary ansatz");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::λ: the reference must be the Wick vacuum");
 
   // construct hbar
   const auto commutator_rank = opts_.hbar_comm_rank.value_or(4);
@@ -260,6 +262,8 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
     throw Exception("CC::rdm: hbar_singles_comm_rank is not supported");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::rdm: the Bernoulli expansion is not supported yet");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::rdm: the reference must be the Wick vacuum");
 
   // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
   // indices are free, so they become the free indices of γ.
@@ -306,6 +310,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                    "pertbar_comm_rank must be specified for unitary ansatz");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::tʼ: the Bernoulli expansion is not supported yet");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::tʼ: the reference must be the Wick vacuum");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
@@ -327,7 +333,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   ExprPtr hbar_pert;
   if (unitary()) {
     // for unitary ansatz, we need to compute the commutator [hbar, Tʼ],
-    // otherwise just hbar * Tʼ is sufficient because ref_av uses connectivity
+    // otherwise just hbar * Tʼ is sufficient because ref_av connects h with
+    // t¹
     hbar_pert = commutator(hbar, Tʼ(N, {.order = order, .nbatch = nbatch}));
   } else {
     hbar_pert = hbar * Tʼ(N, {.order = order, .nbatch = nbatch});
@@ -367,6 +374,8 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λʼ for unitary ansatz");
   SEQUANT_ASSERT(opts_.ansatz == Ansatz::T,
                  "CC::λʼ: only traditional ansatz is supported");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::λʼ: the reference must be the Wick vacuum");
 
   // construct hbar
   const auto hbar = this->hbar();
@@ -520,6 +529,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
         get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
 
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::eom_r: the reference must be the Wick vacuum");
+
   if (unitary()) return eom_r_ucc(np, nh, block_ranks);
 
   if (!block_ranks.empty())
@@ -541,6 +553,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   SEQUANT_ASSERT(!unitary(),
                  "there is no need for CC::eom_l for unitary ansatz");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::eom_l: the reference must be the Wick vacuum");
   SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
 
   if (np != nh)

@@ -185,6 +185,7 @@ class CC {
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 contains the λ pseudoenergy, computed as the
   /// CC energy with \f$ \hat{T} \f$ replaced by \f$ \hat{\Lambda}^{\dagger} \f$
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   [[nodiscard]] std::vector<ExprPtr> λ() const;
 
   // clang-format off
@@ -194,6 +195,7 @@ class CC {
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @throw Exception if `hbar_singles_comm_rank` is positive
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> tʼ(
@@ -206,6 +208,7 @@ class CC {
   /// @param order order of perturbation
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> λʼ(
@@ -235,6 +238,7 @@ class CC {
   ///   - Empty uses the configured H̄ rank for every block.
   /// @note UCC always uses Hamiltonian-matrix assembly. Traditional CC uses
   ///   its connected H̄R product and does not support block ranks.
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @throw Exception if non-empty `block_ranks` is used with a traditional
   ///   ansatz, or if `block_ranks` is not `K`×`K`
   /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
@@ -251,6 +255,7 @@ class CC {
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
   /// @param nh number of hole annihilators in L operator
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return vector of left side sigma equations, element 0 is always null
   [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
@@ -278,6 +283,7 @@ class CC {
   ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
   ///   explicit value to truncate earlier.
   /// @throw Exception if `hbar_singles_comm_rank` is positive
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
   /// part)
   [[nodiscard]] ExprPtr rdm(
@@ -303,11 +309,14 @@ class CC {
   /// Unitary paths and differing references supply empty connectivity;
   /// both cases require explicit commutators.
   [[nodiscard]] LSTOptions lst_options() const {
+    return {.unitary = unitary(),
+            .use_connected_form = !unitary() && reference_is_vacuum()};
+  }
+
+  /// @return true if the reference occupied space is the Wick vacuum's
+  [[nodiscard]] static bool reference_is_vacuum() {
     const auto isr = get_default_context().index_space_registry();
-    return {
-        .unitary = unitary(),
-        .use_connected_form = !unitary() && isr->reference_occupied_space() ==
-                                                isr->vacuum_occupied_space()};
+    return isr->reference_occupied_space() == isr->vacuum_occupied_space();
   }
 
   /// @brief computes reference expectation value of an expression. Dispatches
@@ -318,15 +327,16 @@ class CC {
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
   /// @note Connectivity defaults to default_op_connections(); both lists are
-  /// omitted when the reference differs from the Wick vacuum.
+  /// omitted when the reference differs from the Wick vacuum, where only
+  /// methods that need no connectivity beyond what lst_options() replaces with
+  /// explicit commutators are available.
   auto ref_av(
       const ExprPtr& expr,
       const OpConnections<std::wstring>& connect = default_op_connections(),
       const OpConnections<std::wstring>& do_not_connect = {}) const {
     EVOptions<std::wstring> opts{.screen = this->screen(),
                                  .use_topology = this->use_topology()};
-    const auto isr = get_default_context().index_space_registry();
-    if (isr->reference_occupied_space() == isr->vacuum_occupied_space()) {
+    if (reference_is_vacuum()) {
       opts.connect = connect;
       opts.do_not_connect = do_not_connect;
     }
