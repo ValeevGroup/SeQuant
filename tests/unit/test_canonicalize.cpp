@@ -994,3 +994,55 @@ TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
     REQUIRE(again == cx);
   }
 }
+
+TEST_CASE("current_contexts_version", "[algorithms]") {
+  using namespace sequant;
+  const auto version = current_contexts_version();
+
+  // any change to the canonicalization configuration of the context in
+  // effect for any Statistics changes the version, for as long as it is in
+  // effect
+  auto changed_by = [&](auto&& modify, Statistics s = Statistics::Arbitrary) {
+    Context ctx(get_default_context(s));
+    modify(ctx);
+    auto resetter = set_scoped_default_context({{s, ctx}});
+    return current_contexts_version() != version;
+  };
+  CHECK(
+      changed_by([](Context& ctx) { ctx.set_cardinal_tensor_labels({L"Z"}); }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_tensor_canonicalizer(L"version_test",
+                                 std::make_shared<NullTensorCanonicalizer>());
+  }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_index_comparer(TensorCanonicalizer::default_index_comparer());
+  }));
+  for (auto s : {Statistics::FermiDirac, Statistics::BoseEinstein,
+                 Statistics::Arbitrary}) {
+    CHECK(changed_by(
+        [](Context& ctx) {
+          ctx.set_cardinal_tensor_labels(container::vector<std::wstring>{L"Z"});
+        },
+        s));
+  }
+  // settings that canonicalization does not read do not change it
+  CHECK(!changed_by([](Context& ctx) {
+    ctx.set(ctx.vacuum() == Vacuum::Physical ? Vacuum::SingleProduct
+                                             : Vacuum::Physical);
+  }));
+  // the scoped contexts have ended
+  CHECK(current_contexts_version() == version);
+
+  // an unmodified copy of a context keeps the version
+  CHECK(!changed_by([](Context&) {}));
+
+  // a change of the default context changes it until the default is restored
+  const auto bose_einstein = get_default_context(Statistics::BoseEinstein);
+  // a copy given its own registry, which is a configuration of its own
+  auto changed = bose_einstein;
+  changed.set(IndexSpaceRegistry(*bose_einstein.index_space_registry()));
+  set_default_context(changed, Statistics::BoseEinstein);
+  CHECK(current_contexts_version() != version);
+  set_default_context(bose_einstein, Statistics::BoseEinstein);
+  CHECK(current_contexts_version() == version);
+}
