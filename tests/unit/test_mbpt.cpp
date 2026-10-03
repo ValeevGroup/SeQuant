@@ -1172,16 +1172,19 @@ SECTION("MRSO") {
   SECTION("ref_av rejects connectivity when reference differs from vacuum") {
     const auto unconstrained = t::ref_av(t::h(1) * t::t(1));
     REQUIRE(unconstrained != ex<Constant>(0));
-    REQUIRE_THROWS_AS(t::ref_av(t::h(1) * t::t(1), {.connect = {{0, 1}}}),
-                      Exception);
-    REQUIRE_THROWS_AS(
-        t::ref_av(t::h(1) * t::t(1), {.do_not_connect = {{0, 1}}}), Exception);
-    // Operator requests must be rejected before screening or label lowering.
-    REQUIRE_THROWS_AS(o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}),
-                      Exception);
-    REQUIRE_THROWS_AS(
-        o::ref_av(o::h(1) * o::t(1), {.do_not_connect = {{L"f", L"t"}}}),
-        Exception);
+    if (assert_behavior() != AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(t::ref_av(t::h(1) * t::t(1), {.connect = {{0, 1}}}),
+                        Exception);
+      REQUIRE_THROWS_AS(
+          t::ref_av(t::h(1) * t::t(1), {.do_not_connect = {{0, 1}}}),
+          Exception);
+      // Operator requests must be rejected before screening or label lowering.
+      REQUIRE_THROWS_AS(o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}),
+                        Exception);
+      REQUIRE_THROWS_AS(
+          o::ref_av(o::h(1) * o::t(1), {.do_not_connect = {{L"f", L"t"}}}),
+          Exception);
+    }
   }
 
   SECTION("wick(H2**T2 -> 0)") {
