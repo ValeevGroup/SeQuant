@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/bernoulli.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -386,6 +387,20 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THROWS_AS(CC(N, {.hbar_comm_rank = 0}).λ(), Exception);
     }
   }  // SECTION("with")
+
+  SECTION("reference differs from vacuum") {
+    auto ctx = get_default_context();
+    ctx.set(make_mr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
+
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(CC(1).λ(), Exception);
+      // the check precedes the dispatch to the UCC EOM path
+      REQUIRE_THROWS_AS(CC(1, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 1})
+                            .eom_r(nₚ(1), nₕ(1)),
+                        Exception);
+    }
+  }  // SECTION("reference differs from vacuum")
 
   SECTION("rdm") {
     constexpr auto N = 2;

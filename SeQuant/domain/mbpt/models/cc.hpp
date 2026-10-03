@@ -1,6 +1,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -129,22 +130,25 @@ class CC {
   /// value. If provided, will override all defaults. The optional singles-only
   /// transform is applied afterward regardless of this rank.
   /// @note The returned expression depends on the ansatz and expansion:
-  ///   - A non-unitary ansatz represents each commutator as a connected
-  ///     product,
+  ///   - When the reference is the Wick vacuum, a non-unitary ansatz represents
+  ///     each commutator as a connected product,
   ///     \f$ (\hat{A}\hat{B})_c \f$. It is equivalent to \f$
   ///     [\hat{A},\hat{B}] \f$ only when operator connectivity is supplied
-  ///     downstream.
+  ///     downstream. With a differing reference it uses explicit commutators.
   ///   - A unitary BCH ansatz uses explicit commutators and empty connectivity.
   ///   - `HbarExpansion::Bernoulli` returns a tensor-level expression for use
   ///     with `op::tensor` projectors and `op::tensor::ref_av`. It never
   ///     reaches `CC::ref_av`, so `screen` and `use_topology` have no effect.
-  /// @warning A non-unitary H̄ is not self-contained. Evaluating it with empty
-  ///   connectivity, e.g. `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
-  ///   retains disconnected terms. Pass `default_op_connections()` (the default
-  ///   when the options argument is omitted), or build H̄ with an explicit
+  /// @warning A connected-product H̄ is not self-contained.
+  ///   Evaluating it with empty connectivity, e.g.
+  ///   `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
+  ///   retains disconnected terms. Pass `default_op_connections()` explicitly
+  ///   in EVOptions::connect, or build H̄ with an explicit
   ///   commutator `mbpt::lst(..., {})` call. A unitary H̄ is self-contained,
   ///   so its connectivity must be empty. See the "Using H̄ outside the CC
   ///   class" section of the user guide.
+  /// @note ref_av requires empty connect and do_not_connect when the reference
+  ///   differs from the Wick vacuum.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
 
@@ -181,6 +185,7 @@ class CC {
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 contains the λ pseudoenergy, computed as the
   /// CC energy with \f$ \hat{T} \f$ replaced by \f$ \hat{\Lambda}^{\dagger} \f$
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   [[nodiscard]] std::vector<ExprPtr> λ() const;
 
   // clang-format off
@@ -190,6 +195,7 @@ class CC {
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @throw Exception if `hbar_singles_comm_rank` is positive
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> tʼ(
@@ -202,6 +208,7 @@ class CC {
   /// @param order order of perturbation
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> λʼ(
@@ -231,6 +238,7 @@ class CC {
   ///   - Empty uses the configured H̄ rank for every block.
   /// @note UCC always uses Hamiltonian-matrix assembly. Traditional CC uses
   ///   its connected H̄R product and does not support block ranks.
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @throw Exception if non-empty `block_ranks` is used with a traditional
   ///   ansatz, or if `block_ranks` is not `K`×`K`
   /// @return projected sigma equations in a vector of size `min(np, nh) + 1`,
@@ -247,6 +255,7 @@ class CC {
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param np number of particle annihilators in L operator
   /// @param nh number of hole annihilators in L operator
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return vector of left side sigma equations, element 0 is always null
   [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh) const;
 
@@ -274,6 +283,7 @@ class CC {
   ///   `hbar_comm_rank` for the unitary ansatz (where it does not). Pass an
   ///   explicit value to truncate earlier.
   /// @throw Exception if `hbar_singles_comm_rank` is positive
+  /// @pre the reference is the Wick vacuum (checked by SEQUANT_ENFORCE)
   /// @return the RDM expression (Fermi-vacuum normal-ordered / correlation
   /// part)
   [[nodiscard]] ExprPtr rdm(
@@ -294,30 +304,37 @@ class CC {
       nₚ np, nₕ nh, const std::vector<std::size_t>& block_ranks) const;
 
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
-  /// @note The choice of commutator representation is really a question of
-  /// whether the caller supplies operator connectivity downstream; for this
-  /// engine the two coincide. Every non-unitary path hands `ref_av` a
-  /// connectivity map (`default_op_connections()`, or the λ⁺/perturbed
-  /// supersets thereof), which is what makes the cheaper connected-product
-  /// form equivalent to the explicit commutator. The unitary paths hand
-  /// `ref_av` empty connectivity and so must use explicit commutators.
+  /// @note Non-unitary paths use connected products only when the reference is
+  /// the Wick vacuum; see hbar_connections().
   [[nodiscard]] LSTOptions lst_options() const {
-    return {.unitary = unitary(), .use_connected_form = !unitary()};
+    return {.unitary = unitary(),
+            .use_connected_form = !unitary() && reference_is_vacuum()};
+  }
+
+  /// @return true if the reference occupied space is the Wick vacuum's
+  [[nodiscard]] static bool reference_is_vacuum() {
+    const auto isr = get_default_context().index_space_registry();
+    return isr->reference_occupied_space() == isr->vacuum_occupied_space();
+  }
+
+  /// @return the connectivity that makes the connected products of
+  /// lst_options() equal to commutators: default_op_connections() when they
+  /// are used, empty otherwise
+  [[nodiscard]] OpConnections<std::wstring> hbar_connections() const {
+    return lst_options().use_connected_form ? default_op_connections()
+                                            : OpConnections<std::wstring>{};
   }
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
   /// @param[in] expr input expression
-  /// @param[in] connect list of operator label pairs to connect.
-  /// @param[in] do_not_connect list of operator label pairs to never connect.
+  /// @param[in] connect list of operator label pairs to connect; must be empty
+  /// when the reference differs from the Wick vacuum
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
-  auto ref_av(
-      const ExprPtr& expr,
-      const OpConnections<std::wstring>& connect = default_op_connections(),
-      const OpConnections<std::wstring>& do_not_connect = {}) const {
+  auto ref_av(const ExprPtr& expr,
+              const OpConnections<std::wstring>& connect) const {
     return op::ref_av(expr, {.connect = connect,
-                             .do_not_connect = do_not_connect,
                              .screen = this->screen(),
                              .use_topology = this->use_topology()});
   }

@@ -156,11 +156,17 @@ Each commutator can be written in two ways, and ``use_connected_form`` selects b
 
 - ``true`` writes it as a connected product, :math:`(\hat{A}\hat{B})_c`. This gives fewer terms, but only reproduces the commutator once the same operators are connected downstream when taking the expectation value, using ``OpConnections``.
 
+The connectivity discussion below assumes the reference is the Wick vacuum. When the reference differs from the Wick
+vacuum, both overloads of ``ref_av`` require empty ``connect`` and ``do_not_connect`` lists; use explicit commutators in that
+case. Non-empty lists are rejected even when assertions are disabled.
+
 Both forms give the same equations, given the right connectivity. They differ in *where* the disconnected terms are removed: the commutator removes them algebraically, the connected product relies on the connectivity you supply to ``vac_av``/``ref_av``.
 
-Mind which overload you reach: the operator-level ``op::vac_av``/``op::ref_av`` default to ``default_op_connections()``, which connects the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) with the cluster operator ``t``. Their tensor-level counterparts, ``op::tensor::vac_av``/``op::tensor::ref_av``, default to *empty* connections. Pairing ``use_connected_form = true`` with empty connectivity silently keeps the disconnected terms the commutator would have cancelled, so the result is wrong rather than merely more verbose.
-
-Mind also that omitting the options argument is not the same as passing ``{}``: ``default_op_connections()`` is the default of the *parameter*, whereas ``EVOptions::connect`` is itself empty by default, so ``op::ref_av(expr)`` connects the operators and ``op::ref_av(expr, {})`` does not.
+Both the operator-level and tensor-level ``vac_av``/``ref_av`` overloads default to empty connectivity constraints.
+Omitting the options argument is equivalent to passing ``{}``. To use the connected-product form, supply the required
+connections explicitly through ``EVOptions::connect``. ``default_op_connections()`` provides conventional CC connections
+between the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) and the cluster operator ``t``. Pairing ``use_connected_form = true`` with
+empty connectivity keeps disconnected terms that the commutator would have cancelled, so the result is wrong.
 
 The same trade-off shows up in :func:`CC::hbar() <sequant::mbpt::CC::hbar>`, which returns the connected form for a non-unitary ansatz; see :ref:`cc-hbar-connectivity`.
 
@@ -207,6 +213,12 @@ Vacuum averaging and final expression
 The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum average of an operator level expression.
 If reference state differs from the Wick vacuum ``sequant::mbpt::op::ref_av`` function should be used instead to
 compute the reference average.
+In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` require
+empty ``connect`` and ``do_not_connect`` lists. ``vac_av`` always computes full contractions and honors these options.
+
+Operator-level connection pairs use labels and apply to every matching pair with the first operator to the left of the
+second. Tensor-level pairs use zero-based normal-operator positions. Both conventions apply to ``connect`` and
+``do_not_connect`` in :class:`EVOptions <sequant::mbpt::op::EVOptions>`.
 
 .. literalinclude:: /examples/user/operator.cpp
    :language: cpp

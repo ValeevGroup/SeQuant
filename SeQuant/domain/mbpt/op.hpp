@@ -499,15 +499,18 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// Defines the behavior of expectation value methods.
 /// The struct is used by both tensor and operator level methods, but there are
 /// parameters in here which are only meaningful at the operator level.
+/// @pre When used with ref_av and the reference differs from the Wick vacuum,
+///      connect and do_not_connect must both be empty.
 template <typename T>
 struct EVOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  /// List of pairs of operator labels to be connected; connections are defined
-  /// left-to-right, i.e., pair `{opL,opR}` declares that `opL` and `opR` are to
-  /// be connected when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
+  /// Pairs of operators that must be directly contracted. Operator-level calls
+  /// use labels: `{opL,opR}` applies to every matching pair with `opL` to the
+  /// left of `opR`. Tensor-level calls use zero-based normal-operator
+  /// positions.
   OpConnections<T> connect = {};
-  /// List of pairs of operator labels that should not be connected, defined
-  /// left-to-right.
+  /// Pairs of operators that must not be directly contracted, using the same
+  /// label or position convention as connect.
   OpConnections<T> do_not_connect = {};
   /// If true, expressions are screened before lowering to Tensor level and
   /// calling WickTheorem. Only valid in Operator level calls
@@ -522,16 +525,16 @@ namespace tensor {
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
-/// @note The default `EVOptions<int>{}` has empty connections, unlike the
-///       operator-level overload which defaults to `default_op_connections()`.
+/// @note Connectivity constraints are empty by default.
+/// @pre When the reference differs from the Wick vacuum, opts.connect and
+///      opts.do_not_connect must both be empty.
 ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
-/// @note The default `EVOptions<int>{}` has empty connections, unlike the
-///       operator-level overload which defaults to `default_op_connections()`.
+/// @note Connectivity constraints are empty by default.
 ExprPtr vac_av(ExprPtr expr, EVOptions<int> opts = {});
 }  // namespace tensor
 }  // namespace op
@@ -1365,6 +1368,18 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k);
 
 }  // namespace op
+
+namespace detail {
+template <typename T>
+void validate_ref_av_connections(const EVOptions<T>& opts,
+                                 bool full_contractions) {
+  SEQUANT_ENFORCE(
+      full_contractions ||
+          (opts.connect.empty() && opts.do_not_connect.empty()),
+      "ref_av connectivity requires the reference to equal the Wick vacuum");
+}
+}  // namespace detail
+
 }  // namespace mbpt
 }  // namespace sequant
 

@@ -112,9 +112,9 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   if (opts_.hbar_expansion == HbarExpansion::Bernoulli)
     return bernoulli::hbar(N, truncation, skip_singles());
 
-  // for a non-unitary ansatz this is the cheaper connected-product form, which
-  // is only equivalent to the commutator once the caller supplies operator
-  // connectivity to ref_av (see lst_options() and the @warning on hbar())
+  // Connected products require connectivity enforced by ref_av, so
+  // lst_options() uses explicit commutators when the reference differs from
+  // the Wick vacuum (see the @warning on hbar()).
   auto result = mbpt::lst(H(), T(N, skip_singles()), truncation, lst_options());
 
   // Apply the optional singles-only transform after the primary BCH series.
@@ -135,11 +135,8 @@ ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
     return op::tensor::ref_av(this->hbar(erank));
   }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
-  // truncation. No projector ⇒ this is the energy. ref_av applies the
-  // connectivity (empty for unitary, default otherwise).
-  return this->unitary() ? this->ref_av(this->hbar(comm_rank),
-                                        mbpt::OpConnections<std::wstring>{})
-                         : this->ref_av(this->hbar(comm_rank));
+  // truncation. No projector ⇒ this is the energy.
+  return this->ref_av(this->hbar(comm_rank), hbar_connections());
 }
 
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
@@ -161,10 +158,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
   // 1. construct hbar(op) in canonical form
   auto hbar = this->hbar();
 
-  // connectivity: empty for unitary ansatz, default otherwise
-  const auto connectivity = this->unitary()
-                                ? mbpt::OpConnections<std::wstring>{}
-                                : default_op_connections();
+  const auto connectivity = hbar_connections();
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -199,6 +193,8 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
 
 std::vector<ExprPtr> CC::λ() const {
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λ for unitary ansatz");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::λ: the reference must be the Wick vacuum");
 
   // construct hbar
   const auto commutator_rank = opts_.hbar_comm_rank.value_or(4);
@@ -219,8 +215,8 @@ std::vector<ExprPtr> CC::λ() const {
 
   // element 0: λ pseudoenergy, computed as the CC energy with T → Λ⁺.
   {
-    // connected form; the ref_av below supplies the connectivity that makes it
-    // equivalent to the commutator, here {h,f,f̃,g} with λ⁺ rather than with t
+    // For connected products, ref_av connects {h,f,f̃,g} with λ⁺ rather than
+    // with t to make the result equivalent to the commutator.
     const auto hbar_λ = mbpt::lst(H(), adjoint(Λ(N, skip_singles())),
                                   commutator_rank, lst_options());
     result.at(0) = this->ref_av(
@@ -260,6 +256,8 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
     throw Exception("CC::rdm: hbar_singles_comm_rank is not supported");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::rdm: the Bernoulli expansion is not supported yet");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::rdm: the reference must be the Wick vacuum");
 
   // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
   // indices are free, so they become the free indices of γ.
@@ -272,9 +270,9 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // quasi-creators must be absorbed by ã's 2r plus Λ's 2N legs (k <= r + N).
   // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
   // there is no safe default; use the engine's hbar_comm_rank (the ctor
-  // guarantees it is set). The traditional branch takes lst_options()'s
-  // connected-product form; the {ã,t} connectivity handed to ref_av below is
-  // what makes it equivalent to the explicit commutator.
+  // guarantees it is set). When the reference is the Wick vacuum, the
+  // traditional branch uses connected products; the {ã,t} connectivity handed
+  // to ref_av below makes them equivalent to the explicit commutator.
   const auto commutator_rank = comm_rank.value_or(
       unitary() ? opts_.hbar_comm_rank.value() : std::min(2 * rank, rank + N));
   auto bar =
@@ -306,6 +304,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                    "pertbar_comm_rank must be specified for unitary ansatz");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::tʼ: the Bernoulli expansion is not supported yet");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::tʼ: the reference must be the Wick vacuum");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
@@ -327,7 +327,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   ExprPtr hbar_pert;
   if (unitary()) {
     // for unitary ansatz, we need to compute the commutator [hbar, Tʼ],
-    // otherwise just hbar * Tʼ is sufficient because ref_av uses connectivity
+    // otherwise just hbar * Tʼ is sufficient because ref_av connects h with
+    // t¹
     hbar_pert = commutator(hbar, Tʼ(N, {.order = order, .nbatch = nbatch}));
   } else {
     hbar_pert = hbar * Tʼ(N, {.order = order, .nbatch = nbatch});
@@ -351,7 +352,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
     const auto freq_term =
         L"ω" * P(nₚ(p)) * op::tʼ(p, {.order = order, .nbatch = nbatch});
     result.at(p) =
-        this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
+        this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term, {});
   }
   return result;
 }
@@ -367,6 +368,8 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λʼ for unitary ansatz");
   SEQUANT_ASSERT(opts_.ansatz == Ansatz::T,
                  "CC::λʼ: only traditional ansatz is supported");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::λʼ: the reference must be the Wick vacuum");
 
   // construct hbar
   const auto hbar = this->hbar();
@@ -413,8 +416,8 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   for (auto p = N; p >= 1; --p) {
     const auto freq_term =
         L"ω" * op::λʼ(p, {.order = order, .nbatch = nbatch}) * P(nₚ(-p));
-    result.at(p) =
-        this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
+    result.at(p) = this->ref_av(expr * P(nₚ(-p)), op_connect) +
+                   this->ref_av(freq_term, {});
   }
   return result;
 }
@@ -484,10 +487,7 @@ std::vector<ExprPtr> CC::eom_r_ucc(
                         : op::r(nₚ(p), nₕ(h), eom_norm);
   };
   auto vev = [tensor_level, this](const ExprPtr& e) {
-    return tensor_level ? op::tensor::ref_av(e)
-                        : op::ref_av(e, {.connect = {},
-                                         .screen = opts_.screen,
-                                         .use_topology = opts_.use_topology});
+    return tensor_level ? op::tensor::ref_av(e) : this->ref_av(e, {});
   };
 
   std::vector<ExprPtr> result(min(np, nh) + 1);
@@ -520,6 +520,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
         get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
 
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::eom_r: the reference must be the Wick vacuum");
+
   if (unitary()) return eom_r_ucc(np, nh, block_ranks);
 
   if (!block_ranks.empty())
@@ -541,6 +544,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   SEQUANT_ASSERT(!unitary(),
                  "there is no need for CC::eom_l for unitary ansatz");
+  SEQUANT_ENFORCE(reference_is_vacuum(),
+                  "CC::eom_l: the reference must be the Wick vacuum");
   SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
 
   if (np != nh)

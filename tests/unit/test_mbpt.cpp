@@ -1006,6 +1006,25 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     namespace o = sequant::mbpt::op;
     namespace t = sequant::mbpt::tensor;
 
+    SECTION("expectation values default to empty connectivity") {
+      // Requiring the first h to connect to both t's
+      // removes this nonzero product.
+      const auto unconstrained =
+          o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1), {});
+      REQUIRE(unconstrained != ex<Constant>(0));
+      CHECK_THAT(o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1)),
+                 EquivalentTo(unconstrained));
+      CHECK_THAT(o::ref_av(o::h(1) * o::t(1) * o::h(1) * o::t(1)),
+                 EquivalentTo(unconstrained));
+      CHECK(o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1),
+                      {.connect = {{L"f", L"t"}}}) == ex<Constant>(0));
+    }
+
+    SECTION("ref_av retains connectivity when reference equals vacuum") {
+      REQUIRE(t::ref_av(t::h(1) * t::t(1) * t::h(1) * t::t(1),
+                        {.connect = {{0, 3}}}) == ex<Constant>(0));
+    }
+
     SECTION("SRSO"){
         // H**T12**T12 -> R2
         SECTION("wick(H**T12**T12 -> R2)"){
@@ -1018,7 +1037,8 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
 
     {
       // check against op
-      auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o ::T(2) * o::T(2));
+      auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o ::T(2) * o::T(2),
+                                 {.connect = default_op_connections()});
       REQUIRE(result_op->size() == result->size());  // as compact as result ..
       REQUIRE(simplify(result_op - result) ==
               ex<Constant>(0));  // .. and equivalent to it
@@ -1149,12 +1169,30 @@ SECTION("MRSO") {
   ctx.set(mbpt::make_mr_spaces());
   auto ctx_resetter = set_scoped_default_context(ctx);
 
+  SECTION("ref_av rejects connectivity when reference differs from vacuum") {
+    const auto unconstrained = t::ref_av(t::h(1) * t::t(1));
+    REQUIRE(unconstrained != ex<Constant>(0));
+    if (assert_behavior() != AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS(t::ref_av(t::h(1) * t::t(1), {.connect = {{0, 1}}}),
+                        Exception);
+      REQUIRE_THROWS_AS(
+          t::ref_av(t::h(1) * t::t(1), {.do_not_connect = {{0, 1}}}),
+          Exception);
+      // Operator requests must be rejected before screening or label lowering.
+      REQUIRE_THROWS_AS(o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}),
+                        Exception);
+      REQUIRE_THROWS_AS(
+          o::ref_av(o::h(1) * o::t(1), {.do_not_connect = {{L"f", L"t"}}}),
+          Exception);
+    }
+  }
+
   SECTION("wick(H2**T2 -> 0)") {
     {
-      auto result = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
+      auto result = t::ref_av(t::h(2) * t::t(2));
 
-      auto result_wo_top = t::ref_av(
-          t::h(2) * t::t(2), {.connect = {{0, 1}}, .use_topology = false});
+      auto result_wo_top =
+          t::ref_av(t::h(2) * t::t(2), {.use_topology = false});
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
 
@@ -1164,7 +1202,7 @@ SECTION("MRSO") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::Physical);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      auto result_phys = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
+      auto result_phys = t::ref_av(t::h(2) * t::t(2));
     }
   }
 
@@ -1175,11 +1213,11 @@ SECTION("MRSO") {
   // side dominates this section's runtime.
   SECTION("wick(H2**T2**T2 -> 0)") {
     // first without use of topology
-    auto result = t::ref_av(t::h(2) * t::t(2) * t::t(2),
-                            {.connect = {{0, 1}}, .use_topology = false});
+    auto result =
+        t::ref_av(t::h(2) * t::t(2) * t::t(2), {.use_topology = false});
     // now with topology use
-    auto result_top = t::ref_av(t::h(2) * t::t(2) * t ::t(2),
-                                {.connect = {{0, 1}}, .use_topology = true});
+    auto result_top =
+        t::ref_av(t::h(2) * t::t(2) * t ::t(2), {.use_topology = true});
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
   }
@@ -1222,12 +1260,12 @@ SECTION("MRSF") {
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("wick(H2**T2 -> 0)") {
-    auto result = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
+    auto result = t::ref_av(t::h(2) * t::t(2));
 
     {
       // make sure get same result without use of topology
-      auto result_wo_top = t::ref_av(
-          t::h(2) * t::t(2), {.connect = {{0, 1}}, .use_topology = false});
+      auto result_wo_top =
+          t::ref_av(t::h(2) * t::t(2), {.use_topology = false});
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
@@ -1328,7 +1366,8 @@ SECTION("manuscript-examples") {
   };
 
   SECTION("CCD Term") {
-    auto expr = ref_av(P(2) * H() * t(2) * t(2));
+    auto expr = ref_av(P(2) * H() * t(2) * t(2),
+                       {.connect = {{L"f", L"t"}, {L"g", L"t"}}});
     REQUIRE(expr.size() == 4);
   }
 
