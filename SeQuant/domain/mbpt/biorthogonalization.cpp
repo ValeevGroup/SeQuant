@@ -733,9 +733,9 @@ std::size_t product_network_hash(const ExprPtr& term) {
 rational triplet_triples_slot_weight(
     const container::svector<std::size_t>& ords) {
   // w10 is the first row of the non-null-sapce projector: G . pinv(G)
-  // of the 18x18 TEE overlap matrix
-  constexpr std::array<int, 18> w10{5, -1, -1, -1, 1, 1, -2, -2, 1,
-                                    0, 1,  0,  0,  0, 1, -2, 1,  -2};
+  // of the 18x18 TEE overlap matrix, non-lexicographic order
+  constexpr std::array<int, 18> w10{0,  1, 0,  0,  0, 1, -2, -2, 1,
+                                    -2, 1, -2, -1, 1, 1, 5,  -1, -1};
 
   SEQUANT_ASSERT(ords.size() == 6);
   constexpr std::size_t n = 3;
@@ -747,19 +747,12 @@ rational triplet_triples_slot_weight(
   }
   for (std::size_t i = 0; i != n; ++i) pv_inv[pv[i]] = i;
 
-  std::array<std::size_t, n> sigma{};
+  container::svector<std::size_t> identity(n), sigma(n);
+  std::iota(identity.begin(), identity.end(), std::size_t{0});
   for (std::size_t i = 0; i != n; ++i) sigma[i] = ph[pv_inv[i]];
 
-  // lexicographic rank of sigma among the n! permutations of {0, .., n-1}
-  std::array<std::size_t, n> perm{};
-  std::iota(perm.begin(), perm.end(), std::size_t{0});
-  std::size_t sigma_rank = 0;
-  while (perm != sigma) {
-    ++sigma_rank;
-    [[maybe_unused]] const bool has_next =
-        std::next_permutation(perm.begin(), perm.end());
-    SEQUANT_ASSERT(has_next);
-  }
+  const std::size_t sigma_rank =
+      perm::rank(perm::computeTransformationPermutation(identity, sigma), n);
 
   return ratio(w10[n * sigma_rank + pv[0]], 20);
 }
