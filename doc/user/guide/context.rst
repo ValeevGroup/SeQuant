@@ -12,10 +12,12 @@ The core ``Context``
 
 :class:`sequant::Context` bundles the settings that give meaning to an expression: the :class:`sequant::IndexSpaceRegistry` (the
 vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relative to which operators are normal-ordered
-(``Vacuum::Physical`` — the true, particle-free vacuum — or ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum), the
-``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis`` (spin-orbital vs. spin-free). It also
-owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is accessed and replaced through
-:func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and :func:`sequant::reset_default_context`.
+(``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
+``Vacuum::MultiProduct`` — a general reference state, for which :class:`sequant::WickTheorem` applies the *extended* form of Wick's
+theorem, with density cumulants), the ``IndexSpaceMetric`` (whether the single-particle basis is orthonormal), and the ``SPBasis``
+(spin-orbital vs. spin-free). It also owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is
+accessed and replaced through :func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and
+:func:`sequant::reset_default_context`.
 
 Constructing a ``Context`` from scratch and registering index spaces by hand, as shown in
 :doc:`/user/getting_started/index_spaces`, is the right approach when a custom vocabulary of index spaces is needed. For standard

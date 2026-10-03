@@ -1,3 +1,4 @@
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
@@ -170,17 +171,29 @@ qns_t combine(qns_t a, qns_t b) {
     result[0] = nc;
     result[1] = na;
     return result;
-  } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
+  } else if (get_default_context().vacuum() == Vacuum::SingleProduct ||
+             get_default_context().vacuum() == Vacuum::MultiProduct) {
+    const bool multiproduct =
+        get_default_context().vacuum() == Vacuum::MultiProduct;
     auto isr = get_default_context().index_space_registry();
     const auto& base_spaces = isr->base_spaces();
     for (auto i = 0; i < base_spaces.size(); i++) {
       auto cre = i * 2;
       auto ann = (i * 2) + 1;
+      const auto qns = base_spaces[i].qns();
+      // an active space is both reference-occupied and vacuum-unoccupied; its
+      // ops can also end up in cumulants, which take any equal number of
+      // creators and annihilators from the two sides
+      const bool active =
+          multiproduct &&
+          isr->intersection(base_spaces[i], isr->active_space(qns));
       auto base_is_fermi_occupied = isr->is_pure_occupied(
           base_spaces[i]);  // need to distinguish particle and hole
                             // contractions.
       auto ncontr_space =
-          base_is_fermi_occupied
+          active ? qninterval_t{0, std::min(a[cre].upper() + b[cre].upper(),
+                                            a[ann].upper() + b[ann].upper())}
+          : base_is_fermi_occupied
               ? qninterval_t{0, std::min(b[ann].upper(), a[cre].upper())}
               : qninterval_t{0, std::min(b[cre].upper(), a[ann].upper())};
       auto nc_space = nonnegative(b[cre] + a[cre] - ncontr_space);
@@ -1246,10 +1259,24 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   }
 
   simplify(expr);
+
+  auto restore_scalars = [&scalar_factors](ExprPtr& r) {
+    if (!scalar_factors.empty()) {
+      ranges::for_each(scalar_factors, [&r](const auto& s) { r = r * s; });
+      simplify(r);
+    }
+  };
+
+  // relative to a MultiProduct vacuum WickTheorem expresses the reference
+  // expectation value in γ, η and κ, leaving no operators to replace by RDMs
+  const bool multiproduct =
+      get_default_context().vacuum() == Vacuum::MultiProduct;
+
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
-  const auto rdm_label = spinor ? L"γ" : L"Γ";
+  const auto& rdm_label =
+      spinor ? density::rdm_label() : density::spinfree_rdm_label();
 
   // N.B. reference < vacuum is not yet supported
   if (isr->reference_occupied_space().intersection(
@@ -1263,19 +1290,14 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(connect);
   if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
-  wick.full_contractions(full_contractions);
+  // a partial contraction relative to a MultiProduct vacuum is not
+  // proportional to the reference expectation value
+  wick.full_contractions(multiproduct || full_contractions);
   auto result = wick.compute(/* count_only = */ false,
                              /* skip_input_canonicalization? true since already
                                 did simplification above */
                              true);
   simplify(result);
-
-  auto restore_scalars = [&scalar_factors](ExprPtr& r) {
-    if (!scalar_factors.empty()) {
-      ranges::for_each(scalar_factors, [&r](const auto& s) { r = r * s; });
-      simplify(r);
-    }
-  };
 
   if (Logger::instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
@@ -1288,7 +1310,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   // including a density occupied partition using a "single-reference" method
   // will replace FNOPs with RDMs. i.e. "multi-reference" RDM replacement rules
   // work in the limit of one reference.
-  if (isr->reference_occupied_space() == IndexSpace::Type{} ||
+  if (multiproduct || isr->reference_occupied_space() == IndexSpace::Type{} ||
       isr->reference_occupied_space(Spin::any) ==
           isr->vacuum_occupied_space(Spin::any)) {
     restore_scalars(result);
@@ -1301,28 +1323,9 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
             : isr->reference_occupied_space(Spin::any);
 
     // STEP1. replace NOPs by RDM
-    auto replace_nop_with_rdm = [&rdm_label, spinor](ExprPtr& exptr) {
-      auto replace = [&rdm_label, spinor](const auto& nop) -> ExprPtr {
-        using index_container = container::svector<Index>;
-        auto braidxs = nop.annihilators() |
-                       ranges::views::transform(
-                           [](const auto& op) { return op.index(); }) |
-                       ranges::to<index_container>();
-        auto ketidxs = nop.creators() |
-                       ranges::views::transform(
-                           [](const auto& op) { return op.index(); }) |
-                       ranges::to<index_container>();
-        SEQUANT_ASSERT(
-            braidxs.size() ==
-            ketidxs.size());  // need to handle particle # violating case?
-        const auto rank = braidxs.size();
-        // an RDM is Hermitian, and is particle (column) symmetric since it
-        // is over indistinguishable particles (which the Antisymm branch
-        // implies, but Nonsymm does not)
-        return ex<Tensor>(
-            rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
-            rank > 1 && spinor ? Symmetry::Antisymm : Symmetry::Nonsymm,
-            Hermiticity::Hermitian, ColumnSymmetry::Symm);
+    auto replace_nop_with_rdm = [&rdm_label](ExprPtr& exptr) {
+      auto replace = [&rdm_label](const auto& nop) -> ExprPtr {
+        return density::rdm_from_nop(nop, rdm_label);
       };
 
       if (exptr.template is<FNOperator>()) {

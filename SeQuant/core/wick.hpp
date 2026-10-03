@@ -6,6 +6,7 @@
 #define SEQUANT_WICK_HPP
 
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -15,6 +16,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/wick_extended.hpp>
 
 #include <range/v3/algorithm/adjacent_find.hpp>
 #include <range/v3/algorithm/any_of.hpp>
@@ -44,6 +46,11 @@
 namespace sequant {
 
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
+///
+/// Under a Vacuum::MultiProduct default context the operators are
+/// normal-ordered relative to a multideterminantal reference and compute()
+/// applies the extended (generalized-normal-order) theorem, whose result is
+/// expressed in terms of the reference's densities γ, η and cumulants κ.
 ///
 /// @tparam S particle statistics
 template <Statistics S>
@@ -125,6 +132,27 @@ class WickTheorem {
     return *this;
   }
 
+  /// Controls the largest cumulant formed by the next call to compute();
+  /// only matters under a Vacuum::MultiProduct vacuum. By default cumulants of
+  /// every rank are formed.
+  /// @param rank the largest rank of a cumulant; std::nullopt means no bound,
+  /// 0 or 1 means that no cumulant is formed
+  /// @return reference to @c *this , for daisy-chaining
+  WickTheorem &max_cumulant_rank(std::optional<std::size_t> rank) {
+    max_cumulant_rank_ = rank;
+    return *this;
+  }
+
+  /// Controls whether the next call to compute() spells every hole density η
+  /// as δ - γ; only matters under a Vacuum::MultiProduct vacuum. By default η
+  /// is kept.
+  /// @param edmg if true, will rewrite every η as δ - γ
+  /// @return reference to @c *this , for daisy-chaining
+  WickTheorem &eta_as_delta_minus_gamma(bool edmg) {
+    eta_as_delta_minus_gamma_ = edmg;
+    return *this;
+  }
+
   /// Controls whether next call to compute() will assume spin-free or
   /// spin-orbital normal-ordered operators By default compute() assumes
   /// spin-orbital operators.
@@ -157,6 +185,10 @@ class WickTheorem {
   /// This is useful to to eliminate the topologically-equivalent contractions
   /// when fully-contracted result (i.e. the vacuum average) is sought.
   /// By default the use of topology is enabled.
+  /// @note two Op objects are treated as equivalent only if swapping them
+  /// alone is a symmetry of the input
+  /// @note under a Vacuum::MultiProduct vacuum the equivalences are those of
+  /// each input term, in which an index shared by two operators is a dummy
   /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
@@ -166,6 +198,9 @@ class WickTheorem {
   /// Specifies the external indices; by default assume all indices are summed
   /// over
   /// @param external_indices external (nonsummed) indices
+  /// @note not consulted under a Vacuum::MultiProduct vacuum: there the
+  /// external indices of each input term are inferred from the term itself,
+  /// as when none are specified
   /// @throw Exception if WickTheorem::set_external_indices or
   /// WickTheorem::compute had already been invoked
   template <typename IndexContainer>
@@ -211,6 +246,8 @@ class WickTheorem {
   /// will not constrain connectivity
   /// @param op_index_pairs the list of pairs of op indices to be connected in
   /// the result
+  /// @note under a Vacuum::MultiProduct vacuum a cumulant connects every
+  /// operator its indices come from
   /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
@@ -241,6 +278,8 @@ class WickTheorem {
   /// avoided pair is rejected.
   /// @param op_index_pairs the list of pairs of op indices that must not be
   /// directly contracted
+  /// @note under a Vacuum::MultiProduct vacuum a cumulant connects every
+  /// operator its indices come from
   /// @throw Exception if @p op_index_pairs contains duplicates
   ///@{
 
@@ -273,6 +312,8 @@ class WickTheorem {
   /// @param nop_partitions list of normal operator partitions
   /// @note if this partitions are not given, every operator is assumed to be in
   /// its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum: there the
+  /// partitions are those of each input term's topology (see use_topology())
   /// @internal this performs only the first phase of initialization of
   /// nop_topological_partition_
   ///           since the number of operators is not guaranteed to be known
@@ -325,6 +366,8 @@ class WickTheorem {
   /// @param op_partitions list of index partitions
   /// @note if this partitions are not given, every Index is assumed to be in
   /// its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum: there the
+  /// partitions are those of each input term's topology (see use_topology())
   ///
   ///@{
 
@@ -398,6 +441,8 @@ class WickTheorem {
   }
 
   /// makes a default set of partitions with each Op is in its own partition
+  /// @note not consulted under a Vacuum::MultiProduct vacuum, like
+  /// set_op_partitions()
   auto &make_default_op_partitions() const {
     return set_op_partitions(ranges::views::iota(0ul, input_->opsize()) |
                              ranges::views::transform([](const std::size_t v) {
@@ -416,8 +461,12 @@ class WickTheorem {
   /// Product, or a Sum
   /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
+  /// @note under a Vacuum::MultiProduct vacuum the input is always
+  /// canonicalized
   /// @throw Exception if input's vacuum does not match the current
   /// context vacuum
+  /// @throw Exception under a Vacuum::MultiProduct vacuum if @p count_only is
+  /// true or @p S is Statistics::BoseEinstein
   ExprPtr compute(bool count_only = false,
                   bool skip_input_canonicalization = false);
 
@@ -475,7 +524,41 @@ class WickTheorem {
   mutable ExprPtr prefactor_;
   bool full_contractions_ = true;
   bool use_topology_ = true;
+  std::optional<std::size_t> max_cumulant_rank_;
+  bool eta_as_delta_minus_gamma_ = false;
   mutable Stats stats_;
+
+  // the standard theorem's contractions under any vacuum
+  ExprPtr compute_contractions(bool count_only,
+                               bool skip_input_canonicalization);
+
+  /// partitions of topologically equivalent objects, in the form
+  /// set_nop_partitions() and set_op_partitions() take
+  struct TopologicalPartitions {
+    /// true if the product is zero by symmetry, i.e. has an automorphism of
+    /// phase -1; the partitions are then not computed
+    bool zero = false;
+    /// partitions of NormalOperator ordinals; empty if none is nontrivial
+    container::svector<container::svector<size_t>> nop_partitions;
+    /// partitions of Op ordinals in the flattened operator sequence; empty
+    /// if there are none
+    container::svector<container::svector<size_t>> op_partitions;
+  };
+
+  /// @return the partitions of the topologically equivalent NormalOperator
+  /// and Op objects of @p product, deduced from the automorphisms of its
+  /// tensor network; an Op partition only holds Op objects of the bra or the
+  /// ket of one (anti)symmetric NormalOperator
+  /// @param declared_external_indices if non-null, indices that no
+  /// automorphism may permute, even if contracted
+  static TopologicalPartitions analyze_topology(
+      const Product &product,
+      const container::set<Index> *declared_external_indices = nullptr);
+
+  // the extended theorem runs the standard one on its operators
+  friend ExprPtr detail::extended_wick<S>(ExprPtr,
+                                          const detail::ExtendedWickOptions &,
+                                          WickTheorem &);
 
   mutable std::optional<container::set<Index>> all_indices_;
   mutable bool user_defined_external_indices_ = false;
@@ -568,6 +651,32 @@ class WickTheorem {
       });
       return std::nullopt;
     }
+  }
+
+  /// @return the pairs given to set_nop_connections (@p mask =
+  /// nop_connections_, @p cache = nop_connections_input_) or to
+  /// set_nop_avoided_connections, whether or not they were recorded in
+  /// @p mask yet
+  static container::svector<std::pair<std::size_t, std::size_t>> nop_pairs(
+      const container::svector<std::bitset<max_input_size>> &mask,
+      const container::svector<std::pair<size_t, size_t>> &cache) {
+    if (!cache.empty()) return cache;
+    container::svector<std::pair<std::size_t, std::size_t>> pairs;
+    for (std::size_t i = 0; i != mask.size(); ++i)
+      for (std::size_t j = i + 1; j != mask.size(); ++j)
+        if (!mask[i].test(j)) pairs.emplace_back(i, j);
+    return pairs;
+  }
+
+  /// @return whether the engine applies the required-connectivity filter
+  /// given by set_nop_connections; under a MultiProduct vacuum connectivity is
+  /// a property of the cumulant-expanded result (cumulant blocks connect
+  /// operators that no pair does), so the filter is applied by
+  /// cumulant_expand instead. Avoided pairs (set_nop_avoided_connections) are
+  /// rejected by the engine under every vacuum: a pair contraction between
+  /// them is fatal no matter what a cumulant adds later.
+  bool pairwise_connectivity() const {
+    return input_->vacuum() != Vacuum::MultiProduct;
   }
 
   enum class TopologicalPartitionType { NormalOperator, Index };
@@ -1171,7 +1280,8 @@ class WickTheorem {
 
     // if computing everything, and the user does not insist on some
     // target contractions, include the contraction-free term
-    if (!full_contractions_ && nop_nconnections_total_ == 0) {
+    if (!full_contractions_ &&
+        (nop_nconnections_total_ == 0 || !pairwise_connectivity())) {
       if (count_only) {
         ++state.count;
       } else {
@@ -1216,6 +1326,11 @@ class WickTheorem {
 
     const auto &ctx = state.ctx;
     const auto &isr = ctx.index_space_registry();
+
+    static const container::svector<std::bitset<max_input_size>> unconstrained;
+    const auto &target_connections =
+        pairwise_connectivity() ? nop_connections_ : unconstrained;
+    const auto &avoided_connections = nop_avoided_connections_;
 
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)
@@ -1440,7 +1555,7 @@ class WickTheorem {
                            ctx.index_space_registry())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
-              if (state.connect(nop_connections_, nop_avoided_connections_,
+              if (state.connect(target_connections, avoided_connections,
                                 ranges::get_cursor(op_left_iter),
                                 ranges::get_cursor(op_right_iter))) {
                 if (Logger::instance().wick_contract) {
@@ -1595,7 +1710,7 @@ class WickTheorem {
                 ++state.nopseq_size;
                 ranges::get_cursor(op_right_iter).insert(std::move(right));
                 ++state.nopseq_size;
-                state.disconnect(nop_connections_,
+                state.disconnect(target_connections,
                                  ranges::get_cursor(op_left_iter),
                                  ranges::get_cursor(op_right_iter));
                 //            std::wcout << "  restored nopseq = " <<
@@ -1621,6 +1736,17 @@ class WickTheorem {
     if constexpr (statistics == Statistics::BoseEinstein)
       SEQUANT_ASSERT(vacuum == Vacuum::Physical);
     return sequant::can_contract(left, right, vacuum, isr);
+  }
+
+  /// the value of a single contraction between @p bra (the annihilator's
+  /// index) and @p ket (the creator's index), both already projected onto
+  /// the common quasiparticle space; this is where a spin-free variant
+  /// would substitute its own tensors
+  static ExprPtr contraction_value(const Index &bra, const Index &ket,
+                                   bool left_is_annihilator, Vacuum vacuum) {
+    if (vacuum != Vacuum::MultiProduct) return make_overlap(bra, ket);
+    return left_is_annihilator ? density::make_hole_rdm(bra, ket)
+                               : density::make_rdm(bra, ket);
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
@@ -1651,6 +1777,20 @@ class WickTheorem {
       qpspace_common = isr->intersection(qpspace_left, qpspace_right);
     }
 
+    if constexpr (S == Statistics::FermiDirac) {
+      if (vacuum == Vacuum::MultiProduct &&
+          (left.index().has_proto_indices() ||
+           right.index().has_proto_indices())) {
+        const auto &sp =
+            left_is_pure && right_is_pure
+                ? isr->intersection(left.index().space(), right.index().space())
+                : qpspace_common;
+        const auto qns = sp.qns();
+        SEQUANT_ASSERT(!isr->intersection(sp, isr->active_space(qns)) &&
+                       "protoindexed indices must not reach the active space");
+      }
+    }
+
     std::optional<Index> left_qp_idx;
     if (!left_is_pure) {
       left_qp_idx =
@@ -1674,13 +1814,14 @@ class WickTheorem {
     const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
 
     if (bra_is_pure && ket_is_pure) {
-      return make_overlap(bra_idx, ket_idx);
+      return contraction_value(bra_idx, ket_idx, left_is_ann, vacuum);
     } else {
       auto result = std::make_shared<Product>();
       SEQUANT_ASSERT(bra_is_pure || bra_qp_idx_opt);
       SEQUANT_ASSERT(ket_is_pure || ket_qp_idx_opt);
-      result->append(1, make_overlap(bra_qp_idx_opt.value_or(bra_idx),
-                                     ket_qp_idx_opt.value_or(ket_idx)));
+      result->append(1, contraction_value(bra_qp_idx_opt.value_or(bra_idx),
+                                          ket_qp_idx_opt.value_or(ket_idx),
+                                          left_is_ann, vacuum));
       if (!bra_is_pure)
         result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
       if (!ket_is_pure)

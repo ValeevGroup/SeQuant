@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
@@ -68,6 +69,11 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
         return value;
       };
 
+  // each index occurs once, so canonicalize treats all of them as named;
+  // ordering by their labels makes equal products canonicalize identically,
+  // so that summand_exists finds the repeats
+  const auto canon_opts = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizeOptions::IgnoreNamedIndexLabel::No);
   for (int i = 0; i < unique_bras_list.size(); i++) {
     for (int j = 0; j < unique_kets_list.size(); j++) {  // product level
 
@@ -89,12 +95,13 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
             new_kets.push_back(unique_kets_list[j].second[index_label_pos]);
             index_label_pos++;
           }
-          // mbpt tensors are particle (column) symmetric
           auto new_tensor = ex<Tensor>(
               label, bra(std::move(new_bras)), ket(std::move(new_kets)),
-              Symmetry::Nonsymm, std::nullopt, ColumnSymmetry::Symm);
+              TensorSymmetries{.perm = old_tensor.symmetry(),
+                               .hermiticity = old_tensor.hermiticity(),
+                               .column = old_tensor.column_symmetry()});
           new_product = new_tensor * new_product;
-          new_product->canonicalize();
+          new_product->canonicalize(canon_opts);
         }
 
         else if (it->get()->is<FNOperator>()) {
@@ -109,7 +116,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
           auto new_Nop = ex<FNOperator>(cre(new_crea), ann(new_anni));
           new_product = new_product * new_Nop;
           // std::wcout << "product:  " << to_latex(new_product) << std::endl;
-          new_product->canonicalize();
+          new_product->canonicalize(canon_opts);
         }
 
         else {
@@ -307,11 +314,15 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
           }
         }
         if (new_pairs > og_pairs) {
-          factor = ex<Constant>(-1) *
-                   ex<Tensor>(factor->as<Tensor>().label(),
-                              bra(std::move(current_lower)),
-                              ket(std::move(current_upper)), Symmetry::Nonsymm,
-                              std::nullopt, ColumnSymmetry::Symm);
+          factor =
+              ex<Constant>(-1) *
+              ex<Tensor>(factor->as<Tensor>().label(),
+                         bra(std::move(current_lower)),
+                         ket(std::move(current_upper)),
+                         TensorSymmetries{
+                             .perm = Symmetry::Nonsymm,
+                             .hermiticity = factor->as<Tensor>().hermiticity(),
+                             .column = ColumnSymmetry::Symm});
         }
       } else if (factor->is<FNOperator>()) {
         std::vector<Index> current_upper;
@@ -386,9 +397,9 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
             new_upper.push_back(factor->as<Tensor>().ket()[i]);
             new_lower.push_back(factor->as<Tensor>().bra()[i]);
           }
-          factor = ex<Tensor>(L"Γ", factor->as<Tensor>().bra(),
-                              factor->as<Tensor>().ket(), Symmetry::Nonsymm,
-                              std::nullopt, ColumnSymmetry::Symm);
+          factor = density::make_density(density::spinfree_rdm_label(),
+                                         bra(factor->as<Tensor>().bra()),
+                                         ket(factor->as<Tensor>().ket()));
         } else if (factor->is<FNOperator>()) {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;

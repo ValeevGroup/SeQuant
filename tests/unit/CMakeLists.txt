@@ -25,6 +25,7 @@ set(symb_test_sources
     "test_tensor_network.cpp"
     "test_utilities.cpp"
     "test_wick.cpp"
+    "test_wick_extended.cpp"
 )
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})

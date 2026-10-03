@@ -4,12 +4,15 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/density.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/timer.hpp>
+#include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -49,6 +52,83 @@ namespace {
   return sequant::mbpt::set_scoped_default_mbpt_context(
       {.csv = sequant::mbpt::get_default_mbpt_context().csv(),
        .op_registry = std::move(reg)});
+}
+
+/// @return @p expr spelled so that two reference expectation values that
+/// differ only in how they write the same sums compare equal: every η is
+/// δ - γ, every δ over a dummy is applied, and every index in a non-base
+/// space (e.g. E, or O) is split into a sum over the base spaces it spans
+sequant::ExprPtr in_base_spaces(sequant::ExprPtr expr) {
+  using namespace sequant;
+  const auto isr = get_default_context().index_space_registry();
+  auto terms_of = [](const ExprPtr& e) {
+    return e->is<Sum>() ? e->as<Sum>().summands() | ranges::to_vector
+                        : std::vector<ExprPtr>{e};
+  };
+  auto first_index = [](const ExprPtr& term, auto&& pred) {
+    std::optional<Index> found;
+    auto look = [&](const ExprPtr& f) {
+      if (found || !f->is<Tensor>()) return;
+      for (const auto& idx : f->as<Tensor>().const_braket())
+        if (pred(idx)) {
+          found = idx;
+          return;
+        }
+    };
+    if (term->is<Tensor>())
+      look(term);
+    else
+      term->visit(look, /*atoms_only=*/true);
+    return found;
+  };
+
+  expr = expr->clone();
+  expand(expr);
+  for (bool split = true; split;) {
+    split = false;
+    auto result = std::make_shared<Sum>();
+    for (const auto& term : terms_of(expr)) {
+      const auto idx = first_index(
+          term, [&](const Index& i) { return !isr->is_base(i.space()); });
+      if (!idx) {
+        result->append(term);
+        continue;
+      }
+      split = true;
+      for (const auto& base : isr->base_spaces())
+        if (base.qns() == idx->space().qns() &&
+            idx->space().type().includes(base.type()))
+          result->append(
+              transform_expr(term, {{*idx, Index::make_tmp_index(base)}}));
+    }
+    expr = result;
+    expand(expr);
+  }
+
+  expr->visit(
+      [](ExprPtr& f) {
+        if (f->is<Tensor>() &&
+            f->as<Tensor>().label() == density::hole_rdm_label()) {
+          const auto& t = f->as<Tensor>();
+          f = make_kronecker(t.bra()[0], t.ket()[0]) -
+              density::make_rdm(t.bra()[0], t.ket()[0]);
+        }
+      },
+      /*atoms_only=*/true);
+  expand(expr);
+  auto result = std::make_shared<Sum>();
+  for (auto term : terms_of(expr)) {
+    if (term->is<Product>()) {
+      FWickTheorem reducer{term};
+      reducer.reduce(term);
+    }
+    // canonicalize as a Product so that a lone tensor's dummies are renamed
+    if (!term->is<Product>() && !term->is<Constant>())
+      term = ex<Product>(ExprPtrList{term});
+    result->append(canonicalize(term));
+  }
+  ExprPtr out = result;
+  return simplify(out);
 }
 }  // namespace
 
@@ -1201,7 +1281,7 @@ SECTION("MRSO") {
     // the active-first comparer is scoped to ref_av
     CHECK(&get_default_context().index_comparer() == index_comparer);
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
-                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
+                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
   }
 
 #if 0
@@ -1216,6 +1296,117 @@ SECTION("MRSO") {
     }
 #endif
 }  // SECTION("MRSO")
+
+SECTION("MRSO-MultiProduct") {
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  ctx.set(Vacuum::MultiProduct);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  // one-body: same expectation as the core-vacuum path at MRSO
+  SECTION("ref_av of non-normal-ordered one-body product") {
+    const Index p{L"p_1"};
+    const Index q{L"p_2"};
+    auto H1 = ex<Tensor>(L"h", bra{p}, ket{q}, Symmetry::Nonsymm,
+                         BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
+              fcrex(p) * fannx(q);
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = t::ref_av(H1));
+    REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
+                                      L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}"));
+  }
+
+  // the mbpt operators (ã) are normal-ordered relative to the context vacuum,
+  // i.e. to the reference here and to the core under SingleProduct, so
+  // t::h(k)·t::t(k) is a different operator on the two paths; only products
+  // of elementary operators, whose normal order is immaterial, are compared.
+  // connect is not used: it means different things on the two paths (a core
+  // or virtual δ between the operators vs any density linking them)
+  SECTION("elementary operators match the core-vacuum path") {
+    const Index p1{L"p_1"}, p2{L"p_2"}, p3{L"p_3"}, p4{L"p_4"}, p5{L"p_5"},
+        p6{L"p_6"};
+    auto coeff = [](IndexList b, IndexList k) {
+      return ex<Tensor>(L"h", bra(b), ket(k), Symmetry::Nonsymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
+    };
+    auto check = [](const ExprPtr& x) {
+      const auto mp =
+          mbpt::decompositions::cumulants_to_densities(t::ref_av(x));
+      ExprPtr sp;
+      {
+        auto sp_ctx = get_default_context();
+        sp_ctx.set(Vacuum::SingleProduct);
+        auto sp_resetter = set_scoped_default_context(sp_ctx);
+        sp = t::ref_av(x);
+      }
+      // the two paths spell the same sums differently, e.g. h{E;O} vs
+      // h{a;O} + h{g;O} + h{u;O}, and η vs δ - γ
+      REQUIRE(simplify(in_base_spaces(mp) - in_base_spaces(sp)) ==
+              ex<Constant>(0));
+    };
+    // one-body
+    check(coeff({p1}, {p2}) * fcrex(p1) * fannx(p2));
+    // two-body: up to κ₂
+    check(coeff({p1, p2}, {p3, p4}) * fcrex(p1) * fcrex(p2) * fannx(p4) *
+          fannx(p3));
+    // a two-body times a one-body string: up to κ₃
+    check(coeff({p1, p2, p5}, {p3, p4, p6}) * fcrex(p1) * fcrex(p2) *
+          fannx(p4) * fannx(p3) * fcrex(p5) * fannx(p6));
+#ifndef SEQUANT_SKIP_LONG_TESTS
+    // two two-body strings: up to κ₄
+    const Index p7{L"p_7"}, p8{L"p_8"};
+    check(coeff({p1, p2, p5, p6}, {p3, p4, p7, p8}) * fcrex(p1) * fcrex(p2) *
+          fannx(p4) * fannx(p3) * fcrex(p5) * fcrex(p6) * fannx(p8) *
+          fannx(p7));
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
+  }
+
+  SECTION("wick(H2**T2) runs in generalized normal order") {
+    ExprPtr result;
+    REQUIRE_NOTHROW(result =
+                        t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}}));
+    REQUIRE(!result->is<Constant>());
+    // the product reaches κ₄
+    ExprPtr densities;
+    REQUIRE_NOTHROW(densities =
+                        mbpt::decompositions::cumulants_to_densities(result));
+    REQUIRE(!densities->is<Constant>());
+  }
+
+  SECTION("topology on/off agree") {
+    auto a = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
+    auto b = t::ref_av(t::h(2) * t::t(2),
+                       {.connect = {{0, 1}}, .use_topology = false});
+    REQUIRE(simplify(a - b) == ex<Constant>(0));
+  }
+
+  SECTION("topology prunes contractions") {
+    auto attempted = [](bool top) {
+      FWickTheorem wick{simplify(t::h(2) * t::t(2))};
+      wick.use_topology(top).set_nop_connections({{0, 1}});
+      wick.compute();
+      return wick.stats().num_attempted_contractions.load();
+    };
+    const auto attempted_on = attempted(true);
+    REQUIRE(attempted_on > 0);
+    REQUIRE(attempted_on < attempted(false));
+  }
+
+#ifndef SEQUANT_SKIP_LONG_TESTS
+  SECTION("wick(H2**T2**T2) topology on/off agree") {
+    auto a = t::ref_av(t::h(2) * t::t(2) * t::t(2), {.connect = {{0, 1}}});
+    auto b = t::ref_av(t::h(2) * t::t(2) * t::t(2),
+                       {.connect = {{0, 1}}, .use_topology = false});
+    REQUIRE(simplify(a - b) == ex<Constant>(0));
+  }
+#endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
+
+  SECTION("operator-level ref_av agrees with tensor-level") {
+    auto result_op = o::ref_av(o::h(2) * o::t(2));
+    auto result_t = t::ref_av(t::h(2) * t::t(2), {.connect = {{0, 1}}});
+    REQUIRE(simplify(result_op - result_t) == ex<Constant>(0));
+  }
+}  // SECTION("MRSO-MultiProduct")
 
 SECTION("MRSF") {
   // now compute using (closed) Fermi vacuum + spinfree basis
@@ -1517,9 +1708,9 @@ SECTION("avoided-connections") {
 SECTION("rdm-decomposition symmetries") {
   using namespace sequant;
 
-  // an RDM is Hermitian and particle (column) symmetric by definition, and the
-  // decompositions in mbpt/rdm.cpp must spell out both: the γ they build has
-  // to equal the γ that expectation_value_impl() (mbpt/op.cpp) builds, or
+  // an RDM is Hermitian and particle (column) symmetric by definition: the γ
+  // that the decompositions in mbpt/rdm.cpp build has to equal the γ that
+  // expectation_value_impl() (mbpt/op.cpp) and the parser build, or
   // otherwise-equal terms stop merging. The symmetries take part in the tensor
   // hash, so a mismatch in either attribute is enough to break it.
   auto ctx_resetter = set_scoped_default_context(
@@ -1527,19 +1718,270 @@ SECTION("rdm-decomposition symmetries") {
                .vacuum = Vacuum::SingleProduct}));
 
   const auto kappa =
-      ex<Tensor>(L"κ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
-                 TensorSymmetries{.column = ColumnSymmetry::Symm});
-  const auto gamma = mbpt::decompositions::cumu_to_density(kappa);
+      density::make_cumulant(bra{Index(L"i_1")}, ket{Index(L"i_2")});
+  const auto gamma = mbpt::decompositions::cumulant_to_density(kappa);
   REQUIRE(gamma->is<Tensor>());
   REQUIRE(gamma->as<Tensor>().label() == L"γ");
   REQUIRE(gamma->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
   REQUIRE(gamma->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
 
-  // ... and the two spellings do compare equal
-  const auto gamma_op =
-      ex<Tensor>(L"γ", bra{Index(L"i_1")}, ket{Index(L"i_2")},
-                 Symmetry::Nonsymm, Hermiticity::Hermitian,
-                 std::optional<ColumnSymmetry>(ColumnSymmetry::Symm));
-  REQUIRE(*gamma == *gamma_op);
+  // the decomposition, the factory in SeQuant/core/density.hpp and the parser
+  // agree on the spelling
+  const auto gamma_factory = density::make_rdm(Index(L"i_1"), Index(L"i_2"));
+  REQUIRE(*gamma == *gamma_factory);
+  REQUIRE(*deserialize(L"γ{i_1;i_2}") == *gamma_factory);
+  REQUIRE(*deserialize(L"κ{i_1;i_2}") == *kappa);
+
+  const auto eta = density::make_hole_rdm(Index(L"i_1"), Index(L"i_2"));
+  REQUIRE(eta->as<Tensor>().label() == L"η");
+  REQUIRE(eta->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+  REQUIRE(eta->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+
+  // κ from a 2-body normal operator: bra = annihilators, ket = creators
+  const FNOperator nop2(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"}));
+  const auto kappa2 = density::make_cumulant(nop2);
+  REQUIRE(kappa2->as<Tensor>().label() == L"κ");
+  REQUIRE(kappa2->as<Tensor>().symmetry() == Symmetry::Antisymm);
+  REQUIRE(kappa2->as<Tensor>().bra()[0] == Index(L"i_3"));
+  REQUIRE(kappa2->as<Tensor>().bra()[1] == Index(L"i_4"));
+  REQUIRE(kappa2->as<Tensor>().ket()[0] == Index(L"i_1"));
+  REQUIRE(kappa2->as<Tensor>().ket()[1] == Index(L"i_2"));
+  REQUIRE(*deserialize(L"κ{i_3,i_4;i_1,i_2}") == *kappa2);
+  // antisymmetrize() generates each distinct pairing once, also under the
+  // topological canonicalization that the test suite defaults to
+  {
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizationMethod::Topological));
+    auto topological = set_scoped_default_context(ctx);
+    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4");
+    const auto kappa = density::make_cumulant(bra{i1, i3}, ket{i2, i4});
+    const auto expected =
+        density::make_rdm(bra{i1, i3}, ket{i2, i4}) -
+        density::make_rdm(i1, i2) * density::make_rdm(i3, i4) +
+        density::make_rdm(i1, i4) * density::make_rdm(i3, i2);
+    REQUIRE(simplify(mbpt::decompositions::cumulant2_to_density(kappa) -
+                     expected) == ex<Constant>(0));
+  }
+  // every density a decomposition builds has these symmetries, including
+  // those that antisymmetrize() builds by permuting indices
+  const auto densities2 =
+      simplify(mbpt::decompositions::cumulant2_to_density(kappa2));
+  densities2->visit(
+      [](const ExprPtr& e) {
+        if (!e->is<Tensor>()) return;
+        REQUIRE(e->as<Tensor>().label() == L"γ");
+        REQUIRE(e->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+        REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+      },
+      /*atoms_only=*/true);
+  // a spin-orbital multi-body density is antisymmetric, like the one
+  // expectation_value_impl() builds from a leftover normal operator
+  const auto gamma2 = density::rdm_from_nop(nop2, density::rdm_label());
+  REQUIRE(simplify(densities2 - gamma2)->size() == densities2->size() - 1);
+  // η is a reserved label, hence an mbpt operator label
+  REQUIRE(mbpt::to_op_class(L"η") == mbpt::OpClass::Gen);
+
+  // every multi-body κ that a decomposition builds is the κ that the extended
+  // Wick theorem builds
+  {
+    const FNOperator nop3(cre({L"i_1", L"i_2", L"i_3"}),
+                          ann({L"i_4", L"i_5", L"i_6"}));
+    const auto decomp =
+        simplify(mbpt::decompositions::three_body_decomp(ex<FNOperator>(nop3),
+                                                         /*approx=*/false)
+                     .first);
+    std::size_t n_multibody_kappa = 0;
+    decomp->visit(
+        [&n_multibody_kappa](const ExprPtr& e) {
+          if (!e->is<Tensor>() || e->as<Tensor>().label() != L"κ" ||
+              e->as<Tensor>().rank() < 2)
+            return;
+          ++n_multibody_kappa;
+          REQUIRE(e->as<Tensor>().symmetry() == Symmetry::Antisymm);
+          REQUIRE(e->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+          REQUIRE(e->as<Tensor>().column_symmetry() == ColumnSymmetry::Symm);
+        },
+        /*atoms_only=*/true);
+    REQUIRE(n_multibody_kappa > 0);
+    REQUIRE(simplify(decomp - density::make_cumulant(nop3))->size() ==
+            decomp->size() - 1);
+  }
+}
+
+SECTION("cumulant-to-density decompositions") {
+  using namespace sequant;
+  auto ctx_resetter = set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+               .vacuum = Vacuum::SingleProduct}));
+  auto gamma = [](std::vector<Index> b, std::vector<Index> k) {
+    return b.size() == 1
+               ? density::make_rdm(b[0], k[0])
+               : density::make_rdm(bra(std::move(b)), ket(std::move(k)));
+  };
+
+  // κ₃ = γ₃ - Σ γ₁γ₂ (9 terms) + 2 Σ γ₁γ₁γ₁ (6 terms)
+  const FNOperator nop3(cre({L"i_1", L"i_2", L"i_3"}),
+                        ann({L"i_4", L"i_5", L"i_6"}));
+  const auto densities3 = simplify(
+      mbpt::decompositions::cumulant3_to_density(density::make_cumulant(nop3)));
+  REQUIRE(densities3->is<Sum>());
+  std::size_t n_gamma3 = 0, n_gamma1_gamma2 = 0, n_gamma1_cubed = 0;
+  for (const auto& term : *densities3) {
+    if (term->is<Tensor>()) {
+      REQUIRE(term->as<Tensor>().label() == L"γ");
+      REQUIRE(term->as<Tensor>().rank() == 3);
+      REQUIRE(term->as<Tensor>().symmetry() == Symmetry::Antisymm);
+      ++n_gamma3;
+      continue;
+    }
+    const auto& product = term->as<Product>();
+    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == L"γ");
+    if (product.size() == 2) {
+      REQUIRE(abs(product.scalar()) == 1);
+      ++n_gamma1_gamma2;
+    } else {
+      REQUIRE(product.size() == 3);
+      REQUIRE(abs(product.scalar()) == 2);
+      ++n_gamma1_cubed;
+    }
+  }
+  REQUIRE(n_gamma3 == 1);
+  REQUIRE(n_gamma1_gamma2 == 9);
+  REQUIRE(n_gamma1_cubed == 6);
+  // the identity pairing of γ₁γ₁γ₁ comes with +2
+  const auto identity = ex<Constant>(2) *
+                        density::make_rdm(Index(L"i_4"), Index(L"i_1")) *
+                        density::make_rdm(Index(L"i_5"), Index(L"i_2")) *
+                        density::make_rdm(Index(L"i_6"), Index(L"i_3"));
+  REQUIRE(simplify(densities3 - identity)->size() == densities3->size() - 1);
+
+  // the general cumulant_to_density reproduces the hand-derived κ₂ and κ₃
+  {
+    using mbpt::antisymmetrize;
+    using mbpt::decompositions::cumulant_to_density;
+    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4"), i5(L"i_5"),
+        i6(L"i_6");
+    const auto kappa2_ref =
+        gamma({i3, i4}, {i1, i2}) -
+        antisymmetrize(gamma({i3}, {i1}) * gamma({i4}, {i2})).result;
+    REQUIRE(simplify(cumulant_to_density(density::make_cumulant(
+                         FNOperator(cre({i1, i2}), ann({i3, i4})))) -
+                     kappa2_ref) == ex<Constant>(0));
+    const auto kappa3_ref =
+        gamma({i4, i5, i6}, {i1, i2, i3}) -
+        antisymmetrize(gamma({i4}, {i1}) * gamma({i5, i6}, {i2, i3})).result +
+        ex<Constant>(2) * antisymmetrize(gamma({i4}, {i1}) * gamma({i5}, {i2}) *
+                                         gamma({i6}, {i3}))
+                              .result;
+    REQUIRE(simplify(cumulant_to_density(density::make_cumulant(nop3)) -
+                     kappa3_ref) == ex<Constant>(0));
+  }
+
+  // cumulants_to_densities rewrites every κ in an expression
+  using mbpt::decompositions::cumulants_to_densities;
+  const FNOperator nop2(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"}));
+  const auto kappa2 = density::make_cumulant(nop2);
+  const auto kappa1 =
+      density::make_cumulant(bra{Index(L"i_5")}, ket{Index(L"i_6")});
+  const auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"},
+                            Symmetry::Antisymm);
+  const auto h = ex<Tensor>(L"h", bra{L"i_6"}, ket{L"i_5"});
+  const auto expr = g * kappa2 + h * kappa1;
+  const auto expected = g * mbpt::decompositions::cumulant2_to_density(kappa2) +
+                        h * mbpt::decompositions::cumulant_to_density(kappa1);
+  const auto result = cumulants_to_densities(expr);
+  result->visit(
+      [](const ExprPtr& e) {
+        if (e->is<Tensor>()) REQUIRE(e->as<Tensor>().label() != L"κ");
+      },
+      /*atoms_only=*/true);
+  REQUIRE(simplify(result - expected) == ex<Constant>(0));
+  // ... including a κ that is the whole expression
+  REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop3)) -
+                   densities3) == ex<Constant>(0));
+
+  // κ₄ = γ₄ - Σ γ₁γ₃ (4·4 terms) - Σ γ₂γ₂ (6·6/2 terms)
+  //      + 2 Σ γ₁γ₁γ₂ (12·12/2 terms) - 6 Σ γ₁γ₁γ₁γ₁ (4!·4!/4! terms)
+  const FNOperator nop4(cre({L"i_1", L"i_2", L"i_3", L"i_4"}),
+                        ann({L"i_5", L"i_6", L"i_7", L"i_8"}));
+  const auto densities4 = simplify(
+      mbpt::decompositions::cumulant_to_density(density::make_cumulant(nop4)));
+  REQUIRE(densities4->is<Sum>());
+  std::size_t n_gamma4 = 0, n_gamma1_gamma3 = 0, n_gamma2_gamma2 = 0,
+              n_gamma1_gamma1_gamma2 = 0, n_gamma1_fourth = 0;
+  for (const auto& term : *densities4) {
+    if (term->is<Tensor>()) {
+      REQUIRE(term->as<Tensor>().label() == L"γ");
+      REQUIRE(term->as<Tensor>().rank() == 4);
+      REQUIRE(term->as<Tensor>().symmetry() == Symmetry::Antisymm);
+      ++n_gamma4;
+      continue;
+    }
+    const auto& product = term->as<Product>();
+    for (const auto& f : product) REQUIRE(f->as<Tensor>().label() == L"γ");
+    switch (product.size()) {
+      case 2:
+        REQUIRE(abs(product.scalar()) == 1);
+        if (product.factors()[0]->as<Tensor>().rank() == 2)
+          ++n_gamma2_gamma2;
+        else
+          ++n_gamma1_gamma3;
+        break;
+      case 3:
+        REQUIRE(abs(product.scalar()) == 2);
+        ++n_gamma1_gamma1_gamma2;
+        break;
+      default:
+        REQUIRE(product.size() == 4);
+        REQUIRE(abs(product.scalar()) == 6);
+        ++n_gamma1_fourth;
+    }
+  }
+  REQUIRE(n_gamma4 == 1);
+  REQUIRE(n_gamma1_gamma3 == 16);
+  REQUIRE(n_gamma2_gamma2 == 18);
+  REQUIRE(n_gamma1_gamma1_gamma2 == 72);
+  REQUIRE(n_gamma1_fourth == 24);
+  // the identity pairing of each product comes with (-1)^(m-1) (m-1)!
+  {
+    const Index i1(L"i_1"), i2(L"i_2"), i3(L"i_3"), i4(L"i_4"), i5(L"i_5"),
+        i6(L"i_6"), i7(L"i_7"), i8(L"i_8");
+    for (const auto& identity :
+         {ex<Constant>(-1) * gamma({i5}, {i1}) *
+              gamma({i6, i7, i8}, {i2, i3, i4}),
+          ex<Constant>(-1) * gamma({i5, i6}, {i1, i2}) *
+              gamma({i7, i8}, {i3, i4}),
+          ex<Constant>(2) * gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+              gamma({i7, i8}, {i3, i4}),
+          ex<Constant>(-6) * gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+              gamma({i7}, {i3}) * gamma({i8}, {i4})}) {
+      REQUIRE(simplify(densities4 - identity)->size() ==
+              densities4->size() - 1);
+    }
+    // ... and the expansions of κ₂, κ₃ and κ₄ invert the expansion of γ₄ in
+    // cumulants, γ₄ = κ₄ + A[γ₁κ₃] + A[κ₂κ₂] + A[γ₁γ₁κ₂] + A[γ₁γ₁γ₁γ₁]
+    using mbpt::antisymmetrize;
+    auto kappa = [](std::vector<Index> b, std::vector<Index> k) {
+      return density::make_cumulant(bra(std::move(b)), ket(std::move(k)));
+    };
+    const auto moments =
+        kappa({i5, i6, i7, i8}, {i1, i2, i3, i4}) +
+        antisymmetrize(gamma({i5}, {i1}) * kappa({i6, i7, i8}, {i2, i3, i4}))
+            .result +
+        antisymmetrize(kappa({i5, i6}, {i1, i2}) * kappa({i7, i8}, {i3, i4}))
+            .result +
+        antisymmetrize(gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+                       kappa({i7, i8}, {i3, i4}))
+            .result +
+        antisymmetrize(gamma({i5}, {i1}) * gamma({i6}, {i2}) *
+                       gamma({i7}, {i3}) * gamma({i8}, {i4}))
+            .result;
+    REQUIRE(simplify(cumulants_to_densities(moments) -
+                     gamma({i5, i6, i7, i8}, {i1, i2, i3, i4})) ==
+            ex<Constant>(0));
+  }
+  REQUIRE(simplify(cumulants_to_densities(density::make_cumulant(nop4)) -
+                   densities4) == ex<Constant>(0));
 }
 }

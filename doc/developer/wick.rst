@@ -13,11 +13,14 @@ or a general :class:`sequant::Expr` (repeated indices assumed dummy), then tuned
 ``compute()``:
 
 - ``full_contractions(bool)`` (default ``true``): full contractions only, versus all contractions including partial ones.
-- ``use_topology(bool)`` (default ``true``): treats ``Op``\ s of the same type within a ``NormalOperator``, and — when the input is an
-  ``Expr`` — ``NormalOperator`` objects attached to the same tensor label, as topologically equivalent, so that contractions related by
-  this equivalence are not separately enumerated when only the fully-contracted result (the vacuum average) is wanted.
+- ``use_topology(bool)`` (default ``true``): when the input is an ``Expr``, treats the ``Op``\ s within a bra or ket of a
+  ``NormalOperator`` that can be swapped as a symmetry of the input (see :ref:`below <wick-topology>`), and ``NormalOperator`` objects
+  attached to the same tensor label, as topologically equivalent, so that contractions related by this equivalence are not separately
+  enumerated.
 - ``set_nop_connections()`` / ``set_nop_avoided_connections()``: force, or forbid, contraction between specific pairs of normal-operator
-  ordinals.
+  ordinals. Under a ``Vacuum::MultiProduct`` vacuum a required connection is enforced after cumulant expansion rather than during
+  the contraction recursion, since a cumulant connects operators that no pair does; an avoided pair is still rejected the moment a
+  contraction between it is attempted (see :ref:`below <wick-extended>`).
 - ``set_nop_partitions()`` / ``set_op_partitions()`` / ``make_default_op_partitions()``: declare explicit equivalence groups of normal
   operators, or of individual ``Op``\ s, so that contractions related by permuting within a group are counted once with a combinatorial
   degeneracy factor rather than enumerated redundantly — the general form of what ``use_topology()`` infers automatically.
@@ -47,8 +50,8 @@ workers of the per-summand ``WickTheorem`` instances see that scope.
 
 A candidate pair ``(left, right)`` contracts (``can_contract``) iff ``left`` is a quasiparticle annihilator, ``right`` is a quasiparticle
 creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpcreator``/``IndexSpaceRegistry::intersection``, from
-``SeQuant/core/op.hpp``). The contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle
-subspaces or not:
+``SeQuant/core/op.hpp``); under ``Vacuum::MultiProduct`` their actions must also differ (see :ref:`below <wick-extended>`). The
+contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle subspaces or not:
 
 - both pure: the contraction is a plain overlap :math:`s(L,R)`;
 - neither pure: :math:`\delta(L,l)\, s(l,r)\, \delta(R,r)`;
@@ -56,16 +59,22 @@ subspaces or not:
 - only the right space pure: :math:`\delta(L,l)\, s(l,R)`,
 
 where :math:`l = L \cap H` and :math:`r = R \cap P` (:math:`H`/:math:`P` the hole/particle subspaces), materialized via temporary indices
-from ``Index::make_tmp_index`` when a space needs projecting. For fermionic statistics, each contraction additionally picks up a sign of
-:math:`-1` for every operator that sat strictly between ``left`` and ``right`` at the time of contraction — the usual anticommutation
-rule.
+from ``Index::make_tmp_index`` when a space needs projecting. The middle factor comes from ``WickTheorem::contraction_value``, which
+returns :math:`s` except under ``Vacuum::MultiProduct`` (see :ref:`below <wick-extended>`). For fermionic statistics, each contraction
+additionally picks up a sign of :math:`-1` for every operator that sat strictly between ``left`` and ``right`` at the time of
+contraction — the usual anticommutation rule.
+
+.. _wick-topology:
 
 Topological pruning and degeneracy
 ---------------------------------------
 
 When ``use_topology_`` is set, ``is_topologically_unique()`` restricts contraction attempts within a partition group (from
 ``use_topology()``'s automatic grouping, or an explicit ``set_op_partitions()``/``set_nop_partitions()``) to the group's first free
-member, skipping contractions that would only reproduce one already tried by symmetry. The corresponding combinatorial weight —
+member, skipping contractions that would only reproduce one already tried by symmetry. The automatic grouping puts two ``Op``\ s
+in one partition only if swapping them alone — their index vertices together with the tensor slots these occupy, every other
+vertex of the tensor network graph fixed — is an automorphism; an automorphism that also moves other indices, tensors or operators
+does not make the ``Op``\ s independently interchangeable. The corresponding combinatorial weight —
 equivalent to a multinomial coefficient over how many operators from each partition have already been paired off — is recovered by
 ``op_permutational_degeneracy()``, so the pruned enumeration and the exhaustive one agree on the final coefficient. They also agree for
 an input that vanishes by symmetry, i.e. has an automorphism of phase -1 (see :doc:`tnc`), because such an input is returned as zero
@@ -74,6 +83,78 @@ before any contraction is attempted: by the up-front canonicalization of a ``Sum
 For the spin-free case over a fermionic vacuum, an additional factor of :math:`2^{n}` is folded in per completed contraction, where
 :math:`n` is the number of creation/annihilation "partner" cycles formed by that contraction — the generalized Wick's theorem for
 spin-free operators (attributed, in the surrounding comment, to Kutzelnigg).
+
+.. _wick-extended:
+
+The extended Wick theorem (``Vacuum::MultiProduct``)
+--------------------------------------------------------
+
+Relative to a general (multiconfigurational) reference the quasiparticle picture is lost: an operator on a partially occupied
+(*active*) orbital is both a quasiparticle creator and annihilator. SeQuant follows Kutzelnigg and Mukherjee's *generalized normal
+order*: strings are normal-ordered so that their reference expectation value vanishes, and the theorem acquires, besides the pair
+contractions (now valued :math:`\gamma` for ``cre·ann`` and :math:`\eta = \delta - \gamma` for ``ann·cre``), *multi-leg* contractions
+of :math:`k \ge 2` creators and :math:`k` annihilators valued by the :math:`k`-body density cumulant :math:`\kappa_k`.
+
+Rather than a second engine, this is layered on the standard one, which changes in three places:
+
+- the classifiers in ``SeQuant/core/op.hpp`` gain a ``MultiProduct`` branch in which the "hole" space is the registry's
+  *reference-occupied* space :math:`R` and the "particle" space its *vacuum-unoccupied* space :math:`U`; the active space is
+  :math:`R \cap U`, and an active ``Op`` is classified as both. ``can_contract`` therefore also requires opposite actions, so that only
+  ``cre·ann`` (over :math:`R`) and ``ann·cre`` (over :math:`U`) contract;
+- ``WickTheorem::contraction_value`` returns ``γ`` (``left`` a creator) or ``η`` (``left`` an annihilator), from
+  ``SeQuant/core/density.hpp``, as the middle factor of ``contract``. A ``γ`` over :math:`R` thus stands for :math:`\delta` on the core
+  plus :math:`\gamma` on the active space, and likewise an ``η`` over :math:`U` for :math:`\delta` on the virtual space plus :math:`\eta`
+  on the active space. An index with protoindices must not reach the active space (nonorthogonal active orbitals are not supported);
+- the engine skips the required-connectivity filter (``WickTheorem::pairwise_connectivity()``), since a cumulant can connect
+  operators that no pair does; it keeps rejecting contractions between avoided pairs early, because no cumulant can undo a direct
+  contraction, and ``cumulant_expand`` filters the cumulant-mediated connections of both kinds.
+
+Under this vacuum ``WickTheorem::compute`` hands its input and options to ``detail::extended_wick``
+(``SeQuant/core/wick_extended.hpp``), which drives the rest; ``count_only`` and bosonic statistics are not supported there. For each
+input term it applies the term's own :math:`\delta`\ s and overlaps over summed indices, since identifying two indices is not a
+contraction (one may leave an index shared by two operators, and one left carries the indices of at most one operator),
+canonicalizes, records which input ``NormalOperator`` every operator index comes from (its *provenance*; an index shared by two
+operators is renamed apart, the :math:`\delta` binding the names multiplying the result), and runs the standard theorem
+(the private ``WickTheorem::compute_contractions``) with partial contractions on the bare operator sequence, multiplying the c-number
+factors back in afterwards. In that run every operator index is external, so no term is canonicalized and no surviving index is
+renamed, which keeps the provenance valid. Topological equivalence needs dummy indices, though, so with ``use_topology`` the
+partitions are computed on the canonicalized term before its shared indices are renamed (renaming leaves every operator at its
+ordinal) and passed to that run with ``set_nop_partitions()``/``set_op_partitions()``; the statistics of the run accumulate in the
+dispatching ``WickTheorem``'s ``stats()``. Each resulting term then
+
+- has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an active
+  ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η``, a survivor onto its active part and, with partial contractions,
+  its core and virtual parts. A part that is not a registered space is split over its base spaces. The pieces are reduced with the
+  operator indices kept fixed, so each projected index stays :math:`\delta`-bound to an input index and inherits its provenance;
+- is handed to ``detail::cumulant_expand``, which groups the surviving *active* operators into disjoint blocks of :math:`k`
+  creators and :math:`k` annihilators, :math:`2 \le k \le` ``WickTheorem::max_cumulant_rank``, with legs from at least two
+  input operators. Each block is valued :math:`\kappa_k` (``detail::block_value``), the term takes the parity of the permutation that
+  pulls each block's legs, in order, to the front of the survivor string, and any remaining operators (partial contractions only) stay
+  as a ``MultiProduct``-vacuum ``NormalOperator``. Terms that miss a required ``nop_connections`` pair or realize a
+  ``nop_avoided_connections`` pair are dropped; a factor the theorem produces (a :math:`\gamma`, :math:`\eta`, :math:`\kappa`,
+  :math:`\delta` or overlap) connects all the input operators its indices came from, any other tensor (e.g. a coefficient) none.
+
+Finally every ``η`` is optionally rewritten as :math:`\delta - \gamma` (``WickTheorem::eta_as_delta_minus_gamma``), the
+:math:`\delta`\ s over summed indices are applied, and the result is simplified. In it ``γ{ann;cre}`` and ``η{ann;cre}`` are
+one-body, Hermitian and column-symmetric, ``κ{ann…;cre…}`` is of rank :math:`\ge 2`, antisymmetric, Hermitian and
+column-symmetric, and all their indices are active. These symmetries take part in the tensor hash, so a density spelled
+differently would not merge with the engine's; hence ``γ``, ``η``, ``κ`` and the spin-free ``Γ`` are reserved labels
+(``reserved::density_labels()``): a ``Tensor`` carrying one must have the symmetries ``density::symmetries()`` gives for its
+label and rank, or its constructor throws, and the parser supplies them. The one alternative is a perm-nonsymmetric
+multi-body ``γ``, ``η`` or ``κ``, a spin component such as spin tracing produces. The factories in
+``SeQuant/core/density.hpp`` build densities with them.
+
+The no-double-counting rule is that a block is only ever built from operators that survive the standard theorem: each extended term
+descends from exactly one partial-contraction term (the one carrying its pair contractions), so no :math:`1/k!` weights are needed.
+Spin-free evaluation is not supported for this vacuum (``WickTheorem::compute`` throws); the hooks for it are
+``WickTheorem::contraction_value`` and ``detail::block_value``/``detail::term_weight`` in ``SeQuant/core/wick_extended.hpp``.
+
+``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions. There the mbpt operators (``ã``) are
+normal-ordered relative to the reference, so it evaluates a different quantity than the ``SingleProduct`` path, which
+normal-orders them relative to the core; the two agree for products of elementary operators, which the tests verify for results
+with cumulants up to :math:`\kappa_4`. :func:`sequant::mbpt::decompositions::cumulants_to_densities` converts cumulants of
+every rank to densities. The tests are in ``tests/unit/test_wick_extended.cpp``, ``tests/unit/test_wick.cpp`` and the
+``MRSO-MultiProduct`` section of ``tests/unit/test_mbpt.cpp``.
 
 Reducing the result
 ------------------------
