@@ -729,30 +729,6 @@ std::size_t product_network_hash(const ExprPtr& term) {
       .hash_value();
 }
 
-container::svector<std::string> split_annotation(std::string const& annot) {
-  container::svector<std::string> parts;
-  std::string part;
-  for (char c : annot) {
-    if (c == ',') {
-      parts.push_back(part);
-      part.clear();
-    } else if (c != ' ') {
-      part.push_back(c);
-    }
-  }
-  if (!part.empty()) parts.push_back(part);
-  return parts;
-}
-
-std::string join_annotation(container::svector<std::string> const& parts) {
-  std::string out;
-  for (std::size_t i = 0; i < parts.size(); ++i) {
-    if (i) out.push_back(',');
-    out += parts[i];
-  }
-  return out;
-}
-
 /// The triplet n = 3 non-null-space weights
 rational triplet_triples_slot_weight(
     const container::svector<std::size_t>& ords) {
@@ -1168,25 +1144,6 @@ container::svector<size_t> compute_bra_ket_permuted_indices(
       compute_permuted_indices(ket_slots, perm_index % num_perms, n_particles);
   ords.insert(ords.end(), permuted_ket.begin(), permuted_ket.end());
   return ords;
-}
-
-container::svector<std::string> slot_perm_annots(std::string const& orig_annot,
-                                                 size_t n_particles) {
-  const auto parts = split_annotation(orig_annot);
-  SEQUANT_ASSERT(parts.size() == 2 * n_particles &&
-                 "slot_perm_annots: annotation rank must equal "
-                 "2 * n_particles");
-
-  const auto num_perms = slot_perm_count(n_particles);
-  container::svector<std::string> annots;
-  annots.reserve(num_perms);
-  for (size_t p = 0; p != num_perms; ++p) {
-    const auto ords = compute_bra_ket_permuted_indices(p, n_particles);
-    container::svector<std::string> permuted(parts.size());
-    for (size_t s = 0; s != parts.size(); ++s) permuted[s] = parts[ords[s]];
-    annots.push_back(join_annotation(permuted));
-  }
-  return annots;
 }
 
 std::vector<double> compute_triplet_weights(std::size_t n_particles,
