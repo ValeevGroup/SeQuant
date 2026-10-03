@@ -775,12 +775,27 @@ std::size_t slot_perm_count(std::size_t n_particles) {
 std::size_t slot_perm_index(const container::svector<std::size_t>& ords) {
   SEQUANT_ASSERT(ords.size() % 2 == 0);
   const std::size_t n_particles = ords.size() / 2;
-  const auto num_perms = slot_perm_count(n_particles);
-  for (std::size_t p = 0; p != num_perms; ++p) {
-    if (detail::compute_bra_ket_permuted_indices(p, n_particles) == ords)
-      return p;
+
+  container::svector<std::size_t> identity(n_particles), bra(n_particles),
+      ket(n_particles);
+  std::iota(identity.begin(), identity.end(), std::size_t{0});
+  for (std::size_t i = 0; i != n_particles; ++i) {
+    bra[i] = ords[i];
+    ket[i] = ords[n_particles + i] - n_particles;
   }
-  throw Exception("slot_perm_index: not a valid S_n x S_n slot permutation");
+  SEQUANT_ASSERT(std::is_permutation(bra.begin(), bra.end(), identity.begin()));
+  SEQUANT_ASSERT(std::is_permutation(ket.begin(), ket.end(), identity.begin()));
+
+  const auto rank_of = [&](const container::svector<std::size_t>& to) {
+    return perm::rank(perm::computeTransformationPermutation(identity, to),
+                      n_particles);
+  };
+  const std::size_t p =
+      rank_of(bra) * static_cast<std::size_t>(factorial(n_particles)) +
+      rank_of(ket);
+  SEQUANT_ASSERT(detail::compute_bra_ket_permuted_indices(p, n_particles) ==
+                 ords);
+  return p;
 }
 
 // slot perms: {3/4, -1/4, -1/4, -1/4} for n = 2;
