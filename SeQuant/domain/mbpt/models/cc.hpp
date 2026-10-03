@@ -305,9 +305,7 @@ class CC {
 
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note Non-unitary paths use connected products only when the reference is
-  /// the Wick vacuum, where ref_av enforces their supplied connectivity.
-  /// Unitary paths and differing references supply empty connectivity;
-  /// both cases require explicit commutators.
+  /// the Wick vacuum; see hbar_connections().
   [[nodiscard]] LSTOptions lst_options() const {
     return {.unitary = unitary(),
             .use_connected_form = !unitary() && reference_is_vacuum()};
@@ -319,28 +317,26 @@ class CC {
     return isr->reference_occupied_space() == isr->vacuum_occupied_space();
   }
 
+  /// @return the connectivity that makes the connected products of
+  /// lst_options() equal to commutators: default_op_connections() when they
+  /// are used, empty otherwise
+  [[nodiscard]] OpConnections<std::wstring> hbar_connections() const {
+    return lst_options().use_connected_form ? default_op_connections()
+                                            : OpConnections<std::wstring>{};
+  }
+
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
   /// @param[in] expr input expression
-  /// @param[in] connect list of operator label pairs to connect.
-  /// @param[in] do_not_connect list of operator label pairs to never connect.
+  /// @param[in] connect list of operator label pairs to connect; must be empty
+  /// when the reference differs from the Wick vacuum
   /// @note Uses use_topology() and screen() from the CC instance to set other
   /// EVOptions
-  /// @note Connectivity defaults to default_op_connections(); both lists are
-  /// omitted when the reference differs from the Wick vacuum, where only
-  /// methods that need no connectivity beyond what lst_options() replaces with
-  /// explicit commutators are available.
-  auto ref_av(
-      const ExprPtr& expr,
-      const OpConnections<std::wstring>& connect = default_op_connections(),
-      const OpConnections<std::wstring>& do_not_connect = {}) const {
-    EVOptions<std::wstring> opts{.screen = this->screen(),
-                                 .use_topology = this->use_topology()};
-    if (reference_is_vacuum()) {
-      opts.connect = connect;
-      opts.do_not_connect = do_not_connect;
-    }
-    return op::ref_av(expr, std::move(opts));
+  auto ref_av(const ExprPtr& expr,
+              const OpConnections<std::wstring>& connect) const {
+    return op::ref_av(expr, {.connect = connect,
+                             .screen = this->screen(),
+                             .use_topology = this->use_topology()});
   }
 };  // class CC
 

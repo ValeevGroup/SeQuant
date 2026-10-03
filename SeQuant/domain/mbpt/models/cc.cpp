@@ -135,11 +135,8 @@ ExprPtr CC::energy(std::optional<size_t> comm_rank) const {
     return op::tensor::ref_av(this->hbar(erank));
   }
   // <0|H̄|0>: reference expectation value of H̄ at the requested commutator
-  // truncation. No projector ⇒ this is the energy. CC supplies empty
-  // connectivity for unitary ansätze and default connections otherwise.
-  return this->unitary() ? this->ref_av(this->hbar(comm_rank),
-                                        mbpt::OpConnections<std::wstring>{})
-                         : this->ref_av(this->hbar(comm_rank));
+  // truncation. No projector ⇒ this is the energy.
+  return this->ref_av(this->hbar(comm_rank), hbar_connections());
 }
 
 std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
@@ -161,10 +158,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
   // 1. construct hbar(op) in canonical form
   auto hbar = this->hbar();
 
-  // connectivity: empty for unitary ansatz, default otherwise
-  const auto connectivity = this->unitary()
-                                ? mbpt::OpConnections<std::wstring>{}
-                                : default_op_connections();
+  const auto connectivity = hbar_connections();
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -358,7 +352,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
     const auto freq_term =
         L"ω" * P(nₚ(p)) * op::tʼ(p, {.order = order, .nbatch = nbatch});
     result.at(p) =
-        this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
+        this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term, {});
   }
   return result;
 }
@@ -422,8 +416,8 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   for (auto p = N; p >= 1; --p) {
     const auto freq_term =
         L"ω" * op::λʼ(p, {.order = order, .nbatch = nbatch}) * P(nₚ(-p));
-    result.at(p) =
-        this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
+    result.at(p) = this->ref_av(expr * P(nₚ(-p)), op_connect) +
+                   this->ref_av(freq_term, {});
   }
   return result;
 }
@@ -493,10 +487,7 @@ std::vector<ExprPtr> CC::eom_r_ucc(
                         : op::r(nₚ(p), nₕ(h), eom_norm);
   };
   auto vev = [tensor_level, this](const ExprPtr& e) {
-    return tensor_level ? op::tensor::ref_av(e)
-                        : op::ref_av(e, {.connect = {},
-                                         .screen = opts_.screen,
-                                         .use_topology = opts_.use_topology});
+    return tensor_level ? op::tensor::ref_av(e) : this->ref_av(e, {});
   };
 
   std::vector<ExprPtr> result(min(np, nh) + 1);
