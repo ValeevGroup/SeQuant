@@ -179,16 +179,13 @@ container::svector<size_t> compute_permuted_indices(
     const container::svector<size_t>& indices, size_t perm_rank,
     size_t n_particles);
 
-/// \brief Provides bra and ket permuted indices
-/// for the S_n x S_n external slot permutations, by applying
-/// compute_permuted_indices to the bra and the ket slots separately
+/// \brief compute_permuted_indices applied to the bra and ket slots
 ///
-/// \param perm_index The flat perm index, in [0, (n!)^2)
+/// \param perm_index The rank of the bra and ket permutation pair
 /// \param n_particles The rank of external index pairs
 ///
-/// \return The 2*n_particles slot orders: slot s displays slot ords[s], the
-///         first n_particles slots being the bra and the rest the ket ones
-[[nodiscard]] container::svector<size_t> compute_bra_ket_permuted_indices(
+/// \return The permuted indices, bra slots first
+[[nodiscard]] container::svector<size_t> compute_permuted_indices_bra_ket(
     size_t perm_index, size_t n_particles);
 
 // clang-format off
@@ -692,7 +689,7 @@ namespace detail {
 /// \brief Weighted sum over the S_n x S_n external-slot permutations of a
 /// rank-2n TA::DistArray:
 ///   out = sum_p weights[p] * arr(annot_p),
-/// with the annotations generated from compute_bra_ket_permuted_indices and
+/// with the annotations generated from compute_permuted_indices_bra_ket and
 /// the weight row selected by the caller. Zero-weight
 /// permutations are skipped.
 template <typename... Args>
@@ -711,7 +708,7 @@ auto triplet_perm_combine_ta(
   for (std::size_t p = 0; p != weights.size(); ++p) {
     if (weights[p] == numeric_type(0)) continue;
     const auto annot = sequant::detail::ords_to_annot(
-        compute_bra_ket_permuted_indices(p, n_particles));
+        compute_permuted_indices_bra_ket(p, n_particles));
     if (result.is_initialized()) {
       result(lannot) += weights[p] * arr(annot);
     } else {
@@ -838,7 +835,7 @@ auto triplet_perm_combine_btas(
   for (std::size_t p = 0; p != weights.size(); ++p) {
     if (weights[p] == numeric_type(0)) continue;
     const sequant::detail::perm_t annot =
-        compute_bra_ket_permuted_indices(p, n_particles);
+        compute_permuted_indices_bra_ket(p, n_particles);
 
     btas::Tensor<Args...> temp;
     btas::permute(arr, annot, temp, perm);

@@ -2266,7 +2266,7 @@ TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {
   using ords_t = container::svector<std::size_t>;
   std::vector<ords_t> sorted;
   for (std::size_t p = 0; p != 4; ++p)
-    sorted.push_back(mbpt::detail::compute_bra_ket_permuted_indices(p, 2));
+    sorted.push_back(mbpt::detail::compute_permuted_indices_bra_ket(p, 2));
   std::sort(sorted.begin(), sorted.end());
   REQUIRE(sorted ==
           std::vector<ords_t>{
@@ -2352,7 +2352,7 @@ TEST_CASE("triplet_triples_swap_layouts", "[spin][triplet]") {
   using ords_t = container::svector<std::size_t>;
   std::vector<ords_t> all;
   for (std::size_t p = 0; p != 36; ++p)
-    all.push_back(mbpt::detail::compute_bra_ket_permuted_indices(p, 3));
+    all.push_back(mbpt::detail::compute_permuted_indices_bra_ket(p, 3));
   std::sort(all.begin(), all.end());
   REQUIRE(std::adjacent_find(all.begin(), all.end()) == all.end());
 

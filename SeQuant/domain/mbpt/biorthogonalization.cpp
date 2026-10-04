@@ -780,7 +780,7 @@ container::map<Index, Index> slot_perm_replacements(
     const container::svector<Index>& b, const container::svector<Index>& k,
     std::size_t p) {
   const std::size_t n_particles = b.size();
-  const auto ords = detail::compute_bra_ket_permuted_indices(p, n_particles);
+  const auto ords = detail::compute_permuted_indices_bra_ket(p, n_particles);
   container::map<Index, Index> m;
   for (std::size_t i = 0; i != n_particles; ++i) {
     if (ords[i] != i) m.emplace(b[i], b[ords[i]]);
@@ -949,7 +949,7 @@ ExprPtr triplet_maxcoeff_compact(
 
 namespace detail {
 
-container::svector<size_t> compute_bra_ket_permuted_indices(
+container::svector<size_t> compute_permuted_indices_bra_ket(
     size_t perm_index, size_t n_particles) {
   const auto num_perms = static_cast<size_t>(factorial(n_particles));
   SEQUANT_ASSERT(perm_index < num_perms * num_perms);
