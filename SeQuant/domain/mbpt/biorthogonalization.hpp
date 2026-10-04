@@ -188,6 +188,126 @@ container::svector<size_t> compute_permuted_indices(
 [[nodiscard]] container::svector<size_t> compute_permuted_indices_bra_ket(
     size_t perm_index, size_t n_particles);
 
+/// \brief Provides one row of the NNS projector matrix,
+/// hardcoded from Mathematica to avoid numerical precision loss.
+///
+/// The NNS projector weights are obtained from the normalized pseudoinverse
+/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
+/// factor ((n_particles)!/rank(M)).
+/// Finally, NNS projector = normalized_M_pinv · M.
+///
+/// \param n_particles The rank of external index pairs
+///
+/// \return Optional vector of NNS projector weights representing the last row,
+///         std::nullopt if n_particles is outside the range [1,5].
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
+  switch (n_particles) {
+    case 1:
+      return std::vector<T>{T(1) / T(1)};
+
+    case 2:
+      return std::vector<T>{T(0) / T(1), T(1) / T(1)};
+
+    case 3:
+      return std::vector<T>{T(-1) / T(5), T(-1) / T(5), T(-1) / T(5),
+                            T(-1) / T(5), T(-1) / T(5), T(1) / T(1)};
+
+    case 4:
+      return std::vector<T>{
+          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
+          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(1) / T(7),   T(-2) / T(7),
+          T(-1) / T(14), T(1) / T(7),   T(-1) / T(14), T(-2) / T(7),
+          T(1) / T(7),   T(-1) / T(14), T(-1) / T(14), T(-2) / T(7),
+          T(-2) / T(7),  T(-2) / T(7),  T(-2) / T(7),  T(1) / T(1)};
+
+    case 5:
+      return std::vector<T>{
+          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
+          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(2) / T(21),
+          T(0) / T(1),   T(2) / T(21),  T(2) / T(21),  T(-1) / T(21),
+          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(-1) / T(21),
+          T(-1) / T(21), T(-1) / T(21), T(1) / T(7),   T(0) / T(1),
+          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(3),
+          T(2) / T(21),  T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
+          T(0) / T(1),   T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
+          T(-1) / T(21), T(1) / T(7),   T(2) / T(21),  T(-1) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(0) / T(1),
+          T(1) / T(7),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
+          T(-1) / T(21), T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
+          T(1) / T(7),   T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(1) / T(7),
+          T(0) / T(1),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
+          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(0) / T(1),
+          T(-1) / T(3),  T(1) / T(7),   T(0) / T(1),   T(1) / T(7),
+          T(0) / T(1),   T(-1) / T(3),  T(1) / T(7),   T(1) / T(7),
+          T(0) / T(1),   T(0) / T(1),   T(-1) / T(3),  T(-1) / T(3),
+          T(-1) / T(3),  T(-1) / T(3),  T(-1) / T(3),  T(1) / T(1)};
+
+    default:
+      return std::nullopt;
+  }
+}
+
+/// \brief Provides NNS projection weights for a given rank
+///
+/// \tparam T The numeric type (must be floating point or complex)
+/// \param n_particles The rank of external index pairs
+/// \param threshold The threshold to compute the pseudoinverse matrix
+///        (set to default_biorthogonalizer_pseudoinverse_threshold)
+///
+/// \return (memoized) Vector of hrdcoded/computed NNS projection weights
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+[[nodiscard]] const std::vector<T>& nns_projection_weights(
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold) {
+  static const std::vector<T> empty_vec{};
+
+  if (n_particles < 3) {
+    return empty_vec;
+  }
+
+  using CacheKey = std::pair<std::size_t, double>;
+
+  static std::mutex cache_mutex;
+  static std::condition_variable cache_cv;
+  static container::map<CacheKey, std::optional<std::vector<T>>> cache;
+
+  CacheKey key{n_particles, pseudoinverse_threshold};
+
+  return sequant::detail::memoize(
+      cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
+        constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
+        if (n_particles <= max_rank_hardcoded_nns_projector) {
+          if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
+            return std::move(hardcoded_coeffs.value());
+          }
+        }
+        auto coeffs =
+            detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
+        std::vector<T> nns_p_coeffs;
+        nns_p_coeffs.reserve(coeffs.size());
+        for (const auto& c : coeffs) {
+          nns_p_coeffs.push_back(static_cast<T>(c));
+        }
+        return nns_p_coeffs;
+      });
+}
+
 // clang-format off
 /// \brief Provides the identity row of the closed-shell triplet null-space
 /// projector, hardcoded to avoid numerical precision loss.
@@ -332,126 +452,6 @@ template <typename T>
         "requested rank is : " +
         std::to_string(n_particles));
   return row;
-}
-
-/// \brief Provides one row of the NNS projector matrix,
-/// hardcoded from Mathematica to avoid numerical precision loss.
-///
-/// The NNS projector weights are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
-/// factor ((n_particles)!/rank(M)).
-/// Finally, NNS projector = normalized_M_pinv · M.
-///
-/// \param n_particles The rank of external index pairs
-///
-/// \return Optional vector of NNS projector weights representing the last row,
-///         std::nullopt if n_particles is outside the range [1,5].
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
-  switch (n_particles) {
-    case 1:
-      return std::vector<T>{T(1) / T(1)};
-
-    case 2:
-      return std::vector<T>{T(0) / T(1), T(1) / T(1)};
-
-    case 3:
-      return std::vector<T>{T(-1) / T(5), T(-1) / T(5), T(-1) / T(5),
-                            T(-1) / T(5), T(-1) / T(5), T(1) / T(1)};
-
-    case 4:
-      return std::vector<T>{
-          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
-          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(1) / T(7),   T(-2) / T(7),
-          T(-1) / T(14), T(1) / T(7),   T(-1) / T(14), T(-2) / T(7),
-          T(1) / T(7),   T(-1) / T(14), T(-1) / T(14), T(-2) / T(7),
-          T(-2) / T(7),  T(-2) / T(7),  T(-2) / T(7),  T(1) / T(1)};
-
-    case 5:
-      return std::vector<T>{
-          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
-          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
-          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
-          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(2) / T(21),
-          T(0) / T(1),   T(2) / T(21),  T(2) / T(21),  T(-1) / T(21),
-          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(-1) / T(21),
-          T(-1) / T(21), T(-1) / T(21), T(1) / T(7),   T(0) / T(1),
-          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(3),
-          T(2) / T(21),  T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
-          T(0) / T(1),   T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
-          T(-1) / T(21), T(1) / T(7),   T(2) / T(21),  T(-1) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(0) / T(1),
-          T(1) / T(7),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
-          T(-1) / T(21), T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
-          T(1) / T(7),   T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
-          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(2) / T(21),
-          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(1) / T(7),
-          T(0) / T(1),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
-          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(0) / T(1),
-          T(-1) / T(3),  T(1) / T(7),   T(0) / T(1),   T(1) / T(7),
-          T(0) / T(1),   T(-1) / T(3),  T(1) / T(7),   T(1) / T(7),
-          T(0) / T(1),   T(0) / T(1),   T(-1) / T(3),  T(-1) / T(3),
-          T(-1) / T(3),  T(-1) / T(3),  T(-1) / T(3),  T(1) / T(1)};
-
-    default:
-      return std::nullopt;
-  }
-}
-
-/// \brief Provides NNS projection weights for a given rank
-///
-/// \tparam T The numeric type (must be floating point or complex)
-/// \param n_particles The rank of external index pairs
-/// \param threshold The threshold to compute the pseudoinverse matrix
-///        (set to default_biorthogonalizer_pseudoinverse_threshold)
-///
-/// \return (memoized) Vector of hrdcoded/computed NNS projection weights
-template <typename T>
-  requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& nns_projection_weights(
-    std::size_t n_particles,
-    double pseudoinverse_threshold =
-        default_biorthogonalizer_pseudoinverse_threshold) {
-  static const std::vector<T> empty_vec{};
-
-  if (n_particles < 3) {
-    return empty_vec;
-  }
-
-  using CacheKey = std::pair<std::size_t, double>;
-
-  static std::mutex cache_mutex;
-  static std::condition_variable cache_cv;
-  static container::map<CacheKey, std::optional<std::vector<T>>> cache;
-
-  CacheKey key{n_particles, pseudoinverse_threshold};
-
-  return sequant::detail::memoize(
-      cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
-        constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-        if (n_particles <= max_rank_hardcoded_nns_projector) {
-          if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
-            return std::move(hardcoded_coeffs.value());
-          }
-        }
-        auto coeffs =
-            detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
-        std::vector<T> nns_p_coeffs;
-        nns_p_coeffs.reserve(coeffs.size());
-        for (const auto& c : coeffs) {
-          nns_p_coeffs.push_back(static_cast<T>(c));
-        }
-        return nns_p_coeffs;
-      });
 }
 
 }  // namespace detail
