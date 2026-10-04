@@ -148,20 +148,6 @@ enum class TripletWeightKind {
     const container::svector<container::svector<Index>>& ext_idxs,
     bool te_only = false);
 
-/// \brief Symbolic inverse of triplet_maxcoeff_compact: rebuilds the full
-/// residual as the weighted sum of the kept terms over the (n!)^2 external
-/// slot permutations
-///
-/// \param compact_expr The compact residual; returned unchanged unless a Sum
-/// \param ext_idxs A vector of external index groups
-/// \param kind The weight row to apply
-/// \return The reconstructed expression
-/// \throw Exception for more than 3 groups
-[[nodiscard]] ExprPtr triplet_symbolic_reconstruct(
-    ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    TripletWeightKind kind = TripletWeightKind::NnsReconstruction);
-
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
 /// is true (default), factors out the NNS projector by applying additional
@@ -708,8 +694,7 @@ auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
 
 /// \brief Metric NNS reconstruction for compact closed-shell triplet
 /// residuals: rebuilds the full residual from the representatives kept by
-/// triplet_maxcoeff_compact (numerical analogue of
-/// triplet_symbolic_reconstruct). Apply to the H*R residual when the compact
+/// triplet_maxcoeff_compact. Apply to the H*R residual when the compact
 /// equations were evaluated; no-op for rank 2, throws beyond rank 6.
 template <typename... Args>
 auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,

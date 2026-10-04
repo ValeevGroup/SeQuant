@@ -328,13 +328,11 @@ struct ClosedShellEOMTripletSpintraceOptions {
   /// tensor-network group via triplet_maxcoeff_compact (doubles: the -3c member
   /// of each {c,c,c,-3c} group, 135 terms for 2h2p; triples: one
   /// stabilizer-scaled member per 36 slot perms); the dropped terms are
-  /// recovered on evaluation by triplet_nns_project (numerical) or
-  /// triplet_symbolic_reconstruct (symbolic).
+  /// recovered on evaluation by triplet_nns_project.
   /// Combined with TripletResidualKind::BareTE it instead compacts the bareTE
   /// residual, whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the
   /// kept -2c representative is expanded by triplet_te_nns_project
-  /// ({1,-1/2,-1/2,0}, numerical) or triplet_symbolic_reconstruct with
-  /// TeNnsReconstruction (symbolic).
+  /// ({1,-1/2,-1/2,0}).
   /// On by default; false gives the full residual, which is used only as a
   /// reference in tests.
   bool compact = true;

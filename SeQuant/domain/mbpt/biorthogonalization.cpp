@@ -1061,17 +1061,6 @@ ExprPtr triplet_maxcoeff_compact(
   return ex<Sum>(compact);
 }
 
-ExprPtr triplet_symbolic_reconstruct(
-    ExprPtr compact_expr,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    TripletWeightKind kind) {
-  const std::size_t n_particles = ext_idxs.size();
-  if (n_particles <= 1) return compact_expr;
-  const auto& weights = triplet_weights_rational(n_particles, kind);
-  if (!compact_expr->is<Sum>()) return compact_expr;
-  return triplet_weighted_perm_sum(compact_expr, ext_idxs, weights);
-}
-
 namespace detail {
 
 container::svector<size_t> compute_bra_ket_permuted_indices(

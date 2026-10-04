@@ -170,32 +170,6 @@ std::wstring coeff_to_wstring(const Product::scalar_type& c) {
   return to_latex_align(ex<Constant>(c), 1, 1);
 }
 
-// check the compact/reconstruct. If the compactness is not correct
-// report which tensor-network groups disagree
-void report_reconstruction_mismatch(const ExprPtr& diff, const ExprPtr& full,
-                                    const ExprPtr& compact) {
-  if (!diff->is<Sum>()) return;
-  container::set<std::size_t> bad_hashes;
-  for (const auto& t : *diff) {
-    if (!t->is<Product>()) continue;
-    const auto h = term_network_hash(t);
-    bad_hashes.insert(h);
-    std::wcout << L"    DIFF hash=0x" << std::hex << h << std::dec << L" coeff="
-               << coeff_to_wstring(t->as<Product>().scalar()) << L"\n";
-  }
-  const auto full_groups = group_by_hash(full->clone());
-  const auto compact_groups = group_by_hash(compact->clone());
-  for (const auto h : bad_hashes) {
-    std::wcout << L"    BAD group 0x" << std::hex << h << std::dec << L"\n";
-    if (const auto it = full_groups.find(h); it != full_groups.end())
-      for (const auto& t : it->second)
-        std::wcout << L"      full: " << t->to_latex() << L"\n";
-    if (const auto it = compact_groups.find(h); it != compact_groups.end())
-      for (const auto& t : it->second)
-        std::wcout << L"      kept: " << t->to_latex() << L"\n";
-  }
-}
-
 std::size_t expr_term_count(const ExprPtr& e) {
   if (e->is<Constant>())
     return e->as<Constant>().value() == Constant::scalar_type{0} ? 0 : 1;
@@ -592,7 +566,7 @@ class compute_eomcc_closedshell_triplet {
           }
         }
 
-        // compact residual + symbolic reconstruction
+        // compact residual
         // defined for the rank-2 and rank-3 manifolds (doubles:
         // the -3c member of each {c,c,c,-3c} group; triples: one
         // scaled member per 36 slot perms). The singles residual
@@ -609,19 +583,6 @@ class compute_eomcc_closedshell_triplet {
                      << " terms, and "
                      << count_distinct_hashes(compact->clone())
                      << " distinct hashes, and time: " << cdt.count() << " s\n";
-
-          const ExprPtr recon =
-              triplet_symbolic_reconstruct(compact, ext_groups);
-          ExprPtr recon_diff = recon->clone() - st->clone();
-          canonicalize(recon_diff);
-          simplify(recon_diff);
-          std::wcout << "R[" << i
-                     << "] reconstruct(compact): " << term_count(recon)
-                     << " terms; reconstruct - full: " << term_count(recon_diff)
-                     << " terms (expect 0)\n";
-          if (term_count(recon_diff) > 0)
-            report_reconstruction_mismatch(recon_diff, st, compact);
-          runtime_assert(term_count(recon_diff) == 0);
         }
 
         // ===== EFV experiment: bare-TE residual (CCSD doubles only for now)

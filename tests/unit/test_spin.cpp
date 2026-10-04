@@ -2273,7 +2273,7 @@ TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {
               {0, 1, 2, 3}, {0, 1, 3, 2}, {1, 0, 2, 3}, {1, 0, 3, 2}});
 }
 
-TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
+TEST_CASE("triplet_doubles_maxcoeff_compact", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
@@ -2343,26 +2343,6 @@ TEST_CASE("triplet_doubles_reconstruct", "[spin][triplet]") {
   const ExprPtr compact = triplet_maxcoeff_compact(full, ext_idxs);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 4);
-
-  // symbolic reconstruction rebuilds the full 4 term per group.
-  // then I need to add the numeric function to do this
-  const ExprPtr recon = triplet_symbolic_reconstruct(compact, ext_idxs);
-  REQUIRE(recon->is<Sum>());
-  REQUIRE(recon->size() == 16);
-
-  // full == reconstruct(compact).
-  // lhs == rhs
-  ExprPtr lhs = full->clone();
-  canonicalize(lhs);
-  simplify(lhs);
-  ExprPtr rhs = recon->clone();
-  canonicalize(rhs);
-  simplify(rhs);
-
-  ExprPtr diff = lhs - rhs;
-  canonicalize(diff);
-  simplify(diff);
-  REQUIRE(diff->size() == 0);
 }
 
 TEST_CASE("triplet_triples_swap_layouts", "[spin][triplet]") {
@@ -2410,52 +2390,7 @@ TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
       expr, {.residual = TripletResidualKind::BareTE}));
 }
 
-TEST_CASE("triplet_triples_reconstruct", "[spin][triplet]") {
-  using namespace sequant;
-  using namespace sequant::mbpt;
-
-  auto ctx = get_default_context();
-  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-  auto _ = set_scoped_default_context(ctx);
-
-  const ExprPtr expr =
-      ex<Constant>(ratio(-3, 8)) *
-      deserialize(
-          std::wstring(L"R{i_1,i_2,i_3;a_4,a_2,a_3} * g{a_4,a_5;i_4,a_1} * "
-                       L"t{i_4;a_5}"),
-          {.def_perm_symm = Symmetry::Nonsymm});
-  ExprPtr expr_sum = ex<Sum>(ExprPtrList{expr});
-
-  const container::svector<container::svector<Index>> ext_idxs{
-      {Index(L"i_1"), Index(L"a_1")},
-      {Index(L"i_2"), Index(L"a_2")},
-      {Index(L"i_3"), Index(L"a_3")}};
-
-  const ExprPtr full = triplet_symbolic_reconstruct(expr_sum, ext_idxs);
-  REQUIRE(full->is<Sum>());
-  REQUIRE(full->size() == 14);
-
-  // compaction inverts the reconstruction: one kept term, equal to the core
-  // expr
-  const ExprPtr compact = triplet_maxcoeff_compact(full, ext_idxs);
-  REQUIRE(compact->is<Sum>());
-  REQUIRE(compact->size() == 1);
-  {
-    ExprPtr diff = compact->clone() - expr->clone();
-    canonicalize(diff);
-    simplify(diff);
-    REQUIRE(diff->size() == 0);
-  }
-
-  // and the round trip reproduces the full group
-  const ExprPtr recon = triplet_symbolic_reconstruct(compact, ext_idxs);
-  ExprPtr diff = recon->clone() - full->clone();
-  canonicalize(diff);
-  simplify(diff);
-  REQUIRE(diff->size() == 0);
-}
-
-TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
+TEST_CASE("triplet_doubles_te_maxcoeff_compact", "[spin][triplet]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
@@ -2501,24 +2436,6 @@ TEST_CASE("triplet_doubles_te_reconstruct", "[spin][triplet]") {
       full, ext_idxs, TripletWeightKind::TeNnsReconstruction);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 2);
-
-  const ExprPtr recon = triplet_symbolic_reconstruct(
-      compact, ext_idxs, TripletWeightKind::TeNnsReconstruction);
-  REQUIRE(recon->is<Sum>());
-  REQUIRE(recon->size() == 6);
-
-  // full == reconstruct(compact).
-  ExprPtr lhs = full->clone();
-  canonicalize(lhs);
-  simplify(lhs);
-  ExprPtr rhs = recon->clone();
-  canonicalize(rhs);
-  simplify(rhs);
-
-  ExprPtr diff = lhs - rhs;
-  canonicalize(diff);
-  simplify(diff);
-  REQUIRE(diff->size() == 0);
 }
 
 TEST_CASE("triplet_combined_residual_product", "[spin][triplet]") {
