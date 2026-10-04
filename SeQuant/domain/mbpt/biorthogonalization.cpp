@@ -817,14 +817,24 @@ std::pair<ExprPtr, Product::scalar_type> canonical_unit_product(
   return {std::move(out), sign};
 }
 
-ExprPtr triplet_weighted_perm_sum(
-    const ExprPtr& compact_expr,
+}  // namespace
+
+ExprPtr triplet_combined_residual(
+    const ExprPtr& V,
     const container::svector<container::svector<Index>>& ext_idxs,
-    const std::vector<rational>& weights) {
+    bool bare_te) {
+  const std::size_t n_particles = ext_idxs.size();
+  const auto weights = hardcoded_triplet_residual_row(n_particles, bare_te);
+
+  // the n bra slots and the n ket slots are permuted independently
+  SEQUANT_ASSERT(weights.size() ==
+                 factorial(n_particles) * factorial(n_particles));
+
   const auto [b, k] = external_bra_ket(ext_idxs);
+  const ExprPtr terms = V->is<Sum>() ? V : ex<Sum>(ExprPtrList{V});
 
   Sum out;
-  for (const auto& term : *compact_expr) {
+  for (const auto& term : *terms) {
     SEQUANT_ASSERT(term->is<Product>());
     if (!term->is<Product>()) {
       out.append(term);
@@ -844,23 +854,6 @@ ExprPtr triplet_weighted_perm_sum(
   auto result = ex<Sum>(out);
   simplify(result);
   return result;
-}
-
-}  // namespace
-
-ExprPtr triplet_combined_residual(
-    const ExprPtr& V,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    bool bare_te) {
-  const std::size_t n_particles = ext_idxs.size();
-  const auto weights = hardcoded_triplet_residual_row(n_particles, bare_te);
-
-  // the n bra slots and the n ket slots are permuted independently
-  SEQUANT_ASSERT(weights.size() ==
-                 factorial(n_particles) * factorial(n_particles));
-
-  return triplet_weighted_perm_sum(V->is<Sum>() ? V : ex<Sum>(ExprPtrList{V}),
-                                   ext_idxs, weights);
 }
 
 ExprPtr triplet_maxcoeff_compact(
