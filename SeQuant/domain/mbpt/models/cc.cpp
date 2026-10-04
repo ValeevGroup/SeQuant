@@ -270,9 +270,10 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
   // quasi-creators must be absorbed by ã's 2r plus Λ's 2N legs (k <= r + N).
   // Unitary ansatz: T⁺ contracts with T, the expansion never terminates, so
   // there is no safe default; use the engine's hbar_comm_rank (the ctor
-  // guarantees it is set). When the reference is the Wick vacuum, the
-  // traditional branch uses connected products; the {ã,t} connectivity handed
-  // to ref_av below makes them equivalent to the explicit commutator.
+  // guarantees it is set). Since the reference is the Wick vacuum (enforced
+  // above), the traditional branch uses connected products; the {ã,t}
+  // connectivity handed to ref_av below makes them equivalent to the explicit
+  // commutator.
   const auto commutator_rank = comm_rank.value_or(
       unitary() ? opts_.hbar_comm_rank.value() : std::min(2 * rank, rank + N));
   auto bar =
@@ -327,8 +328,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   ExprPtr hbar_pert;
   if (unitary()) {
     // for unitary ansatz, we need to compute the commutator [hbar, Tʼ],
-    // otherwise just hbar * Tʼ is sufficient because ref_av connects h with
-    // t¹
+    // otherwise just hbar * Tʼ is sufficient because ref_av receives
+    // op_connect below
     hbar_pert = commutator(hbar, Tʼ(N, {.order = order, .nbatch = nbatch}));
   } else {
     hbar_pert = hbar * Tʼ(N, {.order = order, .nbatch = nbatch});

@@ -143,7 +143,8 @@ class CC {
   ///   `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
   ///   retains disconnected terms. Pass `default_op_connections()` explicitly
   ///   in EVOptions::connect, or build H̄ with an explicit
-  ///   commutator `mbpt::lst(..., {})` call. A unitary H̄ is self-contained,
+  ///   commutator `mbpt::lst(..., {})` call. A unitary H̄, or a non-unitary
+  ///   H̄ when the reference differs from the Wick vacuum, is self-contained,
   ///   so its connectivity must be empty. See the "Using H̄ outside the CC
   ///   class" section of the user guide.
   /// @note ref_av requires empty connect and do_not_connect when the reference

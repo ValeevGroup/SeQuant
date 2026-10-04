@@ -1376,6 +1376,13 @@ inline bool reference_is_vacuum() {
 }
 
 namespace detail {
+/// @brief Rejects connectivity constraints that ref_av cannot honor
+/// @param opts the options passed to ref_av
+/// @param full_contractions true if the reference is the Wick vacuum
+/// @pre Called before any screening or operator-label lowering, so invalid
+///      requests are rejected regardless of the expression
+/// @throw Exception (or aborts, per SEQUANT_ENFORCE) if \p full_contractions
+///        is false and `opts.connect` or `opts.do_not_connect` is non-empty
 template <typename T>
 void validate_ref_av_connections(const EVOptions<T>& opts,
                                  bool full_contractions) {
