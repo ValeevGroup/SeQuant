@@ -2517,10 +2517,9 @@ TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
   // weight rows: the NnsReconstruction row is the identity-normalized
   // NullspaceProjector row
   auto require_normalized = [](std::size_t n, double identity_weight) {
-    const auto& nullspace = mbpt::detail::triplet_weights<double>(
-        n, TripletWeightKind::NullspaceProjector);
-    const auto& nns = mbpt::detail::triplet_weights<double>(
-        n, TripletWeightKind::NnsReconstruction);
+    const auto& nullspace =
+        mbpt::detail::triplet_nullspace_projection_weights<double>(n);
+    const auto& nns = mbpt::detail::triplet_nns_projection_weights<double>(n);
     REQUIRE(nullspace.size() == nns.size());
     for (std::size_t p = 0; p != nns.size(); ++p) {
       CAPTURE(n, p);

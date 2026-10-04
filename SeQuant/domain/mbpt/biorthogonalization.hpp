@@ -207,69 +207,150 @@ container::svector<size_t> compute_permuted_indices(
 [[nodiscard]] container::svector<size_t> compute_bra_ket_permuted_indices(
     size_t perm_index, size_t n_particles);
 
-/// \brief Computes the weight row over the S_n x S_n
-/// external slot permutations for the closed-shell triplet primitives
+// clang-format off
+/// \brief Provides the identity row of the closed-shell triplet null-space
+/// projector, hardcoded to avoid numerical precision loss.
 ///
-/// \param n_particles The rank of external index pairs (2 or 3; 2 only for
-///        the bare-TE kinds)
-/// \param kind The weight row to compute
+/// The first row of G.pinv(G), and G being the overlap matrix of
+/// the triplet primitives
+/// \param n_particles The rank of external index pairs
 ///
-/// \return Vector of weights in flat perm order
-///
-/// \throw Exception for unsupported \p n_particles / \p kind combinations
-[[nodiscard]] std::vector<double> compute_triplet_weights(
-    std::size_t n_particles, TripletWeightKind kind);
+/// \return Optional vector of the (n!)^2 weights, std::nullopt if
+///         n_particles is not 2 or 3
+// clang-format on
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+std::optional<std::vector<T>> hardcoded_triplet_nullspace_projector(
+    std::size_t n_particles) {
+  switch (n_particles) {
+    case 2:
+      return std::vector<T>{T(-1) / T(4), T(-1) / T(4), T(-1) / T(4),
+                            T(3) / T(4)};
 
-/// \brief Provides the numeric weight row over the S_n x S_n
-/// external slot permutations for the closed-shell triplet primitives
+    case 3:
+      return std::vector<T>{
+          T(-1) / T(20), T(1) / T(20),  T(1) / T(20),  T(1) / T(20),
+          T(-1) / T(10), T(0) / T(1),   T(1) / T(20),  T(-1) / T(20),
+          T(1) / T(20),  T(1) / T(20),  T(-1) / T(10), T(0) / T(1),
+          T(1) / T(20),  T(1) / T(20),  T(-1) / T(20), T(1) / T(20),
+          T(0) / T(1),   T(-1) / T(10), T(1) / T(20),  T(1) / T(20),
+          T(1) / T(20),  T(-1) / T(20), T(0) / T(1),   T(-1) / T(10),
+          T(-1) / T(10), T(-1) / T(10), T(0) / T(1),   T(0) / T(1),
+          T(1) / T(4),   T(-1) / T(20), T(0) / T(1),   T(0) / T(1),
+          T(-1) / T(10), T(-1) / T(10), T(-1) / T(20), T(1) / T(4)};
+
+    default:
+      return std::nullopt;
+  }
+}
+
+/// \brief Provides the bare-TE (n = 2) undo-compact row, ordered as in
+/// hardcoded_triplet_nullspace_projector
+///
+/// \return Optional vector of weights, std::nullopt unless n_particles is 2
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+std::optional<std::vector<T>> hardcoded_triplet_te_nns_projector(
+    std::size_t n_particles) {
+  if (n_particles != 2) return std::nullopt;
+  return std::vector<T>{T(0) / T(1), T(-1) / T(2), T(-1) / T(2), T(1) / T(1)};
+}
+
+/// \brief Provides the bare-TE (n = 2) -> full-metric reconstruction row,
+/// ordered as in hardcoded_triplet_nullspace_projector
+///
+/// \return Optional vector of weights, std::nullopt unless n_particles is 2
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+std::optional<std::vector<T>> hardcoded_triplet_te_reconstruction(
+    std::size_t n_particles) {
+  if (n_particles != 2) return std::nullopt;
+  return std::vector<T>{T(0) / T(1), T(1) / T(4), T(1) / T(4), T(1) / T(1)};
+}
+
+/// \brief Provides the closed-shell triplet null-space projector weights
 ///
 /// \tparam T The numeric type (must be floating point or complex)
 /// \param n_particles The rank of external index pairs
-/// \param kind The weight row to provide
 ///
-/// \return (memoized) Vector of weights in flat perm order
+/// \return Vector of weights (see hardcoded_triplet_nullspace_projector)
 ///
-/// \throw Exception unless \p n_particles is 2 or 3 (2 only for the bare-TE
-///        kinds; CombinedResidual also 1)
+/// \throw Exception unless \p n_particles is 2 or 3
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] const std::vector<T>& triplet_weights(std::size_t n_particles,
-                                                    TripletWeightKind kind) {
-  // unsupported ranks are rejected before memoize
-  const bool te_kind = kind == TripletWeightKind::TeNnsReconstruction ||
-                       kind == TripletWeightKind::TeReconstruction ||
-                       kind == TripletWeightKind::TeCombinedResidual;
-  const bool supported =
-      te_kind ? n_particles == 2
-              : n_particles == 2 || n_particles == 3 ||
-                    (n_particles == 1 &&
-                     kind == TripletWeightKind::CombinedResidual);
-  if (!supported)
+[[nodiscard]] const std::vector<T>& triplet_nullspace_projection_weights(
+    std::size_t n_particles) {
+  static const std::vector<T> rows[2] = {
+      *hardcoded_triplet_nullspace_projector<T>(2),
+      *hardcoded_triplet_nullspace_projector<T>(3)};
+  if (n_particles != 2 && n_particles != 3)
     throw Exception(
-        "triplet weights are not available for this kind at n_particles = " +
+        "triplet null-space projector weights are only available for "
+        "n_particles = 2, 3, requested rank is : " +
         std::to_string(n_particles));
+  return rows[n_particles - 2];
+}
 
-  using CacheKey = std::pair<std::size_t, TripletWeightKind>;
-  // the rows are cached behind a pointer since the cache holds several keys
-  // and flat_map insertions would invalidate references into it
-  using CachedRow = std::unique_ptr<const std::vector<T>>;
+/// \brief Provides the closed-shell triplet NNS reconstruction weights
+///
+/// \tparam T The numeric type
+/// \param n_particles The rank of external index pairs
+///
+/// \return Vector of weights
+///
+/// \throw Exception unless \p n_particles is 2 or 3
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+[[nodiscard]] const std::vector<T>& triplet_nns_projection_weights(
+    std::size_t n_particles) {
+  auto normalized = [](std::vector<T> row) {
+    const T identity_weight = row.back();
+    for (auto& w : row) w /= identity_weight;
+    return row;
+  };
+  static const std::vector<T> rows[2] = {
+      normalized(*hardcoded_triplet_nullspace_projector<T>(2)),
+      normalized(*hardcoded_triplet_nullspace_projector<T>(3))};
+  if (n_particles != 2 && n_particles != 3)
+    throw Exception(
+        "triplet NNS projection weights are only available for "
+        "n_particles = 2, 3, requested rank is : " +
+        std::to_string(n_particles));
+  return rows[n_particles - 2];
+}
 
-  static std::mutex cache_mutex;
-  static std::condition_variable cache_cv;
-  static container::map<CacheKey, std::optional<CachedRow>> cache;
+/// \brief Provides the bare-TE undo-compact weights
+/// (see hardcoded_triplet_te_nns_projector)
+///
+/// \throw Exception unless \p n_particles is 2
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+[[nodiscard]] const std::vector<T>& triplet_te_nns_projection_weights(
+    std::size_t n_particles) {
+  static const std::vector<T> row = *hardcoded_triplet_te_nns_projector<T>(2);
+  if (n_particles != 2)
+    throw Exception(
+        "bare-TE triplet weights are only available for n_particles = 2, "
+        "requested rank is : " +
+        std::to_string(n_particles));
+  return row;
+}
 
-  CacheKey key{n_particles, kind};
-
-  return *sequant::detail::memoize(
-      cache, cache_mutex, cache_cv, key, [&]() -> CachedRow {
-        auto coeffs = compute_triplet_weights(n_particles, kind);
-        std::vector<T> weights;
-        weights.reserve(coeffs.size());
-        for (const auto& c : coeffs) {
-          weights.push_back(static_cast<T>(c));
-        }
-        return std::make_unique<const std::vector<T>>(std::move(weights));
-      });
+/// \brief Provides the bare-TE -> full-metric reconstruction weights
+/// (see hardcoded_triplet_te_reconstruction)
+///
+/// \throw Exception unless \p n_particles is 2
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+[[nodiscard]] const std::vector<T>& triplet_te_reconstruction_weights(
+    std::size_t n_particles) {
+  static const std::vector<T> row = *hardcoded_triplet_te_reconstruction<T>(2);
+  if (n_particles != 2)
+    throw Exception(
+        "bare-TE triplet weights are only available for n_particles = 2, "
+        "requested rank is : " +
+        std::to_string(n_particles));
+  return row;
 }
 
 /// \brief Provides one row of the NNS projector matrix,
@@ -657,21 +738,22 @@ auto triplet_perm_combine_ta(
   return result;
 }
 
-/// \brief Applies the \p kind weight row over the triplet slot permutations of
-/// \p arr (n_particles = bra_rank); no-op for rank 2 or less
-/// \throw Exception unless the bra and ket ranks are equal, or if the row is
-///        not available for bra_rank (see triplet_weights)
+/// \brief Applies the weight row \p weights_of(n_particles) over the triplet
+/// slot permutations of \p arr (n_particles = bra_rank); no-op for rank 2 or
+/// less
+/// \throw Exception unless the bra and ket ranks are equal, or if
+///        \p weights_of throws for bra_rank
 template <typename... Args>
-auto triplet_perm_project_ta(TA::DistArray<Args...> const& arr, size_t bra_rank,
-                             TripletWeightKind kind) {
-  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+auto triplet_perm_project_ta(
+    TA::DistArray<Args...> const& arr, size_t bra_rank,
+    const std::vector<typename TA::DistArray<Args...>::numeric_type>& (
+        *weights_of)(std::size_t)) {
   const std::size_t rank = arr.trange().rank();
   if (2 * bra_rank != rank)
     throw Exception(
         "triplet_perm_project_ta: the bra and ket ranks must be equal");
   if (rank <= 2) return arr;
-  const auto& weights = triplet_weights<numeric_type>(bra_rank, kind);
-  return triplet_perm_combine_ta<Args...>(arr, bra_rank, weights);
+  return triplet_perm_combine_ta<Args...>(arr, bra_rank, weights_of(bra_rank));
 }
 
 }  // namespace detail
@@ -682,8 +764,10 @@ auto triplet_perm_project_ta(TA::DistArray<Args...> const& arr, size_t bra_rank,
 template <typename... Args>
 auto triplet_nullspace_project_ta(TA::DistArray<Args...> const& arr,
                                   size_t bra_rank) {
-  return detail::triplet_perm_project_ta(arr, bra_rank,
-                                         TripletWeightKind::NullspaceProjector);
+  return detail::triplet_perm_project_ta(
+      arr, bra_rank,
+      &detail::triplet_nullspace_projection_weights<
+          typename TA::DistArray<Args...>::numeric_type>);
 }
 
 template <typename... Args>
@@ -699,8 +783,10 @@ auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
 template <typename... Args>
 auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
                             size_t bra_rank) {
-  return detail::triplet_perm_project_ta(arr, bra_rank,
-                                         TripletWeightKind::NnsReconstruction);
+  return detail::triplet_perm_project_ta(
+      arr, bra_rank,
+      &detail::triplet_nns_projection_weights<
+          typename TA::DistArray<Args...>::numeric_type>);
 }
 
 template <typename... Args>
@@ -716,7 +802,9 @@ template <typename... Args>
 auto triplet_te_nns_project_ta(TA::DistArray<Args...> const& arr,
                                size_t bra_rank) {
   return detail::triplet_perm_project_ta(
-      arr, bra_rank, TripletWeightKind::TeNnsReconstruction);
+      arr, bra_rank,
+      &detail::triplet_te_nns_projection_weights<
+          typename TA::DistArray<Args...>::numeric_type>);
 }
 
 template <typename... Args>
@@ -731,8 +819,10 @@ auto triplet_te_nns_project(TA::DistArray<Args...> const& arr,
 template <typename... Args>
 auto triplet_te_reconstruct_ta(TA::DistArray<Args...> const& arr,
                                size_t bra_rank) {
-  return detail::triplet_perm_project_ta(arr, bra_rank,
-                                         TripletWeightKind::TeReconstruction);
+  return detail::triplet_perm_project_ta(
+      arr, bra_rank,
+      &detail::triplet_te_reconstruction_weights<
+          typename TA::DistArray<Args...>::numeric_type>);
 }
 
 template <typename... Args>
@@ -782,16 +872,17 @@ auto triplet_perm_combine_btas(
 
 /// \brief BTAS analogue of triplet_perm_project_ta
 template <typename... Args>
-auto triplet_perm_project_btas(btas::Tensor<Args...> const& arr,
-                               size_t bra_rank, TripletWeightKind kind) {
-  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+auto triplet_perm_project_btas(
+    btas::Tensor<Args...> const& arr, size_t bra_rank,
+    const std::vector<typename btas::Tensor<Args...>::numeric_type>& (
+        *weights_of)(std::size_t)) {
   const std::size_t rank = arr.rank();
   if (2 * bra_rank != rank)
     throw Exception(
         "triplet_perm_project_btas: the bra and ket ranks must be equal");
   if (rank <= 2) return arr;
-  const auto& weights = triplet_weights<numeric_type>(bra_rank, kind);
-  return triplet_perm_combine_btas<Args...>(arr, bra_rank, weights);
+  return triplet_perm_combine_btas<Args...>(arr, bra_rank,
+                                            weights_of(bra_rank));
 }
 
 }  // namespace detail
@@ -801,7 +892,9 @@ template <typename... Args>
 auto triplet_nns_project_btas(btas::Tensor<Args...> const& arr,
                               size_t bra_rank) {
   return detail::triplet_perm_project_btas(
-      arr, bra_rank, TripletWeightKind::NnsReconstruction);
+      arr, bra_rank,
+      &detail::triplet_nns_projection_weights<
+          typename btas::Tensor<Args...>::numeric_type>);
 }
 
 template <typename... Args>
@@ -814,7 +907,9 @@ template <typename... Args>
 auto triplet_nullspace_project_btas(btas::Tensor<Args...> const& arr,
                                     size_t bra_rank) {
   return detail::triplet_perm_project_btas(
-      arr, bra_rank, TripletWeightKind::NullspaceProjector);
+      arr, bra_rank,
+      &detail::triplet_nullspace_projection_weights<
+          typename btas::Tensor<Args...>::numeric_type>);
 }
 
 template <typename... Args>
