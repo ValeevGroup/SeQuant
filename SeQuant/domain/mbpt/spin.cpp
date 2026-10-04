@@ -2265,65 +2265,34 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
                      "triplet spin adaptation supports particle-conserving "
                      "amplitudes only");
       const auto rank = t.bra_rank();
-
-      if (rank == 1) {
-        out->scale(spin_line_sign(t.bra().at(0)));
-        out->append(1, f, Product::Flatten::No);
-      } else if (rank == 2) {
-        // antisymmetric spin-orbital tensors were already expanded to
-        // Nonsymm representatives by expand_antisymm inside spintrace
-        SEQUANT_ASSERT(t.symmetry() == Symmetry::Nonsymm);
-        const int s0 = spin_line_sign(t.bra().at(0));
-        const int s1 = spin_line_sign(t.bra().at(1));
-        const bool same_spin = (s0 == s1);
-
-        // ColumnSymmetry::Nonsymm keeps R_{a1i1;a2i2} and R_{a2i2;a1i1}
-        // distinct
-        Tensor stored(t.label(), bra(t.bra()), ket(t.ket()), t.aux(),
-                      Symmetry::Nonsymm, t.braket_symmetry(),
-                      ColumnSymmetry::Nonsymm);
-
-        // swap columns
-        container::svector<Index> swapped_bra{t.bra().at(1), t.bra().at(0)};
-        container::svector<Index> swapped_ket{t.ket().at(1), t.ket().at(0)};
-        Tensor swapped(t.label(), bra(std::move(swapped_bra)),
-                       ket(std::move(swapped_ket)), t.aux(), Symmetry::Nonsymm,
-                       t.braket_symmetry(), ColumnSymmetry::Nonsymm);
-
-        auto channel = std::make_shared<Sum>();
-        channel->append(ex<Constant>(s0) * ex<Tensor>(std::move(stored)));
-        channel->append(ex<Constant>(same_spin ? s0 : -s0) *
-                        ex<Tensor>(std::move(swapped)));
-        out->append(1, ExprPtr(channel), Product::Flatten::No);
-      } else if (rank == 3) {
-        SEQUANT_ASSERT(t.symmetry() == Symmetry::Nonsymm);
-        // R3 = sum over labels of r * T(c0) E(c1) E(c2) (T rides column 0).
-        // In a fixed external spin sector the spin-orbital amplitude collects
-        // all 6 column-pair permutations of R, each weighted by the spin sign
-        // of the column that lands in R's first (T-carrying) slot — the rank-3
-        // generalization of s0*R + s1*R_swap above.
-        // I might be able to use only 3 column-pairs to make the eqns more
-        // compact. Check it later.
-        constexpr std::array<std::array<int, 3>, 6> col_perms{
-            {{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}}};
-        auto channel = std::make_shared<Sum>();
-        for (const auto& p : col_perms) {
-          container::svector<Index> pbra{t.bra().at(p[0]), t.bra().at(p[1]),
-                                         t.bra().at(p[2])};
-          container::svector<Index> pket{t.ket().at(p[0]), t.ket().at(p[1]),
-                                         t.ket().at(p[2])};
-          Tensor permuted(t.label(), bra(std::move(pbra)), ket(std::move(pket)),
-                          t.aux(), Symmetry::Nonsymm, t.braket_symmetry(),
-                          ColumnSymmetry::Nonsymm);
-          channel->append(ex<Constant>(spin_line_sign(t.bra().at(p[0]))) *
-                          ex<Tensor>(std::move(permuted)));
-        }
-        out->append(1, ExprPtr(channel), Product::Flatten::No);
-      } else {
+      if (rank < 1 || rank > 3)
         throw Exception(
             "Triplet spin tracing EOM is implemented for singles, doubles and "
             "triples");
+
+      SEQUANT_ASSERT(rank == 1 || t.symmetry() == Symmetry::Nonsymm);
+
+      // In a fixed external spin sector the spin-orbital amplitude collects
+      // all column permutations of R, each weighted by the spin sign of R's
+      // first column. ColumnSymmetry::Nonsymm keeps the permuted R's distinct.
+      container::svector<std::size_t> columns(rank);
+      std::iota(columns.begin(), columns.end(), std::size_t{0});
+      auto channel = std::make_shared<Sum>();
+      const auto n_perms = static_cast<std::size_t>(factorial(rank));
+      for (std::size_t r = 0; r != n_perms; ++r) {
+        const auto cols = detail::compute_permuted_indices(columns, r, rank);
+        container::svector<Index> pbra, pket;
+        for (const auto c : cols) {
+          pbra.push_back(t.bra().at(c));
+          pket.push_back(t.ket().at(c));
+        }
+        Tensor permuted(t.label(), bra(std::move(pbra)), ket(std::move(pket)),
+                        t.aux(), Symmetry::Nonsymm, t.braket_symmetry(),
+                        ColumnSymmetry::Nonsymm);
+        channel->append(ex<Constant>(spin_line_sign(t.bra().at(cols[0]))) *
+                        ex<Tensor>(std::move(permuted)));
       }
+      out->append(1, ExprPtr(channel), Product::Flatten::No);
     }
 
     ExprPtr result = out;
