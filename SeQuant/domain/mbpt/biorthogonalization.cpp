@@ -737,15 +737,15 @@ std::size_t product_network_hash(const ExprPtr& term) {
 /// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434).
 ///
 /// \param n_particles The rank of external index pairs
-/// \param te_only Provide the bare-TE row instead (n = 2 only)
+/// \param bare_te Provide the bare-TE row instead (n = 2 only)
 ///
 /// \return Vector of rational weights in flat perm order
 ///
 /// \throw Exception if the row is not available for \p n_particles
 // clang-format on
 std::vector<rational> hardcoded_triplet_residual_row(std::size_t n_particles,
-                                                     bool te_only) {
-  if (te_only) {
+                                                     bool bare_te) {
+  if (bare_te) {
     if (n_particles == 2)
       return {ratio(0, 1), ratio(0, 1), ratio(0, 1), ratio(1, 4)};
   } else {
@@ -851,9 +851,9 @@ ExprPtr triplet_weighted_perm_sum(
 ExprPtr triplet_combined_residual(
     const ExprPtr& V,
     const container::svector<container::svector<Index>>& ext_idxs,
-    bool te_only) {
+    bool bare_te) {
   const std::size_t n_particles = ext_idxs.size();
-  const auto weights = hardcoded_triplet_residual_row(n_particles, te_only);
+  const auto weights = hardcoded_triplet_residual_row(n_particles, bare_te);
 
   // the n bra slots and the n ket slots are permuted independently
   SEQUANT_ASSERT(weights.size() ==
@@ -865,18 +865,12 @@ ExprPtr triplet_combined_residual(
 
 ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
-    TripletWeightKind kind) {
+    bool bare_te) {
   const std::size_t n_particles = ext_idxs.size();
   if (n_particles <= 1) return expr;
-  if (kind != TripletWeightKind::NnsReconstruction &&
-      kind != TripletWeightKind::TeNnsReconstruction)
-    throw Exception(
-        "triplet_maxcoeff_compact: kind must be NnsReconstruction or "
-        "TeNnsReconstruction");
   const auto& numeric_weights =
-      kind == TripletWeightKind::TeNnsReconstruction
-          ? detail::triplet_te_nns_projection_weights<double>(n_particles)
-          : detail::triplet_nns_projection_weights<double>(n_particles);
+      bare_te ? detail::triplet_te_nns_projection_weights<double>(n_particles)
+              : detail::triplet_nns_projection_weights<double>(n_particles);
   std::vector<rational> weights;
   weights.reserve(numeric_weights.size());
   for (const auto w : numeric_weights) weights.push_back(to_rational(w));

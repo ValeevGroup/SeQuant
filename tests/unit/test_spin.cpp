@@ -2432,8 +2432,8 @@ TEST_CASE("triplet_doubles_te_maxcoeff_compact", "[spin][triplet]") {
 
   // compaction against the bare-TE row keeps the (-2c) representative per
   // group.
-  const ExprPtr compact = triplet_maxcoeff_compact(
-      full, ext_idxs, TripletWeightKind::TeNnsReconstruction);
+  const ExprPtr compact =
+      triplet_maxcoeff_compact(full, ext_idxs, /*bare_te=*/true);
   REQUIRE(compact->is<Sum>());
   REQUIRE(compact->size() == 2);
 }

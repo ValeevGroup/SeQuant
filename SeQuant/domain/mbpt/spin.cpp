@@ -2392,10 +2392,8 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   triplet = triplet_combined_residual(triplet, ext_groups, te_only);
   simplify(triplet);
   if (options.compact)
-    triplet = triplet_maxcoeff_compact(
-        triplet, ext_groups,
-        te_only ? TripletWeightKind::TeNnsReconstruction
-                : TripletWeightKind::NnsReconstruction);
+    triplet =
+        triplet_maxcoeff_compact(triplet, ext_groups, /*bare_te=*/te_only);
   simplify(triplet);
   return triplet;
 }

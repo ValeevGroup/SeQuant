@@ -89,34 +89,18 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
-/// TODO separate them to two categories:  biorthogonalization and NNS
-enum class TripletWeightKind {
-  /// idempotent null-space projector row
-  NullspaceProjector,
-  /// identity-normalized NullspaceProjector row (metric NNS reconstruction)
-  NnsReconstruction,
-  /// bare-TE (te_only) undo-compact row {1, -1/2, -1/2, 0}; n = 2 only
-  TeNnsReconstruction,
-  /// bare-TE -> paper-metric reconstruction row {1, 1/4, 1/4, 0}; n = 2 only
-  TeReconstruction,
-  /// paper-combined residual assembly weights (see triplet_combined_residual)
-  CombinedResidual,
-  /// bare-TE (te_only) residual assembly weights {1/4, 0, 0, 0}; n = 2 only
-  TeCombinedResidual
-};
-
 /// \brief Compaction of the closed-shell triplet residual: keeps one
 /// representative slot permutation per tensor-network hash group.
 /// \param expr The residual; returned unchanged unless it is a Sum
 /// \param ext_idxs A vector of external index groups
-/// \param kind The weight row that generated the residual
+/// \param bare_te Compact the bare-TE residual (see triplet_combined_residual)
 /// \return The compacted expression
 /// \throw Exception for more than 3 groups (rank 3)
 /// \throw Exception if a hash group does not match the single-representative
 ///        pattern
 [[nodiscard]] ExprPtr triplet_maxcoeff_compact(
     ExprPtr expr, const container::svector<container::svector<Index>>& ext_idxs,
-    TripletWeightKind kind = TripletWeightKind::NnsReconstruction);
+    bool bare_te = false);
 
 // clang-format off
 /// \brief Assembles the closed-shell triplet residual from the
@@ -125,7 +109,7 @@ enum class TripletWeightKind {
 ///
 ///   n = 1: Omega = V/2, the biorthogonal factor for rank one is 1/2.
 ///   n = 2: Omega = (3 V - V_ps)/16 (Kohn's paper)
-///   te_only (n = 2, EFV experiment): Omega = V/4, i.e. the bare TE primitive
+///   bare_te (only support n = 2): Omega = V/4, i.e. the bare TE primitive
 ///          with the external pair swap dropped. The dropped part is restored
 ///          by the postprocessing Omega = V/4 + (V_bs + V_ks)/16
 ///   n = 3: Omega = (6 V - V_ps01 - V_ps02 + 2 V_ks12)/160
@@ -138,15 +122,15 @@ enum class TripletWeightKind {
 /// \param V The sector-summed triplet primitive
 /// \param ext_idxs A vector of external index groups (must have 1, 2 or 3
 ///        groups)
-/// \param te_only Assemble the bare-TE weights instead (n = 2 only)
-/// \note I might want to have te_only for triples if EFV prefer it (tee_only)
+/// \param bare_te Assemble the bare-TE weights instead (n = 2 only)
+/// \note I might want to have bare_te for triples if EFV prefer it (tee_only)
 /// \return The combined residual, simplified
 /// \throw Exception for unsupported \p ext_idxs sizes
 // clang-format on
 [[nodiscard]] ExprPtr triplet_combined_residual(
     const ExprPtr& V,
     const container::svector<container::svector<Index>>& ext_idxs,
-    bool te_only = false);
+    bool bare_te = false);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
@@ -709,7 +693,7 @@ namespace detail {
 /// rank-2n TA::DistArray:
 ///   out = sum_p weights[p] * arr(annot_p),
 /// with the annotations generated from compute_bra_ket_permuted_indices and
-/// the weight row selected by the caller (see TripletWeightKind). Zero-weight
+/// the weight row selected by the caller. Zero-weight
 /// permutations are skipped.
 template <typename... Args>
 auto triplet_perm_combine_ta(
@@ -796,7 +780,7 @@ auto triplet_nns_project(TA::DistArray<Args...> const& arr, size_t bra_rank) {
 
 /// \brief Bare-TE undo-compact for compact triplet R2 residuals
 /// (TeNnsReconstruction row). Apply to the H*R residual when the compact
-/// te_only equations were evaluated, before triplet_te_reconstruct; no-op
+/// bare-TE equations were evaluated, before triplet_te_reconstruct; no-op
 /// for rank 2, throws for ranks beyond 4.
 template <typename... Args>
 auto triplet_te_nns_project_ta(TA::DistArray<Args...> const& arr,
