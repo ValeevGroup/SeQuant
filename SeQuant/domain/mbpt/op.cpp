@@ -1449,9 +1449,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
 }
 
 ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts) {
-  auto isr = get_default_context().index_space_registry();
-  const bool full_contractions =
-      isr->reference_occupied_space() == isr->vacuum_occupied_space();
+  const bool full_contractions = reference_is_vacuum();
   detail::validate_ref_av_connections(opts, full_contractions);
   return expectation_value_impl(expr, opts.connect, opts.do_not_connect,
                                 opts.use_topology, full_contractions);

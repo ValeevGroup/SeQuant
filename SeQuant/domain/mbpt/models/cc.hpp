@@ -1,7 +1,6 @@
 #ifndef SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 
-#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -309,12 +308,6 @@ class CC {
   [[nodiscard]] LSTOptions lst_options() const {
     return {.unitary = unitary(),
             .use_connected_form = !unitary() && reference_is_vacuum()};
-  }
-
-  /// @return true if the reference occupied space is the Wick vacuum's
-  [[nodiscard]] static bool reference_is_vacuum() {
-    const auto isr = get_default_context().index_space_registry();
-    return isr->reference_occupied_space() == isr->vacuum_occupied_space();
   }
 
   /// @return the connectivity that makes the connected products of

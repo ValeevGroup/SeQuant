@@ -1369,6 +1369,12 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 }  // namespace op
 
+/// @return true if the reference occupied space is the Wick vacuum's
+inline bool reference_is_vacuum() {
+  const auto isr = get_default_context().index_space_registry();
+  return isr->reference_occupied_space() == isr->vacuum_occupied_space();
+}
+
 namespace detail {
 template <typename T>
 void validate_ref_av_connections(const EVOptions<T>& opts,
