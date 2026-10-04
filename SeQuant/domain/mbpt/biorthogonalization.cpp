@@ -729,13 +729,6 @@ std::size_t product_network_hash(const ExprPtr& term) {
       .hash_value();
 }
 
-// (n!)^2: the n bra slots and the n ket slots are permuted
-// independently
-std::size_t slot_perm_count(std::size_t n_particles) {
-  return static_cast<std::size_t>(factorial(n_particles) *
-                                  factorial(n_particles));
-}
-
 // clang-format off
 /// \brief Provides the closed-shell triplet residual assembly row over the
 /// (n!)^2 external slot permutations
@@ -861,7 +854,10 @@ ExprPtr triplet_combined_residual(
     bool te_only) {
   const std::size_t n_particles = ext_idxs.size();
   const auto weights = hardcoded_triplet_residual_row(n_particles, te_only);
-  SEQUANT_ASSERT(weights.size() == slot_perm_count(n_particles));
+
+  // the n bra slots and the n ket slots are permuted independently
+  SEQUANT_ASSERT(weights.size() ==
+                 factorial(n_particles) * factorial(n_particles));
 
   return triplet_weighted_perm_sum(V->is<Sum>() ? V : ex<Sum>(ExprPtrList{V}),
                                    ext_idxs, weights);
