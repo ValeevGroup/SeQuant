@@ -794,19 +794,6 @@ ExprPtr triplet_expr_for(const ExprPtr& term,
   return transform_expr(term, replacements, w);
 }
 
-std::pair<container::svector<Index>, container::svector<Index>>
-external_bra_ket(
-    const container::svector<container::svector<Index>>& ext_idxs) {
-  container::svector<Index> b, k;
-  b.reserve(ext_idxs.size());
-  k.reserve(ext_idxs.size());
-  for (const auto& group : ext_idxs) {
-    b.push_back(get_bra_idx(group));
-    k.push_back(get_ket_idx(group));
-  }
-  return {std::move(b), std::move(k)};
-}
-
 // the sign the canonicalization produced is returned separately so callers
 // can track coefficients
 std::pair<ExprPtr, Product::scalar_type> canonical_unit_product(
@@ -834,7 +821,14 @@ ExprPtr triplet_combined_residual(
   SEQUANT_ASSERT(weights.size() ==
                  factorial(n_particles) * factorial(n_particles));
 
-  const auto [b, k] = external_bra_ket(ext_idxs);
+  const auto b = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_bra_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+  const auto k = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_ket_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
   const ExprPtr terms = V->is<Sum>() ? V : ex<Sum>(ExprPtrList{V});
 
   Sum out;
@@ -878,7 +872,14 @@ ExprPtr triplet_maxcoeff_compact(
   canonicalize(work);
   simplify(work);
 
-  const auto [b, k] = external_bra_ket(ext_idxs);
+  const auto b = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_bra_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
+  const auto k = ext_idxs | ranges::views::transform([](const auto& group) {
+                   return get_ket_idx(group);
+                 }) |
+                 ranges::to<container::svector<Index>>();
 
   container::map<std::size_t, container::vector<ExprPtr>> groups;
   for (const auto& term : *work) {
