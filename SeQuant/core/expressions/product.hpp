@@ -304,6 +304,9 @@ class Product : public Expr {
   /// @param[in] negate if true, scalar will be before conversion
   std::wstring to_latex(bool negate) const;
 
+  static constexpr type_rank_type type_rank = 20;
+  static constexpr std::string static_type_name() { return "sequant::Product"; }
+
   type_id_type type_id() const override;
 
   /// @return an identical clone of this Product (a deep copy allocated on the
@@ -364,6 +367,12 @@ class CProduct : public Product {
   CProduct(const Product &other);
   CProduct(Product &&other);
 
+  /// objects of this type report Product's type_id(); this name keeps
+  /// `Expr::get_type_id<CProduct>()` distinct from it
+  static constexpr std::string static_type_name() {
+    return "sequant::CProduct";
+  }
+
   bool is_commutative() const override;
 
   /// @return an identical clone of this CProduct
@@ -386,6 +395,12 @@ class NCProduct : public Product {
   using Product::Product;
   NCProduct(const Product &other);
   NCProduct(Product &&other);
+
+  /// objects of this type report Product's type_id(); this name keeps
+  /// `Expr::get_type_id<NCProduct>()` distinct from it
+  static constexpr std::string static_type_name() {
+    return "sequant::NCProduct";
+  }
 
   bool is_commutative() const override;
 

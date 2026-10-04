@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -143,6 +144,31 @@ struct latex_visitor {
   std::wstring result{};
 };
 
+template <typename Derived>
+struct MinimalExpr : public sequant::Expr {
+  type_id_type type_id() const override { return get_type_id<Derived>(); };
+  sequant::ExprPtr clone() const override { return sequant::ex<Derived>(); }
+  void adjoint() override {}
+  bool static_equal(const sequant::Expr &) const override { return true; }
+};
+
+struct DeclaredExpr : public MinimalExpr<DeclaredExpr> {
+  static constexpr type_rank_type type_rank = 77;
+  static constexpr std::string static_type_name() {
+    return "test::DeclaredExpr";
+  }
+};
+
+struct TwinExpr1 : public MinimalExpr<TwinExpr1> {
+  static constexpr type_rank_type type_rank = 78;
+  static constexpr std::string static_type_name() { return "test::TwinExpr"; }
+};
+
+struct TwinExpr2 : public MinimalExpr<TwinExpr2> {
+  static constexpr type_rank_type type_rank = 78;
+  static std::string static_type_name() { return "test::TwinExpr"; }
+};
+
 TEST_CASE("expr", "[elements]") {
   using namespace sequant;
   SECTION("constructors") {
@@ -199,14 +225,12 @@ TEST_CASE("expr", "[elements]") {
           std::make_shared<Constant>(3)});
       const auto ex0 = std::make_shared<Dummy>();
 
-      // type ids get assigned in the order of use, which is program dependent,
-      // only check basic relations here
+      // Dummy and VecExpr do not declare static_type_name(), so their ids
+      // depend on the compiler; only check basic relations here
       REQUIRE(ex0->type_id() == Expr::get_type_id<Dummy>());
       REQUIRE(ex1->type_id() == Expr::get_type_id<Constant>());
       REQUIRE(ex4->type_id() == Expr::get_type_id<VecExpr<double>>());
-      REQUIRE(ex4->type_id() <
-              Expr::get_type_id<VecExpr<float>>());  // VecExpr<float> had not
-                                                     // been used yet
+      REQUIRE(ex4->type_id() != Expr::get_type_id<VecExpr<float>>());
 
       REQUIRE(*ex0 == *ex0);
       REQUIRE(*ex1 == *ex1);
@@ -1366,5 +1390,138 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THROWS_AS(TreeIndex({2}).select_from(expr), Exception);
       REQUIRE_THROWS_AS(TreeIndex({0, 1}).select_from(expr), Exception);
     }
+  }
+}
+
+// CProduct before Product: a derived type computed first must not take, or
+// collide with, its base's id
+TEST_CASE("expr_type_id_derived", "[elements]") {
+  using namespace sequant;
+  const auto cid = Expr::get_type_id<CProduct>();
+  const auto ncid = Expr::get_type_id<NCProduct>();
+  const auto pid = Expr::get_type_id<Product>();
+  REQUIRE(cid != pid);
+  REQUIRE(ncid != pid);
+  REQUIRE(cid != ncid);
+  const auto c = ex<Constant>(1);
+  const auto p = ex<Variable>(L"x") * ex<Variable>(L"y");
+  REQUIRE_NOTHROW(c->is<CProduct>());
+  REQUIRE_NOTHROW(c->is<NCProduct>());
+  REQUIRE_NOTHROW(p->is<CProduct>());
+  REQUIRE_NOTHROW(p->is<NCProduct>());
+  REQUIRE(p->is<Product>());
+  REQUIRE(!p->is<CProduct>());
+  REQUIRE(Expr::get_type_id<Product>() == pid);
+  REQUIRE(Expr::get_type_id<CProduct>() == cid);
+}
+
+TEST_CASE("expr_type_id", "[elements]") {
+  using namespace sequant;
+  using type_id_t = Expr::type_id_type;
+  auto rank_of = [](type_id_t id) { return static_cast<int>(id >> 56); };
+
+  SECTION("core types are ordered by rank") {
+    // touch in reverse order of rank first
+    const std::vector<type_id_t> ids_reverse = {
+        Expr::get_type_id<FNOperator>(), Expr::get_type_id<BNOperator>(),
+        Expr::get_type_id<FOperator>(),  Expr::get_type_id<BOperator>(),
+        Expr::get_type_id<Power>(),      Expr::get_type_id<Variable>(),
+        Expr::get_type_id<Sum>(),        Expr::get_type_id<Constant>(),
+        Expr::get_type_id<Product>(),    Expr::get_type_id<Tensor>()};
+    REQUIRE(std::is_sorted(ids_reverse.rbegin(), ids_reverse.rend()));
+    REQUIRE(std::adjacent_find(ids_reverse.begin(), ids_reverse.end()) ==
+            ids_reverse.end());
+    const std::vector<int> ranks = {253, 252, 251, 250, 60, 50, 40, 30, 20, 10};
+    for (std::size_t i = 0; i != ids_reverse.size(); ++i)
+      REQUIRE(rank_of(ids_reverse[i]) == ranks[i]);
+  }
+
+  SECTION("ids are computed from rank and name") {
+    auto expected = [](Expr::type_rank_type rank, std::string_view name) {
+      return (static_cast<type_id_t>(rank) << 56) |
+             (detail::fnv1a_64(name) >> 8);
+    };
+    REQUIRE(Expr::get_type_id<Tensor>() ==
+            expected(Tensor::type_rank, Tensor::static_type_name()));
+    REQUIRE(Expr::get_type_id<FNOperator>() ==
+            expected(FNOperator::type_rank, FNOperator::static_type_name()));
+    // names are usable in constant expressions
+    static_assert(Tensor::static_type_name() == "sequant::Tensor");
+    static_assert(FNOperator::static_type_name() ==
+                  "sequant::NormalOperator<FermiDirac>");
+    static_assert(FNOperator::static_type_name() !=
+                  BNOperator::static_type_name());
+    static_assert(type_name_of<Tensor>() == "sequant::Tensor");
+    static_assert(type_name_of<DeclaredExpr>() == "test::DeclaredExpr");
+    static_assert((static_cast<type_id_t>(Tensor::type_rank) << 56 |
+                   detail::fnv1a_64(Tensor::static_type_name()) >> 8) ==
+                  0x0a0890014be052abull);
+    // pin the portable values
+    REQUIRE(detail::fnv1a_64("") == 0xcbf29ce484222325ull);
+    REQUIRE(detail::fnv1a_64("a") == 0xaf63dc4c8601ec8cull);
+    REQUIRE(Expr::get_type_id<Tensor>() == 0x0a0890014be052abull);
+    REQUIRE(Expr::get_type_id<FNOperator>() == 0xfdda063c04d1d2adull);
+  }
+
+  SECTION("template instantiations") {
+    REQUIRE(Expr::get_type_id<BOperator>() < Expr::get_type_id<FOperator>());
+    REQUIRE(Expr::get_type_id<FOperator>() < Expr::get_type_id<BNOperator>());
+    REQUIRE(Expr::get_type_id<BNOperator>() < Expr::get_type_id<FNOperator>());
+    REQUIRE(Expr::get_type_id<FNOperatorSeq>() !=
+            Expr::get_type_id<BNOperatorSeq>());
+    REQUIRE(rank_of(Expr::get_type_id<FNOperatorSeq>()) ==
+            Expr::default_type_rank);
+  }
+
+  SECTION("types declared outside SeQuant") {
+    const auto dummy = Expr::get_type_id<Dummy>();
+    REQUIRE(rank_of(dummy) == Expr::default_type_rank);
+    for (const auto id :
+         {Expr::get_type_id<Tensor>(), Expr::get_type_id<Product>(),
+          Expr::get_type_id<Constant>(), Expr::get_type_id<Sum>(),
+          Expr::get_type_id<Variable>(), Expr::get_type_id<Power>(),
+          Expr::get_type_id<BOperator>(), Expr::get_type_id<FOperator>(),
+          Expr::get_type_id<BNOperator>(), Expr::get_type_id<FNOperator>(),
+          Expr::get_type_id<BNOperatorSeq>(),
+          Expr::get_type_id<FNOperatorSeq>()})
+      REQUIRE(id != dummy);
+    REQUIRE(Expr::get_type_id<Power>() < dummy);
+    REQUIRE(dummy < Expr::get_type_id<BOperator>());
+
+    REQUIRE(Expr::get_type_id<DeclaredExpr>() ==
+            ((type_id_t{77} << 56) |
+             (detail::fnv1a_64("test::DeclaredExpr") >> 8)));
+  }
+
+  SECTION("colliding declarations throw") {
+    REQUIRE_NOTHROW(Expr::get_type_id<TwinExpr1>());
+    REQUIRE_THROWS_AS(Expr::get_type_id<TwinExpr2>(), Exception);
+    // the failed computation is retried, and fails again
+    std::string what;
+    try {
+      Expr::get_type_id<TwinExpr2>();
+    } catch (const Exception &e) {
+      what = e.what();
+    }
+    REQUIRE(what.find("static_type_name()") != std::string::npos);
+  }
+
+  SECTION("derived types") {
+    REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<CProduct>());
+    REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<NCProduct>());
+    REQUIRE(Expr::get_type_id<CProduct>() != Expr::get_type_id<NCProduct>());
+    REQUIRE_NOTHROW(ex<Constant>(1)->is<CProduct>());
+    REQUIRE_NOTHROW(ex<Constant>(1)->is<NCProduct>());
+  }
+
+  SECTION("operator< orders unlike types by rank") {
+    const auto c = ex<Constant>(1);
+    const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+    const auto op = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}));
+    REQUIRE(*t < *c);
+    REQUIRE(!(*c < *t));
+    REQUIRE(*t < *op);
+    REQUIRE(!(*op < *t));
+    REQUIRE(*c < *op);
   }
 }

@@ -356,7 +356,6 @@ std::string read_file(const std::filesystem::path& p) {
 
 int main(int argc, char** argv) {
   set_locale();
-  sequant::detail::OpIdRegistrar op_id_registrar;
 
   CLI::App app("SeQuant expression cost/factorization analysis");
   argv = app.ensure_utf8(argv);

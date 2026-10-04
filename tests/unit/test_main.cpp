@@ -9,7 +9,6 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -33,7 +32,6 @@ int main(int argc, char* argv[]) {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
-  sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
       {.index_space_registry_shared_ptr = sequant::mbpt::make_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,

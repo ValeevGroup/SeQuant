@@ -5,7 +5,6 @@
 #include <iostream>
 
 #include <btas/btas.h>
-#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -59,7 +58,6 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
 
   using namespace sequant;
-  detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
       {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,

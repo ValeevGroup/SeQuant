@@ -46,6 +46,11 @@ class Variable : public Expr, public MutatableLabeled {
 
   std::wstring to_latex() const override;
 
+  static constexpr type_rank_type type_rank = 50;
+  static constexpr std::string static_type_name() {
+    return "sequant::Variable";
+  }
+
   type_id_type type_id() const override;
 
   bool is_scalar() const override;

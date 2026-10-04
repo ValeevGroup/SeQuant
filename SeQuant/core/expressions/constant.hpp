@@ -69,6 +69,11 @@ class Constant : public Expr {
 
   std::wstring to_latex() const override;
 
+  static constexpr type_rank_type type_rank = 30;
+  static constexpr std::string static_type_name() {
+    return "sequant::Constant";
+  }
+
   type_id_type type_id() const override;
 
   bool is_scalar() const override;

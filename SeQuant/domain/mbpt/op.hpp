@@ -158,6 +158,13 @@ using BOperator = Operator<QuantumNumbers, Statistics::BoseEinstein>;
 /// Operator
 template <Statistics S>
 class Operator<void, S> : public Expr, public Labeled {
+ public:
+  static constexpr Expr::type_rank_type type_rank = Expr::default_type_rank;
+  static constexpr std::string static_type_name() {
+    return "sequant::mbpt::Operator<void," +
+           sequant::detail::statistics_name(S) + ">";
+  }
+
  protected:
   Operator() = default;
 
@@ -198,7 +205,11 @@ class Operator<void, S> : public Expr, public Labeled {
 using FOperatorBase = FOperator<void>;
 using BOperatorBase = BOperator<void>;
 
-struct default_qns_tag {};
+struct default_qns_tag {
+  static constexpr std::string static_type_name() {
+    return "sequant::mbpt::default_qns_tag";
+  }
+};
 
 // clang-format off
 /// Tracks changes in \c N quantum numbers
@@ -225,6 +236,15 @@ class QuantumNumberChange
   using base_type =
       container::svector<boost::numeric::interval<std::make_signed_t<QNV>>, 8>;
   using this_type = QuantumNumberChange<QNV, Tag>;
+
+  /// @return a portable name of this type
+  static constexpr std::string static_type_name() {
+    static_assert(std::is_integral_v<QNV>);
+    return "sequant::mbpt::QuantumNumberChange<" +
+           std::string(std::is_signed_v<QNV> ? "int" : "uint") +
+           sequant::detail::uint_to_string(8 * sizeof(QNV)) + "," +
+           sequant::type_name_of<Tag>() + ">";
+  }
 
   std::size_t size() const {
     if (get_default_context().vacuum() == Vacuum::Physical) {
@@ -883,6 +903,13 @@ class Operator : public Operator<void, S> {
            const OpParams& params);
 
   virtual ~Operator();
+
+  static constexpr Expr::type_rank_type type_rank = Expr::default_type_rank;
+  static constexpr std::string static_type_name() {
+    return "sequant::mbpt::Operator<" +
+           sequant::type_name_of<QuantumNumbers>() + "," +
+           sequant::detail::statistics_name(S) + ">";
+  }
 
   /// evaluates the result of applying this operator to \p qns
   /// \param qns the quantum numbers of the state to which this operator is

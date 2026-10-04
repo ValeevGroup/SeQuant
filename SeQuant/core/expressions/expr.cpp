@@ -8,8 +8,16 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/tree_index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
+#include <boost/core/demangle.hpp>
+
+#include <map>
+#include <mutex>
 #include <sstream>
+#include <string>
+#include <typeindex>
+#include <utility>
 
 namespace sequant {
 
@@ -82,6 +90,22 @@ const ExprPtr &Expr::back() const { return at(size() - 1); }
 
 std::wstring Expr::to_latex() const {
   throw Exception("to_latex not implemented for " + type_name());
+}
+
+void Expr::register_type_id(type_id_type id, const std::string &name,
+                            std::type_index type) {
+  static std::mutex mutex;
+  static std::map<type_id_type, std::pair<std::string, std::type_index>>
+      registry;
+  std::scoped_lock lock(mutex);
+  const auto [it, inserted] = registry.try_emplace(id, name, type);
+  if (!inserted && it->second.second != type)
+    throw Exception("Expr types " +
+                    boost::core::demangle(it->second.second.name()) +
+                    " (name \"" + it->second.first + "\") and " +
+                    boost::core::demangle(type.name()) + " (name \"" + name +
+                    "\") have the same type id " + std::to_string(id) +
+                    "; declare a distinct static_type_name() for one of them");
 }
 
 Expr &Expr::operator[](const TreeIndex &idx) { return idx.select_from(*this); }
