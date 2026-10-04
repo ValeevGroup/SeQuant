@@ -393,6 +393,10 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     ctx.set(make_mr_spaces());
     auto ctx_resetter = set_scoped_default_context(ctx);
 
+    // H̄ must use explicit commutators, since ref_av takes no connectivity here
+    const auto expected = op::ref_av(lst(op::H(), op::T(1), 2), {});
+    REQUIRE(simplify(CC(1).energy(2) - expected) == ex<Constant>(0));
+
     if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
       REQUIRE_THROWS_AS(CC(1).λ(), Exception);
       // the check precedes the dispatch to the UCC EOM path
