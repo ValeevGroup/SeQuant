@@ -1009,15 +1009,12 @@ TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
     SECTION("expectation values default to empty connectivity") {
       // Requiring the first h to connect to both t's
       // removes this nonzero product.
-      const auto unconstrained =
-          o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1), {});
+      const auto expr = o::h(1) * o::t(1) * o::h(1) * o::t(1);
+      const auto unconstrained = o::vac_av(expr, {});
       REQUIRE(unconstrained != ex<Constant>(0));
-      CHECK_THAT(o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1)),
-                 EquivalentTo(unconstrained));
-      CHECK_THAT(o::ref_av(o::h(1) * o::t(1) * o::h(1) * o::t(1)),
-                 EquivalentTo(unconstrained));
-      CHECK(o::vac_av(o::h(1) * o::t(1) * o::h(1) * o::t(1),
-                      {.connect = {{L"f", L"t"}}}) == ex<Constant>(0));
+      CHECK_THAT(o::vac_av(expr), EquivalentTo(unconstrained));
+      CHECK_THAT(o::ref_av(expr), EquivalentTo(unconstrained));
+      CHECK(o::vac_av(expr, {.connect = {{L"f", L"t"}}}) == ex<Constant>(0));
     }
 
     SECTION("ref_av retains connectivity when reference equals vacuum") {
@@ -1170,14 +1167,13 @@ SECTION("MRSO") {
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("ref_av rejects connectivity when reference differs from vacuum") {
-    const auto unconstrained = t::ref_av(t::h(1) * t::t(1));
+    const auto expr = t::h(1) * t::t(1);
+    const auto unconstrained = t::ref_av(expr);
     REQUIRE(unconstrained != ex<Constant>(0));
     if (assert_behavior() != AssertBehavior::Abort) {
-      REQUIRE_THROWS_AS(t::ref_av(t::h(1) * t::t(1), {.connect = {{0, 1}}}),
+      REQUIRE_THROWS_AS(t::ref_av(expr, {.connect = {{0, 1}}}), Exception);
+      REQUIRE_THROWS_AS(t::ref_av(expr, {.do_not_connect = {{0, 1}}}),
                         Exception);
-      REQUIRE_THROWS_AS(
-          t::ref_av(t::h(1) * t::t(1), {.do_not_connect = {{0, 1}}}),
-          Exception);
       // Operator requests must be rejected before screening or label lowering.
       REQUIRE_THROWS_AS(o::ref_av(ex<Constant>(0), {.connect = {{L"f", L"t"}}}),
                         Exception);
