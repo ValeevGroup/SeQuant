@@ -774,20 +774,24 @@ std::vector<rational> hardcoded_triplet_residual_row(std::size_t n_particles,
       std::to_string(n_particles));
 }
 
-// index replacement map realizing slot permutation p on the external bra/ket
-// index n-tuples: b[i] -> b[ords[i]], k[i] -> k[ords[n + i] - n]
-container::map<Index, Index> slot_perm_replacements(
-    const container::svector<Index>& b, const container::svector<Index>& k,
-    std::size_t p) {
+// Returns weight * term with its external bra and ket indices relabeled by slot
+// permutation p; bra and ket are permuted independently because triplet
+// terms are not particle-symmetric
+ExprPtr triplet_expr_for(const ExprPtr& term,
+                         const container::svector<Index>& b,
+                         const container::svector<Index>& k, std::size_t p,
+                         const rational& w = 1) {
   const std::size_t n_particles = b.size();
   const auto ords = detail::compute_permuted_indices_bra_ket(p, n_particles);
-  container::map<Index, Index> m;
+  container::map<Index, Index> replacements;
   for (std::size_t i = 0; i != n_particles; ++i) {
-    if (ords[i] != i) m.emplace(b[i], b[ords[i]]);
+    if (ords[i] != i) replacements.emplace(b[i], b[ords[i]]);
     if (ords[n_particles + i] != n_particles + i)
-      m.emplace(k[i], k[ords[n_particles + i] - n_particles]);
+      replacements.emplace(k[i], k[ords[n_particles + i] - n_particles]);
   }
-  return m;
+  if (replacements.empty())
+    return w == 1 ? term->clone() : ex<Constant>(w) * term;
+  return transform_expr(term, replacements, w);
 }
 
 std::pair<container::svector<Index>, container::svector<Index>>
@@ -843,11 +847,7 @@ ExprPtr triplet_combined_residual(
     for (std::size_t p = 0; p != weights.size(); ++p) {
       const auto& w = weights[p];
       if (w == 0) continue;
-      const auto map = slot_perm_replacements(b, k, p);
-      if (map.empty())
-        out.append(w == 1 ? term : ex<Constant>(w) * term);
-      else
-        out.append(transform_expr(term, map, w));
+      out.append(triplet_expr_for(term, b, k, p, w));
     }
   }
 
@@ -899,10 +899,7 @@ ExprPtr triplet_maxcoeff_compact(
 
     container::map<std::size_t, Product::scalar_type> pred_weight;
     for (std::size_t p = 0; p != weights.size(); ++p) {
-      const auto map = slot_perm_replacements(b, k, p);
-      ExprPtr t =
-          map.empty() ? rep_unit->clone() : transform_expr(rep_unit, map);
-      auto [u, s] = canonical_unit_product(t);
+      auto [u, s] = canonical_unit_product(triplet_expr_for(rep_unit, b, k, p));
       const auto w = Product::scalar_type(weights[p]) * s;
       if (auto it = pred_weight.find(u->hash_value()); it != pred_weight.end())
         it->second += w;
