@@ -721,14 +721,6 @@ container::svector<size_t> compute_permuted_indices(
 
 namespace {
 
-std::size_t product_network_hash(const ExprPtr& term) {
-  SEQUANT_ASSERT(term->is<Product>());
-  auto product = term.as_shared_ptr<Product>();
-  sequant::TensorNetwork tn(*product);
-  return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
-      .hash_value();
-}
-
 // clang-format off
 /// \brief Provides the closed-shell triplet residual assembly row over the
 /// (n!)^2 external slot permutations
@@ -792,20 +784,6 @@ ExprPtr triplet_expr_for(const ExprPtr& term,
   if (replacements.empty())
     return w == 1 ? term->clone() : ex<Constant>(w) * term;
   return transform_expr(term, replacements, w);
-}
-
-// the sign the canonicalization produced is returned separately so callers
-// can track coefficients
-std::pair<ExprPtr, Product::scalar_type> canonical_unit_product(
-    const ExprPtr& t) {
-  auto out = t->clone();
-  out->as<Product>().scale(Product::scalar_type{1} /
-                           out->as<Product>().scalar());
-  canonicalize(out);
-  simplify(out);
-  const auto sign = out->as<Product>().scalar();
-  out->as<Product>().scale(Product::scalar_type{1} / sign);
-  return {std::move(out), sign};
 }
 
 }  // namespace
@@ -885,8 +863,26 @@ ExprPtr triplet_maxcoeff_compact(
   for (const auto& term : *work) {
     SEQUANT_ASSERT(term->is<Product>());
     if (!term->is<Product>()) continue;
-    groups[product_network_hash(term)].push_back(term);
+    sequant::TensorNetwork tn(*term.as_shared_ptr<Product>());
+    const auto hash =
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+            .hash_value();
+    groups[hash].push_back(term);
   }
+
+  // the sign the canonicalization produced is returned separately so the
+  // coefficients can be tracked
+  auto canonical_unit_product =
+      [](const ExprPtr& t) -> std::pair<ExprPtr, Product::scalar_type> {
+    auto out = t->clone();
+    out->as<Product>().scale(Product::scalar_type{1} /
+                             out->as<Product>().scalar());
+    canonicalize(out);
+    simplify(out);
+    const auto sign = out->as<Product>().scalar();
+    out->as<Product>().scale(Product::scalar_type{1} / sign);
+    return {std::move(out), sign};
+  };
 
   Sum compact;
   for (const auto& [_, terms] : groups) {
