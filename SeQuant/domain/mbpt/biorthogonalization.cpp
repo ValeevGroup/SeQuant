@@ -729,34 +729,6 @@ std::size_t product_network_hash(const ExprPtr& term) {
       .hash_value();
 }
 
-/// The triplet n = 3 non-null-space weights
-rational triplet_triples_slot_weight(
-    const container::svector<std::size_t>& ords) {
-  // w10 is the first row of the non-null-sapce projector: G . pinv(G)
-  // of the 18x18 TEE overlap matrix, non-lexicographic order
-  constexpr std::array<int, 18> w10{0,  1, 0,  0,  0, 1, -2, -2, 1,
-                                    -2, 1, -2, -1, 1, 1, 5,  -1, -1};
-
-  SEQUANT_ASSERT(ords.size() == 6);
-  constexpr std::size_t n = 3;
-
-  std::array<std::size_t, n> ph{}, pv{}, pv_inv{};
-  for (std::size_t i = 0; i != n; ++i) {
-    ph[i] = ords[i];
-    pv[i] = ords[n + i] - n;
-  }
-  for (std::size_t i = 0; i != n; ++i) pv_inv[pv[i]] = i;
-
-  container::svector<std::size_t> identity(n), sigma(n);
-  std::iota(identity.begin(), identity.end(), std::size_t{0});
-  for (std::size_t i = 0; i != n; ++i) sigma[i] = ph[pv_inv[i]];
-
-  const std::size_t sigma_rank =
-      perm::rank(perm::computeTransformationPermutation(identity, sigma), n);
-
-  return ratio(w10[n * sigma_rank + pv[0]], 20);
-}
-
 // (n!)^2: the n bra slots and the n ket slots are permuted
 // independently
 std::size_t slot_perm_count(std::size_t n_particles) {
@@ -791,82 +763,87 @@ std::size_t slot_perm_index(const container::svector<std::size_t>& ords) {
   return p;
 }
 
-// slot perms: {3/4, -1/4, -1/4, -1/4} for n = 2;
-// for n = 3 the per-representative weights w10[m]/20 distributed over the 36
-// slot perms by 18x2
-std::vector<rational> make_triplet_nullspace_weights(std::size_t n_particles) {
-  switch (n_particles) {
-    case 2: {
-      std::vector<rational> weights(slot_perm_count(2), ratio(-1, 4));
-      container::svector<std::size_t> identity_ords(4);
-      std::iota(identity_ords.begin(), identity_ords.end(), std::size_t{0});
-      weights[slot_perm_index(identity_ords)] = ratio(3, 4);
-      return weights;
-    }
+// clang-format off
+/// \brief Provides the closed-shell triplet spin-trace weight row of \p kind over the
+/// (n!)^2 external slot permutations
+///
+/// NullspaceProjector: first of row G.pinv(G) of the overlap matrix G of the triplet primitives (the 4x4 TE
+/// overlap for n = 2, the 18x18 TEE overlap for n = 3).
+///
+/// CombinedResidual: A combination of T and E operators with their
+/// permutations [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434).
+///
+/// \param n_particles The rank of external index pairs
+/// \param kind The weight row to provide
+///
+/// \return Vector of rational weights in flat perm order
+///
+/// \throw Exception if the row of \p kind is not available for \p n_particles
+// clang-format on
+std::vector<rational> hardcoded_triplet_row(std::size_t n_particles,
+                                            TripletWeightKind kind) {
+  switch (kind) {
+    case TripletWeightKind::NullspaceProjector:
+      switch (n_particles) {
+        case 2:
+          return {ratio(-1, 4), ratio(-1, 4), ratio(-1, 4), ratio(3, 4)};
 
-    case 3: {
-      std::vector<rational> weights(slot_perm_count(3), 0);
-      for (std::size_t p = 0; p != weights.size(); ++p) {
-        weights[p] = triplet_triples_slot_weight(
-            detail::compute_bra_ket_permuted_indices(p, 3));
+        case 3:
+          return {ratio(-1, 20), ratio(1, 20),  ratio(1, 20),  ratio(1, 20),
+                  ratio(-1, 10), ratio(0, 1),   ratio(1, 20),  ratio(-1, 20),
+                  ratio(1, 20),  ratio(1, 20),  ratio(-1, 10), ratio(0, 1),
+                  ratio(1, 20),  ratio(1, 20),  ratio(-1, 20), ratio(1, 20),
+                  ratio(0, 1),   ratio(-1, 10), ratio(1, 20),  ratio(1, 20),
+                  ratio(1, 20),  ratio(-1, 20), ratio(0, 1),   ratio(-1, 10),
+                  ratio(-1, 10), ratio(-1, 10), ratio(0, 1),   ratio(0, 1),
+                  ratio(1, 4),   ratio(-1, 20), ratio(0, 1),   ratio(0, 1),
+                  ratio(-1, 10), ratio(-1, 10), ratio(-1, 20), ratio(1, 4)};
       }
-      return weights;
-    }
-
-    default:
-      throw Exception(
-          "triplet slot-perm weights only available for n_particles = "
-          "2, 3, requested rank is : " +
-          std::to_string(n_particles));
-  }
-}
-
-// the paper-combined residual assembly weights; see triplet_combined_residual
-// for the formulas
-std::vector<rational> make_triplet_combined_residual_weights(
-    std::size_t n_particles, bool te_only) {
-  std::vector<rational> weights(slot_perm_count(n_particles), 0);
-
-  auto set = [&](container::svector<std::size_t> bra,
-                 const container::svector<std::size_t>& ket, rational coeff) {
-    SEQUANT_ASSERT(bra.size() == n_particles && ket.size() == n_particles);
-    for (const auto s : ket) bra.push_back(n_particles + s);
-    weights[slot_perm_index(bra)] = coeff;
-  };
-
-  if (te_only) {
-    if (n_particles != 2)
-      throw Exception(
-          "the bare-TE triplet residual weights are only defined for "
-          "n_particles = 2");
-    set({0, 1}, {0, 1}, ratio(1, 4));
-    return weights;
-  }
-
-  switch (n_particles) {
-    case 1:
-      set({0}, {0}, ratio(1, 2));  // identity
       break;
 
-    case 2:
-      set({0, 1}, {0, 1}, ratio(3, 16));   // identity
-      set({1, 0}, {1, 0}, ratio(-1, 16));  // whole-pair swap
+    case TripletWeightKind::CombinedResidual:
+      switch (n_particles) {
+        case 1:
+          return {ratio(1, 2)};
+
+        case 2:
+          return {ratio(-1, 16), ratio(0, 1), ratio(0, 1), ratio(3, 16)};
+
+        case 3:
+          return {ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                  ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                  ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                  ratio(0, 1), ratio(0, 1),    ratio(-1, 160), ratio(0, 1),
+                  ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                  ratio(0, 1), ratio(-1, 160), ratio(0, 1),    ratio(0, 1),
+                  ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                  ratio(0, 1), ratio(0, 1),    ratio(0, 1),    ratio(0, 1),
+                  ratio(0, 1), ratio(0, 1),    ratio(1, 80),   ratio(3, 80)};
+      }
       break;
 
-    case 3:
-      set({0, 1, 2}, {0, 1, 2}, ratio(6, 160));   // identity
-      set({1, 0, 2}, {1, 0, 2}, ratio(-1, 160));  // pair swap 0 <-> 1
-      set({2, 1, 0}, {2, 1, 0}, ratio(-1, 160));  // pair swap 0 <-> 2
-      set({0, 1, 2}, {0, 2, 1}, ratio(2, 160));   // ket swap 1 <-> 2
+    case TripletWeightKind::TeNnsReconstruction:
+      if (n_particles == 2)
+        return {ratio(0, 1), ratio(-1, 2), ratio(-1, 2), ratio(1, 1)};
       break;
 
-    default:
-      throw Exception(
-          "triplet paper-combined residual weights are only available for "
-          "n_particles = 1, 2, 3, requested rank is : " +
-          std::to_string(n_particles));
+    case TripletWeightKind::TeReconstruction:
+      if (n_particles == 2)
+        return {ratio(0, 1), ratio(1, 4), ratio(1, 4), ratio(1, 1)};
+      break;
+
+    case TripletWeightKind::TeCombinedResidual:
+      if (n_particles == 2)
+        return {ratio(0, 1), ratio(0, 1), ratio(0, 1), ratio(1, 4)};
+      break;
+
+    case TripletWeightKind::NnsReconstruction:
+      break;
   }
-  return weights;
+  throw Exception(
+      "hardcoded triplet weights are not available for this kind at "
+      "n_particles = " +
+      std::to_string(n_particles));
 }
 
 // (memoized) rational weight rows for the symbolic triplet primitives
@@ -900,55 +877,18 @@ const std::vector<rational>& triplet_weights_rational(std::size_t n_particles,
   return *sequant::detail::memoize(
       cache, cache_mutex, cache_cv, key, [&]() -> CachedRow {
         auto make_row = [&]() -> std::vector<rational> {
-          switch (kind) {
-            case TripletWeightKind::NullspaceProjector:
-              return make_triplet_nullspace_weights(n_particles);
+          if (kind != TripletWeightKind::NnsReconstruction)
+            return hardcoded_triplet_row(n_particles, kind);
 
-            case TripletWeightKind::NnsReconstruction: {
-              auto weights = make_triplet_nullspace_weights(n_particles);
-              container::svector<std::size_t> identity_ords(2 * n_particles);
-              std::iota(identity_ords.begin(), identity_ords.end(),
-                        std::size_t{0});
-              const auto identity_weight =
-                  weights.at(slot_perm_index(identity_ords));
-              SEQUANT_ASSERT(identity_weight != 0);
-              for (auto& w : weights) w /= identity_weight;
-              return weights;
-            }
-
-            case TripletWeightKind::CombinedResidual:
-              return make_triplet_combined_residual_weights(n_particles,
-                                                            /*te_only=*/false);
-
-            case TripletWeightKind::TeCombinedResidual:
-              return make_triplet_combined_residual_weights(n_particles,
-                                                            /*te_only=*/true);
-
-            case TripletWeightKind::TeNnsReconstruction:
-            case TripletWeightKind::TeReconstruction: {
-              if (n_particles != 2)
-                throw Exception(
-                    "bare-TE triplet weights are only defined for "
-                    "n_particles = 2");
-              const auto swap_weight =
-                  kind == TripletWeightKind::TeNnsReconstruction ? ratio(-1, 2)
-                                                                 : ratio(1, 4);
-              std::vector<rational> weights(slot_perm_count(2), 0);
-              for (std::size_t p = 0; p != weights.size(); ++p) {
-                const auto ords =
-                    detail::compute_bra_ket_permuted_indices(p, 2);
-                const bool bra_swapped = ords[0] != 0;
-                const bool ket_swapped = ords[2] != 2;
-                if (!bra_swapped && !ket_swapped)
-                  weights[p] = 1;
-                else if (bra_swapped != ket_swapped)
-                  weights[p] = swap_weight;
-                // the pair swap carries weight 0 in the bare-TE rows
-              }
-              return weights;
-            }
-          }
-          SEQUANT_UNREACHABLE;
+          auto weights = hardcoded_triplet_row(
+              n_particles, TripletWeightKind::NullspaceProjector);
+          container::svector<std::size_t> identity_ords(2 * n_particles);
+          std::iota(identity_ords.begin(), identity_ords.end(), std::size_t{0});
+          const auto identity_weight =
+              weights.at(slot_perm_index(identity_ords));
+          SEQUANT_ASSERT(identity_weight != 0);
+          for (auto& w : weights) w /= identity_weight;
+          return weights;
         };
         return std::make_unique<const std::vector<rational>>(make_row());
       });
