@@ -168,6 +168,18 @@ class compute_eomcc_closedshell_triplet {
       std::wcout << "R[" << i << "] compact size: " << term_count(compact)
                  << " time: " << dt.count() << " s\n";
 
+      // validated term counts of the compact triplet eom residual
+      const auto n_compact = term_count(compact);
+      if (N == 2 && type == EqnType::right && np == 2 && nh == 2) {
+        if (i == 1) runtime_assert(n_compact == 42);
+        if (i == 2) runtime_assert(n_compact == 135);
+      }
+      if (N == 3 && type == EqnType::right && np == 3 && nh == 3) {
+        if (i == 1) runtime_assert(n_compact == 54);
+        if (i == 2) runtime_assert(n_compact == 230);
+        if (i == 3) runtime_assert(n_compact == 429);
+      }
+
       // bare-TE residual (doubles only): rebuilding the full residual from it
       // via Omega = te + (1/4)(bra_swap(te) + ket_swap(te)) must be exact
       const auto ext_idxs = external_indices(eqvec[i]);
