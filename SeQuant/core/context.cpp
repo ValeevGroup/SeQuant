@@ -51,9 +51,16 @@ void check_tensor_canonicalizer(
 }
 
 template <typename Comparer>
+std::shared_ptr<const Comparer> checked_comparer(
+    std::shared_ptr<const Comparer> comparer) {
+  SEQUANT_ASSERT(comparer && *comparer);
+  return comparer;
+}
+
+template <typename Comparer>
 std::shared_ptr<const Comparer> make_comparer(Comparer comparer) {
-  SEQUANT_ASSERT(comparer);
-  return std::make_shared<const Comparer>(std::move(comparer));
+  return checked_comparer(
+      std::make_shared<const Comparer>(std::move(comparer)));
 }
 
 void check_cardinal_tensor_labels(
@@ -365,6 +372,16 @@ const tensor_index_pair_comparer_t& Context::index_pair_comparer() const {
   return *tensor_canonicalizers_->index_pair_comparer;
 }
 
+std::shared_ptr<const tensor_index_comparer_t> Context::index_comparer_ptr()
+    const {
+  return tensor_canonicalizers_->index_comparer;
+}
+
+std::shared_ptr<const tensor_index_pair_comparer_t>
+Context::index_pair_comparer_ptr() const {
+  return tensor_canonicalizers_->index_pair_comparer;
+}
+
 const container::vector<std::wstring>& Context::cardinal_tensor_labels() const {
   return tensor_canonicalizers_->cardinal_labels;
 }
@@ -473,10 +490,26 @@ Context& Context::set_index_comparer(tensor_index_comparer_t comparer) {
   return *this;
 }
 
+Context& Context::set_index_comparer(
+    std::shared_ptr<const tensor_index_comparer_t> comparer) {
+  mutable_tensor_canonicalizers().index_comparer =
+      checked_comparer(std::move(comparer));
+  bump_version();
+  return *this;
+}
+
 Context& Context::set_index_pair_comparer(
     tensor_index_pair_comparer_t comparer) {
   mutable_tensor_canonicalizers().index_pair_comparer =
       make_comparer(std::move(comparer));
+  bump_version();
+  return *this;
+}
+
+Context& Context::set_index_pair_comparer(
+    std::shared_ptr<const tensor_index_pair_comparer_t> comparer) {
+  mutable_tensor_canonicalizers().index_pair_comparer =
+      checked_comparer(std::move(comparer));
   bump_version();
   return *this;
 }

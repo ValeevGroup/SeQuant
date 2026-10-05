@@ -193,6 +193,14 @@ TEST_CASE("context", "[runtime]") {
     ctx_card.set_cardinal_tensor_labels(ctx.cardinal_tensor_labels());
     CHECK(ctx_card == ctx);
 
+    // a comparer re-installed through its shared pointer keeps equality
+    auto ctx_same_cmp = ctx;
+    ctx_same_cmp.set_index_comparer(ctx.index_comparer_ptr())
+        .set_index_pair_comparer(ctx.index_pair_comparer_ptr());
+    CHECK(ctx_same_cmp == ctx);
+    CHECK(ctx_same_cmp.version() != ctx.version());
+    CHECK(Context(ctx).set_index_comparer(ctx.index_comparer()) != ctx);
+
     // chaining
     auto ctx_chain = ctx;
     CHECK(&ctx_chain.set_tensor_canonicalizer(L"Q", null_canon)

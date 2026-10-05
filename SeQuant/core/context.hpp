@@ -256,6 +256,14 @@ class Context {
   /// \return the object used by tensor canonicalizers to compare pairs of
   /// Index objects
   const tensor_index_pair_comparer_t& index_pair_comparer() const;
+  /// \return the shared object that index_comparer() refers to; passing it to
+  /// set_index_comparer() keeps the context equal to its unmodified copies
+  std::shared_ptr<const tensor_index_comparer_t> index_comparer_ptr() const;
+  /// \return the shared object that index_pair_comparer() refers to; passing
+  /// it to set_index_pair_comparer() keeps the context equal to its
+  /// unmodified copies
+  std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer_ptr()
+      const;
   /// \return Tensor labels with lexicographic preference (in order)
   const container::vector<std::wstring>& cardinal_tensor_labels() const;
 
@@ -323,10 +331,23 @@ class Context {
   /// \param comparer a nonempty Index comparer
   /// \return ref to `*this`, for chaining
   Context& set_index_comparer(tensor_index_comparer_t comparer);
+  /// Sets the Index comparer used by tensor canonicalizers to a shared object
+  /// \param comparer a nonnull pointer to a nonempty Index comparer, e.g.
+  /// one obtained from index_comparer_ptr()
+  /// \return ref to `*this`, for chaining
+  Context& set_index_comparer(
+      std::shared_ptr<const tensor_index_comparer_t> comparer);
   /// Sets the Index pair comparer used by tensor canonicalizers
   /// \param comparer a nonempty Index pair comparer
   /// \return ref to `*this`, for chaining
   Context& set_index_pair_comparer(tensor_index_pair_comparer_t comparer);
+  /// Sets the Index pair comparer used by tensor canonicalizers to a shared
+  /// object
+  /// \param comparer a nonnull pointer to a nonempty Index pair comparer,
+  /// e.g. one obtained from index_pair_comparer_ptr()
+  /// \return ref to `*this`, for chaining
+  Context& set_index_pair_comparer(
+      std::shared_ptr<const tensor_index_pair_comparer_t> comparer);
   /// Sets the cardinal Tensor labels
   /// \param labels the complete list of cardinal labels, without duplicates;
   /// the default labels (reserved::antisymm_label(), reserved::symm_label(),
@@ -386,6 +407,8 @@ class Context {
 /// \note index space registries and cardinal tensor labels are compared by
 /// value; tensor canonicalizers and index comparers by identity, hence
 /// a comparer replaced by a behaviourally identical one compares unequal
+/// (re-install a comparer through its shared pointer, e.g.
+/// Context::index_comparer_ptr(), to keep contexts equal)
 /// \note the versions of the contexts are ignored
 bool operator==(const Context& ctx1, const Context& ctx2);
 
