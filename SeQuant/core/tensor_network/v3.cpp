@@ -1225,6 +1225,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   index_vertices.resize(edges_.size() + pure_proto_indices_.size(),
                         uninitialized_vertex);
 
+  const bool strict_braket_symmetry =
+      get_default_context().assert_strict_braket_symmetry();
   for (std::size_t i = 0; i < edges_.size(); ++i) {
     const Edge &current_edge = edges_[i];
 
@@ -1291,7 +1293,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // strict bra-ket sanity checks
     {
-      if (get_default_context().assert_strict_braket_symmetry()) {
+      if (strict_braket_symmetry) {
         // dummy (anonymous) edges to
         // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
         // or 1 bra and 1 ket index
