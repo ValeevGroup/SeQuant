@@ -20,11 +20,13 @@
 
 #include <atomic>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <latch>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <set>
 #include <string>
 #include <thread>
@@ -526,5 +528,112 @@ TEST_CASE("scoped contexts", "[runtime]") {
       CHECK(seen == v0);
     }
     CHECK(current_context_version() == v0);
+  }
+}
+
+TEST_CASE("parallel exceptions", "[runtime]") {
+  using namespace sequant;
+
+  struct ItemError : Exception {
+    explicit ItemError(int item)
+        : Exception("item " + std::to_string(item)), item(item) {}
+    int item;
+  };
+  auto rethrown_item = [](const std::exception_ptr& e) {
+    try {
+      std::rethrow_exception(e);
+    } catch (const ItemError& error) {
+      return error.item;
+    } catch (...) {
+    }
+    return -1;
+  };
+
+  const auto nthreads = num_threads();
+  set_num_threads(4);
+  auto restore_nthreads = sequant::detail::make_scope_exit(
+      [nthreads] { set_num_threads(nthreads); });
+
+  std::vector<int> items(16);
+  std::iota(items.begin(), items.end(), 0);
+
+  SECTION("for_each rethrows a single exception as is") {
+    std::atomic<int> ran = 0;
+    CHECK_THROWS_AS(sequant::for_each(items,
+                                      [&ran](int& i) {
+                                        ++ran;
+                                        if (i == 5) throw ItemError(i);
+                                      }),
+                    ItemError);
+    // the other items were not abandoned
+    CHECK(ran == 16);
+  }
+
+  SECTION("for_each collects several exceptions, by item") {
+    try {
+      sequant::for_each(items, [](int& i) {
+        if (i % 5 == 1) throw ItemError(i);
+      });
+      FAIL("no exception");
+    } catch (const ParallelExceptions& e) {
+      REQUIRE(e.exceptions().size() == 3);
+      for (std::size_t k = 0; k != 3; ++k) {
+        CHECK(e.exceptions()[k].first == 5 * k + 1);
+        CHECK(rethrown_item(e.exceptions()[k].second) ==
+              static_cast<int>(5 * k + 1));
+      }
+      CHECK(std::string(e.what()).find("item 1") != std::string::npos);
+    }
+  }
+
+  SECTION("nested exceptions are attributed to the outer item") {
+    std::vector<int> outer{0, 1, 2};
+    try {
+      sequant::for_each(outer, [&items](int& o) {
+        if (o == 0) return;
+        sequant::for_each(items, [o](int& i) {
+          if (i < o) throw ItemError(i);
+        });
+      });
+      FAIL("no exception");
+    } catch (const ParallelExceptions& e) {
+      // item 1 throws once (rethrown as is), item 2 twice (ParallelExceptions)
+      REQUIRE(e.exceptions().size() == 3);
+      CHECK(e.exceptions()[0].first == 1);
+      CHECK(e.exceptions()[1].first == 2);
+      CHECK(e.exceptions()[2].first == 2);
+    }
+  }
+
+  SECTION("transform_reduce") {
+    CHECK(sequant::transform_reduce(items, 0, std::plus<int>{},
+                                    [](int i) { return i; }) == 120);
+    CHECK_THROWS_AS(sequant::transform_reduce(items, 0, std::plus<int>{},
+                                              [](int i) {
+                                                if (i == 7) throw ItemError(i);
+                                                return i;
+                                              }),
+                    ItemError);
+    CHECK_THROWS_AS(sequant::transform_reduce(items, 0, std::plus<int>{},
+                                              [](int i) {
+                                                if (i > 13) throw ItemError(i);
+                                                return i;
+                                              }),
+                    ParallelExceptions);
+  }
+
+  SECTION("parallel_do") {
+    CHECK_THROWS_AS(sequant::parallel_do([](int thread_id) {
+                      if (thread_id == 0) throw ItemError(thread_id);
+                    }),
+                    ItemError);
+    try {
+      sequant::parallel_do([](int thread_id) { throw ItemError(thread_id); });
+      FAIL("no exception");
+    } catch (const ParallelExceptions& e) {
+      REQUIRE(e.exceptions().size() == 4);
+      for (std::size_t k = 0; k != 4; ++k)
+        CHECK(rethrown_item(e.exceptions()[k].second) == static_cast<int>(k));
+    }
   }
 }
