@@ -159,7 +159,6 @@ int main(int argc, char* argv[]) {
   std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
   std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
-  sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
       sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
                         .vacuum = Vacuum::SingleProduct}));

@@ -52,6 +52,21 @@ namespace {
 }
 }  // namespace
 
+TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
+  using namespace sequant;
+  using mbpt::qns_t;
+  const auto fid = Expr::get_type_id<mbpt::FOperator<qns_t>>();
+  const auto bid = Expr::get_type_id<mbpt::BOperator<qns_t>>();
+  REQUIRE(fid != bid);
+  REQUIRE(Expr::get_type_id<mbpt::FOperatorBase>() != fid);
+  REQUIRE(Expr::get_type_id<mbpt::BOperatorBase>() != bid);
+  REQUIRE(Expr::type_rank_of(fid) == Expr::default_type_rank);
+  REQUIRE(Expr::type_rank_of(bid) == Expr::default_type_rank);
+  REQUIRE(mbpt::FOperator<qns_t>::static_type_name() ==
+          "sequant::mbpt::Operator<sequant::mbpt::QuantumNumberChange<int64,"
+          "sequant::mbpt::default_qns_tag>,FermiDirac>");
+}
+
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
   SECTION("registry") {
     using namespace sequant::mbpt;

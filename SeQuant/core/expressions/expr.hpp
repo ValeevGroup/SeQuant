@@ -9,12 +9,17 @@
 
 #include <boost/core/demangle.hpp>
 
-#include <atomic>
+#include <concepts>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <typeindex>
+#include <typeinfo>
+#include <utility>
 
 namespace sequant {
 
@@ -37,6 +42,62 @@ inline void toggle_adjoint_label(std::wstring &label) {
     label.pop_back();
   else
     label.push_back(adjoint_label);
+}
+
+namespace detail {
+
+/// @return the 64-bit FNV-1a hash of @p str
+constexpr std::uint64_t fnv1a_64(std::string_view str) {
+  std::uint64_t hash = 0xcbf29ce484222325ull;
+  for (const char c : str) {
+    hash ^= static_cast<unsigned char>(c);
+    hash *= 0x100000001b3ull;
+  }
+  return hash;
+}
+
+/// @return the decimal representation of @p n , for composing Expr type names
+constexpr std::string uint_to_string(std::uint64_t n) {
+  std::string result;
+  do {
+    result.insert(result.begin(), static_cast<char>('0' + n % 10));
+    n /= 10;
+  } while (n != 0);
+  return result;
+}
+
+/// @return the signature of this function as spelled by the compiler, which
+/// names @c T ; deterministic for a given compiler, but not portable across
+/// compilers
+template <typename T>
+constexpr std::string compiler_type_name() {
+#if defined(_MSC_VER)
+  return __FUNCSIG__;
+#else
+  return __PRETTY_FUNCTION__;
+#endif
+}
+
+}  // namespace detail
+
+/// @return `T::static_type_name(std::type_identity<T>{})` if @c T declares
+/// it, else a name derived from the compiler (see detail::compiler_type_name)
+/// @note this is the name used by Expr::get_type_id ; a class template that
+/// declares `static_type_name` composes it from the names of its template
+/// arguments via this function
+/// @note the `std::type_identity<T>` parameter, which does not convert to
+/// `std::type_identity` of a base, keeps a derived class from picking up the
+/// name its base declares
+template <typename T>
+constexpr std::string type_name_of() {
+  if constexpr (requires {
+                  {
+                    T::static_type_name(std::type_identity<T>{})
+                  } -> std::convertible_to<std::string>;
+                })
+    return std::string(T::static_type_name(std::type_identity<T>{}));
+  else
+    return detail::compiler_type_name<T>();
 }
 
 /// @brief Base expression class
@@ -81,7 +142,12 @@ inline void toggle_adjoint_label(std::wstring &label) {
 class Expr : public std::enable_shared_from_this<Expr> {
  public:
   using hash_type = std::size_t;
-  using type_id_type = int;  // to speed up comparisons
+  using type_id_type = std::uint64_t;
+  using type_rank_type = std::uint8_t;
+
+  /// rank of an Expr type that does not declare `type_rank`
+  /// @sa Expr::get_type_id
+  static constexpr type_rank_type default_type_rank = 128;
 
   Expr() = default;
   virtual ~Expr() = default;
@@ -285,19 +351,51 @@ class Expr : public std::enable_shared_from_this<Expr> {
     }
   }
 
-  /// @return (unique) type id of class T
-  template <typename T>
-  static type_id_type get_type_id() {
-    return type_id_accessor<T>();
+  /// @return the type id of a type of rank @p rank named @p name : @p rank in
+  /// the top 8 bits, the top 56 bits of `fnv1a_64(name)` below them
+  static constexpr type_id_type make_type_id(type_rank_type rank,
+                                             std::string_view name) {
+    return (static_cast<type_id_type>(rank) << 56) |
+           (detail::fnv1a_64(name) >> 8);
   }
 
-  /// sets (unique) type id of class T
-  /// @param id the value of type id of class T
-  /// @note since get_type_id does not check for duplicates, it's user's
-  /// responsiblity to make sure that there are no collisions between type ids
+  /// @return the rank encoded in type id @p id
+  /// @sa Expr::make_type_id
+  static constexpr type_rank_type type_rank_of(type_id_type id) {
+    return static_cast<type_rank_type>(id >> 56);
+  }
+
+  /// @return the (unique) type id of class T
+  /// @details The id is `make_type_id(rank, name)`, where `rank` is
+  /// `T::type_rank` (a `static constexpr Expr::type_rank_type`) if
+  /// @c T declares it, else Expr::default_type_rank , and `name` is
+  /// `sequant::type_name_of<T>()`. Hence Expr::operator< orders unlike types by
+  /// rank first. A type whose relative order must not depend on the compiler
+  /// declares `static constexpr std::string
+  /// static_type_name(std::type_identity<Self> = {})`; `constexpr` makes it
+  /// usable in constant expressions, but is not required. A derived class
+  /// inherits its base's `type_rank` but not its name, so unless it declares
+  /// its own name it gets the compiler-derived one. A type in an unnamed
+  /// namespace declares a name if another translation unit may define one of
+  /// the same name, since types are told apart by mangled name and such a pair
+  /// would silently share an id.
+  /// @throw sequant::Exception if a type of another mangled name already has
+  /// this id
   template <typename T>
-  static void set_type_id(type_id_type id) {
-    type_id_accessor<T>() = id;
+  static type_id_type get_type_id() {
+    static const type_id_type id = [] {
+      const std::string name = sequant::type_name_of<T>();
+      type_rank_type rank = default_type_rank;
+      if constexpr (requires { T::type_rank; }) {
+        static_assert(std::in_range<type_rank_type>(T::type_rank),
+                      "type_rank must fit in Expr::type_rank_type");
+        rank = static_cast<type_rank_type>(T::type_rank);
+      }
+      const type_id_type result = make_type_id(rank, name);
+      register_type_id(result, name, typeid(T));
+      return result;
+    }();
+    return id;
   }
 
   /// @tparam T an Expr type
@@ -459,20 +557,29 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
  private:
-  /// @return returns next type id in the grand class list
-  static type_id_type get_next_type_id() {
-    static std::atomic<type_id_type> grand_type_id = 0;
-    return ++grand_type_id;
-  }
-
-  /// sets (unique) type id of class T
-  /// @param id the value of type id of class T
-  template <typename T>
-  static type_id_type &type_id_accessor() {
-    static type_id_type type_id = get_next_type_id();
-    return type_id;
-  }
+  /// records that type @p type , named @p name , has type id @p id
+  /// @throw sequant::Exception if @p id is already recorded for a type of
+  /// another mangled name
+  static void register_type_id(type_id_type id, const std::string &name,
+                               std::type_index type);
 };  // class Expr
+
+/// ranks (`type_rank`) of SeQuant's own Expr types; Expr::operator< orders
+/// unlike types by rank first, so this is their order. Spaced so that a new
+/// type can be inserted between them; types of Expr::default_type_rank sort
+/// between `power` and `boperator`.
+namespace expr_type_rank {
+inline constexpr Expr::type_rank_type tensor = 10;
+inline constexpr Expr::type_rank_type product = 20;
+inline constexpr Expr::type_rank_type constant = 30;
+inline constexpr Expr::type_rank_type sum = 40;
+inline constexpr Expr::type_rank_type variable = 50;
+inline constexpr Expr::type_rank_type power = 60;
+inline constexpr Expr::type_rank_type boperator = 250;
+inline constexpr Expr::type_rank_type foperator = 251;
+inline constexpr Expr::type_rank_type bnoperator = 252;
+inline constexpr Expr::type_rank_type fnoperator = 253;
+}  // namespace expr_type_rank
 
 static_assert(std::ranges::sized_range<Expr>);
 static_assert(std::ranges::bidirectional_range<Expr>);
