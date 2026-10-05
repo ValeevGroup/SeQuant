@@ -810,6 +810,17 @@ TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
     auto zero = make(Symmetry::Symm);
     canonicalize(zero);
     REQUIRE(zero->is_zero());
+    // a zero product keeps no factors, so zeros of different inputs agree
+    REQUIRE(zero->as<Product>().factors().empty());
+    {
+      ExprPtr other_zero =
+          ex<Tensor>(L"t", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"},
+                     Symmetry::Symm) *
+          ex<FNOperator>(cre({L"a_2", L"a_1"}), ann({L"i_1", L"i_2"}));
+      canonicalize(other_zero);
+      REQUIRE(*other_zero == *zero);
+      REQUIRE(other_zero->hash_value() == zero->hash_value());
+    }
     simplify(zero);
     REQUIRE(is_zero(zero));
 

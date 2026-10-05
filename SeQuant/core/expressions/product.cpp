@@ -151,7 +151,13 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
                      SEQUANT_ASSERT(exprptr);
                      return exprptr;
                    });
-    if (canon_factor) scalar_ *= canon_factor->template as<Constant>().value();
+    if (canon_factor) {
+      const auto &factor = canon_factor->template as<Constant>();
+      scalar_ *= factor.value();
+      // a network that vanishes by symmetry is not canonicalized; its tensors
+      // would make the zero product print, hash and compare as nonzero ones
+      if (factor.is_zero()) factors_.clear();
+    }
     this->reset_hash_value();
   } else {  // if contains non-tensors, do commutation-checking resort
 
