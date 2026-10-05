@@ -92,8 +92,9 @@ endif (NOT TARGET Threads::Threads)
 
 set(SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB @SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB@)
 if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB AND NOT TARGET TBB::tbb)
-    get_filename_component(TBB_DIR "@TBB_CONFIG@" DIRECTORY)
-    find_dependency(TBB CONFIG REQUIRED HINTS "${TBB_DIR}")
+    get_filename_component(_sequant_tbb_dir "@TBB_CONFIG@" DIRECTORY)
+    find_dependency(TBB CONFIG REQUIRED HINTS "${_sequant_tbb_dir}")
+    unset(_sequant_tbb_dir)
 endif()
 
 # Include library IMPORT targets
