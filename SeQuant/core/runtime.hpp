@@ -60,22 +60,22 @@ inline int num_threads() { return detail::nthreads_accessor(); }
 /// lambda(thread_id) where @c thread_id is an integer in
 ///        @c [0,nthreads) .
 /// @sa get_num_threads()
-/// @note each instance is invoked on its own copy of @p lambda and sees the
-/// scoped contexts of the calling thread
+/// @note each spawned thread invokes its own copy of @p lambda, the calling
+/// thread @p lambda itself; every instance sees the scoped contexts of the
+/// calling thread
 template <typename Lambda>
 void parallel_do(Lambda&& lambda) {
   std::vector<std::thread> threads;
   const auto nthreads = num_threads();
   const auto overlays = detail::implicit_context_overlays();
-  auto task = [&overlays, lambda](int thread_id) mutable {
-    detail::ImplicitContextOverlaysScope scope(overlays);
-    lambda(thread_id);
-  };
   for (int thread_id = 0; thread_id != nthreads; ++thread_id) {
     if (thread_id != nthreads - 1)
-      threads.push_back(std::thread(task, thread_id));
+      threads.push_back(std::thread([&overlays, lambda, thread_id]() mutable {
+        detail::ImplicitContextOverlaysScope scope(overlays);
+        lambda(thread_id);
+      }));
     else
-      task(thread_id);
+      lambda(thread_id);
   }  // threads_id
   for (int thread_id = 0; thread_id < nthreads - 1; ++thread_id)
     threads[thread_id].join();
