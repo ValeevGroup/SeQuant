@@ -909,6 +909,37 @@ TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
     }
   }
 
+  // a bra<->ket symmetric tensor's bra bundle can map onto its ket bundle:
+  // p1<->p3, p2<->p4 maps g onto itself (+1) and is odd on u
+  SECTION("automorphism exchanging the bra and ket of a tensor") {
+    auto make = [](Symmetry w_symm) {
+      return ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, aux{},
+                        Symmetry::Antisymm, BraKetSymmetry::Symm) *
+             ex<Tensor>(L"u", bra{L"p_1", L"p_3"}, ket{}, Symmetry::Antisymm) *
+             ex<Tensor>(L"w", bra{L"p_2", L"p_4"}, ket{}, w_symm);
+    };
+    auto zero = make(Symmetry::Symm);
+    simplify(zero);
+    REQUIRE(is_zero(zero));
+
+    // w antisymmetric too: the exchange is even
+    auto nonzero = make(Symmetry::Antisymm);
+    simplify(nonzero);
+    REQUIRE(!nonzero->is_zero());
+  }
+
+  // only topological canonicalization looks for automorphisms
+  SECTION("rapid canonicalization does not detect a zero") {
+    auto expr = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                           Symmetry::Symm) *
+                ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+    expr->canonicalize(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizationMethod::Rapid));
+    REQUIRE(!expr->is_zero());
+    canonicalize(expr);
+    REQUIRE(expr->is_zero());
+  }
+
   // odd-size bundles: antisymmetric in a1,a2,a3 against symmetric
   SECTION("odd-size antisymmetric bundle contracted with symmetric one") {
     auto expr = deserialize(L"X{a1,a2,a3;i1}:A Y{;a1,a2,a3}:S");

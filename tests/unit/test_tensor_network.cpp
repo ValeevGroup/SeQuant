@@ -592,6 +592,11 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
       auto h_symm = ex<Tensor>(L"h", bra{L"i_2"}, ket{L"i_3"}, aux{},
                                Symmetry::Nonsymm, BraKetSymmetry::Symm);
       REQUIRE_NOTHROW(canonicalize(h_symm * op));
+
+      // summands are canonicalized in parallel; the exception still reaches
+      // the caller
+      ExprPtr sum = h_ok * op + h * op;
+      REQUIRE_THROWS_AS(sequant::canonicalize(sum), Exception);
     }
 
     {  // with no external indices, hence no named indices whatsoever
