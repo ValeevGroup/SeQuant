@@ -131,8 +131,8 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetwork(tlist);
-    auto md =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+    auto md = tn.canonicalize_slots(
+        get_default_context_snapshot().cardinal_tensor_labels());
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
     canon_indices_ = md.get_indices<index_vector>();
@@ -566,7 +566,8 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract,
       for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
 
       auto canon = tn.canonicalize_slots(
-          TensorCanonicalizer::cardinal_tensor_labels(), &named_indices);
+          get_default_context_snapshot().cardinal_tensor_labels(),
+          &named_indices);
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       EvalExpr result =

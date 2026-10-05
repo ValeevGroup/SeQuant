@@ -1,4 +1,5 @@
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
@@ -122,7 +123,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
       TN tn(this->factors_);
       if constexpr (TN::version() == 3) {
         canon_factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), opts);
+            get_default_context_snapshot().cardinal_tensor_labels(), opts);
       } else {
         using NamedIndexSet = tensor_network::NamedIndexSet;
         std::shared_ptr<NamedIndexSet> named_indices =
@@ -131,7 +132,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
                 : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
                                                   opts.named_indices->end());
         canon_factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(),
+            get_default_context_snapshot().cardinal_tensor_labels(),
             opts.method == CanonicalizationMethod::Rapid, named_indices.get());
       }
       return std::pair{std::move(tn), canon_factor};
@@ -155,8 +156,8 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
   } else {  // if contains non-tensors, do commutation-checking resort
 
     // comparer that respects cardinal tensor labels
-    auto &cardinal_tensor_labels =
-        TensorCanonicalizer::cardinal_tensor_labels();
+    const auto ctx = get_default_context_snapshot();
+    const auto &cardinal_tensor_labels = ctx.cardinal_tensor_labels();
     auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                    const ExprPtr &second) {
       if (first->is<Labeled>() && second->is<Labeled>()) {

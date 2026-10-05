@@ -3,6 +3,7 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -682,7 +683,7 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
     auto e = deserialize(spec);
     ExprPtrList tl{e};
     TensorNetwork tn(tl);
-    return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+    return tn.canonicalize_slots(get_default_context().cardinal_tensor_labels())
         .hash_value();
   };
 
@@ -693,4 +694,94 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   CHECK(canon_hash(L"X{a1;;i1}:N-S-N") == canon_hash(L"X{;a1;i1}:N-S-N"));
   // Without braket symmetry the two forms must remain distinct.
   CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
+}
+
+TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
+  using namespace sequant;
+
+  auto Q = [](std::initializer_list<std::wstring_view> b,
+              std::initializer_list<std::wstring_view> k) {
+    return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
+  };
+
+  SECTION("Tensor::canonicalize uses the context's default canonicalizer") {
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(
+                  L"", std::make_shared<NullTensorCanonicalizer>()));
+      auto q = Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"});
+      CHECK(q->as<Tensor>().canonicalize() == nullptr);
+      CHECK(*q == *Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"}));
+    }
+    auto q = Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"});
+    const auto bp = q->as<Tensor>().canonicalize();
+    REQUIRE(bp);
+    CHECK(bp->as<Constant>().value<int>() == -1);
+    CHECK(*q == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+  }
+
+  SECTION("TN canonicalization uses the context's label canonicalizer") {
+    auto canonicalized = [&Q] {
+      TensorNetwork tn(ExprPtrList{Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
+      const auto byproduct =
+          tn.canonicalize(get_default_context().cardinal_tensor_labels(),
+                          {.method = CanonicalizationMethod::Complete});
+      const int phase = byproduct ? byproduct->as<Constant>().value<int>() : 1;
+      return std::make_pair(std::dynamic_pointer_cast<Expr>(tn.tensors().at(0)),
+                            phase);
+    };
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(
+                  L"Q", std::make_shared<NullTensorCanonicalizer>()));
+      const auto [tensor, phase] = canonicalized();
+      CHECK(*tensor == *Q({L"i_1", L"i_2"}, {L"a_2", L"a_1"}));
+      CHECK(phase == 1);
+    }
+    const auto [tensor, phase] = canonicalized();
+    CHECK(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+    CHECK(phase == -1);
+  }
+
+  SECTION("DefaultTensorCanonicalizer uses the context's index comparer") {
+    const auto default_cmp = TensorCanonicalizer::default_index_comparer();
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_index_comparer(
+                  [default_cmp](const Index& idx1, const Index& idx2) {
+                    return default_cmp(idx2, idx1);
+                  }));
+      auto q = Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"});
+      q->as<Tensor>().canonicalize();
+      CHECK(*q == *Q({L"i_2", L"i_1"}, {L"a_2", L"a_1"}));
+    }
+    auto q = Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"});
+    CHECK(q->as<Tensor>().canonicalize() == nullptr);
+    CHECK(*q == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+  }
+
+  SECTION("Product canonicalization follows the context's cardinal labels") {
+    auto canonical_labels = [] {
+      auto product = ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
+                     ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
+      canonicalize(product, {.method = CanonicalizationMethod::Complete});
+      REQUIRE(product->is<Product>());
+      std::vector<std::wstring> labels;
+      for (const auto& factor : product->as<Product>().factors())
+        labels.emplace_back(factor->as<Tensor>().label());
+      return labels;
+    };
+    const std::vector<std::wstring> y_first{L"Y", L"Z"};
+    const std::vector<std::wstring> z_first{L"Z", L"Y"};
+    CHECK(canonical_labels() == y_first);
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context()).set_cardinal_tensor_labels({L"Z"}));
+      CHECK(canonical_labels() == z_first);
+    }
+    CHECK(canonical_labels() == y_first);
+  }
 }

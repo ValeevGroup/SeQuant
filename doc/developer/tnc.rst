@@ -77,11 +77,17 @@ Subtleties for contributors
   ``DefaultTensorCanonicalizer::apply`` (marked with a ``TODO`` in both places).
 - ``TensorNetworkV3::factorize()`` is unimplemented (aborts).
 - Canonicalizing a *single* tensor's own bra/ket order — as opposed to a whole network — is a separate, deliberately pluggable concern:
-  :class:`sequant::TensorCanonicalizer` is a registry base class (``register_instance``/``instance_ptr``, keyed by tensor label) that a
-  contributor can implement against to customize how one tensor's slots get ordered, without touching the network-wide bliss machinery
-  above. ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort
-  (rather than using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee
-  about using swaps to get there.
+  :class:`sequant::TensorCanonicalizer` is a base class that a contributor can implement against to customize how one tensor's slots get
+  ordered, without touching the network-wide bliss machinery above. Instances are owned by the :class:`sequant::Context`, keyed by tensor
+  label. Inside network canonicalization (``TensorNetworkV3::do_individual_canonicalization``) a tensor uses
+  ``nondefault_tensor_canonicalizer_ptr(label)`` of a :func:`sequant::get_default_context_snapshot` taken once per network, i.e. the
+  entry for exactly its own label, and otherwise the network's own canonicalizer (``DefaultTensorCanonicalizer`` or
+  ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` on a lone tensor. Since
+  the lookup goes through the current context, a scoped context (see :doc:`/user/guide/context`) overrides it for the scope's duration,
+  on the threads that see that scope.
+  ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort (rather than
+  using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee about
+  using swaps to get there.
 
 Debugging and tests
 ------------------------

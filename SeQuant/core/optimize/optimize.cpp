@@ -252,8 +252,8 @@ ExprPtr optimize_impl(ExprPtr const& expr, OptimizeOptions const& opts,
     //   2. The binarize() pass below DOES read Index::label() (a lazy cache
     //      write) on the optimized summands, so it is run *sequentially, after*
     //      for_each() has joined -- never inside do_term().
-    // The default Context and cardinal_tensor_labels must also be configured
-    // before entering here (their writes are unsynchronized unless
+    // The default Context (including its cardinal tensor labels) must also be
+    // configured before entering here (their writes are unsynchronized unless
     // SEQUANT_CONTEXT_MANIPULATION_THREADSAFE); optimize() only reads them.
     if (parallel_outer && in_sum.size() > 1) {
       auto indices = ranges::views::iota(std::size_t{0}, in_sum.size());

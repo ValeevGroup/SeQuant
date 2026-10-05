@@ -11,18 +11,26 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/context.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 #include <cassert>
 #include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace sequant {
 namespace mbpt {
 
 void load(Convention conv, SpinConvention spconv) {
+  if (sequant::detail::implicit_context_overlay<
+          container::map<Statistics, sequant::Context>>())
+    throw Exception(
+        "mbpt::load: cannot install a process-wide context while a scoped "
+        "context is active on this thread");
   std::shared_ptr<IndexSpaceRegistry> isr;
   switch (conv) {
     case Convention::Minimal:
@@ -44,8 +52,10 @@ void load(Convention conv, SpinConvention spconv) {
       isr = make_legacy_spaces(spconv);
       break;
   }
-  set_default_context({.index_space_registry_shared_ptr = isr,
-                       .vacuum = Vacuum::SingleProduct});
+  sequant::Context ctx = get_default_context_snapshot();
+  ctx.set(isr);
+  ctx.set(Vacuum::SingleProduct);
+  set_default_context(std::move(ctx));
 }
 
 void add_fermi_spin(IndexSpaceRegistry& isr) {

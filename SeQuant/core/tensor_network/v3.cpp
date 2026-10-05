@@ -7,6 +7,7 @@
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -1589,9 +1590,10 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
     const TensorCanonicalizer &canonicalizer) {
   ExprPtr byproduct = ex<Constant>(1);
 
+  const auto ctx = get_default_context_snapshot();
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
-        TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
+        ctx.nondefault_tensor_canonicalizer_ptr(tensor->_label());
     const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 
