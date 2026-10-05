@@ -79,7 +79,7 @@ class Power : public Expr {
   /// requires replacing the integer-square-root step with an integer n-th-root.
   static void flatten(ExprPtr& expr);
 
-  static constexpr type_rank_type type_rank = 60;
+  static constexpr type_rank_type type_rank = expr_type_rank::power;
   static constexpr std::string static_type_name(
       std::type_identity<Power> = {}) {
     return "sequant::Power";

@@ -1440,7 +1440,10 @@ TEST_CASE("expr_type_id", "[elements]") {
     REQUIRE(std::is_sorted(ids_reverse.rbegin(), ids_reverse.rend()));
     REQUIRE(std::adjacent_find(ids_reverse.begin(), ids_reverse.end()) ==
             ids_reverse.end());
-    const std::vector<int> ranks = {253, 252, 251, 250, 60, 50, 40, 30, 20, 10};
+    namespace r = expr_type_rank;
+    const std::vector<int> ranks = {
+        r::fnoperator, r::bnoperator, r::foperator, r::boperator, r::power,
+        r::variable,   r::sum,        r::constant,  r::product,   r::tensor};
     for (std::size_t i = 0; i != ids_reverse.size(); ++i)
       REQUIRE(rank_of(ids_reverse[i]) == ranks[i]);
   }

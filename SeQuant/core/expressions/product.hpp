@@ -304,7 +304,7 @@ class Product : public Expr {
   /// @param[in] negate if true, scalar will be before conversion
   std::wstring to_latex(bool negate) const;
 
-  static constexpr type_rank_type type_rank = 20;
+  static constexpr type_rank_type type_rank = expr_type_rank::product;
   static constexpr std::string static_type_name(
       std::type_identity<Product> = {}) {
     return "sequant::Product";

@@ -908,7 +908,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     return mutated;
   }
 
-  static constexpr type_rank_type type_rank = 10;
+  static constexpr type_rank_type type_rank = expr_type_rank::tensor;
   static constexpr std::string static_type_name(
       std::type_identity<Tensor> = {}) {
     return "sequant::Tensor";

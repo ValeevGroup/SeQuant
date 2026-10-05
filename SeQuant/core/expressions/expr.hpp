@@ -550,6 +550,23 @@ class Expr : public std::enable_shared_from_this<Expr> {
                                std::type_index type);
 };  // class Expr
 
+/// ranks (`type_rank`) of SeQuant's own Expr types; Expr::operator< orders
+/// unlike types by rank first, so this is their order. Spaced so that a new
+/// type can be inserted between them; types of Expr::default_type_rank sort
+/// between `power` and `boperator`.
+namespace expr_type_rank {
+inline constexpr Expr::type_rank_type tensor = 10;
+inline constexpr Expr::type_rank_type product = 20;
+inline constexpr Expr::type_rank_type constant = 30;
+inline constexpr Expr::type_rank_type sum = 40;
+inline constexpr Expr::type_rank_type variable = 50;
+inline constexpr Expr::type_rank_type power = 60;
+inline constexpr Expr::type_rank_type boperator = 250;
+inline constexpr Expr::type_rank_type foperator = 251;
+inline constexpr Expr::type_rank_type bnoperator = 252;
+inline constexpr Expr::type_rank_type fnoperator = 253;
+}  // namespace expr_type_rank
+
 static_assert(std::ranges::sized_range<Expr>);
 static_assert(std::ranges::bidirectional_range<Expr>);
 static_assert(std::ranges::random_access_range<Expr>);
