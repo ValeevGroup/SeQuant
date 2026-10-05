@@ -444,6 +444,17 @@ TEST_CASE("scoped contexts", "[runtime]") {
     CHECK(!q_canonicalizer_of(Statistics::FermiDirac));
   }
 
+  SECTION("mbpt::load refuses to run under a scoped context") {
+    const auto process_wide_version = current_context_version();
+    {
+      auto scoped = set_scoped_default_context(
+          with_q_canonicalizer(std::make_shared<NullTensorCanonicalizer>()));
+      CHECK_THROWS_AS(mbpt::load(), Exception);
+    }
+    CHECK(current_context_version() == process_wide_version);
+    CHECK(!q_canonicalizer());
+  }
+
   SECTION("the current version follows the effective context") {
     const auto v0 = current_context_version();
     CHECK(v0 == get_default_context().version());

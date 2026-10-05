@@ -62,7 +62,8 @@ The canonicalizer configuration is part of the ``Context`` value, so installing 
 ``Context::Options`` or ``Context{}``, or the one :func:`sequant::reset_default_context` restores, carries the default configuration.
 Set the canonicalizers and labels on the ``Context`` you install, or derive it from the current one
 (``Context(get_default_context())``). :func:`sequant::mbpt::load` does the latter: it sets only the index space registry and the
-vacuum on a copy of the current default context, so the rest of the configuration is kept.
+vacuum on a copy of the current default context, so the rest of the configuration is kept. It installs the copy process-wide, hence
+throws if the calling thread has a scoped context active, whose settings it would otherwise make permanent.
 :func:`sequant::Context::set_cardinal_tensor_labels` takes the complete list of cardinal labels: the defaults (the reserved labels
 for antisymmetrizers, symmetrizers and transpositions) are kept only if the list includes them, as the one returned by
 :func:`sequant::mbpt::cardinal_tensor_labels` does.

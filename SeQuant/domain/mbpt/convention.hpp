@@ -37,9 +37,10 @@ enum class SpinConvention {
 ///        single-product vacuum into the default Context
 ///
 /// Every other setting of the current default Context, including the
-/// canonicalizer configuration, is kept. On a thread with an active scoped
-/// context, load() copies that (effective) context and installs the result
-/// process-wide.
+/// canonicalizer configuration, is kept.
+/// @throw Exception if the calling thread has an active scoped context (see
+/// set_scoped_default_context()), whose settings would otherwise be
+/// installed process-wide
 void load(Convention conv = Convention::Minimal,
           SpinConvention spconv = SpinConvention::Default);
 
