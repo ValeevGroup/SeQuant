@@ -168,7 +168,7 @@ connections explicitly through ``EVOptions::connect``. ``default_op_connections(
 between the Hamiltonian (``h``, ``f``, ``f̃``, ``g``) and the cluster operator ``t``. Pairing ``use_connected_form = true`` with
 empty connectivity keeps disconnected terms that the commutator would have cancelled, so the result is wrong.
 
-The same trade-off shows up in :func:`CC::hbar() <sequant::mbpt::CC::hbar>`, which returns the connected form for a non-unitary ansatz; see :ref:`cc-hbar-connectivity`.
+The same trade-off shows up in :func:`CC::hbar() <sequant::mbpt::CC::hbar>`, which returns the connected form for a non-unitary ansatz when the reference is the Wick vacuum; see :ref:`cc-hbar-connectivity`.
 
 Examples
 --------
