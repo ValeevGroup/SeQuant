@@ -136,22 +136,24 @@ void assert_failed(
     }                                                                    \
   } while (0)
 
-/// Checks EXPR even when assertions are disabled. Uses the configured assertion
-/// behavior when enabled; otherwise throws sequant::Exception on failure.
-#define SEQUANT_ENFORCE(EXPR, ...) SEQUANT_ASSERT(EXPR, __VA_ARGS__)
+#define SEQUANT_ENFORCE_FAILED sequant::assert_failed
 #else
 #define SEQUANT_ASSERT(...) \
   do {                      \
   } while (0)
 
+#define SEQUANT_ENFORCE_FAILED sequant::throw_failure
+#endif
+
+/// Checks EXPR even when assertions are disabled. Uses the configured assertion
+/// behavior when enabled; otherwise throws sequant::Exception on failure.
 #define SEQUANT_ENFORCE(EXPR, ...)                                    \
   do {                                                                \
     if (!(EXPR)) {                                                    \
-      sequant::throw_failure(                                         \
+      SEQUANT_ENFORCE_FAILED(                                         \
           SEQUANT_CHECK_MESSAGE(SEQUANT_ENFORCE, EXPR, __VA_ARGS__)); \
     }                                                                 \
   } while (0)
-#endif
 
 namespace sequant {
 [[noreturn]] void abort_msg(

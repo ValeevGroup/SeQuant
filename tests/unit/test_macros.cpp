@@ -86,7 +86,8 @@ TEST_CASE("macros", "[elements]") {
       REQUIRE_THROWS_WITH(
           fail_with_message(),
           Catch::Matchers::ContainsSubstring("invalid input") &&
-              Catch::Matchers::ContainsSubstring("1 == 0") &&
+              Catch::Matchers::ContainsSubstring(
+                  "SEQUANT_ENFORCE(1 == 0) failed") &&
               Catch::Matchers::ContainsSubstring("test_macros.cpp:3000"));
     }
   }
