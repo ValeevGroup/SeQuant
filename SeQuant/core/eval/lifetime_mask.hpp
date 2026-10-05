@@ -220,8 +220,8 @@ void stamp_lifetime_masks(R const& forest) {
 /// read by the forest-descent route only; one node sliced along different
 /// modes in different terms keeps each occurrence's own slicing here, and
 /// value identity (\c value_key_of) tells those occurrences apart. See the
-/// as-built design, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md section 5.4.
+/// developer guide, \c
+/// doc/developer/batched_evaluation.rst, "Loop identity and value identity".
 template <meta::eval_node Node>
 container::svector<Index> const& home_scope(Node const& n) noexcept {
   return n->occurrence_home();
@@ -233,7 +233,7 @@ container::svector<Index> const& home_scope(Node const& n) noexcept {
 /// different terms, or read whole in one term and sliced in another, keeps
 /// each occurrence's slicing; value identity (\c value_key_of) then tells the
 /// occurrences apart instead of the meet folding them to a whole home
-/// (explicit-cells design section 11). The table-driven engine's home; the
+/// ("Loop identity and value identity"). The table-driven engine's home; the
 /// forest-descent path keeps \c eval::stamp_lifetime_masks' meet.
 template <meta::eval_node_range R>
 void stamp_occurrence_homes(R const& forest) {
@@ -273,8 +273,10 @@ void stamp_occurrence_homes(R const& forest) {
 
 /// \brief The value key of a node: its node id (\c hash_value, the canonical
 /// colored graph of its tensor network, label-free) combined with the sorted
-/// canonical positions it is home-sliced on (explicit-cells design section
-/// 11). Equal to the node id when nothing is home-sliced, so every unbatched
+/// canonical positions it is home-sliced on (see "Loop identity and value
+/// identity" in
+/// doc/developer/batched_evaluation.rst). Equal to the node id when nothing is
+/// home-sliced, so every unbatched
 /// value keeps the identity it has today. Two occurrences are one value iff
 /// they are one node and are home-sliced on the same positions: one node
 /// sliced along two different modes of its array in two terms is two values,

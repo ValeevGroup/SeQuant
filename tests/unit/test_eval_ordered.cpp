@@ -1,5 +1,5 @@
-// MULTI-ROOT ordered evaluate (see the as-built design, section 8,
-// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md): one
+// MULTI-ROOT ordered evaluate (see the developer guide, "Executing the table",
+// doc/developer/batched_evaluation.rst): one
 // schedule built over SEVERAL INDEPENDENT root trees, returning one result
 // PER ROOT (a map, no cross-root summation), so a subexpression shared
 // across roots is built exactly once.

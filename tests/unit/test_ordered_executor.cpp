@@ -914,11 +914,11 @@ TEST_CASE(
 // multi-instance schedule LOCALLY in seconds (no cluster round-trip).
 //
 // This began life as a reproducer for the use-induced slicing of whole-produced
-// shared operands and the multi-level escape chain; both are built (as-built
-// design section 6.2,
-// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md), so the
-// REQUIRE_NOTHROW below is now the ACCEPTANCE, not a reproduction. It is listed
-// among the headline gates in as-built section 11; a failure here is a real
+// shared operands and the multi-level escape chain; both are built (see
+// "Placement, escapes, and pass splits",
+// doc/developer/batched_evaluation.rst), so the
+// REQUIRE_NOTHROW below is now the ACCEPTANCE, not a reproduction. A failure
+// here is a real
 // regression in the schedule builder or the executor, not a known bug.
 // ===========================================================================
 namespace {
@@ -2109,7 +2109,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
         }
       };
   scan(ordered.root);
-  // Under value identity (explicit-cells design section 11) the water-20
+  // Under value identity ("Loop identity and value identity") the water-20
   // default schedule no longer materializes a member across a split: the
   // later-pass reader of a nest-homed value was a merged-frame occurrence,
   // now its own value in its own nest. The mixed-pass shape stays pinned by
@@ -2803,7 +2803,8 @@ TEST_CASE(
       // Empty mode_order matches production; the base-key sort nests the
       // realized axes by base_key. Contracted axes nest cleanly; an external
       // occupied axis nests OUTERMOST and forces a non-innermost split, which
-      // IS implemented (as-built design section 6.3) -- the *_occ
+      // IS implemented ("Placement, escapes, and pass splits" in
+      // doc/developer/batched_evaluation.rst) -- the *_occ
       // configurations are headline gates, not expected failures. The catch
       // below stays as a report-fixture guard, not an expectation.
       ordered_opt =

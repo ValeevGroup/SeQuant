@@ -516,7 +516,7 @@ template <meta::eval_node_range R>
       auto const& dp_stamps = (*it->second)->node_slice_mask();
       // Positional: the representative node's home is labeled in its tree's
       // frame, vc.carried in the first occurrence's; positions are canonical
-      // across occurrences (explicit-cells design section 11), labels are
+      // across occurrences ("Loop identity and value identity"), labels are
       // not.
       {
         auto const& rep_carried = (*it->second)->canon_indices();

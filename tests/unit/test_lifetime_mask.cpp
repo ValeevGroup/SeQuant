@@ -396,8 +396,10 @@ TEST_CASE("home_scope is the per-occurrence home, not the sliced_modes meet",
   // DIFFERENT quantity from EvalExpr::sliced_modes (the meet that
   // eval::stamp_lifetime_masks stamps, read by the forest-descent route only);
   // value identity now tells two differently-sliced occurrences of one node
-  // apart via value_key rather than by folding them to a common home (as-built
-  // design section 5.4). This case pins BOTH halves: the accessor identity and
+  // apart via value_key rather than by folding them to a common home (see
+  // "Loop identity and value identity" in
+  // doc/developer/batched_evaluation.rst). This case pins BOTH halves: the
+  // accessor identity and
   // the deliberate divergence from the meet.
   Index const i{L"i_1"}, j{L"i_2"};
 

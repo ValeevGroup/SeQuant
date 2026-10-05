@@ -123,7 +123,7 @@ struct TableCell {
 /// different \c slice and \c invariant_on. The residual gap is upstream: when
 /// \c CellTableInputs::operands_of is absent the builder falls back to the
 /// de-duplicated \c depends_on and a self-contracting consumer gets one read
-/// instead of two (as-built design section 12.2).
+/// instead of two.
 struct Read {
   CellId consumer = 0;
   std::size_t operand_value_id = 0;
@@ -311,8 +311,7 @@ template <typename Candidates>
 /// walk of design rule 1 (visibility tracked along the real execution order of
 /// blocks), which is not implemented: visibility is decided instead from the
 /// cells' own scopes and their order in \p table.cells. It is named in the
-/// signature so adding that walk does not change every call site (as-built
-/// design section 12.2).
+/// signature so adding that walk does not change every call site.
 [[nodiscard]] inline container::vector<CellViolation> validate_cell_table(
     CellTable const& table, ScopeBlock const& /*root*/,
     std::function<std::size_t(LoopKey const&)> const& n_batches_of = {}) {

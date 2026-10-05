@@ -54,7 +54,7 @@ struct CellBuildState {
 };
 
 /// The home of value \p vid (the per-occurrence home of one of its forest
-/// nodes, \p nd, explicit-cells design section 11) translated positionally
+/// nodes, \p nd, "Loop identity and value identity") translated positionally
 /// into the rich cell's own frame -- the first occurrence's labels, which the
 /// table builder matches \c CellTableInputs::sliced_modes_of against. The
 /// node's home is labeled in its own tree; positions are canonical across

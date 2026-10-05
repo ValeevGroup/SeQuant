@@ -26,7 +26,7 @@ namespace sequant::eval {
 
 ///
 /// \brief Static peak-profile analysis over an eval forest (see
-/// `doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md`, section 5).
+/// `doc/developer/batched_evaluation.rst`, "Loop identity and value identity").
 ///
 /// Two sizing primitives (`detail::home_depth_of`, `detail::cell_footprint`),
 /// the forest linearization plus loop-identity pass (`compute_dag_boulevard`)
@@ -217,8 +217,8 @@ inline double peak_profile_replay(Schedule const& s) {
 ///
 /// These are what \c compute_dag_boulevard's conflict-aware union-find runs
 /// over: physical loops are connected components of occurrences, and a value's
-/// identity is derived from them (as-built design section 5.2, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md). Each record
+/// identity is derived from them ("Loop identity and value identity", \c
+/// doc/developer/batched_evaluation.rst). Each record
 /// carries its occurrence's physical binding of a relabeled mode plus its own
 /// \c carried / \c home / liveness / enclosing nest.
 ///
@@ -257,7 +257,8 @@ struct OccurrenceRec {
   /// batch loop that slices it (which member of its same-key group), or -1
   /// where the position is not a batched (loop-sliced) mode. Assigned by the
   /// union-find over producer->consumer slot connectivity in \c
-  /// compute_dag_boulevard (as-built design section 5.2; this file's header
+  /// compute_dag_boulevard ("Loop identity and value identity"; this file's
+  /// header
   /// comment carries the path). Parallel to \c carried.
   container::svector<int> loop_slot;
   /// Loop identity for the modes this occurrence's value contracts (reduces)
@@ -305,7 +306,7 @@ struct ValueCell {
                          //!< to its forest nodes; batched-slot-blind.
   std::size_t key = 0;   //!< the value id (\c value_key: node id combined
                          //!< with the home-sliced canonical positions,
-                         //!< explicit-cells design section 11) -- the
+                         //!< "Loop identity and value identity") -- the
                          //!< identity that folds occurrences into this cell.
                          //!< 0 (a hand-built cell) means "== hash"; read it
                          //!< through \c value_key_of(ValueCell const&).
@@ -339,7 +340,7 @@ struct ValueCell {
                     //!< compute_dag_boulevard's conflict-aware union-find
                     //!< runs over these records to derive physical loop
                     //!< identity, and value identity is derived from that
-                    //!< (as-built design section 5.2).
+                    //!< (see "Loop identity and value identity" above).
 };
 
 ///
@@ -621,8 +622,8 @@ RichSchedule compute_dag_boulevard(R const& forest,
   }
 
   // ---------------------------------------------------------------------
-  // Loop identity first, over occurrences (explicit-cells design section
-  // 11): a loop instance is a connected component of
+  // Loop identity first, over occurrences (see "Loop identity and value
+  // identity" above): a loop instance is a connected component of
   // (occurrence, position) nodes joined by producer->consumer edges within a
   // tree and by conflict-aware folds across trees; value identity is defined
   // after the components are numbered -- node id + (position, loop slot) of

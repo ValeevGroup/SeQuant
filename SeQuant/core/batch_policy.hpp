@@ -13,8 +13,8 @@ class Index;
 class Tensor;
 
 /// The two runtime execution models for batched evaluation (see
-/// `doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md`,
-/// sections 8 and 12.1):
+/// `doc/developer/batched_evaluation.rst`,
+/// "Two execution strategies"):
 ///   - \c forest_descent (default): one tree at a time,
 ///     `sequant::evaluate(Nodes const&, ...)`, unchanged.
 ///   - \c ordered: one fused, table-driven walk over the whole forest,
@@ -127,8 +127,8 @@ struct BatchPolicy {
   ///   ties by min peak (accepting the overage).
   ///
   /// See \c PeakBatchedModel::select_root (\c optimize/cost_model.hpp) and
-  /// the as-built design, \c
-  /// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md section 4.4.
+  /// the user guide, \c doc/user/guide/batching.rst,
+  /// "Deciding what to batch".
   double peak_threshold = std::numeric_limits<double>::infinity();
 };
 

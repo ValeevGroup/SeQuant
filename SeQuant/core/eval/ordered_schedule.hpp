@@ -801,9 +801,9 @@ inline ForkedSubchain fork_subchain(
 /// value carrying two same-key modes on different slots gets two nested
 /// loops, not one. A nest holding members of more than one pass additionally
 /// emits one sibling block per pass (latitude = pass), run in schedule order
-/// (see step 2b and \c forced_split_levels). See the as-built design
-/// section 6.1, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md.
+/// (see step 2b and \c forced_split_levels). See "Placement, escapes, and pass
+/// splits" in \c
+/// doc/developer/batched_evaluation.rst.
 ///
 /// \details Four-part algorithm, pure scheduling (no cost choice):
 ///
@@ -857,7 +857,8 @@ inline ForkedSubchain fork_subchain(
 ///     can close -- exactly consistent with an outer accumulator reading an
 ///     inner one. A chain may legitimately skip a level the value is
 ///     invariant on; that crossing is carried by residency plus \c
-///     produce_if_absent, not by an escape (as-built section 6.2).
+///     produce_if_absent, not by an escape ("Placement, escapes, and pass
+///     splits").
 ///
 /// \par 3. Topological order within a block -- a real topological sort
 /// Each block's own \c steps interleave its \c BuildStep's (one per value
@@ -2178,8 +2179,8 @@ inline void assert_global_level_axis_uniqueness(
 /// including two of a nest's own pass blocks (one per pass, latitude =
 /// pass), which differ only in \c latitude_ordinal -- get distinct ids by
 /// construction: a nest's pass blocks must be distinguishable colors, not
-/// folded (as-built design section 5.1, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
+/// folded ("Loop identity and value identity", \c
+/// doc/developer/batched_evaluation.rst).
 ///
 /// \note Defined in \c dag_scope.hpp so the low-level DAG-scope types can be
 /// named without depending on this schedule header; re-exported here so the

@@ -116,7 +116,8 @@ struct CSEOptions {
 /// bandwidth-bound contractions (e.g. single-PNO-index ones) their true memory
 /// traffic while leaving compute-bound (dense) contractions at \c flops, so it
 /// is inert in the dense case. \c machine_balance == 0 (default) recovers the
-/// pure-flop tie-break. See doc/dev/specs/2026-06-23-roofline-tiebreak-cost.md.
+/// pure-flop tie-break. See doc/developer/cost_model.rst ("Roofline
+/// performance cost").
 struct RooflineParams {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// Machine balance beta = 8*F/B in FLOPs per element of traffic. 0 = off.

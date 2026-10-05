@@ -1827,8 +1827,8 @@ TEST_CASE(
   // the replay hit the base class's `throw
   // detail::unimplemented_method("pre_sized_zeros_over_mode")` the moment an
   // External mode was stamped -- the witness could not measure external
-  // batching at all (as-built design
-  // doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 4.2).
+  // batching at all (doc/developer/cost_model.rst,
+  // "Ordered batch contexts and costing").
   // This test drives the SAME scatter branch the TA
   // regression `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp)
   // exercises, on the dry-run backend: a small forest carrying the occupied
@@ -2728,7 +2728,9 @@ TEST_CASE(
   // whose four virtual legs are all protoindexed by the same occ pair (i1,i2),
   // so seeding the pair shrinks the footprint on every one of them. How far the
   // peak drops is not pinned here: the block/extent ratio 8/120 per mode bounds
-  // it, but the per-node external opens the DP performs (section 4.2) decide
+  // it, but the per-node external opens the DP performs (see
+  // "Ordered batch contexts and costing" in doc/developer/cost_model.rst)
+  // decide
   // which nodes carry the slice, so only the drop and the budget fit are.
   CHECK(peak_on < peak_off);
   // ...and the giant now FITS the 40 GB budget (~1874 GB -> ~33 GB): the DP

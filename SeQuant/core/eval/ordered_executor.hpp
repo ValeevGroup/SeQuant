@@ -327,7 +327,8 @@ inline std::size_t& ordered_last_block_skips_slot() {
 /// cleared per batch and stays unseedable. This is what lets a term's
 /// complete partial -- bound to the term's own outer loops, produced once in
 /// the first iteration of an interposed foreign loop -- skip the whole inner
-/// nest on that loop's later iterations (explicit-cells design section 12).
+/// nest on that loop's later iterations (see "Cell forms, reads, and
+/// lifetimes" in doc/developer/batched_evaluation.rst).
 [[nodiscard]] inline bool ordered_visit_skip_seedable(
     TableCell const& c, CellScope const& parent_scope) {
   if (!c.produce_if_absent) return false;
@@ -1708,8 +1709,8 @@ template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
 }  // namespace detail
 
 ///
-/// \brief The ordered executor (as-built design section 8, \c
-/// doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
+/// \brief The ordered executor ("Executing the table", \c
+/// doc/developer/batched_evaluation.rst).
 /// Walks \c ordered.root.steps in sequence, building one
 /// value per root-level \c BuildStep via \c detail::compute_cell (which reads
 /// every operand through the cell table, so a value an earlier step already
