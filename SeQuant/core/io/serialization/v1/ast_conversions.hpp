@@ -217,6 +217,26 @@ std::optional<ConjugationParity> to_conjugation_parity(char c,
 }
 
 template <typename Iterator>
+std::optional<KramersSymmetry> to_kramers_symmetry(char c, std::size_t offset,
+                                                   const Iterator &) {
+  if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
+    return std::nullopt;
+  }
+
+  switch (c) {
+    case 'T':
+    case 't':
+      return KramersSymmetry::TimeReversal;
+    case 'N':
+    case 'n':
+      return KramersSymmetry::Nonsymm;
+  }
+
+  throw SerializationError(
+      offset, 1, std::string("Invalid Kramers symmetry specifier '") + c + "'");
+}
+
+template <typename Iterator>
 ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
                                   ColumnSymmetry default_symmetry) {
   if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
@@ -258,14 +278,14 @@ Constant to_constant(const io::serialization::v1::ast::Number &number,
 
 template <typename PositionCache, typename Iterator>
 std::tuple<Symmetry, std::variant<BraKetSymmetry, Hermiticity>, ColumnSymmetry,
-           std::optional<ConjugationParity>>
+           std::optional<ConjugationParity>, std::optional<KramersSymmetry>>
 to_symmetries(
     const boost::optional<io::serialization::v1::ast::SymmetrySpec> &symm_spec,
     const DefaultSymmetries &default_symms, const PositionCache &cache,
     const Iterator &begin) {
   if (!symm_spec.has_value()) {
     return {std::get<0>(default_symms), std::get<1>(default_symms),
-            std::get<2>(default_symms), std::nullopt};
+            std::get<2>(default_symms), std::nullopt, std::nullopt};
   }
 
   const ast::SymmetrySpec &spec = symm_spec.get();
@@ -284,8 +304,12 @@ to_symmetries(
   // means "let Tensor::resolve_symmetries derive it", not "Even"
   std::optional<ConjugationParity> parity =
       to_conjugation_parity(spec.conjugation_parity, offset + 7, begin);
+  // the fifth letter is optional too: absent means the Tensor default (no
+  // Kramers symmetry)
+  std::optional<KramersSymmetry> kramers =
+      to_kramers_symmetry(spec.kramers_symm, offset + 9, begin);
 
-  return {perm_symm, braket_symm, column_symm, parity};
+  return {perm_symm, braket_symm, column_symm, parity, kramers};
 }
 
 template <typename PositionCache, typename Iterator>
@@ -357,7 +381,7 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    auto [perm_symm, braket_symm, column_symm, parity] =
+    auto [perm_symm, braket_symm, column_symm, parity, kramers] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
 
@@ -481,6 +505,7 @@ struct Transformer {
             syms.hermiticity = symm;
           }
           if (parity.has_value()) syms.conjugation_parity = *parity;
+          if (kramers.has_value()) syms.kramers = *kramers;
 
           ExprPtr t;
           try {

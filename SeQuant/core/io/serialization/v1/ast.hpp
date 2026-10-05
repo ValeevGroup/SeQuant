@@ -75,6 +75,7 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
   char braket_symm = unspecified;
   char column_symm = unspecified;
   char conjugation_parity = unspecified;
+  char kramers_symm = unspecified;
 };
 
 // represents AbstractTensor, i.e. Tensor or NormalOperator
@@ -175,7 +176,7 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
                           ket, auxiliaries, reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
                           perm_symm, braket_symm, column_symm,
-                          conjugation_parity);
+                          conjugation_parity, kramers_symm);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
                           indices, symmetry);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,

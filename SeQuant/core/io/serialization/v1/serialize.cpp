@@ -99,6 +99,17 @@ std::wstring serialize_symm(ConjugationParity parity,
   SEQUANT_UNREACHABLE;
 }
 
+std::wstring serialize_symm(KramersSymmetry symm, const SerializationOptions&) {
+  switch (symm) {
+    case KramersSymmetry::TimeReversal:
+      return L"T";
+    case KramersSymmetry::Nonsymm:
+      return L"N";
+  }
+
+  SEQUANT_UNREACHABLE;
+}
+
 std::wstring serialize_symm(ColumnSymmetry symm, const SerializationOptions&) {
   switch (symm) {
     case ColumnSymmetry::Symm:
@@ -410,9 +421,18 @@ std::wstring to_string(AbstractTensor const& tensor,
         hermiticity == Hermiticity::NonHermitian
             ? to_conjugation_parity(braket_symmetry, tensor._base_field())
             : Tensor::Defaults::conjugation_parity;
-    if (tensor._conjugation_parity() != implied_parity) {
+    // the fifth letter, the Kramers symmetry, is emitted only for a tensor
+    // that has one; the letters are positional, so it brings the parity
+    // letter with it
+    const bool spell_kramers =
+        tensor._kramers_symmetry() != Tensor::Defaults::kramers_symmetry;
+    if (tensor._conjugation_parity() != implied_parity || spell_kramers) {
       serialized +=
           L"-" + details::serialize_symm(tensor._conjugation_parity(), options);
+    }
+    if (spell_kramers) {
+      serialized +=
+          L"-" + details::serialize_symm(tensor._kramers_symmetry(), options);
     }
   }
 

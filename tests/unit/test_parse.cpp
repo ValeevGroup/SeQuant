@@ -244,6 +244,49 @@ TEST_CASE("serialization", "[serialization]") {
       REQUIRE(t6.hermiticity() == Hermiticity::NonHermitian);
     }
 
+    SECTION("Tensor with Kramers symmetry") {
+      // a time-reversal-symmetric tensor spells its Kramers symmetry as a
+      // fifth letter, `T`, after its parity letter; a tensor without the
+      // symmetry is spelled as before
+      auto plain = deserialize<ExprPtr>(L"g{a1;i1}:N-H-N");
+      REQUIRE(plain->as<Tensor>().kramers_symmetry() ==
+              KramersSymmetry::Nonsymm);
+      auto tr = plain->clone();
+      tr->as<Tensor>().set_kramers_symmetry(KramersSymmetry::TimeReversal);
+      REQUIRE(*tr != *plain);
+
+      const auto plain_str = serialize(plain, {.annot_symm = true});
+      const auto tr_str = serialize(tr, {.annot_symm = true});
+      REQUIRE(plain_str == L"g{a_1;i_1}:N-H-N");
+      REQUIRE(tr_str == L"g{a_1;i_1}:N-H-N-E-T");
+
+      auto back = deserialize<ExprPtr>(tr_str);
+      REQUIRE(back->as<Tensor>().kramers_symmetry() ==
+              KramersSymmetry::TimeReversal);
+      REQUIRE(*back == *tr);
+      REQUIRE(back->hash_value() == tr->hash_value());
+      // the letters before it mean what they mean without it
+      REQUIRE(back->as<Tensor>().hermiticity() == Hermiticity::Hermitian);
+      REQUIRE(back->as<Tensor>().conjugation_parity() ==
+              plain->as<Tensor>().conjugation_parity());
+
+      // `N` spells the absence out
+      REQUIRE(*deserialize<ExprPtr>(L"g{a1;i1}:N-H-N-E-N") == *plain);
+      // within a product, with proto indices and a state mark
+      auto prod = deserialize<ExprPtr>(
+          L"1/2 g{a1;i1}:N-H-N-E-T * C{a2<i1,i2>;a1}:N-N-N-N-T");
+      REQUIRE(*deserialize<ExprPtr>(serialize(prod, {.annot_symm = true})) ==
+              *prod);
+      for (const auto& factor : prod->as<Product>().factors())
+        REQUIRE(factor->as<Tensor>().kramers_symmetry() ==
+                KramersSymmetry::TimeReversal);
+
+      REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"g{a1;i1}:N-H-N-E-X"),
+                             io::serialization::SerializationError,
+                             serializationErrorMatches(
+                                 17, 1, "Invalid Kramers symmetry specifier"));
+    }
+
     SECTION("NormalOperator") {
       {
         using NOp = FNOperator;
