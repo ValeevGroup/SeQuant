@@ -25,12 +25,12 @@ An id is computed once per type from two things the type may declare:
   names of its template arguments, obtained via ``sequant::type_name_of<T>()``. A type that does not declare it gets a
   name derived from the compiler's spelling of the type.
 
-The id is ``(rank << 56) | (fnv1a_64(name) >> 8)``, so ranks order types first and the name only breaks ties within a
-rank. The ranks of SeQuant's own types are collected in ``sequant::expr_type_rank``
-(``SeQuant/core/expressions/expr.hpp``); in ascending order they are ``Tensor``, ``Product`` (which ``CProduct`` and
-``NCProduct`` inherit), ``Constant``, ``Sum``, ``Variable``, ``Power``, then every type of default rank (e.g.
-``NormalOperatorSequence`` and ``mbpt::Operator``), then ``BOperator``, ``FOperator``, ``BNOperator`` and
-``FNOperator``. They are spaced so that a new type can be inserted between them.
+The id is ``(rank << 56) | (fnv1a_64(name) >> 8)`` (``Expr::make_type_id``; ``Expr::type_rank_of`` recovers the rank),
+so ranks order types first and the name only breaks ties within a rank. The ranks of SeQuant's own types are collected
+in ``sequant::expr_type_rank`` (``SeQuant/core/expressions/expr.hpp``); in ascending order they are ``Tensor``,
+``Product`` (which ``CProduct`` and ``NCProduct`` inherit), ``Constant``, ``Sum``, ``Variable``, ``Power``, then every
+type of default rank (e.g. ``NormalOperatorSequence`` and ``mbpt::Operator``), then ``BOperator``, ``FOperator``,
+``BNOperator`` and ``FNOperator``. They are spaced so that a new type can be inserted between them.
 
 Every ``Expr`` type in SeQuant declares its own name and a rank (``CProduct`` and ``NCProduct`` inherit ``Product``'s),
 so its id, and hence the order of unlike types, is the same on every platform and in every program. A new type should

@@ -60,8 +60,8 @@ TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
   REQUIRE(fid != bid);
   REQUIRE(Expr::get_type_id<mbpt::FOperatorBase>() != fid);
   REQUIRE(Expr::get_type_id<mbpt::BOperatorBase>() != bid);
-  REQUIRE((fid >> 56) == Expr::default_type_rank);
-  REQUIRE((bid >> 56) == Expr::default_type_rank);
+  REQUIRE(Expr::type_rank_of(fid) == Expr::default_type_rank);
+  REQUIRE(Expr::type_rank_of(bid) == Expr::default_type_rank);
   REQUIRE(mbpt::FOperator<qns_t>::static_type_name() ==
           "sequant::mbpt::Operator<sequant::mbpt::QuantumNumberChange<int64,"
           "sequant::mbpt::default_qns_tag>,FermiDirac>");

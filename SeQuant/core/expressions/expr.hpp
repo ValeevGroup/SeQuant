@@ -351,9 +351,23 @@ class Expr : public std::enable_shared_from_this<Expr> {
     }
   }
 
+  /// @return the type id of a type of rank @p rank named @p name : @p rank in
+  /// the top 8 bits, the top 56 bits of `fnv1a_64(name)` below them
+  static constexpr type_id_type make_type_id(type_rank_type rank,
+                                             std::string_view name) {
+    return (static_cast<type_id_type>(rank) << 56) |
+           (detail::fnv1a_64(name) >> 8);
+  }
+
+  /// @return the rank encoded in type id @p id
+  /// @sa Expr::make_type_id
+  static constexpr type_rank_type type_rank_of(type_id_type id) {
+    return static_cast<type_rank_type>(id >> 56);
+  }
+
   /// @return the (unique) type id of class T
-  /// @details The id is `(rank << 56) | (fnv1a_64(name) >> 8)`, where
-  /// `rank` is `T::type_rank` (a `static constexpr Expr::type_rank_type`) if
+  /// @details The id is `make_type_id(rank, name)`, where `rank` is
+  /// `T::type_rank` (a `static constexpr Expr::type_rank_type`) if
   /// @c T declares it, else Expr::default_type_rank , and `name` is
   /// `sequant::type_name_of<T>()`. Hence Expr::operator< orders unlike types by
   /// rank first. A type whose relative order must not depend on the compiler
@@ -376,8 +390,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
                       "type_rank must fit in Expr::type_rank_type");
         rank = static_cast<type_rank_type>(T::type_rank);
       }
-      const type_id_type result = (static_cast<type_id_type>(rank) << 56) |
-                                  (detail::fnv1a_64(name) >> 8);
+      const type_id_type result = make_type_id(rank, name);
       register_type_id(result, name, typeid(T));
       return result;
     }();

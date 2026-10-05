@@ -1427,7 +1427,7 @@ TEST_CASE("expr_type_id_derived", "[elements]") {
 TEST_CASE("expr_type_id", "[elements]") {
   using namespace sequant;
   using type_id_t = Expr::type_id_type;
-  auto rank_of = [](type_id_t id) { return static_cast<int>(id >> 56); };
+  auto rank_of = [](type_id_t id) { return Expr::type_rank_of(id); };
 
   SECTION("core types are ordered by rank") {
     // touch in reverse order of rank first
@@ -1449,14 +1449,11 @@ TEST_CASE("expr_type_id", "[elements]") {
   }
 
   SECTION("ids are computed from rank and name") {
-    auto expected = [](Expr::type_rank_type rank, std::string_view name) {
-      return (static_cast<type_id_t>(rank) << 56) |
-             (detail::fnv1a_64(name) >> 8);
-    };
     REQUIRE(Expr::get_type_id<Tensor>() ==
-            expected(Tensor::type_rank, Tensor::static_type_name()));
+            Expr::make_type_id(Tensor::type_rank, Tensor::static_type_name()));
     REQUIRE(Expr::get_type_id<FNOperator>() ==
-            expected(FNOperator::type_rank, FNOperator::static_type_name()));
+            Expr::make_type_id(FNOperator::type_rank,
+                               FNOperator::static_type_name()));
     // names are usable in constant expressions
     static_assert(Tensor::static_type_name() == "sequant::Tensor");
     static_assert(FNOperator::static_type_name() ==
@@ -1465,9 +1462,9 @@ TEST_CASE("expr_type_id", "[elements]") {
                   BNOperator::static_type_name());
     static_assert(type_name_of<Tensor>() == "sequant::Tensor");
     static_assert(type_name_of<DeclaredExpr>() == "test::DeclaredExpr");
-    static_assert((static_cast<type_id_t>(Tensor::type_rank) << 56 |
-                   detail::fnv1a_64(Tensor::static_type_name()) >> 8) ==
-                  0x0a0890014be052abull);
+    static_assert(
+        Expr::make_type_id(Tensor::type_rank, Tensor::static_type_name()) ==
+        0x0a0890014be052abull);
     // pin the portable values
     REQUIRE(detail::fnv1a_64("") == 0xcbf29ce484222325ull);
     REQUIRE(detail::fnv1a_64("a") == 0xaf63dc4c8601ec8cull);
@@ -1501,8 +1498,7 @@ TEST_CASE("expr_type_id", "[elements]") {
     REQUIRE(dummy < Expr::get_type_id<BOperator>());
 
     REQUIRE(Expr::get_type_id<DeclaredExpr>() ==
-            ((type_id_t{77} << 56) |
-             (detail::fnv1a_64("test::DeclaredExpr") >> 8)));
+            Expr::make_type_id(77, "test::DeclaredExpr"));
   }
 
   SECTION("colliding declarations throw") {
