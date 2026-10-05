@@ -80,10 +80,11 @@ Subtleties for contributors
   :class:`sequant::TensorCanonicalizer` is a base class that a contributor can implement against to customize how one tensor's slots get
   ordered, without touching the network-wide bliss machinery above. Instances are owned by the :class:`sequant::Context`, keyed by tensor
   label. Inside network canonicalization (``TensorNetworkV3::do_individual_canonicalization``) a tensor uses
-  ``get_default_context().nondefault_tensor_canonicalizer_ptr(label)``, i.e. the entry for exactly its own label, and otherwise the
-  network's own canonicalizer (``DefaultTensorCanonicalizer`` or ``TensorBlockCanonicalizer``); the entry for the empty label is
-  consulted only by ``Tensor::canonicalize()`` on a lone tensor. Since the lookup goes through the current context, a scoped context
-  (see :doc:`/user/guide/context`) overrides it for the scope's duration, on the threads that see that scope.
+  ``nondefault_tensor_canonicalizer_ptr(label)`` of a :func:`sequant::get_default_context_snapshot` taken once per network, i.e. the
+  entry for exactly its own label, and otherwise the network's own canonicalizer (``DefaultTensorCanonicalizer`` or
+  ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` on a lone tensor. Since
+  the lookup goes through the current context, a scoped context (see :doc:`/user/guide/context`) overrides it for the scope's duration,
+  on the threads that see that scope.
   ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort (rather than
   using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee about
   using swaps to get there.

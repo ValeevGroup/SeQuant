@@ -41,7 +41,7 @@ void Tensor::adjoint() {
 
 ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   const auto canonicalizer =
-      get_default_context().tensor_canonicalizer_ptr(L"");
+      get_default_context_snapshot().tensor_canonicalizer_ptr(L"");
   if (!canonicalizer)
     throw Exception(
         "Tensor::canonicalize: the current context has no default tensor "

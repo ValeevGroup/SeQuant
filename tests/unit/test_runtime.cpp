@@ -14,6 +14,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/scope.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -279,6 +280,35 @@ TEST_CASE("context", "[runtime]") {
 
     // the copy was not affected
     CHECK(copy.version() == v0);
+  }
+
+  SECTION("snapshot") {
+    const auto initial_ctx = get_default_context();
+    auto restore = sequant::detail::make_scope_exit(
+        [&initial_ctx] { set_default_context(initial_ctx); });
+
+    // the process-wide context is the sole owner of its labels and comparer
+    set_default_context(
+        Context(initial_ctx)
+            .set_cardinal_tensor_labels(container::vector<std::wstring>{L"X"})
+            .set_index_comparer(TensorCanonicalizer::index_comparer_t(
+                [](const Index& i1, const Index& i2) {
+                  return i2.label() < i1.label();
+                })));
+    const auto snapshot = get_default_context_snapshot();
+    CHECK(snapshot == get_default_context());
+    CHECK(snapshot.version() == current_context_version());
+    const auto& labels = snapshot.cardinal_tensor_labels();
+    const auto& comparer = snapshot.index_comparer();
+
+    // replacing the process-wide context leaves the snapshot intact
+    set_default_context(initial_ctx);
+    CHECK(labels == container::vector<std::wstring>{L"X"});
+    CHECK(comparer(Index(L"i_2"), Index(L"i_1")));
+
+    // on a thread with a scoped context, a copy of that context
+    auto scoped = set_scoped_default_context(snapshot);
+    CHECK(get_default_context_snapshot() == snapshot);
   }
 }
 

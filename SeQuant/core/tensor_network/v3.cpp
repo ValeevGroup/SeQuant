@@ -1590,7 +1590,7 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
     const TensorCanonicalizer &canonicalizer) {
   ExprPtr byproduct = ex<Constant>(1);
 
-  const auto &ctx = get_default_context();
+  const auto ctx = get_default_context_snapshot();
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
         ctx.nondefault_tensor_canonicalizer_ptr(tensor->_label());

@@ -582,8 +582,8 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   // hash filtering logic for R > 2
   container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
 
-  const auto& cardinal_tensor_labels =
-      get_default_context().cardinal_tensor_labels();
+  const auto ctx = get_default_context_snapshot();
+  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
   for (const auto& term : *expr) {
     if (!term->is<Product>()) continue;
 

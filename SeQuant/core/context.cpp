@@ -113,6 +113,16 @@ const Context& get_default_context(Statistics s) {
     return get_default_context(Statistics::Arbitrary);
 }
 
+Context get_default_context_snapshot(Statistics s) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  // a scoped context is thread-local, hence needs no lock
+  std::unique_lock lock(ctx_mtx, std::defer_lock);
+  if (!detail::implicit_context_overlay<container::map<Statistics, Context>>())
+    lock.lock();
+#endif
+  return get_default_context(s);
+}
+
 void set_default_context(Context ctx, Statistics s) {
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);

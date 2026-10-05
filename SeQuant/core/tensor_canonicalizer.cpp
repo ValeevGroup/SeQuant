@@ -231,7 +231,7 @@ ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
 
   canonicalize_braket(t);
 
-  const auto& ctx = get_default_context();
+  const auto ctx = get_default_context_snapshot();
   auto result = this->apply(t, ctx.index_comparer(), ctx.index_pair_comparer());
 
   reset_tags(t);

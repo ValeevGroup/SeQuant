@@ -89,7 +89,8 @@ bool Operator<QuantumNumbers, S>::static_less_than(const Expr& that) const {
   auto& that_op = that.as<this_type>();
 
   // compare cardinal tensor labels first, then QN ranks
-  auto& cardinal_tensor_labels = get_default_context().cardinal_tensor_labels();
+  const auto ctx = get_default_context_snapshot();
+  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
   const auto this_label = this->label();
   const auto that_label = that_op.label();
   if (this_label == that_label) return this->less_than_rank_of(that_op);

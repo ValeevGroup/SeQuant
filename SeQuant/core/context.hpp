@@ -385,8 +385,9 @@ bool operator!=(const Context& ctx1, const Context& ctx2);
 
 /// \name manipulation of implicit context for SeQuant
 /// \warning set_default_context(), reset_default_context() and the reads of
-/// the process-wide context (by get_default_context() and
-/// set_scoped_modified_default_context() on a thread without scoped contexts)
+/// the process-wide context (by get_default_context(),
+/// get_default_context_snapshot() and set_scoped_modified_default_context() on
+/// a thread without scoped contexts)
 /// are thread-safe only if default_context_manipulation_threadsafe() returns
 /// true; set_scoped_default_context(), and the readers on a thread with scoped
 /// contexts, touch only thread-local state
@@ -405,7 +406,20 @@ std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
 /// @brief access default Context for the given Statistics
 /// @param s Statistics
 /// @return the default context used for Statistics @p s
+/// @warning on a thread without scoped contexts the reference is to the
+/// process-wide context, which set_default_context() and
+/// reset_default_context() replace, on any thread; to hold the context, or
+/// anything obtained by reference from it, beyond a brief read use
+/// get_default_context_snapshot()
 const Context& get_default_context(Statistics s = Statistics::Arbitrary);
+
+/// @brief copy of the default Context for the given Statistics
+/// @param s Statistics
+/// @return a copy of `get_default_context(s)`, made under the lock that guards
+/// the process-wide context; it shares the index space registry and the
+/// canonicalizer configuration with its source, hence is cheap, and remains
+/// valid when the default context is replaced
+Context get_default_context_snapshot(Statistics s = Statistics::Arbitrary);
 
 /// @brief sets default Context for the given Statistics
 /// @param ctx Context object

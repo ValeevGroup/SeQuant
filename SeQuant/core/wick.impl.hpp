@@ -704,7 +704,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     const auto nop_labels = NormalOperator<S>::labels();
     SEQUANT_ASSERT(nop_labels.size() == 2);
     // the canonicalizers are looked up in the context for arbitrary statistics
-    const auto &current_ctx = get_default_context();
+    const auto current_ctx = get_default_context_snapshot();
     if (ranges::all_of(nop_labels, [&current_ctx](const auto &label) {
           return std::dynamic_pointer_cast<NullTensorCanonicalizer>(
                      current_ctx.nondefault_tensor_canonicalizer_ptr(label)) !=
