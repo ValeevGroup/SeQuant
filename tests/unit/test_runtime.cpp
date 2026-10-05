@@ -193,6 +193,15 @@ TEST_CASE("context", "[runtime]") {
     ctx_card.set_cardinal_tensor_labels(ctx.cardinal_tensor_labels());
     CHECK(ctx_card == ctx);
 
+    // Context is copy-only: moving from it leaves it intact
+    {
+      auto source = ctx;
+      const auto moved_to = std::move(source);
+      CHECK(source == moved_to);
+      CHECK(source.index_comparer());
+      CHECK(source.tensor_canonicalizer_ptr(L""));
+    }
+
     // a comparer re-installed through its shared pointer keeps equality
     auto ctx_same_cmp = ctx;
     ctx_same_cmp.set_index_comparer(ctx.index_comparer_ptr())

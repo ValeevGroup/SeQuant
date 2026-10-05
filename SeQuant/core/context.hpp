@@ -172,7 +172,9 @@ class Context {
   /// @note created Context does not use this object's index space registry
   Context clone() const;
 
-  Context(Context&&) = default;
+  // no move operations, so that an rvalue is copied: a copy is cheap (it
+  // shares the registry and the canonicalizer configuration), and a moved-from
+  // Context would lack them
 
   /// @return the version of this context: a nonzero number, unique among all
   /// versions ever assigned in this process, that changes whenever the context
