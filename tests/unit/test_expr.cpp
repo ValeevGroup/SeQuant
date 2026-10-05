@@ -154,19 +154,28 @@ struct MinimalExpr : public sequant::Expr {
 
 struct DeclaredExpr : public MinimalExpr<DeclaredExpr> {
   static constexpr type_rank_type type_rank = 77;
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<DeclaredExpr> = {}) {
     return "test::DeclaredExpr";
   }
 };
 
+// inherits DeclaredExpr's type_rank and static_type_name, declares neither
+struct DerivedFromDeclaredExpr : public DeclaredExpr {};
+
 struct TwinExpr1 : public MinimalExpr<TwinExpr1> {
   static constexpr type_rank_type type_rank = 78;
-  static constexpr std::string static_type_name() { return "test::TwinExpr"; }
+  static constexpr std::string static_type_name(
+      std::type_identity<TwinExpr1> = {}) {
+    return "test::TwinExpr";
+  }
 };
 
 struct TwinExpr2 : public MinimalExpr<TwinExpr2> {
   static constexpr type_rank_type type_rank = 78;
-  static std::string static_type_name() { return "test::TwinExpr"; }
+  static std::string static_type_name(std::type_identity<TwinExpr2> = {}) {
+    return "test::TwinExpr";
+  }
 };
 
 TEST_CASE("expr", "[elements]") {
@@ -1512,6 +1521,17 @@ TEST_CASE("expr_type_id", "[elements]") {
     REQUIRE(Expr::get_type_id<CProduct>() != Expr::get_type_id<NCProduct>());
     REQUIRE_NOTHROW(ex<Constant>(1)->is<CProduct>());
     REQUIRE_NOTHROW(ex<Constant>(1)->is<NCProduct>());
+    static_assert(type_name_of<CProduct>() == "sequant::CProduct");
+
+    // a derived type that declares no name keeps its base's rank but not its
+    // name
+    static_assert(type_name_of<DerivedFromDeclaredExpr>() ==
+                  detail::compiler_type_name<DerivedFromDeclaredExpr>());
+    REQUIRE_NOTHROW(Expr::get_type_id<DerivedFromDeclaredExpr>());
+    REQUIRE(Expr::get_type_id<DerivedFromDeclaredExpr>() !=
+            Expr::get_type_id<DeclaredExpr>());
+    REQUIRE(rank_of(Expr::get_type_id<DerivedFromDeclaredExpr>()) ==
+            DeclaredExpr::type_rank);
   }
 
   SECTION("operator< orders unlike types by rank") {

@@ -305,7 +305,10 @@ class Product : public Expr {
   std::wstring to_latex(bool negate) const;
 
   static constexpr type_rank_type type_rank = 20;
-  static constexpr std::string static_type_name() { return "sequant::Product"; }
+  static constexpr std::string static_type_name(
+      std::type_identity<Product> = {}) {
+    return "sequant::Product";
+  }
 
   type_id_type type_id() const override;
 
@@ -368,8 +371,10 @@ class CProduct : public Product {
   CProduct(Product &&other);
 
   /// objects of this type report Product's type_id(); this name keeps
-  /// `Expr::get_type_id<CProduct>()` distinct from it
-  static constexpr std::string static_type_name() {
+  /// `Expr::get_type_id<CProduct>()`, which Expr::is uses, independent of the
+  /// compiler
+  static constexpr std::string static_type_name(
+      std::type_identity<CProduct> = {}) {
     return "sequant::CProduct";
   }
 
@@ -397,8 +402,10 @@ class NCProduct : public Product {
   NCProduct(Product &&other);
 
   /// objects of this type report Product's type_id(); this name keeps
-  /// `Expr::get_type_id<NCProduct>()` distinct from it
-  static constexpr std::string static_type_name() {
+  /// `Expr::get_type_id<NCProduct>()`, which Expr::is uses, independent of the
+  /// compiler
+  static constexpr std::string static_type_name(
+      std::type_identity<NCProduct> = {}) {
     return "sequant::NCProduct";
   }
 

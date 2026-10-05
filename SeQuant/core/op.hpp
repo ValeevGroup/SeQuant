@@ -424,7 +424,8 @@ class Operator : public container::svector<Op<S>>, public Expr {
                                               : S == Statistics::BoseEinstein
                                                   ? 250
                                                   : default_type_rank;
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<Operator> = {}) {
     return "sequant::Operator<" + detail::statistics_name(S) + ">";
   }
 
@@ -752,7 +753,8 @@ class NormalOperator : public Operator<S>,
       S == Statistics::FermiDirac     ? 253
       : S == Statistics::BoseEinstein ? 252
                                       : Expr::default_type_rank;
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<NormalOperator> = {}) {
     return "sequant::NormalOperator<" + detail::statistics_name(S) + ">";
   }
 
@@ -1102,7 +1104,8 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   }
 
   static constexpr Expr::type_rank_type type_rank = Expr::default_type_rank;
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<NormalOperatorSequence> = {}) {
     return "sequant::NormalOperatorSequence<" + detail::statistics_name(S) +
            ">";
   }

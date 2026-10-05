@@ -9,6 +9,7 @@
 #include <boost/numeric/conversion/cast.hpp>
 
 #include <string>
+#include <type_traits>
 
 namespace sequant {
 
@@ -70,7 +71,8 @@ class Constant : public Expr {
   std::wstring to_latex() const override;
 
   static constexpr type_rank_type type_rank = 30;
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<Constant> = {}) {
     return "sequant::Constant";
   }
 

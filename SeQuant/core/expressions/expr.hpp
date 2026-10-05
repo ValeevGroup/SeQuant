@@ -16,6 +16,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <typeindex>
 #include <typeinfo>
 #include <utility>
@@ -79,17 +80,22 @@ constexpr std::string compiler_type_name() {
 
 }  // namespace detail
 
-/// @return `T::static_type_name()` if @c T declares it, else a name derived
-/// from the compiler (see detail::compiler_type_name)
+/// @return `T::static_type_name(std::type_identity<T>{})` if @c T declares
+/// it, else a name derived from the compiler (see detail::compiler_type_name)
 /// @note this is the name used by Expr::get_type_id ; a class template that
-/// declares `static_type_name()` composes it from the names of its template
+/// declares `static_type_name` composes it from the names of its template
 /// arguments via this function
+/// @note the `std::type_identity<T>` parameter, which does not convert to
+/// `std::type_identity` of a base, keeps a derived class from picking up the
+/// name its base declares
 template <typename T>
 constexpr std::string type_name_of() {
   if constexpr (requires {
-                  { T::static_type_name() } -> std::convertible_to<std::string>;
+                  {
+                    T::static_type_name(std::type_identity<T>{})
+                  } -> std::convertible_to<std::string>;
                 })
-    return std::string(T::static_type_name());
+    return std::string(T::static_type_name(std::type_identity<T>{}));
   else
     return detail::compiler_type_name<T>();
 }
@@ -351,14 +357,13 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @c T declares it, else Expr::default_type_rank , and `name` is
   /// `sequant::type_name_of<T>()`. Hence Expr::operator< orders unlike types by
   /// rank first. A type whose relative order must not depend on the compiler
-  /// declares `static constexpr std::string static_type_name()` (usable in
-  /// constant expressions). Both declarations are
-  /// inherited, hence a class derived from a type that declares
-  /// `static_type_name()` must declare its own whenever this function can be
-  /// instantiated for it, including via Expr::is ; so must a type in an unnamed
-  /// namespace if another translation unit may define one of the same name,
-  /// since types are told apart by mangled name and such a pair would silently
-  /// share an id.
+  /// declares `static constexpr std::string
+  /// static_type_name(std::type_identity<Self> = {})` (usable in constant
+  /// expressions). A derived class inherits its base's `type_rank` but not its
+  /// name, so unless it declares its own name it gets the compiler-derived
+  /// one. A type in an unnamed namespace declares a name if another translation
+  /// unit may define one of the same name, since types are told apart by
+  /// mangled name and such a pair would silently share an id.
   /// @throw sequant::Exception if a type of another mangled name already has
   /// this id
   template <typename T>

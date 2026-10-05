@@ -160,7 +160,8 @@ template <Statistics S>
 class Operator<void, S> : public Expr, public Labeled {
  public:
   static constexpr Expr::type_rank_type type_rank = Expr::default_type_rank;
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<Operator> = {}) {
     return "sequant::mbpt::Operator<void," +
            sequant::detail::statistics_name(S) + ">";
   }
@@ -206,7 +207,8 @@ using FOperatorBase = FOperator<void>;
 using BOperatorBase = BOperator<void>;
 
 struct default_qns_tag {
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<default_qns_tag> = {}) {
     return "sequant::mbpt::default_qns_tag";
   }
 };
@@ -238,7 +240,8 @@ class QuantumNumberChange
   using this_type = QuantumNumberChange<QNV, Tag>;
 
   /// @return a portable name of this type
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<QuantumNumberChange> = {}) {
     static_assert(std::is_integral_v<QNV>);
     return "sequant::mbpt::QuantumNumberChange<" +
            std::string(std::is_signed_v<QNV> ? "int" : "uint") +
@@ -905,7 +908,8 @@ class Operator : public Operator<void, S> {
   virtual ~Operator();
 
   static constexpr Expr::type_rank_type type_rank = Expr::default_type_rank;
-  static constexpr std::string static_type_name() {
+  static constexpr std::string static_type_name(
+      std::type_identity<Operator> = {}) {
     return "sequant::mbpt::Operator<" +
            sequant::type_name_of<QuantumNumbers>() + "," +
            sequant::detail::statistics_name(S) + ">";

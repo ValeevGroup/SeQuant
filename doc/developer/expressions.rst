@@ -20,10 +20,10 @@ An id is computed once per type from two things the type may declare:
 - ``static constexpr Expr::type_rank_type type_rank``: the coarse position of the type among unlike types (lower ranks
   sort first); a type that does not declare it gets ``Expr::default_type_rank``, and a value that does not fit is a
   compile-time error;
-- ``static constexpr std::string static_type_name()``: a name for the type, usable in constant expressions; a class
-  template composes it from its own name and the names of its template arguments, obtained via
-  ``sequant::type_name_of<T>()``. A type that does not declare it gets a name derived from the compiler's spelling of
-  the type.
+- ``static constexpr std::string static_type_name(std::type_identity<Self> = {})``, where ``Self`` is the declaring
+  type: a name for the type, usable in constant expressions; a class template composes it from its own name and the
+  names of its template arguments, obtained via ``sequant::type_name_of<T>()``. A type that does not declare it gets a
+  name derived from the compiler's spelling of the type.
 
 The id is ``(rank << 56) | (fnv1a_64(name) >> 8)``, so ranks order types first and the name only breaks ties within a
 rank. The ranks of SeQuant's own types, in ascending order, are ``Tensor`` (10), ``Product`` (20, which ``CProduct`` and
@@ -34,9 +34,9 @@ rank (128, e.g. ``NormalOperatorSequence`` and ``mbpt::Operator``), then ``BOper
 Every ``Expr`` type in SeQuant declares its own name and a rank (``CProduct`` and ``NCProduct`` inherit ``Product``'s),
 so its id, and hence the order of unlike types, is the same on every platform and in every program. A new type should
 do the same: the compiler-derived name is deterministic for a given compiler, but differs between compilers, and so
-does the relative order of types that rely on it. Both declarations are inherited, so a type derived from another
-``Expr`` type that declares ``static_type_name()`` must declare its own whenever ``get_type_id`` can be instantiated for
-it, including through ``is<T>()``.
+does the relative order of types that rely on it. A derived type inherits its base's ``type_rank`` but not its name:
+the ``std::type_identity<Self>`` parameter does not accept ``std::type_identity`` of a derived type, so a derived type
+that declares no name of its own gets the compiler-derived one, and hence an id distinct from its base's.
 
 Ids must be unique; ``get_type_id`` records each type's id and throws :class:`sequant::Exception` naming both types if a
 second type arrives at an id already taken, for instance because two types declare the same rank and name. Types are

@@ -127,7 +127,9 @@ class Sum : public Expr {
   std::wstring to_latex() const override;
 
   static constexpr type_rank_type type_rank = 40;
-  static constexpr std::string static_type_name() { return "sequant::Sum"; }
+  static constexpr std::string static_type_name(std::type_identity<Sum> = {}) {
+    return "sequant::Sum";
+  }
 
   Expr::type_id_type type_id() const override;
 
