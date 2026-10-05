@@ -95,6 +95,9 @@ std::wstring Expr::to_latex() const {
 
 void Expr::register_type_id(type_id_type id, const std::string &name,
                             std::type_index type) {
+  // destroyed at exit like any function-local static: computing a type id for
+  // the first time from a static destructor that runs after them is undefined
+  // behavior (ids computed earlier are cached by get_type_id and stay usable)
   static std::mutex mutex;
   static std::map<type_id_type, std::pair<std::string, std::type_index>>
       registry;
