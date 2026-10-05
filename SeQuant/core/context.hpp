@@ -338,6 +338,10 @@ class Context {
 
   friend bool operator==(const Context& ctx1, const Context& ctx2);
 
+  /// replaces the tensor canonicalization state by a copy owned by this
+  /// @return the copy, for the caller to modify
+  TensorCanonicalizers& mutable_tensor_canonicalizers();
+
   /// assigns a new, never before used version to this
   void bump_version();
 
@@ -358,7 +362,8 @@ class Context {
       Defaults::deserialization_hermiticity;
   ColumnSymmetry deserialization_column_symmetry_ =
       Defaults::deserialization_column_symmetry;
-  TensorCanonicalizers tensor_canonicalizers_;
+  /// shared by copies of this context, hence never mutated in place
+  std::shared_ptr<const TensorCanonicalizers> tensor_canonicalizers_;
 };
 
 /// Context object equality comparison
