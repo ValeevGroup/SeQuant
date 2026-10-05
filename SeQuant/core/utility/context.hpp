@@ -87,6 +87,8 @@ struct ImplicitContextResetter {
   ImplicitContextResetter() = default;
   explicit ImplicitContextResetter(const void* overlay) noexcept
       : overlay_(overlay) {}
+  /// @note a scope ended out of order trips an assertion; since this is
+  /// noexcept, under SEQUANT_ASSERT_BEHAVIOR=THROW that calls std::terminate
   ~ImplicitContextResetter() noexcept {
     if (overlay_) {
       auto& overlays = implicit_context_overlays();
@@ -100,9 +102,13 @@ struct ImplicitContextResetter {
     }
   }
 
-  // ContextResetter is move-only
+  // neither copyable nor movable: a moved-from resetter would still hold
+  // overlay_ and pop the live scope; returning by value relies on guaranteed
+  // copy elision
   ImplicitContextResetter(const ImplicitContextResetter&) = delete;
+  ImplicitContextResetter(ImplicitContextResetter&&) = delete;
   ImplicitContextResetter& operator=(const ImplicitContextResetter&) = delete;
+  ImplicitContextResetter& operator=(ImplicitContextResetter&&) = delete;
 
  private:
   const void* overlay_ = nullptr;
