@@ -55,14 +55,16 @@ The by-product of all this sign bookkeeping is returned as ``nullptr`` (no sign 
 for callers that only need to test two networks for equivalence, such as term matching or :doc:`Wick's theorem <wick>`.
 
 The bliss call of the member ``canonicalize_graph`` also reports the generators of the automorphism group, which detect networks that
-vanish by symmetry. An automorphism maps the network onto itself up to a phase, ``TensorNetworkV3::automorphism_phase()``: the product,
-over the bra and ket bundles of every antisymmetric tensor (including fermionic normal operators), of the parity of the slot permutation
-it induces. If that phase is -1 the network equals minus itself, so it is zero; e.g. in ``t{a1,a2;i1,i2}:S ã{a1,a2;i1,i2}`` the swap
-:math:`a_1 \leftrightarrow a_2` has phase :math:`(+1)(-1)`. Since the phase is a homomorphism of the group to :math:`\{\pm 1\}`,
-a scored generator of phase -1 is enough to detect a zero. Generators that move a tensor, a named or external index, a protoindex bundle, or an aux slot are not
-scored, so a zero can go undetected but is never invented. When a generator of phase -1 is found the member ``canonicalize_graph``
-returns ``ex<Constant>(0)`` and leaves the tensors as they were. :doc:`Wick's theorem <wick>` applies the same test to the input of its
-topology analysis.
+vanish by symmetry. An automorphism maps the network onto itself up to a phase, ``TensorNetworkV3::Graph::automorphism_phase()``: the
+product, over the bra and ket bundles of every antisymmetric tensor (including fermionic normal operators), of the parity of the slot
+permutation it induces. If that phase is -1 the network equals minus itself, so it is zero; e.g. in ``t{a1,a2;i1,i2}:S ã{a1,a2;i1,i2}``
+the swap :math:`a_1 \leftrightarrow a_2` has phase :math:`(+1)(-1)`. Since the phase is a homomorphism of the group to
+:math:`\{\pm 1\}`, a scored generator of phase -1 is enough to detect a zero. Generators that move a tensor, a named or external index, a
+protoindex bundle, or an aux slot are not scored, so a zero can go undetected but is never invented. The phase is computed from the
+graph alone: ``create_graph`` records, as it emits them, the slot vertices of each antisymmetric bundle, the index of each index vertex
+and the vertices an automorphism must fix. When a generator of phase -1 is found the member ``canonicalize_graph`` returns
+``ex<Constant>(0)`` and leaves the tensors as they were. :doc:`Wick's theorem <wick>` applies the same test to the input of its topology
+analysis.
 
 Topological vs. lexicographic canonicalization
 ----------------------------------------------------

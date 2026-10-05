@@ -175,7 +175,36 @@ class TensorNetworkV3 {
     std::vector<VertexType> vertex_types;
     container::map<Index, std::size_t> idx_to_vertex;
 
+    /// the Index represented by each vertex of type VertexType::Index; a null
+    /// Index for the other vertices
+    std::vector<Index> vertex_indices;
+    /// whether each vertex is one that automorphism_phase() requires an
+    /// automorphism to fix: a tensor core, an aux slot, a protoindex bundle,
+    /// or an external index of the network
+    std::vector<bool> vertex_fixed_for_phase;
+    /// the slot vertices of each bra and each ket bundle of an antisymmetric
+    /// tensor that hold an index, in slot order; bundles `2k` and `2k+1` are
+    /// the bra and the ket of the same tensor
+    std::vector<container::svector<std::size_t, 4>> antisymm_bundles;
+    /// for each vertex in antisymm_bundles, its bundle and its position in
+    /// that bundle; `{npos, npos}` for the other vertices
+    std::vector<std::pair<std::size_t, std::size_t>> antisymm_slots;
+
     Graph() = default;
+
+    /// Computes the phase that an automorphism of this graph incurs: an
+    /// automorphism maps the network onto itself, up to the signs of the
+    /// permutations it induces on the slots of antisymmetric bra/ket bundles.
+    /// A network with an automorphism of phase -1 is identically zero.
+    /// @param aut an automorphism of this graph
+    /// @param named_indices indices that @p aut must fix, in addition to the
+    ///        external indices of the network; may be null
+    /// @return the phase (+1 or -1) of @p aut, or 0 if @p aut moves a tensor,
+    ///         an aux slot, a protoindex bundle, an external index or one of
+    ///         @p named_indices; such automorphisms are not scored
+    int automorphism_phase(const unsigned int *aut,
+                           const container::set<Index, Index::FullLabelCompare>
+                               *named_indices = nullptr) const;
 
     std::size_t vertex_to_index_idx(std::size_t vertex) const;
     /// maps vertex ordinal to tensor cluster ordinal
@@ -253,8 +282,8 @@ class TensorNetworkV3 {
   /// parameter; the default is given by CanonicalizeOptions::default_options()
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr; Constant 0 if topological canonicalization finds the network
-  /// to be zero by symmetry (see automorphism_phase()), in which case the
-  /// tensors are left as they were
+  /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
+  /// the tensors are left as they were
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const CanonicalizeOptions &options =
@@ -456,21 +485,6 @@ class TensorNetworkV3 {
       const Graph &graph,
       const std::function<void(unsigned int, const unsigned int *)> &aut_hook =
           {});
-
-  /// Computes the phase that an automorphism of the graph of this network
-  /// incurs: an automorphism maps the term onto itself, up to the sign of
-  /// the permutations it induces on the slots of antisymmetric bra/ket
-  /// bundles. A term with an automorphism of phase -1 is identically zero.
-  /// @param graph the graph of this network, produced by create_graph()
-  ///        with the current tensors and edges
-  /// @param aut an automorphism of @p graph
-  /// @param named_indices the named indices; default is nullptr, which
-  ///        means use all external indices
-  /// @return the phase (+1 or -1) of @p aut, or 0 if @p aut moves a tensor,
-  ///         a named or external index, a protoindex bundle, or an aux slot;
-  ///         such automorphisms are not scored
-  int automorphism_phase(const Graph &graph, const unsigned int *aut,
-                         const NamedIndexSet *named_indices = nullptr) const;
 
  private:
   /// list of tensors

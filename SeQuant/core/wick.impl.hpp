@@ -950,16 +950,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
           // the input is zero if it has an automorphism of phase -1; pruning
           // by its topology would not preserve that. Declared external
-          // indices are not permuted (automorphism_phase also fixes the
-          // network's own external indices), even if contracted.
+          // indices are not permuted (Graph::automorphism_phase also fixes
+          // the network's own external indices), even if contracted.
           {
             TN::NamedIndexSet declared_external;
             if (external_indices_)
               declared_external.insert(external_indices_->begin(),
                                        external_indices_->end());
             if (ranges::any_of(aut_generators, [&](const auto &aut) {
-                  return tn.automorphism_phase(g, aut.data(),
-                                               &declared_external) == -1;
+                  return g.automorphism_phase(aut.data(), &declared_external) ==
+                         -1;
                 }))
               return ex<Constant>(0);
           }

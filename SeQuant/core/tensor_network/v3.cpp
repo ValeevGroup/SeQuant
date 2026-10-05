@@ -189,15 +189,17 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   // a network with an automorphism of phase -1 equals minus itself, i.e. is
   // zero; phase is a homomorphism from the automorphism group to {+1,-1}, so
   // if a scored generator has phase -1 the term is zero. Generators that are
-  // not scored (see automorphism_phase) can only hide a zero, never invent
-  // one.
+  // not scored (see Graph::automorphism_phase) can only hide a zero, never
+  // invent one.
   bool has_odd_automorphism = false;
-  const unsigned int *canonize_perm =
-      canonicalize_graph(graph, [&](unsigned int, const unsigned int *aut) {
-        if (!has_odd_automorphism &&
-            automorphism_phase(graph, aut, &named_indices) == -1)
-          has_odd_automorphism = true;
-      });
+  const unsigned int *canonize_perm = canonicalize_graph(
+      graph, graph.antisymm_bundles.empty()
+                 ? std::function<void(unsigned int, const unsigned int *)>{}
+                 : [&](unsigned int, const unsigned int *aut) {
+                     if (!has_odd_automorphism &&
+                         graph.automorphism_phase(aut, &named_indices) == -1)
+                       has_odd_automorphism = true;
+                   });
 
   if (has_odd_automorphism) {
     if (Logger::instance().canonicalize)
@@ -1118,6 +1120,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       }
     }
 
+    // Graph::automorphism_phase scores the slots of antisymmetric bundles
+    const std::size_t antisymm_bra_bundle = tensor_sym == Symmetry::Antisymm
+                                                ? graph.antisymm_bundles.size()
+                                                : uninitialized_vertex;
+    if (tensor_sym == Symmetry::Antisymm)
+      graph.antisymm_bundles.resize(graph.antisymm_bundles.size() + 2);
+
     // - Create vertex for every index slot, regardless of symmetry
     for (auto &slot_type : {SlotType::Bra, SlotType::Ket}) {
       const auto is_bra = slot_type == SlotType::Bra;
@@ -1188,6 +1197,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // make sure logic in index_slot_offset is correct
         assert(nvertex ==
                tensor_vertex + index_slot_offset(tensor, slot_type, i));
+        if (antisymm_bra_bundle != uninitialized_vertex && slots[i].nonnull())
+          graph.antisymm_bundles[antisymm_bra_bundle + (is_bra ? 0 : 1)]
+              .push_back(nvertex);
         ++nvertex;
       }
     }  // bra+ket slots
@@ -1423,6 +1435,35 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     graph.bliss_graph->change_color(vertex, color);
   }
 
+  // what Graph::automorphism_phase needs to know about the vertices
+  graph.vertex_indices.resize(nvertex);
+  graph.vertex_fixed_for_phase.assign(nvertex, false);
+  for (std::size_t v = 0; v != nvertex; ++v) {
+    switch (graph.vertex_types[v]) {
+      case VertexType::TensorCore:
+      case VertexType::TensorAux:
+      case VertexType::TensorAuxBundle:
+      case VertexType::IndexBundle:
+        graph.vertex_fixed_for_phase[v] = true;
+        break;
+      default:
+        break;
+    }
+  }
+  for (std::size_t i = 0; i < edges_.size(); ++i) {
+    const Index &idx = edges_[i].idx();
+    graph.vertex_indices[index_vertices[i]] = idx;
+    if (ext_indices_.contains(idx))
+      graph.vertex_fixed_for_phase[index_vertices[i]] = true;
+  }
+  for (const auto &[i, index] : ranges::views::enumerate(pure_proto_indices_))
+    graph.vertex_indices[index_vertices[i + edges_.size()]] = index;
+  graph.antisymm_slots.assign(nvertex,
+                              {uninitialized_vertex, uninitialized_vertex});
+  for (std::size_t b = 0; b != graph.antisymm_bundles.size(); ++b)
+    for (std::size_t pos = 0; pos != graph.antisymm_bundles[b].size(); ++pos)
+      graph.antisymm_slots[graph.antisymm_bundles[b][pos]] = {b, pos};
+
   if (options.make_idx_to_vertex) {
     SEQUANT_ASSERT(index_vertices.size() ==
                    edges_.size() + pure_proto_indices_.size());
@@ -1453,94 +1494,34 @@ const unsigned int *TensorNetworkV3::canonicalize_graph(
       const_cast<hook_t *>(&aut_hook));
 }
 
-int TensorNetworkV3::automorphism_phase(
-    const Graph &graph, const unsigned int *aut,
-    const NamedIndexSet *named_indices_ptr) const {
-  SEQUANT_ASSERT(have_edges_);
-  const auto &named_indices =
-      named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
-  const auto &vtypes = graph.vertex_types;
-  const std::size_t nv = vtypes.size();
-  static constexpr std::size_t npos = std::numeric_limits<std::size_t>::max();
-
-  // for each slot vertex of an antisymmetric bra/ket bundle that holds an
-  // index: {bundle ordinal, position among the bundle's nonnull slots}
-  container::vector<std::pair<std::size_t, std::size_t>> slot_pos(nv,
-                                                                  {npos, npos});
-  // nonnull slot vertices of each antisymmetric bundle, in slot order
-  container::vector<container::svector<std::size_t, 4>> bundles;
-
-  std::size_t tensor_count = 0;  // tensor cores visited so far
-  std::size_t index_ord = 0;
-  std::size_t bra_ord = 0, ket_ord = 0;
-  std::size_t bra_bundle = npos, ket_bundle = npos;
+int TensorNetworkV3::Graph::automorphism_phase(
+    const unsigned int *aut,
+    const container::set<Index, Index::FullLabelCompare> *named_indices) const {
+  const std::size_t nv = vertex_types.size();
+  SEQUANT_ASSERT(vertex_indices.size() == nv &&
+                 vertex_fixed_for_phase.size() == nv &&
+                 antisymm_slots.size() == nv);
   for (std::size_t v = 0; v != nv; ++v) {
-    switch (vtypes[v]) {
-      case VertexType::TensorCore: {
-        if (aut[v] != v) return 0;
-        ++tensor_count;
-        bra_ord = ket_ord = 0;
-        bra_bundle = ket_bundle = npos;
-        if (symmetry(*tensors_.at(tensor_count - 1)) == Symmetry::Antisymm) {
-          bra_bundle = bundles.size();
-          ket_bundle = bra_bundle + 1;
-          bundles.resize(bundles.size() + 2);
-        }
-        break;
-      }
-      case VertexType::IndexBundle:
-      case VertexType::TensorAux:
-      case VertexType::TensorAuxBundle:
-        if (aut[v] != v) return 0;
-        break;
-      case VertexType::Index: {
-        if (aut[v] != v) {
-          const Index &idx = index_ord < edges_.size()
-                                 ? edges_[index_ord].idx()
-                                 : *std::next(pure_proto_indices_.begin(),
-                                              index_ord - edges_.size());
-          if (named_indices.contains(idx) || ext_indices_.contains(idx))
-            return 0;
-        }
-        ++index_ord;
-        break;
-      }
-      case VertexType::TensorBra:
-      case VertexType::TensorKet: {
-        const bool is_bra = vtypes[v] == VertexType::TensorBra;
-        auto &slot_ord = is_bra ? bra_ord : ket_ord;
-        const auto bundle = is_bra ? bra_bundle : ket_bundle;
-        if (bundle != npos) {
-          const AbstractTensor &tensor = *tensors_[tensor_count - 1];
-          // the view is held in a local so no reference binds to a temporary
-          auto slots = is_bra ? tensor._bra() : tensor._ket();
-          if (slots[slot_ord].nonnull()) {
-            slot_pos[v] = {bundle, bundles[bundle].size()};
-            bundles[bundle].push_back(v);
-          }
-        }
-        ++slot_ord;
-        break;
-      }
-      case VertexType::TensorBraBundle:
-      case VertexType::TensorKetBundle:
-      case VertexType::TensorBraKet:
-        break;
-    }
+    if (aut[v] == v) continue;
+    if (vertex_fixed_for_phase[v]) return 0;
+    if (named_indices && vertex_types[v] == VertexType::Index &&
+        named_indices->contains(vertex_indices[v]))
+      return 0;
   }
 
   // aut fixes every tensor core, hence maps each antisymmetric bundle onto a
   // bundle of the same tensor (itself, or its partner if the tensor is
   // bra<->ket symmetric); the phase is the product of the parities of the
   // induced maps between slot positions
+  static constexpr std::size_t npos = std::numeric_limits<std::size_t>::max();
   int phase = 1;
   container::svector<std::size_t, 4> perm;
-  for (std::size_t b = 0; b != bundles.size(); ++b) {
-    const auto &vertices = bundles[b];
+  for (std::size_t b = 0; b != antisymm_bundles.size(); ++b) {
+    const auto &vertices = antisymm_bundles[b];
     perm.clear();
     [[maybe_unused]] std::size_t image_bundle = npos;
     for (const auto v : vertices) {
-      const auto &[bundle, pos] = slot_pos[aut[v]];
+      const auto &[bundle, pos] = antisymm_slots[aut[v]];
       SEQUANT_ASSERT(bundle != npos && bundle / 2 == b / 2);
       SEQUANT_ASSERT(image_bundle == npos || image_bundle == bundle);
       SEQUANT_ASSERT(pos < vertices.size());
