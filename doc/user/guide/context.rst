@@ -145,3 +145,5 @@ the context is constructed, cloned or modified through one of its setters. :func
 version of the context in effect on the calling thread, which lets code that caches results derived from the context tell that the
 cache is stale. The version tracks changes made through the ``Context`` interface; it does not track in-place mutation of an
 :class:`sequant::IndexSpaceRegistry` shared with other contexts, nor of a canonicalizer or comparer object that the context refers to.
+It identifies a context and its copies rather than their content: contexts that compare equal, such as two default-constructed ones,
+may have different versions, so a cache keyed on the version can be invalidated without need, but never kept stale.

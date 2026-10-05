@@ -50,6 +50,18 @@ void check_tensor_canonicalizer(
     throw Exception("Context: a tensor canonicalizer must not be null");
 }
 
+template <typename Comparer>
+std::shared_ptr<const Comparer> make_comparer(Comparer comparer) {
+  SEQUANT_ASSERT(comparer);
+  return std::make_shared<const Comparer>(std::move(comparer));
+}
+
+void check_cardinal_tensor_labels(
+    [[maybe_unused]] const container::vector<std::wstring>& labels) {
+  SEQUANT_ASSERT(!has_duplicates(labels) &&
+                 "cardinal tensor labels must not contain duplicates");
+}
+
 }  // namespace
 
 bool default_context_manipulation_threadsafe() {
@@ -229,19 +241,22 @@ Context::Context(Options options)
     tensor_canonicalizers->map = std::move(*options.tensor_canonicalizers);
   }
   tensor_canonicalizers->map.try_emplace(L"", default_tensor_canonicalizer());
-  tensor_canonicalizers->index_comparer = default_index_comparer();
-  tensor_canonicalizers->index_pair_comparer = default_index_pair_comparer();
+  tensor_canonicalizers->index_comparer =
+      options.index_comparer ? make_comparer(std::move(*options.index_comparer))
+                             : default_index_comparer();
+  tensor_canonicalizers->index_pair_comparer =
+      options.index_pair_comparer
+          ? make_comparer(std::move(*options.index_pair_comparer))
+          : default_index_pair_comparer();
+  if (options.cardinal_tensor_labels) {
+    check_cardinal_tensor_labels(*options.cardinal_tensor_labels);
+    tensor_canonicalizers->cardinal_labels =
+        std::move(*options.cardinal_tensor_labels);
+  } else
+    tensor_canonicalizers->cardinal_labels = {reserved::antisymm_label(),
+                                              reserved::symm_label(),
+                                              reserved::transposition_label()};
   tensor_canonicalizers_ = std::move(tensor_canonicalizers);
-  if (options.index_comparer)
-    set_index_comparer(std::move(*options.index_comparer));
-  if (options.index_pair_comparer)
-    set_index_pair_comparer(std::move(*options.index_pair_comparer));
-  set_cardinal_tensor_labels(
-      options.cardinal_tensor_labels
-          ? std::move(*options.cardinal_tensor_labels)
-          : container::vector<std::wstring>{reserved::antisymm_label(),
-                                            reserved::symm_label(),
-                                            reserved::transposition_label()});
   bump_version();
 }
 
@@ -452,26 +467,23 @@ Context& Context::unset_tensor_canonicalizer(std::wstring_view label) {
 }
 
 Context& Context::set_index_comparer(tensor_index_comparer_t comparer) {
-  SEQUANT_ASSERT(comparer);
   mutable_tensor_canonicalizers().index_comparer =
-      std::make_shared<const tensor_index_comparer_t>(std::move(comparer));
+      make_comparer(std::move(comparer));
   bump_version();
   return *this;
 }
 
 Context& Context::set_index_pair_comparer(
     tensor_index_pair_comparer_t comparer) {
-  SEQUANT_ASSERT(comparer);
   mutable_tensor_canonicalizers().index_pair_comparer =
-      std::make_shared<const tensor_index_pair_comparer_t>(std::move(comparer));
+      make_comparer(std::move(comparer));
   bump_version();
   return *this;
 }
 
 Context& Context::set_cardinal_tensor_labels(
     container::vector<std::wstring> labels) {
-  SEQUANT_ASSERT(!has_duplicates(labels) &&
-                 "cardinal tensor labels must not contain duplicates");
+  check_cardinal_tensor_labels(labels);
   mutable_tensor_canonicalizers().cardinal_labels = std::move(labels);
   bump_version();
   return *this;

@@ -252,6 +252,18 @@ TEST_CASE("context", "[runtime]") {
     CHECK(with_registry.clone().version() != with_registry.version());
     CHECK(Context({.vacuum = Vacuum::SingleProduct}).version() != 0);
 
+    // construction from Options assigns a single version, however many
+    // fields are given
+    {
+      const auto before = Context{}.version();
+      const Context from_options(
+          {.index_comparer = TensorCanonicalizer::default_index_comparer(),
+           .index_pair_comparer =
+               TensorCanonicalizer::default_index_pair_comparer(),
+           .cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
+      CHECK(from_options.version() == before + 1);
+    }
+
     // equality ignores the version
     const Context same_registry(
         {.index_space_registry_shared_ptr =

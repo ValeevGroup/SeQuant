@@ -178,6 +178,10 @@ class Context {
   /// versions ever assigned in this process, that changes whenever the context
   /// is constructed, cloned or modified through a setter (including the
   /// `Options` constructor); copies keep the version of their source
+  /// @note the version identifies a context and its copies, not its content:
+  /// contexts that compare equal may have different versions (e.g. two
+  /// default-constructed ones), so code that caches results keyed on the
+  /// version recomputes them more often than strictly necessary
   /// @note the version does not track in-place mutation of an
   /// IndexSpaceRegistry shared with other contexts, nor of a
   /// TensorCanonicalizer or comparer object that this context refers to
