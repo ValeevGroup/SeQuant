@@ -372,12 +372,13 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// `sequant::type_name_of<T>()`. Hence Expr::operator< orders unlike types by
   /// rank first. A type whose relative order must not depend on the compiler
   /// declares `static constexpr std::string
-  /// static_type_name(std::type_identity<Self> = {})` (usable in constant
-  /// expressions). A derived class inherits its base's `type_rank` but not its
-  /// name, so unless it declares its own name it gets the compiler-derived
-  /// one. A type in an unnamed namespace declares a name if another translation
-  /// unit may define one of the same name, since types are told apart by
-  /// mangled name and such a pair would silently share an id.
+  /// static_type_name(std::type_identity<Self> = {})`; `constexpr` makes it
+  /// usable in constant expressions, but is not required. A derived class
+  /// inherits its base's `type_rank` but not its name, so unless it declares
+  /// its own name it gets the compiler-derived one. A type in an unnamed
+  /// namespace declares a name if another translation unit may define one of
+  /// the same name, since types are told apart by mangled name and such a pair
+  /// would silently share an id.
   /// @throw sequant::Exception if a type of another mangled name already has
   /// this id
   template <typename T>

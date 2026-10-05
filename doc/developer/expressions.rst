@@ -21,9 +21,10 @@ An id is computed once per type from two things the type may declare:
   sort first); a type that does not declare it gets ``Expr::default_type_rank``, and a value that does not fit is a
   compile-time error;
 - ``static constexpr std::string static_type_name(std::type_identity<Self> = {})``, where ``Self`` is the declaring
-  type: a name for the type, usable in constant expressions; a class template composes it from its own name and the
-  names of its template arguments, obtained via ``sequant::type_name_of<T>()``. A type that does not declare it gets a
-  name derived from the compiler's spelling of the type.
+  type: a name for the type; a class template composes it from its own name and the names of its template arguments,
+  obtained via ``sequant::type_name_of<T>()``. SeQuant's types declare it ``constexpr``, which makes the name, and
+  ``type_name_of``, usable in constant expressions; a non-``constexpr`` one is accepted too. A type that does not
+  declare it gets a name derived from the compiler's spelling of the type.
 
 The id is ``(rank << 56) | (fnv1a_64(name) >> 8)`` (``Expr::make_type_id``; ``Expr::type_rank_of`` recovers the rank),
 so ranks order types first and the name only breaks ties within a rank. The ranks of SeQuant's own types are collected
