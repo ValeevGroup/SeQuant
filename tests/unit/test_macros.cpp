@@ -12,27 +12,6 @@
 #include <filesystem>
 
 TEST_CASE("macros", "[elements]") {
-  SECTION("SEQUANT_ENFORCE") {
-    int evaluations = 0;
-    SEQUANT_ENFORCE(++evaluations == 1);
-    REQUIRE(evaluations == 1);
-
-    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
-      REQUIRE_THROWS_AS([] { SEQUANT_ENFORCE(false); }(), sequant::Exception);
-      const auto fail_with_message = [] {
-      // clang-format off
-#line 3000
-        SEQUANT_ENFORCE(1 == 0, "invalid input");
-        // clang-format on
-      };
-      REQUIRE_THROWS_WITH(
-          fail_with_message(),
-          Catch::Matchers::ContainsSubstring("invalid input") &&
-              Catch::Matchers::ContainsSubstring("1 == 0") &&
-              Catch::Matchers::ContainsSubstring("test_macros.cpp:3000"));
-    }
-  }
-
   SECTION("SEQUANT_ASSERT") {
     std::filesystem::path this_file("tests/unit/test_macros.cpp");
 
@@ -88,6 +67,27 @@ TEST_CASE("macros", "[elements]") {
         REQUIRE(found);
 #endif
       }
+    }
+  }
+
+  SECTION("SEQUANT_ENFORCE") {
+    int evaluations = 0;
+    SEQUANT_ENFORCE(++evaluations == 1);
+    REQUIRE(evaluations == 1);
+
+    if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
+      REQUIRE_THROWS_AS([] { SEQUANT_ENFORCE(false); }(), sequant::Exception);
+      const auto fail_with_message = [] {
+      // clang-format off
+#line 3000
+        SEQUANT_ENFORCE(1 == 0, "invalid input");
+        // clang-format on
+      };
+      REQUIRE_THROWS_WITH(
+          fail_with_message(),
+          Catch::Matchers::ContainsSubstring("invalid input") &&
+              Catch::Matchers::ContainsSubstring("1 == 0") &&
+              Catch::Matchers::ContainsSubstring("test_macros.cpp:3000"));
     }
   }
 }
