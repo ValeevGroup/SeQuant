@@ -47,6 +47,12 @@ The ``Context`` owns the settings that govern how individual tensors are canonic
 - the *cardinal* tensor labels, which are given lexicographic preference during canonicalization
   (:func:`sequant::Context::set_cardinal_tensor_labels`).
 
+Canonicalization reads this configuration from the default context for ``Statistics::Arbitrary`` only: a canonicalized product
+mixes tensors that have no statistics with operators of either statistics, and must order all of them consistently. The configuration
+of a context installed for a specific statistics is currently ignored. Keep it identical to that of the ``Statistics::Arbitrary``
+context nonetheless (as :func:`sequant::set_scoped_modified_default_context` does), since a future version may consult the
+statistics-specific context first.
+
 These can be given up front through ``Context::Options`` or changed on an existing ``Context`` with the setters above; to change them
 for the duration of a scope, use a scoped context (see below) with a modified canonicalizer configuration. The example
 canonicalizes a product, since that is where a canonicalizer registered for a label is used (a sum canonicalizes each of its summands

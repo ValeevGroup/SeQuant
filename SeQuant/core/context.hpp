@@ -68,6 +68,13 @@ namespace sequant {
 /// - `cardinal_tensor_labels`: Tensor labels with lexicographic preference
 ///   (in order); default to `{reserved::antisymm_label(),
 ///   reserved::symm_label(), reserved::transposition_label()}`.
+///
+/// @note canonicalization reads `tensor_canonicalizers`, `index_comparer`,
+///   `index_pair_comparer` and `cardinal_tensor_labels` only from the default
+///   context for Statistics::Arbitrary; in a context installed for another
+///   Statistics they are currently ignored, but keep them identical to those
+///   of the Statistics::Arbitrary context, since a future version may consult
+///   the statistics-specific context first
 // clang-format off
 class Context {
  public:
