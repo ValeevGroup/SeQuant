@@ -60,7 +60,8 @@ namespace sequant {
 ///   tensors, keyed by tensor label; the one keyed by the empty label applies
 ///   to tensors without a label-specific canonicalizer. The canonicalizer
 ///   objects are shared by copies of the context and must not be mutated.
-///   Defaults to a DefaultTensorCanonicalizer for the empty label.
+///   The empty label maps to a DefaultTensorCanonicalizer unless a map given
+///   to the constructor sets it; unset_tensor_canonicalizer() can remove it.
 /// - `index_comparer`, `index_pair_comparer`: the objects that order Index
 ///   objects (and pairs thereof) during tensor canonicalization; default to
 ///   TensorCanonicalizer::default_index_comparer() and
@@ -131,7 +132,7 @@ class Context {
       /// deserialized tensors
       ColumnSymmetry deserialization_column_symmetry =
         Defaults::deserialization_column_symmetry;
-      /// label -> TensorCanonicalizer map; if not set, maps the empty label to a DefaultTensorCanonicalizer
+      /// label -> TensorCanonicalizer map, without null entries; the empty label maps to a DefaultTensorCanonicalizer unless given
       std::optional<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>> tensor_canonicalizers = std::nullopt;
       /// the Index comparer used by tensor canonicalizers; if not set, TensorCanonicalizer::default_index_comparer()
       std::optional<tensor_index_comparer_t> index_comparer = std::nullopt;
@@ -307,6 +308,7 @@ class Context {
   /// replacing the existing one, if any; the empty label applies to Tensor
   /// objects without a label-specific canonicalizer
   /// \param canonicalizer a nonnull TensorCanonicalizer
+  /// \throw Exception if @p canonicalizer is null
   /// \return ref to `*this`, for chaining
   Context& set_tensor_canonicalizer(
       std::wstring_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);

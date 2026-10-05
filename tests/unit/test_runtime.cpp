@@ -211,12 +211,29 @@ TEST_CASE("context", "[runtime]") {
          .index_comparer = ctx_cmp.index_comparer(),
          .cardinal_tensor_labels = container::vector<std::wstring>{L"Z"}});
     CHECK(ctx_opts.tensor_canonicalizer_ptr(L"Q") == null_canon);
-    CHECK(ctx_opts.tensor_canonicalizer_ptr(L"R") == nullptr);
+    // the empty label maps to the default canonicalizer unless given
+    CHECK(ctx_opts.tensor_canonicalizer_ptr(L"R") ==
+          Context{}.tensor_canonicalizer_ptr(L""));
+    CHECK(Context({.tensor_canonicalizers =
+                       container::map<std::wstring,
+                                      std::shared_ptr<TensorCanonicalizer>>{
+                           {L"", null_canon}}})
+              .tensor_canonicalizer_ptr(L"R") == null_canon);
     CHECK(ctx_opts.cardinal_tensor_labels() ==
           container::vector<std::wstring>{L"Z"});
     CHECK(ctx_opts.index_comparer());
     CHECK(ctx_opts.index_pair_comparer());
     CHECK(ctx_opts != ctx);
+
+    // null canonicalizers are rejected
+    CHECK_THROWS_AS(
+        Context({.tensor_canonicalizers =
+                     container::map<std::wstring,
+                                    std::shared_ptr<TensorCanonicalizer>>{
+                         {L"Q", nullptr}}}),
+        Exception);
+    CHECK_THROWS_AS(Context{}.set_tensor_canonicalizer(L"Q", nullptr),
+                    Exception);
   }
 
   SECTION("version") {

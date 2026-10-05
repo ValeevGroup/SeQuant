@@ -44,6 +44,12 @@ default_index_pair_comparer() {
 
 std::atomic<std::uint64_t> last_context_version{0};
 
+void check_tensor_canonicalizer(
+    const std::shared_ptr<TensorCanonicalizer>& canonicalizer) {
+  if (!canonicalizer)
+    throw Exception("Context: a tensor canonicalizer must not be null");
+}
+
 }  // namespace
 
 bool default_context_manipulation_threadsafe() {
@@ -217,10 +223,12 @@ Context::Context(Options options)
       deserialization_column_symmetry_(
           options.deserialization_column_symmetry) {
   auto tensor_canonicalizers = std::make_shared<TensorCanonicalizers>();
-  if (options.tensor_canonicalizers)
+  if (options.tensor_canonicalizers) {
+    for (const auto& [label, canonicalizer] : *options.tensor_canonicalizers)
+      check_tensor_canonicalizer(canonicalizer);
     tensor_canonicalizers->map = std::move(*options.tensor_canonicalizers);
-  else
-    tensor_canonicalizers->map.emplace(L"", default_tensor_canonicalizer());
+  }
+  tensor_canonicalizers->map.try_emplace(L"", default_tensor_canonicalizer());
   tensor_canonicalizers->index_comparer = default_index_comparer();
   tensor_canonicalizers->index_pair_comparer = default_index_pair_comparer();
   tensor_canonicalizers_ = std::move(tensor_canonicalizers);
@@ -430,7 +438,7 @@ Context& Context::set(ColumnSymmetry column_symmetry) {
 Context& Context::set_tensor_canonicalizer(
     std::wstring_view label,
     std::shared_ptr<TensorCanonicalizer> canonicalizer) {
-  SEQUANT_ASSERT(canonicalizer);
+  check_tensor_canonicalizer(canonicalizer);
   mutable_tensor_canonicalizers().map.insert_or_assign(
       std::wstring{label}, std::move(canonicalizer));
   bump_version();
