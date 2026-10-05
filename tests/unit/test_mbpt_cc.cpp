@@ -397,6 +397,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
     const auto expected = op::ref_av(lst(op::H(), op::T(1), 2), {});
     REQUIRE(simplify(CC(1).energy(2) - expected) == ex<Constant>(0));
 
+    // screening must not change the result
+    const auto screened = CC(2).t();
+    const auto unscreened = CC(2, {.screen = false}).t();
+    for (std::size_t p = 0; p != screened.size(); ++p)
+      REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
+
     if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
       REQUIRE_THROWS_AS(CC(1).λ(), Exception);
       // the check precedes the dispatch to the UCC EOM path
