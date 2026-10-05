@@ -86,6 +86,16 @@ or new abstractions the change doesn't strictly require, even if the
 surrounding code looks like it could use it while you're in the area
 — propose that separately and let it be its own change.
 
+## Keep plans and specs out of the source tree
+
+Do not commit plans, specs, or design notes, including those a planning
+workflow writes into the working tree; keep them outside the repository or
+untracked.
+
+Before discarding a plan or spec, move its current, conceptual content into
+`doc/user/` or `doc/developer/` under the Documentation rules below; anything
+finer-grained belongs in source comments, if anywhere.
+
 ## Comments explain the present code; commit messages explain the change
 
 Keep comments brief, and only write one where the *why* isn't obvious from
