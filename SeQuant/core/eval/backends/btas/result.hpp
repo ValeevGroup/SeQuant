@@ -3,6 +3,7 @@
 
 #ifdef SEQUANT_HAS_BTAS
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/meta.hpp>
@@ -214,12 +215,12 @@ T batched_contract(typename T::numeric_type alpha, T const& L, Annot const& la,
   std::size_t rcsz = 1;
   for (auto const& x : rc) {
     std::size_t ext = 0;
-    if (auto it = std::find(rl.begin(), rl.end(), x); it != rl.end())
-      ext = rlext[static_cast<std::size_t>(it - rl.begin())];
+    if (auto const p = find_position(rl, x))
+      ext = rlext[*p];
     else {
-      auto jt = std::find(rr.begin(), rr.end(), x);
-      SEQUANT_ASSERT(jt != rr.end());
-      ext = rrext[static_cast<std::size_t>(jt - rr.begin())];
+      auto const q = find_position(rr, x);
+      SEQUANT_ASSERT(q);
+      ext = rrext[*q];
     }
     rcext.push_back(ext);
     rcsz *= ext;
@@ -445,7 +446,7 @@ class ResultTensorBTAS final : public Result {
   [[nodiscard]] std::size_t size_in_bytes() const final {
     const auto& tensor = get<T>();
     // only count data
-    return tensor.range().volume() * sizeof(T);
+    return tensor.range().volume() * sizeof(numeric_type);
   }
 };
 

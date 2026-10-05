@@ -5,6 +5,7 @@
 #ifndef SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 #define SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -207,13 +208,12 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       case Symmetry::Symm: {
         auto _bra = mutable_bra_range(t);
         auto _ket = mutable_ket_range(t);
-        reset_ts_swap_counter<Index>();
         // std::{stable_}sort does not necessarily use swap! so must implement
         // sort ourselves .. thankfully ranks will be low so can stick with
         // bubble
-        bubble_sort(begin(_bra), end(_bra), idxcmp);
-        bubble_sort(begin(_ket), end(_ket), idxcmp);
-        if (is_antisymm) even = ts_swap_counter_is_even<Index>();
+        const int parity =
+            bubble_sort_parity(_bra, idxcmp) * bubble_sort_parity(_ket, idxcmp);
+        if (is_antisymm) even = parity == 1;
       } break;
 
       case Symmetry::Nonsymm: {

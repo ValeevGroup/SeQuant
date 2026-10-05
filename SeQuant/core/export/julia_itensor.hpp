@@ -41,39 +41,14 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
 
   void create(const Tensor &tensor, bool zero_init,
               const Context &ctx) override {
-    if (!zero_init) {
-      throw Exception(
-          "In Julia tensors can't be created without being initialized");
-    }
-
-    Base::m_generated += Base::tensor_name(tensor, ctx);
-    Base::m_generated += " = ITensor(zeros(Float64";
-
-    for (const Index &idx : tensor.const_indices()) {
-      Base::m_generated += ", ";
-      Base::m_generated += ctx.get_dim(idx.space());
-    }
-
-    Base::m_generated += "), ";
-    Base::m_generated += index_set(tensor, ctx);
-    Base::m_generated += ")\n";
+    Base::create_wrapped(tensor, zero_init, ctx, "ITensor",
+                         index_set(tensor, ctx));
   }
 
   void load(const Tensor &tensor, bool set_to_zero,
             const Context &ctx) override {
-    if (set_to_zero) {
-      // In Julia setting a tensor to zero has to be done by overwriting it with
-      // a zero tensor
-      create(tensor, true, ctx);
-      return;
-    }
-
-    Base::m_generated += Base::tensor_name(tensor, ctx);
-    Base::m_generated += " = ITensor(deserialize(\"";
-    Base::m_generated += Base::tensor_name(tensor, ctx);
-    Base::m_generated += ".jlbin\"), ";
-    Base::m_generated += index_set(tensor, ctx);
-    Base::m_generated += ")\n";
+    Base::load_wrapped(tensor, set_to_zero, ctx, "ITensor",
+                       index_set(tensor, ctx));
   }
 
   void create(const Variable &variable, bool zero_init,

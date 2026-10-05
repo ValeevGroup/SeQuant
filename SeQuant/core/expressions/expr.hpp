@@ -13,11 +13,31 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <string>
+#include <string_view>
 
 namespace sequant {
 
 /// @brief the wchar used for labeling adjoints, i.e. the superscript + sign
 static const wchar_t adjoint_label = L'\u207A';
+
+/// @return true if @p label ends with the adjoint marker ::adjoint_label
+inline bool is_adjoint_label(std::wstring_view label) {
+  return !label.empty() && label.back() == adjoint_label;
+}
+
+/// @return @p label without its trailing adjoint marker, if present
+inline std::wstring_view strip_adjoint_label(std::wstring_view label) {
+  return is_adjoint_label(label) ? label.substr(0, label.size() - 1) : label;
+}
+
+/// appends the adjoint marker to @p label, or removes it if already present
+inline void toggle_adjoint_label(std::wstring &label) {
+  if (is_adjoint_label(label))
+    label.pop_back();
+  else
+    label.push_back(adjoint_label);
+}
 
 /// @brief Base expression class
 

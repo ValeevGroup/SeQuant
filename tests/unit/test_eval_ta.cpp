@@ -3041,38 +3041,10 @@ TEST_CASE(
   CHECK(rel < 1e-10);
 }
 
-// ===========================================================================
-// [blocked-layers-1-2] -- what these hidden fixtures ARE
-//
-// Every TEST_CASE tagged [blocked-layers-1-2] is hidden ([.]) because it
-// encodes a DESIGN THIS BRANCH DOES NOT IMPLEMENT, not because a known-good
-// test was switched off. The reason some of them still carry -- "blocked on
-// Layers 1-2 (use-induced slicing of whole-produced operands + multi-level
-// escape chain)" -- has EXPIRED: both are built (as-built design sections
-// 6.2 / 6.3 / 7, doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
-// What these fixtures actually encode is the older loop-identity / layout
-// model that the identity rework superseded, so their expectations no longer
-// describe the shipped builder; at least test_eval_ta.cpp's "batched ToT
-// External occ loop" case and test_ordered_schedule.cpp's "forced-split occ
-// axis realizes TWO ordered sibling blocks" case FAIL when run today. The
-// latter is instructive: it sets only a BatchPolicy role predicate and never
-// stamps node_slice_mask on its forest, so the shipped builder realizes NO
-// loop at all and finds zero occ blocks -- the fixture's INPUT contract is
-// stale, not the forced-split realization it was written to pin (which
-// as-built section 6.3 describes correctly and [cell_table][ordered] /
-// [w20-auxocc-walk] exercise on real water-20 data).
-//
-// Retargeting them to the shipped design is deferred (as-built section 12.2).
-// They are kept, hidden, as a record of the shapes that still want coverage.
-// Do NOT un-hide one without first rewriting its expectation against the code.
-// ===========================================================================
-// Hidden [blocked-layers-1-2] -- encodes a design this branch does not
-// implement; see the [blocked-layers-1-2] note in this file. Do not un-hide
-// without rewriting the expectation first.
 TEST_CASE(
     "evaluate_ordered_schedule matches forest descent over one Contracted "
     "loop block",
-    "[.][eval][ordered-executor][blocked-layers-1-2]") {
+    "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3449,113 +3421,6 @@ TEST_CASE(
   CHECK(rel2 < 1e-12);
 }
 
-// Numerical equivalence of evaluate_ordered_schedule vs forest descent for a
-// BATCHED ToT forest: external-occ (spectator) batching on composite-proto ToT
-// tiles -- the CSV-CCk residual's exact shape (AccumulateScatter of a
-// loop-carried external occ over nested tiles). The flat External ordered test
-// passes and the ToT tests above are unbatched, so this is the untested
-// intersection (my read-from-home + member-root caching + ToT scatter) the
-// water-8 run may exercise. Mirrors batched_eval_external_proto_occ_scatter's
-// forest but drives it through the ORDERED executor.
-// Hidden [blocked-layers-1-2] -- encodes a design this branch does not
-// implement; see the [blocked-layers-1-2] note in this file. Do not un-hide
-// without rewriting the expectation first.
-TEST_CASE(
-    "evaluate_ordered_schedule matches forest descent over a batched ToT "
-    "External occ loop",
-    "[.][eval][ordered-executor][blocked-layers-1-2]") {
-  using sequant::evaluate;
-  using sequant::Index;
-  using sequant::index_position;
-  using sequant::eval::analyze_legality;
-  using sequant::eval::build_ordered_schedule;
-  using sequant::eval::compute_dag_boulevard;
-  using sequant::eval::evaluate_ordered_schedule;
-  using sequant::eval::OrderedSchedule;
-  using sequant::eval::RichSchedule;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-  using ToTArray = TA::DistArray<TA::Tensor<TA::Tensor<double>>>;
-
-  auto& world = TA::get_default_world();
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
-                                                    /*nvirt=*/4, /*naux=*/8};
-  yield_.set_max_tile(4);
-
-  auto const expr = sequant::deserialize<sequant::ExprPtr>(
-      L"(g{m_1;m_2} * C{m_2;a1<i_1,i_2>}) * C{a2<i_1,i_2>;m_1}");
-  auto rootn = eval_node(expr);
-  std::string const target = rootn->annot();
-
-  auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
-  auto accept_occ = [occ](Index const& ix) {
-    return ix.space() == occ && !ix.has_proto_indices();
-  };
-  Index mode;
-  for (auto const& ix : rootn->canon_indices())
-    if (accept_occ(ix)) {
-      mode = ix;
-      break;
-    }
-  REQUIRE(mode.nonnull());
-
-  // Reference: forest descent (node_slice_mask ignored, no custom evaluator).
-  std::vector<node_t> forest{rootn};
-  auto const ref = evaluate(forest, target, yield_)->get<ToTArray>();
-  REQUIRE(TA::norm2(ref) > 0.0);
-
-  // Stamp External on every node whose result carries the occ, as the optimizer
-  // would (mirrors batched_eval_external_proto_occ_scatter). The external loop
-  // OPENS once, at the root (an external mode is on the final result, so the
-  // root is its outermost carrier) -- ectx is built from opens (peak_profile).
-  rootn->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
-  rootn->set_batch_loops_opened_here(
-      {{mode, sequant::BatchModeType::External}});
-  auto stamp = [&](auto&& self, node_t& n) -> void {
-    if (n.leaf()) return;
-    if (&n != &rootn && index_position(n, mode).has_value())
-      n->set_node_slice_mask({{mode, sequant::BatchModeType::External}});
-    self(self, n.left());
-    self(self, n.right());
-  };
-  stamp(stamp, rootn);
-
-  sequant::BatchPolicy policy;
-  policy.is_batchable_contracted_index = [](Index const&) { return false; };
-  policy.is_batchable_external_index = [occ](Index const& ix) {
-    return ix.space() == occ && !ix.has_proto_indices();
-  };
-  sequant::eval::dryrun::SizeRegime const regime;
-  sequant::eval::dryrun::CostModel const cm{regime};
-  auto const block_of = [](Index const&) -> std::size_t { return 4; };
-  RichSchedule const rich = compute_dag_boulevard(forest, cm, block_of);
-  auto const legality = analyze_legality(rich, forest, policy);
-  OrderedSchedule const ordered =
-      build_ordered_schedule(rich, legality, policy, {L"i"});
-
-  // Precondition: a realized External loop block exists.
-  bool has_block = false;
-  for (auto const& step : ordered.root.steps)
-    if (std::holds_alternative<sequant::eval::ScopeBlock>(step.value))
-      has_block = true;
-  REQUIRE(has_block);
-
-  auto cache = sequant::CacheManager<node_t>::empty();
-  std::function<std::size_t(Index const&)> const target_batch =
-      [](Index const&) -> std::size_t { return 4; };
-  auto const got = evaluate_ordered_schedule(forest, ordered, rich, target,
-                                             yield_, cache, target_batch)
-                       ->get<ToTArray>();
-
-  ToTArray diff;
-  diff(target) = got(target) - ref(target);
-  double const rel =
-      std::sqrt(diff(target).dot(diff(target)) / ref(target).dot(ref(target)));
-  INFO("relative L2 diff (batched ToT External ordered vs forest descent) = "
-       << rel);
-  CHECK(rel < 1e-12);
-}
-
 // The water-8 intersection: a BATCHED (aux/Contracted) loop AND cross-iteration
 // cache reuse with a changed volatile 't'. All prior ordered tests pass; the
 // batched ones are single-eval and the cross-iteration one is unbatched, so
@@ -3565,13 +3430,10 @@ TEST_CASE(
 // volatile, recomputed with the new 't'); root F2 = S*(p*q) has no 't'
 // (persistent). If ordered disagrees with forest descent on iteration 2, the
 // batched path leaks stale 't'-dependent state across reset.
-// Hidden [blocked-layers-1-2] -- encodes a design this branch does not
-// implement; see the [blocked-layers-1-2] note in this file. Do not un-hide
-// without rewriting the expectation first.
 TEST_CASE(
     "evaluate_ordered_schedule matches forest descent across a reset in "
     "a batched Contracted loop",
-    "[.][eval][ordered-executor][ordered-crossiter-bug][blocked-layers-1-2]") {
+    "[eval][ordered-executor][ordered-crossiter-bug]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -3689,13 +3551,10 @@ TEST_CASE(
 // more than one physical Index in one block is out of scope here. Real TA
 // data at a small tractable size (the DryRun backend is zero-data and cannot
 // witness a dropped/double-written scatter slice).
-// Hidden [blocked-layers-1-2] -- encodes a design this branch does not
-// implement; see the [blocked-layers-1-2] note in this file. Do not un-hide
-// without rewriting the expectation first.
 TEST_CASE(
     "evaluate_ordered_schedule matches forest descent over one External "
     "loop block",
-    "[.][eval][ordered-executor][blocked-layers-1-2]") {
+    "[eval][ordered-executor]") {
   using sequant::evaluate;
   using sequant::eval::analyze_legality;
   using sequant::eval::build_ordered_schedule;
@@ -5316,139 +5175,6 @@ TEST_CASE("batched_eval_external_proto_occ_scatter",
   REQUIRE_FALSE(guard_calls.empty());
   for (auto const n : guard_calls) CHECK(n > 1);
   CHECK(guard_calls.front() == 3);
-}
-
-// Hidden [blocked-layers-1-2] -- encodes a design this branch does not
-// implement; see the [blocked-layers-1-2] note in this file. Do not un-hide
-// without rewriting the expectation first.
-TEST_CASE("batched_eval_external_two_occ",
-          "[.][eval][batched-external][blocked-layers-1-2]") {
-  // Task 9 (rank-2 multi-mode): batched_eval_external_axis_scatter stamps a
-  // SINGLE external mode External; this test stamps TWO DISTINCT occupied
-  // indices External on the SAME (only) product node and proves the runtime
-  // nests both scatter loops as a PRODUCT of block counts, not just one
-  // mode's worth. Structurally this is the External/scatter analog of
-  // "eval_batched_custom_evaluator nests two modes on one node" (which does
-  // the same two-modes-per-node nesting for BatchModeType::Contracted).
-  //
-  // R{i_1;i_2} = g{i_1;a_1} * h{a_1;i_2}: i_1 is free on g and the result
-  // only (not shared with h); i_2 is free on h and the result only (not
-  // shared with g); a_1 is contracted between g and h. Because i_1 and i_2
-  // each appear on only ONE operand (as ordinary result indices), plain
-  // ExprPtr binarization already keeps them free -- unlike the aux
-  // hyperindex in batched_eval_external_axis_scatter (shared by > 2 tensor
-  // slots there), no ResultExpr pinning is needed to keep them external.
-  using sequant::evaluate;
-  using sequant::make_batched_custom_evaluator;
-  using TA::TArrayD;
-  using node_t = sequant::FullBinaryNode<sequant::EvalExprTA>;
-  using cache_t = sequant::CacheManager<node_t>;
-
-  auto& world = TA::get_default_world();
-  // occupied multi-tiled (12 in tiles of 4 -> 3 tiles) so BOTH occ
-  // external modes i_1, i_2 partition into > 1 block; virtual single-tiled
-  // (4, the contracted mode a_1).
-  rand_tensor_yield<double, TA::DensePolicy> yield_{world, /*nocc=*/12,
-                                                    /*nvirt=*/4};
-  yield_.set_max_tile(4);
-
-  auto const expr =
-      sequant::deserialize<sequant::ExprPtr>(L"(g{i_1;a_1} * h{a_1;i_2})");
-  std::string const target = "i_1,i_2";
-  auto node = eval_node(expr);  // mutable: batch modes stamped below
-
-  auto const occ =
-      sequant::get_default_context().index_space_registry()->retrieve(L"i");
-  auto accept_occ = [occ](sequant::Index const& ix) {
-    return ix.space() == occ;
-  };
-
-  // The two distinct occupied result indices, taken from the node's own
-  // canonical (free/result) indices -- both must be free on the node.
-  sequant::container::svector<sequant::Index> occ_axes;
-  for (auto const& ix : node->canon_indices())
-    if (accept_occ(ix)) occ_axes.push_back(ix);
-  REQUIRE(occ_axes.size() == 2);
-  REQUIRE(occ_axes[0] != occ_axes[1]);
-  REQUIRE(sequant::index_position(node, occ_axes[0]).has_value());
-  REQUIRE(sequant::index_position(node, occ_axes[1]).has_value());
-
-  // Stamp BOTH occupied indices External on the single product node.
-  node->set_node_slice_mask({{occ_axes[0], sequant::BatchModeType::External},
-                             {occ_axes[1], sequant::BatchModeType::External}});
-
-  // Reference: plain unbatched evaluation (the OFF path -- node_slice_mask are
-  // ignored without a custom evaluator). Computed first so yield_'s random
-  // leaf arrays are generated and cached, then reused by the batched run.
-  auto const ref = evaluate(node, target, yield_)->get<TArrayD>();
-  REQUIRE(TA::norm2(ref) > 0.0);  // guard: reference is nontrivially nonzero
-
-  // Distinct per-mode target sizes (as in "nests two modes on one node") so
-  // the two nested levels realize DIFFERENT batch counts and their product
-  // is unambiguous: occ_axes[0] -> target 4 over extent 12 = 3 blocks;
-  // occ_axes[1] -> target 8 = 2 blocks (two tiles fused, then the
-  // remainder). Both target sizes are strictly below the mode extent (12),
-  // i.e. the ON configuration for both modes.
-  auto const& axis0 = occ_axes[0];
-  auto target_batch_size = [axis0](sequant::Index const& ix) -> std::size_t {
-    return ix == axis0 ? std::size_t{4} : std::size_t{8};
-  };
-
-  // Firing-witness: records the block count each time the scatter evaluator
-  // fires, and the product of the two live (outer, inner) counts whenever
-  // both levels are simultaneously live -- the RED/GREEN proof that the two
-  // External loops genuinely NEST as a PRODUCT rather than only one mode
-  // firing or the second mode being silently skipped.
-  struct GuardState {
-    std::vector<std::size_t> live;
-    std::vector<std::size_t> counts;
-    std::vector<std::size_t> products_at_depth2;
-    std::size_t max_depth = 0;
-  } state;
-  struct TrackingGuard {
-    GuardState* st;
-    TrackingGuard(GuardState* s, std::size_t n) : st(s) {
-      st->counts.push_back(n);
-      st->live.push_back(n);
-      st->max_depth = std::max(st->max_depth, st->live.size());
-      if (st->live.size() == 2)
-        st->products_at_depth2.push_back(st->live[0] * st->live[1]);
-    }
-    TrackingGuard(TrackingGuard const&) = delete;
-    TrackingGuard& operator=(TrackingGuard const&) = delete;
-    ~TrackingGuard() { st->live.pop_back(); }
-  };
-  auto make_tracking_guard = [&state](std::size_t n) {
-    return TrackingGuard(&state, n);
-  };
-
-  auto cache = cache_t::empty();
-  auto aops = yield_.array_ops();
-  cache.set_array_ops(&aops);
-  cache.set_custom_evaluator(make_batched_custom_evaluator(
-      yield_, target_batch_size, accept_occ, make_tracking_guard,
-      sequant::never_volatile{}));
-  auto const res = evaluate(node, target, yield_, cache)->get<TArrayD>();
-
-  // Exactness: scattering disjoint blocks over both modes reconstructs the
-  // whole result.
-  TArrayD diff;
-  diff("i,j") = ref("i,j") - res("i,j");
-  REQUIRE(TA::norm2(diff) < 1e-10);
-
-  // Depth-2 nesting engaged: occ_axes[0] sliced at the outer level (3
-  // blocks), occ_axes[1] at the inner level (2 blocks) WITHIN each outer
-  // block.
-  REQUIRE(state.max_depth == 2);
-  REQUIRE(state.counts.size() == 4);  // 1 outer firing + 3 inner firings
-  CHECK(std::count(state.counts.begin(), state.counts.end(), 3u) == 1);
-  CHECK(std::count(state.counts.begin(), state.counts.end(), 2u) == 3);
-  // Every depth-2 instant multiplies 3 (outer) by 2 (inner) = 6: BOTH
-  // external loops were live together with DISTINCT partitions, i.e. the
-  // PRODUCT of block counts, not just one mode's worth.
-  REQUIRE(state.products_at_depth2.size() == 3);
-  for (auto const p : state.products_at_depth2) CHECK(p == 6);
-  CHECK(state.live.empty());
 }
 
 TEST_CASE("batched_eval_external_hadamard", "[eval][batched-external]") {

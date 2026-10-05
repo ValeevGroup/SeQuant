@@ -5,7 +5,6 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
-#include <SeQuant/core/tensor_network/v2.hpp>
 
 #include <cstddef>
 #include <optional>
@@ -49,7 +48,7 @@ struct ColumnGroup {
 /// objects that actually should have different colors (i.e. this is more than a
 /// hash function). It is intended to be used to determine the vertex colors in
 /// a colored graph representing a tensor network.
-class VertexPainterImpl {
+class VertexPainter {
  public:
   using Color = tensor_network::VertexColor;
   using NamedIndexSet = tensor_network::NamedIndexSet;
@@ -68,9 +67,9 @@ class VertexPainterImpl {
   /// vertex color so that same-space named indices bound to different loops
   /// become distinguishable. A null (default) or empty map leaves coloring
   /// byte-identical to space-only named coloring.
-  VertexPainterImpl(const NamedIndexSet &named_indices,
-                    bool distinct_named_indices = true,
-                    const NamedIndexColorMap *named_index_colors = nullptr);
+  VertexPainter(const NamedIndexSet &named_indices,
+                bool distinct_named_indices = true,
+                const NamedIndexColorMap *named_index_colors = nullptr);
 
   const ColorMap &used_colors() const;
 
@@ -86,7 +85,7 @@ class VertexPainterImpl {
   /// use this to shade colors of all tensor components by the color of its type
   void apply_shade(std::size_t shade);
 
-  /// unlike the deprecated operator() computes a more complete hash
+  /// computes the hash of @p t
   /// (see VertexPainter::to_hash_value(const AbstractTensor&)) and sets
   /// it as the shade to all subsequent color computation.
   /// Use this before coloring other vertices of this the tensor.
@@ -184,38 +183,6 @@ class VertexPainterImpl {
   bool may_have_same_color(const VertexData &data, const ColumnGroup &group);
   bool may_have_same_color(const VertexData &data, const Index &idx);
   bool may_have_same_color(const VertexData &data, const ProtoBundle &bundle);
-};
-
-template <typename TN>
-class VertexPainter : public VertexPainterImpl {
- public:
-  using VertexPainterImpl::VertexPainterImpl;
-};
-
-// Template specializations vor TNv1 and TNv2, which still require
-// operator()(const AbstractTensor &) (refactoring would require changing tests
-// as well)
-class TensorNetworkV1;
-class TensorNetworkV2;
-
-template <>
-class VertexPainter<TensorNetworkV1> : public VertexPainterImpl {
- public:
-  using VertexPainterImpl::VertexPainterImpl;
-
-  using VertexPainterImpl::operator();
-
-  VertexPainterImpl::Color operator()(const AbstractTensor &tensor) {
-    Color color = to_color(hash::value(label(tensor)));
-
-    return ensure_uniqueness(color, tensor);
-  }
-};
-
-template <>
-class VertexPainter<TensorNetworkV2> : public VertexPainter<TensorNetworkV1> {
- public:
-  using VertexPainter<TensorNetworkV1>::VertexPainter;
 };
 
 }  // namespace sequant

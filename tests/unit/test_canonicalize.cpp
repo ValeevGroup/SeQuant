@@ -8,8 +8,6 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network/v1.hpp>
-#include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 

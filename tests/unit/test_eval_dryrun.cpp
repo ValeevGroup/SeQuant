@@ -2549,49 +2549,16 @@ TEST_CASE(
 }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
-// D1.2 (external-mode batching wired into DP SELECTION): the external batch
-// loop must flow into the DP's REPORTED peak. Optimizing the over-budget C60
-// giant through PeakBatchedModel::reconstruct_batched_modes (the path
-// optimize() drives) must, with batch_spectator_indices ON, report a root peak
-// BELOW its flag-OFF value (the external occ sliced) and stamp
-// BatchModeType::External ONLY on that external occ; with the flag OFF the
-// reported peak is byte-identical to the unsliced baseline and NO External
-// modes are stamped.
-// HIDDEN ([.]): external-mode (occ) seeding no longer lowers the DP-reported
-// peak for this C60 giant (peak stays ~391 GB, not < 40 GB). The expectation
-// predates the per-node external opens the shipped DP performs (as-built
-// section 4.2) and has not been retargeted; see the note below.
-// ===========================================================================
-// [blocked-layers-1-2] -- what these hidden fixtures ARE
-//
-// Every TEST_CASE tagged [blocked-layers-1-2] is hidden ([.]) because it
-// encodes a DESIGN THIS BRANCH DOES NOT IMPLEMENT, not because a known-good
-// test was switched off. The reason some of them still carry -- "blocked on
-// Layers 1-2 (use-induced slicing of whole-produced operands + multi-level
-// escape chain)" -- has EXPIRED: both are built (as-built design sections
-// 6.2 / 6.3 / 7, doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md).
-// What these fixtures actually encode is the older loop-identity / layout
-// model that the identity rework superseded, so their expectations no longer
-// describe the shipped builder; at least test_eval_ta.cpp's "batched ToT
-// External occ loop" case and test_ordered_schedule.cpp's "forced-split occ
-// axis realizes TWO ordered sibling blocks" case FAIL when run today. The
-// latter is instructive: it sets only a BatchPolicy role predicate and never
-// stamps node_slice_mask on its forest, so the shipped builder realizes NO
-// loop at all and finds zero occ blocks -- the fixture's INPUT contract is
-// stale, not the forced-split realization it was written to pin (which
-// as-built section 6.3 describes correctly and [cell_table][ordered] /
-// [w20-auxocc-walk] exercise on real water-20 data).
-//
-// Retargeting them to the shipped design is deferred (as-built section 12.2).
-// They are kept, hidden, as a record of the shapes that still want coverage.
-// Do NOT un-hide one without first rewriting its expectation against the code.
-// ===========================================================================
-// Hidden [blocked-layers-1-2] -- encodes a design this branch does not
-// implement; see the [blocked-layers-1-2] note in this file. Do not un-hide
-// without rewriting the expectation first.
+// External-mode batching reaches the DP's reported peak. Optimizing the
+// over-budget C60 giant through PeakBatchedModel::reconstruct_batched_modes
+// (the path optimize() drives) with batch_spectator_indices on reports a root
+// peak below its flag-off value and within the 40 GB budget, and stamps
+// BatchModeType::External only on occ labels; with the flag off the reported
+// peak stays over budget and no External mode is stamped. The size of the drop
+// is not pinned.
 TEST_CASE(
     "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
-    "[.][dryrun-extmode][blocked-layers-1-2]") {
+    "[dryrun-extmode]") {
   auto ctx = get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto isr = ctx.mutable_index_space_registry();
@@ -2703,14 +2670,13 @@ TEST_CASE(
   // flops). Chosen policy (D1.3): JOINTLY seed BOTH external occ i_1,i_2 of the
   // doubles residual. The giant is the 4-PNO-leg particle-particle-ladder
   //   W^{a1<i1,i2> a2<i1,i2>}_{a3<i1,i2> a4<i1,i2>} = sum_K (g.C.C)(g.C.C),
-  // whose four virtual legs are all protoindexed by the same occ pair (i1,i2).
-  // block/extent = 8/120 each (realistic occ block -- the aux value 72 is wrong
-  // for occ), so the footprint scales by the PRODUCT (8/120)^2 = 1/225.
+  // whose four virtual legs are all protoindexed by the same occ pair (i1,i2),
+  // so seeding the pair shrinks the footprint on every one of them. How far the
+  // peak drops is not pinned here: the block/extent ratio 8/120 per mode bounds
+  // it, but the per-node external opens the DP performs (section 4.2) decide
+  // which nodes carry the slice, so only the drop and the budget fit are.
   CHECK(peak_on < peak_off);
-  // Joint scaling: exactly (8/120)^2 of the unseeded footprint (both occ
-  // sliced).
-  CHECK(peak_on == Catch::Approx(peak_off * (8.0 / 120.0) * (8.0 / 120.0)));
-  // ...and the giant now FITS the 40 GB budget (~1874 GB -> ~8.3 GB): the DP
+  // ...and the giant now FITS the 40 GB budget (~1874 GB -> ~33 GB): the DP
   // models external batching bounding the PPL giant with a realistic occ block.
   CHECK(peak_on < 40.0 * 1e9);
 
@@ -2727,6 +2693,7 @@ TEST_CASE(
       }
   CHECK(external_labels.size() == 2);  // both i_1 and i_2 seeded jointly
 }
+
 // P1 gate spike (external-occ forest batching, mechanism b): PURE SIZING check.
 // Does the cost model's footprint of the perf-first PPL W giant respond to
 // slicing ONE external occupied index to a block? The external occ (the

@@ -20,33 +20,17 @@ namespace details {
 template <typename Range>
 std::wstring serialize_indices(Range&& indices,
                                const SerializationOptions& options) {
-  std::wstring serialized;
-
-  for (std::size_t i = 0; i < indices.size(); ++i) {
-    serialized += v1::to_string(indices[i], options);
-
-    if (i + 1 < indices.size()) {
-      serialized += L",";
-    }
-  }
-
-  return serialized;
+  return join_strings<std::wstring>(indices, L",", [&](const Index& idx) {
+    return v1::to_string(idx, options);
+  });
 }
 
 template <typename Range>
 std::wstring serialize_ops(const Range& ops,
                            const SerializationOptions& options) {
-  std::wstring serialized;
-
-  for (std::size_t i = 0; i < ops.size(); ++i) {
-    serialized += v1::to_string(ops[i].index(), options);
-
-    if (i + 1 < ops.size()) {
-      serialized += L",";
-    }
-  }
-
-  return serialized;
+  return join_strings<std::wstring>(ops, L",", [&](const auto& op) {
+    return v1::to_string(op.index(), options);
+  });
 }
 
 std::wstring serialize_symm(Symmetry symm, const SerializationOptions&) {
@@ -204,7 +188,7 @@ std::wstring to_string(Sum const& sum, const SerializationOptions& options) {
 
     bool is_negative = false;
     if (parenthesize) {
-      current_serialized += L"(" + current_serialized + L")";
+      current_serialized = L"(" + current_serialized + L")";
     } else {
       is_negative = current_serialized.front() == L'-';
     }
@@ -270,14 +254,8 @@ std::wstring to_string(const Index& index, const SerializationOptions&) {
 
   if (index.has_proto_indices()) {
     serialized += L"<";
-    const auto& protos = index.proto_indices();
-    for (std::size_t i = 0; i < protos.size(); ++i) {
-      serialized += protos[i].label();
-
-      if (i + 1 < protos.size()) {
-        serialized += L",";
-      }
-    }
+    serialized +=
+        join_strings<std::wstring>(index.proto_indices(), L",", &Index::label);
     serialized += L">";
   }
 

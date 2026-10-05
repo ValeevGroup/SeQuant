@@ -242,6 +242,27 @@ struct CSEOptions {
   std::vector<Index> batch_indices = {};
 };
 
+/// @return a CSEOptions::filter_predicate that accepts a subexpression only if
+/// it is used at least @p min_usage times and contains at least
+/// @p min_tensors tensors
+/// @note subexpressions with fewer than two tensors are usually not worth
+/// creating, storing and reusing; e.g. in the symmetrization
+/// `1/2 R[abij] + 1/2 R[baji]`, `1/2 R` is such a subexpression
+template <typename TreeNode>
+std::function<bool(const TreeNode &, std::size_t)> min_usage_filter(
+    std::size_t min_usage, std::size_t min_tensors = 2) {
+  return
+      [min_usage, min_tensors](const TreeNode &tree, std::size_t usage_count) {
+        if (usage_count < min_usage) return false;
+
+        std::size_t num_tensors = 0;
+        tree.visit_leaf([&num_tensors](const TreeNode &node) {
+          num_tensors += node->is_tensor();
+        });
+        return num_tensors >= min_tensors;
+      };
+}
+
 /// Takes the range of expression trees and performs common subexpression
 /// elimination on them. Evaluation trees for intermediates are inserted into
 /// the given container as needed.

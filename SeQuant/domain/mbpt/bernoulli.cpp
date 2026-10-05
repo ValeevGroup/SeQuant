@@ -221,7 +221,7 @@ ExprPtr wick_commutator(const ExprPtr& A, const ExprPtr& B) {
   for (const auto& idx : get_used_indices(B))
     repl.emplace(idx, Index::make_tmp_index(idx.space()));
   const auto Bd = repl.empty() ? B : transform_expr(B, repl);
-  return wick_reduce(simplify(A * Bd - Bd * A));
+  return wick_reduce(A * Bd - Bd * A);
 }
 
 namespace {
