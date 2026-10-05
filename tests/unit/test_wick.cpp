@@ -1600,4 +1600,20 @@ TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
     CHECK(!get_default_context().nondefault_tensor_canonicalizer_ptr(
         FNOperator::labels()[0]));
   }
+
+  // #651 as reported: the canonicalizer is registered process-wide
+  SECTION("process-wide canonicalizer of a normal operator label survives") {
+    const auto& label = FNOperator::labels()[1];
+    const auto custom = std::make_shared<DefaultTensorCanonicalizer>();
+    const auto initial_ctx = get_default_context();
+    auto restore = sequant::detail::make_scope_exit(
+        [&initial_ctx] { set_default_context(initial_ctx); });
+    set_default_context(
+        Context(initial_ctx).set_tensor_canonicalizer(label, custom));
+    FWickTheorem{make_input()}.full_contractions(false).compute();
+    CHECK(get_default_context().nondefault_tensor_canonicalizer_ptr(label) ==
+          custom);
+    CHECK(!get_default_context().nondefault_tensor_canonicalizer_ptr(
+        FNOperator::labels()[0]));
+  }
 }
