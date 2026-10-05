@@ -790,28 +790,6 @@ class OpMaker {
   }
 
   /// @tparam TensorGenerator callable with signature
-  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
-  /// Tensor with the respective bra/cre and ket/ann indices and of the given
-  /// symmetry
-  /// @param[in] cre_spaces creator IndexSpaces as an initializer list
-  /// @param[in] ann_spaces annihilator IndexSpaces as an initializer list
-  /// @param[in] tensor_generator the callable that generates the tensor
-  /// @param[in] csv whether to use dependent indices
-  /// @param[in] normalization the normalization convention, see Normalization
-  template <typename TensorGenerator>
-  static ExprPtr make(std::initializer_list<IndexSpace::Type> cre_spaces,
-                      std::initializer_list<IndexSpace::Type> ann_spaces,
-                      TensorGenerator&& tensor_generator,
-                      UseDepIdx csv = UseDepIdx::None,
-                      Normalization normalization = Normalization::Default) {
-    IndexSpaceContainer cre_vec(cre_spaces.begin(), cre_spaces.end());
-    IndexSpaceContainer ann_vec(ann_spaces.begin(), ann_spaces.end());
-    return OpMaker::make(cre_vec, ann_vec,
-                         std::forward<TensorGenerator>(tensor_generator), csv,
-                         normalization);
-  }
-
-  /// @tparam TensorGenerator callable with signature
   /// `TensorGenerator(range<Index>, range<Index>, range<Index>, Symmetry)` that
   /// returns a Tensor with the respective bra/cre, ket/ann, and batch indices
   /// and of the given symmetry
@@ -845,31 +823,6 @@ class OpMaker {
         t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
                                   get_default_context().vacuum());
     return apply_normalization(result, normalization, op_info.mult);
-  }
-
-  /// @tparam TensorGenerator callable with signature
-  /// `TensorGenerator(range<Index>, range<Index>, range<Index>, Symmetry)` that
-  /// returns a Tensor with the respective bra/cre, ket/ann, and batch indices
-  /// and of the given symmetry
-  /// @param[in] creators creator IndexSpaces as an initializer list
-  /// @param[in] annihilators annihilator IndexSpaces as an initializer list
-  /// @param[in] batch_indices batch indices as an initializer list
-  /// @param[in] tensor_generator the callable that generates the tensor
-  /// @param[in] csv whether to use dependent indices
-  /// @param[in] normalization the normalization convention, see Normalization
-  template <typename TensorGenerator>
-  static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
-                      std::initializer_list<IndexSpace::Type> annihilators,
-                      std::initializer_list<Index> batch_indices,
-                      TensorGenerator&& tensor_generator,
-                      UseDepIdx csv = UseDepIdx::None,
-                      Normalization normalization = Normalization::Default) {
-    IndexSpaceContainer cre_vec(creators.begin(), creators.end());
-    IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
-    IndexContainer batchidx_vec(batch_indices.begin(), batch_indices.end());
-    return OpMaker::make(cre_vec, ann_vec, batchidx_vec,
-                         std::forward<TensorGenerator>(tensor_generator), csv,
-                         normalization);
   }
 
  protected:
