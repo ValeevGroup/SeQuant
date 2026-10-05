@@ -14,3 +14,4 @@ endforeach()
 
 add_subdirectory(external-interface)
 add_subdirectory(cost_analysis)
+add_subdirectory(dry_run)
