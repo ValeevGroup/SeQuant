@@ -39,7 +39,9 @@ does the relative order of types that rely on it. Both declarations are inherite
 it, including through ``is<T>()``.
 
 Ids must be unique; ``get_type_id`` records each type's id and throws :class:`sequant::Exception` naming both types if a
-second type arrives at an id already taken, for instance because two types declare the same rank and name, or because
-two types of the same name in unnamed namespaces of different translation units both rely on the compiler-derived name.
-A type in an unnamed namespace therefore declares ``static_type_name()`` if another translation unit may define one of
-the same name.
+second type arrives at an id already taken, for instance because two types declare the same rank and name. Types are
+told apart by their mangled names (``typeid(T).name()``), so that a shared object built with hidden visibility, which
+has its own ``std::type_info`` for a type, is not mistaken for a second type. Two types of the same name in unnamed
+namespaces of different translation units have the same mangled name, so if both rely on the compiler-derived name they
+silently share an id. A type in an unnamed namespace therefore declares ``static_type_name()`` if another translation
+unit may define one of the same name.

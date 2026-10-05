@@ -356,8 +356,11 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// inherited, hence a class derived from a type that declares
   /// `static_type_name()` must declare its own whenever this function can be
   /// instantiated for it, including via Expr::is ; so must a type in an unnamed
-  /// namespace if another translation unit may define one of the same name.
-  /// @throw sequant::Exception if another type already has this id
+  /// namespace if another translation unit may define one of the same name,
+  /// since types are told apart by mangled name and such a pair would silently
+  /// share an id.
+  /// @throw sequant::Exception if a type of another mangled name already has
+  /// this id
   template <typename T>
   static type_id_type get_type_id() {
     static const type_id_type id = [] {
@@ -536,7 +539,8 @@ class Expr : public std::enable_shared_from_this<Expr> {
 
  private:
   /// records that type @p type , named @p name , has type id @p id
-  /// @throw sequant::Exception if @p id is already recorded for another type
+  /// @throw sequant::Exception if @p id is already recorded for a type of
+  /// another mangled name
   static void register_type_id(type_id_type id, const std::string &name,
                                std::type_index type);
 };  // class Expr

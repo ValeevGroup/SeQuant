@@ -12,6 +12,7 @@
 
 #include <boost/core/demangle.hpp>
 
+#include <cstring>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -99,7 +100,10 @@ void Expr::register_type_id(type_id_type id, const std::string &name,
       registry;
   std::scoped_lock lock(mutex);
   const auto [it, inserted] = registry.try_emplace(id, name, type);
-  if (!inserted && it->second.second != type)
+  // compare by mangled name, not by type_index: a shared object built with
+  // hidden visibility has its own type_info for the same type, which libc++
+  // compares by address
+  if (!inserted && std::strcmp(it->second.second.name(), type.name()) != 0)
     throw Exception("Expr types " +
                     boost::core::demangle(it->second.second.name()) +
                     " (name \"" + it->second.first + "\") and " +
