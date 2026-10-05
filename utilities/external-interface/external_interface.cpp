@@ -597,8 +597,9 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
 
 void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
                          std::size_t version) {
-  IndexSpaceRegistry &registry =
-      *get_default_context().mutable_index_space_registry();
+  const auto registry_ptr =
+      get_default_context().mutable_index_space_registry();
+  IndexSpaceRegistry &registry = *registry_ptr;
 
   std::vector<std::pair<std::wstring, IndexSpaceMeta::Entry>> spaceList;
   spaceList.reserve(spaces.size());

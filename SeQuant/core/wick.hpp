@@ -781,7 +781,7 @@ class WickTheorem {
         : wick(wt),
           nopseq(nopseq),
           nopseq_size(nopseq.opsize()),
-          ctx(get_default_context(S)),
+          ctx(get_default_context_snapshot(S)),
           level(0),
           left_op_offset(0),
           count_only(false),

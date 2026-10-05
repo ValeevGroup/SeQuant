@@ -1292,14 +1292,14 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     extract_indices(*expr);
   }
 
+  const auto ctx = get_default_context_snapshot(S);
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
   if (expr.is<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
     SEQUANT_ASSERT(external_indices_);
     if (detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
-                                    *external_indices_,
-                                    get_default_context(S))) {
+                                    *external_indices_, ctx)) {
       expr = expr_cast;
     } else {
       expr = std::make_shared<Constant>(0);
@@ -1310,8 +1310,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
       SEQUANT_ASSERT(external_indices_);
       if (detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
-                                      *noncovariant_indices_,
-                                      get_default_context(S)))
+                                      *noncovariant_indices_, ctx))
         subexpr = subexpr_cast;
       else
         subexpr = std::make_shared<Constant>(0);
