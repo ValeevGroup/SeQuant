@@ -354,6 +354,20 @@ TEST_CASE("context", "[runtime]") {
     CHECK(labels == container::vector<std::wstring>{L"X"});
     CHECK(comparer(Index(L"i_2"), Index(L"i_1")));
 
+    // the next snapshot sees every change of the process-wide context,
+    // including one made on another thread
+    std::thread([&initial_ctx] {
+      set_default_context(Context(initial_ctx)
+                              .set_cardinal_tensor_labels(
+                                  container::vector<std::wstring>{L"Y"}));
+    }).join();
+    CHECK(get_default_context_snapshot().cardinal_tensor_labels() ==
+          container::vector<std::wstring>{L"Y"});
+    std::thread([] { reset_default_context(); }).join();
+    CHECK(get_default_context_snapshot().cardinal_tensor_labels() ==
+          Context{}.cardinal_tensor_labels());
+    set_default_context(initial_ctx);
+
     // on a thread with a scoped context, a copy of that context
     auto scoped = set_scoped_default_context(snapshot);
     CHECK(get_default_context_snapshot() == snapshot);

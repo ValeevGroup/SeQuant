@@ -453,10 +453,12 @@ const Context& get_default_context(Statistics s = Statistics::Arbitrary);
 
 /// @brief copy of the default Context for the given Statistics
 /// @param s Statistics
-/// @return a copy of `get_default_context(s)`, made under the lock that guards
-/// the process-wide context; it shares the index space registry and the
-/// canonicalizer configuration with its source, hence is cheap, and remains
-/// valid when the default context is replaced
+/// @return a copy of `get_default_context(s)` that reflects every change of
+/// the process-wide context completed before the call; it shares the index
+/// space registry and the canonicalizer configuration with its source, hence
+/// is cheap, and remains valid when the default context is replaced
+/// @note takes the lock that guards the process-wide context only if that
+/// changed since the previous snapshot on this thread
 Context get_default_context_snapshot(Statistics s = Statistics::Arbitrary);
 
 /// @brief sets default Context for the given Statistics

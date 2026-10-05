@@ -109,6 +109,19 @@ bool operator!=(const Context& ctx1, const Context& ctx2) {
 
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 static std::recursive_mutex ctx_mtx;  // used to protect the context
+// immutable copy of the process-wide contexts for
+// get_default_context_snapshot(), and its generation; both replaced, under
+// ctx_mtx, by every change of the process-wide contexts
+static std::shared_ptr<const container::map<Statistics, Context>>
+    published_default_contexts;
+static std::atomic<std::uint64_t> default_contexts_generation{1};
+
+static void publish_default_contexts() {
+  published_default_contexts = std::make_shared<
+      const container::map<Statistics, Context>>(
+      detail::implicit_context_instance<container::map<Statistics, Context>>());
+  default_contexts_generation.fetch_add(1, std::memory_order_release);
+}
 #endif
 
 const Context& get_default_context(Statistics s) {
@@ -141,11 +154,32 @@ const Context& get_default_context(Statistics s) {
 Context get_default_context_snapshot(Statistics s) {
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   // a scoped context is thread-local, hence needs no lock
-  std::unique_lock lock(ctx_mtx, std::defer_lock);
-  if (!detail::implicit_context_overlay<container::map<Statistics, Context>>())
-    lock.lock();
-#endif
+  if (detail::implicit_context_overlay<container::map<Statistics, Context>>())
+    return get_default_context(s);
+  // snapshots are taken concurrently on hot paths, where a lock per read
+  // serializes the threads, so this thread holds the published contexts and
+  // takes the lock only to fetch them anew after they changed
+  struct Cache {
+    std::uint64_t generation = 0;
+    std::shared_ptr<const container::map<Statistics, Context>> contexts;
+  };
+  thread_local Cache cache;
+  if (cache.generation !=
+      default_contexts_generation.load(std::memory_order_acquire)) {
+    std::scoped_lock lock(ctx_mtx);
+    get_default_context();  // ensures that the arbitrary statistics has one
+    cache.contexts = published_default_contexts;
+    cache.generation =
+        default_contexts_generation.load(std::memory_order_relaxed);
+  }
+  auto it = cache.contexts->find(s);
+  if (it == cache.contexts->end())
+    it = cache.contexts->find(Statistics::Arbitrary);
+  SEQUANT_ASSERT(it != cache.contexts->end());
+  return it->second;
+#else
   return get_default_context(s);
+#endif
 }
 
 void set_default_context(Context ctx, Statistics s) {
@@ -160,6 +194,9 @@ void set_default_context(Context ctx, Statistics s) {
   } else {
     contexts.emplace(s, std::move(ctx));
   }
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  publish_default_contexts();
+#endif
 }
 
 void set_default_context(Context::Options ctx_opts, Statistics s) {
@@ -177,6 +214,9 @@ void reset_default_context() {
   std::scoped_lock lock(ctx_mtx);
 #endif
   detail::reset_implicit_context<container::map<Statistics, Context>>();
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  publish_default_contexts();
+#endif
 }
 
 [[nodiscard]] detail::ImplicitContextResetter<

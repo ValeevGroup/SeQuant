@@ -134,8 +134,9 @@ after those scopes end.
 Because it replaces the process-wide default, a call of :func:`sequant::set_default_context` on any thread invalidates the reference
 that :func:`sequant::get_default_context` returns on a thread without scoped contexts, and anything obtained from that reference by
 reference. Code that keeps the context beyond a brief read, as the canonicalizers do for the duration of a canonicalization, holds a
-copy made by :func:`sequant::get_default_context_snapshot` instead. The copy is made under the lock that guards the process-wide
-default, and is cheap: it shares the index space registry and the canonicalizer configuration with its source.
+copy made by :func:`sequant::get_default_context_snapshot` instead. The copy reflects every change of the process-wide default
+completed before the call and is cheap: it shares the index space registry and the canonicalizer configuration with its source, and
+takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
 
 Detecting changes
 ----------------------
