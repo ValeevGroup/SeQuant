@@ -135,6 +135,7 @@ class compute_eomcc_openshell {
   }
 };
 }  // namespace
+// TODO add open-shell EOM residual term counts
 
 int main(int argc, char* argv[]) {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
