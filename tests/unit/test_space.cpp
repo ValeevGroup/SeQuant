@@ -118,6 +118,18 @@ TEST_CASE("index_space", "[elements]") {
     auto other_mask = sr_isr->clone();
     other_mask.physical_particle_attribute_mask(bitset::null);
     REQUIRE(other_mask != *sr_isr);
+
+    // ... and the approximate sizes and fields of their spaces, which
+    // IndexSpace equality ignores
+    IndexSpaceRegistry other_size = *sr_isr;
+    other_size.retrieve_ptr(L"i")->approximate_size(
+        sr_isr->retrieve(L"i").approximate_size() + 1);
+    REQUIRE(other_size.retrieve(L"i") == sr_isr->retrieve(L"i"));
+    REQUIRE(other_size != *sr_isr);
+    IndexSpaceRegistry other_field = *sr_isr;
+    other_field.retrieve_ptr(L"i")->field(Field::Real);
+    REQUIRE(sr_isr->retrieve(L"i").field() == Field::Complex);
+    REQUIRE(other_field != *sr_isr);
   }
 
   SECTION("ordering") {

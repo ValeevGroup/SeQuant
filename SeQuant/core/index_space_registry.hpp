@@ -21,6 +21,7 @@
 #include <boost/hana.hpp>
 #include <boost/hana/ext/std/integral_constant.hpp>
 
+#include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <mutex>
@@ -1570,12 +1571,19 @@ class IndexSpaceRegistry {
     return contains_complex ? Field::Complex : Field::Real;
   }
 
-  /// registries are equal if they have equal spaces and specify the same
-  /// physical-particle attributes and vacuum-occupied, reference-occupied,
-  /// complete, hole and particle spaces
+  /// registries are equal if they have equal spaces, of equal approximate
+  /// size and field, and specify the same physical-particle attributes and
+  /// vacuum-occupied, reference-occupied, complete, hole and particle spaces
   friend bool operator==(const IndexSpaceRegistry& isr1,
                          const IndexSpaceRegistry& isr2) {
-    return isr1.spaces_ == isr2.spaces_ &&
+    // IndexSpace equality ignores the approximate size and the field
+    return std::ranges::equal(isr1.spaces_, isr2.spaces_,
+                              [](const IndexSpace& s1, const IndexSpace& s2) {
+                                return s1 == s2 &&
+                                       s1.approximate_size() ==
+                                           s2.approximate_size() &&
+                                       s1.field() == s2.field();
+                              }) &&
            isr1.physical_particle_attribute_mask_ ==
                isr2.physical_particle_attribute_mask_ &&
            isr1.vacocc_ == isr2.vacocc_ && isr1.refocc_ == isr2.refocc_ &&

@@ -341,8 +341,13 @@ TEST_CASE("context", "[runtime]") {
     {
       IndexSpaceRegistry other;
       other.add(L"q", 0b01);
-      CHECK(Context({.index_space_registry = std::move(other)}) !=
-            with_registry);
+      CHECK(Context({.index_space_registry = other}) != with_registry);
+      // including the approximate sizes of their spaces
+      IndexSpaceRegistry resized = other;
+      resized.retrieve_ptr(L"q")->approximate_size(
+          other.retrieve(L"q").approximate_size() + 1);
+      CHECK(Context({.index_space_registry = std::move(resized)}) !=
+            Context({.index_space_registry = std::move(other)}));
     }
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
