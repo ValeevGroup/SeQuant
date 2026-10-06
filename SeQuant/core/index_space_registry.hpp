@@ -1576,9 +1576,18 @@ class IndexSpaceRegistry {
     return contains_complex ? Field::Complex : Field::Real;
   }
 
+  /// registries are equal if they have equal spaces and specify the same
+  /// physical-particle attributes and vacuum-occupied, reference-occupied,
+  /// complete, hole and particle spaces
   friend bool operator==(const IndexSpaceRegistry& isr1,
                          const IndexSpaceRegistry& isr2) {
-    return *isr1.spaces_ == *isr2.spaces_;
+    return *isr1.spaces_ == *isr2.spaces_ &&
+           isr1.physical_particle_attribute_mask_ ==
+               isr2.physical_particle_attribute_mask_ &&
+           isr1.vacocc_ == isr2.vacocc_ && isr1.refocc_ == isr2.refocc_ &&
+           isr1.complete_ == isr2.complete_ &&
+           isr1.hole_space_ == isr2.hole_space_ &&
+           isr1.particle_space_ == isr2.particle_space_;
   }
 };  // class IndexSpaceRegistry
 

@@ -109,6 +109,15 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(sr_isr->retrieve(L"i") == sr_isr->retrieve(L"i"));
     REQUIRE(sr_isr->retrieve(L"i") == IndexSpace(L"i"));
     REQUIRE(sr_isr->retrieve(L"i") != sr_isr->retrieve(L"a"));
+
+    // registries compare their space specifications as well as their spaces
+    REQUIRE(*sr_isr == sr_isr->clone());
+    auto other_hole = sr_isr->clone();
+    other_hole.hole_space(L"o");
+    REQUIRE(other_hole != *sr_isr);
+    auto other_mask = sr_isr->clone();
+    other_mask.physical_particle_attribute_mask(bitset::null);
+    REQUIRE(other_mask != *sr_isr);
   }
 
   SECTION("ordering") {
