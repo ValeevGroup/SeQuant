@@ -1503,7 +1503,7 @@ TEST_CASE("role filter: contracted mode sliced only in the contracted role",
           "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 8ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -1571,7 +1571,7 @@ TEST_CASE("role filter: external mode needs the external role, not a fallback",
           "[optimize][role-filter]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 8ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -2766,7 +2766,7 @@ TEST_CASE("batched DP peak matches oracle with two modes and accumulation",
 TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
           "[optimize][ordered-key]") {
   using namespace sequant;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -2813,7 +2813,7 @@ TEST_CASE("ordered key prices the hoistable order (Carr != 0)",
 // EXTERNAL and F1 is the sole contracted batchable mode.
 TEST_CASE("ordered cells exclude external modes", "[optimize][ext-place]") {
   using namespace sequant;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -2860,7 +2860,7 @@ TEST_CASE("the DP opens an external batch loop on an over-budget node",
           "[optimize][ext-place]") {
   using namespace sequant;
   namespace o = sequant::opt::detail;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   {
     IndexSpaceRegistry reg = *ctx_clone.index_space_registry();
     reg.add(L"F", IndexSpace::Type{0b10000}, 100ul);
@@ -3891,7 +3891,7 @@ TEST_CASE("loop-tree recompute charge prices the middle gap",
   using namespace sequant;
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -4054,7 +4054,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
   using namespace sequant;
   // Scoped context: these TEST_CASEs are file-scope, so adding F to the
   // default context's registry would make them collide on the second add.
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -4116,7 +4116,7 @@ TEST_CASE("loop-tree charge must not bill a free hoist", "[.][loop-tree]") {
 // assertion is independent of which factorization the DP happens to select.
 TEST_CASE("loop-tree emit: per-node effective_count", "[.][loop-tree]") {
   using namespace sequant;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -4271,7 +4271,7 @@ TEST_CASE(
     "loop-tree emit: External axis precedes Contracted at co-carrying node",
     "[.][loop-tree]") {
   using namespace sequant;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   auto reg =
       std::make_shared<IndexSpaceRegistry>(*ctx_clone.index_space_registry());
   reg->retrieve_ptr(L"i")->approximate_size(10);  // occupied, external, batched
@@ -4350,7 +4350,7 @@ TEST_CASE(
 TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
           "[.][loop-tree-peak]") {
   using namespace sequant;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -4406,7 +4406,7 @@ TEST_CASE("loop-tree probe: resident-scan peak of a hoisted node",
 TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
           "[.][loop-tree-order]") {
   using namespace sequant;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000}, 4ul));
   auto ctx_resetter = set_scoped_default_context(std::move(ctx_clone));
@@ -4472,7 +4472,7 @@ TEST_CASE("loop-tree probe: order-dependent Carr != 0 cells",
 TEST_CASE("loop-tree probe: resident-scan peak, nested",
           "[.][loop-tree-peak-nested]") {
   using namespace sequant;
-  auto ctx_clone = get_default_context().clone();
+  auto ctx_clone = get_default_context_snapshot();
   ctx_clone.set(IndexSpaceRegistry(*ctx_clone.index_space_registry())
                     .add(L"F", IndexSpace::Type{0b10000},
                          1000ul));  // large: dominates peak

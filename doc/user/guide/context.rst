@@ -148,7 +148,7 @@ Detecting changes
 ----------------------
 
 Every ``Context`` has a version (:func:`sequant::Context::version`): a nonzero number, unique within the process, that changes whenever
-the context is constructed, cloned or modified through one of its setters. :func:`sequant::current_context_version` returns the
+the context is constructed or modified through one of its setters. :func:`sequant::current_context_version` returns the
 version of the context in effect on the calling thread, which lets code that caches results derived from the context tell that the
 cache is stale. The version tracks changes made through the ``Context`` interface; it does not track in-place mutation of a
 canonicalizer or comparer object that the context refers to.

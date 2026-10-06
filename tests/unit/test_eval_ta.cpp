@@ -2530,7 +2530,7 @@ TEST_CASE(
   // array operations of a mixed same-node open, not about the canonicalizer's
   // covariance assumptions, so relax the policy for its scope -- the same
   // treatment the other multi-bra fixtures in this file already use.
-  auto ctx_relaxed = sequant::get_default_context().clone();
+  auto ctx_relaxed = sequant::get_default_context_snapshot();
   ctx_relaxed.set(sequant::AssertStrictBraKetSymmetry::No);
   auto const ctx_resetter =
       sequant::set_scoped_default_context(std::move(ctx_relaxed));
@@ -2665,7 +2665,7 @@ TEST_CASE(
   // array operations of a mixed same-node open, not about the canonicalizer's
   // covariance assumptions, so relax the policy for its scope -- the same
   // treatment the other multi-bra fixtures in this file already use.
-  auto ctx_relaxed = sequant::get_default_context().clone();
+  auto ctx_relaxed = sequant::get_default_context_snapshot();
   ctx_relaxed.set(sequant::AssertStrictBraKetSymmetry::No);
   auto const ctx_resetter =
       sequant::set_scoped_default_context(std::move(ctx_relaxed));
@@ -2879,7 +2879,7 @@ TEST_CASE(
   // the rank-(2,2) non-symmetric amplitude trips the strict-braket assertion
   // of the tensor-network canonicalizer in Debug; the fixture is about the
   // array operations, so relax it here.
-  auto ctx_relaxed = sequant::get_default_context().clone();
+  auto ctx_relaxed = sequant::get_default_context_snapshot();
   ctx_relaxed.set(sequant::AssertStrictBraKetSymmetry::No);
   auto const ctx_resetter =
       sequant::set_scoped_default_context(std::move(ctx_relaxed));

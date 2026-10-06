@@ -1393,7 +1393,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       // the last example
       {
         auto _ = set_scoped_default_context(
-            get_default_context().clone().set(mbpt::make_min_sr_spaces()));
+            get_default_context_snapshot().set(mbpt::make_min_sr_spaces()));
 
         auto input =
             fannx(Index{"p_1", {L"i_1"}}) *

@@ -160,20 +160,14 @@ class Context {
 
   /// copy constructor
   /// @param[in] ctx a Context
-  /// @warning created Context uses the same index space registry as @p ctx
-  /// @sa clone()
+  /// @note created Context uses the same index space registry as @p ctx
   Context(const Context& ctx) = default;
 
   /// copy assignment
   /// @param[in] ctx a Context
-  /// @warning this object will use the same index space registry as @p ctx
-  /// @sa clone()
+  /// @note this object will use the same index space registry as @p ctx
   /// @return reference to this object
   Context& operator=(const Context& ctx) = default;
-
-  /// clones this object AND its index space registry
-  /// @note created Context does not use this object's index space registry
-  Context clone() const;
 
   // no move operations, so that an rvalue is copied: a copy is cheap (it
   // shares the registry and the canonicalizer configuration), and a moved-from
@@ -181,7 +175,7 @@ class Context {
 
   /// @return the version of this context: a nonzero number, unique among all
   /// versions ever assigned in this process, that changes whenever the context
-  /// is constructed, cloned or modified through a setter (including the
+  /// is constructed or modified through a setter (including the
   /// `Options` constructor); copies keep the version of their source
   /// @note the version identifies a context and its copies, not its content:
   /// contexts that compare equal may have different versions (e.g. two

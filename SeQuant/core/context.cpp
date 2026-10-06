@@ -319,14 +319,6 @@ Context::Context(Options options)
   bump_version();
 }
 
-Context Context::clone() const {
-  Context ctx(*this);
-  ctx.idx_space_reg_ =
-      std::make_shared<const IndexSpaceRegistry>(idx_space_reg_->clone());
-  ctx.bump_version();
-  return ctx;
-}
-
 std::uint64_t Context::version() const { return version_; }
 
 Context::TensorCanonicalizers& Context::mutable_tensor_canonicalizers() {

@@ -309,14 +309,13 @@ TEST_CASE("context", "[runtime]") {
     CHECK(v0 != 0);
     CHECK(Context{}.version() != Context{}.version());
 
-    // copies keep the version, clones do not
+    // copies keep the version
     const Context copy(ctx);
     CHECK(copy.version() == v0);
     Context assigned;
     assigned = ctx;
     CHECK(assigned.version() == v0);
     const Context with_registry({.index_space_registry = IndexSpaceRegistry{}});
-    CHECK(with_registry.clone().version() != with_registry.version());
     CHECK(Context({.vacuum = Vacuum::SingleProduct}).version() != 0);
 
     // construction from Options assigns a single version, however many

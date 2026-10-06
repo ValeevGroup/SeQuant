@@ -175,7 +175,7 @@ TEST_CASE(
   using sequant::eval::dryrun::EvalNodeDryRun;
   using Node = EvalNodeDryRun;
 
-  auto ctx = sequant::get_default_context().clone();
+  auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx.index_space_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
@@ -788,7 +788,7 @@ TEST_CASE(
     using sequant::eval::dryrun::EvalNodeDryRun;
     using Node = EvalNodeDryRun;
 
-    auto ctx = sequant::get_default_context().clone();
+    auto ctx = sequant::get_default_context_snapshot();
     ctx.set_first_dummy_index_ordinal(1000000);
     REQUIRE(ctx.index_space_registry() != nullptr);
     auto isr = std::make_shared<sequant::IndexSpaceRegistry>(

@@ -85,7 +85,7 @@ TEST_CASE(
   bool const collapse_sums =
       std::getenv("SEQUANT_DOT_COLLAPSE_SUMS") != nullptr;
 
-  auto ctx0 = get_default_context().clone();
+  auto ctx0 = get_default_context_snapshot();
   ctx0.set_first_dummy_index_ordinal(1000000);
   REQUIRE(ctx0.index_space_registry() != nullptr);
   auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
