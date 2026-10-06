@@ -219,6 +219,16 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(f12_base_spaces_sf[2].base_key() == L"a");
     REQUIRE(f12_base_spaces_sf[3].base_key() == L"g");
     REQUIRE(f12_base_spaces_sf[4].base_key() == L"α'");
+
+    // assignment, hence clear(), replaces the memoized base spaces
+    const auto sr_base_space_types =
+        sequant::mbpt::make_sr_spaces()->base_space_types();
+    REQUIRE(sr_base_space_types.size() == 4);
+    *isr = *sequant::mbpt::make_sr_spaces();
+    REQUIRE(isr->base_space_types() == sr_base_space_types);
+    isr->clear();
+    REQUIRE(isr->base_space_types().empty());
+    REQUIRE(isr->base_spaces().empty());
   }
 
   SECTION("AO spaces") {

@@ -139,7 +139,7 @@ class IndexSpaceRegistry {
     complete_ = other.complete_;
     hole_space_ = other.hole_space_;
     particle_space_ = other.particle_space_;
-    return *this;
+    return clear_memoized_data_and_return_this();
   }
 
   /// move assignment operator
@@ -152,7 +152,7 @@ class IndexSpaceRegistry {
     complete_ = std::move(other.complete_);
     hole_space_ = std::move(other.hole_space_);
     particle_space_ = std::move(other.particle_space_);
-    return *this;
+    return clear_memoized_data_and_return_this();
   }
 
   /// deep copy of this object, creates a copy of its spaces
