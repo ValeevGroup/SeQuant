@@ -841,18 +841,6 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
   }
   return result;
 }
-// δr/δl are the (de)excitation projectors P indexed by nonnegative ranks
-// (think "derivative wrt r/l"). δl is the deexcitation/bra projector P(np,nh);
-// δr is the excitation/ket projector P(-np,-nh).
-ExprPtr δr(nₚ np, nₕ nh) {
-  SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return tensor::P(-np, -nh);
-}
-
-ExprPtr δl(nₚ np, nₕ nh) {
-  SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return tensor::P(np, nh);
-}
 }  // namespace tensor
 
 ExprPtr h(std::size_t k) {
@@ -1178,19 +1166,6 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
 ExprPtr L(nₚ np, nₕ nh) {
   return L(nann(np), ncre(nh), cre(get_hole_space(Spin::any)),
            ann(get_particle_space(Spin::any)));
-}
-
-// δr/δl are the (de)excitation projectors P indexed by nonnegative ranks
-// (think "derivative wrt r/l"). δl is the deexcitation/bra projector P(np,nh);
-// δr is the excitation/ket projector P(-np,-nh).
-ExprPtr δr(nₚ np, nₕ nh) {
-  SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return P(-np, -nh);
-}
-
-ExprPtr δl(nₚ np, nₕ nh) {
-  SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return P(np, nh);
 }
 
 qns_t apply_to_vac(const ExprPtr& expr) {
