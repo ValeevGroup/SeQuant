@@ -689,6 +689,15 @@ TEST_CASE("expr", "[elements]") {
 
       Power pv(ex<Variable>(L"x"), rational{2, 1});
       REQUIRE(to_latex(pv) == L"{x}^{2}");
+
+      const Expr &expr = pv;
+      REQUIRE(to_latex(expr) == L"{x}^{2}");
+      const auto ptr = pv.clone();
+      REQUIRE(to_latex(ptr) == L"{x}^{2}");
+      REQUIRE(to_latex(ex<Product>(ExprPtrList{ptr, ex<Variable>(L"y")})) ==
+              L"{{x}^{2}{y}}");
+      REQUIRE(to_latex(ex<Sum>(ExprPtrList{ptr, ex<Variable>(L"y")})) ==
+              L"{ \\bigl({x}^{2} + {y}\\bigr) }");
     }
 
     Product sp0{};
