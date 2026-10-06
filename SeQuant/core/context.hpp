@@ -380,8 +380,8 @@ class Context {
     container::vector<std::wstring> cardinal_labels;
     std::optional<CanonicalizeOptions> options;
 
-    /// canonicalizers and comparers compare by identity, labels and options by
-    /// value
+    /// canonicalizers and comparers compare by identity, labels by value,
+    /// options by CanonicalizeOptions::operator== (i.e. by method only)
     bool operator==(const CanonicalizationConfig&) const = default;
   };
 
@@ -425,7 +425,9 @@ class Context {
 /// a comparer replaced by a behaviourally identical one compares unequal
 /// (re-install a comparer through its shared pointer, e.g.
 /// Context::index_comparer_ptr(), to keep contexts equal)
-/// \note the versions of the contexts are ignored
+/// \note the versions of the contexts are ignored, and equal contexts may
+/// have different ones: Context::version() compares canonicalization options
+/// by all their members, not only by method
 bool operator==(const Context& ctx1, const Context& ctx2);
 
 /// Context object inequality comparison

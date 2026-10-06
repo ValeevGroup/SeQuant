@@ -367,6 +367,17 @@ TEST_CASE("context", "[runtime]") {
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
 
+    // equality does not imply equal versions: it compares canonicalization
+    // options by method only
+    {
+      Context plain(with_registry);
+      plain.set(CanonicalizeOptions::default_options());
+      Context named(with_registry);
+      named.set(CanonicalizeOptions::default_options().copy_and_set(
+          std::optional<container::set<Index>>{container::set<Index>{}}));
+      CHECK(named == plain);
+      CHECK(named.version() != plain.version());
+    }
     // the version of a configuration whose objects are gone is not reused,
     // even if a new object takes the address of a dead one
     {
