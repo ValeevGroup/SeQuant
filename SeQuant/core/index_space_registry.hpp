@@ -124,7 +124,10 @@ class IndexSpaceRegistry {
         refocc_(std::move(other.refocc_)),
         complete_(std::move(other.complete_)),
         hole_space_(std::move(other.hole_space_)),
-        particle_space_(std::move(other.particle_space_)) {}
+        particle_space_(std::move(other.particle_space_)) {
+    // what other has memoized describes the spaces it gave up
+    other.clear_memoized_data_and_return_this();
+  }
 
   /// copy assignment operator
   IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
@@ -148,6 +151,8 @@ class IndexSpaceRegistry {
     complete_ = std::move(other.complete_);
     hole_space_ = std::move(other.hole_space_);
     particle_space_ = std::move(other.particle_space_);
+    // what other has memoized describes the spaces it gave up
+    other.clear_memoized_data_and_return_this();
     return clear_memoized_data_and_return_this();
   }
 

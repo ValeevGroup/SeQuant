@@ -241,6 +241,19 @@ TEST_CASE("index_space", "[elements]") {
     isr->clear();
     REQUIRE(isr->base_space_types().empty());
     REQUIRE(isr->base_spaces().empty());
+
+    // a registry that was moved from memoizes none of the spaces it gave up
+    IndexSpaceRegistry moved_from = *sequant::mbpt::make_sr_spaces();
+    REQUIRE(moved_from.base_space_types() == sr_base_space_types);
+    REQUIRE(!moved_from.base_spaces().empty());
+    IndexSpaceRegistry moved_to = std::move(moved_from);
+    REQUIRE(moved_from.base_space_types().empty());
+    REQUIRE(moved_from.base_spaces().empty());
+    REQUIRE(moved_to.base_space_types() == sr_base_space_types);
+    moved_from = std::move(moved_to);
+    REQUIRE(moved_to.base_space_types().empty());
+    REQUIRE(moved_to.base_spaces().empty());
+    REQUIRE(moved_from.base_space_types() == sr_base_space_types);
   }
 
   SECTION("AO spaces") {
