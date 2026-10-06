@@ -39,19 +39,10 @@ The format specifier selects the representation: ``l`` or ``latex`` for LaTeX, a
 serialization. An empty specifier selects LaTeX. These are the only supported specifiers; apply string formatting
 to the rendered string if width, alignment, or precision is needed.
 
-.. literalinclude:: /examples/user/formatting.cpp
-   :language: cpp
-   :start-after: start-snippet-1
-   :end-before: end-snippet-1
-
 Stream insertion always produces LaTeX. For explicit serialization, insert the result of
 :func:`sequant::io::serialization::to_string` into a wide stream, or use ``std::format`` with ``s`` or ``serialize``
-for a narrow string. Wide formatting is available with wide format strings:
-
-.. literalinclude:: /examples/user/formatting.cpp
-   :language: cpp
-   :start-after: start-snippet-2
-   :end-before: end-snippet-2
+for a narrow string. Wide formatting is available with wide format strings. The :doc:`expressions` examples
+demonstrate both stream insertion and explicit format selection.
 
 Formatting uses the existing LaTeX and serialization converters and preserves their limitations. In particular,
 a custom expression's LaTeX output comes from its virtual ``to_latex()`` implementation; serialization requires

@@ -1,7 +1,9 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+
+#include <format>
 
 int main() {
   using namespace sequant;
@@ -21,7 +23,7 @@ int main() {
   SEQUANT_ASSERT(sum.is<Sum>());
   SEQUANT_ASSERT(sum.as<Sum>().summands().size() == 3);
 
-  std::wcout << to_latex(sum) << std::endl;
+  std::wcout << sum << std::endl;
   // end-snippet-1
 
   // start-snippet-2
@@ -36,7 +38,7 @@ int main() {
   SEQUANT_ASSERT(lambda_sq.as<Power>().exponent() == 2);
 
   auto scaled = half * g;  // Constant and Tensor combine into one Product
-  std::wcout << to_latex(scaled) << std::endl;
+  std::wcout << std::format(L"{:l}", scaled) << std::endl;
   // end-snippet-2
 
   // start-snippet-3
@@ -46,7 +48,7 @@ int main() {
   auto result = ResultExpr(Tensor(L"R", bra{L"i_1"}, ket{L"a_1"}), f);
 
   SEQUANT_ASSERT(result.produces_tensor());
-  std::wcout << to_latex(result.expression()) << std::endl;
+  std::wcout << std::format(L"{:s}", result.expression()) << std::endl;
   // end-snippet-3
 
   return 0;

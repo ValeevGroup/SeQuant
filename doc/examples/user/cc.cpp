@@ -3,7 +3,7 @@
 //
 
 #include <SeQuant/core/context.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/format.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -24,55 +24,55 @@ int main() {
   // start-snippet-1
   // Traditional CCSD
   auto t_eqs = CC{2}.t();
-  std::wcout << "T1: " << to_latex(t_eqs[1]) << "\n"
-             << "T2: " << to_latex(t_eqs[2]) << "\n";
+  std::wcout << "T1: " << t_eqs[1] << "\n"
+             << "T2: " << t_eqs[2] << "\n";
 
   // Lambda equations
   auto l_eqs = CC{2}.λ();
-  std::wcout << "λ1: " << to_latex(l_eqs[1]) << "\n"
-             << "λ2: " << to_latex(l_eqs[2]) << "\n";
+  std::wcout << "λ1: " << l_eqs[1] << "\n"
+             << "λ2: " << l_eqs[2] << "\n";
 
   // Unitary CCSD
   auto Ut_eqs = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 4})
                     .t();  // Use 4th-order commutator expansion
-  std::wcout << "T1 (UCC): " << to_latex(Ut_eqs[1]) << "\n"
-             << "T2 (UCC): " << to_latex(Ut_eqs[2]) << "\n";
+  std::wcout << "T1 (UCC): " << Ut_eqs[1] << "\n"
+             << "T2 (UCC): " << Ut_eqs[2] << "\n";
 
   // Orbital-optimized CCSD
   auto oT_eqs = CC(2, {.ansatz = CC::Ansatz::oT}).t();
-  std::wcout << "T2 (oT): " << to_latex(oT_eqs[2]) << "\n";
+  std::wcout << "T2 (oT): " << oT_eqs[2] << "\n";
   // end-snippet-1
 
   // start-snippet-2
   // EE-EOM-CCSD (excitation energy)
   auto r_eqs = CC{2}.eom_r(nₚ(2), nₕ(2));
-  std::wcout << "R1: " << to_latex(r_eqs[1]) << "\n"
-             << "R2: " << to_latex(r_eqs[2]) << "\n";
+  std::wcout << "R1: " << r_eqs[1] << "\n"
+             << "R2: " << r_eqs[2] << "\n";
 
   //  EE-EOM-CCSD Left eigenvectors
   auto ee_l_eqs = CC{2}.eom_l(nₚ(2), nₕ(2));
-  std::wcout << "L1: " << to_latex(ee_l_eqs[1]) << "\n"
-             << "L2: " << to_latex(ee_l_eqs[2]) << "\n";
+  std::wcout << "L1: " << ee_l_eqs[1] << "\n"
+             << "L2: " << ee_l_eqs[2] << "\n";
 
   // IP-EOM-CCSD (ionization potential)
   auto ip_eqs = CC{2}.eom_r(nₚ(0), nₕ(1));
-  std::wcout << "IP-R1: " << to_latex(ip_eqs[0]) << "\n";
+  std::wcout << "IP-R1: " << ip_eqs[0] << "\n";
 
   // EA-EOM-CCSD (electron attachment)
   auto ea_eqs = CC{2}.eom_r(nₚ(1), nₕ(0));
-  std::wcout << "EA-R1: " << to_latex(ea_eqs[0]) << "\n";
+  std::wcout << "EA-R1: " << ea_eqs[0] << "\n";
   // end-snippet-2
 
   // start-snippet-3
   // First-order perturbed amplitude equations
   auto t_pt = CC{2}.tʼ(1, 1);
-  std::wcout << "t1 perturbed: " << to_latex(t_pt[1]) << "\n"
-             << "t2 perturbed: " << to_latex(t_pt[2]) << "\n";
+  std::wcout << "t1 perturbed: " << t_pt[1] << "\n"
+             << "t2 perturbed: " << t_pt[2] << "\n";
 
   // First-order perturbed Lambda amplitude equations
   auto l_pt = CC{2}.λʼ(1, 1);
-  std::wcout << "λ1 perturbed: " << to_latex(l_pt[1]) << "\n"
-             << "λ2 perturbed: " << to_latex(l_pt[2]) << "\n";
+  std::wcout << "λ1 perturbed: " << l_pt[1] << "\n"
+             << "λ2 perturbed: " << l_pt[2] << "\n";
   // end-snippet-3
 
   // start-snippet-4
@@ -87,14 +87,14 @@ int main() {
 
   // Convert to the closed-shell spin-traced form
   auto t2_cs = closed_shell_CC_spintrace(t2_eq);
-  std::wcout << "Closed-shell spin-traced CCSD-R2: " << to_latex(t2_cs) << "\n";
+  std::wcout << "Closed-shell spin-traced CCSD-R2: " << t2_cs << "\n";
 
   // Convert to the open-shell spin-traced form
   auto t2_os = open_shell_CC_spintrace(
       t2_eq);  // vector of expressions: {ɑɑ, ɑβ, ββ} blocks
   std::wcout << "Open-shell spin-traced CCSD-R2:\n";
   for (const auto& eq : t2_os) {
-    std::wcout << to_latex(eq) << "\n";
+    std::wcout << eq << "\n";
   }
   // end-snippet-5
 
