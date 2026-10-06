@@ -428,7 +428,8 @@ class WickTheorem {
   /// @throw Exception if input's vacuum does not match the current
   /// context vacuum
   /// @throw Exception under a Vacuum::MultiProduct vacuum if @p count_only is
-  /// true or @p S is Statistics::BoseEinstein
+  /// true, @p S is Statistics::BoseEinstein or the context's SPBasis is
+  /// Spinfree
   ExprPtr compute(bool count_only = false,
                   bool skip_input_canonicalization = false);
 

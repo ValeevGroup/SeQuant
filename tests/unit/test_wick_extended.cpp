@@ -229,6 +229,18 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
             Catch::Matchers::ContainsSubstring("count_only")));
   }
 
+  SECTION("WickTheorem: spin-free operators are not supported") {
+    auto sf_ctx = get_default_context();
+    sf_ctx.set(SPBasis::Spinfree);
+    auto sf_resetter = set_scoped_default_context(sf_ctx);
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    REQUIRE_THROWS_MATCHES(
+        FWickTheorem{in}.compute(), Exception,
+        Catch::Matchers::MessageMatches(
+            Catch::Matchers::ContainsSubstring("spin-free")));
+  }
+
   SECTION("WickTheorem: the input is not modified") {
     // the coefficient's bra is paired with the creator, as mbpt builds them
     auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *

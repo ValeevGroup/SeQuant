@@ -1175,6 +1175,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       throw Exception(
           "WickTheorem<S>::compute: count_only is not supported under a "
           "MultiProduct vacuum");
+    if (get_default_context(S).spbasis() == SPBasis::Spinfree)
+      throw Exception(
+          "WickTheorem<S>::compute: spin-free operators are not supported "
+          "under a MultiProduct vacuum");
     if constexpr (S == Statistics::FermiDirac) {
       return detail::extended_wick<S>(
           expr_input_ ? expr_input_ : ExprPtr(input_),
