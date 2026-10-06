@@ -406,8 +406,11 @@ class Context {
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are equal
-/// \note index space registries and cardinal tensor labels are compared by
-/// value; tensor canonicalizers and index comparers by identity, hence
+/// \note index space registries are equal only if they share their set of
+/// index spaces, as copies of one registry do (registries with equal but
+/// separately created sets compare unequal); contexts without a registry are
+/// equal in that respect; cardinal tensor labels are compared by value;
+/// tensor canonicalizers and index comparers by identity, hence
 /// a comparer replaced by a behaviourally identical one compares unequal
 /// (re-install a comparer through its shared pointer, e.g.
 /// Context::index_comparer_ptr(), to keep contexts equal)
