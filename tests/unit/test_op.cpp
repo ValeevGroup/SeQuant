@@ -506,6 +506,10 @@ TEST_CASE("op", "[elements]") {
         FNOperator(cre({L"i_2"}), ann({L"a_1", L"a_2"}), Vacuum::SingleProduct);
     auto nop5 = FNOperator(cre({L"i_1"}), ann({}), Vacuum::SingleProduct);
     auto nop6 = FNOperator(cre({}), ann({L"a_1"}), Vacuum::SingleProduct);
+    auto nop7 =
+        FNOperator(cre({L"i_1", L"i_2"}), ann({}), Vacuum::SingleProduct);
+    auto nop8 =
+        FNOperator(cre({}), ann({L"a_1", L"a_2"}), Vacuum::SingleProduct);
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
 
     SECTION("default (brasub, naive) typesetting") {
@@ -574,6 +578,10 @@ TEST_CASE("op", "[elements]") {
               L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}*^{i_2}_{a_2}}}");
       REQUIRE(to_latex(nop5) == L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}}}");
       REQUIRE(to_latex(nop6) == L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}}}");
+      REQUIRE(to_latex(nop7) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}*^{i_2}_{}}}");
+      REQUIRE(to_latex(nop8) ==
+              L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}*^{}_{a_2}}}");
       REQUIRE(to_latex(nopseq1) ==
               L"{{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}}{\\tensor*{"
               L"\\tilde{a}}{*^{i_1}_{a_1^{{i_1}{i_2}}}*^{i_2}_{a_2^{{i_1}{i_2}}"
