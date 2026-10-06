@@ -61,8 +61,8 @@ struct ObjectRef {
 
 /// what canonicalization reads from a Context: its CanonicalizationConfig, its
 /// index space registry and its SP basis, with the shared objects referred to
-/// weakly and compared by identity, as in
-/// operator==(const Context&, const Context&)
+/// weakly and compared by identity (operator==(const Context&, const Context&)
+/// compares the registries by value)
 struct CanonicalizationKey {
   ObjectRef registry;
   /// determines the symmetry of NormalOperator

@@ -427,7 +427,8 @@ class Context {
 /// Context::index_comparer_ptr(), to keep contexts equal)
 /// \note the versions of the contexts are ignored, and equal contexts may
 /// have different ones: Context::version() compares canonicalization options
-/// by all their members, not only by method
+/// by all their members, not only by method, and index space registries as
+/// objects, not by value
 bool operator==(const Context& ctx1, const Context& ctx2);
 
 /// Context object inequality comparison
