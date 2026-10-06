@@ -1648,6 +1648,12 @@ TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
 TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
   using namespace sequant;
 
+  // only Complete canonicalization marks its result
+  auto complete_ctx = get_default_context();
+  complete_ctx.set(
+      CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto complete_resetter = set_scoped_default_context(complete_ctx);
+
   Index::reset_tmp_index();
 
   auto make_h2t2 = [] {

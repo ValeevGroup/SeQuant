@@ -249,8 +249,9 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// with @p opts produced, and since then neither this nor any of its
   /// subexpressions has been mutated or replaced, nor have the contexts in
   /// effect changed (see current_contexts_version())
-  /// @note always false if @p opts does not request topological (i.e., full)
-  /// canonicalization
+  /// @note always false if @p opts does not request Complete canonicalization,
+  /// the only method whose result is the same for every spelling of an
+  /// expression
   bool is_canonical(const CanonicalizeOptions &opts =
                         CanonicalizeOptions::default_options()) const;
 
@@ -261,8 +262,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @param opts the canonicalization options
   /// @param contexts_version the value of current_contexts_version() when the
   /// canonicalization started; if it has changed since, the mark is not valid
-  /// @note no-op if @p opts does not request topological (i.e., full)
-  /// canonicalization
+  /// @note no-op if @p opts does not request Complete canonicalization
   /// @warning only to be called with the result of canonicalization with
   /// @p opts: canonicalization leaves an expression marked as canonical alone
   void mark_canonical(

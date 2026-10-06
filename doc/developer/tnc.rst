@@ -115,7 +115,9 @@ Recorded canonical form
 A fully canonicalized expression carries a mark that makes canonicalizing it again a no-op, so callers can request full
 canonicalization without tracking whether it was already done. The free ``canonicalize()``, as well as ``Product::canonicalize()``,
 ``Sum::canonicalize()`` and ``Tensor::canonicalize()``, record their result with ``Expr::mark_canonical(opts)`` and return at once, with
-no byproduct, for an expression that ``Expr::is_canonical(opts)``; rapid (``Lexicographic``-only) canonicalization never marks. Since the
+no byproduct, for an expression that ``Expr::is_canonical(opts)``. Only ``Complete`` canonicalization marks: ``Lexicographic`` alone is
+incomplete, and ``Topological`` alone leaves the order of named indices in (anti)symmetric slots to the graph, so that, e.g., a lone
+tensor and the same tensor scaled end up spelled differently. Since the
 summands of a ``Sum`` are marked by their own canonicalization, re-canonicalizing a ``Sum`` after some of its summands changed
 canonicalizes only those.
 

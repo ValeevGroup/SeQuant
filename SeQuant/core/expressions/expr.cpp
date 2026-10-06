@@ -99,9 +99,11 @@ const ExprPtr &Expr::back() const { return at(size() - 1); }
 
 namespace {
 
+/// only the topological stage followed by the lexicographic one produces a
+/// form that is the same for every spelling of an expression
 bool is_full(const CanonicalizeOptions &opts) {
-  return (opts.method & CanonicalizationMethod::Topological) ==
-         CanonicalizationMethod::Topological;
+  return (opts.method & CanonicalizationMethod::Complete) ==
+         CanonicalizationMethod::Complete;
 }
 
 /// @return the digest of everything other than the expression itself that

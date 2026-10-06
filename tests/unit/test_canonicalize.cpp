@@ -1051,6 +1051,12 @@ TEST_CASE("current_contexts_version", "[algorithms]") {
 TEST_CASE("canonicalize_canonical", "[algorithms]") {
   using namespace sequant;
 
+  // only Complete canonicalization marks its result
+  auto complete_ctx = get_default_context();
+  complete_ctx.set(
+      CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto complete_resetter = set_scoped_default_context(complete_ctx);
+
   auto make_product = [] {
     return ex<Constant>(rational{1, 2}) *
            ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
@@ -1122,7 +1128,12 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
     auto e = make_sum();
     canonicalize(e);
     e->hash_value();
-    auto& t = e->as<Sum>().summand(0)->as<Product>().factor(0)->as<Tensor>();
+    // the first summand that is a Product, wherever canonical order puts it
+    auto product = ranges::find_if(e->as<Sum>().summands(), [](const auto& s) {
+      return s->template is<Product>();
+    });
+    REQUIRE(product != ranges::end(e->as<Sum>().summands()));
+    auto& t = (*product)->as<Product>().factor(0)->as<Tensor>();
     t.transform_indices(
         container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_5"}}});
     t.reset_tags();
@@ -1149,6 +1160,21 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
     simplify(e);
     REQUIRE(e->is_canonical());
     REQUIRE(count_product_canonicalizations([&] { simplify(e); }) == 0);
+  }
+
+  SECTION("Topological canonicalization alone does not mark") {
+    auto topological_ctx = get_default_context();
+    topological_ctx.set(
+        CanonicalizeOptions{.method = CanonicalizationMethod::Topological});
+    auto topological_resetter = set_scoped_default_context(topological_ctx);
+    // a lone tensor and the same tensor scaled are spelled differently by
+    // Topological canonicalization alone, so a summand it leaves behind must
+    // still merge with a fresh copy
+    ExprPtr z = deserialize(L"X{i_1;a_1} - X{i_6,i_3,i_5;a_1,a_2,a_4}:A-C-S");
+    simplify(z);
+    REQUIRE(!z->is_canonical());
+    ExprPtr d = z - deserialize(serialize(z));
+    REQUIRE(simplify(d) == ex<Constant>(0));
   }
 
   SECTION("canonicalizing a Sum leaves its canonical summands alone") {
