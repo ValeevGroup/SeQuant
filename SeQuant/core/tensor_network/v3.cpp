@@ -22,14 +22,17 @@
 #include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <span>
 #include <sstream>
 #include <string>
 
@@ -183,7 +186,28 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     sequant::wprintf(oss.str());
   }
 
-  const unsigned int *canonize_perm = canonicalize_graph(graph);
+  // a network with an automorphism of phase -1 equals minus itself, i.e. is
+  // zero; phase is a homomorphism from the automorphism group to {+1,-1}, so
+  // if a scored generator has phase -1 the term is zero. Generators that are
+  // not scored (see Graph::automorphism_phase) can only hide a zero, never
+  // invent one.
+  bool has_odd_automorphism = false;
+  const unsigned int *canonize_perm = canonicalize_graph(
+      graph, graph.antisymm_bundles.empty()
+                 ? std::function<void(unsigned int, const unsigned int *)>{}
+                 : [&](unsigned int, const unsigned int *aut) {
+                     if (!has_odd_automorphism &&
+                         graph.automorphism_phase(aut, &named_indices) == -1)
+                       has_odd_automorphism = true;
+                   });
+
+  if (has_odd_automorphism) {
+    if (Logger::instance().canonicalize)
+      sequant::wprintf(
+          "TensorNetworkV3::canonicalize_graph: automorphism of phase -1 "
+          "found, the network is zero\n");
+    return ex<Constant>(0);
+  }
 
   if (Logger::instance().canonicalize_dot) {
     std::wostringstream oss;
@@ -535,6 +559,7 @@ ExprPtr TensorNetworkV3::canonicalize(
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(
         named_indices, static_cast<bool>(options.ignore_named_index_labels));
+    if (byproduct && byproduct->as<Constant>().is_zero()) return byproduct;
   }
 
   if ((options.method & CanonicalizationMethod::Lexicographic) ==
@@ -1095,6 +1120,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       }
     }
 
+    // Graph::automorphism_phase scores the slots of antisymmetric bundles
+    const std::size_t antisymm_bra_bundle = tensor_sym == Symmetry::Antisymm
+                                                ? graph.antisymm_bundles.size()
+                                                : uninitialized_vertex;
+    if (tensor_sym == Symmetry::Antisymm)
+      graph.antisymm_bundles.resize(graph.antisymm_bundles.size() + 2);
+
     // - Create vertex for every index slot, regardless of symmetry
     for (auto &slot_type : {SlotType::Bra, SlotType::Ket}) {
       const auto is_bra = slot_type == SlotType::Bra;
@@ -1165,6 +1197,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // make sure logic in index_slot_offset is correct
         assert(nvertex ==
                tensor_vertex + index_slot_offset(tensor, slot_type, i));
+        if (antisymm_bra_bundle != uninitialized_vertex && slots[i].nonnull())
+          graph.antisymm_bundles[antisymm_bra_bundle + (is_bra ? 0 : 1)]
+              .push_back(nvertex);
         ++nvertex;
       }
     }  // bra+ket slots
@@ -1190,6 +1225,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   index_vertices.resize(edges_.size() + pure_proto_indices_.size(),
                         uninitialized_vertex);
 
+  const bool strict_braket_symmetry =
+      get_default_context().assert_strict_braket_symmetry();
   for (std::size_t i = 0; i < edges_.size(); ++i) {
     const Edge &current_edge = edges_[i];
 
@@ -1255,8 +1292,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // strict bra-ket sanity checks
-    if constexpr (assert_enabled()) {
-      if (get_default_context().assert_strict_braket_symmetry()) {
+    {
+      if (strict_braket_symmetry) {
         // dummy (anonymous) edges to
         // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
         // or 1 bra and 1 ket index
@@ -1264,10 +1301,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         if (current_edge.vertex_count() > 1) {
           // ignore if named index
           if (!this->ext_indices_.contains(current_edge.idx())) {
-            [[maybe_unused]] std::size_t nbra = 0;
-            [[maybe_unused]] std::size_t nket = 0;
+            std::size_t nbra = 0;
+            std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;
-            [[maybe_unused]] BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
+            BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
             for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
               const Vertex &vertex = current_edge.vertex(v);
               switch (vertex.getOrigin()) {
@@ -1295,9 +1332,15 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             // distinction between bra and ket, but still can have at most 2 of
             // them total if braket symmetry != BraKetSymmetry::Symm at most 1
             // bra and 1 ket can connect to aux
-            SEQUANT_ASSERT(symm == BraKetSymmetry::Symm
-                               ? (nbra + nket <= 2)
-                               : (nbra <= 1 && nket <= 1));
+            if (symm == BraKetSymmetry::Symm ? (nbra + nket > 2)
+                                             : (nbra > 1 || nket > 1)) {
+              throw Exception(
+                  "TensorNetworkV3: index " +
+                  toUtf8(current_edge.idx().full_label()) +
+                  " is contracted between two bra slots (or two ket slots) "
+                  "of tensors without bra-ket symmetry; a contraction pairs a "
+                  "bra slot with a ket slot");
+            }
           }
         }
       }
@@ -1394,6 +1437,35 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     graph.bliss_graph->change_color(vertex, color);
   }
 
+  // what Graph::automorphism_phase needs to know about the vertices
+  graph.vertex_indices.resize(nvertex);
+  graph.vertex_fixed_for_phase.assign(nvertex, false);
+  for (std::size_t v = 0; v != nvertex; ++v) {
+    switch (graph.vertex_types[v]) {
+      case VertexType::TensorCore:
+      case VertexType::TensorAux:
+      case VertexType::TensorAuxBundle:
+      case VertexType::IndexBundle:
+        graph.vertex_fixed_for_phase[v] = true;
+        break;
+      default:
+        break;
+    }
+  }
+  for (std::size_t i = 0; i < edges_.size(); ++i) {
+    const Index &idx = edges_[i].idx();
+    graph.vertex_indices[index_vertices[i]] = idx;
+    if (ext_indices_.contains(idx))
+      graph.vertex_fixed_for_phase[index_vertices[i]] = true;
+  }
+  for (const auto &[i, index] : ranges::views::enumerate(pure_proto_indices_))
+    graph.vertex_indices[index_vertices[i + edges_.size()]] = index;
+  graph.antisymm_slots.assign(nvertex,
+                              {uninitialized_vertex, uninitialized_vertex});
+  for (std::size_t b = 0; b != graph.antisymm_bundles.size(); ++b)
+    for (std::size_t pos = 0; pos != graph.antisymm_bundles[b].size(); ++pos)
+      graph.antisymm_slots[graph.antisymm_bundles[b][pos]] = {b, pos};
+
   if (options.make_idx_to_vertex) {
     SEQUANT_ASSERT(index_vertices.size() ==
                    edges_.size() + pure_proto_indices_.size());
@@ -1414,10 +1486,53 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 }
 
 const unsigned int *TensorNetworkV3::canonicalize_graph(
-    const TensorNetworkV3::Graph &graph) {
+    const TensorNetworkV3::Graph &graph,
+    const std::function<void(unsigned int, const unsigned int *)> &aut_hook) {
+  using hook_t = std::function<void(unsigned int, const unsigned int *)>;
   bliss::Stats stats;
   graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-  return graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
+  return graph.bliss_graph->canonical_form(
+      stats, aut_hook ? &bliss::aut_hook<const hook_t> : nullptr,
+      const_cast<hook_t *>(&aut_hook));
+}
+
+int TensorNetworkV3::Graph::automorphism_phase(
+    const unsigned int *aut,
+    const container::set<Index, Index::FullLabelCompare> *named_indices) const {
+  const std::size_t nv = vertex_types.size();
+  SEQUANT_ASSERT(vertex_indices.size() == nv &&
+                 vertex_fixed_for_phase.size() == nv &&
+                 antisymm_slots.size() == nv);
+  for (std::size_t v = 0; v != nv; ++v) {
+    if (aut[v] == v) continue;
+    if (vertex_fixed_for_phase[v]) return 0;
+    if (named_indices && vertex_types[v] == VertexType::Index &&
+        named_indices->contains(vertex_indices[v]))
+      return 0;
+  }
+
+  // aut fixes every tensor core, hence maps each antisymmetric bundle onto a
+  // bundle of the same tensor (itself, or its partner if the tensor is
+  // bra<->ket symmetric); the phase is the product of the parities of the
+  // induced maps between slot positions
+  static constexpr std::size_t npos = std::numeric_limits<std::size_t>::max();
+  int phase = 1;
+  container::svector<std::size_t, 4> perm;
+  for (std::size_t b = 0; b != antisymm_bundles.size(); ++b) {
+    const auto &vertices = antisymm_bundles[b];
+    perm.clear();
+    [[maybe_unused]] std::size_t image_bundle = npos;
+    for (const auto v : vertices) {
+      const auto &[bundle, pos] = antisymm_slots[aut[v]];
+      SEQUANT_ASSERT(bundle != npos && bundle / 2 == b / 2);
+      SEQUANT_ASSERT(image_bundle == npos || image_bundle == bundle);
+      SEQUANT_ASSERT(pos < vertices.size());
+      image_bundle = bundle;
+      perm.push_back(pos);
+    }
+    phase *= permutation_parity(std::span(perm));
+  }
+  return phase;
 }
 
 void TensorNetworkV3::init_edges() {

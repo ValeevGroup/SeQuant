@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/find_if.hpp>
@@ -735,7 +736,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       if (!skip_input_canonicalization) {
         // initial full canonicalization
         canonicalize(expr_input_);
-        SEQUANT_ASSERT(!expr_input_->as<Sum>().empty());
+        // every summand may have canonicalized to zero
+        if (expr_input_->as<Sum>().empty()) return ex<Constant>(0);
       }
 
       // NOW disable canonicalization of normal operators
@@ -944,6 +946,22 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                             "automorphism generators = \n"
                          << oss2.str() << std::endl;
             }
+          }
+
+          // the input is zero if it has an automorphism of phase -1; pruning
+          // by its topology would not preserve that. Declared external
+          // indices are not permuted (Graph::automorphism_phase also fixes
+          // the network's own external indices), even if contracted.
+          {
+            TN::NamedIndexSet declared_external;
+            if (external_indices_)
+              declared_external.insert(external_indices_->begin(),
+                                       external_indices_->end());
+            if (ranges::any_of(aut_generators, [&](const auto &aut) {
+                  return g.automorphism_phase(aut.data(), &declared_external) ==
+                         -1;
+                }))
+              return ex<Constant>(0);
           }
 
           // Use automorphisms to determine groups of topologically equivalent
