@@ -275,12 +275,16 @@ top-level builds.
 Doxygen setup behind the API reference; see `doc/developer/documentation.rst`
 for how it's built. Conventions that hold across the existing pages:
 
+- **Document concepts, not implementation details.** `doc/user/` documents
+  the public API and how to use it. `doc/developer/` gives contributors a
+  high-level overview of what the implementation does: the important
+  concepts, algorithms, invariants, and design decisions they need in order
+  to make sense of the code. Leave implementation details to the code and
+  its comments.
 - **Scope a page relative to its companion, and don't repeat it.** A
-  `user/guide/` page covers the public API; a `developer/` page (if any)
-  covers the implementation for contributors, opens by naming its companion,
-  and states what it assumes rather than re-explaining it. Keep that split —
-  don't inline implementation detail into a user-facing page, and don't
-  re-teach usage in a developer one.
+  `developer/` page opens by naming its `user/guide/` companion (if any) and
+  states what it assumes rather than re-explaining it; it does not re-teach
+  usage.
 - **Every new page goes into a `toctree`.** A page that exists on disk but
   isn't linked from the relevant `index.rst` is orphaned; check `doc/*/index.rst`
   whenever a file is added. Order entries to mirror the conceptual order a
