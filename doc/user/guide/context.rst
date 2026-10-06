@@ -48,7 +48,8 @@ The ``Context`` owns the settings that govern how individual tensors are canonic
   (:func:`sequant::Context::set_tensor_canonicalizer`). When tensors are canonicalized as part of a product (a tensor network), a
   tensor uses the canonicalizer registered for its own label, if any (:func:`sequant::Context::nondefault_tensor_canonicalizer_ptr`),
   and otherwise the built-in one that sorts bra/ket indices according to the tensor's symmetry. The canonicalizer keyed by the empty
-  label (:func:`sequant::Context::tensor_canonicalizer_ptr`) is the one ``Tensor::canonicalize()`` applies to a lone tensor;
+  label (:func:`sequant::Context::tensor_canonicalizer_ptr`) is the one ``Tensor::canonicalize()`` applies to a lone tensor in which no
+  index occurs more than once (one with a repeated index, protoindices included, is a tensor network and is canonicalized as one);
 - the comparers that order indices and pairs of indices (:func:`sequant::Context::set_index_comparer`,
   :func:`sequant::Context::set_index_pair_comparer`);
 - the *cardinal* tensor labels, which are given lexicographic preference during canonicalization

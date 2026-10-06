@@ -1256,3 +1256,46 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
     }
   }
 }
+
+TEST_CASE("canonicalize_tensor_with_repeated_index", "[algorithms]") {
+  using namespace sequant;
+
+  for (const auto method : {CanonicalizationMethod::Topological,
+                            CanonicalizationMethod::Complete}) {
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = method});
+    auto resetter = set_scoped_default_context(ctx);
+
+    // two spellings of one tensor network, differing in dummy names
+    auto require_equal = [](const ExprPtr& x, const ExprPtr& y) {
+      REQUIRE(simplify(x - y) == ex<Constant>(0));
+    };
+    // a slot index repeated in bra and ket
+    require_equal(ex<Tensor>(L"h", bra{L"i_7"}, ket{L"i_7"}),
+                  ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"}));
+    // ... next to a named index
+    require_equal(ex<Tensor>(L"h", bra{L"i_7", L"i_2"}, ket{L"i_7", L"a_1"}),
+                  ex<Tensor>(L"h", bra{L"i_1", L"i_2"}, ket{L"i_1", L"a_1"}));
+    // a repeated index carrying protoindices
+    require_equal(ex<Tensor>(L"X", bra{Index(L"a_1", {L"i_1"})},
+                             ket{Index(L"a_1", {L"i_1"})}),
+                  ex<Tensor>(L"X", bra{Index(L"a_2", {L"i_1"})},
+                             ket{Index(L"a_2", {L"i_1"})}));
+    // an index repeated only as a protoindex: its lone and scaled spellings
+    // merge
+    {
+      auto x = [] {
+        return ex<Tensor>(L"X", bra{Index(L"a_1", {L"i_1"})},
+                          ket{Index(L"a_2", {L"i_1"})});
+      };
+      REQUIRE(simplify(x() - ex<Constant>(2) * x()) ==
+              simplify(ex<Constant>(-1) * x()));
+    }
+    // a lone and a scaled spelling merge
+    REQUIRE(simplify(ex<Tensor>(L"h", bra{L"i_7"}, ket{L"i_7"}) -
+                     ex<Constant>(2) *
+                         ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"})) ==
+            simplify(ex<Constant>(-1) *
+                     ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"})));
+  }
+}

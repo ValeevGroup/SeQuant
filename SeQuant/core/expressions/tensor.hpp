@@ -888,7 +888,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     abort();  // unreachable
   }
 
-  /// @note this performs rapid canonicalization only
+  /// @note a tensor in which an index occurs more than once, protoindices
+  /// included, is a tensor network and is canonicalized as one, with the
+  /// given options; any other is canonicalized by the default tensor
+  /// canonicalizer
   ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
   /// @brief adjoint of a Tensor swaps its bra and ket

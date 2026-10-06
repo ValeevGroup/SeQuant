@@ -102,9 +102,10 @@ Subtleties for contributors
   label. Inside network canonicalization (``TensorNetworkV3::do_individual_canonicalization``) a tensor uses
   ``nondefault_tensor_canonicalizer_ptr(label)`` of a :func:`sequant::get_default_context_snapshot` taken once per network, i.e. the
   entry for exactly its own label, and otherwise the network's own canonicalizer (``DefaultTensorCanonicalizer`` or
-  ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` on a lone tensor. Since
-  the lookup goes through the current context, a scoped context (see :doc:`/user/guide/context`) overrides it for the scope's duration,
-  on the threads that see that scope.
+  ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` on a lone tensor in which
+  no index occurs more than once (a lone tensor with a repeated index, protoindices included, is a tensor network and is canonicalized as
+  one). Since the lookup goes through the current context, a scoped context (see :doc:`/user/guide/context`) overrides it for the
+  scope's duration, on the threads that see that scope.
   ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort (rather than
   using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee about
   using swaps to get there.
