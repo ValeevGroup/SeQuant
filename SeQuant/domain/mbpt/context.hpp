@@ -14,11 +14,36 @@ namespace sequant::mbpt {
 enum class CSV { Yes, No };
 
 // clang-format off
+/// @brief Prefactors of coefficient-summed MBPT operators
+///
+/// For an operator with `c` creators and `a` annihilators let `m = c! a!` in a
+/// spin-orbital basis and `m = c!` in a spin-free basis (where `c = a`). The
+/// prefactor depends on the operator's OpClass:
+///
+/// | operators                                    | Default         | Symmetric |
+/// |----------------------------------------------|-----------------|-----------|
+/// | OpClass::Ex, OpClass::Deex (e.g. t, λ, R, L) | 1/m             | 1/sqrt(m) |
+/// | OpClass::Gen (e.g. h, f, g, θ)               | 1/m             | 1/m       |
+/// | projectors Â, Ŝ, P                           | None (Implicit) | 1/sqrt(m) |
+///
+/// For example, the doubles amplitude operator is
+/// `1/4 t^{i1 i2}_{a1 a2} a^{a1 a2}_{i1 i2}` under Default and
+/// `1/2 t^{i1 i2}_{a1 a2} a^{a1 a2}_{i1 i2}` under Symmetric.
+///
+/// The convention is read when an operator is lowered to tensor form.
+// clang-format on
+enum class NormalizationConvention {
+  Default,   ///< factorial prefactors; projectors carry none
+  Symmetric  ///< square-root prefactors for amplitudes and projectors
+};
+
+// clang-format off
 /// @brief Specifies details of the MBPT formalism
 ///
 /// MBPT context contains:
 /// - csv: whether to use cluster-specific virtuals
 /// - an `OpRegistry`: maps operator labels to their `OpClass`
+/// - normalization_convention: prefactors of coefficient-summed operators
 ///
 /// @warning Default construction creates a `Context` with null `OpRegistry`.
 ///          Most MBPT functions require a registry. Can be initialized as:
@@ -32,6 +57,8 @@ class Context {
  public:
   struct Defaults {
     constexpr static auto csv = CSV::No;
+    constexpr static auto normalization_convention =
+        NormalizationConvention::Default;
   };
 
   struct Options {
@@ -42,6 +69,9 @@ class Context {
     std::shared_ptr<OpRegistry> op_registry_ptr = nullptr;
     /// optional operator registry, use if no shared pointer is provided
     std::optional<OpRegistry> op_registry = std::nullopt;
+    /// normalization convention for tensor-form generation
+    NormalizationConvention normalization_convention =
+        Defaults::normalization_convention;
   };
 
   /// @brief makes default options for mbpt::Context
@@ -68,6 +98,9 @@ class Context {
   /// @return the value of CSV in this context
   CSV csv() const;
 
+  /// @return the normalization convention for tensor-form generation
+  NormalizationConvention normalization_convention() const;
+
   /// @return a constant pointer to the OpRegistry for this context
   /// @note asserts that OpRegistry is not null
   std::shared_ptr<const OpRegistry> op_registry() const;
@@ -85,9 +118,14 @@ class Context {
   /// @brief sets whether to use cluster-specific virtuals
   Context& set(CSV csv);
 
+  /// sets the normalization convention for tensor-form generation
+  Context& set(NormalizationConvention convention);
+
  private:
   CSV csv_ = Defaults::csv;
   std::shared_ptr<OpRegistry> op_registry_;
+  NormalizationConvention normalization_convention_ =
+      Defaults::normalization_convention;
 
   friend bool operator==(Context const& left, Context const& right);
 };
