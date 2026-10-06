@@ -567,6 +567,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
             })) {
       const ExprPtr resolved = apply_dummy_deltas<S>(term);
       if (resolved->as<Sum>().empty()) return ex<Constant>(0);
+      SEQUANT_ASSERT(resolved->as<Sum>().size() == 1);
       term = resolved->as<Sum>().summand(0);
     }
     if (term->is<NormalOperator<S>>()) term = ex<Product>(ExprPtrList{term});
