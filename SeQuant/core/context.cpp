@@ -80,6 +80,11 @@ bool default_context_manipulation_threadsafe() {
 }
 
 bool operator==(const Context& ctx1, const Context& ctx2) {
+  // a Context need not have a registry
+  auto same_registry = [](const auto& r1, const auto& r2) {
+    if (!r1 || !r2) return !r1 && !r2;
+    return r1->spaces() == r2->spaces() && *r1 == *r2;
+  };
   if (&ctx1 == &ctx2)
     return true;
   else
@@ -89,8 +94,6 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.spbasis() == ctx2.spbasis() &&
            ctx1.first_dummy_index_ordinal() ==
                ctx2.first_dummy_index_ordinal() &&
-           ctx1.index_space_registry()->spaces() ==
-               ctx2.index_space_registry()->spaces() &&
            ctx1.canonicalization_options() == ctx2.canonicalization_options() &&
            ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
            ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
@@ -100,7 +103,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.deserialization_column_symmetry() ==
                ctx2.deserialization_column_symmetry() &&
            *ctx1.tensor_canonicalizers_ == *ctx2.tensor_canonicalizers_ &&
-           *ctx1.index_space_registry() == *ctx2.index_space_registry();
+           same_registry(ctx1.index_space_registry(),
+                         ctx2.index_space_registry());
 }
 
 bool operator!=(const Context& ctx1, const Context& ctx2) {

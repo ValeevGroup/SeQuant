@@ -289,6 +289,12 @@ TEST_CASE("context", "[runtime]") {
              with_registry.mutable_index_space_registry()});
     CHECK(with_registry.version() != same_registry.version());
     CHECK(with_registry == same_registry);
+    // registries are equal only if they share their spaces; a context need
+    // not have one
+    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}) !=
+          with_registry);
+    CHECK(Context{} == Context{});
+    CHECK(Context{} != with_registry);
 
     // every setter assigns a new version
     auto bumps = [&ctx](auto&& set) {
