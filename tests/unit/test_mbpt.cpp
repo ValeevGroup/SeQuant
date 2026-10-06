@@ -105,16 +105,18 @@ sequant::ExprPtr in_base_spaces(sequant::ExprPtr expr) {
     expand(expr);
   }
 
-  expr->visit(
-      [](ExprPtr& f) {
-        if (f->is<Tensor>() &&
-            f->as<Tensor>().label() == density::hole_rdm_label()) {
-          const auto& t = f->as<Tensor>();
-          f = make_kronecker(t.bra()[0], t.ket()[0]) -
-              density::make_rdm(t.bra()[0], t.ket()[0]);
-        }
-      },
-      /*atoms_only=*/true);
+  auto eta_to_delta_minus_gamma = [](ExprPtr& f) {
+    if (f->is<Tensor>() &&
+        f->as<Tensor>().label() == density::hole_rdm_label()) {
+      const auto& t = f->as<Tensor>();
+      f = make_kronecker(t.bra()[0], t.ket()[0]) -
+          density::make_rdm(t.bra()[0], t.ket()[0]);
+    }
+  };
+  if (expr->is_atom())
+    eta_to_delta_minus_gamma(expr);
+  else
+    expr->visit(eta_to_delta_minus_gamma, /*atoms_only=*/true);
   expand(expr);
   auto result = std::make_shared<Sum>();
   for (auto term : terms_of(expr)) {
