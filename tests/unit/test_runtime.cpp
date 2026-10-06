@@ -142,8 +142,7 @@ TEST_CASE("context", "[runtime]") {
     }
 
     // two default-constructed states compare equal
-    const Context ctx2({.index_space_registry_shared_ptr =
-                            ctx.mutable_index_space_registry()});
+    const Context ctx2({.index_space_registry = *ctx.index_space_registry()});
     CHECK(ctx == ctx2);
 
     // setters act on a copy only
@@ -223,7 +222,7 @@ TEST_CASE("context", "[runtime]") {
 
     // named-parameter construction
     const Context ctx_opts(
-        {.index_space_registry_shared_ptr = ctx.mutable_index_space_registry(),
+        {.index_space_registry = *ctx.index_space_registry(),
          .tensor_canonicalizers =
              container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>{
                  {L"Q", null_canon}},
@@ -253,6 +252,55 @@ TEST_CASE("context", "[runtime]") {
         Exception);
     CHECK_THROWS_AS(Context{}.set_tensor_canonicalizer(L"Q", nullptr),
                     Exception);
+  }
+
+  SECTION("index space registry is owned") {
+    // a shared_ptr whose object has other owners is copied, so modifying the
+    // object does not affect the context
+    auto shared = mbpt::make_sr_spaces();
+    Context ctx({.index_space_registry_shared_ptr = shared});
+    CHECK(ctx.index_space_registry().get() != shared.get());
+    CHECK(*ctx.index_space_registry() == *shared);
+    shared->add(L"q", 0b10000);
+    CHECK(!ctx.index_space_registry()->contains(L"q"));
+    ctx.set(shared);
+    CHECK(ctx.index_space_registry().get() != shared.get());
+    CHECK(ctx.index_space_registry()->contains(L"q"));
+
+    // the only owner of its object is adopted, without a copy
+    {
+      auto unique = mbpt::make_sr_spaces();
+      const auto* object = unique.get();
+      const Context adopted(
+          {.index_space_registry_shared_ptr = std::move(unique)});
+      CHECK(adopted.index_space_registry().get() == object);
+      auto set_unique = mbpt::make_sr_spaces();
+      const auto* set_object = set_unique.get();
+      ctx.set(std::move(set_unique));
+      CHECK(ctx.index_space_registry().get() == set_object);
+    }
+
+    // a registry given by value is moved in, keeping its storage
+    {
+      IndexSpaceRegistry by_value = *mbpt::make_sr_spaces();
+      const auto* storage = &*by_value.begin();
+      const Context from_value({.index_space_registry = std::move(by_value)});
+      CHECK(&*from_value.index_space_registry()->begin() == storage);
+      IndexSpaceRegistry set_value = *mbpt::make_sr_spaces();
+      const auto* set_storage = &*set_value.begin();
+      ctx.set(std::move(set_value));
+      CHECK(&*ctx.index_space_registry()->begin() == set_storage);
+    }
+
+    // copies of a context share its registry
+    const Context copy(ctx);
+    CHECK(copy.index_space_registry() == ctx.index_space_registry());
+
+    // to modify a context's registry, modify a copy and set it
+    IndexSpaceRegistry modified = *ctx.index_space_registry();
+    modified.add(L"q", 0b10000);
+    ctx.set(std::move(modified));
+    CHECK(ctx.index_space_registry()->contains(L"q"));
   }
 
   SECTION("version") {
@@ -285,8 +333,7 @@ TEST_CASE("context", "[runtime]") {
 
     // equality ignores the version
     const Context same_registry(
-        {.index_space_registry_shared_ptr =
-             with_registry.mutable_index_space_registry()});
+        {.index_space_registry = *with_registry.index_space_registry()});
     CHECK(with_registry.version() != same_registry.version());
     CHECK(with_registry == same_registry);
     // registries are compared by value; a context need not have one

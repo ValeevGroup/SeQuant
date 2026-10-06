@@ -823,9 +823,11 @@ TEST_CASE(
     "correct nesting depth (Task 3, DAG-scope runtime slicing)",
     "[ordered-schedule][sp2-noninner]") {
   auto ctx = sequant::get_default_context().clone();
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
+  REQUIRE(ctx.index_space_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
+      *ctx.index_space_registry());
   sequant::mbpt::add_df_spaces(isr);  // Κ (DF aux)
+  ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto B = orderedsched_2axis_forest_root();
@@ -1037,10 +1039,12 @@ struct OrderedSchedFixture {
 
   auto ctx = sequant::get_default_context().clone();
   ctx.set_first_dummy_index_ordinal(1000000);
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
+  REQUIRE(ctx.index_space_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
+      *ctx.index_space_registry());
   sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
   sequant::mbpt::add_df_spaces(isr);
+  ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto const body =
@@ -1181,9 +1185,11 @@ TEST_CASE(
     "build_ordered_schedule persists operand_vids (value/occurrence DAG edges)",
     "[ordered-schedule][value-id]") {
   auto ctx = sequant::get_default_context().clone();
-  auto isr = ctx.mutable_index_space_registry();
-  REQUIRE(isr != nullptr);
+  REQUIRE(ctx.index_space_registry() != nullptr);
+  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
+      *ctx.index_space_registry());
   sequant::mbpt::add_df_spaces(isr);
+  ctx.set(isr);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 
   auto B = orderedsched_2axis_forest_root();

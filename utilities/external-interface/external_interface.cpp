@@ -597,8 +597,8 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
 
 void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
                          std::size_t version) {
-  const auto registry_ptr =
-      get_default_context().mutable_index_space_registry();
+  const auto registry_ptr = std::make_shared<IndexSpaceRegistry>(
+      *get_default_context().index_space_registry());
   IndexSpaceRegistry &registry = *registry_ptr;
 
   std::vector<std::pair<std::wstring, IndexSpaceMeta::Entry>> spaceList;
@@ -631,6 +631,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
   }
 
   mbpt::add_fermi_spin(registry);
+  set_default_context(get_default_context_snapshot().set(registry_ptr));
 
   for (auto &[label, entry] : spaceList) {
     meta.registerSpace(Index(label + L"_1").space(), std::move(entry));
