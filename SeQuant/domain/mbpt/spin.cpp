@@ -2273,21 +2273,20 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   canonicalize(triplet);
   simplify(triplet);
 
-  const bool bare_te = options.residual == TripletResidualKind::BareTE;
-  if (bare_te && n_ext == 3)
+  if (options.residual == TripletResidualKind::BareTE && n_ext == 3)
     throw Exception(
-        "closed_shell_EOM_triplet_spintrace: te_only is a doubles-only "
+        "closed_shell_EOM_triplet_spintrace: BareTE is a doubles-only "
         "experiment, not implemented beyond doubles");
   // BareTE only handles the rank 2 residual; rank 1 uses the Combined one
-  const bool te_only = bare_te && n_ext == 2;
+  const bool bare_te =
+      options.residual == TripletResidualKind::BareTE && n_ext == 2;
   SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
                              [](const auto& g) { return g.size() == 2; }));
 
-  triplet = triplet_combined_residual(triplet, ext_groups, te_only);
+  triplet = triplet_combined_residual(triplet, ext_groups, bare_te);
   simplify(triplet);
   if (options.compact)
-    triplet =
-        triplet_maxcoeff_compact(triplet, ext_groups, /*bare_te=*/te_only);
+    triplet = triplet_maxcoeff_compact(triplet, ext_groups, bare_te);
   simplify(triplet);
   return triplet;
 }
