@@ -1587,13 +1587,6 @@ SECTION("MRSO-MultiProduct") {
         for (const auto& [c, s] : product)
           sp = sp + c->clone() * core_vacuum_average(s);
       }
-      // compared with Complete canonicalization: under Topological, a Sum
-      // holding one all-external antisymmetric tensor both alone and scaled
-      // can keep the two spelled differently
-      auto cmp_ctx = get_default_context();
-      cmp_ctx.set(
-          CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
-      auto cmp_resetter = set_scoped_default_context(cmp_ctx);
       REQUIRE(simplify(in_base_spaces(mp) - in_base_spaces(sp)) ==
               ex<Constant>(0));
     };
