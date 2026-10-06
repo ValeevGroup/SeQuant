@@ -292,6 +292,29 @@ TEST_CASE("context", "[runtime]") {
       CHECK(&*ctx.index_space_registry()->begin() == set_storage);
     }
 
+    // the Options given to set_default_context() and
+    // set_scoped_default_context() hand over their registry the same way
+    {
+      const Context initial_ctx = get_default_context_snapshot();
+      auto unique = mbpt::make_sr_spaces();
+      const auto* object = unique.get();
+      set_default_context(
+          {.index_space_registry_shared_ptr = std::move(unique)});
+      CHECK(get_default_context().index_space_registry().get() == object);
+      IndexSpaceRegistry by_value = *mbpt::make_sr_spaces();
+      const auto* storage = &*by_value.begin();
+      set_default_context({.index_space_registry = std::move(by_value)});
+      CHECK(&*get_default_context().index_space_registry()->begin() == storage);
+      set_default_context(initial_ctx);
+
+      auto scoped_unique = mbpt::make_sr_spaces();
+      const auto* scoped_object = scoped_unique.get();
+      const auto resetter = set_scoped_default_context(
+          {.index_space_registry_shared_ptr = std::move(scoped_unique)});
+      CHECK(get_default_context().index_space_registry().get() ==
+            scoped_object);
+    }
+
     // copies of a context share its registry
     const Context copy(ctx);
     CHECK(copy.index_space_registry() == ctx.index_space_registry());

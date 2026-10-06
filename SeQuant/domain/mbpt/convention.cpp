@@ -53,7 +53,7 @@ void load(Convention conv, SpinConvention spconv) {
       break;
   }
   sequant::Context ctx = get_default_context_snapshot();
-  ctx.set(isr);
+  ctx.set(std::move(isr));
   ctx.set(Vacuum::SingleProduct);
   set_default_context(std::move(ctx));
 }

@@ -212,7 +212,7 @@ void set_default_context(Context ctx, Statistics s) {
 }
 
 void set_default_context(Context::Options ctx_opts, Statistics s) {
-  return set_default_context(Context(ctx_opts), s);
+  return set_default_context(Context(std::move(ctx_opts)), s);
 }
 
 void set_default_context(const container::map<Statistics, Context>& ctxs) {
