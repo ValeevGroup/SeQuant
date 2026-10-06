@@ -156,9 +156,6 @@ class IndexSpaceRegistry {
     return clear_memoized_data_and_return_this();
   }
 
-  /// @return a copy of this object, same as the copy constructor
-  IndexSpaceRegistry clone() const;
-
   const auto& spaces() const { return spaces_; }
 
   decltype(auto) begin() const { return spaces_.cbegin(); }

@@ -111,11 +111,11 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(sr_isr->retrieve(L"i") != sr_isr->retrieve(L"a"));
 
     // registries compare their space specifications as well as their spaces
-    REQUIRE(*sr_isr == sr_isr->clone());
-    auto other_hole = sr_isr->clone();
+    REQUIRE(*sr_isr == IndexSpaceRegistry(*sr_isr));
+    IndexSpaceRegistry other_hole = *sr_isr;
     other_hole.hole_space(L"o");
     REQUIRE(other_hole != *sr_isr);
-    auto other_mask = sr_isr->clone();
+    IndexSpaceRegistry other_mask = *sr_isr;
     other_mask.physical_particle_attribute_mask(bitset::null);
     REQUIRE(other_mask != *sr_isr);
 

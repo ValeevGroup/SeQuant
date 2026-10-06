@@ -59,7 +59,7 @@ void load(Convention conv, SpinConvention spconv) {
 }
 
 void add_fermi_spin(IndexSpaceRegistry& isr) {
-  IndexSpaceRegistry result = isr.clone();
+  IndexSpaceRegistry result = isr;
 
   for (auto&& space : isr) {
     if (space.base_key() != L"") {
