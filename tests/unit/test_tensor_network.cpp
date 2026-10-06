@@ -1068,16 +1068,27 @@ TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
         REQUIRE(phase == -1);
       }
 
-      // one registered for label Q is used instead; with the null
-      // canonicalizer the graph-based pass alone determines the slot order
+      // one registered for label Q is used instead; with one that leaves Q as
+      // is the graph-based pass alone determines the slot order, which places
+      // the named indices in label order
       {
+        // a canonicalizer registered for label Q, which leaves Q as is and
+        // counts its uses
+        struct CountingCanonicalizer : NullTensorCanonicalizer {
+          std::shared_ptr<int> calls = std::make_shared<int>(0);
+          ExprPtr apply(AbstractTensor&) const override {
+            ++*calls;
+            return {};
+          }
+        };
+        const auto counting = std::make_shared<CountingCanonicalizer>();
         auto scoped = set_scoped_default_context(
             Context(get_default_context())
-                .set_tensor_canonicalizer(
-                    L"Q", std::make_shared<NullTensorCanonicalizer>()));
+                .set_tensor_canonicalizer(L"Q", counting));
         const auto [tensor, phase] = canonicalized();
-        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_2", L"a_1"}));
-        REQUIRE(phase == 1);
+        REQUIRE(*counting->calls > 0);
+        REQUIRE(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+        REQUIRE(phase == -1);
       }
     }
 

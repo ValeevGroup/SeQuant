@@ -60,11 +60,11 @@ struct CanonicalizeOptions {
   /// deduced to be named, but this may be misleading if e.g. single
   /// summed-over dummy index appears in an expression
   std::optional<container::set<Index>> named_indices = std::nullopt;
-  /// whether to ignore the labels of named indices. Setting
-  /// to false will cause named indices to be treated as equivalent slots, which
-  /// the result to be independent of their labels. This does not make sense in
-  /// contexts where labels are meaningful, e.g. when canonicalizing sum of
-  /// tensor networks and will be therefore ignored.
+  /// whether the graph-based canonicalization ignores the labels of named
+  /// indices, so that the structure of the result does not depend on them;
+  /// named indices that an automorphism of the network can exchange are then
+  /// placed in the order of their labels. A Sum canonicalizes its summands with
+  /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
 
   static CanonicalizeOptions default_options();
