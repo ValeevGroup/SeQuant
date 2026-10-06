@@ -622,7 +622,8 @@ TEST_CASE("scoped contexts", "[runtime]") {
   // e.g. the scopes of successive top-level WickTheorems, which map the
   // normal operator labels to one shared NullTensorCanonicalizer
   SECTION("equal modifications of a context scope equal versions") {
-    const auto shared = std::make_shared<NullTensorCanonicalizer>();
+    const auto& shared = NullTensorCanonicalizer::instance();
+    REQUIRE(shared == NullTensorCanonicalizer::instance());
     auto scoped_version = [](std::shared_ptr<TensorCanonicalizer> c) {
       auto modified = set_scoped_modified_default_context(
           [&c](Context& ctx) { ctx.set_tensor_canonicalizer(L"Q", c); });
