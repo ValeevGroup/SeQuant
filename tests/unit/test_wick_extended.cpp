@@ -447,6 +447,22 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
                  L"δ{p_2;u_2}:N-C-S"));
   }
 
+  SECTION("WickTheorem: projected indices are fresh in their term") {
+    // {a†_u1 a_i1}{a†_p1 a_A1}: the active projection of the surviving a†_p1
+    // must not reuse the name the engine's reduction gave the dummy of
+    // γ·δ(A_1), however far the global tmp-index counter has advanced
+    auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"i_1"})) *
+              ex<FNOperator>(cre({L"p_1"}), ann({L"A_1"}));
+    Index::reset_tmp_index();
+    ExprPtr first;
+    REQUIRE_NOTHROW(first = wick_mp(in, {.full_contractions = false}));
+    const auto& u =
+        get_default_context().index_space_registry()->retrieve(L"u");
+    for (int i = 0; i != 1000; ++i) Index::make_tmp_index(u);
+    const auto second = wick_mp(in, {.full_contractions = false});
+    REQUIRE(simplify(first - second) == ex<Constant>(0));
+  }
+
   SECTION("WickTheorem: connectivity") {
     // partial contractions: with full ones, connecting 0 to 1 but not to 2
     // leaves 2 isolated, and no term survives

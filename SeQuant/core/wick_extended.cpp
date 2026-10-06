@@ -9,6 +9,7 @@
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wick.hpp>
 
@@ -23,6 +24,18 @@ namespace sequant::detail {
 namespace {
 
 using Blocks = container::svector<container::svector<std::size_t>>;
+
+/// @return a factory of indices whose labels differ from those of every index
+/// of @p expr; Index::make_tmp_index does not guarantee that, since the
+/// dummies named by reduction and canonicalization come from IndexFactory
+/// objects that count from the same ordinal
+IndexFactory fresh_index_factory(const Expr &expr) {
+  container::set<std::wstring> labels;
+  for (const auto &idx : get_used_indices(expr)) labels.emplace(idx.label());
+  return IndexFactory([labels = std::move(labels)](const Index &idx) {
+    return !labels.contains(std::wstring(idx.label()));
+  });
+}
 
 /// the core (R minus U), active (R ∩ U) and virtual (U minus R) parts of
 /// the space, where R is the reference-occupied and U the vacuum-unoccupied
@@ -195,6 +208,7 @@ template <Statistics S>
 container::svector<ExprPtr> separate_shared_indices(Expr &term) {
   container::svector<ExprPtr> deltas;
   container::set<Index> seen;
+  auto idxfac = fresh_index_factory(term);
   auto separate = [&](NormalOperator<S> &nop) {
     container::svector<Op<S>> ops;
     bool renamed = false;
@@ -204,7 +218,7 @@ container::svector<ExprPtr> separate_shared_indices(Expr &term) {
         ops.push_back(op);
         continue;
       }
-      const auto j = Index::make_tmp_index(idx.space(), idx.proto_indices());
+      const auto j = idxfac.make(idx);
       ops.emplace_back(j, op.action());
       deltas.push_back(op.action() == Action::Create ? make_kronecker(j, idx)
                                                      : make_kronecker(idx, j));
@@ -246,6 +260,7 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 /// a δ over its core (γ) or virtual (η) part and a γ/η over its active
 /// part, or nullopt if both indices are already active
 std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
+                                          IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
                                           bool is_gamma) {
   const auto parts = space_parts(isr, bra.space().qns());
@@ -258,13 +273,13 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
   Alternatives result;
   for (const auto &sp : registered_pieces(
            isr, common.type().intersection(inactive), common.qns())) {
-    const auto d = Index::make_tmp_index(sp);
+    const auto d = idxfac.make(sp);
     result.push_back({make_kronecker(bra, d), make_kronecker(d, ket)});
   }
   if (const auto active = common.type().intersection(parts.active)) {
     const auto &sp = isr.retrieve(active, common.qns());
-    const auto b = Index::make_tmp_index(sp);
-    const auto k = Index::make_tmp_index(sp);
+    const auto b = idxfac.make(sp);
+    const auto k = idxfac.make(sp);
     result.push_back(
         {make_kronecker(bra, b),
          is_gamma ? density::make_rdm(b, k) : density::make_hole_rdm(b, k),
@@ -278,7 +293,8 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
 /// preceded by the δs binding projected indices to the original ones
 template <Statistics S>
 Alternatives split_survivors(const IndexSpaceRegistry &isr,
-                             const NormalOperator<S> &nop, bool full) {
+                             IndexFactory &idxfac, const NormalOperator<S> &nop,
+                             bool full) {
   // the projections so far: their ops and the δs they need
   container::svector<
       std::pair<container::svector<Op<S>>, container::svector<ExprPtr>>>
@@ -304,7 +320,7 @@ Alternatives split_survivors(const IndexSpaceRegistry &isr,
         continue;
       }
       for (const auto &sp : targets) {
-        const auto j = Index::make_tmp_index(sp, idx.proto_indices());
+        const auto j = idxfac.make(Index(sp, idx.proto_indices()));
         auto &[ops2, deltas2] = next.emplace_back(ops, deltas);
         ops2.emplace_back(j, op.action());
         deltas2.push_back(op.action() == Action::Create
@@ -333,6 +349,7 @@ container::svector<std::shared_ptr<Product>> split_mixed_spaces(
       term->is<Product>()
           ? std::static_pointer_cast<Product>(term->clone().as_shared_ptr())
           : std::make_shared<Product>(ExprPtrList{term->clone()});
+  auto idxfac = fresh_index_factory(*product);
   container::svector<std::shared_ptr<Product>> partials{
       std::make_shared<Product>(product->scalar(), ExprPtrList{})};
   for (const auto &f : product->factors()) {
@@ -342,9 +359,11 @@ container::svector<std::shared_ptr<Product>> split_mixed_spaces(
       const bool is_gamma = t.label() == density::rdm_label();
       if ((is_gamma || t.label() == density::hole_rdm_label()) &&
           t.bra_rank() == 1 && t.ket_rank() == 1)
-        alternatives = split_density(isr, t.bra()[0], t.ket()[0], is_gamma);
+        alternatives =
+            split_density(isr, idxfac, t.bra()[0], t.ket()[0], is_gamma);
     } else if (f->is<NormalOperator<S>>()) {
-      alternatives = split_survivors<S>(isr, f->as<NormalOperator<S>>(), full);
+      alternatives =
+          split_survivors<S>(isr, idxfac, f->as<NormalOperator<S>>(), full);
     }
     if (!alternatives) {
       for (auto &p : partials) p->append(1, f);
