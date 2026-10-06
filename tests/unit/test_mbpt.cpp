@@ -27,8 +27,11 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include "catch2_sequant.hpp"
 
+#include <algorithm>
 #include <iostream>
+#include <map>
 #include <memory>
+#include <numeric>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -1376,6 +1379,241 @@ SECTION("MRSO-MultiProduct") {
           fannx(p4) * fannx(p3) * fcrex(p5) * fcrex(p6) * fannx(p8) *
           fannx(p7));
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
+  }
+
+  // relative to a fixed-N reference, a GNO string {x} is defined by
+  // x = Σ ± Π κ(B) {x minus the legs of every B} over all sets of disjoint
+  // blocks B of the ops of x, each with as many creators as annihilators
+  // (a pair is a γ or an η), the sign being that of moving the blocks' legs,
+  // in order, to the front; κ(B) is the ordered cumulant of the reference
+  // averages of B's substrings. Built so from core-vacuum averages, {x} is an
+  // elementary-operator expression, which makes products of GNO strings,
+  // number-conserving or not, comparable on the two paths
+  SECTION("GNO products match the core-vacuum path") {
+    struct Leg {
+      Index index;
+      Action action;
+    };
+    using Legs = container::svector<Leg>;
+    // a GNO string from its creators and its annihilators in storage order
+    auto gno_string = [](IndexList cre_idxs, IndexList ann_idxs) {
+      Legs legs;
+      for (const auto& i : cre_idxs) legs.push_back({i, Action::Create});
+      for (const auto& i : ann_idxs) legs.push_back({i, Action::Annihilate});
+      return legs;
+    };
+    auto balanced = [](const Legs& legs, const container::svector<int>& pos) {
+      long net = 0;
+      for (auto p : pos) net += legs[p].action == Action::Create ? 1 : -1;
+      return net == 0;
+    };
+    // the parity of the permutation that lists @p order
+    auto parity = [](const container::svector<int>& order) {
+      int sign = 1;
+      for (std::size_t i = 0; i != order.size(); ++i)
+        for (std::size_t j = i + 1; j != order.size(); ++j)
+          if (order[i] > order[j]) sign = -sign;
+      return sign;
+    };
+    // calls f(sign, blocks, rest) for every partition of @p pos into blocks
+    // of ≥ 2 legs with as many creators as annihilators and, if
+    // @p with_rest, a rest of single legs
+    using Blocks = container::svector<container::svector<int>>;
+    auto for_each_partition = [&](const Legs& legs,
+                                  const container::svector<int>& pos,
+                                  bool with_rest, auto&& f) {
+      Blocks blocks;
+      container::svector<int> rest;
+      container::svector<bool> used(legs.size(), false);
+      auto recurse = [&](auto&& self) -> void {
+        auto first = std::find_if(pos.begin(), pos.end(),
+                                  [&](int p) { return !used[p]; });
+        if (first == pos.end()) {
+          container::svector<int> order;
+          for (const auto& b : blocks)
+            order.insert(order.end(), b.begin(), b.end());
+          order.insert(order.end(), rest.begin(), rest.end());
+          f(parity(order), blocks, rest);
+          return;
+        }
+        const int p0 = *first;
+        used[p0] = true;
+        if (with_rest) {
+          rest.push_back(p0);
+          self(self);
+          rest.pop_back();
+        }
+        container::svector<int> others;
+        for (auto p : pos)
+          if (!used[p]) others.push_back(p);
+        for (std::size_t m = 1; m < (std::size_t{1} << others.size()); ++m) {
+          container::svector<int> block{p0};
+          for (std::size_t k = 0; k != others.size(); ++k)
+            if (m & (std::size_t{1} << k)) block.push_back(others[k]);
+          if (!balanced(legs, block)) continue;
+          for (auto p : block) used[p] = true;
+          blocks.push_back(block);
+          self(self);
+          blocks.pop_back();
+          for (auto p : block) used[p] = p == p0;
+        }
+        used[p0] = false;
+      };
+      recurse(recurse);
+    };
+    // an elementary-operator expression: Σ c·(string of elementary operators)
+    using Expansion = container::svector<std::pair<ExprPtr, Legs>>;
+    auto subset = [](const Legs& legs, const container::svector<int>& pos) {
+      Legs result;
+      for (auto p : pos) result.push_back(legs[p]);
+      return result;
+    };
+    // the reference average of an elementary string via the standard theorem
+    // under the core vacuum: a surviving all-active string is a density, any
+    // other survivor averages to 0, and so does an unbalanced string, the
+    // reference having a fixed N; call under the SingleProduct vacuum
+    auto core_vacuum_average = [&](const Legs& legs) -> ExprPtr {
+      container::svector<int> all(legs.size());
+      std::iota(all.begin(), all.end(), 0);
+      if (!balanced(legs, all)) return ex<Constant>(0);
+      if (legs.empty()) return ex<Constant>(1);
+      ExprPtr string = ex<Constant>(1);
+      for (const auto& l : legs)
+        string = string *
+                 (l.action == Action::Create ? fcrex(l.index) : fannx(l.index));
+      auto contracted = FWickTheorem{string}.full_contractions(false).compute();
+      const auto isr = get_default_context().index_space_registry();
+      const auto& active = isr->retrieve(L"u");
+      auto average = [&](ExprPtr& f) {
+        if (f->is<FNOperator>()) {
+          const auto& nop = f->as<FNOperator>();
+          const bool all_active = ranges::all_of(nop, [&](const auto& op) {
+            return op.index().space() == active;
+          });
+          f = all_active && nop.ncreators() == nop.nannihilators()
+                  ? density::rdm_from_nop(nop, density::rdm_label())
+                  : ex<Constant>(0);
+        } else if (f->is<Tensor>() &&
+                   f->as<Tensor>().label() == reserved::overlap_label()) {
+          f = make_kronecker(f->as<Tensor>().bra()[0],
+                             f->as<Tensor>().ket()[0]);
+        }
+      };
+      ExprPtr result = std::make_shared<Sum>();
+      for (const auto& term : contracted->is<Sum>()
+                                  ? contracted->as<Sum>().summands() |
+                                        ranges::to<container::svector<ExprPtr>>
+                                  : container::svector<ExprPtr>{contracted}) {
+        ExprPtr t = term->is<Product>()
+                        ? term->clone()
+                        : ex<Product>(ExprPtrList{term->clone()});
+        t->visit(average, /*atoms_only=*/true);
+        result = result + t;
+      }
+      return simplify(result);
+    };
+    // {x} as an elementary-operator expression with core-vacuum averages;
+    // call under the SingleProduct vacuum
+    auto gno_from_core_vacuum = [&](const Legs& legs) {
+      std::map<container::svector<int>, ExprPtr> cumulants;
+      std::map<container::svector<int>, Expansion> gnos;
+      auto cumulant = [&](auto&& self,
+                          const container::svector<int>& pos) -> ExprPtr {
+        if (auto it = cumulants.find(pos); it != cumulants.end())
+          return it->second->clone();
+        ExprPtr result = core_vacuum_average(subset(legs, pos));
+        for_each_partition(legs, pos, /*with_rest=*/false,
+                           [&](int sign, const Blocks& blocks, const auto&) {
+                             if (blocks.size() < 2) return;
+                             ExprPtr term = ex<Constant>(-sign);
+                             for (const auto& b : blocks)
+                               term = term * self(self, b);
+                             result = result + term;
+                           });
+        expand(result);
+        cumulants.emplace(pos, result);
+        return result->clone();
+      };
+      auto gno = [&](auto&& self,
+                     const container::svector<int>& pos) -> Expansion {
+        if (auto it = gnos.find(pos); it != gnos.end()) return it->second;
+        Expansion result{{ex<Constant>(1), subset(legs, pos)}};
+        for_each_partition(
+            legs, pos, /*with_rest=*/true,
+            [&](int sign, const Blocks& blocks,
+                const container::svector<int>& rest) {
+              if (blocks.empty()) return;
+              ExprPtr c = ex<Constant>(-sign);
+              for (const auto& b : blocks) c = c * cumulant(cumulant, b);
+              for (const auto& [c_rest, string] : self(self, rest))
+                result.emplace_back(c * c_rest->clone(), string);
+            });
+        gnos.emplace(pos, result);
+        return result;
+      };
+      container::svector<int> all(legs.size());
+      std::iota(all.begin(), all.end(), 0);
+      return gno(gno, all);
+    };
+    auto check = [&](std::initializer_list<Legs> strings) {
+      ExprPtr mp_input = ex<Constant>(1);
+      for (const auto& legs : strings) {
+        container::svector<Index> cre_idxs, ann_idxs;
+        for (const auto& l : legs)
+          (l.action == Action::Create ? cre_idxs : ann_idxs).push_back(l.index);
+        // the ctor takes annihilators in particle order, the reverse of
+        // storage
+        std::reverse(ann_idxs.begin(), ann_idxs.end());
+        mp_input = mp_input * ex<FNOperator>(cre(cre_idxs), ann(ann_idxs));
+      }
+      const auto mp = mbpt::decompositions::cumulants_to_densities(
+          FWickTheorem{mp_input}.compute());
+      ExprPtr sp = ex<Constant>(0);
+      {
+        auto sp_ctx = get_default_context();
+        sp_ctx.set(Vacuum::SingleProduct);
+        auto sp_resetter = set_scoped_default_context(sp_ctx);
+        Expansion product{{ex<Constant>(1), Legs{}}};
+        for (const auto& legs : strings) {
+          Expansion next;
+          for (const auto& [c1, s1] : product)
+            for (const auto& [c2, s2] : gno_from_core_vacuum(legs)) {
+              Legs s = s1;
+              s.insert(s.end(), s2.begin(), s2.end());
+              next.emplace_back(c1->clone() * c2->clone(), std::move(s));
+            }
+          product = std::move(next);
+        }
+        for (const auto& [c, s] : product)
+          sp = sp + c->clone() * core_vacuum_average(s);
+      }
+      // compared with Complete canonicalization: under Topological, a Sum
+      // holding one all-external antisymmetric tensor both alone and scaled
+      // can keep the two spelled differently
+      auto cmp_ctx = get_default_context();
+      cmp_ctx.set(
+          CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+      auto cmp_resetter = set_scoped_default_context(cmp_ctx);
+      REQUIRE(simplify(in_base_spaces(mp) - in_base_spaces(sp)) ==
+              ex<Constant>(0));
+    };
+    const Index u1{L"u_1"}, u2{L"u_2"}, u3{L"u_3"}, u4{L"u_4"}, u5{L"u_5"},
+        u6{L"u_6"}, i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"}, a2{L"a_2"};
+    // number-conserving
+    check({gno_string({u1}, {u2}), gno_string({u3}, {u4})});
+    check({gno_string({u1}, {i1}), gno_string({a1}, {u2})});
+    // non-conserving
+    check({gno_string({u1, u2}, {u3}), gno_string({}, {u4})});
+    check({gno_string({}, {u1}), gno_string({u2}, {})});
+    check({gno_string({u1}, {u3, u2}), gno_string({u4, u5}, {})});
+    check({gno_string({}, {u1}), gno_string({u2}, {u3}), gno_string({u4}, {})});
+    check({gno_string({u1}, {}), gno_string({u2}, {})});
+    check({gno_string({}, {i1}), gno_string({i2}, {u1}), gno_string({u2}, {})});
+    check({gno_string({a1}, {i1, u1}), gno_string({u2}, {a2}),
+           gno_string({i2}, {})});
+    // up to κ₃; the 2-body string's own κ₂ enters its definition
+    check({gno_string({u1, u2}, {u4, u3}), gno_string({u5}, {u6})});
+    check({gno_string({u1, u2}, {u3}), gno_string({u4}, {u6, u5})});
   }
 
   SECTION("wick(H2**T2) runs in generalized normal order") {
