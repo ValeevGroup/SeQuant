@@ -95,7 +95,7 @@ ExprPtr WK_biorthogonalization_filter(
 /// \param ext_idxs A vector of external index groups
 /// \param bare_te Compact the bare-TE residual (see triplet_combined_residual)
 /// \return The compacted expression
-/// \throw Exception for more than 3 groups (rank 3)
+/// \throw Exception for more than 3 groups (beyond triples)
 /// \throw Exception if a hash group does not match the single-representative
 ///        pattern
 [[nodiscard]] ExprPtr triplet_maxcoeff_compact(
@@ -104,19 +104,20 @@ ExprPtr WK_biorthogonalization_filter(
 
 // clang-format off
 /// \brief Assembles the closed-shell triplet residual from the
-/// sector-summed primitive V, for any supported rank
-/// (rank 2 based on Kohn's paper)
+/// sector-summed primitive V, for singles, doubles and triples (n = 1, 2, 3
+/// external index groups; doubles based on Kohn's paper)
 ///
-///   n = 1: Omega = V/2, the biorthogonal factor for rank one is 1/2.
+///   n = 1: Omega = V/2, the biorthogonal factor for singles is 1/2.
 ///   n = 2: Omega = (3 V - V_ps)/16 (Kohn's paper)
 ///   bare_te (only support n = 2): Omega = V/4, i.e. the bare TE primitive
 ///          with the external pair swap dropped. The dropped part is restored
 ///          by the postprocessing Omega = V/4 + (V_bs + V_ks)/16
 ///   n = 3: Omega = (6 V - V_ps01 - V_ps02 + 2 V_ks12)/160
-///          the 18 TEE ops (6 pairings x 3 T positions) have rank 9;
+///          the 18x18 overlap matrix of the TEE ops (6 pairings x 3 T
+///          positions) has rank 9;
 ///
-/// Supporting a new rank means adding weights to the CombinedResidual case
-/// of the triplet weight table
+/// Supporting a new n means adding its row to
+/// hardcoded_triplet_residual_row
 ///
 /// \pre \p V is a Product or a Sum of Products
 /// \param V The sector-summed triplet primitive
@@ -720,8 +721,8 @@ auto triplet_perm_combine_ta(
 }
 
 /// \brief Applies the weight row \p weights_of(n_particles) over the triplet
-/// slot permutations of \p arr (n_particles = bra_rank); no-op for rank 2 or
-/// less
+/// slot permutations of \p arr (n_particles = bra_rank); no-op for singles
+/// (array rank 2) or less
 /// \throw Exception unless the bra and ket ranks are equal, or if
 ///        \p weights_of throws for bra_rank
 template <typename... Args>
@@ -741,7 +742,8 @@ auto triplet_perm_project_ta(
 
 /// \brief Idempotent null-space projector for the closed-shell triplet R:
 /// removes the metric-null component of the array. Apply to the Davidson
-/// trial vector each iteration; no-op for rank 2, throws beyond rank 6.
+/// trial vector each iteration; no-op for singles (array rank 2), throws
+/// beyond triples (array rank 6).
 template <typename... Args>
 auto triplet_nullspace_project_ta(TA::DistArray<Args...> const& arr,
                                   size_t bra_rank) {
@@ -760,7 +762,8 @@ auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
 /// \brief Metric NNS reconstruction for compact closed-shell triplet
 /// residuals: rebuilds the full residual from the representatives kept by
 /// triplet_maxcoeff_compact. Apply to the H*R residual when the compact
-/// equations were evaluated; no-op for rank 2, throws beyond rank 6.
+/// equations were evaluated; no-op for singles (array rank 2), throws beyond
+/// triples (array rank 6).
 template <typename... Args>
 auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
                             size_t bra_rank) {
@@ -775,10 +778,11 @@ auto triplet_nns_project(TA::DistArray<Args...> const& arr, size_t bra_rank) {
   return triplet_nns_project_ta(arr, bra_rank);
 }
 
-/// \brief Bare-TE undo-compact for compact triplet R2 residuals
-/// (TeNnsReconstruction row). Apply to the H*R residual when the compact
-/// bare-TE equations were evaluated, before triplet_te_reconstruct; no-op
-/// for rank 2, throws for ranks beyond 4.
+/// \brief Bare-TE undo-compact for compact triplet doubles residuals
+/// (triplet_te_nns_projection_weights row). Apply to the H*R residual when the
+/// compact bare-TE equations were evaluated, before triplet_te_reconstruct;
+/// no-op for singles (array rank 2), throws for anything but doubles (array
+/// rank 4).
 template <typename... Args>
 auto triplet_te_nns_project_ta(TA::DistArray<Args...> const& arr,
                                size_t bra_rank) {

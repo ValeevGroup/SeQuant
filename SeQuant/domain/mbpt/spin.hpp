@@ -466,10 +466,10 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 /// @param ext_index_groups external index groups; for particle-conserving
 ///        input each group is the {bra, ket} pair of one external particle
 ///        (as returned by `external_indices`)
-/// @param triplet_R if true, the EOM amplitude tensors (R/L) are spin-adapted
+/// @param triplet_R if true, the EOM amplitude tensors (R) are spin-adapted
 ///        to the explicitly spin-coupled triplet (M_S = 0) manifold instead
 ///        of the singlet one (see closed_shell_EOM_triplet_spintrace);
-///        supported for singles and doubles amplitudes only
+///        supported for singles, doubles and triples R amplitudes only
 /// @return one (label, spin-free expression) pair per external spin string,
 ///         ordered by the bit pattern over groups (αα.., βα.., .., ββ..).
 ///         Summing all sectors reproduces generic `spintrace` (for

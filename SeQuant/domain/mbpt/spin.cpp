@@ -2277,7 +2277,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
     throw Exception(
         "closed_shell_EOM_triplet_spintrace: BareTE is a doubles-only "
         "experiment, not implemented beyond doubles");
-  // BareTE only handles the rank 2 residual; rank 1 uses the Combined one
+  // BareTE only changes the doubles residual; singles use the Combined one
   const bool bare_te =
       options.residual == TripletResidualKind::BareTE && n_ext == 2;
   SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
