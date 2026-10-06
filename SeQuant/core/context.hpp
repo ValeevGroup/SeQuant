@@ -365,23 +365,27 @@ class Context {
   Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
 
  private:
-  /// the tensor canonicalization state; comparers are held by shared_ptr so
-  /// that equality can be decided by identity
-  struct TensorCanonicalizers {
-    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> map;
+  /// the settings that control canonicalization (which also reads the index
+  /// space registry, a setting not specific to it); comparers are held by
+  /// shared_ptr so that equality can be decided by identity
+  struct CanonicalizationConfig {
+    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+        tensor_canonicalizers;
     std::shared_ptr<const tensor_index_comparer_t> index_comparer;
     std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer;
     container::vector<std::wstring> cardinal_labels;
+    std::optional<CanonicalizeOptions> options;
 
-    /// canonicalizers and comparers compare by identity, labels by value
-    bool operator==(const TensorCanonicalizers&) const = default;
+    /// canonicalizers and comparers compare by identity, labels and options by
+    /// value
+    bool operator==(const CanonicalizationConfig&) const = default;
   };
 
   friend bool operator==(const Context& ctx1, const Context& ctx2);
 
-  /// replaces the tensor canonicalization state by a copy owned by this
+  /// replaces the canonicalization configuration by a copy owned by this
   /// @return the copy, for the caller to modify
-  TensorCanonicalizers& mutable_tensor_canonicalizers();
+  CanonicalizationConfig& mutable_canonicalization_config();
 
   /// assigns a new, never before used version to this
   void bump_version();
@@ -394,7 +398,6 @@ class Context {
   bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
-  std::optional<CanonicalizeOptions> canonicalization_options_ = std::nullopt;
   BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
   BraKetSlotTypesetting braket_slot_typesetting_ =
       Defaults::braket_slot_typesetting;
@@ -404,7 +407,7 @@ class Context {
   ColumnSymmetry deserialization_column_symmetry_ =
       Defaults::deserialization_column_symmetry;
   /// shared by copies of this context, hence never mutated in place
-  std::shared_ptr<const TensorCanonicalizers> tensor_canonicalizers_;
+  std::shared_ptr<const CanonicalizationConfig> canonicalization_config_;
 };
 
 /// Context object equality comparison
