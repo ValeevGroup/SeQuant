@@ -178,11 +178,12 @@ class Context {
   /// nonzero number that two contexts share if and only if canonicalization
   /// sees the same configuration in both, i.e. they have the same index space
   /// registry, tensor canonicalizers and index comparers (the same objects),
-  /// cardinal tensor labels and canonicalization options; a number is never
-  /// reused for another configuration
-  /// @note the other settings (vacuum, metric, SP basis, first dummy index
-  /// ordinal, typesetting, deserialization defaults, strict bra-ket checks)
-  /// do not affect the version
+  /// cardinal tensor labels, canonicalization options and SP basis (which
+  /// determines the symmetry of NormalOperator); a number is never reused for
+  /// another configuration
+  /// @note the other settings (vacuum, metric, first dummy index ordinal,
+  /// typesetting, deserialization defaults, strict bra-ket checks) do not
+  /// affect the version
   /// @note the version does not track in-place mutation of a
   /// TensorCanonicalizer or comparer object that this context refers to
   std::uint64_t version() const;
@@ -367,9 +368,9 @@ class Context {
 
  private:
   /// the settings that control canonicalization (which also reads the index
-  /// space registry, a setting not specific to it); these and the registry
-  /// define version(), so a setting that canonicalization comes to read
-  /// belongs here; comparers are held by shared_ptr so that equality can be
+  /// space registry and the SP basis, settings not specific to it); these, the
+  /// registry and the SP basis define version(), so a setting that
+  /// canonicalization comes to read belongs here; comparers are held by shared_ptr so that equality can be
   /// decided by identity
   struct CanonicalizationConfig {
     container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>

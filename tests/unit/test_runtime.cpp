@@ -390,13 +390,13 @@ TEST_CASE("context", "[runtime]") {
     CHECK(!changes([](Context& c) { c.set(Vacuum::SingleProduct); }));
     CHECK(!changes([](Context& c) { c.set(IndexSpaceMetric::General); }));
     CHECK(!changes([](Context& c) { c.set(AssertStrictBraKetSymmetry::No); }));
-    CHECK(!changes([](Context& c) { c.set(SPBasis::Spinfree); }));
     CHECK(!changes([](Context& c) { c.set_first_dummy_index_ordinal(200); }));
     CHECK(!changes([](Context& c) { c.set(BraKetTypesetting::KetSub); }));
     CHECK(!changes([](Context& c) { c.set(BraKetSlotTypesetting::Naive); }));
     CHECK(!changes([](Context& c) { c.set(Symmetry::Symm); }));
     CHECK(!changes([](Context& c) { c.set(Hermiticity::Hermitian); }));
     CHECK(!changes([](Context& c) { c.set(ColumnSymmetry::Symm); }));
+    CHECK(changes([](Context& c) { c.set(SPBasis::Spinfree); }));
     CHECK(changes([](Context& c) { c.set(IndexSpaceRegistry{}); }));
     CHECK(changes(
         [](Context& c) { c.set(std::make_shared<IndexSpaceRegistry>()); }));

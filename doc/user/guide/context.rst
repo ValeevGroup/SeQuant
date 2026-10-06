@@ -149,9 +149,10 @@ Detecting changes
 ----------------------
 
 Every ``Context`` has a version (:func:`sequant::Context::version`) that identifies its canonicalization configuration: the index
-space registry, the tensor canonicalizers and index comparers (compared as objects, not by behavior), the cardinal tensor labels and the
-canonicalization options. Two contexts share a version if and only if canonicalization sees the same configuration in both; a version
-is never reused for another configuration. The other settings (vacuum, metric, single-particle basis, first dummy index ordinal,
-typesetting, deserialization defaults) do not affect it. :func:`sequant::current_context_version` returns the version of the context
-in effect on the calling thread, which lets code that caches canonicalization results tell whether they are still valid. The version
-does not track in-place mutation of a canonicalizer or comparer object that the context refers to.
+space registry, the tensor canonicalizers and index comparers (compared as objects, not by behavior), the cardinal tensor labels, the
+canonicalization options and the single-particle basis (which determines the symmetry of normal operators). Two contexts share a
+version if and only if canonicalization sees the same configuration in both; a version is never reused for another configuration. The
+other settings (vacuum, metric, first dummy index ordinal, typesetting, deserialization defaults) do not affect it.
+:func:`sequant::current_context_version` returns the version of the context in effect on the calling thread, which lets code that
+caches canonicalization results tell whether they are still valid. The version does not track in-place mutation of a canonicalizer or
+comparer object that the context refers to.

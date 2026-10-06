@@ -59,11 +59,14 @@ struct ObjectRef {
   bool operator==(const ObjectRef& other) const { return ptr == other.ptr; }
 };
 
-/// what canonicalization reads from a Context: its CanonicalizationConfig and
-/// its index space registry, with the shared objects referred to weakly and
-/// compared by identity, as in operator==(const Context&, const Context&)
+/// what canonicalization reads from a Context: its CanonicalizationConfig, its
+/// index space registry and its SP basis, with the shared objects referred to
+/// weakly and compared by identity, as in
+/// operator==(const Context&, const Context&)
 struct CanonicalizationKey {
   ObjectRef registry;
+  /// determines the symmetry of NormalOperator
+  SPBasis spbasis = Context::Defaults::spbasis;
   container::vector<std::pair<std::wstring, ObjectRef>> canonicalizers;
   ObjectRef index_comparer;
   ObjectRef index_pair_comparer;
@@ -86,7 +89,7 @@ struct CanonicalizationKey {
              o1->named_indices == o2->named_indices &&
              o1->ignore_named_index_labels == o2->ignore_named_index_labels;
     };
-    return registry == other.registry &&
+    return registry == other.registry && spbasis == other.spbasis &&
            canonicalizers == other.canonicalizers &&
            index_comparer == other.index_comparer &&
            index_pair_comparer == other.index_pair_comparer &&
@@ -399,6 +402,7 @@ void Context::update_version() {
   const auto& [tensor_canonicalizers, index_comparer, index_pair_comparer,
                cardinal_labels, options] = *canonicalization_config_;
   CanonicalizationKey key{.registry = ObjectRef(idx_space_reg_),
+                          .spbasis = spbasis_,
                           .canonicalizers = {},
                           .index_comparer = ObjectRef(index_comparer),
                           .index_pair_comparer = ObjectRef(index_pair_comparer),
@@ -533,6 +537,7 @@ Context& Context::set(
 
 Context& Context::set(SPBasis spbasis) {
   spbasis_ = spbasis;
+  update_version();
   return *this;
 }
 
