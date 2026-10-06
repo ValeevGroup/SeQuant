@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -391,10 +392,24 @@ class Context {
   /// @return the copy, for the caller to modify
   CanonicalizationConfig& mutable_canonicalization_config();
 
-  /// sets the version to that of the current canonicalization configuration
-  void update_version();
+  /// marks the cached version stale, to be recomputed by the next version()
+  void invalidate_version();
 
-  std::uint64_t version_ = 0;
+  /// the cached version(), 0 while stale; atomic because version() may be
+  /// called on a context that threads share (e.g. the process-wide default),
+  /// copyable so that Context stays copyable
+  struct CachedVersion {
+    std::atomic<std::uint64_t> value{0};
+    CachedVersion() = default;
+    CachedVersion(const CachedVersion& other)
+        : value(other.value.load(std::memory_order_relaxed)) {}
+    CachedVersion& operator=(const CachedVersion& other) {
+      value.store(other.value.load(std::memory_order_relaxed),
+                  std::memory_order_relaxed);
+      return *this;
+    }
+  };
+  mutable CachedVersion version_;
 
   std::shared_ptr<const IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;

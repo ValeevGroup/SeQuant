@@ -444,6 +444,20 @@ TEST_CASE("context", "[runtime]") {
       // undoing a change restores the version
       CHECK(ctx.version() == before);
     }
+    // the version is assigned when read, so the intermediate configurations
+    // of a chain of setters get none: versions are assigned in increasing
+    // order, and the intermediate one, read after the final one, is newer
+    {
+      const auto s = std::make_shared<NullTensorCanonicalizer>();
+      const auto t = std::make_shared<NullTensorCanonicalizer>();
+      Context chained(ctx);
+      chained.set_tensor_canonicalizer(L"S", s).set_tensor_canonicalizer(L"T",
+                                                                         t);
+      const auto final_version = chained.version();
+      Context intermediate(ctx);
+      intermediate.set_tensor_canonicalizer(L"S", s);
+      CHECK(intermediate.version() > final_version);
+    }
     CHECK(changes([](Context& c) {
       c.set_index_comparer(TensorCanonicalizer::default_index_comparer());
     }));

@@ -267,6 +267,8 @@ Context get_default_context_snapshot(Statistics s) {
 }
 
 void set_default_context(Context ctx, Statistics s) {
+  // versioned before it is shared, so that no two threads compute its version
+  ctx.version();
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
 #endif
@@ -310,6 +312,8 @@ set_scoped_default_context(container::map<Statistics, Context> ctx) {
   // contexts alone, hence needs no lock
   // get_default_context() falls back to the context for arbitrary statistics
   ctx.try_emplace(Statistics::Arbitrary);
+  // versioned before the workers of parallel primitives can read them
+  for (auto& [s, c] : ctx) c.version();
   return detail::set_scoped_implicit_context(std::move(ctx));
 }
 
@@ -388,20 +392,14 @@ Context::Context(Options options)
                                reserved::transposition_label()};
   config->options = std::move(options.canonicalization_options);
   canonicalization_config_ = std::move(config);
-  update_version();
 }
 
-std::uint64_t Context::version() const { return version_; }
-
-Context::CanonicalizationConfig& Context::mutable_canonicalization_config() {
-  auto copy =
-      std::make_shared<CanonicalizationConfig>(*canonicalization_config_);
-  auto& result = *copy;
-  canonicalization_config_ = std::move(copy);
-  return result;
-}
-
-void Context::update_version() {
+std::uint64_t Context::version() const {
+  // computed on demand, so that the intermediate configurations of a chain of
+  // setters never reach the version table; threads that find the cache stale
+  // at once compute the same version, since equal configurations share one
+  auto result = version_.value.load(std::memory_order_relaxed);
+  if (result != 0) return result;
   // binds every member, so that a member added to CanonicalizationConfig
   // fails to compile here until the key accounts for it
   const auto& [tensor_canonicalizers, index_comparer, index_pair_comparer,
@@ -415,7 +413,21 @@ void Context::update_version() {
                           .options = options};
   for (const auto& [label, canonicalizer] : tensor_canonicalizers)
     key.canonicalizers.emplace_back(label, ObjectRef(canonicalizer));
-  version_ = canonicalization_version(std::move(key));
+  result = canonicalization_version(std::move(key));
+  version_.value.store(result, std::memory_order_relaxed);
+  return result;
+}
+
+Context::CanonicalizationConfig& Context::mutable_canonicalization_config() {
+  auto copy =
+      std::make_shared<CanonicalizationConfig>(*canonicalization_config_);
+  auto& result = *copy;
+  canonicalization_config_ = std::move(copy);
+  return result;
+}
+
+void Context::invalidate_version() {
+  version_.value.store(0, std::memory_order_relaxed);
 }
 
 std::uint64_t current_context_version(Statistics s) {
@@ -518,13 +530,13 @@ Context& Context::set(Vacuum vacuum) {
 
 Context& Context::set(IndexSpaceRegistry ISR) {
   idx_space_reg_ = std::make_shared<const IndexSpaceRegistry>(std::move(ISR));
-  update_version();
+  invalidate_version();
   return *this;
 }
 
 Context& Context::set(std::shared_ptr<const IndexSpaceRegistry> ISR) {
   idx_space_reg_ = owned(std::move(ISR));
-  update_version();
+  invalidate_version();
   return *this;
 }
 
@@ -542,7 +554,7 @@ Context& Context::set(
 
 Context& Context::set(SPBasis spbasis) {
   spbasis_ = spbasis;
-  update_version();
+  invalidate_version();
   return *this;
 }
 
@@ -554,7 +566,7 @@ Context& Context::set_first_dummy_index_ordinal(
 
 Context& Context::set(CanonicalizeOptions copt) {
   mutable_canonicalization_config().options = copt;
-  update_version();
+  invalidate_version();
   return *this;
 }
 
@@ -589,21 +601,21 @@ Context& Context::set_tensor_canonicalizer(
   check_tensor_canonicalizer(canonicalizer);
   mutable_canonicalization_config().tensor_canonicalizers.insert_or_assign(
       std::wstring{label}, std::move(canonicalizer));
-  update_version();
+  invalidate_version();
   return *this;
 }
 
 Context& Context::unset_tensor_canonicalizer(std::wstring_view label) {
   mutable_canonicalization_config().tensor_canonicalizers.erase(
       std::wstring{label});
-  update_version();
+  invalidate_version();
   return *this;
 }
 
 Context& Context::set_index_comparer(tensor_index_comparer_t comparer) {
   mutable_canonicalization_config().index_comparer =
       make_comparer(std::move(comparer));
-  update_version();
+  invalidate_version();
   return *this;
 }
 
@@ -611,7 +623,7 @@ Context& Context::set_index_comparer(
     std::shared_ptr<const tensor_index_comparer_t> comparer) {
   mutable_canonicalization_config().index_comparer =
       checked_comparer(std::move(comparer));
-  update_version();
+  invalidate_version();
   return *this;
 }
 
@@ -619,7 +631,7 @@ Context& Context::set_index_pair_comparer(
     tensor_index_pair_comparer_t comparer) {
   mutable_canonicalization_config().index_pair_comparer =
       make_comparer(std::move(comparer));
-  update_version();
+  invalidate_version();
   return *this;
 }
 
@@ -627,7 +639,7 @@ Context& Context::set_index_pair_comparer(
     std::shared_ptr<const tensor_index_pair_comparer_t> comparer) {
   mutable_canonicalization_config().index_pair_comparer =
       checked_comparer(std::move(comparer));
-  update_version();
+  invalidate_version();
   return *this;
 }
 
@@ -635,7 +647,7 @@ Context& Context::set_cardinal_tensor_labels(
     container::vector<std::wstring> labels) {
   check_cardinal_tensor_labels(labels);
   mutable_canonicalization_config().cardinal_labels = std::move(labels);
-  update_version();
+  invalidate_version();
   return *this;
 }
 
