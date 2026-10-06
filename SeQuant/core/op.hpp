@@ -356,6 +356,21 @@ bool can_contract(const Op<S> &left, const Op<S> &right,
 template <Statistics S = Statistics::FermiDirac>
 class NormalOperator;
 
+namespace detail {
+/// @return the name of @p S , for composing Expr type names
+constexpr std::string statistics_name(Statistics S) {
+  switch (S) {
+    case Statistics::FermiDirac:
+      return "FermiDirac";
+    case Statistics::BoseEinstein:
+      return "BoseEinstein";
+    case Statistics::Arbitrary:
+      return "Arbitrary";
+  }
+  SEQUANT_UNREACHABLE;
+}
+}  // namespace detail
+
 /// @brief Operator is a sequence of Op objects
 ///
 /// @tparam S specifies the particle statistics
@@ -403,6 +418,15 @@ class Operator : public container::svector<Op<S>>, public Expr {
     for (const auto &o : *this) result += o.to_latex();
     result += L"}";
     return result;
+  }
+
+  static constexpr type_rank_type type_rank =
+      S == Statistics::FermiDirac     ? expr_type_rank::foperator
+      : S == Statistics::BoseEinstein ? expr_type_rank::boperator
+                                      : default_type_rank;
+  static constexpr std::string static_type_name(
+      std::type_identity<Operator> = {}) {
+    return "sequant::Operator<" + detail::statistics_name(S) + ">";
   }
 
   type_id_type type_id() const override { return get_type_id<Operator>(); };
@@ -723,6 +747,15 @@ class NormalOperator : public Operator<S>,
     auto result = Operator<S>::insert(it, std::forward<T>(value));
     if (hug_) hug_->insert(result - begin(), *result);
     return result;
+  }
+
+  static constexpr Expr::type_rank_type type_rank =
+      S == Statistics::FermiDirac     ? expr_type_rank::fnoperator
+      : S == Statistics::BoseEinstein ? expr_type_rank::bnoperator
+                                      : Expr::default_type_rank;
+  static constexpr std::string static_type_name(
+      std::type_identity<NormalOperator> = {}) {
+    return "sequant::NormalOperator<" + detail::statistics_name(S) + ">";
   }
 
   Expr::type_id_type type_id() const override {
@@ -1070,6 +1103,13 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     return result;
   }
 
+  static constexpr Expr::type_rank_type type_rank = Expr::default_type_rank;
+  static constexpr std::string static_type_name(
+      std::type_identity<NormalOperatorSequence> = {}) {
+    return "sequant::NormalOperatorSequence<" + detail::statistics_name(S) +
+           ">";
+  }
+
   Expr::type_id_type type_id() const override {
     return Expr::get_type_id<NormalOperatorSequence>();
   };
@@ -1135,12 +1175,6 @@ template <typename... Attr>
 inline ExprPtr fannx(Index i, Attr &&...attr) {
   return ex<FNOperator>(cre(), ann({fann(i, std::forward<Attr>(attr)...)}));
 }
-
-namespace detail {
-struct OpIdRegistrar {
-  OpIdRegistrar();
-};
-}  // namespace detail
 
 /// converts NormalOperatorSequence to NormalOperator
 /// @tparam S Statistics

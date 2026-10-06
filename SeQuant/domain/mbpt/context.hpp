@@ -102,6 +102,12 @@ void set_default_mbpt_context(const Context::Options& options);
 
 void reset_default_mbpt_context();
 
+/// @brief changes the default mbpt context until the returned object is
+/// destroyed
+/// @note the scoped contexts are seen only by the calling thread and by the
+/// workers of the parallel primitives (sequant::for_each, etc.) it launches;
+/// set_default_mbpt_context() is not seen by this thread until the scope ends
+/// @note scopes must end in the reverse order of their creation
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& ctx);
 

@@ -111,6 +111,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2
 
+    - name: Enable TBB
+      if: ${{ startswith(matrix.os, 'ubuntu') && !matrix.valgrind && !matrix.sanitize }}
+      run: |
+        sudo apt-get install libtbb-dev
+        echo "TBB_CONFIG=-DENABLE_TBB=ON" >> "$GITHUB_ENV"
+
     - name: Setup MSVC
       if: ${{ startswith(matrix.os, 'windows') }}
       uses: TheMrMilchmann/setup-msvc-dev@v4
@@ -149,7 +155,7 @@ jobs:
       # Passed through the environment so that bash does not interpret the backslashes in Windows paths
       env:
         VCPKG_CMAKE_CONFIG: ${{ steps.vcpkg.outputs.vcpkg-cmake-config }}
-      run: cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG -B $GITHUB_WORKSPACE/build -S $GITHUB_WORKSPACE -DSEQUANT_QUICK_BENCHMARKS=ON $VCPKG_CMAKE_CONFIG
+      run: cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG -B $GITHUB_WORKSPACE/build -S $GITHUB_WORKSPACE -DSEQUANT_QUICK_BENCHMARKS=ON $TBB_CONFIG $VCPKG_CMAKE_CONFIG
 
 
     - name: Build

@@ -2,12 +2,14 @@
 // Created by Eduard Valeyev on 2019-01-30.
 //
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
@@ -38,7 +40,13 @@ void Tensor::adjoint() {
 }
 
 ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
-  return TensorCanonicalizer::instance()->apply(*this);
+  const auto canonicalizer =
+      get_default_context_snapshot().tensor_canonicalizer_ptr(L"");
+  if (!canonicalizer)
+    throw Exception(
+        "Tensor::canonicalize: the current context has no default tensor "
+        "canonicalizer");
+  return canonicalizer->apply(*this);
 }
 
 }  // namespace sequant

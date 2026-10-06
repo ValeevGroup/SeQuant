@@ -90,8 +90,8 @@ static void random_tensor_network(benchmark::State& state) {
   const std::size_t num_indices = state.range(1);
 
   auto ctx_resetter = set_scoped_default_context(
-      Context(get_default_context())
-          .set_first_dummy_index_ordinal(num_indices + 1));
+      get_default_context_snapshot().set_first_dummy_index_ordinal(num_indices +
+                                                                   1));
 
   const ProductPtr& prod = create_random_network(testcase, num_indices);
 
@@ -99,12 +99,13 @@ static void random_tensor_network(benchmark::State& state) {
     state.SkipWithMessage("Invalid");
   }
 
+  const auto& cardinal_tensor_labels =
+      get_default_context().cardinal_tensor_labels();
   for (auto _ : state) {
     // Need to clone in order to avoid mutating original expression
     TensorNetwork tn(prod->clone()->as<Product>().factors());
 
-    ExprPtr expr =
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
+    ExprPtr expr = tn.canonicalize(cardinal_tensor_labels);
 
     // Prevent the compiler from optimizing the canonicalization away
     benchmark::DoNotOptimize(expr);

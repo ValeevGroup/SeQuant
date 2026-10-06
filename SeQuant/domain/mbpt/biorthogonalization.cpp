@@ -3,6 +3,7 @@
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
@@ -582,6 +583,8 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   // hash filtering logic for R > 2
   container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
 
+  const auto ctx = get_default_context_snapshot();
+  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
   for (const auto& term : *expr) {
     if (!term->is<Product>()) continue;
 
@@ -589,9 +592,7 @@ ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
     auto scalar = product->scalar();
 
     sequant::TensorNetwork tn(*product);
-    auto hash =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
-            .hash_value();
+    auto hash = tn.canonicalize_slots(cardinal_tensor_labels).hash_value();
 
     auto it = largest_coeff_terms.find(hash);
     if (it == largest_coeff_terms.end()) {
@@ -860,13 +861,14 @@ ExprPtr triplet_maxcoeff_compact(
                  ranges::to<container::svector<Index>>();
 
   container::map<std::size_t, container::vector<ExprPtr>> groups;
+  const auto ctx = get_default_context_snapshot();
+  const auto& cardinal_tensor_labels = ctx.cardinal_tensor_labels();
   for (const auto& term : *work) {
     SEQUANT_ASSERT(term->is<Product>());
     if (!term->is<Product>()) continue;
     sequant::TensorNetwork tn(*term.as_shared_ptr<Product>());
     const auto hash =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
-            .hash_value();
+        tn.canonicalize_slots(cardinal_tensor_labels).hash_value();
     groups[hash].push_back(term);
   }
 

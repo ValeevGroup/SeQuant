@@ -52,6 +52,21 @@ namespace {
 }
 }  // namespace
 
+TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
+  using namespace sequant;
+  using mbpt::qns_t;
+  const auto fid = Expr::get_type_id<mbpt::FOperator<qns_t>>();
+  const auto bid = Expr::get_type_id<mbpt::BOperator<qns_t>>();
+  REQUIRE(fid != bid);
+  REQUIRE(Expr::get_type_id<mbpt::FOperatorBase>() != fid);
+  REQUIRE(Expr::get_type_id<mbpt::BOperatorBase>() != bid);
+  REQUIRE(Expr::type_rank_of(fid) == Expr::default_type_rank);
+  REQUIRE(Expr::type_rank_of(bid) == Expr::default_type_rank);
+  REQUIRE(mbpt::FOperator<qns_t>::static_type_name() ==
+          "sequant::mbpt::Operator<sequant::mbpt::QuantumNumberChange<int64,"
+          "sequant::mbpt::default_qns_tag>,FermiDirac>");
+}
+
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
   SECTION("registry") {
     using namespace sequant::mbpt;
@@ -1196,7 +1211,10 @@ SECTION("MRSO") {
                          BraKetSymmetry::Conjugate, ColumnSymmetry::Symm) *
               fcrex(p) * fannx(q);
     ExprPtr result;
+    const auto* index_comparer = &get_default_context().index_comparer();
     REQUIRE_NOTHROW(result = t::ref_av(H1));
+    // the active-first comparer is scoped to ref_av
+    CHECK(&get_default_context().index_comparer() == index_comparer);
     REQUIRE_THAT(result, SimplifiesTo(L"h{O_1;O_1}:N-C-S + "
                                       L"h{u_2;u_1}:N-C-S * γ{u_1;u_2}:N-C-S"));
   }

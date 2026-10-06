@@ -12,9 +12,12 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
+#include <SeQuant/core/utility/scope.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -997,6 +1000,33 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 #endif
   }  // SECTION("fermi vacuum")
 
+  // t:S ã{a1,a2;i1,i2} is identically zero (a1<->a2 is an automorphism of
+  // odd phase); topology pruning must not turn it into a nonzero result
+  SECTION("zero by symmetry") {
+    for (auto symm : {Symmetry::Symm, Symmetry::Antisymm}) {
+      ExprPtr results[2];
+      for (auto topology : {false, true}) {
+        auto input =
+            ex<FNOperator>(cre({L"i_3", L"i_4"}), ann({L"a_3", L"a_4"})) *
+            ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
+            ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+        auto wick = FWickTheorem{input};
+        wick.set_external_indices(IndexList{L"i_3", L"i_4", L"a_3", L"a_4"})
+            .use_topology(topology);
+        auto result = wick.compute();
+        simplify(result);
+        results[topology] = result;
+      }
+      if (symm == Symmetry::Symm) {
+        REQUIRE_THAT(results[false], EquivalentTo("0"));
+        REQUIRE_THAT(results[true], EquivalentTo("0"));
+      } else {
+        REQUIRE(!results[false]->is_zero());
+        REQUIRE_THAT(results[true], EquivalentTo(results[false]));
+      }
+    }
+  }
+
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
     // default vacuum is already spin-orbital Fermi vacuum
@@ -1517,3 +1547,100 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   }
 }
 #endif
+
+TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
+  using namespace sequant;
+
+  // a sum of products of normal operators whose partial contractions are
+  // normal operators that DefaultTensorCanonicalizer would reorder
+  auto make_input = [] {
+    ExprPtr sum = ex<Constant>(0);
+    for (int k = 0; k != 6; ++k) {
+      auto i = [k](int n) { return L"i_" + std::to_wstring(4 * k + n); };
+      sum += ex<FNOperator>(cre({i(4)}), ann({i(3)})) *
+             ex<FNOperator>(cre({i(2)}), ann({i(1)}));
+    }
+    canonicalize(sum);
+    REQUIRE(sum->is<Sum>());
+    REQUIRE(sum->size() == 6);
+    return sum;
+  };
+  auto terms = [](const ExprPtr& expr) {
+    std::vector<std::wstring> result;
+    if (expr->is<Sum>()) {
+      for (auto&& term : *expr) result.push_back(term->to_latex());
+    } else
+      result.push_back(expr->to_latex());
+    std::sort(result.begin(), result.end());
+    return result;
+  };
+
+  // regression test for #651: per-summand WickTheorems run concurrently and
+  // must neither enable nor disable normal operator canonicalization for each
+  // other, so every term equals that of the summand computed on its own
+  SECTION("per-summand computations") {
+    const auto input = make_input();
+    std::vector<std::wstring> expected;
+    // terms that canonicalization of their normal operators would change
+    int reorderable_terms = 0;
+    for (auto&& summand : *input) {
+      const auto summand_result =
+          FWickTheorem{summand->clone()}.full_contractions(false).compute(
+              false, /* skip_input_canonicalization */ true);
+      REQUIRE(summand_result->is<Sum>());
+      for (auto&& term : *summand_result) {
+        auto canonical_term = term->clone();
+        canonicalize(canonical_term);
+        if (canonical_term->to_latex() != term->to_latex()) ++reorderable_terms;
+      }
+      const auto summand_terms = terms(summand_result);
+      expected.insert(expected.end(), summand_terms.begin(),
+                      summand_terms.end());
+    }
+    std::sort(expected.begin(), expected.end());
+    REQUIRE(reorderable_terms > 0);
+
+    for (int rep = 0; rep != 4; ++rep) {
+      CHECK(terms(FWickTheorem{input->clone()}
+                      .full_contractions(false)
+                      .compute()) == expected);
+    }
+    {
+      const auto nthreads = num_threads();
+      set_num_threads(1);
+      auto restore_nthreads = sequant::detail::make_scope_exit(
+          [nthreads] { set_num_threads(nthreads); });
+      CHECK(terms(FWickTheorem{input->clone()}
+                      .full_contractions(false)
+                      .compute()) == expected);
+    }
+  }
+
+  SECTION("user canonicalizer of a normal operator label survives") {
+    const auto& label = FNOperator::labels()[1];
+    const auto custom = std::make_shared<DefaultTensorCanonicalizer>();
+    auto scoped = set_scoped_default_context(
+        Context(get_default_context()).set_tensor_canonicalizer(label, custom));
+    FWickTheorem{make_input()}.full_contractions(false).compute();
+    CHECK(get_default_context().nondefault_tensor_canonicalizer_ptr(label) ==
+          custom);
+    CHECK(!get_default_context().nondefault_tensor_canonicalizer_ptr(
+        FNOperator::labels()[0]));
+  }
+
+  // #651 as reported: the canonicalizer is registered process-wide
+  SECTION("process-wide canonicalizer of a normal operator label survives") {
+    const auto& label = FNOperator::labels()[1];
+    const auto custom = std::make_shared<DefaultTensorCanonicalizer>();
+    const auto initial_ctx = get_default_context();
+    auto restore = sequant::detail::make_scope_exit(
+        [&initial_ctx] { set_default_context(initial_ctx); });
+    set_default_context(
+        Context(initial_ctx).set_tensor_canonicalizer(label, custom));
+    FWickTheorem{make_input()}.full_contractions(false).compute();
+    CHECK(get_default_context().nondefault_tensor_canonicalizer_ptr(label) ==
+          custom);
+    CHECK(!get_default_context().nondefault_tensor_canonicalizer_ptr(
+        FNOperator::labels()[0]));
+  }
+}

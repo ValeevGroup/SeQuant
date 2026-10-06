@@ -36,6 +36,11 @@ canonicalizes it and recurses per summand in parallel before merging results. Th
 Under ``full_contractions_`` (the default) it only ever extends a contraction starting from the leftmost still-free operator — the
 standard recursive formulation of full-contraction enumeration; with it disabled, all pairs are considered.
 
+Because canonicalizing the produced normal operators would undo their normalization, a top-level ``compute()`` installs, after
+canonicalizing its input, a scoped :class:`sequant::Context` in which the normal-operator labels map to ``NullTensorCanonicalizer``
+for every statistics; a canonicalizer registered by the user for those labels is shadowed for the duration, not removed. The parallel
+workers of the per-summand ``WickTheorem`` instances see that scope.
+
 A candidate pair ``(left, right)`` contracts (``can_contract``) iff ``left`` is a quasiparticle annihilator, ``right`` is a quasiparticle
 creator, and their quasiparticle spaces intersect (``is_qpannihilator``/``is_qpcreator``/``IndexSpaceRegistry::intersection``, from
 ``SeQuant/core/op.hpp``). The contraction *value* (``contract``) depends on whether those quasiparticle spaces are pure hole/particle
@@ -58,7 +63,9 @@ When ``use_topology_`` is set, ``is_topologically_unique()`` restricts contracti
 ``use_topology()``'s automatic grouping, or an explicit ``set_op_partitions()``/``set_nop_partitions()``) to the group's first free
 member, skipping contractions that would only reproduce one already tried by symmetry. The corresponding combinatorial weight —
 equivalent to a multinomial coefficient over how many operators from each partition have already been paired off — is recovered by
-``op_permutational_degeneracy()``, so the pruned enumeration and the exhaustive one agree on the final coefficient.
+``op_permutational_degeneracy()``, so the pruned enumeration and the exhaustive one agree on the final coefficient. They also agree for
+an input that vanishes by symmetry, i.e. has an automorphism of phase -1 (see :doc:`tnc`), because such an input is returned as zero
+before any contraction is attempted: by the up-front canonicalization of a ``Sum`` input, or by the topology analysis for a ``Product``.
 
 For the spin-free case over a fermionic vacuum, an additional factor of :math:`2^{n}` is folded in per completed contraction, where
 :math:`n` is the number of creation/annihilation "partner" cycles formed by that contraction — the generalized Wick's theorem for

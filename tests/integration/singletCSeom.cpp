@@ -205,8 +205,6 @@ int main(int argc, char* argv[]) {
                              biorth_str + " (expected V1 or V2)");
   }
 
-  sequant::detail::OpIdRegistrar op_id_registrar;
-
   sequant::set_default_context(sequant::Context(
       {.index_space_registry_shared_ptr = make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
@@ -214,8 +212,6 @@ int main(int argc, char* argv[]) {
            CanonicalizationMethod::Complete)}));
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
-  TensorCanonicalizer::register_instance(
-      std::make_shared<DefaultTensorCanonicalizer>());
 
   Logger::instance().wick_stats = false;
 

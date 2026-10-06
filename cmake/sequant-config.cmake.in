@@ -90,6 +90,13 @@ if (NOT TARGET Threads::Threads)
     find_dependency(Threads REQUIRED)
 endif (NOT TARGET Threads::Threads)
 
+set(SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB @SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB@)
+if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB AND NOT TARGET TBB::tbb)
+    get_filename_component(_sequant_tbb_dir "@TBB_CONFIG@" DIRECTORY)
+    find_dependency(TBB CONFIG REQUIRED HINTS "${_sequant_tbb_dir}")
+    unset(_sequant_tbb_dir)
+endif()
+
 # Include library IMPORT targets
 if(NOT TARGET SeQuant::SeQuant)
   include("${CMAKE_CURRENT_LIST_DIR}/sequant-targets.cmake")
