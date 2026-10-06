@@ -48,8 +48,9 @@ namespace sequant {
 
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
 ///
-/// Under a Vacuum::MultiProduct default context the operators are
-/// normal-ordered relative to a multideterminantal reference and compute()
+/// Under a Vacuum::MultiProduct default context the operators, which need
+/// not conserve particle number, are normal-ordered relative to a
+/// multideterminantal reference of definite particle number and compute()
 /// applies the extended (generalized-normal-order) theorem, whose result is
 /// expressed in terms of the reference's densities γ, η and cumulants κ.
 ///
@@ -144,6 +145,8 @@ class WickTheorem {
   /// every rank are formed.
   /// @param rank the largest rank of a cumulant; std::nullopt means no bound,
   /// 0 or 1 means that no cumulant is formed
+  /// @note without a bound, the number of cumulant blocks tried grows
+  /// combinatorially with the number of uncontracted active operators
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &max_cumulant_rank(std::optional<std::size_t> rank) {
     max_cumulant_rank_ = rank;
