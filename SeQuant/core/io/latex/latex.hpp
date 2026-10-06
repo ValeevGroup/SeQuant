@@ -18,11 +18,18 @@
 #include <type_traits>
 
 namespace sequant {
+class Expr;
+class ExprPtr;
 class Power;
 class ResultExpr;
 }  // namespace sequant
 
 namespace sequant::io::latex {
+
+std::wstring to_string(const Expr& expr);
+
+/// @throws Exception if @p expr is null.
+std::wstring to_string(const ExprPtr& expr);
 
 template <typename T>
 concept has_to_latex_member = requires(const T& t) { t.to_latex(); };

@@ -274,9 +274,9 @@ std::wstring Product::to_latex(bool negate) const {
     }
     for (const auto &i : factors()) {
       if (i->is<Product>())
-        result += L"\\bigl(" + i->to_latex() + L"\\bigr)";
+        result += L"\\bigl(" + io::latex::to_string(*i) + L"\\bigr)";
       else
-        result += i->to_latex();
+        result += io::latex::to_string(*i);
     }
   }
   result += L"}";

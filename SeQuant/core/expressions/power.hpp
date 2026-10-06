@@ -63,8 +63,6 @@ class Power : public Expr {
   /// treated as 1.
   bool is_zero() const override;
 
-  std::wstring to_latex() const override;
-
   /// @brief Attempts to flatten a Power, mutating @p expr in place. Folds
   /// when @p expr holds a Power and any of:
   ///   - the exponent is 1 (then `b^1 = b` and conjugate if needed);
