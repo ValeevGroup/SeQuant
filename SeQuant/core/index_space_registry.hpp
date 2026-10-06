@@ -805,6 +805,7 @@ class IndexSpaceRegistry {
   /// @return (memoized) set of base IndexSpace::Type objects, sorted in
   /// increasing order
   const std::vector<IndexSpace::Type>& base_space_types() const {
+    std::scoped_lock guard{mtx_memoized_};
     if (!base_space_types_) {
       auto types =
           spaces_ |
@@ -812,11 +813,8 @@ class IndexSpaceRegistry {
           ranges::views::filter([](const auto& t) { return is_base(t); }) |
           ranges::views::unique | ranges::to_vector;
       ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
-      std::scoped_lock guard{mtx_memoized_};
-      if (!base_space_types_) {
-        base_space_types_ =
-            std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
-      }
+      base_space_types_ =
+          std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
     }
     return *base_space_types_;
   }
@@ -828,6 +826,7 @@ class IndexSpaceRegistry {
   /// @return (memoized) set of base IndexSpace objects, sorted in the order of
   /// increasing type()
   const std::vector<IndexSpace>& base_spaces() const {
+    std::scoped_lock guard{mtx_memoized_};
     if (!base_spaces_) {
       auto spaces = spaces_ | ranges::views::filter([this](const auto& s) {
                       return this->is_base(s);
@@ -835,11 +834,8 @@ class IndexSpaceRegistry {
                     ranges::views::unique | ranges::to_vector;
       ranges::sort(spaces,
                    [](auto s1, auto s2) { return s1.type() < s2.type(); });
-      std::scoped_lock guard{mtx_memoized_};
-      if (!base_spaces_) {
-        base_spaces_ =
-            std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
-      }
+      base_spaces_ =
+          std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
     }
     return *base_spaces_;
   }
@@ -1350,7 +1346,7 @@ class IndexSpaceRegistry {
   mutable std::shared_ptr<std::vector<IndexSpace::Type>> base_space_types_;
   mutable std::shared_ptr<std::vector<IndexSpace>> base_spaces_;
   mutable std::recursive_mutex
-      mtx_memoized_;  // used to update the memoized data
+      mtx_memoized_;  // guards every access to the memoized data
   IndexSpaceRegistry& clear_memoized_data_and_return_this() {
     std::scoped_lock guard{mtx_memoized_};
     base_space_types_.reset();
