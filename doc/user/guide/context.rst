@@ -131,6 +131,9 @@ expands such CSV-dependent tensors into an explicit basis (standard unoccupieds,
    :end-before: end-snippet-4
    :dedent: 2
 
+The :class:`sequant::mbpt::NormalizationConvention` controls operator prefactors. Its default is ``Default``;
+:doc:`operator` describes the two conventions and which operators each one affects.
+
 .. _context-scoped:
 
 Scoped context changes

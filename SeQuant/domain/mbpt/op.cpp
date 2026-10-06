@@ -409,6 +409,21 @@ sequant::container::svector<sequant::Index> make_batch_indices(
 
 namespace sequant::mbpt {
 
+namespace detail {
+Normalization normalization(const std::wstring& label) {
+  const bool is_projector =
+      label == reserved::antisymm_label() || label == reserved::symm_label();
+  const auto opclass = to_op_class(label);
+
+  if (get_default_mbpt_context().normalization_convention() ==
+      NormalizationConvention::Default)
+    return is_projector ? Normalization::Implicit : Normalization::Default;
+  if (is_projector) return Normalization::SquareRoot;
+  return opclass == OpClass::Gen ? Normalization::Default
+                                 : Normalization::SquareRoot;
+}
+}  // namespace detail
+
 template <Statistics S>
 OpMaker<S>::OpMaker(const std::wstring& label) : label_(label) {}
 
@@ -483,9 +498,8 @@ OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
 }
 
 template <Statistics S>
-ExprPtr OpMaker<S>::operator()(
-    std::optional<UseDepIdx> dep, std::optional<Symmetry> opsymm_opt,
-    std::optional<Normalization> normalization) const {
+ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
+                               std::optional<Symmetry> opsymm_opt) const {
   auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
 
   // if not given dep, use mbpt::Context::CSV to determine whether to use
@@ -523,13 +537,7 @@ ExprPtr OpMaker<S>::operator()(
     }
   }
   const auto full_label = detail::decorate_with_pert_order(label_, order_);
-
-  if (!normalization) {
-    normalization =
-        label_ == reserved::antisymm_label() || label_ == reserved::symm_label()
-            ? Normalization::Implicit
-            : Normalization::Default;
-  }
+  const auto normalization = detail::normalization(label_);
 
   // if batching indices are present, use them
   if (batch_indices_) {
@@ -544,7 +552,7 @@ ExprPtr OpMaker<S>::operator()(
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm,
                             op_herm, ColumnSymmetry::Symm);
         },
-        dep ? *dep : UseDepIdx::None, normalization.value());
+        dep ? *dep : UseDepIdx::None, normalization);
   }
   // else no batching
   return make(
@@ -557,7 +565,7 @@ ExprPtr OpMaker<S>::operator()(
                           opsymm_opt ? *opsymm_opt : opsymm, op_herm,
                           ColumnSymmetry::Symm);
       },
-      dep ? *dep : UseDepIdx::None, normalization.value());
+      dep ? *dep : UseDepIdx::None, normalization);
 }
 
 template class OpMaker<Statistics::FermiDirac>;
@@ -614,7 +622,8 @@ ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
     auto make_g_contribution = [](const auto& occ_space) {
       auto isr = get_default_context().index_space_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
-          {isr->complete_space(Spin::any)}, {isr->complete_space(Spin::any)},
+          L"f", {isr->complete_space(Spin::any)},
+          {isr->complete_space(Spin::any)},
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
             auto m1 = Index::make_tmp_index(occ_space);
             auto m2 = Index::make_tmp_index(occ_space);
@@ -692,43 +701,41 @@ ExprPtr Λ(std::size_t K, bool skip1) {
 }
 
 ExprPtr r(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
-  return OpMaker<Statistics::FermiDirac>(L"R", nc, na, cre_space, ann_space)(
-      {}, {}, norm);
+  return OpMaker<Statistics::FermiDirac>(L"R", nc, na, cre_space, ann_space)();
 }
-ExprPtr r(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr r(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
   return OpMaker<Statistics::FermiDirac>(L"R", ncre(np.value()),
-                                         nann(nh.value()))({}, {}, norm);
+                                         nann(nh.value()))();
 }
 
 ExprPtr l(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
-  return OpMaker<Statistics::FermiDirac>(L"L", nc, na, cre_space, ann_space)(
-      {}, {}, norm);
+  return OpMaker<Statistics::FermiDirac>(L"L", nc, na, cre_space, ann_space)();
 }
 
-ExprPtr l(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr l(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
   return OpMaker<Statistics::FermiDirac>(L"L", ncre(nh.value()),
-                                         nann(np.value()))({}, {}, norm);
+                                         nann(np.value()))();
 }
 
-ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr P(nₚ np, nₕ nh) {
   if (np != nh)
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "Spinfree basis does not support non-particle conserving projectors");
   return get_default_context().spbasis() == SPBasis::Spinfree
-             ? tensor::S(-nh /* nh == np */, norm)
-             : tensor::A(-np, -nh, norm);
+             ? tensor::S(-nh /* nh == np */)
+             : tensor::A(-np, -nh);
 }
 
-ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr A(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(!(np == 0 && nh == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (np != 0 && nh != 0) {
@@ -757,10 +764,10 @@ ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
                              : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(reserved::antisymm_label(),
                                          cre(creators), ann(annihilators))(
-      dep, {Symmetry::Antisymm}, norm);
+      dep, {Symmetry::Antisymm});
 }
 
-ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
+ExprPtr S(std::int64_t K) {
   SEQUANT_ASSERT(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -783,7 +790,7 @@ ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(reserved::symm_label(), cre(creators),
                                          ann(annihilators))(
-      dep, {Symmetry::Nonsymm}, norm);
+      dep, {Symmetry::Nonsymm});
 }
 
 ExprPtr Hʼ(std::size_t R, const OpParams& params) {
@@ -834,19 +841,17 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
   }
   return result;
 }
-
-// δr/δl are the (de)excitation projectors P, normalized by SquareRoot and
-// indexed by nonnegative ranks (think "derivative wrt r/l"). δl is the
-// deexcitation/bra projector P(np,nh); δr is the excitation/ket projector
-// P(-np,-nh).
+// δr/δl are the (de)excitation projectors P indexed by nonnegative ranks
+// (think "derivative wrt r/l"). δl is the deexcitation/bra projector P(np,nh);
+// δr is the excitation/ket projector P(-np,-nh).
 ExprPtr δr(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return tensor::P(-np, -nh, Normalization::SquareRoot);
+  return tensor::P(-np, -nh);
 }
 
 ExprPtr δl(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return tensor::P(np, nh, Normalization::SquareRoot);
+  return tensor::P(np, nh);
 }
 }  // namespace tensor
 
@@ -988,7 +993,7 @@ ExprPtr F(bool use_f_tensor, const IndexSpace& occupied_density) {
   }
 }
 
-ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr A(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(!(nh == 0 && np == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (nh != 0 && np != 0) {
@@ -1001,7 +1006,7 @@ ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
   auto hole_space = get_hole_space(Spin::any);
   return ex<op_t>(
       []() -> std::wstring_view { return reserved::antisymm_label(); },
-      [=]() -> ExprPtr { return tensor::A(np, nh, norm); },
+      [=]() -> ExprPtr { return tensor::A(np, nh); },
       [=](qnc_t& qns) {
         const std::size_t abs_nh = std::abs(nh);
         const std::size_t abs_np = std::abs(np);
@@ -1017,10 +1022,10 @@ ExprPtr A(nₚ np, nₕ nh, std::optional<Normalization> norm) {
       });
 }
 
-ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
+ExprPtr S(std::int64_t K) {
   SEQUANT_ASSERT(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return reserved::symm_label(); },
-                  [=]() -> ExprPtr { return tensor::S(K, norm); },
+                  [=]() -> ExprPtr { return tensor::S(K); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_K = std::abs(K);
                     if (K < 0) {
@@ -1033,17 +1038,17 @@ ExprPtr S(std::int64_t K, std::optional<Normalization> norm) {
                   });
 }
 
-ExprPtr P(nₚ np, nₕ nh, std::optional<Normalization> norm) {
+ExprPtr P(nₚ np, nₕ nh) {
   if (get_default_context().spbasis() == SPBasis::Spinfree) {
     SEQUANT_ASSERT(
         nh == np &&
         "Only particle number conserving cases are supported with spinfree "
         "basis for now");
     const auto K = np;  // K = np = nh
-    return S(-K, norm);
+    return S(-K);
   } else {
     SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
-    return A(-np, -nh, norm);
+    return A(-np, -nh);
   }
 }
 
@@ -1104,91 +1109,88 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
 }
 
 ExprPtr r(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
-  return ex<op_t>([]() -> std::wstring_view { return L"R"; },
-                  [=]() -> ExprPtr {
-                    return tensor::r(na, nc, cre_space, ann_space, norm);
-                  },
-                  [=](qnc_t& qns) {
-                    // ex -> creators in particle_space, annihilators in
-                    // hole_space
-                    qns = combine(generic_excitation_qns(/*particle_rank*/ nc,
-                                                         /*hole_rank*/ na,
-                                                         cre_space, ann_space),
-                                  qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"R"; },
+      [=]() -> ExprPtr { return tensor::r(na, nc, cre_space, ann_space); },
+      [=](qnc_t& qns) {
+        // ex -> creators in particle_space, annihilators in
+        // hole_space
+        qns = combine(
+            generic_excitation_qns(/*particle_rank*/ nc,
+                                   /*hole_rank*/ na, cre_space, ann_space),
+            qns);
+      });
 }
 
-ExprPtr r(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr r(nₚ np, nₕ nh) {
   return r(nann(nh), ncre(np), cre(get_particle_space(Spin::any)),
-           ann(get_hole_space(Spin::any)), norm);
+           ann(get_hole_space(Spin::any)));
 }
 
 ExprPtr l(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
-  return ex<op_t>([]() -> std::wstring_view { return L"L"; },
-                  [=]() -> ExprPtr {
-                    return tensor::l(na, nc, cre_space, ann_space, norm);
-                  },
-                  [=](qnc_t& qns) {
-                    // deex -> creators in hole_space, annihilators in
-                    // particle_space
-                    qns = combine(generic_deexcitation_qns(
-                                      /*particle_rank*/ na, /*hole_rank*/ nc,
-                                      ann_space, cre_space),
-                                  qns);
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"L"; },
+      [=]() -> ExprPtr { return tensor::l(na, nc, cre_space, ann_space); },
+      [=](qnc_t& qns) {
+        // deex -> creators in hole_space, annihilators in
+        // particle_space
+        qns = combine(
+            generic_deexcitation_qns(
+                /*particle_rank*/ na, /*hole_rank*/ nc, ann_space, cre_space),
+            qns);
+      });
 }
 
-ExprPtr l(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr l(nₚ np, nₕ nh) {
   return l(nann(np), ncre(nh), cre(get_hole_space(Spin::any)),
-           ann(get_particle_space(Spin::any)), norm);
+           ann(get_particle_space(Spin::any)));
 }
 
 ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(na > 0 || nc > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
   ExprPtr result;
   for (const auto& [ra, rc] : detail::descending_rank_pairs(na, nc))
-    result += r(nann(ra), ncre(rc), cre_space, ann_space, norm);
+    result += r(nann(ra), ncre(rc), cre_space, ann_space);
   return result;
 }
 
-ExprPtr R(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr R(nₚ np, nₕ nh) {
   return R(nann(nh), ncre(np), cre(get_particle_space(Spin::any)),
-           ann(get_hole_space(Spin::any)), norm);
+           ann(get_hole_space(Spin::any)));
 }
 
 ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space, Normalization norm) {
+          const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(na > 0 || nc > 0);
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
   ExprPtr result;
   for (const auto& [ra, rc] : detail::descending_rank_pairs(na, nc))
-    result += l(nann(ra), ncre(rc), cre_space, ann_space, norm);
+    result += l(nann(ra), ncre(rc), cre_space, ann_space);
   return result;
 }
 
-ExprPtr L(nₚ np, nₕ nh, Normalization norm) {
+ExprPtr L(nₚ np, nₕ nh) {
   return L(nann(np), ncre(nh), cre(get_hole_space(Spin::any)),
-           ann(get_particle_space(Spin::any)), norm);
+           ann(get_particle_space(Spin::any)));
 }
 
-// δr/δl are the (de)excitation projectors P, normalized by SquareRoot and
-// indexed by nonnegative ranks (think "derivative wrt r/l"). δl is the
-// deexcitation/bra projector P(np,nh); δr is the excitation/ket projector
-// P(-np,-nh).
+// δr/δl are the (de)excitation projectors P indexed by nonnegative ranks
+// (think "derivative wrt r/l"). δl is the deexcitation/bra projector P(np,nh);
+// δr is the excitation/ket projector P(-np,-nh).
 ExprPtr δr(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return P(-np, -nh, Normalization::SquareRoot);
+  return P(-np, -nh);
 }
 
 ExprPtr δl(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return P(np, nh, Normalization::SquareRoot);
+  return P(np, nh);
 }
 
 qns_t apply_to_vac(const ExprPtr& expr) {
