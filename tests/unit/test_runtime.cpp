@@ -19,6 +19,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -26,6 +27,7 @@
 #include <latch>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <numeric>
 #include <set>
 #include <string>
@@ -379,17 +381,29 @@ TEST_CASE("context", "[runtime]") {
       CHECK(named.version() != plain.version());
     }
     // the version of a configuration whose objects are gone is not reused,
-    // even if a new object takes the address of a dead one
+    // even if a new object takes the address of a dead one: the registries
+    // are constructed in one buffer, so the second has the address of the
+    // first; a sole-owner shared_ptr is adopted rather than copied
     {
+      alignas(IndexSpaceRegistry) std::byte buffer[sizeof(IndexSpaceRegistry)];
+      auto registry_in_buffer = [&buffer] {
+        return std::shared_ptr<const IndexSpaceRegistry>(
+            new (buffer) IndexSpaceRegistry{},
+            [](const IndexSpaceRegistry* r) { r->~IndexSpaceRegistry(); });
+      };
       std::uint64_t dead_version = 0;
       {
-        const Context dead({.index_space_registry = IndexSpaceRegistry{}});
+        const Context dead(
+            {.index_space_registry_shared_ptr = registry_in_buffer()});
+        REQUIRE(static_cast<const void*>(dead.index_space_registry().get()) ==
+                static_cast<const void*>(buffer));
         dead_version = dead.version();
       }
-      for (int i = 0; i != 8; ++i)
-        CHECK(
-            Context({.index_space_registry = IndexSpaceRegistry{}}).version() !=
-            dead_version);
+      const Context reborn(
+          {.index_space_registry_shared_ptr = registry_in_buffer()});
+      REQUIRE(static_cast<const void*>(reborn.index_space_registry().get()) ==
+              static_cast<const void*>(buffer));
+      CHECK(reborn.version() != dead_version);
     }
 
     // the canonicalization settings change the version, the others do not
