@@ -148,10 +148,10 @@ takes the lock that guards the process-wide default only if that changed since t
 Detecting changes
 ----------------------
 
-Every ``Context`` has a version (:func:`sequant::Context::version`): a nonzero number, unique within the process, that changes whenever
-the context is constructed or modified through one of its setters. :func:`sequant::current_context_version` returns the
-version of the context in effect on the calling thread, which lets code that caches results derived from the context tell that the
-cache is stale. The version tracks changes made through the ``Context`` interface; it does not track in-place mutation of a
-canonicalizer or comparer object that the context refers to.
-It identifies a context and its copies rather than their content: contexts that compare equal, such as two default-constructed ones,
-may have different versions, so a cache keyed on the version can be invalidated without need, but never kept stale.
+Every ``Context`` has a version (:func:`sequant::Context::version`) that identifies its canonicalization configuration: the index
+space registry, the tensor canonicalizers and index comparers (compared as objects, not by behavior), the cardinal tensor labels and the
+canonicalization options. Two contexts share a version if and only if canonicalization sees the same configuration in both; a version
+is never reused for another configuration. The other settings (vacuum, metric, single-particle basis, first dummy index ordinal,
+typesetting, deserialization defaults) do not affect it. :func:`sequant::current_context_version` returns the version of the context
+in effect on the calling thread, which lets code that caches canonicalization results tell whether they are still valid. The version
+does not track in-place mutation of a canonicalizer or comparer object that the context refers to.
