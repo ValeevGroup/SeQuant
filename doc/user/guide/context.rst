@@ -133,6 +133,9 @@ registered under a name, whose registry entry says whether it is orthonormal (:f
    :end-before: end-snippet-4
    :dedent: 2
 
+The :class:`sequant::mbpt::NormalizationConvention` controls operator prefactors. Its default is ``Default``;
+:doc:`operator` describes the two conventions and which operators each one affects.
+
 Several bases of one space can meet in an expression: the canonical and the localized orbitals of a perturbation theory,
 the cluster-specific virtuals of the ground-state and of the perturbed amplitudes, and so on. An :class:`sequant::Index`
 can therefore carry an optional *basis instance*, an opaque integer written after its proto indices, ``a_1<i_1,i_2;1>``
@@ -187,8 +190,8 @@ the copy:
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp
-   :start-after: start-snippet-6
-   :end-before: end-snippet-6
+   :start-after: start-snippet-7
+   :end-before: end-snippet-7
    :dedent: 2
 
 Scoped contexts are per thread

@@ -245,7 +245,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
                : label == L"λ" ? t::λ(2)
                : label == L"h" ? t::h(2)
                : label == L"f" ? t::h(1)
-                               : t::P(nₚ(1), nₕ(1), {}, L"t");
+                               : t::P(nₚ(1), nₕ(1), L"t");
       };
       // granted: authored under the grants; stamped: authored without, then
       // given each leg's grant
@@ -369,11 +369,11 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     using Maker = OpMaker<Statistics::FermiDirac>;
     const container::svector<IndexSpace> uoccs{a};
     const auto op = Maker::make(
-        uoccs, uoccs,
+        L"t", uoccs, uoccs,
         [](auto const& creidxs, auto const& annidxs, Symmetry opsymm) {
           return ex<Tensor>(L"X", bra(creidxs), ket(annidxs), opsymm);
         },
-        Maker::UseDepIdx::Bra, Normalization::Default,
+        Maker::UseDepIdx::Bra,
         [](IndexSpace const&) { return IndexBasis::optional_instance{7}; });
     const auto xs = tensors_labelled(op, L"X");
     REQUIRE(xs.size() == 1);
@@ -391,7 +391,7 @@ TEST_CASE("basis-grants-authoring", "[mbpt][csv]") {
     ScopedCsvContext scoped{reg, CSV::No};
     for (auto const& [op, label] :
          {std::pair{t::t(2), std::wstring(L"t")},
-          std::pair{t::P(nₚ(2), nₕ(2), {}, L"t"),
+          std::pair{t::P(nₚ(2), nₕ(2), L"t"),
                     std::wstring(reserved::antisymm_label())}}) {
       std::size_t n = 0;
       for (Index const& idx : slots_of(op, label))

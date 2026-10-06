@@ -62,7 +62,7 @@ std::pair<std::shared_ptr<Sum>, std::shared_ptr<Sum>> screen_terms(
 
 /// P(@p np) whose legs carry the basis grants of @p amplitude
 ExprPtr amplitude_projector(nₚ np, std::wstring amplitude) {
-  return P(np, nₕ(np), {}, std::move(amplitude));
+  return P(np, nₕ(np), std::move(amplitude));
 }
 }  // namespace
 
@@ -167,7 +167,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
     std::vector<ExprPtr> result(pmax + 1);
     for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
       const auto projected =
-          (p != 0) ? op::tensor::P(nₚ(p), nₕ(p), {}, L"t") * hbar : hbar;
+          (p != 0) ? op::tensor::P(nₚ(p), nₕ(p), L"t") * hbar : hbar;
       result.at(p) = op::tensor::ref_av(projected);
     }
     return result;
@@ -499,8 +499,8 @@ std::vector<ExprPtr> CC::eom_r_ucc(
           bernoulli::detail::R_part(it->second, N, skip_singles() ? 2 : 1);
   }
   auto bra_of = [tensor_level](std::int64_t p, std::int64_t h) {
-    return tensor_level ? op::tensor::P(nₚ(p), nₕ(h), {}, L"R")
-                        : op::P(nₚ(p), nₕ(h), {}, L"R");
+    return tensor_level ? op::tensor::P(nₚ(p), nₕ(h), L"R")
+                        : op::P(nₚ(p), nₕ(h), L"R");
   };
   auto ket_of = [tensor_level](std::int64_t p, std::int64_t h) {
     return tensor_level ? op::tensor::r(nₚ(p), nₕ(h)) : op::r(nₚ(p), nₕ(h));
@@ -555,7 +555,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
   std::vector<ExprPtr> result(min(np, nh) + 1);
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        ref_av(P(nₚ(rp), nₕ(rh), {}, L"R") * hbar_R, op_connect);
+        ref_av(P(nₚ(rp), nₕ(rh), L"R") * hbar_R, op_connect);
 
   return result;
 }
@@ -591,7 +591,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
   for (const auto& [rp, rh] : eom_manifolds(np, nh))
     result.at(min(rp, rh)) =
-        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh), {}, L"L"), op_connect);
+        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh), L"L"), op_connect);
 
   return result;
 }

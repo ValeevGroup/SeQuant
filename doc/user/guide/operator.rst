@@ -112,6 +112,29 @@ up. General operators cannot be granted one.
 
 The registry is stored in the :class:`mbpt::Context <sequant::mbpt::Context>`. See the unit test cases for further manipulations with :class:`mbpt::Context <sequant::mbpt::Context>` and :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>`.
 
+Normalization conventions
+---------------------------
+
+:class:`sequant::mbpt::NormalizationConvention` in the MBPT context controls prefactors of coefficient-summed operators.
+For an operator with :math:`c` creators and :math:`a` annihilators, let :math:`m=c!a!` in a spin-orbital basis;
+in a spin-free basis, :math:`c=a` and :math:`m=c!`.
+
+- ``Default`` gives coefficient-summed operators the prefactor :math:`1/m`, while projectors ``A``, ``S``, and ``P`` have no
+  additional prefactor.
+- ``Symmetric`` gives (de)excitation operators (:cpp:enumerator:`OpClass::Ex <sequant::mbpt::OpClass::Ex>` and
+  :cpp:enumerator:`OpClass::Deex <sequant::mbpt::OpClass::Deex>`), whose coefficients are the amplitudes being solved for,
+  and projectors the prefactor :math:`1/\sqrt{m}`. General operators
+  (:cpp:enumerator:`OpClass::Gen <sequant::mbpt::OpClass::Gen>`), such as the Hamiltonian, perturbations, and F12 geminals,
+  have supplied coefficients and retain :math:`1/m`.
+
+The prefactor follows from the operator's :class:`sequant::mbpt::OpClass`, so register a custom operator whose coefficients
+are solved for as ``Ex`` or ``Deex``. The replacement operator ``ã`` has explicit free indices and no summed coefficient
+tensor, so it carries no factorial prefactor.
+
+Normalization is selected when tensor forms are generated; abstract operator identity is independent of the convention.
+Keep a scoped convention active through lowering to tensor form. See :doc:`context` for a compiled example of a scoped
+convention.
+
 .. _mbpt-lst:
 
 Lie Similarity Transformation
