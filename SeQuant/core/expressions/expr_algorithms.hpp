@@ -105,7 +105,9 @@ T& ExprPtr::as() {
 
 /// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; may be
-/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// _replaced_ (i.e. `&expr` may be mutated by call); a Sum left with at most
+/// one summand, or a Product with one factor and a unit scalar, is replaced
+/// by that summand or factor (or 0), canonicalized on its own
 /// @param[in] opts canonicalization options (if not given, uses
 ///            CanonicalizeOptions::default_options() to obtain the default)
 /// @return \p expr to facilitate chaining

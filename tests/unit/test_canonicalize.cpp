@@ -540,7 +540,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
                          Symmetry::Antisymm);
       canonicalize(input);
-      REQUIRE(input->size() == 1);
+      // the summands merge into one term, which canonicalization returns
+      REQUIRE(input->is<Product>());
       REQUIRE_THAT(input,
                    EquivalentTo("g{i3,i4;i1,a3}:A t{a2;i3} t{a1,a3;i2,i4}:A"));
     }
@@ -562,7 +563,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
                          particle_symmetric);
 
       canonicalize(input);
-      REQUIRE(input->size() == 1);
+      // the summands merge into one term, which canonicalization returns
+      REQUIRE(input->is<Product>());
       REQUIRE_THAT(input,
                    EquivalentTo("g{i3,i4;i1,a3} t{a2;i4} t{a1,a3;i3,i2}"));
     }
@@ -1297,5 +1299,35 @@ TEST_CASE("canonicalize_tensor_with_repeated_index", "[algorithms]") {
                          ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"})) ==
             simplify(ex<Constant>(-1) *
                      ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"})));
+  }
+}
+
+TEST_CASE("canonicalize_lone_term", "[algorithms]") {
+  using namespace sequant;
+
+  for (const auto method : {CanonicalizationMethod::Topological,
+                            CanonicalizationMethod::Complete}) {
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = method});
+    auto resetter = set_scoped_default_context(ctx);
+
+    auto x = [](std::initializer_list<const wchar_t*> bra_idxs) {
+      return ex<Tensor>(L"X", bra(bra_idxs), ket{L"a_1", L"a_2", L"a_4"},
+                        Symmetry::Antisymm, BraKetSymmetry::Conjugate,
+                        ColumnSymmetry::Symm);
+    };
+    // the summands of a Sum that merge into one term, and a Product of one
+    // factor with a unit scalar, are canonicalized as that term
+    for (auto input :
+         {x({L"i_6", L"i_3", L"i_5"}) +
+              ex<Constant>(2) * x({L"i_3", L"i_6", L"i_5"}),
+          ex<Product>(1, ExprPtrList{x({L"i_6", L"i_3", L"i_5"})}),
+          ex<Product>(-1, ExprPtrList{x({L"i_6", L"i_3", L"i_5"})})}) {
+      simplify(input);
+      REQUIRE(!input->is<Sum>());
+      const auto once = serialize(input);
+      simplify(input);
+      REQUIRE(serialize(input) == once);
+    }
   }
 }
