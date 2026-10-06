@@ -83,7 +83,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
   // a Context need not have a registry
   auto same_registry = [](const auto& r1, const auto& r2) {
     if (!r1 || !r2) return !r1 && !r2;
-    return r1->spaces() == r2->spaces() && *r1 == *r2;
+    return *r1 == *r2;
   };
   if (&ctx1 == &ctx2)
     return true;

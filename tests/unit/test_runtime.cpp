@@ -62,7 +62,7 @@ TEST_CASE("context", "[runtime]") {
     // set distinct contexts for fermi and bose statistics
     auto [fermi_isr, bose_isr] = mbpt::make_fermi_and_bose_spaces();
     CHECK(fermi_isr->spaces() ==
-          bose_isr->spaces());  // fermi_isr and bose_isr share the space set
+          bose_isr->spaces());  // fermi_isr and bose_isr have the same spaces
     CHECK_NOTHROW(set_default_context(
         {{Statistics::FermiDirac,
           Context({.index_space_registry_shared_ptr = fermi_isr,
@@ -289,10 +289,15 @@ TEST_CASE("context", "[runtime]") {
              with_registry.mutable_index_space_registry()});
     CHECK(with_registry.version() != same_registry.version());
     CHECK(with_registry == same_registry);
-    // registries are equal only if they share their spaces; a context need
-    // not have one
-    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}) !=
+    // registries are compared by value; a context need not have one
+    CHECK(Context({.index_space_registry = IndexSpaceRegistry{}}) ==
           with_registry);
+    {
+      IndexSpaceRegistry other;
+      other.add(L"q", 0b01);
+      CHECK(Context({.index_space_registry = std::move(other)}) !=
+            with_registry);
+    }
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
 
