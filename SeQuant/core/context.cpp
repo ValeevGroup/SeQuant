@@ -81,13 +81,18 @@ struct CanonicalizationKey {
   }
 
   bool operator==(const CanonicalizationKey& other) const {
-    // CanonicalizeOptions::operator== compares only the method
+    // CanonicalizeOptions::operator== compares only the method; the bindings
+    // name every member, so that a member added to CanonicalizeOptions fails
+    // to compile here until it is compared
     auto same_options = [](const std::optional<CanonicalizeOptions>& o1,
                            const std::optional<CanonicalizeOptions>& o2) {
       if (!o1 || !o2) return !o1 && !o2;
-      return o1->method == o2->method &&
-             o1->named_indices == o2->named_indices &&
-             o1->ignore_named_index_labels == o2->ignore_named_index_labels;
+      const auto& [guard1, method1, named_indices1, ignore_labels1] = *o1;
+      const auto& [guard2, method2, named_indices2, ignore_labels2] = *o2;
+      (void)guard1;
+      (void)guard2;
+      return method1 == method2 && named_indices1 == named_indices2 &&
+             ignore_labels1 == ignore_labels2;
     };
     return registry == other.registry && spbasis == other.spbasis &&
            canonicalizers == other.canonicalizers &&

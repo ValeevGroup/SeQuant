@@ -405,6 +405,10 @@ TEST_CASE("context", "[runtime]") {
       c.set(CanonicalizeOptions::default_options().copy_and_set(
           CanonicalizeOptions::IgnoreNamedIndexLabel::No));
     }));
+    CHECK(changes([](Context& c) {
+      c.set(c.canonicalization_options()->copy_and_set(
+          std::optional<container::set<Index>>{container::set<Index>{}}));
+    }));
     {
       const auto before = ctx.version();
       CHECK(changes([](Context& c) {
