@@ -373,6 +373,7 @@ set(SeQuant_symb_src
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
         SeQuant/core/io/concepts.hpp
+        SeQuant/core/io/format.hpp
         SeQuant/core/io/shorthands.hpp
         SeQuant/core/io/latex/latex.cpp
         SeQuant/core/io/latex/latex.hpp

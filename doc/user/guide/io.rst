@@ -28,6 +28,38 @@ The produced LaTeX code is not self-contained. It needs to be embedded in a suit
 
 
 
+Formatting and streams
+=========================
+
+Include :file:`SeQuant/core/io/format.hpp` to print :class:`sequant::Expr`, its subclasses, and
+:class:`sequant::ExprPtr` with ``std::format`` or stream insertion (``<<``). Both default to LaTeX and support
+narrow and wide characters; narrow output is UTF-8. An empty ``ExprPtr`` prints ``NULL`` in either representation.
+
+The format specifier selects the representation: ``l`` or ``latex`` for LaTeX, and ``s`` or ``serialize`` for
+serialization. An empty specifier selects LaTeX. These are the only supported specifiers; apply string formatting
+to the rendered string if width, alignment, or precision is needed.
+
+.. literalinclude:: /examples/user/formatting.cpp
+   :language: cpp
+   :start-after: start-snippet-1
+   :end-before: end-snippet-1
+
+Stream insertion always produces LaTeX. For explicit serialization, insert the result of
+:func:`sequant::io::serialization::to_string` into a wide stream, or use ``std::format`` with ``s`` or ``serialize``
+for a narrow string. Wide formatting is available with wide format strings:
+
+.. literalinclude:: /examples/user/formatting.cpp
+   :language: cpp
+   :start-after: start-snippet-2
+   :end-before: end-snippet-2
+
+Formatting uses the existing LaTeX and serialization converters and preserves their limitations. In particular,
+a custom expression's LaTeX output comes from its virtual ``to_latex()`` implementation; serialization requires
+support in the serialization converter. Unsupported conversions propagate their exceptions. Unknown format
+specifiers are rejected during compile-time format-string checking, or with :class:`sequant::Exception` when
+using runtime format strings with ``std::vformat``.
+
+
 .. _io-Serialization:
 
 Serialization
@@ -126,4 +158,3 @@ scaled by the constant ``1/2``:
 ::
 
    R1{u1;i1} = f{u1;i1} - Ym1{u1;u2} f{u2;i1} - Ym1{u3;u2} * g{u1,u2;u3,i1} + 1/2 Ym2{u1,u4;u_2,u_3} g{u2,u3;u4,i1}:A-C-S
-

@@ -11,6 +11,7 @@ set(symb_test_sources
     "test_bliss.cpp"
     "test_canonicalize.cpp"
     "test_expr.cpp"
+    "test_format.cpp"
     "test_index.cpp"
     "test_iterator.cpp"
     "test_latex.cpp"
