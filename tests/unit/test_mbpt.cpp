@@ -127,9 +127,6 @@ sequant::ExprPtr in_base_spaces(sequant::ExprPtr expr) {
       FWickTheorem reducer{term};
       reducer.reduce(term);
     }
-    // canonicalize as a Product so that a lone tensor's dummies are renamed
-    if (!term->is<Product>() && !term->is<Constant>())
-      term = ex<Product>(ExprPtrList{term});
     result->append(canonicalize(term));
   }
   ExprPtr out = result;

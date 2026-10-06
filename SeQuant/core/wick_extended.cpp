@@ -459,7 +459,6 @@ ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
     const auto &product = reduced->as<Product>();
     ExprPtr folded = std::make_shared<Product>(product.scalar(), ExprPtrList{});
     for (const auto &f : product) folded->as<Product>().append(1, f);
-    // a lone tensor left by simplify would keep the reducer's dummy names
     result->append(canonicalize(folded));
   }
   return result;
