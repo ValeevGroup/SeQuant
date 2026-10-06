@@ -20,8 +20,9 @@ owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>
 A ``Context`` owns its registry, which its copies share and which cannot change while any context uses it: a registry given by value
 is moved or copied in, and one given by ``std::shared_ptr`` is adopted if that is its only owner (e.g. a temporary, such as the result
 of :func:`sequant::mbpt::make_sr_spaces`, or a moved-from pointer) and copied otherwise. Modifying a registry after giving it to a
-context therefore does not affect the context. To change the registry of a context, copy the registry, modify the copy and set it on a
-copy of the context.
+context therefore does not affect the context, unless the registry was moved in or adopted and the caller kept another way to reach
+it, such as a pointer to one of its spaces (see the warning of ``Context::set``). To change the registry of a context, copy the
+registry, modify the copy and set it on a copy of the context.
 
 Constructing a ``Context`` from scratch and registering index spaces by hand, as shown in
 :doc:`/user/getting_started/index_spaces`, is the right approach when a custom vocabulary of index spaces is needed. For standard

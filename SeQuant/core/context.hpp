@@ -28,7 +28,8 @@ namespace sequant {
 ///   shared by the copies of a context. A context owns its registry: it moves
 ///   or copies in a registry it is given, and adopts a shared_ptr to one only
 ///   if that is the registry's only owner, so the registry cannot change
-///   while any context uses it.
+///   while any context uses it (short of what
+///   Context::set(std::shared_ptr<const IndexSpaceRegistry>) warns about).
 /// - `vacuum`: the vacuum state used to define normal ordering of
 /// `NormalOperator`s
 /// - `metric`: whether the plain basis of vector space (ket) modes are
@@ -103,7 +104,7 @@ class Context {
   /// see the Context documentation for detailed description
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
-      /// a shared_ptr to an IndexSpaceRegistry object; the Context adopts it if it is the only owner of the object (e.g. a temporary or a moved-from shared_ptr), else copies the object
+      /// a shared_ptr to an IndexSpaceRegistry object; the Context adopts it if it is the only owner of the object (e.g. a temporary or a moved-from shared_ptr), else copies the object; see the warning of Context::set(std::shared_ptr<const IndexSpaceRegistry>)
       std::shared_ptr<const IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
       /// an IndexSpaceRegistry object, moved into the Context; used if index_space_registry_shared_ptr is null and it is nonnull
       std::optional<IndexSpaceRegistry> index_space_registry = std::nullopt;
@@ -268,14 +269,22 @@ class Context {
   /// \return ref to `*this`, for chaining
   Context& set(Vacuum vacuum);
   /// sets the IndexSpaceRegistry for this context
-  /// \param ISR an IndexSpaceRegistry
+  /// \param ISR an IndexSpaceRegistry, moved into this context
   /// \return ref to '*this' for chaining
+  /// \sa the warning of set(std::shared_ptr<const IndexSpaceRegistry>)
   Context& set(IndexSpaceRegistry ISR);
   /// sets the IndexSpaceRegistry for this context
   /// \param ISR a IndexSpaceRegistry shared_ptr; adopted if it is the only
   /// owner of its object (e.g. a temporary or a moved-from shared_ptr), else
   /// the object is copied
   /// \return ref to '*this' for chaining
+  /// \warning a registry that is adopted or moved in is the caller's object,
+  /// and whatever else the caller kept that reaches it still does: a pointer
+  /// or reference to it or into it (e.g. from the non-const
+  /// IndexSpaceRegistry::retrieve_ptr()), a std::weak_ptr to it, or a
+  /// shared_ptr that does not own it (e.g. one with a no-op deleter), which
+  /// cannot be told from its only owner. Modifying the registry through any
+  /// of these goes unnoticed by the contexts that hold it.
   Context& set(std::shared_ptr<const IndexSpaceRegistry> ISR);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
