@@ -46,7 +46,8 @@ default_index_pair_comparer() {
 }
 
 /// identifies a shared object while it lives; the weak reference keeps an
-/// object later allocated at the same address from matching
+/// object later allocated at the same address from matching. A null pointer
+/// denotes no object (a Context need not have a registry) and is always alive.
 struct ObjectRef {
   const void* ptr = nullptr;
   std::weak_ptr<const void> obj;
@@ -62,7 +63,8 @@ struct ObjectRef {
 /// what canonicalization reads from a Context: its CanonicalizationConfig, its
 /// index space registry and its SP basis, with the shared objects referred to
 /// weakly and compared by identity (operator==(const Context&, const Context&)
-/// compares the registries by value)
+/// compares the registries by value); mirrors Context::CanonicalizationConfig
+/// in context.hpp, so a member added there is added here
 struct CanonicalizationKey {
   ObjectRef registry;
   /// determines the symmetry of NormalOperator
@@ -82,8 +84,9 @@ struct CanonicalizationKey {
 
   bool operator==(const CanonicalizationKey& other) const {
     // CanonicalizeOptions::operator== compares only the method; the bindings
-    // name every member, so that a member added to CanonicalizeOptions fails
-    // to compile here until it is compared
+    // name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY tag), so
+    // that a member added to CanonicalizeOptions fails to compile here until
+    // it is compared
     auto same_options = [](const std::optional<CanonicalizeOptions>& o1,
                            const std::optional<CanonicalizeOptions>& o2) {
       if (!o1 || !o2) return !o1 && !o2;

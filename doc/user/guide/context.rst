@@ -154,5 +154,7 @@ canonicalization options and the single-particle basis (which determines the sym
 version if and only if canonicalization sees the same configuration in both; a version is never reused for another configuration. The
 other settings (vacuum, metric, first dummy index ordinal, typesetting, deserialization defaults) do not affect it.
 :func:`sequant::current_context_version` returns the version of the context in effect on the calling thread, which lets code that
-caches canonicalization results tell whether they are still valid. The version does not track in-place mutation of a canonicalizer or
-comparer object that the context refers to.
+caches canonicalization results tell whether they are still valid. Such a cache is keyed on the versions for all statistics, since
+canonicalization reads the single-particle basis from the context for the statistics of the normal operator at hand and the rest
+from the context for arbitrary statistics. The version does not track in-place mutation of a canonicalizer or comparer object that
+the context refers to.
