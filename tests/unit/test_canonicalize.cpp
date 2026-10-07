@@ -1011,6 +1011,32 @@ TEST_CASE("canonicalize_options_equality", "[algorithms]") {
           opts.copy_and_set(container::set<Index>{Index{L"i_1"}}));
 }
 
+// the hooks of a lone tensor with a repeated index (a tensor network) default
+// to the context's options; with no index named every index is a dummy, so
+// the once-occurring a_5 is relabeled, which the deduced named indices (a_5
+// among them) would not do
+TEST_CASE("canonicalize_hook_defaults", "[algorithms]") {
+  using namespace sequant;
+  auto make_tensor = [] {
+    return ex<Tensor>(L"t", bra{L"i_3"}, ket{L"i_3", L"a_5"});
+  };
+  const auto all_dummy = CanonicalizeOptions::default_options().copy_and_set(
+      container::set<Index>{});
+
+  SECTION("Tensor::canonicalize") {
+    auto expected = make_tensor();
+    expected->as<Tensor>().canonicalize(all_dummy);
+    auto deduced = make_tensor();
+    deduced->as<Tensor>().canonicalize(CanonicalizeOptions::default_options());
+    REQUIRE(*expected != *deduced);
+
+    auto scope = scoped_canonicalize_options(all_dummy);
+    auto t = make_tensor();
+    t->as<Tensor>().canonicalize();
+    REQUIRE(*t == *expected);
+  }
+}
+
 TEST_CASE("current_contexts_version", "[algorithms]") {
   using namespace sequant;
   const auto version = current_contexts_version();
