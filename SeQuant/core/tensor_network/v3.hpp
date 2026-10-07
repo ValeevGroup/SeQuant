@@ -517,8 +517,10 @@ class TensorNetworkV3 {
   /// indices, see CanonicalizeOptions for more info
   /// @return The byproduct of canonicalization; Constant 0, with the network
   /// unchanged, if the network has an automorphism of phase -1
-  /// @note this produces canonical representation that is invariant with
-  /// respect to the renaming of named indices
+  /// @note with @p ignore_named_index_labels the structure of the result does
+  /// not depend on the labels of the named indices, but their placement does:
+  /// named indices that an automorphism of the network can exchange are placed
+  /// in the order of the context's index comparer
   [[nodiscard]] ExprPtr canonicalize_graph(
       const NamedIndexSet &named_indices,
       bool ignore_named_index_labels = true);
