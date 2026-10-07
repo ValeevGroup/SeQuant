@@ -1332,8 +1332,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       auto wick = FWickTheorem{opseq};
       auto result = compute_contractions(wick.full_contractions(false));
       // = ã{u_2,u_4;u_1,u_3} - γ{u_4;u_1} ã{u_2;u_3} + η{u_2;u_3} ã{u_4;u_1}
-      //   + γ{u_4;u_1} η{u_2;u_3}, built in code because deserialized ã
-      //   carries a SingleProduct vacuum
+      //   + γ{u_4;u_1} η{u_2;u_3}
       const Index u_1(L"u_1"), u_2(L"u_2"), u_3(L"u_3"), u_4(L"u_4");
       const auto expected =
           ex<FNOperator>(cre({u_1, u_3}), ann({u_2, u_4})) -
