@@ -563,7 +563,8 @@ class WickTheorem {
   /// the operator sequence, or of the expression (the first Product summand
   /// of a Sum; every summand of an expanded Sum has the same external
   /// indices)
-  /// @throw Exception if the expression input is not expanded
+  /// @throw Exception if the expression input is not expanded, or is a Sum
+  /// without a Product summand
   void extract_indices() const;
 
   /// @return the external indices: the named indices of the context's

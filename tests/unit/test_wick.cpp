@@ -24,6 +24,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 
 #include <range/v3/range/conversion.hpp>
@@ -1147,6 +1148,13 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                        ex<FNOperator>(cre({L"i_2"}), ann({L"a_1"})));
     auto term = make_term();
     REQUIRE_THROWS_AS(FWickTheorem{unexpanded}.reduce(term), Exception);
+    // nor can a Sum without a Product summand, which compute() accepts
+    auto nops = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) +
+                ex<FNOperator>(cre({L"i_2"}), ann({L"a_1"}));
+    REQUIRE_THROWS_WITH(
+        FWickTheorem{nops}.reduce(term),
+        Catch::Matchers::ContainsSubstring("without a Product summand"));
+    REQUIRE_NOTHROW(FWickTheorem{nops->clone()}.compute());
   }
 
   SECTION("Expression Reduction") {

@@ -669,7 +669,10 @@ void WickTheorem<S>::extract_indices() const {
   if (input->is<Sum>()) {
     const auto it = ranges::find_if(
         *input, [](const ExprPtr &summand) { return summand->is<Product>(); });
-    if (it == ranges::end(*input)) return;
+    if (it == ranges::end(*input))
+      throw Exception(
+          "WickTheorem::extract_indices: the expression input is a Sum without "
+          "a Product summand, its external indices cannot be deduced");
     input = *it;
   }
   bool expanded = true;
