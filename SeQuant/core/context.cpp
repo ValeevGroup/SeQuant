@@ -85,26 +85,11 @@ struct CanonicalizationKey {
   }
 
   bool operator==(const CanonicalizationKey& other) const {
-    // CanonicalizeOptions::operator== compares only the method; the bindings
-    // name every member (guard is the SEQUANT_DESIGNATED_INIT_ONLY tag), so
-    // that a member added to CanonicalizeOptions fails to compile here until
-    // it is compared
-    auto same_options = [](const std::optional<CanonicalizeOptions>& o1,
-                           const std::optional<CanonicalizeOptions>& o2) {
-      if (!o1 || !o2) return !o1 && !o2;
-      const auto& [guard1, method1, named_indices1, ignore_labels1] = *o1;
-      const auto& [guard2, method2, named_indices2, ignore_labels2] = *o2;
-      (void)guard1;
-      (void)guard2;
-      return method1 == method2 && named_indices1 == named_indices2 &&
-             ignore_labels1 == ignore_labels2;
-    };
     return registry == other.registry && spbasis == other.spbasis &&
            canonicalizers == other.canonicalizers &&
            index_comparer == other.index_comparer &&
            index_pair_comparer == other.index_pair_comparer &&
-           cardinal_labels == other.cardinal_labels &&
-           same_options(options, other.options);
+           cardinal_labels == other.cardinal_labels && options == other.options;
   }
 };
 

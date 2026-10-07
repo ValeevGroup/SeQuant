@@ -998,6 +998,19 @@ TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
   }
 }
 
+TEST_CASE("canonicalize_options_equality", "[algorithms]") {
+  using namespace sequant;
+  const CanonicalizeOptions opts{.method = CanonicalizationMethod::Complete};
+  REQUIRE(opts == CanonicalizeOptions{opts});
+  // every member takes part, not only the method
+  REQUIRE(!(opts == opts.copy_and_set(CanonicalizationMethod::Rapid)));
+  REQUIRE(!(opts == opts.copy_and_set(container::set<Index>{Index{L"i_1"}})));
+  REQUIRE(!(opts ==
+            opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)));
+  REQUIRE(opts.copy_and_set(container::set<Index>{Index{L"i_1"}}) ==
+          opts.copy_and_set(container::set<Index>{Index{L"i_1"}}));
+}
+
 TEST_CASE("current_contexts_version", "[algorithms]") {
   using namespace sequant;
   const auto version = current_contexts_version();
