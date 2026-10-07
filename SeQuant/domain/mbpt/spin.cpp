@@ -2239,8 +2239,8 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
 
 }  // namespace
 
-ExprPtr closed_shell_EOM_triplet_spintrace(
-    ExprPtr const& expr, ClosedShellEOMTripletSpintraceOptions options) {
+ExprPtr closed_shell_CC_triplet_spintrace(
+    ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options) {
   container::svector<container::svector<Index>> ext_groups;
   const auto ext_idxs = external_indices(expr);
   for (const auto& g : ext_idxs) {
@@ -2253,7 +2253,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
   const auto n_ext = ext_idxs.size();
   if (n_ext == 0 || n_ext > 3)
     throw Exception(
-        "closed_shell_EOM_triplet_spintrace: the explicitly spin-coupled "
+        "closed_shell_CC_triplet_spintrace: the explicitly spin-coupled "
         "triplet manifold is implemented for singles, doubles and triples");
 
   // spintrace_by_sector already removed spin (with collision relabeling) from
@@ -2275,7 +2275,7 @@ ExprPtr closed_shell_EOM_triplet_spintrace(
 
   if (options.residual == TripletResidualKind::BareTE && n_ext == 3)
     throw Exception(
-        "closed_shell_EOM_triplet_spintrace: BareTE is a doubles-only "
+        "closed_shell_CC_triplet_spintrace: BareTE is a doubles-only "
         "experiment, not implemented beyond doubles");
   // BareTE only changes the doubles residual; singles use the Combined one
   const bool bare_te =

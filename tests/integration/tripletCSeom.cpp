@@ -141,7 +141,7 @@ class compute_eomcc_closedshell_triplet {
 
       auto tstart = std::chrono::high_resolution_clock::now();
       const auto st =
-          closed_shell_EOM_triplet_spintrace(eqvec[i], {.compact = false});
+          closed_shell_CC_triplet_spintrace(eqvec[i], {.compact = false});
       auto tstop = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> dt = tstop - tstart;
       std::wcout << "R[" << i << "] size: " << term_count(st)
@@ -162,7 +162,7 @@ class compute_eomcc_closedshell_triplet {
       // compact residual (the production form)
       tstart = std::chrono::high_resolution_clock::now();
       const auto compact =
-          closed_shell_EOM_triplet_spintrace(eqvec[i], {.compact = true});
+          closed_shell_CC_triplet_spintrace(eqvec[i], {.compact = true});
       tstop = std::chrono::high_resolution_clock::now();
       dt = tstop - tstart;
       std::wcout << "R[" << i << "] compact size: " << term_count(compact)
@@ -184,7 +184,7 @@ class compute_eomcc_closedshell_triplet {
       // via Omega = te + (1/4)(bra_swap(te) + ket_swap(te)) must be exact
       const auto ext_idxs = external_indices(eqvec[i]);
       if (ext_idxs.size() == 2 && N <= 2) {
-        auto te = closed_shell_EOM_triplet_spintrace(
+        auto te = closed_shell_CC_triplet_spintrace(
             eqvec[i],
             {.compact = false, .residual = TripletResidualKind::BareTE});
         simplify(te);
