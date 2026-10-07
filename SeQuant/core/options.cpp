@@ -58,13 +58,4 @@ CanonicalizeOptions CanonicalizeOptions::copy_and_set(
   return result;
 }
 
-SimplifyOptions SimplifyOptions::default_options() {
-  auto result =
-      sequant::get_default_context().canonicalization_options().value_or(
-          CanonicalizeOptions{});
-  return {result};
-}
-SimplifyOptions::SimplifyOptions(CanonicalizeOptions opts)
-    : CanonicalizeOptions(opts) {}
-
 }  // namespace sequant

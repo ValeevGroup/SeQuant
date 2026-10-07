@@ -108,42 +108,30 @@ T& ExprPtr::as() {
 /// _replaced_ (i.e. `&expr` may be mutated by call); a Sum left with at most
 /// one summand, or a Product with one factor and a unit scalar, is replaced
 /// by that summand or factor (or 0), canonicalized on its own
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @return \p expr to facilitate chaining
-ExprPtr& canonicalize(
-    ExprPtr& expr,
-    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+ExprPtr& canonicalize(ExprPtr& expr);
 
 /// Recursively canonicalizes an Expr; like mutating canonicalize() but works
 /// for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @return canonicalized form of \p expr_rv
-ExprPtr canonicalize(
-    ExprPtr&& expr_rv,
-    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+ExprPtr canonicalize(ExprPtr&& expr_rv);
 
 /// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @return \p expr to facilitate chaining
-ResultExpr& canonicalize(
-    ResultExpr& expr,
-    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+ResultExpr& canonicalize(ResultExpr& expr);
 
 /// Recursively canonicalizes an Expr; like mutating canonicalize() but works
 /// for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @return canonicalized form of \p expr_rv
-[[nodiscard]] ResultExpr& canonicalize(
-    ResultExpr&& expr,
-    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+[[nodiscard]] ResultExpr& canonicalize(ResultExpr&& expr);
 
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded
@@ -189,77 +177,57 @@ ResultExpr& flatten(ResultExpr& expr);
 /// trivial math, flattening sums and products, etc.)
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-ExprPtr& rapid_simplify(
-    ExprPtr& expr, SimplifyOptions opts = SimplifyOptions::default_options());
+ExprPtr& rapid_simplify(ExprPtr& expr);
 
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-ResultExpr& rapid_simplify(
-    ResultExpr& expr,
-    SimplifyOptions opts = SimplifyOptions::default_options());
+ResultExpr& rapid_simplify(ResultExpr& expr);
 
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-[[nodiscard]] ResultExpr& rapid_simplify(
-    ResultExpr&& expr,
-    SimplifyOptions opts = SimplifyOptions::default_options());
+[[nodiscard]] ResultExpr& rapid_simplify(ResultExpr&& expr);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
-ExprPtr& simplify(ExprPtr& expr,
-                  SimplifyOptions opts = SimplifyOptions::default_options());
+ExprPtr& simplify(ExprPtr& expr);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify; like mutating simplify() but works for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be simplified
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @return simplified form of \p expr_rv
-ExprPtr simplify(ExprPtr&& expr_rv,
-                 SimplifyOptions opts = SimplifyOptions::default_options());
+ExprPtr simplify(ExprPtr&& expr_rv);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
-ResultExpr& simplify(ResultExpr& expr,
-                     SimplifyOptions opts = SimplifyOptions::default_options());
+ResultExpr& simplify(ResultExpr& expr);
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify; like mutating simplify() but works for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be simplified
-/// @param[in] opts canonicalization options (if not given, uses
-///            CanonicalizeOptions::default_options() to obtain the default)
+/// @note the canonicalization options are those of the default context
 /// @return simplified form of \p expr_rv
-[[nodiscard]] ResultExpr& simplify(
-    ResultExpr&& expr,
-    SimplifyOptions opts = SimplifyOptions::default_options());
+[[nodiscard]] ResultExpr& simplify(ResultExpr&& expr);
 
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify

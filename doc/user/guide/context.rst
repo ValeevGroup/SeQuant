@@ -82,6 +82,21 @@ throws if the calling thread has a scoped context active, whose settings it woul
 for antisymmetrizers, symmetrizers and transpositions) are kept only if the list includes them, as the one returned by
 :func:`sequant::mbpt::cardinal_tensor_labels` does.
 
+.. _context-canonicalization-options:
+
+Canonicalization options
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``Context`` also carries the :class:`sequant::CanonicalizeOptions` that :func:`sequant::canonicalize`,
+:func:`sequant::simplify` and everything built on them use (``Context::Options::canonicalization_options``,
+``Context::set(CanonicalizeOptions)``, :func:`sequant::Context::canonicalization_options`): the canonicalization method, which
+indices are *named* (external), and whether the labels of the named indices affect the result. By default the named indices of an
+expression are deduced as those that occur once in it; naming them explicitly makes an index that occurs more than once external,
+which is what the theorem machinery relies on as well: the named indices of the context are the external indices of a
+:class:`sequant::WickTheorem`, the ones it does not sum over. When the context names indices it names *every* external index of the
+expressions canonicalized under it, since any other index is then a dummy. There are no per-call options; to canonicalize under
+other options, scope a context that carries them (see :ref:`below <context-scoped>`).
+
 The MBPT ``Context``
 ----------------------
 
@@ -110,6 +125,8 @@ expands such CSV-dependent tensors into an explicit basis (standard unoccupieds,
    :start-after: start-snippet-4
    :end-before: end-snippet-4
    :dedent: 2
+
+.. _context-scoped:
 
 Scoped context changes
 ------------------------

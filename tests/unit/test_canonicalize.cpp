@@ -146,24 +146,19 @@ TEST_CASE("canonicalization", "[algorithms]") {
       // columns of its column-symmetric tensors; they canonicalize alike
       // whether or not named index labels are ignored
       for (auto ignore_named_index_labels : {true, false}) {
+        auto scope = scoped_canonicalize_options(
+            {.method = CanonicalizationMethod::Topological,
+             .ignore_named_index_labels =
+                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
+                     ignore_named_index_labels)});
         auto input1 =
             deserialize(L"1/2 t{a3,a1,a2;i4,i5,i2}:N-C-S g{i4,i5;i3,i1}:N-C-S");
         //      auto input1 = deserialize(L"1/2
         //      t{a1,a2,a3;i5,i2,i4}:N-C-S g{i4,i5;i3,i1}:N-C-S");
         auto input2 =
             deserialize(L"1/2 t{a1,a3,a2;i5,i4,i2}:N-C-S g{i5,i4;i1,i3}:N-C-S");
-        canonicalize(
-            input1,
-            {.method = CanonicalizationMethod::Topological,
-             .ignore_named_index_labels =
-                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
-                     ignore_named_index_labels)});
-        canonicalize(
-            input2,
-            {.method = CanonicalizationMethod::Topological,
-             .ignore_named_index_labels =
-                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
-                     ignore_named_index_labels)});
+        canonicalize(input1);
+        canonicalize(input2);
         REQUIRE(input1 == input2);
       }
     }
@@ -775,7 +770,10 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
     auto canonical_labels = [] {
       auto product = ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
                      ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
-      canonicalize(product, {.method = CanonicalizationMethod::Complete});
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Complete));
+      canonicalize(product);
       REQUIRE(product->is<Product>());
       std::vector<std::wstring> labels;
       for (const auto& factor : product->as<Product>().factors())
@@ -966,6 +964,7 @@ TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
       .method = CanonicalizationMethod::Topological,
       .ignore_named_index_labels =
           CanonicalizeOptions::IgnoreNamedIndexLabel::Yes};
+  auto scope = scoped_canonicalize_options(opts);
   // pairs of spellings of one expression
   for (const auto& [x, y] :
        std::initializer_list<std::pair<std::wstring_view, std::wstring_view>>{
@@ -982,18 +981,18 @@ TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
            {L"X{i_3,i_5;a_1,a_2}:N-N-S", L"X{i_5,i_3;a_2,a_1}:N-N-S"},
            {L"X{i_3,i_5,i_6;a_1,a_2,a_4}:A-N-S",
             L"X{i_6,i_3,i_5;a_4,a_1,a_2}:A-N-S"}}) {
-    auto canonicalized = [&opts](std::wstring_view input) {
+    auto canonicalized = [](std::wstring_view input) {
       ExprPtr e = deserialize(input);
       // a lone tensor is canonicalized as a network only within a Product
       if (!e->is<Product>()) e = ex<Product>(ExprPtrList{e});
-      canonicalize(e, opts);
+      canonicalize(e);
       return e;
     };
     const auto cx = canonicalized(x);
     CAPTURE(x, y, serialize(cx));
     REQUIRE(cx == canonicalized(y));
     auto again = cx->clone();
-    canonicalize(again, opts);
+    canonicalize(again);
     REQUIRE(again == cx);
   }
 }
@@ -1144,8 +1143,12 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
 
   SECTION("rapid canonicalization does not mark") {
     auto e = make_sum();
-    canonicalize(e, opts.copy_and_set(CanonicalizationMethod::Rapid));
-    REQUIRE(!e->is_canonical());
+    {
+      auto scope = scoped_canonicalize_options(
+          opts.copy_and_set(CanonicalizationMethod::Rapid));
+      canonicalize(e);
+      REQUIRE(!e->is_canonical());
+    }
     e->rapid_canonicalize();
     REQUIRE(!e->is_canonical());
     // and invalidates the mark
@@ -1295,10 +1298,13 @@ TEST_CASE("canonicalize_canonical", "[algorithms]") {
     const auto other_opts =
         opts.copy_and_set(container::set<Index>{Index{L"i_1"}});
     REQUIRE(!e->is_canonical(other_opts));
-    REQUIRE(count_product_canonicalizations(
-                [&] { canonicalize(e, other_opts); }) > 0);
-    REQUIRE(e->is_canonical(other_opts));
-    REQUIRE(!e->is_canonical(opts));
+    {
+      auto scope = scoped_canonicalize_options(other_opts);
+      REQUIRE(!e->is_canonical());
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) > 0);
+      REQUIRE(e->is_canonical());
+    }
+    REQUIRE(!e->is_canonical());
   }
 
   SECTION("a clone of a canonical expression is canonical") {

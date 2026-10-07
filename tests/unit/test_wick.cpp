@@ -710,18 +710,20 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
            ex<FNOperator>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"}))) *
           ex<FNOperator>(cre({L"a_2"}), ann({}));
       // the external indices are the context's named indices
-      auto ctx = get_default_context();
-      ctx.set(CanonicalizeOptions::default_options().copy_and_set(
-          container::set<Index>{Index(L"i_1"), Index(L"a_3"), Index(L"a_4"),
-                                Index(L"a_2")}));
-      auto resetter = set_scoped_default_context(ctx);
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{Index(L"i_1"), Index(L"a_3"), Index(L"a_4"),
+                                    Index(L"a_2")}));
       auto wick = FWickTheorem{input};
       wick.use_topology(true);
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
       REQUIRE(to_latex(result) == L"{\\bar{g}^{{a_2}{i_1}}_{{a_3}{a_4}}}");
-      canonicalize(result, {.method = CanonicalizationMethod::Rapid});
+      auto rapid = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Rapid));
+      canonicalize(result);
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
@@ -1012,11 +1014,10 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             ex<FNOperator>(cre({L"i_3", L"i_4"}), ann({L"a_3", L"a_4"})) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
             ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
-        auto ctx = get_default_context();
-        ctx.set(CanonicalizeOptions::default_options().copy_and_set(
-            container::set<Index>{Index(L"i_3"), Index(L"i_4"), Index(L"a_3"),
-                                  Index(L"a_4")}));
-        auto resetter = set_scoped_default_context(ctx);
+        auto scope = scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                container::set<Index>{Index(L"i_3"), Index(L"i_4"),
+                                      Index(L"a_3"), Index(L"a_4")}));
         auto wick = FWickTheorem{input};
         wick.use_topology(topology);
         auto result = wick.compute();
@@ -1048,10 +1049,9 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
     ExprPtr fixed;
     {
-      auto ctx = get_default_context();
-      ctx.set(CanonicalizeOptions::default_options().copy_and_set(
-          container::set<Index>{p3}));
-      auto resetter = set_scoped_default_context(ctx);
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{p3}));
       fixed = FWickTheorem{input->clone()}.compute();
       REQUIRE(get_used_indices_with_counts(fixed).contains(p3));
       REQUIRE_THAT(fixed, !EquivalentTo(summed));
@@ -1093,7 +1093,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       wick.reset_indices();
       wick.reduce(wick_result_2);
       rapid_simplify(wick_result_2);
-      canonicalize(wick_result_2, {.method = CanonicalizationMethod::Complete});
+      {
+        auto scope = scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                CanonicalizationMethod::Complete));
+        canonicalize(wick_result_2);
+      }
       rapid_simplify(wick_result_2);
 
       // std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
@@ -1172,8 +1177,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
           wick.reset_indices();
           wick.reduce(wick_result_2);
           rapid_simplify(wick_result_2);
-          canonicalize(wick_result_2,
-                       {.method = CanonicalizationMethod::Complete});
+          {
+            auto scope = scoped_canonicalize_options(
+                CanonicalizeOptions::default_options().copy_and_set(
+                    CanonicalizationMethod::Complete));
+            canonicalize(wick_result_2);
+          }
           rapid_simplify(wick_result_2);
 
           // std::wcout << wick_result_2.to_latex() << std::endl;
@@ -1371,7 +1380,13 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         w.reduce(result0);
         // std::wcout << "after reduce: op = " << to_latex_align(result0,
         // 3) << std::endl;
-        simplify(result0, {{.named_indices = IndexList{}}});
+        {
+          // every index is a dummy
+          auto scope = scoped_canonicalize_options(
+              CanonicalizeOptions::default_options().copy_and_set(
+                  container::set<Index>{}));
+          simplify(result0);
+        }
         // sequant::wprintf(L"after simplify: op = ", to_latex_align(result0,
         // 3), L"\n");
 
@@ -1383,7 +1398,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
             fannx("p_4") * fcrex("p_1");
         auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
-        simplify(result1, {{.named_indices = IndexList{}}});
+        {
+          auto scope = scoped_canonicalize_options(
+              CanonicalizeOptions::default_options().copy_and_set(
+                  container::set<Index>{}));
+          simplify(result1);
+        }
         // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
         // to_latex_align(result1, 0, 2), L"\n");
         REQUIRE(result0 == result1);
@@ -1398,8 +1418,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             fcrex("p_1");
         auto result2 =
             FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
-        simplify(result2, {{.method = CanonicalizationMethod::Complete,
-                            .named_indices = IndexList{}}});
+        {
+          auto scope = scoped_canonicalize_options(
+              {.method = CanonicalizationMethod::Complete,
+               .named_indices = container::set<Index>{}});
+          simplify(result2);
+        }
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);

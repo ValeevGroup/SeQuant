@@ -92,18 +92,6 @@ struct CanonicalizeOptions {
   }
 };
 
-/// @brief options that control behavior of `simplify()`
-/// @note this is a superset of CanonicalizeOptions
-struct SimplifyOptions : public CanonicalizeOptions {
-  static SimplifyOptions default_options();
-  SimplifyOptions(CanonicalizeOptions opts);
-
-  friend bool operator==(const SimplifyOptions& a, const SimplifyOptions& b) {
-    return static_cast<const CanonicalizeOptions&>(a) ==
-           static_cast<const CanonicalizeOptions&>(b);
-  }
-};
-
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_OPTIONS_HPP

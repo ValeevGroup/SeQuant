@@ -444,9 +444,10 @@ struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
   using ExpressionMatcher::ExpressionMatcher;
 
   static void pre_comparison(sequant::ExprPtr &expr) {
-    sequant::simplify(
-        expr, sequant::SimplifyOptions::default_options().copy_and_set(
-                  sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    auto scope = sequant::tests::scoped_canonicalize_options(
+        sequant::CanonicalizeOptions::default_options().copy_and_set(
+            sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
+    sequant::simplify(expr);
   }
 
   static std::string comparison_requirement() { return "Equivalent to"; }
