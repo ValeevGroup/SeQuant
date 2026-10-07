@@ -1604,6 +1604,107 @@ SECTION("MRSO-MultiProduct") {
     // up to κ₃; the 2-body string's own κ₂ enters its definition
     check({gno_string({u1, u2}, {u4, u3}), gno_string({u5}, {u6})});
     check({gno_string({u1, u2}, {u3}), gno_string({u4}, {u6, u5})});
+
+    // partial contractions are operator-valued, so the two paths are compared
+    // in a common normal form: the GNO remainders of the MultiProduct result
+    // are replaced by their elementary-operator expansions and both sides are
+    // normal-ordered relative to the core vacuum by the standard theorem
+    // a lone term is returned as is: a Product whose factor is a one-term Sum
+    // is not flattened by expand, and the theorem would take it for a scalar
+    auto to_expr = [](const Expansion& expansion) {
+      auto result = std::make_shared<Sum>();
+      for (const auto& [c, legs] : expansion) {
+        ExprPtr string = c->clone();
+        for (const auto& l : legs)
+          string = string * (l.action == Action::Create ? fcrex(l.index)
+                                                        : fannx(l.index));
+        result->append(string);
+      }
+      return result->size() == 1 ? result->summand(0) : ExprPtr(result);
+    };
+    // call under the SingleProduct vacuum; the standard theorem spells a
+    // contraction as the overlap s, the extended one as δ
+    auto core_vacuum_normal_form = [&](ExprPtr x) {
+      expand(x);
+      auto result = FWickTheorem{x}.full_contractions(false).compute();
+      auto overlap_to_kronecker = [](ExprPtr& f) {
+        if (f->is<Tensor>() &&
+            f->as<Tensor>().label() == reserved::overlap_label())
+          f = make_kronecker(f->as<Tensor>().bra()[0],
+                             f->as<Tensor>().ket()[0]);
+      };
+      if (result->is_atom())
+        overlap_to_kronecker(result);
+      else
+        result->visit(overlap_to_kronecker, /*atoms_only=*/true);
+      return in_base_spaces(result);
+    };
+    auto check_partial = [&](std::initializer_list<Legs> strings) {
+      ExprPtr mp_input = ex<Constant>(1);
+      for (const auto& legs : strings) {
+        container::svector<Index> cre_idxs, ann_idxs;
+        for (const auto& l : legs)
+          (l.action == Action::Create ? cre_idxs : ann_idxs).push_back(l.index);
+        std::reverse(ann_idxs.begin(), ann_idxs.end());
+        mp_input = mp_input * ex<FNOperator>(cre(cre_idxs), ann(ann_idxs));
+      }
+      const auto mp = mbpt::decompositions::cumulants_to_densities(
+          FWickTheorem{mp_input}.full_contractions(false).compute());
+      ExprPtr lhs, rhs;
+      {
+        auto sp_ctx = get_default_context();
+        sp_ctx.set(Vacuum::SingleProduct);
+        auto sp_resetter = set_scoped_default_context(sp_ctx);
+        auto expand_gno = [&](const ExprPtr& f) {
+          Legs legs;
+          for (const auto& op : f->as<FNOperator>())
+            legs.push_back({op.index(), op.action()});
+          return to_expr(gno_from_core_vacuum(legs));
+        };
+        // each term's GNO remainder, if any, is replaced by its expansion
+        ExprPtr elementary = ex<Constant>(0);
+        for (const auto& term :
+             mp->is<Sum>() ? mp->as<Sum>().summands() |
+                                 ranges::to<container::svector<ExprPtr>>
+                           : container::svector<ExprPtr>{mp}) {
+          if (term->is<FNOperator>()) {
+            elementary = elementary + expand_gno(term);
+          } else if (term->is<Product>()) {
+            ExprPtr coefficient = ex<Constant>(term->as<Product>().scalar());
+            ExprPtr remainder;
+            for (const auto& factor : term->as<Product>().factors())
+              if (factor->is<FNOperator>())
+                remainder = expand_gno(factor);
+              else
+                coefficient = coefficient * factor->clone();
+            elementary = elementary +
+                         (remainder ? coefficient * remainder : coefficient);
+          } else {
+            elementary = elementary + term->clone();
+          }
+        }
+        lhs = core_vacuum_normal_form(elementary);
+        ExprPtr product = ex<Constant>(1);
+        for (const auto& legs : strings)
+          product = product * to_expr(gno_from_core_vacuum(legs));
+        rhs = core_vacuum_normal_form(product);
+      }
+      INFO("lhs: " << toUtf8(to_latex(lhs))
+                   << "\nrhs: " << toUtf8(to_latex(rhs)));
+      REQUIRE(!lhs->is<Constant>());
+      REQUIRE(simplify(lhs - rhs) == ex<Constant>(0));
+    };
+    // number-conserving
+    check_partial({gno_string({u1}, {u2}), gno_string({u3}, {u4})});
+    // non-conserving
+    check_partial({gno_string({u1, u2}, {u3}), gno_string({}, {u4})});
+    check_partial({gno_string({}, {u1}), gno_string({u2}, {})});
+    check_partial({gno_string({u1}, {u3, u2}), gno_string({u4, u5}, {})});
+    check_partial(
+        {gno_string({}, {i1}), gno_string({i2}, {u1}), gno_string({u2}, {})});
+    check_partial({gno_string({a1}, {i1, u1}), gno_string({u2}, {a2}),
+                   gno_string({i2}, {})});
+    check_partial({gno_string({u1, u2}, {u3}), gno_string({u4}, {u6, u5})});
   }
 
   SECTION("wick(H2**T2) runs in generalized normal order") {
