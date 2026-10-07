@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <memory>
 #include <new>
+#include <source_location>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
@@ -59,6 +60,17 @@ std::pair<std::shared_ptr<Sum>, std::shared_ptr<Sum>> screen_terms(
   }
   return {std::move(kept), std::move(kept_for_vev)};
 }
+
+/// SEQUANT_ENFORCE()s that the reference is the Wick vacuum; a failure reports
+/// the caller's location
+const auto enforce_vacuum_reference = [](std::source_location location =
+                                             std::source_location::current()) {
+  if (!reference_is_vacuum())
+    SEQUANT_ENFORCE_FAILED(
+        SEQUANT_CHECK_MESSAGE(SEQUANT_ENFORCE, reference_is_vacuum(),
+                              "the reference must be the Wick vacuum"),
+        location);
+};
 }  // namespace
 
 CC::CC(size_t n) : CC(n, Options{}) {}
@@ -110,9 +122,7 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
       truncation_rank.value_or(opts_.hbar_comm_rank.value_or(4));
 
   if (opts_.hbar_expansion == HbarExpansion::Bernoulli) {
-    SEQUANT_ENFORCE(reference_is_vacuum(),
-                    "CC::hbar: the Bernoulli expansion requires the reference "
-                    "to be the Wick vacuum");
+    enforce_vacuum_reference();
     return bernoulli::hbar(N, truncation, skip_singles());
   }
 
@@ -197,8 +207,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) const {
 
 std::vector<ExprPtr> CC::λ() const {
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λ for unitary ansatz");
-  SEQUANT_ENFORCE(reference_is_vacuum(),
-                  "CC::λ: the reference must be the Wick vacuum");
+  enforce_vacuum_reference();
 
   // construct hbar
   const auto commutator_rank = opts_.hbar_comm_rank.value_or(4);
@@ -260,8 +269,7 @@ ExprPtr CC::rdm(size_t rank, std::optional<size_t> comm_rank) const {
     throw Exception("CC::rdm: hbar_singles_comm_rank is not supported");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::rdm: the Bernoulli expansion is not supported yet");
-  SEQUANT_ENFORCE(reference_is_vacuum(),
-                  "CC::rdm: the reference must be the Wick vacuum");
+  enforce_vacuum_reference();
 
   // 1. replacement operator {ã^{p_1..p_r}_{p_{r+1}..p_{2r}}} (see op::ã); its
   // indices are free, so they become the free indices of γ.
@@ -309,8 +317,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                    "pertbar_comm_rank must be specified for unitary ansatz");
   SEQUANT_ASSERT(opts_.hbar_expansion != HbarExpansion::Bernoulli,
                  "CC::tʼ: the Bernoulli expansion is not supported yet");
-  SEQUANT_ENFORCE(reference_is_vacuum(),
-                  "CC::tʼ: the reference must be the Wick vacuum");
+  enforce_vacuum_reference();
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
@@ -373,8 +380,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(!unitary(), "there is no need for CC::λʼ for unitary ansatz");
   SEQUANT_ASSERT(opts_.ansatz == Ansatz::T,
                  "CC::λʼ: only traditional ansatz is supported");
-  SEQUANT_ENFORCE(reference_is_vacuum(),
-                  "CC::λʼ: the reference must be the Wick vacuum");
+  enforce_vacuum_reference();
 
   // construct hbar
   const auto hbar = this->hbar();
@@ -525,8 +531,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
         get_default_context().spbasis() != SPBasis::Spinfree,
         "spin-free basis does not yet support non particle-conserving cases");
 
-  SEQUANT_ENFORCE(reference_is_vacuum(),
-                  "CC::eom_r: the reference must be the Wick vacuum");
+  enforce_vacuum_reference();
 
   if (unitary()) return eom_r_ucc(np, nh, block_ranks);
 
@@ -549,8 +554,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh,
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) const {
   SEQUANT_ASSERT(!unitary(),
                  "there is no need for CC::eom_l for unitary ansatz");
-  SEQUANT_ENFORCE(reference_is_vacuum(),
-                  "CC::eom_l: the reference must be the Wick vacuum");
+  enforce_vacuum_reference();
   SEQUANT_ASSERT(np > 0 || nh > 0, "Unsupported excitation order");
 
   if (np != nh)
