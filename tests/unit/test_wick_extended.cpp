@@ -3,6 +3,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/core/wick_extended.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -11,6 +12,8 @@
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
+
+#include <array>
 
 namespace sequant {
 
@@ -634,6 +637,32 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       auto without = wick_mp(ops(u5), opts);
       auto result = wick_mp(ext * ops(u5), opts);
       REQUIRE(simplify(result - simplify(ext * without)) == ex<Constant>(0));
+    }
+  }
+
+  SECTION("WickTheorem: use_topology with a context-named dummy") {
+    // the context may name an index that appears twice; it is then external,
+    // so the pruning may not treat the operators carrying it as equivalent
+    auto coeff = [](std::wstring_view label, IndexList b, IndexList k) {
+      return ex<Tensor>(label, bra(b), ket(k), Symmetry::Antisymm,
+                        BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+    };
+    auto in = coeff(L"g", {L"u_1", L"u_2"}, {L"u_3", L"u_4"}) *
+              ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"})) *
+              coeff(L"t", {L"u_5", L"u_6"}, {L"u_7", L"u_8"}) *
+              ex<FNOperator>(cre({L"u_5", L"u_6"}), ann({L"u_7", L"u_8"}));
+    auto scope = scoped_canonicalize_options(
+        CanonicalizeOptions::default_options().copy_and_set(
+            container::set<Index>{Index(L"u_1"), Index(L"u_5")}));
+    for (const bool full : {true, false}) {
+      INFO("full=" << full);
+      std::array<ExprPtr, 2> result;
+      for (const bool top : {false, true}) {
+        FWickTheorem wick{in->clone()};
+        result[top] = wick.full_contractions(full).use_topology(top).compute();
+      }
+      REQUIRE(get_used_indices_with_counts(result[1]).contains(Index(L"u_1")));
+      REQUIRE(simplify(result[1] - result[0]) == ex<Constant>(0));
     }
   }
 

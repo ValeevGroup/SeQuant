@@ -737,7 +737,17 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
           return factor->is<AbstractTensor>();
         }) |
         ranges::to<container::svector<ExprPtr>>);
-  auto g = tn.create_graph({.distinct_named_indices = true});
+  // the declared external indices are the named indices of the graph (a
+  // declared one that appears twice is not a dummy); without a declaration
+  // the network deduces them
+  TN::NamedIndexSet declared_external;
+  if (declared_external_indices)
+    declared_external.insert(declared_external_indices->begin(),
+                             declared_external_indices->end());
+  auto g = tn.create_graph({.named_indices = declared_external_indices
+                                                 ? &declared_external
+                                                 : nullptr,
+                            .distinct_named_indices = true});
   const auto &graph = g.bliss_graph;
   const auto &vlabels = g.vertex_labels;
   const auto &vcolors = g.vertex_colors;
@@ -842,10 +852,6 @@ typename WickTheorem<S>::TopologicalPartitions WickTheorem<S>::analyze_topology(
   // external indices are not permuted (Graph::automorphism_phase also fixes the
   // network's own external indices), even if contracted.
   {
-    TN::NamedIndexSet declared_external;
-    if (declared_external_indices)
-      declared_external.insert(declared_external_indices->begin(),
-                               declared_external_indices->end());
     if (ranges::any_of(aut_generators, [&](const auto &aut) {
           return g.automorphism_phase(aut.data(), &declared_external) == -1;
         })) {

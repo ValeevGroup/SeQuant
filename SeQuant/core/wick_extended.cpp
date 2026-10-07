@@ -580,8 +580,13 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     // index shared by two operators is a dummy; renaming it below leaves
     // every op at its ordinal
     std::optional<typename WickTheorem<S>::TopologicalPartitions> partitions;
-    if (opts.use_topology && term->is<Product>())
-      partitions = WickTheorem<S>::analyze_topology(term->as<Product>());
+    if (opts.use_topology && term->is<Product>()) {
+      // the context's named indices are external even if they appear twice
+      const auto &copts = ctx.canonicalization_options();
+      partitions = WickTheorem<S>::analyze_topology(
+          term->as<Product>(),
+          copts && copts->named_indices ? &*copts->named_indices : nullptr);
+    }
     // a summed index shared by two operators is two indices bound by a δ,
     // which multiplies the result so that it does not count as a connection
     const auto shared_deltas = separate_shared_indices<S>(*term);

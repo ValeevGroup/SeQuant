@@ -520,8 +520,9 @@ class WickTheorem {
   /// and Op objects of @p product, deduced from the automorphisms of its
   /// tensor network; an Op partition only holds Op objects of the bra or the
   /// ket of one (anti)symmetric NormalOperator
-  /// @param declared_external_indices if non-null, indices that no
-  /// automorphism may permute, even if contracted
+  /// @param declared_external_indices if non-null, the external indices of
+  /// the product, which no automorphism may permute even if contracted; if
+  /// null they are deduced as the indices that appear once
   static TopologicalPartitions analyze_topology(
       const Product &product,
       const container::set<Index> *declared_external_indices = nullptr);

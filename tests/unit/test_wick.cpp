@@ -1139,6 +1139,34 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     }
 #endif
 
+    // the context may name an index that appears twice; it is then external,
+    // so use_topology may not treat the operators carrying it as equivalent
+    {
+      auto coeff = [](std::wstring_view label, IndexList b, IndexList k) {
+        return ex<Tensor>(label, bra(b), ket(k), Symmetry::Antisymm,
+                          BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+      };
+      auto in = coeff(L"g", {L"i_1", L"i_2"}, {L"a_1", L"a_2"}) *
+                ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"})) *
+                coeff(L"t", {L"a_3", L"a_4"}, {L"i_3", L"i_4"}) *
+                ex<FNOperator>(cre({L"a_3", L"a_4"}), ann({L"i_3", L"i_4"}));
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{Index(L"i_1"), Index(L"a_3")}));
+      for (const bool full : {true, false}) {
+        INFO("full=" << full);
+        std::array<ExprPtr, 2> result;
+        for (const bool top : {false, true}) {
+          FWickTheorem wick{in->clone()};
+          result[top] =
+              wick.full_contractions(full).use_topology(top).compute();
+        }
+        REQUIRE(
+            get_used_indices_with_counts(result[1]).contains(Index(L"i_1")));
+        REQUIRE(simplify(result[1] - result[0]) == ex<Constant>(0));
+      }
+    }
+
     // the operators of an expression input must use the context's vacuum,
     // like those of an operator sequence
     {
