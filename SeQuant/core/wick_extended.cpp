@@ -258,7 +258,9 @@ using Alternatives = container::svector<container::svector<ExprPtr>>;
 
 /// @return the split of a 1-body γ (@p is_gamma) or η {@p bra; @p ket} into
 /// a δ over its core (γ) or virtual (η) part and a γ/η over its active
-/// part, or nullopt if both indices are already active
+/// part, or nullopt if both indices are already active; the virtual part of
+/// a γ and the core part of an η vanish, so the indices may range over any
+/// space (e.g. an input γ over the complete space)
 std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
                                           IndexFactory &idxfac,
                                           const Index &bra, const Index &ket,
@@ -269,7 +271,6 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
     return std::nullopt;
   const auto &common = isr.intersection(bra.space(), ket.space());
   const auto inactive = is_gamma ? parts.core : parts.virt;
-  SEQUANT_ASSERT(inactive.unIon(parts.active).includes(common.type()));
   Alternatives result;
   for (const auto &sp : registered_pieces(
            isr, common.type().intersection(inactive), common.qns())) {

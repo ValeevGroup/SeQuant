@@ -323,6 +323,34 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
             L"δ{u_2;p_1}:N-C-S * δ{p_2;u_3}:N-C-S * δ{p_4;u_4}:N-C-S"));
   }
 
+  SECTION("WickTheorem: an input density over a wider space is split") {
+    // a one-body γ (η) of the input is the reference (hole) density over
+    // whatever space its indices range over: like the ones the theorem
+    // produces it is δ on the core (virtual) space, γ (η) on the active one
+    // and zero on the virtual (core) one
+    auto h = [](const Index& b, const Index& k) {
+      return ex<Tensor>(L"h", bra{b}, ket{k}, Symmetry::Nonsymm,
+                        BraKetSymmetry::Conjugate, ColumnSymmetry::Symm);
+    };
+    const Index p1(L"p_1"), p2(L"p_2"), O1(L"O_1"), u5(L"u_5"), u6(L"u_6"),
+        a1(L"a_1"), g1(L"g_1");
+    auto ops = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+               ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    const auto ops_av = wick_mp(ops);
+    ExprPtr gamma_result;
+    REQUIRE_NOTHROW(gamma_result =
+                        wick_mp(density::make_rdm(p1, p2) * h(p2, p1) * ops));
+    const auto gamma_coeff = h(O1, O1) + h(u6, u5) * density::make_rdm(u5, u6);
+    REQUIRE(simplify(gamma_result - gamma_coeff * ops_av) == ex<Constant>(0));
+    ExprPtr eta_result;
+    REQUIRE_NOTHROW(
+        eta_result = wick_mp(density::make_hole_rdm(p1, p2) * h(p2, p1) * ops));
+    // the virtual space {a,g} is not registered, so its δ splits over a and g
+    const auto eta_coeff =
+        h(a1, a1) + h(g1, g1) + h(u6, u5) * density::make_hole_rdm(u5, u6);
+    REQUIRE(simplify(eta_result - eta_coeff * ops_av) == ex<Constant>(0));
+  }
+
   SECTION("WickTheorem: dummy indices keep their provenance") {
     // a one-body h summed against its operator's indices, times an active
     // one-body operator: every op index of the first factor is a dummy
