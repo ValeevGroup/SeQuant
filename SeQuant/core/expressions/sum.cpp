@@ -169,35 +169,30 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
-  // options of the full canonicalization of the summands in the last pass of
-  // multipass canonicalization; summands already in that canonical form are
-  // left alone by every pass
-  auto summand_full_opts = opts;
-  summand_full_opts.ignore_named_index_labels =
+  // options of the rapid and of the full canonicalization of the summands;
+  // canonicalizing TNs in a sum requires treating named indices as
+  // meaningful/distinct
+  auto rapid_opts = opts;
+  rapid_opts.ignore_named_index_labels =
       CanonicalizeOptions::IgnoreNamedIndexLabel::No;
-  summand_full_opts.method = opts.method | CanonicalizationMethod::Topological;
+  rapid_opts.method = CanonicalizationMethod::Lexicographic;
+  auto full_opts = rapid_opts;
+  full_opts.method = opts.method | CanonicalizationMethod::Topological;
 
   const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
     const auto rapid = (pass % 2 == 0);
-
-    // canonicalizing TNs in a sum requires treating named indices as
-    // meaningful/distinct
-    auto opts_copy = opts;
-    opts_copy.ignore_named_index_labels =
-        CanonicalizeOptions::IgnoreNamedIndexLabel::No;
-    if (rapid) {
-      opts_copy.method = CanonicalizationMethod::Lexicographic;
-    } else
-      opts_copy.method = opts.method | CanonicalizationMethod::Topological;
+    const auto &opts_copy = rapid ? rapid_opts : full_opts;
 
     // recursively canonicalize summands ...
     // using for_each and direct access to summands
+    // N.B. summands already in the canonical form that the full pass of
+    // multipass canonicalization produces are left alone by every pass
     sequant::for_each(summands_, [&opts_copy, &rapid, &multipass,
-                                  &summand_full_opts](ExprPtr &summand) {
+                                  &full_opts](ExprPtr &summand) {
       ExprPtr bp;
       if (rapid) {
-        if (multipass && summand->is_canonical(summand_full_opts)) return;
+        if (multipass && summand->is_canonical(full_opts)) return;
         bp = summand->rapid_canonicalize(opts_copy);
       } else {
         bp = summand->canonicalize(opts_copy);
