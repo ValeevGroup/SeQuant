@@ -684,7 +684,7 @@ void WickTheorem<S>::extract_indices() const {
     if (it == ranges::end(*input))
       throw Exception(
           "WickTheorem::extract_indices: the expression input is a Sum without "
-          "a Product summand, its external indices cannot be deduced");
+          "a Product summand, its indices cannot be counted");
     input = *it;
   }
   bool expanded = true;
