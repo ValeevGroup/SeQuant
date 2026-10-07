@@ -160,14 +160,12 @@ std::size_t count_product_canonicalizations(
   }
   return count;
 }
-/// @return a guard that scopes, for every Statistics, a copy of the current
-/// default context (the one for Statistics::Arbitrary) whose canonicalization
-/// options are @p opts
+/// @return a guard that scopes, for every Statistics, a copy of the default
+/// context in effect for it whose canonicalization options are @p opts
 [[nodiscard]] inline auto scoped_canonicalize_options(
     CanonicalizeOptions opts) {
-  auto ctx = get_default_context();
-  ctx.set(std::move(opts));
-  return set_scoped_default_context(ctx);
+  return set_scoped_modified_default_context(
+      [&opts](Context &ctx) { ctx.set(opts); });
 }
 
 }  // namespace sequant::tests
