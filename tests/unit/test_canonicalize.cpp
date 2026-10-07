@@ -1050,6 +1050,31 @@ TEST_CASE("canonicalize_hook_defaults", "[algorithms]") {
   }
 }
 
+// a named index that the network does not contain (e.g. one named for a
+// whole sum, or by the context for a whole computation) does not affect
+// the canonicalization of the network; the lexicographic pass relabels the
+// anonymous indices in the order of the tensors they connect
+TEST_CASE("canonicalize_named_index_absent", "[algorithms]") {
+  using namespace sequant;
+  const auto input = L"t{p_1;m_2} u{m_2;p_3} v{p_4;m_1} w{m_1;p_5}";
+  const auto named = container::set<Index>{Index{L"p_1"}, Index{L"p_3"},
+                                           Index{L"p_4"}, Index{L"p_5"}};
+  auto canonicalized = [&](container::set<Index> named_indices) {
+    auto scope = scoped_canonicalize_options(
+        {.method = CanonicalizationMethod::Lexicographic,
+         .named_indices = std::move(named_indices)});
+    auto e = deserialize(input);
+    canonicalize(e);
+    return e;
+  };
+  const auto expected =
+      deserialize(L"t{p_1;m_1} u{m_1;p_3} v{p_4;m_2} w{m_2;p_5}");
+  REQUIRE(canonicalized(named) == expected);
+  auto with_absent = named;
+  with_absent.emplace(L"p_2");
+  REQUIRE(canonicalized(with_absent) == expected);
+}
+
 TEST_CASE("current_contexts_version", "[algorithms]") {
   using namespace sequant;
   const auto version = current_contexts_version();
