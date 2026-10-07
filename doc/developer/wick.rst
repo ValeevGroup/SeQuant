@@ -8,9 +8,9 @@ extending or debugging that algorithm.
 Configuration
 ----------------
 
-:class:`sequant::WickTheorem` is built from a :class:`sequant::NormalOperatorSequence` (indices assumed external unless stated otherwise)
-or a general :class:`sequant::Expr` (repeated indices assumed dummy), then tuned via a handful of fluent setters before calling
-``compute()``:
+:class:`sequant::WickTheorem` is built from a :class:`sequant::NormalOperatorSequence` or a general :class:`sequant::Expr`; either way
+an index that appears once in the input is external and a repeated one is a dummy, unless the ``Context`` names the external indices
+(see :ref:`context-canonicalization-options`). It is then tuned via a handful of fluent setters before calling ``compute()``:
 
 - ``full_contractions(bool)`` (default ``true``): full contractions only, versus all contractions including partial ones.
 - ``use_topology(bool)`` (default ``true``): treats ``Op``\ s of the same type within a ``NormalOperator``, and — when the input is an
