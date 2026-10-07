@@ -90,7 +90,9 @@ Canonicalization options
 The ``Context`` also carries the :class:`sequant::CanonicalizeOptions` that :func:`sequant::canonicalize`,
 :func:`sequant::simplify` and everything built on them use (``Context::Options::canonicalization_options``,
 ``Context::set(CanonicalizeOptions)``, :func:`sequant::Context::canonicalization_options`): the canonicalization method, which
-indices are *named* (external), and whether the labels of the named indices affect the result. By default the named indices of an
+indices are *named* (external), and whether the labels of the named indices affect the result. Like the rest of the configuration
+they are read from the ``Statistics::Arbitrary`` context only, by canonicalization and by the theorem machinery alike, whatever the
+statistics of the expression. By default the named indices of an
 expression are deduced as those that occur once in it; naming them explicitly makes an index that occurs more than once external,
 which is what the theorem machinery relies on as well: the named indices of the context are the external indices of a
 :class:`sequant::WickTheorem`, the ones it does not sum over (an operator sequence given to it directly follows the same rule: an

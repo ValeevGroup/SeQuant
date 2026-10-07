@@ -70,9 +70,10 @@ class WickTheorem {
  public:
   /// @param input normal operator sequence
   /// @note the external (nonsummed) indices are the named indices of the
-  /// context's CanonicalizeOptions in effect at each use, if it has them
-  /// (name every index that must survive, any other is a dummy), else the
-  /// indices that appear once in the input; see external_indices()
+  /// CanonicalizeOptions of the context (for arbitrary statistics, as read by
+  /// canonicalization) in effect at each use, if it has them (name every index
+  /// that must survive, any other is a dummy), else the indices that appear
+  /// once in the input; see external_indices()
   explicit WickTheorem(
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
