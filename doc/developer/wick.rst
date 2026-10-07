@@ -145,7 +145,8 @@ dispatching ``WickTheorem``'s ``stats()``. Each resulting term then
   ``nop_avoided_connections`` pair are dropped; a factor the theorem produces (a :math:`\gamma`, :math:`\eta`, :math:`\kappa`,
   :math:`\delta` or overlap) connects all the input operators its indices came from, any other tensor (e.g. a coefficient) none.
 
-Finally every ``η`` is optionally rewritten as :math:`\delta - \gamma` (``WickTheorem::eta_as_delta_minus_gamma``), the
+Finally every one-body ``η`` is optionally rewritten as :math:`\delta - \gamma` (``WickTheorem::eta_as_delta_minus_gamma``; a
+multi-body ``η`` of the input is kept), the
 :math:`\delta`\ s over summed indices are applied, and the result is simplified. In it ``γ{ann;cre}`` and ``η{ann;cre}`` are
 one-body, Hermitian and column-symmetric, ``κ{ann…;cre…}`` is of rank :math:`\ge 2`, antisymmetric, Hermitian and
 column-symmetric, and all their indices are active. These symmetries take part in the tensor hash, so a density spelled

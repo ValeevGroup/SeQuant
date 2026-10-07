@@ -155,10 +155,10 @@ class WickTheorem {
     return *this;
   }
 
-  /// Controls whether the next call to compute() spells every hole density η
-  /// as δ - γ; only matters under a Vacuum::MultiProduct vacuum. By default η
-  /// is kept.
-  /// @param edmg if true, will rewrite every η as δ - γ
+  /// Controls whether the next call to compute() spells every one-body hole
+  /// density η as δ - γ; only matters under a Vacuum::MultiProduct vacuum. By
+  /// default η is kept. A multi-body η of the input is kept either way.
+  /// @param edmg if true, will rewrite every one-body η as δ - γ
   /// @return reference to @c *this , for daisy-chaining
   WickTheorem &eta_as_delta_minus_gamma(bool edmg) {
     eta_as_delta_minus_gamma_ = edmg;

@@ -464,14 +464,15 @@ ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
   return result;
 }
 
-/// rewrites every 1-body η of @p expr, a Sum, as δ - γ
+/// rewrites every 1-body η of @p expr, a Sum, as δ - γ; a multi-body η (an
+/// input tensor, since the theorem only produces 1-body ones) is kept
 void rewrite_eta(ExprPtr &expr) {
   expr->visit(
       [](ExprPtr &e) {
         if (e->is<Tensor>() &&
-            e->as<Tensor>().label() == density::hole_rdm_label()) {
+            e->as<Tensor>().label() == density::hole_rdm_label() &&
+            e->as<Tensor>().rank() == 1) {
           const auto &t = e->as<Tensor>();
-          SEQUANT_ASSERT(t.rank() == 1);
           const Index &b = t.bra()[0], &k = t.ket()[0];
           e = make_kronecker(b, k) - density::make_rdm(b, k);
         }

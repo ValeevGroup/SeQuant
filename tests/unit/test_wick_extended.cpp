@@ -791,6 +791,26 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(!has_eta);
   }
 
+  SECTION("WickTheorem: η = δ - γ leaves a multi-body η alone") {
+    // only the one-body η the theorem produces is δ - γ; a multi-body η in
+    // the input (e.g. from an earlier result) is kept as is
+    const auto eta2 = density::make_density(
+        density::hole_rdm_label(), bra{L"u_5", L"u_6"}, ket{L"u_7", L"u_8"});
+    auto in = eta2 * ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"})) *
+              ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}));
+    ExprPtr result;
+    REQUIRE_NOTHROW(result = wick_mp(in, {.eta_as_delta_minus_gamma = true}));
+    std::size_t n_eta1 = 0, n_eta2 = 0;
+    result->visit(
+        [&](const ExprPtr& e) {
+          if (e->is<Tensor>() && e->as<Tensor>().label() == L"η")
+            (e->as<Tensor>().rank() == 1 ? n_eta1 : n_eta2) += 1;
+        },
+        /*atoms_only=*/true);
+    REQUIRE(n_eta1 == 0);
+    REQUIRE(n_eta2 == result->size());
+  }
+
   SECTION("WickTheorem: single-reference limit") {
     // without an active space (reference occupancy == vacuum occupancy)
     // MultiProduct reduces to SingleProduct. The SR registry declares both
