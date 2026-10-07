@@ -2291,16 +2291,14 @@ ExprPtr closed_shell_CC_triplet_spintrace(
   return triplet;
 }
 
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
-                                  ClosedShellCCSpintraceOptions options) {
-  switch (options.multiplicity) {
-    case SpinMultiplicity::Singlet:
-      return closed_shell_CC_singlet_spintrace(expr, options.singlet);
-    case SpinMultiplicity::Triplet:
-      return closed_shell_CC_triplet_spintrace(expr, options.triplet);
-  }
+ExprPtr closed_shell_CC_spintrace(
+    ExprPtr const& expr, ClosedShellCCSingletSpintraceOptions options) {
+  return closed_shell_CC_singlet_spintrace(expr, options);
+}
 
-  SEQUANT_UNREACHABLE;
+ExprPtr closed_shell_CC_spintrace(
+    ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options) {
+  return closed_shell_CC_triplet_spintrace(expr, options);
 }
 
 container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(

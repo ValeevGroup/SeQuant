@@ -354,35 +354,18 @@ struct ClosedShellCCTripletSpintraceOptions {
 ExprPtr closed_shell_CC_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options = {});
 
-/// spin multiplicity of the closed-shell states targeted by
-/// closed_shell_CC_spintrace
-enum class SpinMultiplicity {
-  /// see closed_shell_CC_singlet_spintrace
-  Singlet,
-  /// M_S = 0 triplet, see closed_shell_CC_triplet_spintrace
-  Triplet
-};
+/// @brief Closed-shell singlet spin trace of CC/EOM-CC equations; the type of
+///        @p options selects this overload
+/// @return closed_shell_CC_singlet_spintrace(expr, options)
+ExprPtr closed_shell_CC_spintrace(
+    ExprPtr const& expr, ClosedShellCCSingletSpintraceOptions options = {});
 
-/// controls behavior of closed_shell_CC_spintrace
-struct ClosedShellCCSpintraceOptions {
-  SEQUANT_DESIGNATED_INIT_ONLY;
-  SpinMultiplicity multiplicity = SpinMultiplicity::Singlet;
-  /// used only if multiplicity == SpinMultiplicity::Singlet
-  ClosedShellCCSingletSpintraceOptions singlet = {};
-  /// used only if multiplicity == SpinMultiplicity::Triplet
-  ClosedShellCCTripletSpintraceOptions triplet = {};
-};
-
-/// @brief Closed-shell spin trace of CC/EOM-CC equations onto the spin-trace
-///        path by @p options
-/// @param expr spin-orbital equation; see closed_shell_CC_singlet_spintrace
-///        and closed_shell_CC_triplet_spintrace for the requirements of each
-///        multiplicity
-/// @param options the multiplicity and the options of its spin-tracing path
-/// @return closed_shell_CC_singlet_spintrace(expr, options.singlet) or
-///         closed_shell_CC_triplet_spintrace(expr, options.triplet)
+/// @brief Closed-shell triplet (M_S = 0) spin trace of EOM-CC equations; the
+///        type of @p options selects this overload
+/// @return closed_shell_CC_triplet_spintrace(expr, options)
+/// @throw Exception as documented by closed_shell_CC_triplet_spintrace
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
-                                  ClosedShellCCSpintraceOptions options = {});
+                                  ClosedShellCCTripletSpintraceOptions options);
 
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
