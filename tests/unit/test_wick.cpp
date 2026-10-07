@@ -1070,6 +1070,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_THAT(fixed, EquivalentTo(summed));
   }
 
+  // a second compute() counts the indices of the product again, not those of
+  // the operator sequence that the first one split off from it, in which
+  // every index of the example appears once
+  SECTION("repeated compute agrees") {
+    auto input = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"p_4"}) *
+                 ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"})) *
+                 ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    FWickTheorem wick{input};
+    auto first = wick.compute();
+    REQUIRE_THAT(first,
+                 EquivalentTo(ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"})));
+    auto second = wick.compute();
+    REQUIRE_THAT(second, EquivalentTo(first));
+  }
+
   // an operator sequence is subject to the same rule as an expression: an
   // index that appears twice is a dummy unless the context names it
   SECTION("operator sequence with a repeated index") {

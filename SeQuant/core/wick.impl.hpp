@@ -826,9 +826,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       const auto nop_canonicalization_disabled = disable_nop_canonicalization();
 
       // the input was expanded and may have been canonicalized, so counts
-      // taken by an earlier reduce() describe an input that is gone
-      input_index_counts_.reset();
-      extract_indices();
+      // taken by an earlier reduce() describe an input that is gone; counted
+      // from the product, since input_ holds the operator sequence that an
+      // earlier compute() split off from it
+      extract_indices(*expr_input_);
 
       // split off NormalOperators into input_
       auto first_nop_it = ranges::find_if(
