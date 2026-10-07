@@ -659,6 +659,31 @@ void WickTheorem<S>::extract_indices(const Expr &expr) const {
 }
 
 template <Statistics S>
+void WickTheorem<S>::extract_indices() const {
+  if (input_index_counts_) return;
+  if (input_) return extract_indices(*input_);
+  SEQUANT_ASSERT(expr_input_);
+  // an expression input: its first Product summand if a Sum (every summand of
+  // an expanded Sum has the same external indices), else the expression itself
+  ExprPtr input = expr_input_;
+  if (input->is<Sum>()) {
+    const auto it = ranges::find_if(
+        *input, [](const ExprPtr &summand) { return summand->is<Product>(); });
+    if (it == ranges::end(*input)) return;
+    input = *it;
+  }
+  bool expanded = true;
+  input->visit([&expanded](const ExprPtr &subexpr) {
+    if (subexpr->is<Sum>()) expanded = false;
+  });
+  if (!expanded)
+    throw Exception(
+        "WickTheorem::extract_indices: the input must be expanded (contains a "
+        "Sum as a subexpression)");
+  extract_indices(*input);
+}
+
+template <Statistics S>
 container::set<Index> WickTheorem<S>::external_indices() const {
   const auto &copts = get_default_context().canonicalization_options();
   if (copts && copts->named_indices) return *copts->named_indices;
@@ -744,22 +769,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
-      // deduce the indices from the first Product summand, if not done yet
-      if (!input_index_counts_) {
-        ranges::find_if(summands, [this](const auto &summand) {
-          if (summand.template is<Sum>())  // summands must not be a Sum
-            throw Exception(
-                "WickTheorem<S>::compute(expr): expr is a Sum with one of "
-                "the "
-                "summands also a Sum, WickTheorem can only accept a fully "
-                "expanded Sum");
-          else if (summand.template is<Product>()) {
-            extract_indices(*(summand.template as_shared_ptr<Product>()));
-            return true;
-          } else
-            return false;
-        });
-      }
+      extract_indices();
 
       if (Logger::instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
@@ -798,9 +808,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       // subsequent nop canonicalization
       const auto nop_canonicalization_disabled = disable_nop_canonicalization();
 
-      if (!input_index_counts_) {
-        extract_indices(*(expr_input_.as_shared_ptr<Product>()));
-      }
+      extract_indices();
 
       // split off NormalOperators into input_
       auto first_nop_it = ranges::find_if(
@@ -1294,11 +1302,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
                << to_latex_align(expr, 20, 1) << std::endl;
   }
 
-  // without an input to deduce them from, the indices are those of expr
-  const bool extracted_indices = !input_index_counts_;
-  if (extracted_indices) {
-    extract_indices(*expr);
-  }
+  extract_indices();
 
   const auto ctx = get_default_context_snapshot(S);
   const auto external = external_indices();
@@ -1328,7 +1332,6 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     sequant::wprintf(
         "WickTheorem<S>::reduce: result = ", to_latex_align(expr, 20, 1), "\n");
   }
-  if (extracted_indices) input_index_counts_.reset();
 }
 template <Statistics S>
 WickTheorem<S>::~WickTheorem() {}

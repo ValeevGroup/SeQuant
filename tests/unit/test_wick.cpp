@@ -1121,6 +1121,34 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(*sum->begin() == product);
   }
 
+  // the external indices are deduced from the input, never from the
+  // expression being reduced, whose Kronecker deltas double every external
+  // index: reduce() agrees before and after compute()
+  SECTION("reduce deduces the external indices from the input") {
+    auto input = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"a_1"}) *
+                 ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}));
+    // p_3 is external to the input but appears twice here
+    auto make_term = [] {
+      return ex<Tensor>(L"g", bra{L"p_3"}, ket{L"i_2"}) *
+             ex<Tensor>(reserved::kronecker_label(), bra{L"i_2"}, ket{L"p_3"});
+    };
+    auto fresh = make_term();
+    FWickTheorem{input->clone()}.reduce(fresh);
+    REQUIRE(get_used_indices_with_counts(fresh).contains(Index{L"p_3"}));
+    FWickTheorem wick{input->clone()};
+    wick.full_contractions(false).compute();
+    auto computed = make_term();
+    wick.reduce(computed);
+    REQUIRE(computed == fresh);
+
+    // an expression input that is not expanded cannot be deduced from
+    auto unexpanded = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"a_1"}) *
+                      (ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) +
+                       ex<FNOperator>(cre({L"i_2"}), ann({L"a_1"})));
+    auto term = make_term();
+    REQUIRE_THROWS_AS(FWickTheorem{unexpanded}.reduce(term), Exception);
+  }
+
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
     // default vacuum is already spin-orbital Fermi vacuum

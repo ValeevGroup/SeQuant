@@ -555,6 +555,13 @@ class WickTheorem {
   /// subexpression)
   void extract_indices(const Expr &expr) const;
 
+  ///  counts the index occurrences of the input, if not done yet: of
+  /// the operator sequence, or of the expression (the first Product summand
+  /// of a Sum; every summand of an expanded Sum has the same external
+  /// indices)
+  ///  Exception if the expression input is not expanded
+  void extract_indices() const;
+
   /// @return the external indices: the named indices of the context's
   /// CanonicalizeOptions if it has them, else the indices of the input that
   /// appear once in a nonproto slot or are pure protoindices
@@ -657,9 +664,7 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi vacuum");
 
-    if (!input_index_counts_) {
-      extract_indices(*input_);
-    }
+    extract_indices();
 
     // process cached nop_connections_input_, if needed
     if (!nop_connections_input_.empty())
