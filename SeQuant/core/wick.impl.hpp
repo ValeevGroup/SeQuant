@@ -1309,16 +1309,22 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
   // see compute()
   const auto contexts_in_effect = pin_default_contexts();
 
+  extract_indices();
+  const auto external = external_indices();
+  reduce(expr, external, noncovariant_indices(external),
+         get_default_context_snapshot(S));
+}
+
+template <Statistics S>
+void WickTheorem<S>::reduce(ExprPtr &expr,
+                            const container::set<Index> &external,
+                            const container::set<Index> &noncovariant,
+                            const Context &ctx) const {
   if (Logger::instance().wick_reduce) {
     std::wcout << "WickTheorem<S>::reduce: input = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
 
-  extract_indices();
-
-  const auto ctx = get_default_context_snapshot(S);
-  const auto external = external_indices();
-  const auto noncovariant = noncovariant_indices(external);
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
   if (expr.is<Product>()) {

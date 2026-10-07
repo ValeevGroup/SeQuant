@@ -583,6 +583,13 @@ class WickTheorem {
   container::set<Index> noncovariant_indices(
       const container::set<Index> &external_indices) const;
 
+  /// reduce() with the external indices, the noncovariant indices and the
+  /// context given, for the contraction engine, which derives them once per
+  /// compute() rather than once per term
+  void reduce(ExprPtr &expr, const container::set<Index> &external_indices,
+              const container::set<Index> &noncovariant_indices,
+              const Context &ctx) const;
+
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
   /// @param new_size the number of items in
@@ -757,6 +764,8 @@ class WickTheorem {
           nopseq(nopseq),
           nopseq_size(nopseq.opsize()),
           ctx(get_default_context_snapshot(S)),
+          external_indices(wt.external_indices()),
+          noncovariant_indices(wt.noncovariant_indices(external_indices)),
           level(0),
           left_op_offset(0),
           count_only(false),
@@ -776,8 +785,11 @@ class WickTheorem {
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
     std::size_t nopseq_size;           //!< current size of nopseq
     Context ctx;                       //!< current context
-    Product sp;                        //!< current prefactor
-    std::size_t sp_initial_size = 0;   //!< size of prefactor at the start
+    container::set<Index> external_indices;  //!< external indices of the input
+    container::set<Index>
+        noncovariant_indices;         //!< noncovariant indices of the input
+    Product sp;                       //!< current prefactor
+    std::size_t sp_initial_size = 0;  //!< size of prefactor at the start
     container::svector<std::pair<Op<S>, Op<S>>>
         contractions;  //!< current list of indices of contracted {qpann,qpcre}
                        //!< ops
@@ -1490,7 +1502,8 @@ class WickTheorem {
                         auto prefactor = state.sp.clone();
                         prefactor.template as<Product>().scale(
                             std::move(scalar_prefactor));
-                        this->reduce(prefactor);
+                        this->reduce(prefactor, state.external_indices,
+                                     state.noncovariant_indices, state.ctx);
                         auto bp = prefactor->canonicalize();
                         prefactor *= bp;
 
@@ -1528,7 +1541,8 @@ class WickTheorem {
                             std::move(scalar_prefactor));
                         if (!op->empty()) summand *= std::move(op);
                         if (state.sp_initial_size > 0) {
-                          this->reduce(summand);
+                          this->reduce(summand, state.external_indices,
+                                       state.noncovariant_indices, state.ctx);
                           auto bp = summand->canonicalize();
                           summand *= bp;
                         }
