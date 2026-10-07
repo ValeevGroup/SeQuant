@@ -404,11 +404,18 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       REQUIRE_THAT(screened.at(p), EquivalentTo(unscreened.at(p)));
 
     if (sequant::assert_behavior() != sequant::AssertBehavior::Abort) {
-      REQUIRE_THROWS_AS(CC(1).λ(), Exception);
+      const CC cc(1);
+      REQUIRE_THROWS_AS(cc.λ(), Exception);
+      REQUIRE_THROWS_AS(cc.λʼ(), Exception);
+      REQUIRE_THROWS_AS(cc.tʼ(), Exception);
+      REQUIRE_THROWS_AS(cc.rdm(), Exception);
+      REQUIRE_THROWS_AS(cc.eom_l(nₚ(1), nₕ(1)), Exception);
+      const auto ucc = cc.with([](auto& o) {
+        o.ansatz = CC::Ansatz::U;
+        o.hbar_comm_rank = 1;
+      });
       // the check precedes the dispatch to the UCC EOM path
-      REQUIRE_THROWS_AS(CC(1, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 1})
-                            .eom_r(nₚ(1), nₕ(1)),
-                        Exception);
+      REQUIRE_THROWS_AS(ucc.eom_r(nₚ(1), nₕ(1)), Exception);
     }
   }  // SECTION("reference differs from vacuum")
 
