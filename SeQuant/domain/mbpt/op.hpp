@@ -1409,6 +1409,10 @@ inline bool reference_is_vacuum() {
 
 namespace detail {
 /// @brief Rejects connectivity constraints that ref_av cannot honor
+/// @details The connectivity lists constrain direct contractions only. With
+/// partial contractions, operators can also be connected through the RDMs
+/// (cumulants) of the residual operators, which the lists cannot express, so
+/// they are rejected rather than given a partial meaning.
 /// @param opts the options passed to ref_av
 /// @param full_contractions true if the reference is the Wick vacuum
 /// @pre Called before any screening or operator-label lowering, so invalid

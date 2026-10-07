@@ -214,7 +214,9 @@ The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum ave
 If reference state differs from the Wick vacuum ``sequant::mbpt::op::ref_av`` function should be used instead to
 compute the reference average.
 In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` require
-empty ``connect`` and ``do_not_connect`` lists. ``vac_av`` always computes full contractions and honors these options.
+empty ``connect`` and ``do_not_connect`` lists. These lists constrain direct contractions only, while partial
+contractions can also connect operators through the RDMs (cumulants) of the residual operators, which the lists cannot
+express. ``vac_av`` always computes full contractions and honors these options.
 
 Operator-level connection pairs use labels and apply to every matching pair with the first operator to the left of the
 second. Tensor-level pairs use zero-based normal-operator positions. Both conventions apply to ``connect`` and

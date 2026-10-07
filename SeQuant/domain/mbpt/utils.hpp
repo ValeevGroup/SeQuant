@@ -28,7 +28,7 @@ struct LSTOptions {
   /// commutators [A,B] = AB - BA. The connected-product form is only
   /// equivalent if the caller supplies operator connectivity downstream, hence
   /// the default is the explicit form.
-  /// ref_av honors connectivity only when the reference is the Wick vacuum.
+  /// ref_av rejects connectivity unless the reference is the Wick vacuum.
   bool use_connected_form = false;
   /// If true, will not clone the input expression
   bool skip_clone = false;
