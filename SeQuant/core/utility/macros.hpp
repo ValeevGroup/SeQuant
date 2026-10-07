@@ -121,6 +121,8 @@ void assert_failed(
     std::source_location location = std::source_location::current());
 }  // namespace sequant
 
+// The optional message of SEQUANT_ASSERT and SEQUANT_ENFORCE must be a string
+// literal.
 #define SEQUANT_CHECK_MESSAGE(NAME, EXPR, ...)             \
   #NAME "(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
       " with message '" __VA_ARGS__ "'")
