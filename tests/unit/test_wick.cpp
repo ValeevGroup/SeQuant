@@ -1718,6 +1718,33 @@ TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(to_latex(canonical_result) == to_latex(result));
   }
 
+  // canonicalization replaces a Sum of at most one summand, or a Product of
+  // one factor with a unit scalar, by that term
+  SECTION("a Sum input whose summands cancel") {
+    auto input = make_h1t1() - make_h1t1();
+    REQUIRE(FWickTheorem{input}.compute()->is_zero());
+  }
+
+  SECTION("a Sum input left with one summand") {
+    auto reference = FWickTheorem{ex<Constant>(2) * make_h1t1()}.compute();
+    for (auto input : {make_h1t1() + make_h1t1(),
+                       ex<Sum>(ExprPtrList{ex<Constant>(2) * make_h1t1()})}) {
+      auto result = FWickTheorem{input}.compute();
+      REQUIRE(simplify(result - reference)->is_zero());
+    }
+  }
+
+  SECTION("a Product input of one normal operator") {
+    auto nop = ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    REQUIRE(FWickTheorem{ex<Product>(1, ExprPtrList{nop->clone()})}
+                .compute()
+                ->is_zero());
+    auto result = FWickTheorem{ex<Product>(1, ExprPtrList{nop->clone()})}
+                      .full_contractions(false)
+                      .compute();
+    REQUIRE(simplify(result - nop)->is_zero());
+  }
+
   // relies on the tensor-network rule that a contraction of a symmetric with
   // an antisymmetric pair of slots is zero
   SECTION("symmetric amplitude times antisymmetric operator") {
