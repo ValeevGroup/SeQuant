@@ -1138,6 +1138,22 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
       auto result = wick.compute(true);
     }
 #endif
+
+    // the operators of an expression input must use the context's vacuum,
+    // like those of an operator sequence
+    {
+      auto physical =
+          ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}), Vacuum::Physical) *
+          ex<FNOperator>(cre({L"a_2"}), ann({L"i_2"}), Vacuum::Physical);
+      REQUIRE_THROWS_AS(FWickTheorem{physical}.compute(), Exception);
+      REQUIRE_THROWS_AS(
+          FWickTheorem{
+              ex<FNOperatorSeq>(
+                  FNOperator(cre({L"i_1"}), ann({L"a_1"}), Vacuum::Physical),
+                  FNOperator(cre({L"a_2"}), ann({L"i_2"}), Vacuum::Physical))}
+              .compute(),
+          Exception);
+    }
   }  // SECTION("fermi vacuum")
 
   // t:S ã{a1,a2;i1,i2} is identically zero (a1<->a2 is an automorphism of

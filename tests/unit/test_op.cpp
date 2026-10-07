@@ -132,6 +132,22 @@ TEST_CASE("op", "[elements]") {
         {FNOperator(cre({L"i_1"}), ann({L"i_2"}), Vacuum::Physical),
          FNOperator(cre({L"i_3"}), ann({L"i_4"}), Vacuum::SingleProduct),
          FNOperator(cre({L"i_5"}), ann({L"i_6"}))}));
+    // ... also when appended: an empty sequence adopts the vacuum of the
+    // first operator, later ones must match
+    {
+      FNOperatorSeq appended;
+      REQUIRE_NOTHROW(appended.push_back(
+          FNOperator(cre({L"i_1"}), ann({L"i_2"}), Vacuum::Physical)));
+      REQUIRE(appended.vacuum() == Vacuum::Physical);
+      REQUIRE_THROWS_AS(
+          appended.push_back(
+              FNOperator(cre({L"i_3"}), ann({L"i_4"}), Vacuum::SingleProduct)),
+          Exception);
+      REQUIRE_THROWS_AS(appended.emplace_back(cre({L"i_3"}), ann({L"i_4"}),
+                                              Vacuum::SingleProduct),
+                        Exception);
+      REQUIRE(appended.size() == 1);
+    }
   }
 
   SECTION("equality") {

@@ -1346,15 +1346,17 @@ SECTION("MRSO-MultiProduct") {
       return ex<Tensor>(L"h", bra(b), ket(k), Symmetry::Nonsymm,
                         BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
     };
-    auto check = [](const ExprPtr& x) {
+    // the operators carry the vacuum of the context they are built under,
+    // so the input is built under each
+    auto check = [](auto&& make_x) {
       const auto mp =
-          mbpt::decompositions::cumulants_to_densities(t::ref_av(x));
+          mbpt::decompositions::cumulants_to_densities(t::ref_av(make_x()));
       ExprPtr sp;
       {
         auto sp_ctx = get_default_context();
         sp_ctx.set(Vacuum::SingleProduct);
         auto sp_resetter = set_scoped_default_context(sp_ctx);
-        sp = t::ref_av(x);
+        sp = t::ref_av(make_x());
       }
       // the two paths spell the same sums differently, e.g. h{E;O} vs
       // h{a;O} + h{g;O} + h{u;O}, and η vs δ - γ
@@ -1362,19 +1364,25 @@ SECTION("MRSO-MultiProduct") {
               ex<Constant>(0));
     };
     // one-body
-    check(coeff({p1}, {p2}) * fcrex(p1) * fannx(p2));
+    check([&] { return coeff({p1}, {p2}) * fcrex(p1) * fannx(p2); });
     // two-body: up to κ₂
-    check(coeff({p1, p2}, {p3, p4}) * fcrex(p1) * fcrex(p2) * fannx(p4) *
-          fannx(p3));
+    check([&] {
+      return coeff({p1, p2}, {p3, p4}) * fcrex(p1) * fcrex(p2) * fannx(p4) *
+             fannx(p3);
+    });
     // a two-body times a one-body string: up to κ₃
-    check(coeff({p1, p2, p5}, {p3, p4, p6}) * fcrex(p1) * fcrex(p2) *
-          fannx(p4) * fannx(p3) * fcrex(p5) * fannx(p6));
+    check([&] {
+      return coeff({p1, p2, p5}, {p3, p4, p6}) * fcrex(p1) * fcrex(p2) *
+             fannx(p4) * fannx(p3) * fcrex(p5) * fannx(p6);
+    });
 #ifndef SEQUANT_SKIP_LONG_TESTS
     // two two-body strings: up to κ₄
     const Index p7{L"p_7"}, p8{L"p_8"};
-    check(coeff({p1, p2, p5, p6}, {p3, p4, p7, p8}) * fcrex(p1) * fcrex(p2) *
-          fannx(p4) * fannx(p3) * fcrex(p5) * fcrex(p6) * fannx(p8) *
-          fannx(p7));
+    check([&] {
+      return coeff({p1, p2, p5, p6}, {p3, p4, p7, p8}) * fcrex(p1) * fcrex(p2) *
+             fannx(p4) * fannx(p3) * fcrex(p5) * fcrex(p6) * fannx(p8) *
+             fannx(p7);
+    });
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
   }
 

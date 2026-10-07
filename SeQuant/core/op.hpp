@@ -1176,12 +1176,10 @@ class NormalOperatorSequence
   using access_type::at;
   using access_type::begin;
   using access_type::clear;
-  using access_type::emplace_back;
   using access_type::end;
   using access_type::erase;
   using access_type::insert;
   using access_type::pop_back;
-  using access_type::push_back;
   using access_type::rbegin;
   using access_type::rend;
   using access_type::resize;
@@ -1216,6 +1214,24 @@ class NormalOperatorSequence
   }
 
   Vacuum vacuum() const { return vacuum_; }
+
+  /// appends @p nop; an empty sequence adopts its vacuum
+  /// @throw Exception if @p nop does not use the vacuum of the operators of
+  ///        this
+  void push_back(const NormalOperator<S> &nop) {
+    adopt_vacuum(nop);
+    access_type::push_back(nop);
+  }
+  void push_back(NormalOperator<S> &&nop) {
+    adopt_vacuum(nop);
+    access_type::push_back(std::move(nop));
+  }
+  /// constructs a NormalOperator from @p args and push_back's it
+  template <typename... Args>
+  NormalOperator<S> &emplace_back(Args &&...args) {
+    push_back(NormalOperator<S>(std::forward<Args>(args)...));
+    return base_type::back();
+  }
 
   operator const base_type &() const & { return *this; }
   operator base_type &&() && { return *this; }
@@ -1281,14 +1297,24 @@ class NormalOperatorSequence
                                      return op.vacuum();
                                    }) == this->end();
 
-    if (!all_same_vaccum) {
-      throw Exception(
-          "NormalOperatorSequence expects all constituent "
-          "NormalOperator objects to use same vacuum");
-    }
+    if (!all_same_vaccum) throw mixed_vacua();
 
     vacuum_ =
         size() > 0 ? this->cbegin()->vacuum() : get_default_context(S).vacuum();
+  }
+
+  /// sets vacuum_ to that of @p nop if empty, else checks that they match
+  void adopt_vacuum(const NormalOperator<S> &nop) {
+    if (empty())
+      vacuum_ = nop.vacuum();
+    else if (nop.vacuum() != vacuum_)
+      throw mixed_vacua();
+  }
+
+  static Exception mixed_vacua() {
+    return Exception(
+        "NormalOperatorSequence expects all constituent "
+        "NormalOperator objects to use same vacuum");
   }
 
   bool static_equal(const Expr &that) const override {

@@ -212,6 +212,22 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(simplify(partial - wick_out) == ex<Constant>(0));
   }
 
+  SECTION("WickTheorem: the operators must use the MultiProduct vacuum") {
+    // an operator normal-ordered relative to another vacuum is not a GNO
+    // string; it is rejected rather than reinterpreted
+    for (const auto vacuum : {Vacuum::Physical, Vacuum::SingleProduct}) {
+      auto in = ex<FNOperator>(cre({L"u_1"}), ann({L"u_2"}), vacuum) *
+                ex<FNOperator>(cre({L"u_3"}), ann({L"u_4"}), vacuum);
+      REQUIRE_THROWS_AS(FWickTheorem{in}.compute(), Exception);
+      REQUIRE_THROWS_AS(FWickTheorem{in}.full_contractions(false).compute(),
+                        Exception);
+    }
+    // the elementary-operator spelling of the parser is Physical
+    REQUIRE_THROWS_AS(
+        FWickTheorem{deserialize(L"a{u_1;u_2} a{u_3;u_4}")}.compute(),
+        Exception);
+  }
+
   SECTION("WickTheorem: bosons are not supported") {
     auto in = ex<BNOperator>(cre({L"u_1"}), ann({L"u_2"}), Vacuum::Physical) *
               ex<BNOperator>(cre({L"u_3"}), ann({L"u_4"}), Vacuum::Physical);
