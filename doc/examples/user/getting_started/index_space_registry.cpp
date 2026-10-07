@@ -1,8 +1,11 @@
+#include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
+
+#include <algorithm>
 
 void v1() {
   // start-snippet-1
@@ -53,8 +56,38 @@ void v2() {
   // end-snippet-2
 }
 
+void v3() {
+  // start-snippet-3
+  using namespace sequant;
+  auto isr = mbpt::make_min_sr_spaces();
+  // a basis instance of a registered space can be registered under its own
+  // label: here the localized occupied orbitals as basis instance 1 of the
+  // occupied space i
+  const IndexSpace i = isr->retrieve(L"i");
+  isr->add(L"ĩ", IndexBasis{i, 1});
+  // a Context owns its registry: register everything first, then hand it over
+  // (it is moved in)
+  set_default_context({.index_space_registry_shared_ptr = std::move(isr)});
+  const auto& registry = *get_default_context().index_space_registry();
+  Index loc1(registry.retrieve_basis(L"ĩ"), 1);
+  // same space ...
+  SEQUANT_ASSERT(loc1.space() == i);
+  // ... a specific basis of it
+  SEQUANT_ASSERT(loc1.basis() == IndexBasis(i, 1));
+  // a name is not a space
+  SEQUANT_ASSERT(registry.contains(L"ĩ") &&
+                 registry.retrieve_ptr(L"ĩ") == nullptr);
+  // the space views see i once: the named entry is not a space
+  SEQUANT_ASSERT(
+      std::ranges::count_if(registry.spaces(), [](const IndexSpace& s) {
+        return s.base_key() == L"i";
+      }) == 1);
+  // end-snippet-3
+}
+
 int main() {
   v1();
   v2();
+  v3();
   return 0;
 }

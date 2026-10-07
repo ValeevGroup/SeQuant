@@ -31,7 +31,22 @@ This and other vocabularies commonly used in quantum many-body context are suppo
 Bitset representation of index spaces allows to define set-theoretic operations naturally. Bitset-based representation is used not only for index space *type* attribute (:code:`IndexSpace::Type`) but also for the *quantum numbers* attribute (:code:`IndexSpace::QuantumNumbers`). The latter can be used to represent spin `quantum numbers <https://en.wikipedia.org/wiki/Quantum_number>`_, particle types, etc.
 The main difference of the last example with the original example is that the :code:`make_min_sr_spaces()` factory changes the quantum numbers used by default (:code:`mbpt::Spin::any`) to make spin algebraic manipulations (like tracing out spin degrees of freedom) easier. Users can create their own definitions to suit their needs, but the vast majority of users will not need to venture outside of the predefined vocabularies.
 
-Notice that the set-theoretic operations are only partially automated. It is the user's responsibility to define any and all unions and intersections of base spaces that they may encounter in their context. For this reason :class:`sequant::IndexSpaceRegistry` has its own :code:`add_unIon()` and :code:`add_intersection()` methods that perform error checking to ensure that only registered spaces are defined.
+Notice that the set-theoretic operations are only partially automated. It is the user's responsibility to define any and all unions and intersections of base spaces that they may encounter in their context. For this reason :class:`sequant::IndexBasisRegistry` has its own :code:`add_unIon()` and :code:`add_intersection()` methods that perform error checking to ensure that only registered spaces are defined.
+
+Named basis instances
+~~~~~~~~~~~~~~~~~~~~~~
+
+An :class:`sequant::Index` can run over a specific *basis instance* of its space (see :doc:`../guide/context`). A
+basis instance can be registered under a label of its own with :func:`sequant::IndexBasisRegistry::add`; the entry
+carries its own extent and field. The space views (:func:`sequant::IndexBasisRegistry::spaces`) and the set algebra
+see spaces only; :func:`sequant::IndexBasisRegistry::retrieve` throws on such a label, use
+:func:`sequant::IndexBasisRegistry::retrieve_basis`.
+
+.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
+   :language: cpp
+   :start-after: start-snippet-3
+   :end-before: end-snippet-3
+   :dedent: 2
 
 Quasiparticles
 ~~~~~~~~~~~~~~~

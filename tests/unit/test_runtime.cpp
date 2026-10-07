@@ -63,8 +63,8 @@ TEST_CASE("context", "[runtime]") {
 
     // set distinct contexts for fermi and bose statistics
     auto [fermi_isr, bose_isr] = mbpt::make_fermi_and_bose_spaces();
-    CHECK(fermi_isr->spaces() ==
-          bose_isr->spaces());  // fermi_isr and bose_isr have the same spaces
+    CHECK(fermi_isr->bases() ==
+          bose_isr->bases());  // fermi_isr and bose_isr have the same spaces
     CHECK_NOTHROW(set_default_context(
         {{Statistics::FermiDirac,
           Context({.index_space_registry_shared_ptr = fermi_isr,

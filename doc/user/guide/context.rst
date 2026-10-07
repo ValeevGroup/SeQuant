@@ -10,7 +10,7 @@ index spaces is covered separately in :doc:`Getting started </user/getting_start
 The core ``Context``
 ---------------------
 
-:class:`sequant::Context` bundles the settings that give meaning to an expression: the :class:`sequant::IndexSpaceRegistry` (the
+:class:`sequant::Context` bundles the settings that give meaning to an expression: the :class:`sequant::IndexBasisRegistry` (the
 vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relative to which operators are normal-ordered
 (``Vacuum::Physical`` — the true, particle-free vacuum —, ``Vacuum::SingleProduct`` — a single-determinant quasiparticle vacuum —, or
 ``Vacuum::MultiProduct`` — a general reference state, for which :class:`sequant::WickTheorem` applies the *extended* form of Wick's
@@ -29,7 +29,7 @@ registry, modify the copy and set it on a copy of the context.
 Constructing a ``Context`` from scratch and registering index spaces by hand, as shown in
 :doc:`/user/getting_started/index_spaces`, is the right approach when a custom vocabulary of index spaces is needed. For standard
 quantum-chemistry conventions, :func:`sequant::mbpt::load` is a one-line shortcut: it builds a ready-made
-:class:`sequant::IndexSpaceRegistry` for one of a few common conventions (:class:`sequant::mbpt::Convention` — minimal,
+:class:`sequant::IndexBasisRegistry` for one of a few common conventions (:class:`sequant::mbpt::Convention` — minimal,
 single-reference, multi-reference, F12, ...; :class:`sequant::mbpt::SpinConvention` controls whether/how spin is tracked), sets it
 and ``Vacuum::SingleProduct`` on a copy of the current default context, and installs that copy as the default context:
 

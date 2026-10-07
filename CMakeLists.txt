@@ -371,7 +371,8 @@ set(SeQuant_symb_src
         SeQuant/core/index.hpp
         SeQuant/core/basis.cpp
         SeQuant/core/basis.hpp
-        SeQuant/core/index_space_registry.cpp
+        SeQuant/core/index_basis_registry.cpp
+        SeQuant/core/index_basis_registry.hpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
         SeQuant/core/io/concepts.hpp

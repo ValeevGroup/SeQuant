@@ -282,7 +282,7 @@ make_fermi_and_bose_spaces(SpinConvention spconv) {
   const auto bspin_any = IndexSpace::QuantumNumbers{Spin::any};
   isr->add(L"β", 0b100, bspin_any);  // bose
 
-  auto fermi_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());
+  auto fermi_isr = std::make_shared<IndexSpaceRegistry>(isr->bases());
   fermi_isr->vacuum_occupied_space(L"i");
   fermi_isr->reference_occupied_space(L"i");
   fermi_isr->hole_space(L"i");
@@ -290,7 +290,7 @@ make_fermi_and_bose_spaces(SpinConvention spconv) {
   fermi_isr->complete_space(L"p");
   fermi_isr->physical_particle_attribute_mask(bitset_t(fspin_any));
 
-  auto bose_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());
+  auto bose_isr = std::make_shared<IndexSpaceRegistry>(isr->bases());
   bose_isr->vacuum_occupied_space(IndexSpace::null);
   bose_isr->reference_occupied_space(IndexSpace::null);
   bose_isr->hole_space(IndexSpace::null);

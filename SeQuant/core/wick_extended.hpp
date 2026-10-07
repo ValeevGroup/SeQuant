@@ -18,7 +18,8 @@ namespace sequant {
 template <Statistics S>
 class WickTheorem;
 
-class IndexSpaceRegistry;
+class IndexBasisRegistry;
+using IndexSpaceRegistry = IndexBasisRegistry;
 
 namespace detail {
 
