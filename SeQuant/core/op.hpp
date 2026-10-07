@@ -875,7 +875,9 @@ class NormalOperator : public Operator<S>,
             typename... Args>
   bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
-    ranges::for_each(*this, [&](auto &&op) {
+    // iterated as the vector: the mutable begin()/end() would reset the hash
+    // even if no index changes
+    ranges::for_each(static_cast<vector_type &>(*this), [&](auto &&op) {
       if (op.index().transform(index_map)) mutated = true;
     });
     if (mutated) this->reset_hash_value();
