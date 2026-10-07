@@ -80,8 +80,8 @@ where :math:`b` denotes normal bosonic operators constructed analogously with th
 Extended Wick's theorem
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-With ``Vacuum::MultiProduct`` the reference is a general (e.g. multiconfigurational) state with a definite number of particles, and
-operators, which need not conserve particle number, are normal-ordered relative to it (*generalized normal order*). The same
+With ``Vacuum::MultiProduct`` the reference is a general (e.g. multiconfigurational) state that commutes with the number operator,
+and operators, which need not conserve particle number, are normal-ordered relative to it (*generalized normal order*). The same
 ``WickTheorem`` then evaluates products of such operators into one-body densities :math:`\gamma`, one-body hole densities
 :math:`\eta` and density cumulants :math:`\kappa_k` over the active (partially occupied) orbitals; ``max_cumulant_rank`` bounds the
 rank of the cumulants and ``eta_as_delta_minus_gamma`` spells :math:`\eta` as :math:`\delta - \gamma`:

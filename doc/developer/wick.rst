@@ -96,9 +96,10 @@ order*: strings are normal-ordered so that their reference expectation value van
 contractions (now valued :math:`\gamma` for ``cre·ann`` and :math:`\eta = \delta - \gamma` for ``ann·cre``), *multi-leg* contractions
 of :math:`k \ge 2` creators and :math:`k` annihilators valued by the :math:`k`-body density cumulant :math:`\kappa_k`.
 
-The reference must have a definite particle number: only then does every string with unequal numbers of creators and annihilators
-have a vanishing reference expectation value and cumulant, so that the blocks above are the only multi-leg contractions (a reference
-without one would need anomalous contractions such as :math:`\langle a_p a_q \rangle` as well). Kutzelnigg and Mukherjee define generalized normal order for
+The reference must commute with the number operator (a state of definite particle number, or an ensemble of such states): only
+then does every string with unequal numbers of creators and annihilators have a vanishing reference expectation value and cumulant,
+so that the blocks above are the only multi-leg contractions (a reference that superposes particle numbers, such as a Bogoliubov
+vacuum, would need anomalous contractions such as :math:`\langle a_p a_q \rangle` as well). Kutzelnigg and Mukherjee define generalized normal order for
 number-conserving strings; SeQuant extends it to every string by the same rule, under which a string is the sum, over all sets of
 disjoint internal contractions (pairs and cumulant blocks), of their values times the normal-ordered remainder. Hence
 :math:`\{a_p\} = a_p`, the reference expectation value of every normal-ordered string vanishes, and the theorem holds for products

@@ -50,9 +50,11 @@ namespace sequant {
 ///
 /// Under a Vacuum::MultiProduct default context the operators, which need
 /// not conserve particle number, are normal-ordered relative to a
-/// multideterminantal reference of definite particle number and compute()
-/// applies the extended (generalized-normal-order) theorem, whose result is
-/// expressed in terms of the reference's densities γ, η and cumulants κ.
+/// multideterminantal reference that commutes with the number operator (a
+/// state of definite particle number or an ensemble of such states) and
+/// compute() applies the extended (generalized-normal-order) theorem, whose
+/// result is expressed in terms of the reference's densities γ, η and
+/// cumulants κ.
 ///
 /// @tparam S particle statistics
 template <Statistics S>
