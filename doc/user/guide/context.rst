@@ -166,6 +166,12 @@ copy made by :func:`sequant::get_default_context_snapshot` instead. The copy ref
 completed before the call and is cheap: it shares the index space registry and the canonicalizer configuration with its source, and
 takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
 
+Code that reads the contexts at several points of one operation, as :func:`sequant::canonicalize`, :func:`sequant::simplify` and
+``WickTheorem::compute()`` do, pins them instead with :func:`sequant::pin_default_contexts`: on a thread without scoped contexts the
+returned resetter scopes a copy of the contexts in effect, with their versions, so that a concurrent
+:func:`sequant::set_default_context` is seen only once the pin ends; under scoped contexts, which cannot change under the caller, it
+installs nothing.
+
 Detecting changes
 ----------------------
 
