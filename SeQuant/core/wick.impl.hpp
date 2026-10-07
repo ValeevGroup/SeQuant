@@ -711,6 +711,12 @@ container::set<Index> WickTheorem<S>::noncovariant_indices(
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only,
                                 const bool skip_input_canonicalization) {
+  // the canonicalization options are read from the context at several points
+  // of this call; the contexts in effect are scoped so that every read sees
+  // the same ones even if another thread replaces the process-wide context
+  const auto contexts_in_effect =
+      set_scoped_modified_default_context([](Context &) {});
+
   // canonicalization of the operators produced by WickTheorem would undo
   // what NormalOperator<S>::normalize did, so the returned object scopes a
   // context in which they are not canonicalized; it installs nothing if the
@@ -1297,6 +1303,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
 template <Statistics S>
 void WickTheorem<S>::reduce(ExprPtr &expr) const {
+  // see compute()
+  const auto contexts_in_effect =
+      set_scoped_modified_default_context([](Context &) {});
+
   if (Logger::instance().wick_reduce) {
     std::wcout << "WickTheorem<S>::reduce: input = "
                << to_latex_align(expr, 20, 1) << std::endl;
