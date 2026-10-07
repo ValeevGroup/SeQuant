@@ -105,4 +105,6 @@ to the reference:
    + \bar{\kappa}^{u_1 u_3}_{u_2 u_4} + \gamma^{u_1}_{u_4} \eta^{u_3}_{u_2}
 
 The labels ``γ``, ``η`` and ``κ`` are reserved: build such tensors with the factories in ``SeQuant/core/density.hpp`` (or
-parse them, e.g. ``γ{u_1;u_2}``), which give them their fixed symmetries.
+parse them, e.g. ``γ{u_1;u_2}``), which give them their fixed symmetries. Note that parsing reads the context in effect: a
+parsed ``ã`` takes its vacuum, and a parsed density takes the bra-ket symmetry its field implies, so parse an expression under
+the context it is meant for.
