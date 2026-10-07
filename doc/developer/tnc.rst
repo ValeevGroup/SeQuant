@@ -136,7 +136,8 @@ canonicalizer or comparer object are not tracked (see ``Context::version()``).
 The contract with ``Expr`` types is that every mutation of a node's own data clears its mark: ``Expr::reset_hash_value()`` does so, and
 mutations that do not reset the hash, such as those of the ``Product`` scalar, call ``Expr::reset_canonical_mark()``; a new ``Expr``
 type must do the same in each of its mutators. ``Operator`` and ``NormalOperatorSequence``, which are vectors of their elements, honor
-it by resetting in their mutable element accessors (``operator[]``, ``at``, ``begin``, ``end``, ``push_back``, ``emplace_back``).
+it by resetting in their mutable element accessors and mutators (``operator[]``, ``at``, ``begin``, ``end``, ``rbegin``, ``rend``,
+``push_back``, ``emplace_back``, ``pop_back``, ``insert``, ``erase``, ``clear``, ``resize``).
 Mutation or replacement of a subexpression needs no such call: each node carries a stamp of its own data, and a mark digests the stamps
 of the whole subtree, so merely iterating mutably, as ``visit()`` and ``expand()`` do, leaves marks intact. With assertions enabled,
 checking a mark also revalidates the memoized hash of each leaf, which catches a leaf mutator that resets neither (the memoized hash

@@ -346,6 +346,28 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(nop.hash_value() != nop_hash);
     *nop.begin() = fcre(L"i_1");
     REQUIRE(nop.hash_value() == nop_hash);
+    *nop.rbegin() = fann(L"a_2");
+    REQUIRE(nop.hash_value() != nop_hash);
+    *nop.rbegin() = fann(L"a_1");
+    REQUIRE(nop.hash_value() == nop_hash);
+
+    // and the remaining mutators of the sequence
+    auto op = FOperator{fcre(L"i_1"), fann(L"a_1")};
+    const auto op_hash = op.hash_value();
+    op.pop_back();
+    REQUIRE(op.hash_value() != op_hash);
+    op.insert(op.end(), fann(L"a_1"));
+    REQUIRE(op.hash_value() == op_hash);
+    op.resize(1);
+    REQUIRE(op.hash_value() != op_hash);
+    op.push_back(fann(L"a_1"));
+    REQUIRE(op.hash_value() == op_hash);
+    op.erase(op.begin(), op.end());
+    REQUIRE(op.hash_value() != op_hash);
+    op.insert(op.end(), {fcre(L"i_1"), fann(L"a_1")});
+    REQUIRE(op.hash_value() == op_hash);
+    op.clear();
+    REQUIRE(op.hash_value() != op_hash);
   }
 
   SECTION("hug") {

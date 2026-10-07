@@ -394,6 +394,10 @@ class VectorExprAccess {
   auto begin() { return mutable_vector().begin(); }
   auto end() const { return vector().end(); }
   auto end() { return mutable_vector().end(); }
+  auto rbegin() const { return vector().rbegin(); }
+  auto rbegin() { return mutable_vector().rbegin(); }
+  auto rend() const { return vector().rend(); }
+  auto rend() { return mutable_vector().rend(); }
   void push_back(const typename Vector::value_type &value) {
     mutable_vector().push_back(value);
   }
@@ -403,6 +407,27 @@ class VectorExprAccess {
   template <typename... Args>
   typename Vector::value_type &emplace_back(Args &&...args) {
     return mutable_vector().emplace_back(std::forward<Args>(args)...);
+  }
+  void pop_back() { mutable_vector().pop_back(); }
+  template <typename... Args>
+  auto insert(typename Vector::const_iterator pos, Args &&...args) {
+    return mutable_vector().insert(pos, std::forward<Args>(args)...);
+  }
+  auto insert(typename Vector::const_iterator pos,
+              std::initializer_list<typename Vector::value_type> values) {
+    return mutable_vector().insert(pos, values);
+  }
+  auto erase(typename Vector::const_iterator pos) {
+    return mutable_vector().erase(pos);
+  }
+  auto erase(typename Vector::const_iterator first,
+             typename Vector::const_iterator last) {
+    return mutable_vector().erase(first, last);
+  }
+  void clear() { mutable_vector().clear(); }
+  template <typename... Args>
+  void resize(Args &&...args) {
+    mutable_vector().resize(std::forward<Args>(args)...);
   }
 
  private:
@@ -440,9 +465,16 @@ class Operator
 
   using access_type::at;
   using access_type::begin;
+  using access_type::clear;
   using access_type::emplace_back;
   using access_type::end;
+  using access_type::erase;
+  using access_type::insert;
+  using access_type::pop_back;
   using access_type::push_back;
+  using access_type::rbegin;
+  using access_type::rend;
+  using access_type::resize;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
@@ -1107,9 +1139,16 @@ class NormalOperatorSequence
 
   using access_type::at;
   using access_type::begin;
+  using access_type::clear;
   using access_type::emplace_back;
   using access_type::end;
+  using access_type::erase;
+  using access_type::insert;
+  using access_type::pop_back;
   using access_type::push_back;
+  using access_type::rbegin;
+  using access_type::rend;
+  using access_type::resize;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
