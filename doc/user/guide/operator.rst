@@ -216,7 +216,8 @@ compute the reference average.
 In this case partial contractions leave residual operators that become RDMs, and both overloads of ``ref_av`` require
 empty ``connect`` and ``do_not_connect`` lists. These lists constrain direct contractions only, while partial
 contractions can also connect operators through the RDMs (cumulants) of the residual operators, which the lists cannot
-express. ``vac_av`` always computes full contractions and honors these options.
+express. ``vac_av`` always computes full contractions and honors these options, but it computes the Wick vacuum
+average, which may differ from the reference average.
 
 Operator-level connection pairs use labels and apply to every matching pair with the first operator to the left of the
 second. Tensor-level pairs use zero-based normal-operator positions. Both conventions apply to ``connect`` and
