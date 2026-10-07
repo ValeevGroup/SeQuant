@@ -578,6 +578,19 @@ set_scoped_default_context(Context::Options ctx_options);
 set_scoped_modified_default_context(
     const std::function<void(Context&)>& modify);
 
+/// @brief pins the default contexts in effect for the calling thread
+/// @return a move-only ContextResetter object that scopes a copy of the
+/// default contexts in effect, if the calling thread has none scoped yet, so
+/// that every read of the contexts during its lifetime sees the same ones even
+/// if another thread replaces the process-wide contexts meanwhile; a scoped
+/// context cannot change under the caller, so then nothing is installed and
+/// the object is empty
+/// @note the copies have the versions of the contexts in effect, so canonical
+/// marks made under one are valid under the other
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+pin_default_contexts();
+
 ///@}
 
 /// \name particle, hole and complete space accessors

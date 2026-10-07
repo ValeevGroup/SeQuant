@@ -845,3 +845,33 @@ TEST_CASE("scoped_canonicalize_options", "[runtime]") {
       get_default_context(Statistics::FermiDirac).canonicalization_options() !=
       opts);
 }
+
+// a pin scopes a copy of the contexts in effect, with their versions, that a
+// change of the process-wide contexts made meanwhile does not reach; under a
+// scoped context it installs nothing
+TEST_CASE("pin_default_contexts", "[runtime]") {
+  using namespace sequant;
+  using Contexts = container::map<Statistics, Context>;
+  REQUIRE(detail::implicit_context_overlay<Contexts>() == nullptr);
+  const auto version = current_contexts_version();
+  const auto vacuum = get_default_context().vacuum();
+  const auto other_vacuum =
+      vacuum == Vacuum::Physical ? Vacuum::SingleProduct : Vacuum::Physical;
+  {
+    auto pin = pin_default_contexts();
+    const auto* overlay = detail::implicit_context_overlay<Contexts>();
+    REQUIRE(overlay != nullptr);
+    CHECK(current_contexts_version() == version);
+    auto changed = get_default_context();
+    changed.set(other_vacuum);
+    set_default_context(changed);
+    CHECK(get_default_context().vacuum() == vacuum);
+    auto inner = pin_default_contexts();
+    CHECK(detail::implicit_context_overlay<Contexts>() == overlay);
+  }
+  CHECK(get_default_context().vacuum() == other_vacuum);
+  auto restored = get_default_context();
+  restored.set(vacuum);
+  set_default_context(restored);
+  CHECK(current_contexts_version() == version);
+}

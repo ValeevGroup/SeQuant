@@ -339,6 +339,14 @@ set_scoped_modified_default_context(
   return set_scoped_default_context(std::move(ctxs));
 }
 
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+pin_default_contexts() {
+  if (detail::implicit_context_overlay<container::map<Statistics, Context>>())
+    return {};
+  return set_scoped_modified_default_context([](Context&) {});
+}
+
 Context::Context(Options options)
     : idx_space_reg_(
           options.index_space_registry_shared_ptr
