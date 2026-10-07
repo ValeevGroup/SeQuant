@@ -131,7 +131,8 @@ factors back in afterwards. In that run every operator index is external, so no 
 renamed, which keeps the provenance valid. Topological equivalence needs dummy indices, though, so with ``use_topology`` the
 partitions are computed on the canonicalized term before its shared indices are renamed (renaming leaves every operator at its
 ordinal) and passed to that run with ``set_nop_partitions()``/``set_op_partitions()``; the statistics of the run accumulate in the
-dispatching ``WickTheorem``'s ``stats()``. Each resulting term then
+dispatching ``WickTheorem``'s ``stats()``. The terms of a Sum input are handled one after another, each with its own topology
+analysis, where the standard path contracts them in parallel. Each resulting term then
 
 - has its mixed-space ``γ``/``η`` and surviving operators split into pure pieces: a ``γ`` into a core :math:`\delta` plus an active
   ``γ``, an ``η`` into a virtual :math:`\delta` plus an active ``η``, a survivor onto its active part and, with partial contractions,
