@@ -700,8 +700,20 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
+  /// @throw Exception if @p label is a reserved density label (see
+  ///        reserved::density_labels()) and this lacks its defining symmetries
   void set_label(std::wstring label) override {
-    label_ = std::move(label);
+    if (ranges::contains(reserved::density_labels(), label)) {
+      const auto previous = std::exchange(label_, std::move(label));
+      try {
+        check_density_symmetries();
+      } catch (...) {
+        label_ = previous;
+        throw;
+      }
+    } else {
+      label_ = std::move(label);
+    }
     reset_hash_value();
   }
   /// @return the bra slot range (empty slots are occupied by null indices)
@@ -1018,8 +1030,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       column_symmetry_ = ColumnSymmetry::Symm;
     }
 
-    if (ranges::contains(reserved::density_labels(), label_))
+    if (ranges::contains(reserved::density_labels(), label_)) {
+      // the permutational symmetry of a 1-body density is void; normalizing
+      // it keeps every spelling of the same γ equal
+      if (bra_.size() == 1 && ket_.size() == 1) symmetry_ = Symmetry::Nonsymm;
       check_density_symmetries();
+    }
   }
 
   /// @throw Exception unless this reference density (see

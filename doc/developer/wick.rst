@@ -152,7 +152,8 @@ one-body, Hermitian and column-symmetric, ``κ{ann…;cre…}`` is of rank :math
 column-symmetric, and all their indices are active. These symmetries take part in the tensor hash, so a density spelled
 differently would not merge with the engine's; hence ``γ``, ``η``, ``κ`` and the spin-free ``Γ`` are reserved labels
 (``reserved::density_labels()``): a ``Tensor`` carrying one must have the symmetries ``density::symmetries()`` gives for its
-label and rank, or its constructor throws, and the parser supplies them. The one alternative is a perm-nonsymmetric
+label and rank, or its constructor (and ``set_label``) throws, and the parser supplies them; the permutational symmetry of a
+one-body density is void, so any spelled-out one is accepted and normalized away. The one alternative is a perm-nonsymmetric
 multi-body ``γ``, ``η`` or ``κ``, a spin component such as spin tracing produces. The factories in
 ``SeQuant/core/density.hpp`` build densities with them.
 

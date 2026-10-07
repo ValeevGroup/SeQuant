@@ -780,6 +780,32 @@ TEST_CASE("density labels", "[elements]") {
         Exception);
   }
 
+  SECTION("a rank-1 density's permutational symmetry is immaterial") {
+    // the perm symmetry of a rank-1 tensor is void, so a spelled-out one is
+    // accepted and normalized away rather than rejected: the γ{u1;u2}:A of
+    // old inputs still parses, and equals the factory's γ
+    const auto gamma = density::make_rdm(Index(L"i_1"), Index(L"i_2"));
+    REQUIRE(*deserialize<ExprPtr>(L"γ{i_1;i_2}:A") == *gamma);
+    REQUIRE(*deserialize<ExprPtr>(L"γ{i_1;i_2}:S") == *gamma);
+    REQUIRE(*ex<Tensor>(reserved::rdm_label(), bra{L"i_1"}, ket{L"i_2"},
+                        TensorSymmetries{.perm = Symmetry::Antisymm,
+                                         .hermiticity = Hermiticity::Hermitian,
+                                         .column = ColumnSymmetry::Symm}) ==
+            *gamma);
+    // the other defining symmetries are still required
+    REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"γ{i_1;i_2}:A-N-S"), Exception);
+  }
+
+  SECTION("relabeling a tensor to a density label checks its symmetries") {
+    auto h = Tensor(L"h", bra{L"i_1"}, ket{L"i_2"});
+    REQUIRE_THROWS_AS(h.set_label(reserved::rdm_label()), Exception);
+    auto gamma = density::make_rdm(Index(L"i_1"), Index(L"i_2"))->as<Tensor>();
+    REQUIRE_NOTHROW(gamma.set_label(reserved::hole_rdm_label()));
+    REQUIRE(gamma ==
+            density::make_hole_rdm(Index(L"i_1"), Index(L"i_2"))->as<Tensor>());
+    REQUIRE_NOTHROW(gamma.set_label(L"h"));
+  }
+
   SECTION("deserialization gives a density its defining symmetries") {
     // bra = annihilators = the first index group
     REQUIRE(*deserialize<ExprPtr>(L"γ{i_1;i_2}") ==
