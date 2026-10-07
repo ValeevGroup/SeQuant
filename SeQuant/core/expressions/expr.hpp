@@ -239,9 +239,10 @@ class Expr : public std::enable_shared_from_this<Expr> {
   /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
   virtual ExprPtr rapid_canonicalize(
-      CanonicalizeOptions = CanonicalizeOptions::default_options().copy_and_set(
-          CanonicalizationMethod::Rapid)) {
-    return this->canonicalize({.method = CanonicalizationMethod::Rapid});
+      CanonicalizeOptions opts =
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Rapid)) {
+    return this->canonicalize(opts.copy_and_set(CanonicalizationMethod::Rapid));
   }
 
   /// @param opts the canonicalization options

@@ -1035,6 +1035,20 @@ TEST_CASE("canonicalize_hook_defaults", "[algorithms]") {
     t->as<Tensor>().canonicalize();
     REQUIRE(*t == *expected);
   }
+
+  SECTION("Expr::rapid_canonicalize forwards its options") {
+    auto expected = make_tensor();
+    expected->canonicalize(
+        all_dummy.copy_and_set(CanonicalizationMethod::Rapid));
+    auto deduced = make_tensor();
+    deduced->canonicalize(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizationMethod::Rapid));
+    REQUIRE(*expected != *deduced);
+
+    auto t = make_tensor();
+    t->rapid_canonicalize(all_dummy);
+    REQUIRE(*t == *expected);
+  }
 }
 
 TEST_CASE("current_contexts_version", "[algorithms]") {
