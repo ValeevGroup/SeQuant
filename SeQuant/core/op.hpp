@@ -215,7 +215,7 @@ bool is_pure_qpcreator(const Op<S> &op,
       const auto &target = op.action() == Action::Create
                                ? isr->vacuum_unoccupied_space(sp.qns())
                                : isr->reference_occupied_space(sp.qns());
-      return isr->intersection(sp, target) == sp;
+      return target.type().includes(sp.type());
     }
   }
 
@@ -243,7 +243,7 @@ bool is_qpcreator(const Op<S> &op,
       const auto &target = op.action() == Action::Create
                                ? isr->vacuum_unoccupied_space(sp.qns())
                                : isr->reference_occupied_space(sp.qns());
-      return static_cast<bool>(isr->intersection(sp, target));
+      return static_cast<bool>(sp.type().intersection(target.type()));
     }
   }
 
@@ -300,7 +300,7 @@ bool is_pure_qpannihilator(
       const auto &target = op.action() == Action::Annihilate
                                ? isr->vacuum_unoccupied_space(sp.qns())
                                : isr->reference_occupied_space(sp.qns());
-      return isr->intersection(sp, target) == sp;
+      return target.type().includes(sp.type());
     }
   }
 
@@ -328,7 +328,7 @@ bool is_qpannihilator(const Op<S> &op,
       const auto &target = op.action() == Action::Annihilate
                                ? isr->vacuum_unoccupied_space(sp.qns())
                                : isr->reference_occupied_space(sp.qns());
-      return static_cast<bool>(isr->intersection(sp, target));
+      return static_cast<bool>(sp.type().intersection(target.type()));
     }
   }
 
