@@ -15,6 +15,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/debug.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
 #include <SeQuant/core/utility/scope.hpp>
@@ -708,9 +709,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                       Symmetry::Antisymm) *
            ex<FNOperator>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"}))) *
           ex<FNOperator>(cre({L"a_2"}), ann({}));
+      // the external indices are the context's named indices
+      auto ctx = get_default_context();
+      ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+          container::set<Index>{Index(L"i_1"), Index(L"a_3"), Index(L"a_4"),
+                                Index(L"a_2")}));
+      auto resetter = set_scoped_default_context(ctx);
       auto wick = FWickTheorem{input};
-      wick.set_external_indices(IndexList{L"i_1", L"a_3", L"a_4", L"a_2"})
-          .use_topology(true);
+      wick.use_topology(true);
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
@@ -847,17 +853,13 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                                      FNOperator(cre({L"p_3"}), ann({L"p_4"})),
                                      FNOperator(cre({L"p_5"}), ann({L"p_6"})),
                                      FNOperator(cre({L"p_7"}), ann({L"p_8"})));
-      auto ext_indices = make_indices<std::vector<Index>>(WstrList{
-          L"p_1", L"p_2", L"p_3", L"p_4", L"p_5", L"p_6", L"p_7", L"p_8"});
       auto wick1 = FWickTheorem{opseq};
-      auto result1 = wick1.set_external_indices(ext_indices).compute();
+      auto result1 = wick1.compute();
       REQUIRE(result1->is<Sum>());
       REQUIRE(result1->size() == 9);
       REQUIRE(9 == GWT({1, 1, 1, 1}).result().size());
       auto wick2 = FWickTheorem{opseq};
-      auto result2 = wick2.set_external_indices(ext_indices)
-                         .set_nop_connections({{1, 2}, {1, 3}})
-                         .compute();
+      auto result2 = wick2.set_nop_connections({{1, 2}, {1, 3}}).compute();
       REQUIRE(result2->is<Sum>());
       REQUIRE(result2->size() == 2);
     }
@@ -1010,9 +1012,13 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             ex<FNOperator>(cre({L"i_3", L"i_4"}), ann({L"a_3", L"a_4"})) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
             ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+        auto ctx = get_default_context();
+        ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+            container::set<Index>{Index(L"i_3"), Index(L"i_4"), Index(L"a_3"),
+                                  Index(L"a_4")}));
+        auto resetter = set_scoped_default_context(ctx);
         auto wick = FWickTheorem{input};
-        wick.set_external_indices(IndexList{L"i_3", L"i_4", L"a_3", L"a_4"})
-            .use_topology(topology);
+        wick.use_topology(topology);
         auto result = wick.compute();
         simplify(result);
         results[topology] = result;
@@ -1025,6 +1031,35 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_THAT(results[true], EquivalentTo(results[false]));
       }
     }
+  }
+
+  // an index that the context names is external to the theorem even if it
+  // appears twice, for the canonicalization of the input and of the result as
+  // well as for the reduction
+  SECTION("named indices from the context") {
+    const Index p3(L"p_3"), p4(L"p_4");
+    auto input = ex<Tensor>(L"f", bra{p3}, ket{p4}) *
+                 ex<FNOperator>(cre({p3}), ann({p4})) *
+                 ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    // p_3 and p_4 appear twice, hence are summed over by default
+    auto summed = FWickTheorem{input->clone()}.compute();
+    REQUIRE_THAT(summed,
+                 EquivalentTo(ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"})));
+
+    ExprPtr fixed;
+    {
+      auto ctx = get_default_context();
+      ctx.set(CanonicalizeOptions::default_options().copy_and_set(
+          container::set<Index>{p3}));
+      auto resetter = set_scoped_default_context(ctx);
+      fixed = FWickTheorem{input->clone()}.compute();
+      REQUIRE(get_used_indices_with_counts(fixed).contains(p3));
+      REQUIRE_THAT(fixed, !EquivalentTo(summed));
+    }
+    // summing over p_3 afterwards recovers the summed result
+    FWickTheorem reducer{fixed};
+    reducer.reduce(fixed);
+    REQUIRE_THAT(fixed, EquivalentTo(summed));
   }
 
   SECTION("Expression Reduction") {

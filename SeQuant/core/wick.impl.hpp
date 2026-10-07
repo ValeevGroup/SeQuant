@@ -663,20 +663,18 @@ void WickTheorem<S>::extract_indices(const Expr &expr,
       ranges::views::transform([](const auto &v) { return v.first; }) |
       ranges::to<container::set<Index>>;
 
-  if (!user_defined_external_indices_) {
-    const auto &copts = get_default_context().canonicalization_options();
-    if (copts && copts->named_indices) {
-      external_indices_ = copts->named_indices.value();
-    } else {
-      // external indices either appears once in nonproto slot or is pure
-      // protoindex
-      external_indices_ =
-          idx_counter | ranges::views::filter([force_external](const auto &v) {
-            return v.second.nonproto() <= 1 || force_external;
-          }) |
-          ranges::views::transform([](const auto &v) { return v.first; }) |
-          ranges::to<container::set<Index>>;
-    }
+  // the context's named indices are the external indices; else an external
+  // index either appears once in a nonproto slot or is a pure protoindex
+  const auto &copts = get_default_context().canonicalization_options();
+  if (copts && copts->named_indices) {
+    external_indices_ = copts->named_indices.value();
+  } else {
+    external_indices_ =
+        idx_counter | ranges::views::filter([force_external](const auto &v) {
+          return v.second.nonproto() <= 1 || force_external;
+        }) |
+        ranges::views::transform([](const auto &v) { return v.first; }) |
+        ranges::to<container::set<Index>>;
   }
 
   // covariant indices are indices that do not depend on other indices,

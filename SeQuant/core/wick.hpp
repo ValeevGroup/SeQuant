@@ -163,45 +163,12 @@ class WickTheorem {
     return *this;
   }
 
-  /// Specifies the external indices; by default assume all indices are summed
-  /// over
-  /// @param external_indices external (nonsummed) indices
-  /// @throw Exception if WickTheorem::set_external_indices or
-  /// WickTheorem::compute had already been invoked
-  template <typename IndexContainer>
-  WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    external_indices_.reset();
-
-    if constexpr (std::is_convertible_v<
-                      IndexContainer,
-                      typename decltype(external_indices_)::value_type>)
-      external_indices_ = std::forward<IndexContainer>(external_indices);
-    else {
-      external_indices_ = typename decltype(external_indices_)::value_type{};
-      ranges::for_each(
-          std::forward<IndexContainer>(external_indices), [this](auto &&v) {
-            auto [it, inserted] = this->external_indices_->emplace(v);
-            if (!inserted) {
-              std::wstringstream ss;
-              ss << L"WickTheorem::set_external_indices: "
-                    L"external index " +
-                        io::latex::to_string(Index(v)) + L" repeated";
-              throw Exception(toUtf8(ss.str()));
-            }
-          });
-    }
-
-    user_defined_external_indices_ = true;
-    return *this;
-  }
-
   /// Resets the memoized (external, covariant) indices; will auto-deduce next
   /// time reduce is called
   const WickTheorem &reset_indices() const {
     all_indices_.reset();
     external_indices_.reset();
     noncovariant_indices_.reset();
-    user_defined_external_indices_ = false;
     return *this;
   }
 
@@ -478,7 +445,6 @@ class WickTheorem {
   mutable Stats stats_;
 
   mutable std::optional<container::set<Index>> all_indices_;
-  mutable bool user_defined_external_indices_ = false;
   mutable std::optional<container::set<Index>> external_indices_;
   // covariant indices (= dummy indices that appear twice in braket slots) can
   // be "rotated" arbitrarily in reduce ... these are the ones that can't
