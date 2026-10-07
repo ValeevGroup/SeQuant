@@ -2575,3 +2575,35 @@ TEST_CASE("triplet_generic_perms", "[spin][triplet]") {
   require_normalized(2, 3.0 / 4.0);  // {3/4, -1/4, -1/4, -1/4}
   require_normalized(3, 1.0 / 4.0);  // w10[m]/20, identity op weight 5/20
 }
+TEST_CASE("closed_shell_CC_spintrace_calls", "[spin]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+
+  SECTION("singlet") {
+    const auto expr = deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                                  {.def_perm_symm = Symmetry::Antisymm});
+    REQUIRE_THAT(closed_shell_CC_spintrace(expr),
+                 EquivalentTo(closed_shell_CC_singlet_spintrace(expr)));
+    REQUIRE_THAT(closed_shell_CC_spintrace(
+                     expr, {.method = BiorthogonalizationMethod::V1}),
+                 EquivalentTo(closed_shell_CC_singlet_spintrace_v1(expr)));
+
+    // closed_shell_CC_spintrace(expr, {.multiplicity =
+    // SpinMultiplicity::Singlet,
+    //                          .triplet = {.compact = false}});
+  }
+
+  SECTION("triplet") {
+    const auto expr =
+        deserialize(std::wstring(L"Â{i_1,i_2,i_3;a_1,a_2,a_3} * f{a_4;a_1} * "
+                                 L"R{i_1,i_2,i_3;a_4,a_2,a_3}"),
+                    {.def_perm_symm = Symmetry::Nonsymm});
+    REQUIRE_THAT(closed_shell_CC_spintrace(expr, {.compact = false}),
+                 EquivalentTo(closed_shell_CC_triplet_spintrace(
+                     expr, {.compact = false})));
+  }
+}
