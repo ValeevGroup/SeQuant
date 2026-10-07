@@ -115,6 +115,9 @@ class WickTheorem {
     input_ = {};  // reset input_ so that it is deduced from expr_input_
     // copy ctor does not do anything useful, so this is OK
     expr_input_ = expr_input;
+    // counted from expr_input_, not from other's input: its external indices
+    // are the same, but which of its dummies are noncovariant is not
+    input_index_counts_.reset();
     reset_stats();
   }
 

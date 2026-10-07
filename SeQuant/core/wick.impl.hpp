@@ -775,8 +775,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
-      extract_indices();
-
       if (Logger::instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
                    << summands.size()
