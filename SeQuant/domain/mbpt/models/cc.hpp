@@ -138,6 +138,7 @@ class CC {
   ///   - `HbarExpansion::Bernoulli` returns a tensor-level expression for use
   ///     with `op::tensor` projectors and `op::tensor::ref_av`. It never
   ///     reaches `CC::ref_av`, so `screen` and `use_topology` have no effect.
+  /// @pre for `HbarExpansion::Bernoulli`, the reference is the Wick vacuum
   /// @warning A connected-product H̄ is not self-contained.
   ///   Evaluating it with empty connectivity, e.g.
   ///   `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,

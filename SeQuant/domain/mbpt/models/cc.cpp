@@ -109,8 +109,12 @@ ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   const auto truncation =
       truncation_rank.value_or(opts_.hbar_comm_rank.value_or(4));
 
-  if (opts_.hbar_expansion == HbarExpansion::Bernoulli)
+  if (opts_.hbar_expansion == HbarExpansion::Bernoulli) {
+    SEQUANT_ENFORCE(reference_is_vacuum(),
+                    "CC::hbar: the Bernoulli expansion requires the reference "
+                    "to be the Wick vacuum");
     return bernoulli::hbar(N, truncation, skip_singles());
+  }
 
   // Connected products require connectivity enforced by ref_av, so
   // lst_options() uses explicit commutators when the reference differs from

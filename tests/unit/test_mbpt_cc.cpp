@@ -416,6 +416,12 @@ TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
       });
       // the check precedes the dispatch to the UCC EOM path
       REQUIRE_THROWS_AS(ucc.eom_r(nₚ(1), nₕ(1)), Exception);
+      REQUIRE_THROWS_AS(ucc.with([](auto& o) {
+                             o.hbar_expansion = CC::HbarExpansion::Bernoulli;
+                           })
+                            .energy(),
+                        Exception);
+      REQUIRE_THROWS_AS(bernoulli::hbar(1, 1, false), Exception);
     }
   }  // SECTION("reference differs from vacuum")
 
