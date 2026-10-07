@@ -150,6 +150,12 @@ TEST_CASE("mbpt_operator_type_id", "[mbpt]") {
 }
 
 TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
+  SECTION("cardinal tensor labels") {
+    // every reference density label sorts as a cardinal label
+    for (const auto& label : sequant::reserved::density_labels())
+      REQUIRE(ranges::contains(sequant::mbpt::cardinal_tensor_labels(), label));
+  }
+
   SECTION("registry") {
     using namespace sequant::mbpt;
 

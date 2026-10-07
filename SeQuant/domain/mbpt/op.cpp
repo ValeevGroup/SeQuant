@@ -30,6 +30,7 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           reserved::transposition_label(),
           L"κ",
           L"γ",
+          L"η",
           L"Γ",
           L"L",
           L"λ",
