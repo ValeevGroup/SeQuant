@@ -44,6 +44,14 @@ default_index_pair_comparer() {
 
 std::atomic<std::uint64_t> last_context_version{0};
 
+/// @return @p registry if it is the only owner of its object, else a copy of
+/// the object, so that a Context holds the only owners of its registry
+std::shared_ptr<const IndexSpaceRegistry> owned(
+    std::shared_ptr<const IndexSpaceRegistry> registry) {
+  if (!registry || registry.use_count() == 1) return registry;
+  return std::make_shared<const IndexSpaceRegistry>(*registry);
+}
+
 void check_tensor_canonicalizer(
     const std::shared_ptr<TensorCanonicalizer>& canonicalizer) {
   if (!canonicalizer)
@@ -83,7 +91,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
   // a Context need not have a registry
   auto same_registry = [](const auto& r1, const auto& r2) {
     if (!r1 || !r2) return !r1 && !r2;
-    return r1->spaces() == r2->spaces() && *r1 == *r2;
+    return *r1 == *r2;
   };
   if (&ctx1 == &ctx2)
     return true;
@@ -204,7 +212,7 @@ void set_default_context(Context ctx, Statistics s) {
 }
 
 void set_default_context(Context::Options ctx_opts, Statistics s) {
-  return set_default_context(Context(ctx_opts), s);
+  return set_default_context(Context(std::move(ctx_opts)), s);
 }
 
 void set_default_context(const container::map<Statistics, Context>& ctxs) {
@@ -268,9 +276,9 @@ set_scoped_modified_default_context(
 Context::Context(Options options)
     : idx_space_reg_(
           options.index_space_registry_shared_ptr
-              ? std::move(options.index_space_registry_shared_ptr)
+              ? owned(std::move(options.index_space_registry_shared_ptr))
               : (options.index_space_registry.has_value()
-                     ? std::make_shared<IndexSpaceRegistry>(
+                     ? std::make_shared<const IndexSpaceRegistry>(
                            std::move(options.index_space_registry.value()))
                      : nullptr)),
       vacuum_(options.vacuum),
@@ -311,14 +319,6 @@ Context::Context(Options options)
   bump_version();
 }
 
-Context Context::clone() const {
-  Context ctx(*this);
-  ctx.idx_space_reg_ =
-      std::make_shared<IndexSpaceRegistry>(idx_space_reg_->clone());
-  ctx.bump_version();
-  return ctx;
-}
-
 std::uint64_t Context::version() const { return version_; }
 
 Context::TensorCanonicalizers& Context::mutable_tensor_canonicalizers() {
@@ -339,11 +339,6 @@ std::uint64_t current_context_version(Statistics s) {
 Vacuum Context::vacuum() const { return vacuum_; }
 
 std::shared_ptr<const IndexSpaceRegistry> Context::index_space_registry()
-    const {
-  return idx_space_reg_;
-}
-
-std::shared_ptr<IndexSpaceRegistry> Context::mutable_index_space_registry()
     const {
   return idx_space_reg_;
 }
@@ -437,13 +432,13 @@ Context& Context::set(Vacuum vacuum) {
 }
 
 Context& Context::set(IndexSpaceRegistry ISR) {
-  idx_space_reg_ = std::make_shared<IndexSpaceRegistry>(ISR);
+  idx_space_reg_ = std::make_shared<const IndexSpaceRegistry>(std::move(ISR));
   bump_version();
   return *this;
 }
 
-Context& Context::set(std::shared_ptr<IndexSpaceRegistry> ISR) {
-  idx_space_reg_ = std::move(ISR);
+Context& Context::set(std::shared_ptr<const IndexSpaceRegistry> ISR) {
+  idx_space_reg_ = owned(std::move(ISR));
   bump_version();
   return *this;
 }

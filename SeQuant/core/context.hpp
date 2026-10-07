@@ -25,7 +25,11 @@ namespace sequant {
 /// SeQuant context contains the following information:
 /// - a IndexSpaceRegistry object: contains information about the known
 ///   IndexSpace objects and their attributes; managed by shared_ptr and
-///   can be shared by multiple contexts.
+///   shared by the copies of a context. A context owns its registry: it moves
+///   or copies in a registry it is given, and adopts a shared_ptr to one only
+///   if that is the registry's only owner, so the registry cannot change
+///   while any context uses it (short of what
+///   Context::set(std::shared_ptr<const IndexSpaceRegistry>) warns about).
 /// - `vacuum`: the vacuum state used to define normal ordering of
 /// `NormalOperator`s
 /// - `metric`: whether the plain basis of vector space (ket) modes are
@@ -100,9 +104,9 @@ class Context {
   /// see the Context documentation for detailed description
   struct Options {
     SEQUANT_DESIGNATED_INIT_ONLY;
-      /// a shared_ptr to an IndexSpaceRegistry object
-      std::shared_ptr<IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
-      /// an IndexSpaceRegistry object; used if index_space_registry_shared_ptr is null and it is nonnull
+      /// a shared_ptr to an IndexSpaceRegistry object; the Context adopts it if it is the only owner of the object (e.g. a temporary or a moved-from shared_ptr), else copies the object; see the warning of Context::set(std::shared_ptr<const IndexSpaceRegistry>)
+      std::shared_ptr<const IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
+      /// an IndexSpaceRegistry object, moved into the Context; used if index_space_registry_shared_ptr is null and it is nonnull
       std::optional<IndexSpaceRegistry> index_space_registry = std::nullopt;
       /// the Vacuum object
       Vacuum vacuum = Defaults::vacuum;
@@ -157,20 +161,14 @@ class Context {
 
   /// copy constructor
   /// @param[in] ctx a Context
-  /// @warning created Context uses the same index space registry as @p ctx
-  /// @sa clone()
+  /// @note created Context uses the same index space registry as @p ctx
   Context(const Context& ctx) = default;
 
   /// copy assignment
   /// @param[in] ctx a Context
-  /// @warning this object will use the same index space registry as @p ctx
-  /// @sa clone()
+  /// @note this object will use the same index space registry as @p ctx
   /// @return reference to this object
   Context& operator=(const Context& ctx) = default;
-
-  /// clones this object AND its index space registry
-  /// @note created Context does not use this object's index space registry
-  Context clone() const;
 
   // no move operations, so that an rvalue is copied: a copy is cheap (it
   // shares the registry and the canonicalizer configuration), and a moved-from
@@ -178,14 +176,13 @@ class Context {
 
   /// @return the version of this context: a nonzero number, unique among all
   /// versions ever assigned in this process, that changes whenever the context
-  /// is constructed, cloned or modified through a setter (including the
+  /// is constructed or modified through a setter (including the
   /// `Options` constructor); copies keep the version of their source
   /// @note the version identifies a context and its copies, not its content:
   /// contexts that compare equal may have different versions (e.g. two
   /// default-constructed ones), so code that caches results keyed on the
   /// version recomputes them more often than strictly necessary
-  /// @note the version does not track in-place mutation of an
-  /// IndexSpaceRegistry shared with other contexts, nor of a
+  /// @note the version does not track in-place mutation of a
   /// TensorCanonicalizer or comparer object that this context refers to
   std::uint64_t version() const;
 
@@ -194,10 +191,8 @@ class Context {
   /// @return a constant pointer to the IndexSpaceRegistry for this context
   /// @warning can be null when user did not provide one to Context (i.e., it
   /// was default constructed)
+  /// @note the registry does not change; to change it, set a modified copy
   std::shared_ptr<const IndexSpaceRegistry> index_space_registry() const;
-  /// @return a pointer to the IndexSpaceRegistry for this context.
-  /// @throw Exception if the IndexSpaceRegistry is null
-  std::shared_ptr<IndexSpaceRegistry> mutable_index_space_registry() const;
   /// \return IndexSpaceMetric of this context
   IndexSpaceMetric metric() const;
   /// \return true if strict bra-ket symmetry is asserted;
@@ -274,13 +269,23 @@ class Context {
   /// \return ref to `*this`, for chaining
   Context& set(Vacuum vacuum);
   /// sets the IndexSpaceRegistry for this context
-  /// \param ISR an IndexSpaceRegistry
+  /// \param ISR an IndexSpaceRegistry, moved into this context
   /// \return ref to '*this' for chaining
+  /// \sa the warning of set(std::shared_ptr<const IndexSpaceRegistry>)
   Context& set(IndexSpaceRegistry ISR);
   /// sets the IndexSpaceRegistry for this context
-  /// \param ISR a IndexSpaceRegistry shared_ptr
+  /// \param ISR a IndexSpaceRegistry shared_ptr; adopted if it is the only
+  /// owner of its object (e.g. a temporary or a moved-from shared_ptr), else
+  /// the object is copied
   /// \return ref to '*this' for chaining
-  Context& set(std::shared_ptr<IndexSpaceRegistry> ISR);
+  /// \warning a registry that is adopted or moved in is the caller's object,
+  /// and whatever else the caller kept that reaches it still does: a pointer
+  /// or reference to it or into it (e.g. from the non-const
+  /// IndexSpaceRegistry::retrieve_ptr()), a std::weak_ptr to it, or a
+  /// shared_ptr that does not own it (e.g. one with a no-op deleter), which
+  /// cannot be told from its only owner. Modifying the registry through any
+  /// of these goes unnoticed by the contexts that hold it.
+  Context& set(std::shared_ptr<const IndexSpaceRegistry> ISR);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
   /// \return ref to `*this`, for chaining
@@ -383,7 +388,7 @@ class Context {
 
   std::uint64_t version_ = 0;
 
-  std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
+  std::shared_ptr<const IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
   IndexSpaceMetric metric_ = Defaults::metric;
   bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
@@ -406,10 +411,9 @@ class Context {
 /// \param ctx1
 /// \param ctx2
 /// \return true if \p ctx1 and \p ctx2 are equal
-/// \note index space registries are equal only if they share their set of
-/// index spaces, as copies of one registry do (registries with equal but
-/// separately created sets compare unequal); contexts without a registry are
-/// equal in that respect; cardinal tensor labels are compared by value;
+/// \note index space registries and cardinal tensor labels are compared by
+/// value (contexts without a registry are equal in that respect), the
+/// registries including the approximate sizes and fields of their spaces;
 /// tensor canonicalizers and index comparers by identity, hence
 /// a comparer replaced by a behaviourally identical one compares unequal
 /// (re-install a comparer through its shared pointer, e.g.

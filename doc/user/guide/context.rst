@@ -17,6 +17,13 @@ vocabulary of index spaces in use, e.g. occupied/virtual), the ``Vacuum`` relati
 owns the :ref:`canonicalizer configuration <context-canonicalizer-configuration>`. It is accessed and replaced through
 :func:`sequant::get_default_context`, :func:`sequant::set_default_context`, and :func:`sequant::reset_default_context`.
 
+A ``Context`` owns its registry, which its copies share and which cannot change while any context uses it: a registry given by value
+is moved or copied in, and one given by ``std::shared_ptr`` is adopted if that is its only owner (e.g. a temporary, such as the result
+of :func:`sequant::mbpt::make_sr_spaces`, or a moved-from pointer) and copied otherwise. Modifying a registry after giving it to a
+context therefore does not affect the context, unless the registry was moved in or adopted and the caller kept another way to reach
+it, such as a pointer to one of its spaces (see the warning of ``Context::set``). To change the registry of a context, copy the
+registry, modify the copy and set it on a copy of the context.
+
 Constructing a ``Context`` from scratch and registering index spaces by hand, as shown in
 :doc:`/user/getting_started/index_spaces`, is the right approach when a custom vocabulary of index spaces is needed. For standard
 quantum-chemistry conventions, :func:`sequant::mbpt::load` is a one-line shortcut: it builds a ready-made
@@ -142,9 +149,9 @@ Detecting changes
 ----------------------
 
 Every ``Context`` has a version (:func:`sequant::Context::version`): a nonzero number, unique within the process, that changes whenever
-the context is constructed, cloned or modified through one of its setters. :func:`sequant::current_context_version` returns the
+the context is constructed or modified through one of its setters. :func:`sequant::current_context_version` returns the
 version of the context in effect on the calling thread, which lets code that caches results derived from the context tell that the
-cache is stale. The version tracks changes made through the ``Context`` interface; it does not track in-place mutation of an
-:class:`sequant::IndexSpaceRegistry` shared with other contexts, nor of a canonicalizer or comparer object that the context refers to.
+cache is stale. The version tracks changes made through the ``Context`` interface; it does not track in-place mutation of a
+canonicalizer or comparer object that the context refers to.
 It identifies a context and its copies rather than their content: contexts that compare equal, such as two default-constructed ones,
 may have different versions, so a cache keyed on the version can be invalidated without need, but never kept stale.

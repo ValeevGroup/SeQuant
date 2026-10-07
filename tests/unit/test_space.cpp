@@ -109,6 +109,27 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(sr_isr->retrieve(L"i") == sr_isr->retrieve(L"i"));
     REQUIRE(sr_isr->retrieve(L"i") == IndexSpace(L"i"));
     REQUIRE(sr_isr->retrieve(L"i") != sr_isr->retrieve(L"a"));
+
+    // registries compare their space specifications as well as their spaces
+    REQUIRE(*sr_isr == IndexSpaceRegistry(*sr_isr));
+    IndexSpaceRegistry other_hole = *sr_isr;
+    other_hole.hole_space(L"o");
+    REQUIRE(other_hole != *sr_isr);
+    IndexSpaceRegistry other_mask = *sr_isr;
+    other_mask.physical_particle_attribute_mask(bitset::null);
+    REQUIRE(other_mask != *sr_isr);
+
+    // ... and the approximate sizes and fields of their spaces, which
+    // IndexSpace equality ignores
+    IndexSpaceRegistry other_size = *sr_isr;
+    other_size.retrieve_ptr(L"i")->approximate_size(
+        sr_isr->retrieve(L"i").approximate_size() + 1);
+    REQUIRE(other_size.retrieve(L"i") == sr_isr->retrieve(L"i"));
+    REQUIRE(other_size != *sr_isr);
+    IndexSpaceRegistry other_field = *sr_isr;
+    other_field.retrieve_ptr(L"i")->field(Field::Real);
+    REQUIRE(sr_isr->retrieve(L"i").field() == Field::Complex);
+    REQUIRE(other_field != *sr_isr);
   }
 
   SECTION("ordering") {
@@ -210,6 +231,29 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(f12_base_spaces_sf[2].base_key() == L"a");
     REQUIRE(f12_base_spaces_sf[3].base_key() == L"g");
     REQUIRE(f12_base_spaces_sf[4].base_key() == L"α'");
+
+    // assignment, hence clear(), replaces the memoized base spaces
+    const auto sr_base_space_types =
+        sequant::mbpt::make_sr_spaces()->base_space_types();
+    REQUIRE(sr_base_space_types.size() == 4);
+    *isr = *sequant::mbpt::make_sr_spaces();
+    REQUIRE(isr->base_space_types() == sr_base_space_types);
+    isr->clear();
+    REQUIRE(isr->base_space_types().empty());
+    REQUIRE(isr->base_spaces().empty());
+
+    // a registry that was moved from memoizes none of the spaces it gave up
+    IndexSpaceRegistry moved_from = *sequant::mbpt::make_sr_spaces();
+    REQUIRE(moved_from.base_space_types() == sr_base_space_types);
+    REQUIRE(!moved_from.base_spaces().empty());
+    IndexSpaceRegistry moved_to = std::move(moved_from);
+    REQUIRE(moved_from.base_space_types().empty());
+    REQUIRE(moved_from.base_spaces().empty());
+    REQUIRE(moved_to.base_space_types() == sr_base_space_types);
+    moved_from = std::move(moved_to);
+    REQUIRE(moved_to.base_space_types().empty());
+    REQUIRE(moved_to.base_spaces().empty());
+    REQUIRE(moved_from.base_space_types() == sr_base_space_types);
   }
 
   SECTION("AO spaces") {

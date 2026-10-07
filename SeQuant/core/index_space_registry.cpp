@@ -24,12 +24,4 @@ IndexSpace::QuantumNumbers IndexSpaceRegistry::other_attributes(
   return to_bitset(qn) & ~physical_particle_attribute_mask_;
 }
 
-IndexSpaceRegistry IndexSpaceRegistry::clone() const {
-  IndexSpaceRegistry result(*this);
-  result.spaces_ =
-      std::make_shared<container::set<IndexSpace, IndexSpace::KeyCompare>>(
-          *spaces_);
-  return result;
-}
-
 }  // namespace sequant

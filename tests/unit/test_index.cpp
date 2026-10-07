@@ -418,31 +418,29 @@ TEST_CASE("index", "[elements][index]") {
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
 
-    // following tests mutate index space registry, so clone the context
-    auto ctx_resetter =
-        set_scoped_default_context(get_default_context().clone());
-
     // a good test of adding new indices to the registry
-    IndexSpace ar(
-        L"a→",
-        get_default_context().index_space_registry()->retrieve(L"a").type());
-    get_default_context().mutable_index_space_registry()->add(ar);
-    Index a1_r(L"a→_1", {i1, i2});
-    std::wstring a1_r_str = to_latex(a1_r);
-    REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
-    get_default_context().mutable_index_space_registry()->remove(L"a→");
-
-    auto registry = get_default_context().mutable_index_space_registry();
-
-    if (!registry->contains(L"μ̃")) {
-      auto uocc_space = registry->particle_space(/* nulltype_ok = */ false);
-      registry->add(
-          IndexSpace{L"μ̃", uocc_space, mbpt::LCAOQNS::pao})  // OBS PAO
-          ;
-      if (!registry->contains(L"f̌"))
-        registry->add(IndexSpace{L"f̌", registry->retrieve(L"μ̃").type(),
-                                 mbpt::LCAOQNS::ao});
+    {
+      IndexSpaceRegistry registry =
+          *get_default_context().index_space_registry();
+      registry.add(IndexSpace(L"a→", registry.retrieve(L"a").type()));
+      const auto ctx_resetter = set_scoped_default_context(
+          get_default_context_snapshot().set(std::move(registry)));
+      Index a1_r(L"a→_1", {i1, i2});
+      std::wstring a1_r_str = to_latex(a1_r);
+      REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
     }
+
+    IndexSpaceRegistry registry = *get_default_context().index_space_registry();
+    if (!registry.contains(L"μ̃")) {
+      auto uocc_space = registry.particle_space(/* nulltype_ok = */ false);
+      registry.add(IndexSpace{L"μ̃", uocc_space, mbpt::LCAOQNS::pao})  // OBS PAO
+          ;
+      if (!registry.contains(L"f̌"))
+        registry.add(IndexSpace{L"f̌", registry.retrieve(L"μ̃").type(),
+                                mbpt::LCAOQNS::ao});
+    }
+    const auto ctx_resetter = set_scoped_default_context(
+        get_default_context_snapshot().set(std::move(registry)));
 
     REQUIRE(Index(L"μ̃_1").to_latex() == L"{\\tilde{\\mu}_1}");
     REQUIRE(Index(L"f̌_22").to_latex() == L"{\\check{f}_{22}}");
