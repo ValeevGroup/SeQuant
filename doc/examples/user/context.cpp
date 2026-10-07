@@ -54,11 +54,13 @@ int main() {
 
   // start-snippet-5
   // the Context also owns the canonicalizer configuration: within the scope,
-  // tensors labeled "A" are not reordered (hence no phase is produced) when a
-  // product is canonicalized; a lone Tensor::canonicalize() would use the
-  // canonicalizer of the empty label instead
+  // tensors labeled "A" are canonicalized by the null canonicalizer, so their
+  // slots keep the order the graph-based canonicalization of the product gives
+  // them, here the input order (hence no phase is produced); a lone
+  // Tensor::canonicalize() would use the canonicalizer of the empty label
+  // instead
   auto make_product = [] {
-    return ex<Tensor>(L"A", bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"},
+    return ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
                       Symmetry::Antisymm) *
            ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_3"});
   };

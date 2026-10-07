@@ -141,13 +141,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
               "Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
     }
     {  // Azam's example:
-      // two intermediates that are equivalent modulo permutation of columns of
-      // named indices. as of https://github.com/ValeevGroup/SeQuant/pull/349
-      // canonicalization does not recognize them as identical because by
-      // default named index labels are ignored (this is done to make canonical
-      // TNs to be independent of external index renamings). However in
-      // the context of a sum external index labels are meaningful and should be
-      // accounted.
+      // two spellings of one product, which differ by permutations of the
+      // columns of its column-symmetric tensors; they canonicalize alike
+      // whether or not named index labels are ignored
       for (auto ignore_named_index_labels : {true, false}) {
         auto input1 =
             deserialize(L"1/2 t{a3,a1,a2;i4,i5,i2}:N-C-S g{i4,i5;i3,i1}:N-C-S");
@@ -167,10 +163,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
              .ignore_named_index_labels =
                  static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
                      ignore_named_index_labels)});
-        if (ignore_named_index_labels)
-          REQUIRE(input1 != input2);
-        else
-          REQUIRE(input1 == input2);
+        REQUIRE(input1 == input2);
       }
     }
 
@@ -733,13 +726,24 @@ TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
                             phase);
     };
     {
+      // a canonicalizer registered for label Q, which leaves Q as is and
+      // counts its uses
+      struct CountingCanonicalizer : NullTensorCanonicalizer {
+        std::shared_ptr<int> calls = std::make_shared<int>(0);
+        ExprPtr apply(AbstractTensor&) const override {
+          ++*calls;
+          return {};
+        }
+      };
+      const auto counting = std::make_shared<CountingCanonicalizer>();
       auto scoped = set_scoped_default_context(
           Context(get_default_context())
-              .set_tensor_canonicalizer(
-                  L"Q", std::make_shared<NullTensorCanonicalizer>()));
+              .set_tensor_canonicalizer(L"Q", counting));
       const auto [tensor, phase] = canonicalized();
-      CHECK(*tensor == *Q({L"i_1", L"i_2"}, {L"a_2", L"a_1"}));
-      CHECK(phase == 1);
+      CHECK(*counting->calls > 0);
+      // the graph-based pass alone places the named indices in label order
+      CHECK(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+      CHECK(phase == -1);
     }
     const auto [tensor, phase] = canonicalized();
     CHECK(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
@@ -945,5 +949,48 @@ TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
     auto expr = deserialize(L"X{a1,a2,a3;i1}:A Y{;a1,a2,a3}:S");
     simplify(expr);
     REQUIRE(is_zero(expr));
+  }
+}
+
+TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
+  using namespace sequant;
+
+  // Topological canonicalization with named index labels ignored: automorphisms
+  // of the network that permute named indices leave their placement to the
+  // labels, so that every spelling of an expression canonicalizes alike and
+  // canonicalizing again changes nothing (#666)
+  const CanonicalizeOptions opts{
+      .method = CanonicalizationMethod::Topological,
+      .ignore_named_index_labels =
+          CanonicalizeOptions::IgnoreNamedIndexLabel::Yes};
+  // pairs of spellings of one expression
+  for (const auto& [x, y] :
+       std::initializer_list<std::pair<std::wstring_view, std::wstring_view>>{
+           // identical tensors
+           {L"X{i_1;a_1} * X{i_2;a_2}", L"X{i_2;a_2} * X{i_1;a_1}"},
+           {L"X{i_1;a_1} * X{i_2;a_2} * Y{i_3;a_3}",
+            L"Y{i_3;a_3} * X{i_2;a_2} * X{i_1;a_1}"},
+           // antisymmetric slots, dummies renamed
+           {L"g{i_1,i_2;a_3,a_4}:A * t{a_3,a_4;i_3,i_4}:A",
+            L"t{a_5,a_6;i_3,i_4}:A * g{i_1,i_2;a_5,a_6}:A"},
+           {L"f{i_1;a_3} * t{a_3,a_1;i_2,i_3}:A",
+            L"-1 f{i_1;a_5} * t{a_1,a_5;i_2,i_3}:A"},
+           // columns of a column-symmetric tensor
+           {L"X{i_3,i_5;a_1,a_2}:N-N-S", L"X{i_5,i_3;a_2,a_1}:N-N-S"},
+           {L"X{i_3,i_5,i_6;a_1,a_2,a_4}:A-N-S",
+            L"X{i_6,i_3,i_5;a_4,a_1,a_2}:A-N-S"}}) {
+    auto canonicalized = [&opts](std::wstring_view input) {
+      ExprPtr e = deserialize(input);
+      // a lone tensor is canonicalized as a network only within a Product
+      if (!e->is<Product>()) e = ex<Product>(ExprPtrList{e});
+      canonicalize(e, opts);
+      return e;
+    };
+    const auto cx = canonicalized(x);
+    CAPTURE(x, y, serialize(cx));
+    REQUIRE(cx == canonicalized(y));
+    auto again = cx->clone();
+    canonicalize(again, opts);
+    REQUIRE(again == cx);
   }
 }

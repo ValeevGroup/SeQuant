@@ -32,10 +32,14 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <memory>
+#include <numeric>
 #include <span>
 #include <sstream>
 #include <string>
+#include <vector>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/is_sorted.hpp>
@@ -53,6 +57,141 @@
 #include <range/v3/view/zip.hpp>
 
 namespace sequant {
+
+namespace {
+
+using Permutation = std::vector<unsigned int>;
+
+/// @return generators of the automorphisms of @p graph that fix each of
+/// @p fixed_vertices
+std::vector<Permutation> stabilizer_generators(
+    const TensorNetworkV3::Graph &graph,
+    const std::vector<unsigned int> &fixed_vertices) {
+  const auto nvertices = graph.bliss_graph->get_nof_vertices();
+  Permutation identity(nvertices);
+  std::iota(identity.begin(), identity.end(), 0);
+  std::unique_ptr<bliss::Graph> individualized(
+      graph.bliss_graph->permute(identity));
+  // each fixed vertex gets a color of its own
+  container::set<TensorNetworkV3::Graph::VertexColor> used(
+      graph.vertex_colors.begin(), graph.vertex_colors.end());
+  auto color = std::numeric_limits<TensorNetworkV3::Graph::VertexColor>::max();
+  for (const auto vertex : fixed_vertices) {
+    while (used.contains(color)) --color;
+    individualized->change_color(vertex, color);
+    used.insert(color);
+  }
+  std::vector<Permutation> generators;
+  using hook_t = std::function<void(unsigned int, const unsigned int *)>;
+  hook_t hook = [&generators](unsigned int n, const unsigned int *aut) {
+    generators.emplace_back(aut, aut + n);
+  };
+  bliss::Stats stats;
+  individualized->find_automorphisms(stats, &bliss::aut_hook<hook_t>, &hook);
+  return generators;
+}
+
+/// Among the canonical labelings of @p graph, which are @p labeling composed
+/// with its automorphisms, selects the one that places the named indices in
+/// label order: position by position, in canonical order, each position of a
+/// named index gets the one with the smallest label that an automorphism
+/// fixing the positions before it can bring there. This makes the labeling
+/// a function of the expression when named indices are not told apart by label
+/// in @p graph.
+/// @param labeling a canonical labeling of @p graph (input vertex to
+///        canonical position)
+/// @param generators generators of the automorphism group of @p graph
+/// @param named_indices the named indices of the network
+/// @param label_less the order of index labels, that of the tensor
+///        canonicalizers so that a lone tensor is ordered alike; must be a
+///        strict total order on @p named_indices, else the placement would
+///        depend on the input vertex numbering
+/// @return the selected labeling
+Permutation order_named_indices_by_label(
+    const TensorNetworkV3::Graph &graph, Permutation labeling,
+    std::vector<Permutation> generators,
+    const TensorNetworkV3::NamedIndexSet &named_indices,
+    const tensor_index_comparer_t &label_less) {
+  const auto nvertices = labeling.size();
+  const auto is_named = [&](unsigned int vertex) {
+    return graph.vertex_types[vertex] == VertexType::Index &&
+           named_indices.contains(graph.vertex_indices[vertex]);
+  };
+  std::vector<unsigned int> positions;
+  for (unsigned int vertex = 0; vertex != nvertices; ++vertex)
+    if (is_named(vertex)) positions.push_back(labeling[vertex]);
+  if (positions.size() < 2) return labeling;
+  std::sort(positions.begin(), positions.end());
+
+  Permutation vertex_at(nvertices);
+  const auto invert = [&] {
+    for (unsigned int vertex = 0; vertex != nvertices; ++vertex)
+      vertex_at[labeling[vertex]] = vertex;
+  };
+  invert();
+  std::vector<unsigned int> placed;
+  for (const auto position : positions) {
+    const auto current = vertex_at[position];
+    // the orbit of current under the automorphisms that fix the placed
+    // vertices, each with an automorphism that maps current to it
+    container::map<unsigned int, Permutation> transversal;
+    {
+      Permutation identity(nvertices);
+      std::iota(identity.begin(), identity.end(), 0);
+      transversal.emplace(current, std::move(identity));
+    }
+    std::vector<unsigned int> frontier{current};
+    while (!frontier.empty()) {
+      const auto vertex = frontier.back();
+      frontier.pop_back();
+      for (const auto &generator : generators) {
+        const auto image = generator[vertex];
+        if (transversal.contains(image)) continue;
+        const auto &to_vertex = transversal.at(vertex);
+        Permutation to_image(nvertices);
+        for (unsigned int v = 0; v != nvertices; ++v)
+          to_image[v] = generator[to_vertex[v]];
+        transversal.emplace(image, std::move(to_image));
+        frontier.push_back(image);
+      }
+    }
+    // an automorphism maps named indices to named ones
+    SEQUANT_ASSERT(ranges::all_of(
+        transversal, [&](const auto &entry) { return is_named(entry.first); }));
+    const auto best =
+        std::min_element(transversal.begin(), transversal.end(),
+                         [&](const auto &a, const auto &b) {
+                           return label_less(graph.vertex_indices[a.first],
+                                             graph.vertex_indices[b.first]);
+                         });
+    const auto chosen = best->first;
+    SEQUANT_ASSERT(ranges::none_of(transversal, [&](const auto &entry) {
+      return entry.first != chosen &&
+             !label_less(graph.vertex_indices[chosen],
+                         graph.vertex_indices[entry.first]);
+    }));
+    if (chosen != current) {
+      // the inverse of best->second maps chosen to current, so composing the
+      // labeling with it puts chosen at this position and leaves the placed
+      // vertices where they are
+      const auto &to_chosen = best->second;
+      Permutation inverse(nvertices);
+      for (unsigned int v = 0; v != nvertices; ++v) inverse[to_chosen[v]] = v;
+      Permutation composed(nvertices);
+      for (unsigned int v = 0; v != nvertices; ++v)
+        composed[v] = labeling[inverse[v]];
+      labeling = std::move(composed);
+      invert();
+    }
+    placed.push_back(chosen);
+    // a trivial orbit means every generator fixes chosen already
+    if (transversal.size() > 1)
+      generators = stabilizer_generators(graph, placed);
+  }
+  return labeling;
+}
+
+}  // namespace
 
 TensorNetworkV3::Vertex::Vertex(Origin origin, std::size_t terminal_idx,
                                 std::size_t index_slot, Symmetry terminal_symm)
@@ -192,11 +331,19 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   // not scored (see Graph::automorphism_phase) can only hide a zero, never
   // invent one.
   bool has_odd_automorphism = false;
-  const unsigned int *canonize_perm = canonicalize_graph(
-      graph, graph.antisymm_bundles.empty()
+  // with labels ignored, the graph does not tell named indices apart, so the
+  // canonical labeling places them only up to its automorphisms; they are then
+  // placed by label, which needs the automorphism group
+  std::vector<Permutation> automorphisms;
+  const bool collect_automorphisms = ignore_named_index_labels;
+  const unsigned int *bliss_labeling = canonicalize_graph(
+      graph, graph.antisymm_bundles.empty() && !collect_automorphisms
                  ? std::function<void(unsigned int, const unsigned int *)>{}
-                 : [&](unsigned int, const unsigned int *aut) {
-                     if (!has_odd_automorphism &&
+                 : [&](unsigned int n, const unsigned int *aut) {
+                     if (collect_automorphisms)
+                       automorphisms.emplace_back(aut, aut + n);
+                     if (!graph.antisymm_bundles.empty() &&
+                         !has_odd_automorphism &&
                          graph.automorphism_phase(aut, &named_indices) == -1)
                        has_odd_automorphism = true;
                    });
@@ -208,6 +355,14 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
           "found, the network is zero\n");
     return ex<Constant>(0);
   }
+
+  Permutation labeling(bliss_labeling,
+                       bliss_labeling + graph.bliss_graph->get_nof_vertices());
+  if (collect_automorphisms && !automorphisms.empty())
+    labeling = order_named_indices_by_label(
+        graph, std::move(labeling), std::move(automorphisms), named_indices,
+        get_default_context_snapshot().index_comparer());
+  const unsigned int *canonize_perm = labeling.data();
 
   if (Logger::instance().canonicalize_dot) {
     std::wostringstream oss;

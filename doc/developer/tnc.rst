@@ -33,9 +33,16 @@ Computing the canonical form
 ---------------------------------
 
 The static ``TensorNetworkV3::canonicalize_graph(const Graph&, aut_hook)`` hands the constructed graph to bliss's ``canonical_form()``
-(with the ``shs_fsm`` splitting heuristic), which returns a permutation of vertex ordinals that is invariant under the graph's
-automorphism group — this permutation *is* the canonical form; two isomorphic networks (under the coloring/topology rules above) always
-produce the same one.
+(with the ``shs_fsm`` splitting heuristic), which returns a canonical labeling: a permutation of vertex ordinals that maps every network
+isomorphic to this one (under the coloring/topology rules above) onto the same canonical graph. The labeling itself is determined only
+up to the automorphisms of the graph, and which one bliss returns depends on the numbering of the input vertices. That is immaterial for
+anonymous indices, which are renamed in canonical order below, but not for named ones: with ``ignore_named_index_labels`` all named
+indices of a space share a color, an automorphism may exchange them, and the labeling would place their labels by input numbering
+(`#666 <https://github.com/ValeevGroup/SeQuant/issues/666>`_). So, with labels ignored, the member ``canonicalize_graph`` selects among
+the labelings the automorphisms allow: position by position in canonical order, each named-index position gets the index with the
+smallest label (by the context's index comparer, as tensor canonicalizers order indices) that an automorphism fixing the positions
+before it can bring there. The automorphisms fixing given vertices are found by rerunning bliss's automorphism search with those
+vertices given colors of their own. The structure of the result does not depend on the labels; where the labels go does.
 
 Translating that permutation back into an actual relabeling is the job of the (differently overloaded, same-named) *member* function
 ``canonicalize_graph(named_indices, ...)``. It walks the graph's vertices in canonical-rank order and, from each ``TensorBra``/
