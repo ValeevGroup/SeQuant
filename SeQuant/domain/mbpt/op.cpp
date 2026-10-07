@@ -1,3 +1,5 @@
+#include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
@@ -15,6 +17,9 @@
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
+
+#include <memory>
+#include <mutex>
 
 namespace sequant::mbpt {
 
@@ -1230,6 +1235,48 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 namespace tensor {
 
+namespace {
+
+/// @return the Index comparer that moves active indices to the front and
+/// otherwise defers to @p base ; one object per @p base , so that the
+/// scopes of successive calls have the same canonicalization configuration,
+/// hence the same Context::version()
+std::shared_ptr<const tensor_index_comparer_t> active_first_index_comparer(
+    std::shared_ptr<const tensor_index_comparer_t> base) {
+  static std::mutex mtx;
+  // a comparer holds its base alive, so the key cannot come to denote another
+  static container::map<const tensor_index_comparer_t*,
+                        std::shared_ptr<const tensor_index_comparer_t>>
+      comparers;
+  std::scoped_lock lock(mtx);
+  auto& result = comparers[base.get()];
+  if (!result)
+    result = std::make_shared<const tensor_index_comparer_t>(
+        [base](const Index& idx1, const Index& idx2) -> bool {
+          // the registry of the context in effect, i.e. of the scope that
+          // installs this comparer
+          const auto isr = get_default_context().index_space_registry();
+          auto active_space = isr->intersection(isr->particle_space(Spin::any),
+                                                isr->hole_space(Spin::any));
+          const auto idx1_active = idx1.space().type() == active_space.type();
+          const auto idx2_active = idx2.space().type() == active_space.type();
+          if (idx1_active) {
+            if (idx2_active)
+              return (*base)(idx1, idx2);
+            else
+              return true;
+          } else {
+            if (idx2_active)
+              return false;
+            else
+              return (*base)(idx1, idx2);
+          }
+        });
+  return result;
+}
+
+}  // namespace
+
 ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
                                OpConnections<int> avoid, bool use_top,
                                bool full_contractions) {
@@ -1416,29 +1463,9 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
     // precedence
     {
       auto scoped_ctx =
-          set_scoped_modified_default_context([isr](sequant::Context& ctx) {
+          set_scoped_modified_default_context([](sequant::Context& ctx) {
             ctx.set_index_comparer(
-                [isr, current_index_comparer = ctx.index_comparer()](
-                    const Index& idx1, const Index& idx2) -> bool {
-                  auto active_space =
-                      isr->intersection(isr->particle_space(Spin::any),
-                                        isr->hole_space(Spin::any));
-                  const auto idx1_active =
-                      idx1.space().type() == active_space.type();
-                  const auto idx2_active =
-                      idx2.space().type() == active_space.type();
-                  if (idx1_active) {
-                    if (idx2_active)
-                      return current_index_comparer(idx1, idx2);
-                    else
-                      return true;
-                  } else {
-                    if (idx2_active)
-                      return false;
-                    else
-                      return current_index_comparer(idx1, idx2);
-                  }
-                });
+                active_first_index_comparer(ctx.index_comparer_ptr()));
           });
       simplify(result);
     }

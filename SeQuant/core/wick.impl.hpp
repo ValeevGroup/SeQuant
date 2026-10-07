@@ -713,12 +713,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         }))
       return detail::ImplicitContextResetter<
           container::map<Statistics, Context>>{};
-    const auto null_canonicalizer = std::make_shared<NullTensorCanonicalizer>();
-    return set_scoped_modified_default_context(
-        [&nop_labels, &null_canonicalizer](Context &ctx) {
-          for (const auto &label : nop_labels)
-            ctx.set_tensor_canonicalizer(label, null_canonicalizer);
-        });
+    // the shared instance, so that the scopes of successive calls have the
+    // same canonicalization configuration, hence the same Context::version()
+    return set_scoped_modified_default_context([&nop_labels](Context &ctx) {
+      for (const auto &label : nop_labels)
+        ctx.set_tensor_canonicalizer(label,
+                                     NullTensorCanonicalizer::instance());
+    });
   };
 
   // have an Expr as input? Apply recursively ...

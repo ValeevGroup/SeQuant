@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/aggregate.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -174,14 +175,16 @@ class Context {
   // shares the registry and the canonicalizer configuration), and a moved-from
   // Context would lack them
 
-  /// @return the version of this context: a nonzero number, unique among all
-  /// versions ever assigned in this process, that changes whenever the context
-  /// is constructed or modified through a setter (including the
-  /// `Options` constructor); copies keep the version of their source
-  /// @note the version identifies a context and its copies, not its content:
-  /// contexts that compare equal may have different versions (e.g. two
-  /// default-constructed ones), so code that caches results keyed on the
-  /// version recomputes them more often than strictly necessary
+  /// @return the version of this context's canonicalization configuration: a
+  /// nonzero number that two contexts share if and only if canonicalization
+  /// sees the same configuration in both, i.e. they have the same index space
+  /// registry, tensor canonicalizers and index comparers (the same objects),
+  /// cardinal tensor labels, canonicalization options and SP basis (which
+  /// determines the symmetry of NormalOperator); a number is never reused for
+  /// another configuration
+  /// @note the other settings (vacuum, metric, first dummy index ordinal,
+  /// typesetting, deserialization defaults, strict bra-ket checks) do not
+  /// affect the version
   /// @note the version does not track in-place mutation of a
   /// TensorCanonicalizer or comparer object that this context refers to
   std::uint64_t version() const;
@@ -329,6 +332,10 @@ class Context {
   /// \param canonicalizer a nonnull TensorCanonicalizer
   /// \throw Exception if @p canonicalizer is null
   /// \return ref to `*this`, for chaining
+  /// \warning version() identifies the canonicalizer by the object the
+  /// shared_ptr owns, so a shared_ptr that does not own its object (e.g. one
+  /// with a no-op deleter) makes the version change when the shared_ptr, not
+  /// the object, dies
   Context& set_tensor_canonicalizer(
       std::wstring_view label, std::shared_ptr<TensorCanonicalizer> canonicalizer);
   /// Removes the TensorCanonicalizer for @p label , if any
@@ -342,6 +349,8 @@ class Context {
   /// \param comparer a nonnull pointer to a nonempty Index comparer, e.g.
   /// one obtained from index_comparer_ptr()
   /// \return ref to `*this`, for chaining
+  /// \warning see the warning of set_tensor_canonicalizer() about a
+  /// shared_ptr that does not own its object
   Context& set_index_comparer(
       std::shared_ptr<const tensor_index_comparer_t> comparer);
   /// Sets the Index pair comparer used by tensor canonicalizers
@@ -353,6 +362,8 @@ class Context {
   /// \param comparer a nonnull pointer to a nonempty Index pair comparer,
   /// e.g. one obtained from index_pair_comparer_ptr()
   /// \return ref to `*this`, for chaining
+  /// \warning see the warning of set_tensor_canonicalizer() about a
+  /// shared_ptr that does not own its object
   Context& set_index_pair_comparer(
       std::shared_ptr<const tensor_index_pair_comparer_t> comparer);
   /// Sets the cardinal Tensor labels
@@ -365,28 +376,50 @@ class Context {
   Context& set_cardinal_tensor_labels(container::vector<std::wstring> labels);
 
  private:
-  /// the tensor canonicalization state; comparers are held by shared_ptr so
-  /// that equality can be decided by identity
-  struct TensorCanonicalizers {
-    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>> map;
+  /// the settings that control canonicalization (which also reads the index
+  /// space registry and the SP basis, settings not specific to it); these, the
+  /// registry and the SP basis define version(), so a setting that
+  /// canonicalization comes to read belongs here, and in the key of the
+  /// version table (CanonicalizationKey in context.cpp) that mirrors this;
+  /// comparers are held by shared_ptr so that equality can be decided by
+  /// identity
+  struct CanonicalizationConfig {
+    container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
+        tensor_canonicalizers;
     std::shared_ptr<const tensor_index_comparer_t> index_comparer;
     std::shared_ptr<const tensor_index_pair_comparer_t> index_pair_comparer;
     container::vector<std::wstring> cardinal_labels;
+    std::optional<CanonicalizeOptions> options;
 
-    /// canonicalizers and comparers compare by identity, labels by value
-    bool operator==(const TensorCanonicalizers&) const = default;
+    /// canonicalizers and comparers compare by identity, labels by value,
+    /// options by CanonicalizeOptions::operator== (i.e. by method only)
+    bool operator==(const CanonicalizationConfig&) const = default;
   };
 
   friend bool operator==(const Context& ctx1, const Context& ctx2);
 
-  /// replaces the tensor canonicalization state by a copy owned by this
+  /// replaces the canonicalization configuration by a copy owned by this
   /// @return the copy, for the caller to modify
-  TensorCanonicalizers& mutable_tensor_canonicalizers();
+  CanonicalizationConfig& mutable_canonicalization_config();
 
-  /// assigns a new, never before used version to this
-  void bump_version();
+  /// marks the cached version stale, to be recomputed by the next version()
+  void invalidate_version();
 
-  std::uint64_t version_ = 0;
+  /// the cached version(), 0 while stale; atomic because version() may be
+  /// called on a context that threads share (e.g. the process-wide default),
+  /// copyable so that Context stays copyable
+  struct CachedVersion {
+    std::atomic<std::uint64_t> value{0};
+    CachedVersion() = default;
+    CachedVersion(const CachedVersion& other)
+        : value(other.value.load(std::memory_order_relaxed)) {}
+    CachedVersion& operator=(const CachedVersion& other) {
+      value.store(other.value.load(std::memory_order_relaxed),
+                  std::memory_order_relaxed);
+      return *this;
+    }
+  };
+  mutable CachedVersion version_;
 
   std::shared_ptr<const IndexSpaceRegistry> idx_space_reg_ = nullptr;
   Vacuum vacuum_ = Defaults::vacuum;
@@ -394,7 +427,6 @@ class Context {
   bool assert_strict_braket_symmetry_ = Defaults::assert_strict_braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
-  std::optional<CanonicalizeOptions> canonicalization_options_ = std::nullopt;
   BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
   BraKetSlotTypesetting braket_slot_typesetting_ =
       Defaults::braket_slot_typesetting;
@@ -404,7 +436,7 @@ class Context {
   ColumnSymmetry deserialization_column_symmetry_ =
       Defaults::deserialization_column_symmetry;
   /// shared by copies of this context, hence never mutated in place
-  std::shared_ptr<const TensorCanonicalizers> tensor_canonicalizers_;
+  std::shared_ptr<const CanonicalizationConfig> canonicalization_config_;
 };
 
 /// Context object equality comparison
@@ -418,7 +450,10 @@ class Context {
 /// a comparer replaced by a behaviourally identical one compares unequal
 /// (re-install a comparer through its shared pointer, e.g.
 /// Context::index_comparer_ptr(), to keep contexts equal)
-/// \note the versions of the contexts are ignored
+/// \note the versions of the contexts are ignored, and equal contexts may
+/// have different ones: Context::version() compares canonicalization options
+/// by all their members, not only by method, and index space registries as
+/// objects, not by value
 bool operator==(const Context& ctx1, const Context& ctx2);
 
 /// Context object inequality comparison
@@ -446,6 +481,11 @@ bool default_context_manipulation_threadsafe();
 /// @param s Statistics
 /// @return `get_default_context(s).version()`, i.e. the version of the context
 /// in effect on the calling thread (see Context::version())
+/// @note canonicalization reads the SP basis, which determines the symmetry
+/// of NormalOperator<S>, from the context for the operator's Statistics `S`,
+/// and the rest from the context for Statistics::Arbitrary; a cache of
+/// canonicalization results is therefore keyed on the versions for all
+/// Statistics, not only the one for Statistics::Arbitrary
 std::uint64_t current_context_version(Statistics s = Statistics::Arbitrary);
 
 /// @brief access default Context for the given Statistics
