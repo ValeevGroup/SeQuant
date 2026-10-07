@@ -109,6 +109,8 @@ ExprPtr lone_term(const ExprPtr& expr) {
 }  // namespace
 
 ExprPtr& canonicalize(ExprPtr& expr) {
+  // the contexts are read at several points of this call and of the hooks
+  const auto contexts_in_effect = pin_default_contexts();
   const auto opts = CanonicalizeOptions::default_options();
   if (expr->is_canonical(opts)) return expr;
   const auto contexts_version = current_contexts_version();
@@ -464,6 +466,8 @@ ResultExpr& rapid_simplify(ResultExpr& expr) {
 ResultExpr& rapid_simplify(ResultExpr&& expr) { return rapid_simplify(expr); }
 
 ExprPtr& simplify(ExprPtr& expr) {
+  // every stage reads the contexts
+  const auto contexts_in_effect = pin_default_contexts();
   expand(expr);
   rapid_simplify(expr);
   canonicalize(expr);
