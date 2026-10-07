@@ -1,6 +1,5 @@
-// SP3 Task 1 of the ordered-scope batched-eval design (see
-// ordered_schedule.hpp's own doc comments for the SP2 OrderedSchedule IR):
-// the ORDERED executor SKELETON. For a forest with NO batchable index (so
+// The ORDERED executor SKELETON (see ordered_schedule.hpp's own doc comments
+// for the OrderedSchedule IR). For a forest with NO batchable index (so
 // build_ordered_schedule realizes ordered.root as a flat, topologically
 // sorted sequence of BuildSteps -- no nested child ScopeBlock, since no axis
 // type is ever realized), evaluate_ordered_schedule must reproduce the SAME
@@ -163,10 +162,10 @@ TEST_CASE(
   ScalarLeafEvaluator const yield{{{L"a", 2.0}, {L"b", -3.5}, {L"c", 7.25}}};
 
   // NO batchable index: build_ordered_schedule must realize a single root
-  // block of plain BuildSteps (no child ScopeBlock) -- the shape SP3 Task 1
-  // handles. Default-constructed BatchPolicy declines every index in both
-  // roles (is_batchable_contracted_index / is_batchable_external_index both
-  // default to "false"), so this is the natural no-batching policy, not a
+  // block of plain BuildSteps (no child ScopeBlock) -- the shape the
+  // skeleton handles. Default-constructed BatchPolicy declines every index in
+  // both roles (is_batchable_contracted_index / is_batchable_external_index
+  // both default to "false"), so this is the natural no-batching policy, not a
   // hand-suppressed one.
   sequant::BatchPolicy const policy;
 
@@ -209,7 +208,7 @@ TEST_CASE(
   CHECK(got_val == Catch::Approx(expected));
 }
 
-// Explicit value cells (SP4 Task 3): evaluate_ordered_schedule now builds and
+// Explicit value cells: evaluate_ordered_schedule builds and
 // statically validates a cell table before evaluating a schedule at all --
 // same fixture as the case above, corrupting nothing, so the run must succeed
 // and the test-facing diagnostic must report the table's own cell count.
@@ -243,7 +242,7 @@ TEST_CASE("ordered executor asserts the cell table before evaluating",
 // The same equivalence, but reached through the BatchPolicy-gated dispatch
 // entry (sequant::evaluate(Nodes const&, BatchPolicy const&, ...),
 // ordered_executor.hpp) with policy.scheduler == BatchScheduler::ordered -- the
-// actual caller-facing seam SP3 Task 1 wires up, rather than calling
+// actual caller-facing seam, rather than calling
 // evaluate_ordered_schedule directly as the test above does.
 TEST_CASE(
     "BatchPolicy::scheduler == BatchScheduler::ordered routes through the "
@@ -293,10 +292,10 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// SP3 Task 4: the acceptance payoff. On the real water-20 CSV-CCSD doubles
+// The acceptance payoff. On the real water-20 CSV-CCSD doubles
 // residual (DF/aux-only Κ batching), both executors -- forest descent and
 // the ORDERED executor -- must model the SAME final result
-// shape (Step 1 / resolution R1: this is a zero-data DryRun forest, so
+// shape (this is a zero-data DryRun forest, so
 // "numerical equivalence" here is result-shape/extent equivalence, NOT
 // floating-point arithmetic; the real-FP equivalence of the ordered executor
 // is already proven at small scale by the [ordered-executor] scalar tests
@@ -306,7 +305,7 @@ TEST_CASE(
 // as a plain root-level BuildStep, never inside the {Κ} child block) must
 // build EXACTLY ONCE under the ordered executor and under forest descent
 // (CSE) -- eliminating the per-block rebuild of a root-homed composite that
-// the whole ordered-scope effort exists to remove (Step 2 / R4).
+// the whole ordered-scope effort exists to remove.
 //
 // `[.]` hidden (run-by-name): a multi-second DryRun optimize+binarize of ~40
 // residual terms. The fixture construction below is
@@ -314,11 +313,11 @@ TEST_CASE(
 // test_ordered_schedule.cpp's water-20 fixture rather than shared via a header:
 // the sibling test files already duplicate it deliberately under distinct
 // prefixes to avoid a CMake UNITY_BUILD anonymous-namespace collision (see
-// test_ordered_schedule.cpp's own note at its Task-3 section), and a shared
+// test_ordered_schedule.cpp's own note at its water-20 section), and a shared
 // header consumed by only this new file would not reduce the existing two-file
-// duplication without a risky behavior-changing refactor of both (R5's
-// fallback path). The executor-DRIVE logic itself is NOT duplicated -- it lives
-// in ordered_executor.hpp; only the forest/rich/policy construction is.
+// duplication without a risky behavior-changing refactor of both. The
+// executor-DRIVE logic itself is NOT duplicated -- it lives in
+// ordered_executor.hpp; only the forest/rich/policy construction is.
 // ===========================================================================
 
 namespace {
@@ -545,19 +544,20 @@ TEST_CASE(
   }
   REQUIRE(!forest.empty());
 
-  // ONE forest + ONE rich shared by all three pipelines (R2).
+  // ONE forest + ONE rich shared by all three pipelines.
   auto const block_of = [](sequant::Index const&) -> std::size_t {
     return 256;
   };
   auto const rich = sequant::eval::compute_dag_boulevard(forest, *cm, block_of);
   REQUIRE(!rich.cells.empty());
 
-  // ---- Identify the Κ-free home={} composite (I(i,i;a,a)-shaped), R3:
+  // ---- Identify the Κ-free home={} composite (I(i,i;a,a)-shaped):
   // the composite that CONSUMES a Κ-reduction result (a non-leaf that
   // contracts Κ at its own node but does not carry Κ free) but does not
   // itself carry or contract Κ -- placed by build_ordered_schedule as a plain
   // root-level BuildStep. Same identification as test_ordered_schedule.cpp's
-  // water-20 acceptance test (Target 1 -> its structural parent).
+  // water-20 acceptance test (the Κ-contraction result -> its structural
+  // parent).
   auto const is_K = [](sequant::Index const& ix) {
     return ix.basis().base_key() == L"Κ";
   };
@@ -646,7 +646,7 @@ TEST_CASE(
   auto const ordered =
       sequant::eval::build_ordered_schedule(rich, legality, policy, {L"Κ"});
   REQUIRE(sequant::eval::well_formed(ordered));
-  // R3: confirm the composite is a plain ROOT-level BuildStep (home={}), never
+  // Confirm the composite is a plain ROOT-level BuildStep (home={}), never
   // inside the {Κ} child block.
   REQUIRE(orderedexec_index_of_build_step(ordered.root, parent_value_id)
               .has_value());
@@ -656,14 +656,14 @@ TEST_CASE(
   auto ordered_cache = sequant::cache_manager(forest);
   ordered_cache.set_array_ops(&aops);
   ordered_cache.set_recompute_tally_enabled(true);
-  // R1/R2: install the hierarchy-wide PeakMonitor on the ROOT cache only; it
+  // Install the hierarchy-wide PeakMonitor on the ROOT cache only; it
   // propagates to every per-batch scratch via peak_monitor()'s parent_
   // fallthrough (the scratch caches set_parent to this root), so note_working_
   // set() calls anywhere in the ordered walk fold into ONE high-water mark. No
   // executor wiring -- the install lives entirely here.
   sequant::eval::PeakMonitor ord_mon;
   ordered_cache.set_peak_monitor(&ord_mon);
-  // Task 4: the NODE-level lift of policy.is_volatile_leaf (mirrors
+  // The NODE-level lift of policy.is_volatile_leaf (mirrors
   // make_evaluator's is_volatile_node lift, eval.hpp): a leaf tensor labeled
   // "t" is volatile, every internal node non-volatile. Threaded into the
   // ordered executor so it classifies each root-homed composite
@@ -745,12 +745,12 @@ TEST_CASE(
   std::wcerr << L"  worst build count over ALL root-homed Κ-free composites: "
              << L"ordered = " << worst_ord << L"\n";
 
-  // ---- Step 1 (R1): both model the SAME final result shape. ----
+  // ---- Both model the SAME final result shape. ----
   REQUIRE(ord_result);
   REQUIRE(fd_result);
   CHECK(ord_result->size_in_bytes() == fd_result->size_in_bytes());
 
-  // ---- Step 2 (R4): the build-count acceptance. The ordered executor
+  // ---- The build-count acceptance. The ordered executor
   // builds the Κ-free root-homed composite EXACTLY ONCE (home store/lookup
   // de-aliases it to the root scope), and forest descent builds it once too
   // (CSE) -- the sanity anchor. If ord_builds != 1, that is a REAL
@@ -762,7 +762,7 @@ TEST_CASE(
   // systematic form of the acceptance).
   CHECK(worst_ord == 1);
 
-  // ---- Step 1 (R1/R2): realized-peak monitoring. Both peaks are measured
+  // ---- Realized-peak monitoring. Both peaks are measured
   // the SAME way (a PeakMonitor on each executor's root cache, every run under
   // Trace::On, all on THIS shared forest), emitted for context.
   //
@@ -772,25 +772,26 @@ TEST_CASE(
   // right invariant is that ordered's build-once homing does not raise peak
   // over the build-once REFERENCE (forest descent), which it satisfies (and
   // here strictly improves on). Per-composite home-vs-rebuild peak control
-  // (choosing which composites to home vs recompute to cap peak) is SP4's
-  // cost-driven job; SP3 executes whatever build_ordered_schedule produces.
+  // (choosing which composites to home vs recompute to cap peak) is the
+  // cost model's job; the executor runs whatever build_ordered_schedule
+  // produces.
   std::wcerr << L"  realized peak (bytes): ordered = " << ord_mon.hwmark_bytes
              << L", forest-descent = " << fd_mon.hwmark_bytes << L"\n";
   INFO("realized peak (bytes): ordered = "
        << ord_mon.hwmark_bytes << ", forest-descent = " << fd_mon.hwmark_bytes);
   CAPTURE(ord_mon.hwmark_bytes, fd_mon.hwmark_bytes);
-  // R1: if the ordered high-water is 0, the ordered build path never called
+  // If the ordered high-water is 0, the ordered build path never called
   // note_working_set() where the reference does -- a real executor gap, not a
   // test artifact. Under Trace::On every evaluate_impl / combine step notes its
   // working set, so a nonzero mark confirms the monitor observes the ordered
   // walk.
   CHECK(ord_mon.hwmark_bytes > 0);
   CHECK(fd_mon.hwmark_bytes > 0);
-  // R2 (ruling: assert vs the build-once baseline): the ordered executor's
+  // The ordered executor's
   // build-once homing must not raise peak over forest descent's build-once CSE.
   CHECK(ord_mon.hwmark_bytes <= fd_mon.hwmark_bytes);
 
-  // ---- Task 4 (THE PAYOFF): eager release of volatile homed values.
+  // ---- THE PAYOFF: eager release of volatile homed values.
   //
   // With is_volatile_node threaded in, every root-homed composite whose subtree
   // carries a volatile ("t"-labeled) leaf is homed NON-persistent -- released
@@ -844,7 +845,7 @@ TEST_CASE(
   // assertion to weaken).
   CHECK(ord_mon.hwmark_bytes < 988732399293ull);
 
-  // ---- Step 1 (R3): test-side run-completeness cross-check, complementing
+  // ---- Test-side run-completeness cross-check, complementing
   // the SEQUANT_ASSERT inside evaluate_ordered_schedule (a no-op in this
   // IGNORE-assert release build; ACTIVE in cmake-build-debug, where the
   // executor-side `built` ledger -- set at every real production site, product
@@ -889,7 +890,7 @@ TEST_CASE(
     CHECK(ord_missing_vs_fd == 0);
   }
 
-  // ---- R4: confirm SP2's build-time non-innermost forced-split tripwire
+  // ---- Confirm the builder's build-time non-innermost forced-split tripwire
   // stands (ordered_schedule.hpp:839-860). That SEQUANT_ASSERT in
   // build_ordered_schedule prevents a non-innermost forced-split
   // OrderedSchedule from EVER being constructed, so evaluate_ordered_schedule
@@ -1497,7 +1498,7 @@ TEST_CASE(
       return it != vmap.end() &&
              sequant::subtree_any(*it->second, is_volatile_node);
     };
-    // SP4 Task 4 fix1 item 4: the static gate must validate the same lives
+    // The static gate must validate the same lives
     // the executor enforces at runtime -- real per-loop-instance batch
     // counts, not the constant-1 stub (which under-counts a value read from
     // outside n*m nested real batches, exactly the gap that made
@@ -1562,13 +1563,13 @@ TEST_CASE(
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
-// Explicit value cells (SP4 Task 3): derive the cell table's productions
+// Explicit value cells: derive the cell table's productions
 // (Build/Assemble/Leaf) from an ordered schedule already built above by the
 // [w20-auxocc-walk] fixture. This checks structure only (one Build per
 // BuildStep, one Assemble per block output entry, at least one Leaf, every
 // Assemble strictly enclosing its source, every Build cell's sliced entries
 // naming an enclosing loop instance of its own scope) -- reads and lives are
-// Task 4.
+// checked separately.
 // ===========================================================================
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
@@ -1659,7 +1660,7 @@ TEST_CASE("cell table: cells derived from the w20 default schedule",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
-  // SP4 Task 4 fix1 item 4: real per-loop batch counts for n_batches_of (see
+  // Real per-loop batch counts for n_batches_of (see
   // the walk-gate case's own note); aops is otherwise unused in this
   // static-only fixture.
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
@@ -2020,7 +2021,7 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
   REQUIRE(sequant::eval::well_formed(ordered));
   auto const sma = sequant::eval::compute_sliced_mode_assignment(ordered, rich);
   auto const vmap = sequant::eval::build_value_node_map(forest);
-  // SP4 Task 4 fix1 item 4: real per-loop batch counts for n_batches_of (see
+  // Real per-loop batch counts for n_batches_of (see
   // the walk-gate case's own note); aops is otherwise unused in this
   // static-only fixture.
   auto aops = sequant::eval::dryrun::make_dryrun_array_ops(cm);
@@ -2119,9 +2120,9 @@ TEST_CASE("cell table: the input-mirrored configuration derives a valid table",
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
 
 // ===========================================================================
-// Diagnostic-only dump (Task 1 of the explicit-cells stage-2 plan):
+// Diagnostic-only dump:
 // characterize, on the mirrored w20 configuration, the values that the
-// stage-1 table builder and schedule builder mis-handled -- where each is
+// earlier table builder and schedule builder mis-handled -- where each is
 // built or escaped, and who consumes it and where. Those gaps are FIXED: the
 // mirrored configuration now derives a table that validates clean (see the
 // unconditional gate block in the [w20-auxocc-walk] case, and the
@@ -2475,7 +2476,7 @@ TEST_CASE(
   // composites.
   run_iter();
 
-  // Stage 3: persistence is the TABLE's own classification (no volatile leaf,
+  // Persistence is the TABLE's own classification (no volatile leaf,
   // bound to no loop instance) and lives in the cache handle's cross-call
   // PersistentValueStore, which the cell registry publishes to on every
   // production of such a cell and seeds itself from at the next call's entry.
@@ -3167,8 +3168,8 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// b3 (2026-08-12 eager-home-release plan, Task b): dry == wet schedule
-// EQUIVALENCE for the ordered executor. b1 fixed a real dry-run/wet-run
+// Dry == wet schedule
+// EQUIVALENCE for the ordered executor. This guards a real dry-run/wet-run
 // fidelity bug in meter.hpp: the custom-evaluator install used to fire for
 // BatchScheduler::ordered too (ordered was not distinguishable from
 // forest_descent by that single negated check), routing
@@ -3182,7 +3183,7 @@ TEST_CASE(
 // SAME peak as a directly-invoked evaluate_ordered_schedule call wired with
 // its own PeakMonitor -- the "wet-style" invocation the witness TEST_CASE
 // above uses. Reuses the SAME water-20 fixture (forest/policy/rich
-// construction) as that witness -- SP3 Task 4's expensive optimize+binarize
+// construction) as that witness -- its expensive optimize+binarize
 // scaffold is not rebuilt from scratch elsewhere in this file, so it is
 // duplicated here as-is, matching the file's own stated precedent for these
 // fixtures (see the file-header note above the witness TEST_CASE).
@@ -3283,9 +3284,9 @@ TEST_CASE(
   REQUIRE(!forest.empty());
 
   // ONE forest + ONE rich shared by both replays (mirrors the witness's own
-  // R2 invariant -- meter() below builds its OWN internal rich from the SAME
-  // forest/block_of, so this local `rich` is only used to build the direct
-  // ordered schedule, not shared code with meter()).
+  // shared-rich invariant -- meter() below builds its OWN internal rich from
+  // the SAME forest/block_of, so this local `rich` is only used to build the
+  // direct ordered schedule, not shared code with meter()).
   auto const block_of = [](sequant::Index const&) -> std::size_t {
     return 256;
   };
@@ -4022,7 +4023,7 @@ TEST_CASE("ordered executor has no slice seam", "[ordered][cell_table]") {
   SUCCEED();
 }
 
-// Task 5 (Stage 3): the value-keyed cache machinery (home slots, coloring,
+// The value-keyed cache machinery (home slots, coloring,
 // the release bridge) that only the ordered path used is gone now that the
 // executor runs entirely on cells. Same SFINAE-friendly-lookup rationale as
 // the slice-seam concept above: a plain out-of-line `requires` expression
@@ -4047,7 +4048,7 @@ concept has_recolor = requires(
     Cache& c, typename Cache::cache_key_type const& k) { c.recolor(k); };
 template <typename Schedule>
 concept has_home_mode_depth = requires(Schedule& s) { s.home_mode_depth; };
-// Stage 4 (explicit-cells): the residency/role inference machinery that no
+// The residency/role inference machinery that no
 // production path consults any more (verified zero-callers). Same
 // SFINAE-friendly-lookup rationale as above.
 template <typename Cache>
@@ -4069,7 +4070,7 @@ concept has_stored_this_eval =
 template <typename M2L>
 concept has_mode_of =
     requires(M2L const& m, sequant::DagScopeLevel const& l) { m.mode_of(l); };
-// Task 2 (explicit cells, cache key): the value-id slice coloring is gone --
+// The value-id slice coloring is gone --
 // CachedValue holds only the node.
 template <typename CV>
 concept has_coloring_member = requires(CV const& v) { v.coloring; };

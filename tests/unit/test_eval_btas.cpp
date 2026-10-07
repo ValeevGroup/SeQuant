@@ -534,8 +534,8 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   }
 }
 
-// Task 2 (multiroot-single-dag-eval): a Sum node marked accumulate_in_place()
-// (Task 1's binarize()-applied mark on the left-accumulator chain of a folded
+// A Sum node marked accumulate_in_place()
+// (binarize()'s mark on the left-accumulator chain of a folded
 // N-ary Sum) must evaluate via Result::add_inplace() into the left operand's
 // own buffer rather than the allocating Result::sum() -- EXCEPT when its left
 // child is a leaf: a leaf's ResultPtr comes straight out of the caller's
@@ -547,7 +547,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 // Summation" test, which reads a leaf back out of the SAME yield_ after
 // evaluating a marked Sum that used it as the chain seed -- the leaf came
 // back already mutated. So for the chain (((t1+t2)+t3)+t4), all 3 Sum nodes
-// are STILL marked (Task 1's static property, unaffected), but only the two
+// are STILL marked (a static property, unaffected), but only the two
 // OUTER ones (whose left child is itself a Sum result, never a leaf) actually
 // evaluate in place; the innermost (t1+t2), whose left child t1 is a leaf,
 // falls back to the allocating sum() -- one bounded extra allocation for the
@@ -563,7 +563,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 // marked evaluation (nothing was corrupted), and the marked result's pointer
 // aliases none of the 4 leaves (no accidental leaf mutation slipped through).
 // (2) Numeric equality against an unmarked reference (the SAME chain with
-// every mark forced off, reproducing the pre-Task-2 always-allocate path).
+// every mark forced off, reproducing the always-allocate path).
 TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
   using namespace sequant;
   using BTensorD = btas::Tensor<double>;
@@ -608,7 +608,7 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
   auto marked = eval_node(sum);
   auto unmarked = eval_node(sum);
 
-  // Sanity on the marking itself (Task 1): the whole 3-Sum chain is marked.
+  // Sanity on the marking itself: the whole 3-Sum chain is marked.
   std::size_t total_sum = 0, inplace = 0;
   marked.visit([&](auto const& n) {
     if (!n->is_sum()) return;
@@ -618,7 +618,7 @@ TEST_CASE("eval_sum_accumulate_in_place_btas", "[eval_btas]") {
   REQUIRE(total_sum == 3);
   REQUIRE(inplace == 3);
 
-  // Force the SAME chain unmarked, reproducing the pre-Task-2 always-allocate
+  // Force the SAME chain unmarked, reproducing the always-allocate
   // sum() path, to serve as the reference. The chain is left-leaning
   // (fold_left_to_node): unmarked = ((t1+t2)+t3)+t4, so the 3 Sum nodes are
   // unmarked, unmarked.left(), and unmarked.left().left().

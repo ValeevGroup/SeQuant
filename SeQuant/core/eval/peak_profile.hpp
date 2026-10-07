@@ -315,7 +315,7 @@ struct ValueCell {
                          //!< Cell::home_depth
   container::svector<Index> carried;     //!< canon_indices (same across
                                          //!< occurrences)
-  container::svector<Index> home_modes;  //!< the Phase-3b footprint home:
+  container::svector<Index> home_modes;  //!< the footprint home:
                                          //!< \c r.home minus
                                          //!< own_modes_union[hash], read off
                                          //!< the first occurrence

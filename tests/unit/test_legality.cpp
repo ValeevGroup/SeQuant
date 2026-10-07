@@ -289,14 +289,14 @@ TEST_CASE(
   // identity, so any Κ-typed Index found in the forest is a valid probe.
   std::optional<sequant::Index> k_axis;
 
-  // Target 1: the Κ-CONTRACTION RESULT -- a non-leaf value that does NOT
+  // The Κ-CONTRACTION RESULT -- a non-leaf value that does NOT
   // itself carry Κ (Q1 false) but DOES contract Κ at its own node (Q2a
   // true) => Reduction. Also record its hash so target 2 can find its
   // consumer.
   std::optional<std::size_t> mu_mu_hash;
   {
     // Two passes over the same predicate (Q1 false, Q2a true): the first
-    // pass only accepts an EXACT μ̃,μ̃ carried pair (the brief's canonical
+    // pass only accepts an EXACT μ̃,μ̃ carried pair (the canonical
     // example); if the fixture has none, the second pass falls back to the
     // first Κ-contraction-result candidate of any shape (the
     // classify_axis == Reduction assertion itself is the load-bearing part
@@ -347,7 +347,7 @@ TEST_CASE(
         REQUIRE(ax_it != cl_it->per_axis.end());
         CHECK(ax_it->role == sequant::eval::LoopRole::Reduction);
 
-        // Task 3: I(μ̃,μ̃)'s home_floor must EXCLUDE Κ -- a Reduction axis is
+        // I(μ̃,μ̃)'s home_floor must EXCLUDE Κ -- a Reduction axis is
         // lifted out, never a home-floor member. Cross-check against the
         // existing meet-residency home (ValueCell::home_modes): both
         // "homes" should agree that Κ is not in the floor.
@@ -361,11 +361,11 @@ TEST_CASE(
   }
   REQUIRE(k_axis.has_value());
 
-  // Target 2: the Κ-FREE COMPOSITE ABOVE THE CONTRACTION -- the immediate
+  // The Κ-FREE COMPOSITE ABOVE THE CONTRACTION -- the immediate
   // consumer of the Κ-contraction result found above. Its OWN node does not
   // carry Κ (it was already summed away below) and does not contract Κ
   // AGAIN at its own node, so classify_axis(..., Κ, ...) must be
-  // LoopInvariant -- this is exactly the case Task 1's uncorrected
+  // LoopInvariant -- this is exactly the case an uncorrected
   // (whole-subtree) build_site_of would have gotten wrong (it would have
   // seen Κ in the subtree and reported Reduction).
   {
@@ -417,11 +417,11 @@ TEST_CASE(
               cell_it->carried, contracted_below, *k_axis, cell_it->occurrences,
               cell_it->carried) == sequant::eval::LoopRole::LoopInvariant);
 
-    // Illustrative signature check from the brief ([i i a a]); informational
+    // Illustrative signature check ([i i a a]); informational
     // -- the LoopInvariant assertion above is the load-bearing one.
     INFO("I(i,i;a,a) candidate carried.size()=" << cell_it->carried.size());
 
-    // Confirm the Task-1 correction actually landed: Κ must NOT appear in
+    // Κ must NOT appear in
     // this cell's own (at-node) build_site / per_axis at all (the
     // uncorrected whole-subtree build_site_of would have wrongly included
     // it as Reduction).
@@ -433,7 +433,7 @@ TEST_CASE(
     CHECK(std::none_of(cl_it->per_axis.begin(), cl_it->per_axis.end(),
                        [&](auto const& ac) { return is_K(ac.axis); }));
 
-    // Task 3: I(i,i;a,a)'s home_floor must EXCLUDE Κ too -- Κ is
+    // I(i,i;a,a)'s home_floor must EXCLUDE Κ too -- Κ is
     // LoopInvariant here (absent from build_site altogether, the IMPLICIT
     // case), so it can never surface in home_floor either. Cross-check
     // against the meet-residency home (ValueCell::home_modes).
@@ -442,14 +442,14 @@ TEST_CASE(
           carries_type(cell_it->home_modes, is_K));
   }
 
-  // Target 3: a Κ-CARRYING leaf/intermediate used AT the loop variable
+  // A Κ-CARRYING leaf/intermediate used AT the loop variable
   // (Q1 true, Q2b lockstep) -> LoopLocal. Scan every value that itself
   // carries a Κ-typed index (leaves included -- e.g. the DF integral
-  // g{Κ;μ̃,ν̃}) and classify it; the brief requires at least one LoopLocal
-  // candidate be found in this fixture (REQUIRE'd below, same rigor as
-  // Targets 1/2). The loop-CARRIED counterpart is deferred to Task 5's
-  // synthetic fixture per the brief, so found_loop_carried is reported but
-  // NOT asserted either way.
+  // g{Κ;μ̃,ν̃}) and classify it; at least one LoopLocal
+  // candidate must be found in this fixture (REQUIRE'd below, same rigor as
+  // the Κ-contraction-result and Κ-free-composite checks). The loop-CARRIED
+  // counterpart is covered by the synthetic cross-iteration fixture below, so
+  // found_loop_carried is reported but NOT asserted either way.
   {
     bool found_loop_local = false;
     bool found_loop_carried = false;
@@ -476,7 +476,7 @@ TEST_CASE(
         REQUIRE(ax_it != cl_it->per_axis.end());
         CHECK(ax_it->role == sequant::eval::LoopRole::LoopLocal);
 
-        // Task 3: a Κ-local value's home_floor must INCLUDE Κ -- it stays
+        // A Κ-local value's home_floor must INCLUDE Κ -- it stays
         // sliced on (homed inside) the axis it is locked to lockstep with
         // its enclosing loop. Cross-check against the meet-residency home
         // (ValueCell::home_modes); INFO records any divergence for the
@@ -493,20 +493,21 @@ TEST_CASE(
     // Every Κ-carrying candidate that WAS classified LoopLocal was already
     // checked above (per_axis wiring agreement); this REQUIRE guarantees the
     // LoopLocal path is actually exercised at least once by this fixture
-    // (matching Targets 1/2, which REQUIRE their own candidate was found) --
+    // (matching the Κ-contraction-result and Κ-free-composite checks, which
+    // REQUIRE their own candidate was found) --
     // without it, a future shift in the fixture/optimizer output could
     // silently drop LoopLocal coverage entirely.
     INFO("water-20 Κ-carrying values: LoopLocal seen="
          << found_loop_local << " LoopCarried seen=" << found_loop_carried);
     REQUIRE(found_loop_local);
-    // Loop-carried case remains deferred to Task 5's synthetic fixture per
-    // the brief -- found_loop_carried is recorded (via INFO above) but not
+    // The loop-carried case is covered by the synthetic cross-iteration
+    // fixture -- found_loop_carried is recorded (via INFO above) but not
     // asserted either way.
   }
 }
 
 // ===========================================================================
-// Task 4: forced_split_axes + the monotone fixpoint, on a SYNTHETIC
+// forced_split_axes + the monotone fixpoint, on a SYNTHETIC
 // cross-iteration fixture. Water-20's aux-only residual has no LoopCarried
 // value (every Κ is contracted immediately), so the loop-carried case must be
 // authored here. The fixture is B{i_3,i_4} = A{;i_3} * A{;i_4}: an outer
@@ -514,7 +515,7 @@ TEST_CASE(
 // with the occupied space made batchable in the EXTERNAL role and no enclosing
 // occ batch loop realized, the occ axis survives into the value's result with
 // nothing to lock it to a loop iteration -> classify_axis == LoopCarried.
-// Saved to data/legality_cross_iteration.txt for Task 5 to reuse.
+// Saved to data/legality_cross_iteration.txt for reuse below.
 // ===========================================================================
 TEST_CASE(
     "analyze_legality: a loop-carried value records its axis in "
@@ -596,15 +597,16 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// SP2 Task 1: classify_axis's Q2b must compare EVERY same-type carried slot
+// classify_axis's Q2b must compare EVERY same-type carried slot
 // against the enclosing loop, not just the first. Direct unit test on
 // classify_axis with a HAND-CONSTRUCTED OccurrenceRec -- no forest/optimize
 // pipeline needed, since classify_axis is a pure function of its four
-// arguments. SP1's own fixtures never realize this case: the water-20 witness
-// has no multi-carried same-space value, and the synthetic cross-iteration
-// fixture's outer product has no enclosing loop at all (ectx empty), so it
-// falls through to the "no enclosing loop of this type" LoopCarried path
-// rather than exercising the lockstep-vs-free comparison inside the loop.
+// arguments. The legality fixtures above never realize this case: the water-20
+// witness has no multi-carried same-space value, and the synthetic
+// cross-iteration fixture's outer product has no enclosing loop at all (ectx
+// empty), so it falls through to the "no enclosing loop of this type"
+// LoopCarried path rather than exercising the lockstep-vs-free comparison
+// inside the loop.
 // ===========================================================================
 TEST_CASE(
     "classify_axis (Q2b): a value carrying TWO same-space indices, one bound "
@@ -622,7 +624,7 @@ TEST_CASE(
 
   // B{i_1,i_2} = A{;i_1} * A{;i_2}: an outer product carrying two DISTINCT
   // occ indices into its own result -- exactly the multi-carried shape the
-  // Task-4 synthetic fixture uses, but here placed under a REALIZED
+  // synthetic cross-iteration fixture uses, but here placed under a REALIZED
   // enclosing occ loop bound to i_1 (ectx non-empty), mirroring how
   // compute_dag_boulevard stamps `node_slice_mask` once a loop is actually
   // realized.
@@ -708,9 +710,9 @@ TEST_CASE(
 }
 
 // ===========================================================================
-// SP2 Task 1: forced_split_types groups CellLegality::forced_split_axes by
+// forced_split_types groups CellLegality::forced_split_axes by
 // axis TYPE (IndexBasis::base_key()), collapsing multiple same-space Index
-// INSTANCES (e.g. the Task-4 fixture's i_3/i_4 outer product, both
+// INSTANCES (e.g. the cross-iteration fixture's i_3/i_4 outer product, both
 // LoopCarried on occ) into the single loop (axis) they jointly force to
 // split.
 // ===========================================================================
@@ -725,7 +727,7 @@ TEST_CASE(
   CellLegality cl;
   cl.hash = 0;
   // Two DISTINCT occ Index instances, both LoopCarried on the same space --
-  // the per-instance record Task 4's synthetic B{i_3,i_4} = A{;i_3} * A{;i_4}
+  // the per-instance record the synthetic B{i_3,i_4} = A{;i_3} * A{;i_4}
   // outer product produces.
   cl.forced_split_axes = {Index{L"i_3"}, Index{L"i_4"}};
 
@@ -770,9 +772,9 @@ TEST_CASE("forced_split_types keeps a named basis apart from its space",
 }
 
 // ===========================================================================
-// Task 5 (SP1 acceptance): a single, explicitly-named test documenting that
+// Legality acceptance: a single, explicitly-named test documenting that
 // all FOUR LoopRole values are demonstrably produced by analyze_legality /
-// classify_axis across SP1's two canonical inputs. This test does NOT
+// classify_axis across the two canonical inputs. This test does NOT
 // re-derive the detailed per-role assertions already proven end-to-end
 // elsewhere in this file -- it only re-tallies which LoopRole each already-
 // exercised input actually produces, as one consolidated acceptance point:
@@ -780,23 +782,24 @@ TEST_CASE("forced_split_types keeps a named basis apart from its space",
 //     water-20 aux-only residual" already REQUIREs/CHECKs, against
 //     analyze_legality's own LegalitySchedule: Reduction (the mu~,mu~
 //     Kappa-contraction result), LoopInvariant (the I(i,i;a,a) composite
-//     above it -- the Task-1 whole-subtree-vs-at-node correction target;
+//     above it -- the whole-subtree-vs-at-node case;
 //     home_floor excludes Kappa in both), and LoopLocal (at least one
 //     Kappa-carrying value, home_floor includes Kappa).
 //   - "analyze_legality: a loop-carried value records its axis in
 //     forced_split_axes; ..." already REQUIREs LoopCarried on the synthetic
-//     cross-iteration fixture, plus (Task 5 item 2) forced_split_axes is
+//     cross-iteration fixture, plus forced_split_axes is
 //     non-empty and home_floor EXCLUDES the split axis for that value.
 // Both fixtures are re-run here (same recipe, same shared helpers) purely to
 // tally LoopRole coverage; LoopInvariant is IMPLICIT in analyze_legality's
 // own output (an axis classified LoopInvariant is, by construction, never a
 // build_site member -- see CellLegality::home_floor's doc comment), so it is
 // witnessed via one direct classify_axis call on a cell with no Kappa
-// dependence at its own node, exactly as the water-20 test's Target 2 does.
+// dependence at its own node, exactly as the water-20 test's Κ-free-composite
+// check does.
 // ===========================================================================
 TEST_CASE(
-    "SP1 acceptance: analyze_legality / classify_axis demonstrably produce "
-    "all four LoopRole values (LoopLocal, Reduction, LoopCarried, "
+    "legality acceptance: analyze_legality / classify_axis demonstrably "
+    "produce all four LoopRole values (LoopLocal, Reduction, LoopCarried, "
     "LoopInvariant) across the water-20 and cross-iteration canonical "
     "inputs",
     "[.][legality][blocked-stamp-based-legality]") {
@@ -1005,6 +1008,6 @@ TEST_CASE(
 
   CHECK(saw_carried);
 
-  // Consolidated SP1 acceptance: all four roles demonstrably reachable.
+  // Consolidated acceptance: all four roles demonstrably reachable.
   CHECK((saw_local && saw_reduction && saw_invariant && saw_carried));
 }

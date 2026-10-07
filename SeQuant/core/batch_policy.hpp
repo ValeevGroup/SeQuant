@@ -25,7 +25,7 @@ class Tensor;
 enum class BatchScheduler { forest_descent, ordered };
 
 /// One batchability policy shared by the single-term optimizer and the runtime
-/// batched evaluator (make_evaluator, Task A3). All predicates default empty.
+/// batched evaluator (make_evaluator). All predicates default empty.
 struct BatchPolicy {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// Spaces batchable in the contracted role: a mode of such a space is

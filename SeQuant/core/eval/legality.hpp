@@ -24,10 +24,9 @@
 namespace sequant::eval {
 
 ///
-/// \brief Legality analysis output types of the ordered-scope batched-eval
-/// design: per-value classification of which batch-loop axes a value's
-/// computation depends on, and whether it is legal to home the value at each
-/// such axis.
+/// \brief Legality analysis output types of the ordered scheduler: per-value
+/// classification of which batch-loop axes a value's computation depends on,
+/// and whether it is legal to home the value at each such axis.
 ///
 
 ///

@@ -576,7 +576,7 @@ TEST_CASE("eval_expr_node_slice_mask_typed", "[EvalExpr][batched-here]") {
   REQUIRE(node.node_slice_mask()[1].second == BatchModeType::External);
 }
 
-// Task 5 (multiroot-single-dag-eval): binarize(Sum const&, ...)'s make_sum
+// binarize(Sum const&, ...)'s make_sum
 // lambda used to capture its prefix-hash range (imed_hashes(hvals)) as a
 // LAZY, stateful view; ranges::at(hs, ++i) re-begin()s that view on every
 // access, which re-drives inits' internal mutable `++n` counter and
