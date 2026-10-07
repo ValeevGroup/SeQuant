@@ -559,11 +559,11 @@ class WickTheorem {
   /// subexpression)
   void extract_indices(const Expr &expr) const;
 
-  ///  counts the index occurrences of the input, if not done yet: of
+  /// @brief counts the index occurrences of the input, if not done yet: of
   /// the operator sequence, or of the expression (the first Product summand
   /// of a Sum; every summand of an expanded Sum has the same external
   /// indices)
-  ///  Exception if the expression input is not expanded
+  /// @throw Exception if the expression input is not expanded
   void extract_indices() const;
 
   /// @return the external indices: the named indices of the context's
