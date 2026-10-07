@@ -68,7 +68,10 @@ class WickTheorem {
 
  public:
   /// @param input normal operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note the external (nonsummed) indices are the named indices of the
+  /// context's CanonicalizeOptions in effect at each use, if it has them
+  /// (name every index that must survive, any other is a dummy), else the
+  /// indices that appear once in the input; see external_indices()
   explicit WickTheorem(
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
@@ -77,21 +80,19 @@ class WickTheorem {
       SEQUANT_ASSERT(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
 
-    // default computation may treat repeating indices as dummy
-    // override
-    extract_indices(*input, /* force_external = */ true);
+    extract_indices(*input);
   }
 
   /// @param input normal operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(NormalOperatorSequence<S> input)
       : WickTheorem(
             std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
   /// @param expr_input input expression
-  /// @note if \p expr_input is a normal operator sequence, assume that all
-  /// indices are external (not summed), else duplicate indices are assumed
-  /// dummy
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
       *this = WickTheorem(
@@ -160,15 +161,6 @@ class WickTheorem {
   /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
-    return *this;
-  }
-
-  /// Resets the memoized (external, covariant) indices; will auto-deduce next
-  /// time reduce is called
-  const WickTheorem &reset_indices() const {
-    all_indices_.reset();
-    external_indices_.reset();
-    noncovariant_indices_.reset();
     return *this;
   }
 
@@ -444,7 +436,10 @@ class WickTheorem {
   bool use_topology_ = true;
   mutable Stats stats_;
 
-  mutable std::optional<container::set<Index>> all_indices_;
+  // the indices deduced from the input by extract_indices(); the input, not
+  // a result, since the kronecker deltas of a result double every external
+  // index. The context's named indices override the external ones at each
+  // use, see external_indices()
   mutable std::optional<container::set<Index>> external_indices_;
   // covariant indices (= dummy indices that appear twice in braket slots) can
   // be "rotated" arbitrarily in reduce ... these are the ones that can't
@@ -559,18 +554,21 @@ class WickTheorem {
   friend class NontensorWickState;  // NontensorWickState needs to access
                                     // members of this
 
-  /// @brief extracts and memoizes all, external (if not already set) and
-  /// covariant indices
+  /// @brief deduces and memoizes the external and the noncovariant indices of
+  /// an input
 
-  /// External indices appear only once in an expression
+  /// An external index appears once in a nonproto slot or is a pure
+  /// protoindex; a noncovariant index is any other that has protoindices, is
+  /// a protoindex, or does not appear exactly twice in nonproto slots
   /// @param expr an expression
-  /// @param force_external if true, will treat all indices (even repeating) as
-  /// external
   /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
   /// subexpression)
-  /// @note protoindices of external indices are external
-  /// @throw Exception if any of @p expr subexpressions is a Sum
-  void extract_indices(const Expr &expr, bool force_external = false) const;
+  void extract_indices(const Expr &expr) const;
+
+  /// @return the external indices: the named indices of the context's
+  /// CanonicalizeOptions if it has them, else those deduced from the input
+  /// @pre the context names indices or extract_indices() has been called
+  container::set<Index> external_indices() const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
@@ -659,7 +657,7 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi vacuum");
 
-    if (!all_indices_) {
+    if (!external_indices_) {
       extract_indices(*input_);
     }
 
