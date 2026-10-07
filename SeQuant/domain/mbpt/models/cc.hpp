@@ -309,7 +309,7 @@ class CC {
   /// the Wick vacuum; see hbar_connections().
   [[nodiscard]] LSTOptions lst_options() const {
     return {.unitary = unitary(),
-            .use_connected_form = !unitary() && reference_is_vacuum()};
+            .use_connected_form = !unitary() && detail::reference_is_vacuum()};
   }
 
   /// @return the connectivity that makes the connected products of

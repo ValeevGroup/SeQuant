@@ -65,7 +65,7 @@ std::pair<std::shared_ptr<Sum>, std::shared_ptr<Sum>> screen_terms(
 /// the caller's location
 const auto enforce_vacuum_reference = [](std::source_location location =
                                              std::source_location::current()) {
-  if (!reference_is_vacuum())
+  if (!detail::reference_is_vacuum())
     SEQUANT_ENFORCE_FAILED(
         SEQUANT_CHECK_MESSAGE(SEQUANT_ENFORCE, reference_is_vacuum(),
                               "the reference must be the Wick vacuum"),

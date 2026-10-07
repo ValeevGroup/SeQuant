@@ -1401,13 +1401,14 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 }  // namespace op
 
+namespace detail {
 /// @return true if the reference occupied space is the Wick vacuum's
 inline bool reference_is_vacuum() {
   const auto isr = get_default_context().index_space_registry();
+  SEQUANT_ASSERT(isr, "the default context has no IndexSpaceRegistry");
   return isr->reference_occupied_space() == isr->vacuum_occupied_space();
 }
 
-namespace detail {
 /// @brief Rejects connectivity constraints that ref_av cannot honor
 /// @details The connectivity lists constrain direct contractions only. With
 /// partial contractions, operators can also be connected through the RDMs
