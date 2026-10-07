@@ -40,7 +40,7 @@ Specialized variants exist for the more demanding cases that arise in practice:
 
 - :func:`sequant::mbpt::closed_shell_spintrace` is a more efficient alternative to ``spintrace`` specifically for closed-shell
   (spin-restricted) references, avoiding the exponential cost of the general algorithm.
-- :func:`sequant::mbpt::closed_shell_CC_spintrace` additionally transforms the traced result into *biorthogonal* form, the
+- :func:`sequant::mbpt::closed_shell_CC_singlet_spintrace` additionally transforms the traced result into *biorthogonal* form, the
   representation typically wanted for closed-shell coupled-cluster equations (see :doc:`cc`); it also factors out and re-applies
   the necessary (anti)symmetrizers.
 - :func:`sequant::mbpt::open_shell_spintrace` and :func:`sequant::mbpt::open_shell_CC_spintrace` produce, instead of a single spin-free
@@ -49,5 +49,5 @@ Specialized variants exist for the more demanding cases that arise in practice:
 All of these expect their input to already be in a specific normal form (a leading antisymmetrizer, produced by "complete"
 canonicalization — see :doc:`canonicalization`, unless the expression doesn't have any external indices (e.g. energy expressions)); consult their
 reference documentation for the exact preconditions and options before using them on a new class of equations. For a worked example applying
-``closed_shell_CC_spintrace``/``open_shell_CC_spintrace`` to actual coupled-cluster amplitude equations, see :ref:`cc-spin-tracing` in the :doc:`cc`
+``closed_shell_CC_singlet_spintrace``/``open_shell_CC_spintrace`` to actual coupled-cluster amplitude equations, see :ref:`cc-spin-tracing` in the :doc:`cc`
 page.
