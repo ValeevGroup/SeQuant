@@ -93,9 +93,10 @@ The ``Context`` also carries the :class:`sequant::CanonicalizeOptions` that :fun
 indices are *named* (external), and whether the labels of the named indices affect the result. By default the named indices of an
 expression are deduced as those that occur once in it; naming them explicitly makes an index that occurs more than once external,
 which is what the theorem machinery relies on as well: the named indices of the context are the external indices of a
-:class:`sequant::WickTheorem`, the ones it does not sum over. When the context names indices it names *every* external index of the
-expressions canonicalized under it, since any other index is then a dummy. There are no per-call options; to canonicalize under
-other options, scope a context that carries them (see :ref:`below <context-scoped>`).
+:class:`sequant::WickTheorem`, the ones it does not sum over (an operator sequence given to it directly follows the same rule: an
+index that appears in it twice is summed over unless the context names it). When the context names indices it names *every*
+external index of the expressions canonicalized under it, since any other index is then a dummy. There are no per-call options;
+to canonicalize under other options, scope a context that carries them (see :ref:`below <context-scoped>`).
 
 The MBPT ``Context``
 ----------------------

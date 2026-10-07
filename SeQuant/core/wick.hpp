@@ -103,7 +103,8 @@ class WickTheorem {
   }
 
   /// @param ops operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
       : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
