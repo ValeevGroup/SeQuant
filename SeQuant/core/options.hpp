@@ -63,7 +63,9 @@ struct CanonicalizeOptions {
   /// whether the graph-based canonicalization ignores the labels of named
   /// indices, so that the structure of the result does not depend on them;
   /// named indices that an automorphism of the network can exchange are then
-  /// placed in the order of their labels. A Sum canonicalizes its summands with
+  /// placed in the order of their labels, as the context's index comparer
+  /// orders them; the result is determined only if that comparer orders every
+  /// two named indices of the network. A Sum canonicalizes its summands with
   /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
 

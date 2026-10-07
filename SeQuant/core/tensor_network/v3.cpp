@@ -103,7 +103,9 @@ std::vector<Permutation> stabilizer_generators(
 /// @param generators generators of the automorphism group of @p graph
 /// @param named_indices the named indices of the network
 /// @param label_less the order of index labels, that of the tensor
-///        canonicalizers so that a lone tensor is ordered alike
+///        canonicalizers so that a lone tensor is ordered alike; must be a
+///        strict total order on @p named_indices, else the placement would
+///        depend on the input vertex numbering
 /// @return the selected labeling
 Permutation order_named_indices_by_label(
     const TensorNetworkV3::Graph &graph, Permutation labeling,
@@ -163,6 +165,11 @@ Permutation order_named_indices_by_label(
                                              graph.vertex_indices[b.first]);
                          });
     const auto chosen = best->first;
+    SEQUANT_ASSERT(ranges::none_of(transversal, [&](const auto &entry) {
+      return entry.first != chosen &&
+             !label_less(graph.vertex_indices[chosen],
+                         graph.vertex_indices[entry.first]);
+    }));
     if (chosen != current) {
       // the inverse of best->second maps chosen to current, so composing the
       // labeling with it puts chosen at this position and leaves the placed
