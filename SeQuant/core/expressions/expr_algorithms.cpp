@@ -1,3 +1,4 @@
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
@@ -89,19 +90,43 @@ std::size_t size(const ExprPtr& exprptr) {
   return 0;
 }
 
+namespace {
+
+/// @return the term that @p expr stands for if it is a Sum of at most one
+/// summand or a Product of one factor with a unit scalar, else nullptr
+ExprPtr lone_term(const ExprPtr& expr) {
+  if (expr->is<Sum>()) {
+    const auto& sum = expr->as<Sum>();
+    if (sum.empty()) return ex<Constant>(0);
+    if (sum.size() == 1) return sum.summand(0);
+  } else if (expr->is<Product>()) {
+    const auto& product = expr->as<Product>();
+    if (product.size() == 1 && product.scalar() == 1) return product.factor(0);
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 ExprPtr& canonicalize(ExprPtr& expr, CanonicalizeOptions opts) {
+  if (expr->is_canonical(opts)) return expr;
+  const auto contexts_version = current_contexts_version();
   const auto byproduct = expr->canonicalize(opts);
   if (byproduct && byproduct->is<Constant>()) {
     expr = byproduct * expr;
   }
+  // a Sum or Product left with a single term is that term, whose canonical
+  // form on its own may differ from its form as a summand or factor
+  if (auto term = lone_term(expr)) {
+    expr = std::move(term);
+    return canonicalize(expr, opts);
+  }
+  expr->mark_canonical(opts, contexts_version);
   return expr;
 }
 
 ExprPtr canonicalize(ExprPtr&& expr_rv, CanonicalizeOptions opts) {
-  const auto byproduct = expr_rv->canonicalize(opts);
-  if (byproduct && byproduct->is<Constant>()) {
-    expr_rv = byproduct * expr_rv;
-  }
+  canonicalize(expr_rv, std::move(opts));
   return std::move(expr_rv);
 }
 

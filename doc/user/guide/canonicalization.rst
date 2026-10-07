@@ -42,6 +42,9 @@ dropping zeros, ...) to fully reduce an expression:
    :end-before: end-snippet-2
    :dedent: 2
 
+A fully canonicalized expression remembers that it is in canonical form, so canonicalizing or simplifying it again before it is
+modified does no work.
+
 None of this needs to be invoked explicitly in typical use: the :doc:`mbpt operator machinery <operator>` and
 :doc:`CC equation generator <cc>` call ``simplify()``/canonicalization as needed while building up equations. Knowing that it happens —
 and why two "different-looking" terms may in fact be the same one — is mainly useful for interpreting intermediate output and for

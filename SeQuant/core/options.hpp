@@ -20,8 +20,11 @@ enum class CanonicalizationMethod {
   /// expensive.
   /// @note Canonicalization of tensor networks must take into account the
   ///       topology of the TN; this enables the use of canonical graph
-  ///       sort of all TN elements to produces complete
-  ///       canonicalization. The result may be aesthetically poor.
+  ///       sort of all TN elements. By itself it leaves the order of named
+  ///       indices in (anti)symmetric slots to the graph, so its result
+  ///       depends on how an expression is spelled (e.g. a lone tensor vs the
+  ///       same tensor scaled) and may be aesthetically poor; Complete
+  ///       canonicalization does not.
   Topological = 0b01,
   /// Enables the use of rapid canonicalization based on lexicographic sort.
   /// @note for TN this performs lexicographic sort of tensors, slots and

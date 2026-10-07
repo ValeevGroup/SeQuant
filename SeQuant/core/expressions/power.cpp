@@ -121,6 +121,7 @@ bool Power::is_scalar() const { return true; }
 ExprPtr Power::clone() const {
   auto cloned = ex<Power>(base_, exponent_);
   if (conjugated_) cloned->as<Power>().conjugate();
+  cloned->as<Power>().copy_canonical_mark(*this);
   return cloned;
 }
 

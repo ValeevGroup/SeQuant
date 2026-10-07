@@ -735,10 +735,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     // if sum, canonicalize and apply to each summand ...
     if (expr_input_->is<Sum>()) {
       if (!skip_input_canonicalization) {
-        // initial full canonicalization
+        // initial full canonicalization; it replaces a Sum of at most one
+        // summand by that summand, or by 0 if every summand canonicalized to
+        // zero
         canonicalize(expr_input_);
-        // every summand may have canonicalized to zero
-        if (expr_input_->as<Sum>().empty()) return ex<Constant>(0);
+        if (expr_input_->is<Constant>()) return expr_input_;
+        if (!expr_input_->is<Sum>())
+          expr_input_ = ex<Sum>(ExprPtrList{expr_input_});
       }
 
       // NOW disable canonicalization of normal operators
@@ -799,10 +802,11 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     // ...
     else if (expr_input_->is<Product>()) {
       if (!skip_input_canonicalization) {  // canonicalize, unless told to skip
-        auto canon_byproduct = expr_input_->rapid_canonicalize();
-        SEQUANT_ASSERT(
-            canon_byproduct ==
-            nullptr);  // canonicalization of Product always returns nullptr
+        // canonicalization replaces a Product of one factor with a unit
+        // scalar by that factor
+        canonicalize(expr_input_);
+        if (!expr_input_->is<Product>())
+          expr_input_ = ex<Product>(1, ExprPtrList{expr_input_});
       }
       // NOW disable canonicalization of normal operators
       // N.B. even if skipped initial input canonicalization need to disable

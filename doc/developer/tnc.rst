@@ -102,12 +102,46 @@ Subtleties for contributors
   label. Inside network canonicalization (``TensorNetworkV3::do_individual_canonicalization``) a tensor uses
   ``nondefault_tensor_canonicalizer_ptr(label)`` of a :func:`sequant::get_default_context_snapshot` taken once per network, i.e. the
   entry for exactly its own label, and otherwise the network's own canonicalizer (``DefaultTensorCanonicalizer`` or
-  ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` on a lone tensor. Since
-  the lookup goes through the current context, a scoped context (see :doc:`/user/guide/context`) overrides it for the scope's duration,
-  on the threads that see that scope.
+  ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` on a lone tensor in which
+  no index occurs more than once (a lone tensor with a repeated index, protoindices included, is a tensor network and is canonicalized as
+  one). Since the lookup goes through the current context, a scoped context (see :doc:`/user/guide/context`) overrides it for the
+  scope's duration, on the threads that see that scope.
   ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort (rather than
   using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee about
   using swaps to get there.
+
+Recorded canonical form
+----------------------------
+
+A fully canonicalized expression carries a mark that makes canonicalizing it again a no-op, so callers can request full
+canonicalization without tracking whether it was already done. The free ``canonicalize()``, as well as ``Product::canonicalize()``,
+``Sum::canonicalize()`` and ``Tensor::canonicalize()``, record their result with ``Expr::mark_canonical(opts)`` and return at once, with
+no byproduct, for an expression that ``Expr::is_canonical(opts)``. Only ``Complete`` canonicalization marks: ``Lexicographic`` alone is
+incomplete, and ``Topological`` alone leaves the order of named indices in (anti)symmetric slots to the graph, so that, e.g., a lone
+tensor and the same tensor scaled end up spelled differently. Since the
+summands of a ``Sum`` are marked by their own canonicalization, re-canonicalizing a ``Sum`` after some of its summands changed
+canonicalizes only those.
+
+A mark is valid only for the ``CanonicalizeOptions`` it was recorded under (named indices included) and only while the contexts in
+effect canonicalize as they did when it was recorded, as reported by ``current_contexts_version()`` (``SeQuant/core/context.hpp``): it
+combines the versions of the contexts in effect on the calling thread for all statistics. A context's version identifies its
+canonicalization configuration (tensor canonicalizers, index comparers, cardinal tensor labels, canonicalization options, the index
+space registry and the SP basis), so the value changes when a different configuration takes effect -- a default context is set or reset, a scoped one begins
+or ends, or a setter of one of those runs -- but not for settings canonicalization does not read, and contexts with the same
+configuration share it. It is a function of the contexts, not a counter, so marks recorded before a scoped context are valid again once
+it ends, and marks recorded in the scope of one top-level ``WickTheorem`` are valid in that of the next. Canonicalization seals its result
+with the value at which it started, so a change of the contexts while it runs leaves the result unmarked. In-place changes of a
+canonicalizer or comparer object are not tracked (see ``Context::version()``).
+
+The contract with ``Expr`` types is that every mutation of a node's own data clears its mark: ``Expr::reset_hash_value()`` does so, and
+mutations that do not reset the hash, such as those of the ``Product`` scalar, call ``Expr::reset_canonical_mark()``; a new ``Expr``
+type must do the same in each of its mutators. ``Operator`` and ``NormalOperatorSequence``, which are vectors of their elements, honor
+it by resetting in their mutable element accessors and mutators (``operator[]``, ``at``, ``begin``, ``end``, ``rbegin``, ``rend``,
+``push_back``, ``emplace_back``, ``pop_back``, ``insert``, ``erase``, ``clear``, ``resize``).
+Mutation or replacement of a subexpression needs no such call: each node carries a stamp of its own data, and a mark digests the stamps
+of the whole subtree, so merely iterating mutably, as ``visit()`` and ``expand()`` do, leaves marks intact. With assertions enabled,
+checking a mark also revalidates the memoized hash of each leaf, which catches a leaf mutator that resets neither (the memoized hash
+of a non-leaf is legitimately stale after in-place mutation of a subexpression). ``clone()`` keeps the mark.
 
 Debugging and tests
 ------------------------

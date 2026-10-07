@@ -9,6 +9,7 @@
 
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
@@ -1542,5 +1543,185 @@ TEST_CASE("expr_type_id", "[elements]") {
     REQUIRE(*t < *op);
     REQUIRE(!(*op < *t));
     REQUIRE(*c < *op);
+  }
+}
+
+TEST_CASE("canonical_mark", "[elements]") {
+  using namespace sequant;
+
+  const auto opts = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizationMethod::Complete);
+  const auto rapid_opts = opts.copy_and_set(CanonicalizationMethod::Rapid);
+
+  auto make_product = [] {
+    return ex<Constant>(rational{1, 2}) *
+           ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+           ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  };
+  auto make_sum = [&] {
+    return make_product() + ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"}) +
+           ex<Constant>(3);
+  };
+
+  SECTION("unmarked by default") {
+    REQUIRE(!make_product()->is_canonical(opts));
+    REQUIRE(!make_sum()->is_canonical(opts));
+  }
+
+  SECTION("marking") {
+    auto e = make_sum();
+    e->mark_canonical(opts);
+    REQUIRE(e->is_canonical(opts));
+    // the mark is only valid for the options it was recorded under ...
+    REQUIRE(!e->is_canonical(
+        opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)));
+    REQUIRE(!e->is_canonical(
+        opts.copy_and_set(container::set<Index>{Index{L"i_1"}})));
+    // ... and never for rapid canonicalization
+    REQUIRE(!e->is_canonical(rapid_opts));
+    // only full canonicalization marks
+    auto r = make_sum();
+    r->mark_canonical(rapid_opts);
+    REQUIRE(!r->is_canonical(rapid_opts));
+    REQUIRE(!r->is_canonical(opts));
+    // the subexpressions are not marked
+    REQUIRE(!(*e)[0]->is_canonical(opts));
+  }
+
+  SECTION("changing the contexts in effect invalidates") {
+    auto e = make_sum();
+    e->mark_canonical(opts);
+    REQUIRE(e->is_canonical(opts));
+    {
+      // a copy given its own registry, which is a configuration of its own
+      auto changed = get_default_context();
+      changed.set(IndexSpaceRegistry(*changed.index_space_registry()));
+      auto resetter = set_scoped_default_context(changed);
+      REQUIRE(!e->is_canonical(opts));
+    }
+    // ... for as long as they are in effect
+    REQUIRE(e->is_canonical(opts));
+  }
+
+  SECTION("mutations of Product invalidate") {
+    auto check = [&](auto &&mutate) {
+      auto e = make_product();
+      e->mark_canonical(opts);
+      REQUIRE(e->is_canonical(opts));
+      // memoize the hashes, which in-place mutation of a subexpression leaves
+      // stale in its ancestors
+      e->hash_value();
+      mutate(e);
+      return e->is_canonical(opts);
+    };
+    CHECK(!check([](ExprPtr &e) {
+      e->as<Product>().append(1, ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+    }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>().scale(2); }));
+    CHECK(!check(
+        [](ExprPtr &e) { e->as<Product>().append(2, ex<Constant>(3)); }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>() *= Constant(3); }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>().add_identical(e); }));
+    CHECK(!check([](ExprPtr &e) { e->adjoint(); }));
+    // replacing or reordering factors
+    CHECK(!check([](ExprPtr &e) {
+      (*e)[0] = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    }));
+    CHECK(!check([](ExprPtr &e) { std::swap((*e)[0], (*e)[1]); }));
+    CHECK(!check([](ExprPtr &e) {
+      e->as<Product>().factors().push_back(ex<Variable>(L"x"));
+    }));
+    // mutating a factor in place, also via a pointer obtained without
+    // mutable access to the Product
+    CHECK(!check([](ExprPtr &e) {
+      const auto &t = e->as<Product>().factor(0);
+      t->as<Tensor>().transform_indices(
+          container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_3"}}});
+    }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>().factor(1)->adjoint(); }));
+    // non-mutating access does not invalidate
+    CHECK(check([](ExprPtr &e) {
+      for ([[maybe_unused]] auto &factor : *e) {
+      }
+      [[maybe_unused]] auto &factors = e->as<Product>().factors();
+      e->visit([](ExprPtr &) {});
+    }));
+  }
+
+  SECTION("mutations of operators invalidate") {
+    auto e = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+             ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    e->mark_canonical(opts);
+    REQUIRE(e->is_canonical(opts));
+    e->as<Product>().factor(1)->as<FNOperator>()[0] = fcre(L"a_7");
+    REQUIRE(!e->is_canonical(opts));
+
+    auto s = ex<FNOperatorSeq>(FNOperator(cre({L"a_1"}), ann({L"i_1"})),
+                               FNOperator(cre({L"a_2"}), ann({L"i_2"})));
+    s->mark_canonical(opts);
+    REQUIRE(s->is_canonical(opts));
+    s->as<FNOperatorSeq>()[1] = FNOperator(cre({L"a_3"}), ann({L"i_3"}));
+    REQUIRE(!s->is_canonical(opts));
+  }
+
+  SECTION("mutations of Sum invalidate") {
+    auto check = [&](auto &&mutate) {
+      auto e = make_sum();
+      e->mark_canonical(opts);
+      REQUIRE(e->is_canonical(opts));
+      // memoize the hashes, which in-place mutation of a subexpression leaves
+      // stale in its ancestors
+      e->hash_value();
+      mutate(e);
+      return e->is_canonical(opts);
+    };
+    CHECK(!check([](ExprPtr &e) {
+      e->as<Sum>().append(ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+    }));
+    CHECK(!check([](ExprPtr &e) { e->as<Sum>().append(ex<Constant>(1)); }));
+    CHECK(!check([](ExprPtr &e) { e += ex<Variable>(L"x"); }));
+    CHECK(!check([](ExprPtr &e) { (*e)[1] = ex<Variable>(L"x"); }));
+    CHECK(!check([](ExprPtr &e) { std::swap((*e)[0], (*e)[1]); }));
+    // a deep mutation, via a pointer to the subexpression
+    CHECK(!check([](ExprPtr &e) {
+      const auto &product = e->as<Sum>().summand(0);
+      product->as<Product>().factor(0)->as<Tensor>().transform_indices(
+          container::map<Index, Index>{{Index{L"a_1"}, Index{L"a_3"}}});
+    }));
+    CHECK(!check(
+        [](ExprPtr &e) { e->as<Sum>().summand(0)->as<Product>().scale(2); }));
+    CHECK(check([](ExprPtr &e) {
+      for ([[maybe_unused]] auto &summand : *e) {
+      }
+      e->visit([](ExprPtr &) {});
+    }));
+  }
+
+  SECTION("clone keeps the mark") {
+    for (auto e : {make_product(), make_sum()}) {
+      e->mark_canonical(opts);
+      auto c = e->clone();
+      REQUIRE(c->is_canonical(opts));
+      // mutating the clone does not affect the original, or vice versa
+      c->adjoint();
+      REQUIRE(!c->is_canonical(opts));
+      REQUIRE(e->is_canonical(opts));
+      auto c2 = e->clone();
+      e->adjoint();
+      REQUIRE(c2->is_canonical(opts));
+    }
+    auto t = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"});
+    t->mark_canonical(opts);
+    REQUIRE(t->clone()->is_canonical(opts));
+    auto c = ex<Constant>(2);
+    c->mark_canonical(opts);
+    REQUIRE(c->clone()->is_canonical(opts));
+  }
+
+  SECTION("moving out invalidates the source") {
+    auto e = make_product();
+    e->mark_canonical(opts);
+    Product moved(std::move(e->as<Product>()));
+    REQUIRE(!e->is_canonical(opts));
   }
 }

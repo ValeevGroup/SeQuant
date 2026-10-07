@@ -1644,3 +1644,117 @@ TEST_CASE("wick_nop_canonicalization", "[algorithms][wick]") {
         FNOperator::labels()[0]));
   }
 }
+
+TEST_CASE("wick_input_canonicalization", "[algorithms][wick][valgrind_skip]") {
+  using namespace sequant;
+
+  // only Complete canonicalization marks its result
+  auto complete_ctx = get_default_context();
+  complete_ctx.set(
+      CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto complete_resetter = set_scoped_default_context(complete_ctx);
+
+  Index::reset_tmp_index();
+
+  auto make_h2t2 = [] {
+    return ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                      Symmetry::Antisymm) *
+           ex<FNOperator>(cre({L"p_1", L"p_2"}), ann({L"p_4", L"p_3"})) *
+           ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                      Symmetry::Antisymm) *
+           ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+  };
+  auto make_h1t1 = [] {
+    return ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}) *
+           ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"})) *
+           ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+           ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+  };
+
+  SECTION("a Product input is fully canonicalized") {
+    // N.B. the input is canonicalized in place
+    auto input = make_h2t2();
+    ExprPtr result;
+    const auto nrapid = count_product_canonicalizations(
+        [&] { result = FWickTheorem{input}.compute(); },
+        {CanonicalizationMethod::Rapid});
+    REQUIRE(nrapid == 0);
+
+    // and not at all if already canonical, with the same result
+    auto canonical_input = make_h2t2();
+    canonicalize(canonical_input);
+    REQUIRE(canonical_input->is_canonical());
+    auto noncanonical_input = make_h2t2();
+    ExprPtr canonical_result;
+    const auto ncanonical = count_product_canonicalizations(
+        [&] { canonical_result = FWickTheorem{canonical_input}.compute(); });
+    const auto nnoncanonical = count_product_canonicalizations(
+        [&] { result = FWickTheorem{noncanonical_input}.compute(); });
+    REQUIRE(ncanonical + 1 == nnoncanonical);
+    REQUIRE(to_latex(canonical_result) == to_latex(result));
+  }
+
+  SECTION("a Sum input is fully canonicalized") {
+    auto canonical_input = make_h2t2() + make_h1t1();
+    canonicalize(canonical_input);
+    REQUIRE(canonical_input->is_canonical());
+    // its summands are left in the canonical form that summands of a Sum get
+    const auto opts = CanonicalizeOptions::default_options();
+    const auto summand_opts =
+        opts.copy_and_set(opts.method | CanonicalizationMethod::Topological)
+            .copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No);
+    REQUIRE(canonical_input->size() == 2);
+    for (const auto& summand : *canonical_input)
+      REQUIRE(summand->is_canonical(summand_opts));
+
+    auto noncanonical_input = make_h2t2() + make_h1t1();
+    ExprPtr canonical_result, result;
+    const auto ncanonical = count_product_canonicalizations(
+        [&] { canonical_result = FWickTheorem{canonical_input}.compute(); });
+    const auto nnoncanonical = count_product_canonicalizations(
+        [&] { result = FWickTheorem{noncanonical_input}.compute(); });
+    // the rapid and the full pass over each summand are skipped
+    REQUIRE(ncanonical + 4 == nnoncanonical);
+    REQUIRE(to_latex(canonical_result) == to_latex(result));
+  }
+
+  // canonicalization replaces a Sum of at most one summand, or a Product of
+  // one factor with a unit scalar, by that term
+  SECTION("a Sum input whose summands cancel") {
+    auto input = make_h1t1() - make_h1t1();
+    REQUIRE(FWickTheorem{input}.compute()->is_zero());
+  }
+
+  SECTION("a Sum input left with one summand") {
+    auto reference = FWickTheorem{ex<Constant>(2) * make_h1t1()}.compute();
+    for (auto input : {make_h1t1() + make_h1t1(),
+                       ex<Sum>(ExprPtrList{ex<Constant>(2) * make_h1t1()})}) {
+      auto result = FWickTheorem{input}.compute();
+      REQUIRE(simplify(result - reference)->is_zero());
+    }
+  }
+
+  SECTION("a Product input of one normal operator") {
+    auto nop = ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    REQUIRE(FWickTheorem{ex<Product>(1, ExprPtrList{nop->clone()})}
+                .compute()
+                ->is_zero());
+    auto result = FWickTheorem{ex<Product>(1, ExprPtrList{nop->clone()})}
+                      .full_contractions(false)
+                      .compute();
+    REQUIRE(simplify(result - nop)->is_zero());
+  }
+
+  // relies on the tensor-network rule that a contraction of a symmetric with
+  // an antisymmetric pair of slots is zero
+  SECTION("symmetric amplitude times antisymmetric operator") {
+    auto input = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                            Symmetry::Symm) *
+                 ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+    auto result = FWickTheorem{input}
+                      .full_contractions(false)
+                      .use_topology(false)
+                      .compute();
+    REQUIRE(result->is_zero());
+  }
+}

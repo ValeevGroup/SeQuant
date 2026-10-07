@@ -1,3 +1,4 @@
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
@@ -149,7 +150,10 @@ ExprPtr Sum::clone() const {
   auto cloned_summands =
       summands() |
       ranges::views::transform([](const ExprPtr &ptr) { return ptr->clone(); });
-  return ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
+  auto result =
+      ex<Sum>(ranges::begin(cloned_summands), ranges::end(cloned_summands));
+  result->as<Sum>().copy_canonical_mark(*this);
+  return result;
 }
 
 void Sum::adjoint() {
@@ -165,25 +169,30 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
+  // options of the rapid and of the full canonicalization of the summands;
+  // canonicalizing TNs in a sum requires treating named indices as
+  // meaningful/distinct
+  auto rapid_opts = opts;
+  rapid_opts.ignore_named_index_labels =
+      CanonicalizeOptions::IgnoreNamedIndexLabel::No;
+  rapid_opts.method = CanonicalizationMethod::Lexicographic;
+  auto full_opts = rapid_opts;
+  full_opts.method = opts.method | CanonicalizationMethod::Topological;
+
   const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
     const auto rapid = (pass % 2 == 0);
-
-    // canonicalizing TNs in a sum requires treating named indices as
-    // meaningful/distinct
-    auto opts_copy = opts;
-    opts_copy.ignore_named_index_labels =
-        CanonicalizeOptions::IgnoreNamedIndexLabel::No;
-    if (rapid) {
-      opts_copy.method = CanonicalizationMethod::Lexicographic;
-    } else
-      opts_copy.method = opts.method | CanonicalizationMethod::Topological;
+    const auto &opts_copy = rapid ? rapid_opts : full_opts;
 
     // recursively canonicalize summands ...
     // using for_each and direct access to summands
-    sequant::for_each(summands_, [&opts_copy, &rapid](ExprPtr &summand) {
+    // N.B. summands already in the canonical form that the full pass of
+    // multipass canonicalization produces are left alone by every pass
+    sequant::for_each(summands_, [&opts_copy, &rapid, &multipass,
+                                  &full_opts](ExprPtr &summand) {
       ExprPtr bp;
       if (rapid) {
+        if (multipass && summand->is_canonical(full_opts)) return;
         bp = summand->rapid_canonicalize(opts_copy);
       } else {
         bp = summand->canonicalize(opts_copy);
@@ -236,8 +245,10 @@ Sum &Sum::operator-=(const Expr &that) {
 }
 
 ExprIterator Sum::begin_subexpr() {
+  // N.B. the canonical mark need not be reset: changes of the summands are
+  // detected by Expr::is_canonical()
   if (!summands_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{summands_.data()};
@@ -248,7 +259,7 @@ ExprIterator Sum::end_subexpr() {
   // memoized hash, regardless of which end of the range it points at
   // (`*(--end())` mutates just as `*begin()` does)
   if (!summands_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{summands_.data() + summands_.size()};
@@ -287,7 +298,11 @@ Expr::hash_type Sum::memoizing_hash() const {
 }
 
 ExprPtr Sum::canonicalize(CanonicalizeOptions opt) {
-  return canonicalize_impl(true, opt);
+  if (is_canonical(opt)) return {};
+  const auto contexts_version = current_contexts_version();
+  auto byproduct = canonicalize_impl(true, opt);
+  mark_canonical(opt, contexts_version);
+  return byproduct;
 }
 ExprPtr Sum::rapid_canonicalize(CanonicalizeOptions opts) {
   SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
