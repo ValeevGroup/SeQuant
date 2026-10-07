@@ -369,15 +369,15 @@ TEST_CASE("context", "[runtime]") {
     CHECK(Context{} == Context{});
     CHECK(Context{} != with_registry);
 
-    // equality does not imply equal versions: it compares canonicalization
-    // options by method only
+    // the canonicalization options are compared in full, named indices
+    // included, as the version does
     {
       Context plain(with_registry);
       plain.set(CanonicalizeOptions::default_options());
       Context named(with_registry);
       named.set(CanonicalizeOptions::default_options().copy_and_set(
           std::optional<container::set<Index>>{container::set<Index>{}}));
-      CHECK(named == plain);
+      CHECK(named != plain);
       CHECK(named.version() != plain.version());
     }
     // the version of a configuration whose objects are gone is not reused,
@@ -812,4 +812,66 @@ TEST_CASE("parallel exceptions", "[runtime]") {
         CHECK(rethrown_item(e.exceptions()[k].second) == static_cast<int>(k));
     }
   }
+}
+
+// the helper changes the canonicalization options of the context in effect
+// for every Statistics and nothing else, i.e. a context specific to one
+// Statistics keeps its other settings
+TEST_CASE("scoped_canonicalize_options", "[runtime]") {
+  using namespace sequant;
+  auto fermi = get_default_context(Statistics::FermiDirac);
+  fermi.set(Vacuum::Physical);
+  auto arbitrary = get_default_context();
+  arbitrary.set(Vacuum::SingleProduct);
+  auto outer = set_scoped_default_context(container::map<Statistics, Context>{
+      {Statistics::FermiDirac, fermi}, {Statistics::Arbitrary, arbitrary}});
+  const auto opts = CanonicalizeOptions::default_options().copy_and_set(
+      container::set<Index>{Index{L"i_1"}});
+  REQUIRE(
+      get_default_context(Statistics::FermiDirac).canonicalization_options() !=
+      opts);
+  {
+    auto inner = tests::scoped_canonicalize_options(opts);
+    CHECK(get_default_context(Statistics::FermiDirac).vacuum() ==
+          Vacuum::Physical);
+    CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
+    CHECK(get_default_context(Statistics::FermiDirac)
+              .canonicalization_options() == opts);
+    CHECK(get_default_context().canonicalization_options() == opts);
+  }
+  CHECK(get_default_context(Statistics::FermiDirac).vacuum() ==
+        Vacuum::Physical);
+  CHECK(
+      get_default_context(Statistics::FermiDirac).canonicalization_options() !=
+      opts);
+}
+
+// a pin scopes a copy of the contexts in effect, with their versions, that a
+// change of the process-wide contexts made meanwhile does not reach; under a
+// scoped context it installs nothing
+TEST_CASE("pin_default_contexts", "[runtime]") {
+  using namespace sequant;
+  using Contexts = container::map<Statistics, Context>;
+  REQUIRE(detail::implicit_context_overlay<Contexts>() == nullptr);
+  const auto version = current_contexts_version();
+  const auto vacuum = get_default_context().vacuum();
+  const auto other_vacuum =
+      vacuum == Vacuum::Physical ? Vacuum::SingleProduct : Vacuum::Physical;
+  {
+    auto pin = pin_default_contexts();
+    const auto* overlay = detail::implicit_context_overlay<Contexts>();
+    REQUIRE(overlay != nullptr);
+    CHECK(current_contexts_version() == version);
+    auto changed = get_default_context();
+    changed.set(other_vacuum);
+    set_default_context(changed);
+    CHECK(get_default_context().vacuum() == vacuum);
+    auto inner = pin_default_contexts();
+    CHECK(detail::implicit_context_overlay<Contexts>() == overlay);
+  }
+  CHECK(get_default_context().vacuum() == other_vacuum);
+  auto restored = get_default_context();
+  restored.set(vacuum);
+  set_default_context(restored);
+  CHECK(current_contexts_version() == version);
 }

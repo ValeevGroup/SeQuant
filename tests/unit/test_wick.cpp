@@ -15,6 +15,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/debug.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
 #include <SeQuant/core/utility/scope.hpp>
@@ -23,6 +24,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "catch2_sequant.hpp"
 
 #include <range/v3/range/conversion.hpp>
@@ -277,9 +279,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
 
     // general string of creators/annihilators, from Nick Mayhall
     {
-      // sequence of individual ops
+      // sequence of individual ops; i_1 appears twice, hence every index is
+      // named to keep it external
       const auto ops = {fann("i_1"), fcre("i_2"), fcre("i_3"),
                         fann("i_4"), fann("i_5"), fcre("i_1")};
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"},
+                                    Index{L"i_4"}, Index{L"i_5"}}));
       REQUIRE_NOTHROW(FWickTheorem(ops));
       FWickTheorem w(ops);
       REQUIRE_NOTHROW(w.full_contractions(false).compute());
@@ -708,14 +715,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                       Symmetry::Antisymm) *
            ex<FNOperator>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"}))) *
           ex<FNOperator>(cre({L"a_2"}), ann({}));
+      // the external indices are the context's named indices
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{Index(L"i_1"), Index(L"a_3"), Index(L"a_4"),
+                                    Index(L"a_2")}));
       auto wick = FWickTheorem{input};
-      wick.set_external_indices(IndexList{L"i_1", L"a_3", L"a_4", L"a_2"})
-          .use_topology(true);
+      wick.use_topology(true);
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
       REQUIRE(to_latex(result) == L"{\\bar{g}^{{a_2}{i_1}}_{{a_3}{a_4}}}");
-      canonicalize(result, {.method = CanonicalizationMethod::Rapid});
+      auto rapid = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Rapid));
+      canonicalize(result);
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
@@ -847,17 +861,13 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                                      FNOperator(cre({L"p_3"}), ann({L"p_4"})),
                                      FNOperator(cre({L"p_5"}), ann({L"p_6"})),
                                      FNOperator(cre({L"p_7"}), ann({L"p_8"})));
-      auto ext_indices = make_indices<std::vector<Index>>(WstrList{
-          L"p_1", L"p_2", L"p_3", L"p_4", L"p_5", L"p_6", L"p_7", L"p_8"});
       auto wick1 = FWickTheorem{opseq};
-      auto result1 = wick1.set_external_indices(ext_indices).compute();
+      auto result1 = wick1.compute();
       REQUIRE(result1->is<Sum>());
       REQUIRE(result1->size() == 9);
       REQUIRE(9 == GWT({1, 1, 1, 1}).result().size());
       auto wick2 = FWickTheorem{opseq};
-      auto result2 = wick2.set_external_indices(ext_indices)
-                         .set_nop_connections({{1, 2}, {1, 3}})
-                         .compute();
+      auto result2 = wick2.set_nop_connections({{1, 2}, {1, 3}}).compute();
       REQUIRE(result2->is<Sum>());
       REQUIRE(result2->size() == 2);
     }
@@ -1010,9 +1020,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             ex<FNOperator>(cre({L"i_3", L"i_4"}), ann({L"a_3", L"a_4"})) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
             ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+        auto scope = scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                container::set<Index>{Index(L"i_3"), Index(L"i_4"),
+                                      Index(L"a_3"), Index(L"a_4")}));
         auto wick = FWickTheorem{input};
-        wick.set_external_indices(IndexList{L"i_3", L"i_4", L"a_3", L"a_4"})
-            .use_topology(topology);
+        wick.use_topology(topology);
         auto result = wick.compute();
         simplify(result);
         results[topology] = result;
@@ -1025,6 +1038,138 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         REQUIRE_THAT(results[true], EquivalentTo(results[false]));
       }
     }
+  }
+
+  // an index that the context names is external to the theorem even if it
+  // appears twice, for the canonicalization of the input and of the result as
+  // well as for the reduction
+  SECTION("named indices from the context") {
+    const Index p3(L"p_3"), p4(L"p_4");
+    auto input = ex<Tensor>(L"f", bra{p3}, ket{p4}) *
+                 ex<FNOperator>(cre({p3}), ann({p4})) *
+                 ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    // p_3 and p_4 appear twice, hence are summed over by default
+    auto summed = FWickTheorem{input->clone()}.compute();
+    REQUIRE_THAT(summed,
+                 EquivalentTo(ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"})));
+
+    ExprPtr fixed;
+    FWickTheorem wick{input->clone()};
+    {
+      auto scope = scoped_canonicalize_options(
+          CanonicalizeOptions::default_options().copy_and_set(
+              container::set<Index>{p3}));
+      fixed = wick.compute();
+      REQUIRE(get_used_indices_with_counts(fixed).contains(p3));
+      REQUIRE_THAT(fixed, !EquivalentTo(summed));
+    }
+    // the external indices are those of the context in effect at the call,
+    // not those of the compute: summing over p_3 afterwards recovers the
+    // summed result
+    wick.reduce(fixed);
+    REQUIRE_THAT(fixed, EquivalentTo(summed));
+  }
+
+  // a second compute() counts the indices of the product again, not those of
+  // the operator sequence that the first one split off from it, in which
+  // every index of the example appears once
+  SECTION("repeated compute agrees") {
+    auto input = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"p_4"}) *
+                 ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"})) *
+                 ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    FWickTheorem wick{input};
+    auto first = wick.compute();
+    REQUIRE_THAT(first,
+                 EquivalentTo(ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"})));
+    auto second = wick.compute();
+    REQUIRE_THAT(second, EquivalentTo(first));
+  }
+
+  // an operator sequence is subject to the same rule as an expression: an
+  // index that appears twice is a dummy unless the context names it
+  SECTION("operator sequence with a repeated index") {
+    const Index p2(L"p_2");
+    auto op1 = FNOperator(cre({L"p_1"}), ann({p2}));
+    auto op2 = FNOperator(cre({L"p_3"}), ann({L"p_4"}));
+    auto op3 = FNOperator(cre({p2}), ann({L"p_5"}));
+    auto opseq = FNOperatorSeq{op1, op2, op3};
+    auto from_opseq = FWickTheorem{opseq}.compute();
+    auto from_expr = FWickTheorem{ex<FNOperator>(op1) * ex<FNOperator>(op2) *
+                                  ex<FNOperator>(op3)}
+                         .compute();
+    REQUIRE(!get_used_indices_with_counts(from_expr).contains(p2));
+    REQUIRE_THAT(from_opseq, EquivalentTo(from_expr));
+
+    auto scope = scoped_canonicalize_options(
+        CanonicalizeOptions::default_options().copy_and_set(
+            container::set<Index>{Index{L"p_1"}, p2, Index{L"p_3"},
+                                  Index{L"p_4"}, Index{L"p_5"}}));
+    auto named = FWickTheorem{opseq}.compute();
+    REQUIRE(get_used_indices_with_counts(named).contains(p2));
+    REQUIRE_THAT(named, !EquivalentTo(from_expr));
+  }
+
+  // reduce() tells the covariant indices (dummies it may relabel freely) from
+  // the noncovariant ones against the external indices in effect, for a
+  // product and for a sum of products alike: with the context naming p_3
+  // only, a_1 and a_2 are dummies that appear once, hence noncovariant, and
+  // the overlap between them is left alone in both cases
+  SECTION("reduce of a product and of a sum agree") {
+    auto input = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"p_4"}) *
+                 ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"})) *
+                 ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    auto scope = scoped_canonicalize_options(
+        CanonicalizeOptions::default_options().copy_and_set(
+            container::set<Index>{Index{L"p_3"}}));
+    FWickTheorem wick{input};
+    wick.compute();
+    auto make_term = [] {
+      return ex<Tensor>(L"g", bra{L"p_3"}, ket{L"i_2"}) *
+             ex<Tensor>(reserved::overlap_label(), bra{L"a_1"}, ket{L"a_2"});
+    };
+    auto product = make_term();
+    wick.reduce(product);
+    REQUIRE(product == make_term());
+    auto sum = ex<Sum>(ExprPtrList{make_term()});
+    wick.reduce(sum);
+    REQUIRE(sum->is<Sum>());
+    REQUIRE(sum->size() == 1);
+    REQUIRE(*sum->begin() == product);
+  }
+
+  // the external indices are deduced from the input, never from the
+  // expression being reduced, whose Kronecker deltas double every external
+  // index: reduce() agrees before and after compute()
+  SECTION("reduce deduces the external indices from the input") {
+    auto input = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"a_1"}) *
+                 ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}));
+    // p_3 is external to the input but appears twice here
+    auto make_term = [] {
+      return ex<Tensor>(L"g", bra{L"p_3"}, ket{L"i_2"}) *
+             ex<Tensor>(reserved::kronecker_label(), bra{L"i_2"}, ket{L"p_3"});
+    };
+    auto fresh = make_term();
+    FWickTheorem{input->clone()}.reduce(fresh);
+    REQUIRE(get_used_indices_with_counts(fresh).contains(Index{L"p_3"}));
+    FWickTheorem wick{input->clone()};
+    wick.full_contractions(false).compute();
+    auto computed = make_term();
+    wick.reduce(computed);
+    REQUIRE(computed == fresh);
+
+    // an expression input that is not expanded cannot be deduced from
+    auto unexpanded = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"a_1"}) *
+                      (ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) +
+                       ex<FNOperator>(cre({L"i_2"}), ann({L"a_1"})));
+    auto term = make_term();
+    REQUIRE_THROWS_AS(FWickTheorem{unexpanded}.reduce(term), Exception);
+    // nor can a Sum without a Product summand, which compute() accepts
+    auto nops = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"})) +
+                ex<FNOperator>(cre({L"i_2"}), ann({L"a_1"}));
+    REQUIRE_THROWS_WITH(
+        FWickTheorem{nops}.reduce(term),
+        Catch::Matchers::ContainsSubstring("without a Product summand"));
+    REQUIRE_NOTHROW(FWickTheorem{nops->clone()}.compute());
   }
 
   SECTION("Expression Reduction") {
@@ -1054,11 +1199,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                                       ket{L"i_4", L"i_5"}, Symmetry::Antisymm) *
                            wick_result;
       expand(wick_result_2);
-      // n.b. what used to be external indices now are dummy
-      wick.reset_indices();
-      wick.reduce(wick_result_2);
+      // what used to be external indices now are dummy: every index is
+      // a dummy
+      {
+        auto scope = scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                container::set<Index>{}));
+        wick.reduce(wick_result_2);
+      }
       rapid_simplify(wick_result_2);
-      canonicalize(wick_result_2, {.method = CanonicalizationMethod::Complete});
+      {
+        auto scope = scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                CanonicalizationMethod::Complete));
+        canonicalize(wick_result_2);
+      }
       rapid_simplify(wick_result_2);
 
       // std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
@@ -1086,9 +1241,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         expand(wick_result_2);
         REQUIRE(wick_result_2->size() == 4);  // still 4 terms
 
-        // n.b. what used to be external indices now are dummy
-        wick.reset_indices();
-        wick.reduce(wick_result_2);
+        // what used to be external indices now are dummy: every index is
+        // a dummy
+        {
+          auto scope = scoped_canonicalize_options(
+              CanonicalizeOptions::default_options().copy_and_set(
+                  container::set<Index>{}));
+          wick.reduce(wick_result_2);
+        }
         rapid_simplify(wick_result_2);
         canonicalize(wick_result_2);
         rapid_simplify(wick_result_2);
@@ -1133,12 +1293,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
               ex<Tensor>(L"t", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Antisymm) *
               wick_result;
           expand(wick_result_2);
-          // n.b. what used to be external indices now are dummy
-          wick.reset_indices();
-          wick.reduce(wick_result_2);
+          // what used to be external indices now are dummy: every index is
+          // a dummy
+          {
+            auto scope = scoped_canonicalize_options(
+                CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{}));
+            wick.reduce(wick_result_2);
+          }
           rapid_simplify(wick_result_2);
-          canonicalize(wick_result_2,
-                       {.method = CanonicalizationMethod::Complete});
+          {
+            auto scope = scoped_canonicalize_options(
+                CanonicalizeOptions::default_options().copy_and_set(
+                    CanonicalizationMethod::Complete));
+            canonicalize(wick_result_2);
+          }
           rapid_simplify(wick_result_2);
 
           // std::wcout << wick_result_2.to_latex() << std::endl;
@@ -1182,9 +1351,14 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
                      ket{L"i_3", L"i_4"}, Symmetry::Antisymm) *
           wick_result;
       expand(wick_result_2);
-      // n.b. what used to be external indices now are dummy
-      wick.reset_indices();
-      wick.reduce(wick_result_2);
+      // what used to be external indices now are dummy: every index is
+      // a dummy
+      {
+        auto scope = scoped_canonicalize_options(
+            CanonicalizeOptions::default_options().copy_and_set(
+                container::set<Index>{}));
+        wick.reduce(wick_result_2);
+      }
       rapid_simplify(wick_result_2);
       canonicalize(wick_result_2);
       rapid_simplify(wick_result_2);
@@ -1315,12 +1489,21 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     SECTION("diagonals") {
       // example with "diagonal" operator from Nick Mayhall
       {
-        // sequence of individual ops
+        // sequence of individual ops; p_1 appears twice, hence every index is
+        // named to keep it external
         const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
                           fann("p_5"), fann("p_4"), fcre("p_1")};
         FWickTheorem w(ops);
-        REQUIRE_NOTHROW(w.full_contractions(false).compute());
-        auto wresult = FWickTheorem{ops}.full_contractions(false).compute();
+        ExprPtr wresult;
+        {
+          auto scope = scoped_canonicalize_options(
+              CanonicalizeOptions::default_options().copy_and_set(
+                  container::set<Index>{Index{L"p_1"}, Index{L"p_2"},
+                                        Index{L"p_3"}, Index{L"p_4"},
+                                        Index{L"p_5"}}));
+          REQUIRE_NOTHROW(w.full_contractions(false).compute());
+          wresult = FWickTheorem{ops}.full_contractions(false).compute();
+        }
 
         auto result0 =
             wresult * ex<Constant>(ratio(1, 4)) *
@@ -1331,12 +1514,17 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
         expand(result0);
         // std::wcout << "after expand: op = " << to_latex(op) << std::endl;
 
-        // n.b. what used to be external indices are now dummy indices
-        w.reset_indices();
-        w.reduce(result0);
-        // std::wcout << "after reduce: op = " << to_latex_align(result0,
-        // 3) << std::endl;
-        simplify(result0, {{.named_indices = IndexList{}}});
+        {
+          // what used to be external indices are now dummy indices: every
+          // index is a dummy
+          auto scope = scoped_canonicalize_options(
+              CanonicalizeOptions::default_options().copy_and_set(
+                  container::set<Index>{}));
+          w.reduce(result0);
+          // std::wcout << "after reduce: op = " << to_latex_align(result0,
+          // 3) << std::endl;
+          simplify(result0);
+        }
         // sequant::wprintf(L"after simplify: op = ", to_latex_align(result0,
         // 3), L"\n");
 
@@ -1348,7 +1536,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
             fannx("p_4") * fcrex("p_1");
         auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
-        simplify(result1, {{.named_indices = IndexList{}}});
+        {
+          auto scope = scoped_canonicalize_options(
+              CanonicalizeOptions::default_options().copy_and_set(
+                  container::set<Index>{}));
+          simplify(result1);
+        }
         // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
         // to_latex_align(result1, 0, 2), L"\n");
         REQUIRE(result0 == result1);
@@ -1363,8 +1556,12 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
             fcrex("p_1");
         auto result2 =
             FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
-        simplify(result2, {{.method = CanonicalizationMethod::Complete,
-                            .named_indices = IndexList{}}});
+        {
+          auto scope = scoped_canonicalize_options(
+              {.method = CanonicalizationMethod::Complete,
+               .named_indices = container::set<Index>{}});
+          simplify(result2);
+        }
         // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
         //                  to_latex_align(result2, 0, 2), L"\n");
         REQUIRE(result2.as<Sum>().size() == 5);

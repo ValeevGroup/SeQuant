@@ -13,6 +13,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -68,7 +69,11 @@ class WickTheorem {
 
  public:
   /// @param input normal operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note the external (nonsummed) indices are the named indices of the
+  /// CanonicalizeOptions of the context (for arbitrary statistics, as read by
+  /// canonicalization) in effect at each use, if it has them (name every index
+  /// that must survive, any other is a dummy), else the indices that appear
+  /// once in the input; see external_indices()
   explicit WickTheorem(
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
@@ -77,21 +82,19 @@ class WickTheorem {
       SEQUANT_ASSERT(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
 
-    // default computation may treat repeating indices as dummy
-    // override
-    extract_indices(*input, /* force_external = */ true);
+    extract_indices(*input);
   }
 
   /// @param input normal operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(NormalOperatorSequence<S> input)
       : WickTheorem(
             std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
   /// @param expr_input input expression
-  /// @note if \p expr_input is a normal operator sequence, assume that all
-  /// indices are external (not summed), else duplicate indices are assumed
-  /// dummy
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
       *this = WickTheorem(
@@ -101,7 +104,8 @@ class WickTheorem {
   }
 
   /// @param ops operator sequence
-  /// @note assuming that all indices are external (not summed)
+  /// @note see WickTheorem(const std::shared_ptr<NormalOperatorSequence<S>>&)
+  /// for which indices are external
   explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
       : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
@@ -112,6 +116,9 @@ class WickTheorem {
     input_ = {};  // reset input_ so that it is deduced from expr_input_
     // copy ctor does not do anything useful, so this is OK
     expr_input_ = expr_input;
+    // counted from expr_input_, not from other's input: its external indices
+    // are the same, but which of its dummies are noncovariant is not
+    input_index_counts_.reset();
     reset_stats();
   }
 
@@ -160,48 +167,6 @@ class WickTheorem {
   /// @param ut if true, will utilize the topology to minimize work.
   WickTheorem &use_topology(bool ut) {
     use_topology_ = ut;
-    return *this;
-  }
-
-  /// Specifies the external indices; by default assume all indices are summed
-  /// over
-  /// @param external_indices external (nonsummed) indices
-  /// @throw Exception if WickTheorem::set_external_indices or
-  /// WickTheorem::compute had already been invoked
-  template <typename IndexContainer>
-  WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    external_indices_.reset();
-
-    if constexpr (std::is_convertible_v<
-                      IndexContainer,
-                      typename decltype(external_indices_)::value_type>)
-      external_indices_ = std::forward<IndexContainer>(external_indices);
-    else {
-      external_indices_ = typename decltype(external_indices_)::value_type{};
-      ranges::for_each(
-          std::forward<IndexContainer>(external_indices), [this](auto &&v) {
-            auto [it, inserted] = this->external_indices_->emplace(v);
-            if (!inserted) {
-              std::wstringstream ss;
-              ss << L"WickTheorem::set_external_indices: "
-                    L"external index " +
-                        io::latex::to_string(Index(v)) + L" repeated";
-              throw Exception(toUtf8(ss.str()));
-            }
-          });
-    }
-
-    user_defined_external_indices_ = true;
-    return *this;
-  }
-
-  /// Resets the memoized (external, covariant) indices; will auto-deduce next
-  /// time reduce is called
-  const WickTheorem &reset_indices() const {
-    all_indices_.reset();
-    external_indices_.reset();
-    noncovariant_indices_.reset();
-    user_defined_external_indices_ = false;
     return *this;
   }
 
@@ -477,15 +442,11 @@ class WickTheorem {
   bool use_topology_ = true;
   mutable Stats stats_;
 
-  mutable std::optional<container::set<Index>> all_indices_;
-  mutable bool user_defined_external_indices_ = false;
-  mutable std::optional<container::set<Index>> external_indices_;
-  // covariant indices (= dummy indices that appear twice in braket slots) can
-  // be "rotated" arbitrarily in reduce ... these are the ones that can't
-  // n.b. this list is computed using input expression and
-  // used to compute list in reduce because kronecker deltas propagate
-  // noncovariance
-  mutable std::optional<container::set<Index>> noncovariant_indices_;
+  // the index counts of the input, see extract_indices(); the input, not a
+  // result, since the kronecker deltas of a result double every external
+  // index. external_indices() and noncovariant_indices() derive from them
+  mutable std::optional<container::map<Index, IndexSlotCounters>>
+      input_index_counts_;
   container::svector<std::pair<Index, Index>>
       input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
                                //!< input_ whose corresponding Op<S> objects
@@ -593,18 +554,41 @@ class WickTheorem {
   friend class NontensorWickState;  // NontensorWickState needs to access
                                     // members of this
 
-  /// @brief extracts and memoizes all, external (if not already set) and
-  /// covariant indices
-
-  /// External indices appear only once in an expression
+  /// @brief counts the index occurrences of an input and memoizes them
   /// @param expr an expression
-  /// @param force_external if true, will treat all indices (even repeating) as
-  /// external
   /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
   /// subexpression)
-  /// @note protoindices of external indices are external
-  /// @throw Exception if any of @p expr subexpressions is a Sum
-  void extract_indices(const Expr &expr, bool force_external = false) const;
+  void extract_indices(const Expr &expr) const;
+
+  /// @brief counts the index occurrences of the input, if not done yet: of
+  /// the operator sequence, or of the expression (the first Product summand
+  /// of a Sum; every summand of an expanded Sum has the same external
+  /// indices)
+  /// @throw Exception if the expression input is not expanded, or is a Sum
+  /// without a Product summand
+  void extract_indices() const;
+
+  /// @return the external indices: the named indices of the context's
+  /// CanonicalizeOptions if it has them, else the indices of the input that
+  /// appear once in a nonproto slot or are pure protoindices
+  /// @pre the context names indices or extract_indices() has been called
+  container::set<Index> external_indices() const;
+
+  /// @return the noncovariant indices of the input with respect to
+  /// @p external_indices: those that have protoindices, are protoindices, or
+  /// do not appear exactly twice in nonproto slots, and are not external. A
+  /// covariant index (a dummy that appears exactly twice) can be relabeled
+  /// freely by reduce(), a noncovariant one cannot
+  /// @pre extract_indices() has been called
+  container::set<Index> noncovariant_indices(
+      const container::set<Index> &external_indices) const;
+
+  /// reduce() with the external indices, the noncovariant indices and the
+  /// context given, for the contraction engine, which derives them once per
+  /// compute() rather than once per term
+  void reduce(ExprPtr &expr, const container::set<Index> &external_indices,
+              const container::set<Index> &noncovariant_indices,
+              const Context &ctx) const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
@@ -693,9 +677,7 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi vacuum");
 
-    if (!all_indices_) {
-      extract_indices(*input_);
-    }
+    extract_indices();
 
     // process cached nop_connections_input_, if needed
     if (!nop_connections_input_.empty())
@@ -782,6 +764,8 @@ class WickTheorem {
           nopseq(nopseq),
           nopseq_size(nopseq.opsize()),
           ctx(get_default_context_snapshot(S)),
+          external_indices(wt.external_indices()),
+          noncovariant_indices(wt.noncovariant_indices(external_indices)),
           level(0),
           left_op_offset(0),
           count_only(false),
@@ -801,8 +785,11 @@ class WickTheorem {
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
     std::size_t nopseq_size;           //!< current size of nopseq
     Context ctx;                       //!< current context
-    Product sp;                        //!< current prefactor
-    std::size_t sp_initial_size = 0;   //!< size of prefactor at the start
+    container::set<Index> external_indices;  //!< external indices of the input
+    container::set<Index>
+        noncovariant_indices;         //!< noncovariant indices of the input
+    Product sp;                       //!< current prefactor
+    std::size_t sp_initial_size = 0;  //!< size of prefactor at the start
     container::svector<std::pair<Op<S>, Op<S>>>
         contractions;  //!< current list of indices of contracted {qpann,qpcre}
                        //!< ops
@@ -1515,7 +1502,8 @@ class WickTheorem {
                         auto prefactor = state.sp.clone();
                         prefactor.template as<Product>().scale(
                             std::move(scalar_prefactor));
-                        this->reduce(prefactor);
+                        this->reduce(prefactor, state.external_indices,
+                                     state.noncovariant_indices, state.ctx);
                         auto bp = prefactor->canonicalize();
                         prefactor *= bp;
 
@@ -1553,7 +1541,8 @@ class WickTheorem {
                             std::move(scalar_prefactor));
                         if (!op->empty()) summand *= std::move(op);
                         if (state.sp_initial_size > 0) {
-                          this->reduce(summand);
+                          this->reduce(summand, state.external_indices,
+                                       state.noncovariant_indices, state.ctx);
                           auto bp = summand->canonicalize();
                           summand *= bp;
                         }

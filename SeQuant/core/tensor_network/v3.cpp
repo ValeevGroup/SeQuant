@@ -778,10 +778,12 @@ ExprPtr TensorNetworkV3::canonicalize(
     container::map<Index, Index> idxrepl;
 
     // Use the new order of edges as the canonical order of indices and relabel
-    // accordingly (but only anonymous indices, of course)
-    for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
-      const Index &index = edges_[i].idx();
-      SEQUANT_ASSERT(is_anonymous_index(index));
+    // accordingly (but only anonymous indices, of course); a named index need
+    // not be an index of this network, so the named edges are skipped by
+    // membership, not by count
+    for (const auto &edge : edges_) {
+      const Index &index = edge.idx();
+      if (is_named_index(index)) continue;
       Index replacement = idxfac.make(index);
       if (index != replacement) idxrepl.emplace(index, std::move(replacement));
     }

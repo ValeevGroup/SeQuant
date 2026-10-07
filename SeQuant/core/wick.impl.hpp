@@ -562,7 +562,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     // update list of noncovariant indices every iteration
     container::set<Index> all_noncovariant_indices;
     if (have_noncovariant_indices) {
-      // see extract_indices
+      // see WickTheorem::noncovariant_indices
       all_noncovariant_indices =
           idx_counter |
           ranges::views::filter([&external_indices](const auto &v) {
@@ -654,48 +654,70 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
 }  // namespace detail
 
 template <Statistics S>
-void WickTheorem<S>::extract_indices(const Expr &expr,
-                                     bool force_external) const {
-  auto idx_counter = get_used_indices_with_counts(expr);
+void WickTheorem<S>::extract_indices(const Expr &expr) const {
+  input_index_counts_ = get_used_indices_with_counts(expr);
+}
 
-  all_indices_ =
-      idx_counter |
-      ranges::views::transform([](const auto &v) { return v.first; }) |
-      ranges::to<container::set<Index>>;
-
-  if (!user_defined_external_indices_) {
-    const auto &copts = get_default_context().canonicalization_options();
-    if (copts && copts->named_indices) {
-      external_indices_ = copts->named_indices.value();
-    } else {
-      // external indices either appears once in nonproto slot or is pure
-      // protoindex
-      external_indices_ =
-          idx_counter | ranges::views::filter([force_external](const auto &v) {
-            return v.second.nonproto() <= 1 || force_external;
-          }) |
-          ranges::views::transform([](const auto &v) { return v.first; }) |
-          ranges::to<container::set<Index>>;
-    }
+template <Statistics S>
+void WickTheorem<S>::extract_indices() const {
+  if (input_index_counts_) return;
+  if (input_) return extract_indices(*input_);
+  SEQUANT_ASSERT(expr_input_);
+  // an expression input: its first Product summand if a Sum (every summand of
+  // an expanded Sum has the same external indices), else the expression itself
+  ExprPtr input = expr_input_;
+  if (input->is<Sum>()) {
+    const auto it = ranges::find_if(
+        *input, [](const ExprPtr &summand) { return summand->is<Product>(); });
+    if (it == ranges::end(*input))
+      throw Exception(
+          "WickTheorem::extract_indices: the expression input is a Sum without "
+          "a Product summand, its indices cannot be counted");
+    input = *it;
   }
+  bool expanded = true;
+  input->visit([&expanded](const ExprPtr &subexpr) {
+    if (subexpr->is<Sum>()) expanded = false;
+  });
+  if (!expanded)
+    throw Exception(
+        "WickTheorem::extract_indices: the input must be expanded (contains a "
+        "Sum as a subexpression)");
+  extract_indices(*input);
+}
 
-  // covariant indices are indices that do not depend on other indices,
-  // are not protoindices for other indices, and are dummy, i.e. summed over by
-  // appearing twice in nonproto slots and not among external indices
-  // noncovariant indices are the rest
-  noncovariant_indices_ =
-      idx_counter | ranges::views::filter([this](const auto &v) {
-        return (v.first.has_proto_indices() == true || v.second.proto != 0 ||
-                v.second.nonproto() != 2) &&
-               !external_indices_->contains(v.first);
-      }) |
-      ranges::views::transform([](const auto &v) { return v.first; }) |
-      ranges::to<container::set<Index>>;
+template <Statistics S>
+container::set<Index> WickTheorem<S>::external_indices() const {
+  const auto &copts = get_default_context().canonicalization_options();
+  if (copts && copts->named_indices) return *copts->named_indices;
+  SEQUANT_ASSERT(input_index_counts_);
+  return *input_index_counts_ | ranges::views::filter([](const auto &v) {
+    return v.second.nonproto() <= 1;
+  }) | ranges::views::transform([](const auto &v) { return v.first; }) |
+         ranges::to<container::set<Index>>;
+}
+
+template <Statistics S>
+container::set<Index> WickTheorem<S>::noncovariant_indices(
+    const container::set<Index> &external_indices) const {
+  SEQUANT_ASSERT(input_index_counts_);
+  return *input_index_counts_ |
+         ranges::views::filter([&external_indices](const auto &v) {
+           return (v.first.has_proto_indices() || v.second.proto != 0 ||
+                   v.second.nonproto() != 2) &&
+                  !external_indices.contains(v.first);
+         }) |
+         ranges::views::transform([](const auto &v) { return v.first; }) |
+         ranges::to<container::set<Index>>;
 }
 
 template <Statistics S>
 ExprPtr WickTheorem<S>::compute(const bool count_only,
                                 const bool skip_input_canonicalization) {
+  // the canonicalization options are read from the context at several points
+  // of this call
+  const auto contexts_in_effect = pin_default_contexts();
+
   // canonicalization of the operators produced by WickTheorem would undo
   // what NormalOperator<S>::normalize did, so the returned object scopes a
   // context in which they are not canonicalized; it installs nothing if the
@@ -754,28 +776,6 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
-      // find external_indices if don't have them
-      if (!external_indices_) {
-        const auto &copts = get_default_context().canonicalization_options();
-        if (copts && copts->named_indices) {
-          external_indices_ = copts->named_indices.value();
-        } else {
-          ranges::find_if(summands, [this](const auto &summand) {
-            if (summand.template is<Sum>())  // summands must not be a Sum
-              throw Exception(
-                  "WickTheorem<S>::compute(expr): expr is a Sum with one of "
-                  "the "
-                  "summands also a Sum, WickTheorem can only accept a fully "
-                  "expanded Sum");
-            else if (summand.template is<Product>()) {
-              extract_indices(*(summand.template as_shared_ptr<Product>()));
-              return true;
-            } else
-              return false;
-          });
-        }
-      }
-
       if (Logger::instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
                    << summands.size()
@@ -813,9 +813,11 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       // subsequent nop canonicalization
       const auto nop_canonicalization_disabled = disable_nop_canonicalization();
 
-      if (!all_indices_) {
-        extract_indices(*(expr_input_.as_shared_ptr<Product>()));
-      }
+      // the input was expanded and may have been canonicalized, so counts
+      // taken by an earlier reduce() describe an input that is gone; counted
+      // from the product, since input_ holds the operator sequence that an
+      // earlier compute() split off from it
+      extract_indices(*expr_input_);
 
       // split off NormalOperators into input_
       auto first_nop_it = ranges::find_if(
@@ -954,14 +956,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           }
 
           // the input is zero if it has an automorphism of phase -1; pruning
-          // by its topology would not preserve that. Declared external
-          // indices are not permuted (Graph::automorphism_phase also fixes
-          // the network's own external indices), even if contracted.
+          // by its topology would not preserve that. External indices are
+          // not permuted (Graph::automorphism_phase also fixes the network's
+          // own external indices), even if contracted.
           {
-            TN::NamedIndexSet declared_external;
-            if (external_indices_)
-              declared_external.insert(external_indices_->begin(),
-                                       external_indices_->end());
+            const auto external = external_indices();
+            TN::NamedIndexSet declared_external(external.begin(),
+                                                external.end());
             if (ranges::any_of(aut_generators, [&](const auto &aut) {
                   return g.automorphism_phase(aut.data(), &declared_external) ==
                          -1;
@@ -1305,24 +1306,30 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
 template <Statistics S>
 void WickTheorem<S>::reduce(ExprPtr &expr) const {
+  // see compute()
+  const auto contexts_in_effect = pin_default_contexts();
+
+  extract_indices();
+  const auto external = external_indices();
+  reduce(expr, external, noncovariant_indices(external),
+         get_default_context_snapshot(S));
+}
+
+template <Statistics S>
+void WickTheorem<S>::reduce(ExprPtr &expr,
+                            const container::set<Index> &external,
+                            const container::set<Index> &noncovariant,
+                            const Context &ctx) const {
   if (Logger::instance().wick_reduce) {
     std::wcout << "WickTheorem<S>::reduce: input = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
 
-  const bool extracted_indices = !all_indices_;
-  if (extracted_indices) {
-    extract_indices(*expr);
-  }
-
-  const auto ctx = get_default_context_snapshot(S);
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
   if (expr.is<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
-    SEQUANT_ASSERT(external_indices_);
-    if (detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
-                                    *external_indices_, ctx)) {
+    if (detail::reduce_wick_impl<S>(expr_cast, external, noncovariant, ctx)) {
       expr = expr_cast;
     } else {
       expr = std::make_shared<Constant>(0);
@@ -1331,9 +1338,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     for (auto &&subexpr : *expr) {
       SEQUANT_ASSERT(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
-      SEQUANT_ASSERT(external_indices_);
-      if (detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
-                                      *noncovariant_indices_, ctx))
+      if (detail::reduce_wick_impl<S>(subexpr_cast, external, noncovariant,
+                                      ctx))
         subexpr = subexpr_cast;
       else
         subexpr = std::make_shared<Constant>(0);
@@ -1344,7 +1350,6 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     sequant::wprintf(
         "WickTheorem<S>::reduce: result = ", to_latex_align(expr, 20, 1), "\n");
   }
-  if (extracted_indices) reset_indices();
 }
 template <Statistics S>
 WickTheorem<S>::~WickTheorem() {}
