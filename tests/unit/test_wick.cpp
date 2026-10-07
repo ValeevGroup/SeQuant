@@ -1093,6 +1093,34 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE_THAT(named, !EquivalentTo(from_expr));
   }
 
+  // reduce() tells the covariant indices (dummies it may relabel freely) from
+  // the noncovariant ones against the external indices in effect, for a
+  // product and for a sum of products alike: with the context naming p_3
+  // only, a_1 and a_2 are dummies that appear once, hence noncovariant, and
+  // the overlap between them is left alone in both cases
+  SECTION("reduce of a product and of a sum agree") {
+    auto input = ex<Tensor>(L"f", bra{L"p_3"}, ket{L"p_4"}) *
+                 ex<FNOperator>(cre({L"p_3"}), ann({L"p_4"})) *
+                 ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    auto scope = scoped_canonicalize_options(
+        CanonicalizeOptions::default_options().copy_and_set(
+            container::set<Index>{Index{L"p_3"}}));
+    FWickTheorem wick{input};
+    wick.compute();
+    auto make_term = [] {
+      return ex<Tensor>(L"g", bra{L"p_3"}, ket{L"i_2"}) *
+             ex<Tensor>(reserved::overlap_label(), bra{L"a_1"}, ket{L"a_2"});
+    };
+    auto product = make_term();
+    wick.reduce(product);
+    REQUIRE(product == make_term());
+    auto sum = ex<Sum>(ExprPtrList{make_term()});
+    wick.reduce(sum);
+    REQUIRE(sum->is<Sum>());
+    REQUIRE(sum->size() == 1);
+    REQUIRE(*sum->begin() == product);
+  }
+
   SECTION("Expression Reduction") {
     constexpr Vacuum V = Vacuum::SingleProduct;
     // default vacuum is already spin-orbital Fermi vacuum

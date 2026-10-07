@@ -13,6 +13,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -436,17 +437,11 @@ class WickTheorem {
   bool use_topology_ = true;
   mutable Stats stats_;
 
-  // the indices deduced from the input by extract_indices(); the input, not
-  // a result, since the kronecker deltas of a result double every external
-  // index. The context's named indices override the external ones at each
-  // use, see external_indices()
-  mutable std::optional<container::set<Index>> external_indices_;
-  // covariant indices (= dummy indices that appear twice in braket slots) can
-  // be "rotated" arbitrarily in reduce ... these are the ones that can't
-  // n.b. this list is computed using input expression and
-  // used to compute list in reduce because kronecker deltas propagate
-  // noncovariance
-  mutable std::optional<container::set<Index>> noncovariant_indices_;
+  // the index counts of the input, see extract_indices(); the input, not a
+  // result, since the kronecker deltas of a result double every external
+  // index. external_indices() and noncovariant_indices() derive from them
+  mutable std::optional<container::map<Index, IndexSlotCounters>>
+      input_index_counts_;
   container::svector<std::pair<Index, Index>>
       input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
                                //!< input_ whose corresponding Op<S> objects
@@ -554,21 +549,26 @@ class WickTheorem {
   friend class NontensorWickState;  // NontensorWickState needs to access
                                     // members of this
 
-  /// @brief deduces and memoizes the external and the noncovariant indices of
-  /// an input
-
-  /// An external index appears once in a nonproto slot or is a pure
-  /// protoindex; a noncovariant index is any other that has protoindices, is
-  /// a protoindex, or does not appear exactly twice in nonproto slots
+  /// @brief counts the index occurrences of an input and memoizes them
   /// @param expr an expression
   /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
   /// subexpression)
   void extract_indices(const Expr &expr) const;
 
   /// @return the external indices: the named indices of the context's
-  /// CanonicalizeOptions if it has them, else those deduced from the input
+  /// CanonicalizeOptions if it has them, else the indices of the input that
+  /// appear once in a nonproto slot or are pure protoindices
   /// @pre the context names indices or extract_indices() has been called
   container::set<Index> external_indices() const;
+
+  /// @return the noncovariant indices of the input with respect to
+  /// @p external_indices: those that have protoindices, are protoindices, or
+  /// do not appear exactly twice in nonproto slots, and are not external. A
+  /// covariant index (a dummy that appears exactly twice) can be relabeled
+  /// freely by reduce(), a noncovariant one cannot
+  /// @pre extract_indices() has been called
+  container::set<Index> noncovariant_indices(
+      const container::set<Index> &external_indices) const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
@@ -657,7 +657,7 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi vacuum");
 
-    if (!external_indices_) {
+    if (!input_index_counts_) {
       extract_indices(*input_);
     }
 
