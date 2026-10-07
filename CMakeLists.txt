@@ -392,6 +392,7 @@ set(SeQuant_symb_src
         SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
+        SeQuant/core/tensor_canonicalizer_fwd.hpp
         SeQuant/core/tensor_network.hpp
         SeQuant/core/tensor_network/canonicals.hpp
         SeQuant/core/tensor_network/slot.hpp
@@ -616,7 +617,9 @@ endif()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
-        target_link_libraries(SeQuant-symb PRIVATE ${TBB_LIBRARIES})
+        # public: the parallel algorithms in runtime.hpp are instantiated in
+        # consumers' translation units
+        target_link_libraries(SeQuant-symb PUBLIC TBB::tbb)
     endif()
 endif()
 target_link_libraries(SeQuant-symb

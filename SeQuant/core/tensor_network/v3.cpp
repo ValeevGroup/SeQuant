@@ -7,6 +7,7 @@
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
@@ -21,17 +22,24 @@
 #include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <memory>
+#include <numeric>
+#include <span>
 #include <sstream>
 #include <string>
+#include <vector>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/is_sorted.hpp>
@@ -49,6 +57,141 @@
 #include <range/v3/view/zip.hpp>
 
 namespace sequant {
+
+namespace {
+
+using Permutation = std::vector<unsigned int>;
+
+/// @return generators of the automorphisms of @p graph that fix each of
+/// @p fixed_vertices
+std::vector<Permutation> stabilizer_generators(
+    const TensorNetworkV3::Graph &graph,
+    const std::vector<unsigned int> &fixed_vertices) {
+  const auto nvertices = graph.bliss_graph->get_nof_vertices();
+  Permutation identity(nvertices);
+  std::iota(identity.begin(), identity.end(), 0);
+  std::unique_ptr<bliss::Graph> individualized(
+      graph.bliss_graph->permute(identity));
+  // each fixed vertex gets a color of its own
+  container::set<TensorNetworkV3::Graph::VertexColor> used(
+      graph.vertex_colors.begin(), graph.vertex_colors.end());
+  auto color = std::numeric_limits<TensorNetworkV3::Graph::VertexColor>::max();
+  for (const auto vertex : fixed_vertices) {
+    while (used.contains(color)) --color;
+    individualized->change_color(vertex, color);
+    used.insert(color);
+  }
+  std::vector<Permutation> generators;
+  using hook_t = std::function<void(unsigned int, const unsigned int *)>;
+  hook_t hook = [&generators](unsigned int n, const unsigned int *aut) {
+    generators.emplace_back(aut, aut + n);
+  };
+  bliss::Stats stats;
+  individualized->find_automorphisms(stats, &bliss::aut_hook<hook_t>, &hook);
+  return generators;
+}
+
+/// Among the canonical labelings of @p graph, which are @p labeling composed
+/// with its automorphisms, selects the one that places the named indices in
+/// label order: position by position, in canonical order, each position of a
+/// named index gets the one with the smallest label that an automorphism
+/// fixing the positions before it can bring there. This makes the labeling
+/// a function of the expression when named indices are not told apart by label
+/// in @p graph.
+/// @param labeling a canonical labeling of @p graph (input vertex to
+///        canonical position)
+/// @param generators generators of the automorphism group of @p graph
+/// @param named_indices the named indices of the network
+/// @param label_less the order of index labels, that of the tensor
+///        canonicalizers so that a lone tensor is ordered alike; must be a
+///        strict total order on @p named_indices, else the placement would
+///        depend on the input vertex numbering
+/// @return the selected labeling
+Permutation order_named_indices_by_label(
+    const TensorNetworkV3::Graph &graph, Permutation labeling,
+    std::vector<Permutation> generators,
+    const TensorNetworkV3::NamedIndexSet &named_indices,
+    const tensor_index_comparer_t &label_less) {
+  const auto nvertices = labeling.size();
+  const auto is_named = [&](unsigned int vertex) {
+    return graph.vertex_types[vertex] == VertexType::Index &&
+           named_indices.contains(graph.vertex_indices[vertex]);
+  };
+  std::vector<unsigned int> positions;
+  for (unsigned int vertex = 0; vertex != nvertices; ++vertex)
+    if (is_named(vertex)) positions.push_back(labeling[vertex]);
+  if (positions.size() < 2) return labeling;
+  std::sort(positions.begin(), positions.end());
+
+  Permutation vertex_at(nvertices);
+  const auto invert = [&] {
+    for (unsigned int vertex = 0; vertex != nvertices; ++vertex)
+      vertex_at[labeling[vertex]] = vertex;
+  };
+  invert();
+  std::vector<unsigned int> placed;
+  for (const auto position : positions) {
+    const auto current = vertex_at[position];
+    // the orbit of current under the automorphisms that fix the placed
+    // vertices, each with an automorphism that maps current to it
+    container::map<unsigned int, Permutation> transversal;
+    {
+      Permutation identity(nvertices);
+      std::iota(identity.begin(), identity.end(), 0);
+      transversal.emplace(current, std::move(identity));
+    }
+    std::vector<unsigned int> frontier{current};
+    while (!frontier.empty()) {
+      const auto vertex = frontier.back();
+      frontier.pop_back();
+      for (const auto &generator : generators) {
+        const auto image = generator[vertex];
+        if (transversal.contains(image)) continue;
+        const auto &to_vertex = transversal.at(vertex);
+        Permutation to_image(nvertices);
+        for (unsigned int v = 0; v != nvertices; ++v)
+          to_image[v] = generator[to_vertex[v]];
+        transversal.emplace(image, std::move(to_image));
+        frontier.push_back(image);
+      }
+    }
+    // an automorphism maps named indices to named ones
+    SEQUANT_ASSERT(ranges::all_of(
+        transversal, [&](const auto &entry) { return is_named(entry.first); }));
+    const auto best =
+        std::min_element(transversal.begin(), transversal.end(),
+                         [&](const auto &a, const auto &b) {
+                           return label_less(graph.vertex_indices[a.first],
+                                             graph.vertex_indices[b.first]);
+                         });
+    const auto chosen = best->first;
+    SEQUANT_ASSERT(ranges::none_of(transversal, [&](const auto &entry) {
+      return entry.first != chosen &&
+             !label_less(graph.vertex_indices[chosen],
+                         graph.vertex_indices[entry.first]);
+    }));
+    if (chosen != current) {
+      // the inverse of best->second maps chosen to current, so composing the
+      // labeling with it puts chosen at this position and leaves the placed
+      // vertices where they are
+      const auto &to_chosen = best->second;
+      Permutation inverse(nvertices);
+      for (unsigned int v = 0; v != nvertices; ++v) inverse[to_chosen[v]] = v;
+      Permutation composed(nvertices);
+      for (unsigned int v = 0; v != nvertices; ++v)
+        composed[v] = labeling[inverse[v]];
+      labeling = std::move(composed);
+      invert();
+    }
+    placed.push_back(chosen);
+    // a trivial orbit means every generator fixes chosen already
+    if (transversal.size() > 1)
+      generators = stabilizer_generators(graph, placed);
+  }
+  return labeling;
+}
+
+}  // namespace
 
 TensorNetworkV3::Vertex::Vertex(Origin origin, std::size_t terminal_idx,
                                 std::size_t index_slot, Symmetry terminal_symm)
@@ -182,7 +325,44 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     sequant::wprintf(oss.str());
   }
 
-  const unsigned int *canonize_perm = canonicalize_graph(graph);
+  // a network with an automorphism of phase -1 equals minus itself, i.e. is
+  // zero; phase is a homomorphism from the automorphism group to {+1,-1}, so
+  // if a scored generator has phase -1 the term is zero. Generators that are
+  // not scored (see Graph::automorphism_phase) can only hide a zero, never
+  // invent one.
+  bool has_odd_automorphism = false;
+  // with labels ignored, the graph does not tell named indices apart, so the
+  // canonical labeling places them only up to its automorphisms; they are then
+  // placed by label, which needs the automorphism group
+  std::vector<Permutation> automorphisms;
+  const bool collect_automorphisms = ignore_named_index_labels;
+  const unsigned int *bliss_labeling = canonicalize_graph(
+      graph, graph.antisymm_bundles.empty() && !collect_automorphisms
+                 ? std::function<void(unsigned int, const unsigned int *)>{}
+                 : [&](unsigned int n, const unsigned int *aut) {
+                     if (collect_automorphisms)
+                       automorphisms.emplace_back(aut, aut + n);
+                     if (!graph.antisymm_bundles.empty() &&
+                         !has_odd_automorphism &&
+                         graph.automorphism_phase(aut, &named_indices) == -1)
+                       has_odd_automorphism = true;
+                   });
+
+  if (has_odd_automorphism) {
+    if (Logger::instance().canonicalize)
+      sequant::wprintf(
+          "TensorNetworkV3::canonicalize_graph: automorphism of phase -1 "
+          "found, the network is zero\n");
+    return ex<Constant>(0);
+  }
+
+  Permutation labeling(bliss_labeling,
+                       bliss_labeling + graph.bliss_graph->get_nof_vertices());
+  if (collect_automorphisms && !automorphisms.empty())
+    labeling = order_named_indices_by_label(
+        graph, std::move(labeling), std::move(automorphisms), named_indices,
+        get_default_context_snapshot().index_comparer());
+  const unsigned int *canonize_perm = labeling.data();
 
   if (Logger::instance().canonicalize_dot) {
     std::wostringstream oss;
@@ -534,6 +714,7 @@ ExprPtr TensorNetworkV3::canonicalize(
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(
         named_indices, static_cast<bool>(options.ignore_named_index_labels));
+    if (byproduct && byproduct->as<Constant>().is_zero()) return byproduct;
   }
 
   if ((options.method & CanonicalizationMethod::Lexicographic) ==
@@ -1094,6 +1275,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       }
     }
 
+    // Graph::automorphism_phase scores the slots of antisymmetric bundles
+    const std::size_t antisymm_bra_bundle = tensor_sym == Symmetry::Antisymm
+                                                ? graph.antisymm_bundles.size()
+                                                : uninitialized_vertex;
+    if (tensor_sym == Symmetry::Antisymm)
+      graph.antisymm_bundles.resize(graph.antisymm_bundles.size() + 2);
+
     // - Create vertex for every index slot, regardless of symmetry
     for (auto &slot_type : {SlotType::Bra, SlotType::Ket}) {
       const auto is_bra = slot_type == SlotType::Bra;
@@ -1164,6 +1352,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // make sure logic in index_slot_offset is correct
         assert(nvertex ==
                tensor_vertex + index_slot_offset(tensor, slot_type, i));
+        if (antisymm_bra_bundle != uninitialized_vertex && slots[i].nonnull())
+          graph.antisymm_bundles[antisymm_bra_bundle + (is_bra ? 0 : 1)]
+              .push_back(nvertex);
         ++nvertex;
       }
     }  // bra+ket slots
@@ -1189,6 +1380,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   index_vertices.resize(edges_.size() + pure_proto_indices_.size(),
                         uninitialized_vertex);
 
+  const bool strict_braket_symmetry =
+      get_default_context().assert_strict_braket_symmetry();
   for (std::size_t i = 0; i < edges_.size(); ++i) {
     const Edge &current_edge = edges_[i];
 
@@ -1254,8 +1447,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // strict bra-ket sanity checks
-    if constexpr (assert_enabled()) {
-      if (get_default_context().assert_strict_braket_symmetry()) {
+    {
+      if (strict_braket_symmetry) {
         // dummy (anonymous) edges to
         // - involve at most 2 bra and/or ket indices (if BraKetSymmetry::Symm)
         // or 1 bra and 1 ket index
@@ -1263,10 +1456,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         if (current_edge.vertex_count() > 1) {
           // ignore if named index
           if (!this->ext_indices_.contains(current_edge.idx())) {
-            [[maybe_unused]] std::size_t nbra = 0;
-            [[maybe_unused]] std::size_t nket = 0;
+            std::size_t nbra = 0;
+            std::size_t nket = 0;
             [[maybe_unused]] std::size_t naux = 0;
-            [[maybe_unused]] BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
+            BraKetSymmetry symm = BraKetSymmetry::Nonsymm;
             for (std::size_t v = 0; v < current_edge.vertex_count(); ++v) {
               const Vertex &vertex = current_edge.vertex(v);
               switch (vertex.getOrigin()) {
@@ -1294,9 +1487,15 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             // distinction between bra and ket, but still can have at most 2 of
             // them total if braket symmetry != BraKetSymmetry::Symm at most 1
             // bra and 1 ket can connect to aux
-            SEQUANT_ASSERT(symm == BraKetSymmetry::Symm
-                               ? (nbra + nket <= 2)
-                               : (nbra <= 1 && nket <= 1));
+            if (symm == BraKetSymmetry::Symm ? (nbra + nket > 2)
+                                             : (nbra > 1 || nket > 1)) {
+              throw Exception(
+                  "TensorNetworkV3: index " +
+                  toUtf8(current_edge.idx().full_label()) +
+                  " is contracted between two bra slots (or two ket slots) "
+                  "of tensors without bra-ket symmetry; a contraction pairs a "
+                  "bra slot with a ket slot");
+            }
           }
         }
       }
@@ -1393,6 +1592,35 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     graph.bliss_graph->change_color(vertex, color);
   }
 
+  // what Graph::automorphism_phase needs to know about the vertices
+  graph.vertex_indices.resize(nvertex);
+  graph.vertex_fixed_for_phase.assign(nvertex, false);
+  for (std::size_t v = 0; v != nvertex; ++v) {
+    switch (graph.vertex_types[v]) {
+      case VertexType::TensorCore:
+      case VertexType::TensorAux:
+      case VertexType::TensorAuxBundle:
+      case VertexType::IndexBundle:
+        graph.vertex_fixed_for_phase[v] = true;
+        break;
+      default:
+        break;
+    }
+  }
+  for (std::size_t i = 0; i < edges_.size(); ++i) {
+    const Index &idx = edges_[i].idx();
+    graph.vertex_indices[index_vertices[i]] = idx;
+    if (ext_indices_.contains(idx))
+      graph.vertex_fixed_for_phase[index_vertices[i]] = true;
+  }
+  for (const auto &[i, index] : ranges::views::enumerate(pure_proto_indices_))
+    graph.vertex_indices[index_vertices[i + edges_.size()]] = index;
+  graph.antisymm_slots.assign(nvertex,
+                              {uninitialized_vertex, uninitialized_vertex});
+  for (std::size_t b = 0; b != graph.antisymm_bundles.size(); ++b)
+    for (std::size_t pos = 0; pos != graph.antisymm_bundles[b].size(); ++pos)
+      graph.antisymm_slots[graph.antisymm_bundles[b][pos]] = {b, pos};
+
   if (options.make_idx_to_vertex) {
     SEQUANT_ASSERT(index_vertices.size() ==
                    edges_.size() + pure_proto_indices_.size());
@@ -1413,10 +1641,53 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 }
 
 const unsigned int *TensorNetworkV3::canonicalize_graph(
-    const TensorNetworkV3::Graph &graph) {
+    const TensorNetworkV3::Graph &graph,
+    const std::function<void(unsigned int, const unsigned int *)> &aut_hook) {
+  using hook_t = std::function<void(unsigned int, const unsigned int *)>;
   bliss::Stats stats;
   graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
-  return graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
+  return graph.bliss_graph->canonical_form(
+      stats, aut_hook ? &bliss::aut_hook<const hook_t> : nullptr,
+      const_cast<hook_t *>(&aut_hook));
+}
+
+int TensorNetworkV3::Graph::automorphism_phase(
+    const unsigned int *aut,
+    const container::set<Index, Index::FullLabelCompare> *named_indices) const {
+  const std::size_t nv = vertex_types.size();
+  SEQUANT_ASSERT(vertex_indices.size() == nv &&
+                 vertex_fixed_for_phase.size() == nv &&
+                 antisymm_slots.size() == nv);
+  for (std::size_t v = 0; v != nv; ++v) {
+    if (aut[v] == v) continue;
+    if (vertex_fixed_for_phase[v]) return 0;
+    if (named_indices && vertex_types[v] == VertexType::Index &&
+        named_indices->contains(vertex_indices[v]))
+      return 0;
+  }
+
+  // aut fixes every tensor core, hence maps each antisymmetric bundle onto a
+  // bundle of the same tensor (itself, or its partner if the tensor is
+  // bra<->ket symmetric); the phase is the product of the parities of the
+  // induced maps between slot positions
+  static constexpr std::size_t npos = std::numeric_limits<std::size_t>::max();
+  int phase = 1;
+  container::svector<std::size_t, 4> perm;
+  for (std::size_t b = 0; b != antisymm_bundles.size(); ++b) {
+    const auto &vertices = antisymm_bundles[b];
+    perm.clear();
+    [[maybe_unused]] std::size_t image_bundle = npos;
+    for (const auto v : vertices) {
+      const auto &[bundle, pos] = antisymm_slots[aut[v]];
+      SEQUANT_ASSERT(bundle != npos && bundle / 2 == b / 2);
+      SEQUANT_ASSERT(image_bundle == npos || image_bundle == bundle);
+      SEQUANT_ASSERT(pos < vertices.size());
+      image_bundle = bundle;
+      perm.push_back(pos);
+    }
+    phase *= permutation_parity(std::span(perm));
+  }
+  return phase;
 }
 
 void TensorNetworkV3::init_edges() {
@@ -1589,9 +1860,10 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
     const TensorCanonicalizer &canonicalizer) {
   ExprPtr byproduct = ex<Constant>(1);
 
+  const auto ctx = get_default_context_snapshot();
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
-        TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
+        ctx.nondefault_tensor_canonicalizer_ptr(tensor->_label());
     const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 

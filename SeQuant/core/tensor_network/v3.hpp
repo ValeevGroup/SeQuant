@@ -20,6 +20,7 @@
 #include <range/v3/view/indirect.hpp>
 
 #include <cstdlib>
+#include <functional>
 #include <iosfwd>
 #include <memory>
 #include <string>
@@ -174,7 +175,36 @@ class TensorNetworkV3 {
     std::vector<VertexType> vertex_types;
     container::map<Index, std::size_t> idx_to_vertex;
 
+    /// the Index represented by each vertex of type VertexType::Index; a null
+    /// Index for the other vertices
+    std::vector<Index> vertex_indices;
+    /// whether each vertex is one that automorphism_phase() requires an
+    /// automorphism to fix: a tensor core, an aux slot, a protoindex bundle,
+    /// or an external index of the network
+    std::vector<bool> vertex_fixed_for_phase;
+    /// the slot vertices of each bra and each ket bundle of an antisymmetric
+    /// tensor that hold an index, in slot order; bundles `2k` and `2k+1` are
+    /// the bra and the ket of the same tensor
+    std::vector<container::svector<std::size_t, 4>> antisymm_bundles;
+    /// for each vertex in antisymm_bundles, its bundle and its position in
+    /// that bundle; `{npos, npos}` for the other vertices
+    std::vector<std::pair<std::size_t, std::size_t>> antisymm_slots;
+
     Graph() = default;
+
+    /// Computes the phase that an automorphism of this graph incurs: an
+    /// automorphism maps the network onto itself, up to the signs of the
+    /// permutations it induces on the slots of antisymmetric bra/ket bundles.
+    /// A network with an automorphism of phase -1 is identically zero.
+    /// @param aut an automorphism of this graph
+    /// @param named_indices indices that @p aut must fix, in addition to the
+    ///        external indices of the network; may be null
+    /// @return the phase (+1 or -1) of @p aut, or 0 if @p aut moves a tensor,
+    ///         an aux slot, a protoindex bundle, an external index or one of
+    ///         @p named_indices; such automorphisms are not scored
+    int automorphism_phase(const unsigned int *aut,
+                           const container::set<Index, Index::FullLabelCompare>
+                               *named_indices = nullptr) const;
 
     std::size_t vertex_to_index_idx(std::size_t vertex) const;
     /// maps vertex ordinal to tensor cluster ordinal
@@ -251,7 +281,9 @@ class TensorNetworkV3 {
   /// @param options see CanonicalizeOptions for the meaning of this
   /// parameter; the default is given by CanonicalizeOptions::default_options()
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
-  /// nullptr
+  /// nullptr; Constant 0 if topological canonicalization finds the network
+  /// to be zero by symmetry (see Graph::automorphism_phase()), in which case
+  /// the tensors are left as they were
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const CanonicalizeOptions &options =
@@ -445,7 +477,14 @@ class TensorNetworkV3 {
   // clang-format on
   Graph create_graph(
       const CreateGraphOptions &options = make_default_graph_options()) const;
-  static const unsigned int *canonicalize_graph(const Graph &graph);
+  /// @param graph a graph produced by create_graph()
+  /// @param aut_hook if nonempty, called with each automorphism generator of
+  /// @p graph found by bliss, as `(n, aut)`
+  /// @return the canonical labeling of @p graph
+  static const unsigned int *canonicalize_graph(
+      const Graph &graph,
+      const std::function<void(unsigned int, const unsigned int *)> &aut_hook =
+          {});
 
  private:
   /// list of tensors
@@ -476,9 +515,12 @@ class TensorNetworkV3 {
   /// @param named_indices named indices
   /// @param ignore_named_index_labels whether to ignore labels of named
   /// indices, see CanonicalizeOptions for more info
-  /// @return The byproduct of canonicalization
-  /// @note this produces canonical representation that is invariant with
-  /// respect to the renaming of named indices
+  /// @return The byproduct of canonicalization; Constant 0, with the network
+  /// unchanged, if the network has an automorphism of phase -1
+  /// @note with @p ignore_named_index_labels the structure of the result does
+  /// not depend on the labels of the named indices, but their placement does:
+  /// named indices that an automorphism of the network can exchange are placed
+  /// in the order of the context's index comparer
   [[nodiscard]] ExprPtr canonicalize_graph(
       const NamedIndexSet &named_indices,
       bool ignore_named_index_labels = true);

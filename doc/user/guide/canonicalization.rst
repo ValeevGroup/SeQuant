@@ -28,7 +28,8 @@ How it works, briefly
 ------------------------
 
 Canonicalizing a single :class:`sequant::Tensor` — putting its own bra/ket indices in a fixed order consistent with its declared
-permutational symmetry — is handled by a :class:`sequant::TensorCanonicalizer`. Canonicalizing a whole product of tensors (or of
+permutational symmetry — is handled by a :class:`sequant::TensorCanonicalizer`, looked up by the tensor's label in the current
+:class:`sequant::Context` (see :ref:`context-canonicalizer-configuration`). Canonicalizing a whole product of tensors (or of
 normal-ordered operators) additionally requires choosing a consistent relabeling of the *dummy* indices shared between factors; SeQuant
 does this by building a colored graph representation of the product (a *tensor network*) and computing its canonical form using the
 bundled `bliss <https://users.aalto.fi/~tjunttil/bliss/>`_ `graph-automorphism <https://en.wikipedia.org/wiki/Graph_automorphism>`_ library. This machinery is what
@@ -40,6 +41,9 @@ dropping zeros, ...) to fully reduce an expression:
    :start-after: start-snippet-2
    :end-before: end-snippet-2
    :dedent: 2
+
+A fully canonicalized expression remembers that it is in canonical form, so canonicalizing or simplifying it again before it is
+modified does no work.
 
 None of this needs to be invoked explicitly in typical use: the :doc:`mbpt operator machinery <operator>` and
 :doc:`CC equation generator <cc>` call ``simplify()``/canonicalization as needed while building up equations. Knowing that it happens —

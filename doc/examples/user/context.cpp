@@ -1,6 +1,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -50,6 +51,35 @@ int main() {
   }
   SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
   // end-snippet-3
+
+  // start-snippet-5
+  // the Context also owns the canonicalizer configuration: within the scope,
+  // tensors labeled "A" are canonicalized by the null canonicalizer, so their
+  // slots keep the order the graph-based canonicalization of the product gives
+  // them, here the input order (hence no phase is produced); a lone
+  // Tensor::canonicalize() would use the canonicalizer of the empty label
+  // instead
+  auto make_product = [] {
+    return ex<Tensor>(L"A", bra{L"a_1", L"i_1"}, ket{L"i_2", L"a_2"},
+                      Symmetry::Antisymm) *
+           ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_3"});
+  };
+  {
+    auto resetter = set_scoped_modified_default_context([](Context& scoped) {
+      scoped.set_tensor_canonicalizer(
+          L"A", std::make_shared<NullTensorCanonicalizer>());
+    });
+    auto product = make_product();
+    product->canonicalize();
+    SEQUANT_ASSERT(product.as<Product>().scalar() == 1);
+  }
+
+  // outside of the scope the default canonicalizer reorders the indices of A,
+  // picking up a sign
+  auto product = make_product();
+  product->canonicalize();
+  SEQUANT_ASSERT(product.as<Product>().scalar() == -1);
+  // end-snippet-5
 
   (void)ctx;
 

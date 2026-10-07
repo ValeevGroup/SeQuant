@@ -1,4 +1,5 @@
 #include <SeQuant/core/algorithm.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
@@ -52,7 +53,9 @@ Product::factors_type &Product::factors() {
   // `!factors_.empty()`: those hand out iterators, and an empty range yields
   // nothing to dereference, whereas the caller can grow an empty factors_
   // through this reference (e.g. push_back()).
-  reset_hash_value();
+  // N.B. the canonical mark need not be reset: changes of the factors are
+  // detected by Expr::is_canonical()
+  hash_value_.reset();
   return factors_;
 }
 
@@ -72,6 +75,8 @@ bool Product::is_commutative() const {
 }
 
 ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
+  reset_canonical_mark();
+
   // recursively canonicalize non-tensor subfactors (tensors will be
   // canonicalized as part of the TN built of all tensor factors of this) ...
   ranges::for_each(factors_, [this, opts](auto &factor) {
@@ -122,7 +127,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
       TN tn(this->factors_);
       if constexpr (TN::version() == 3) {
         canon_factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), opts);
+            get_default_context_snapshot().cardinal_tensor_labels(), opts);
       } else {
         using NamedIndexSet = tensor_network::NamedIndexSet;
         std::shared_ptr<NamedIndexSet> named_indices =
@@ -131,7 +136,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
                 : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
                                                   opts.named_indices->end());
         canon_factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(),
+            get_default_context_snapshot().cardinal_tensor_labels(),
             opts.method == CanonicalizationMethod::Rapid, named_indices.get());
       }
       return std::pair{std::move(tn), canon_factor};
@@ -150,13 +155,19 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
                      SEQUANT_ASSERT(exprptr);
                      return exprptr;
                    });
-    if (canon_factor) scalar_ *= canon_factor->template as<Constant>().value();
+    if (canon_factor) {
+      const auto &factor = canon_factor->template as<Constant>();
+      scalar_ *= factor.value();
+      // a network that vanishes by symmetry is not canonicalized; its tensors
+      // would make the zero product print, hash and compare as nonzero ones
+      if (factor.is_zero()) factors_.clear();
+    }
     this->reset_hash_value();
   } else {  // if contains non-tensors, do commutation-checking resort
 
     // comparer that respects cardinal tensor labels
-    auto &cardinal_tensor_labels =
-        TensorCanonicalizer::cardinal_tensor_labels();
+    const auto ctx = get_default_context_snapshot();
+    const auto &cardinal_tensor_labels = ctx.cardinal_tensor_labels();
     auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                    const ExprPtr &second) {
       if (first->is<Labeled>() && second->is<Labeled>()) {
@@ -232,7 +243,11 @@ void Product::adjoint() {
 }
 
 ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
-  return this->canonicalize_impl(opt);
+  if (this->is_canonical(opt)) return {};
+  const auto contexts_version = current_contexts_version();
+  auto byproduct = this->canonicalize_impl(opt);
+  this->mark_canonical(opt, contexts_version);
+  return byproduct;
 }
 
 ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
@@ -286,6 +301,7 @@ Product Product::deep_copy() const {
   ranges::for_each(cloned_factors, [&](const auto &cloned_factor) {
     result.append(1, std::move(cloned_factor), Flatten::No);
   });
+  result.copy_canonical_mark(*this);
   return result;
 }
 
@@ -294,6 +310,7 @@ Product &Product::operator*=(const Expr &that) {
     this->append(1, const_cast<Expr &>(that).shared_from_this());
   } else {
     scalar_ *= that.as<Constant>().value();
+    reset_canonical_mark();
   }
   return *this;
 }
@@ -301,11 +318,13 @@ Product &Product::operator*=(const Expr &that) {
 void Product::add_identical(const Product &other) {
   SEQUANT_ASSERT(ranges::equal(this->factors(), other.factors()));
   scalar_ += other.scalar_;
+  reset_canonical_mark();
 }
 
 void Product::add_identical(const std::shared_ptr<Product> &other) {
   SEQUANT_ASSERT(ranges::equal(this->factors(), other->factors()));
   scalar_ += other->scalar_;
+  reset_canonical_mark();
 }
 
 void Product::add_identical(const ExprPtr &other) {
@@ -314,11 +333,14 @@ void Product::add_identical(const ExprPtr &other) {
   // only makes sense if this has a single factor
   SEQUANT_ASSERT(this->factors_.size() == 1 && this->factors_[0] == other);
   scalar_ += 1;
+  reset_canonical_mark();
 }
 
 ExprIterator Product::begin_subexpr() {
+  // N.B. the canonical mark need not be reset: changes of the factors are
+  // detected by Expr::is_canonical()
   if (!factors_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{factors_.data()};
@@ -329,7 +351,7 @@ ExprIterator Product::end_subexpr() {
   // memoized hash, regardless of which end of the range it points at
   // (`*(--end())` mutates just as `*begin()` does)
   if (!factors_.empty()) {
-    reset_hash_value();
+    hash_value_.reset();
   }
 
   return ExprIterator{factors_.data() + factors_.size()};

@@ -7,6 +7,7 @@
 
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 namespace sequant {
 
@@ -45,6 +46,12 @@ class Variable : public Expr, public MutatableLabeled {
   bool conjugated() const;
 
   std::wstring to_latex() const override;
+
+  static constexpr type_rank_type type_rank = expr_type_rank::variable;
+  static constexpr std::string static_type_name(
+      std::type_identity<Variable> = {}) {
+    return "sequant::Variable";
+  }
 
   type_id_type type_id() const override;
 

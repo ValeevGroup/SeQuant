@@ -9,10 +9,12 @@
 
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tree_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -143,6 +145,40 @@ struct latex_visitor {
   std::wstring result{};
 };
 
+template <typename Derived>
+struct MinimalExpr : public sequant::Expr {
+  type_id_type type_id() const override { return get_type_id<Derived>(); };
+  sequant::ExprPtr clone() const override { return sequant::ex<Derived>(); }
+  void adjoint() override {}
+  bool static_equal(const sequant::Expr &) const override { return true; }
+};
+
+struct DeclaredExpr : public MinimalExpr<DeclaredExpr> {
+  static constexpr type_rank_type type_rank = 77;
+  static constexpr std::string static_type_name(
+      std::type_identity<DeclaredExpr> = {}) {
+    return "test::DeclaredExpr";
+  }
+};
+
+// inherits DeclaredExpr's type_rank and static_type_name, declares neither
+struct DerivedFromDeclaredExpr : public DeclaredExpr {};
+
+struct TwinExpr1 : public MinimalExpr<TwinExpr1> {
+  static constexpr type_rank_type type_rank = 78;
+  static constexpr std::string static_type_name(
+      std::type_identity<TwinExpr1> = {}) {
+    return "test::TwinExpr";
+  }
+};
+
+struct TwinExpr2 : public MinimalExpr<TwinExpr2> {
+  static constexpr type_rank_type type_rank = 78;
+  static std::string static_type_name(std::type_identity<TwinExpr2> = {}) {
+    return "test::TwinExpr";
+  }
+};
+
 TEST_CASE("expr", "[elements]") {
   using namespace sequant;
   SECTION("constructors") {
@@ -199,14 +235,12 @@ TEST_CASE("expr", "[elements]") {
           std::make_shared<Constant>(3)});
       const auto ex0 = std::make_shared<Dummy>();
 
-      // type ids get assigned in the order of use, which is program dependent,
-      // only check basic relations here
+      // Dummy and VecExpr do not declare static_type_name(), so their ids
+      // depend on the compiler; only check basic relations here
       REQUIRE(ex0->type_id() == Expr::get_type_id<Dummy>());
       REQUIRE(ex1->type_id() == Expr::get_type_id<Constant>());
       REQUIRE(ex4->type_id() == Expr::get_type_id<VecExpr<double>>());
-      REQUIRE(ex4->type_id() <
-              Expr::get_type_id<VecExpr<float>>());  // VecExpr<float> had not
-                                                     // been used yet
+      REQUIRE(ex4->type_id() != Expr::get_type_id<VecExpr<float>>());
 
       REQUIRE(*ex0 == *ex0);
       REQUIRE(*ex1 == *ex1);
@@ -1366,5 +1400,328 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THROWS_AS(TreeIndex({2}).select_from(expr), Exception);
       REQUIRE_THROWS_AS(TreeIndex({0, 1}).select_from(expr), Exception);
     }
+  }
+}
+
+// CProduct before Product: a derived type computed first must not take, or
+// collide with, its base's id
+TEST_CASE("expr_type_id_derived", "[elements]") {
+  using namespace sequant;
+  const auto cid = Expr::get_type_id<CProduct>();
+  const auto ncid = Expr::get_type_id<NCProduct>();
+  const auto pid = Expr::get_type_id<Product>();
+  REQUIRE(cid != pid);
+  REQUIRE(ncid != pid);
+  REQUIRE(cid != ncid);
+  const auto c = ex<Constant>(1);
+  const auto p = ex<Variable>(L"x") * ex<Variable>(L"y");
+  REQUIRE_NOTHROW(c->is<CProduct>());
+  REQUIRE_NOTHROW(c->is<NCProduct>());
+  REQUIRE_NOTHROW(p->is<CProduct>());
+  REQUIRE_NOTHROW(p->is<NCProduct>());
+  REQUIRE(p->is<Product>());
+  REQUIRE(!p->is<CProduct>());
+  REQUIRE(Expr::get_type_id<Product>() == pid);
+  REQUIRE(Expr::get_type_id<CProduct>() == cid);
+}
+
+TEST_CASE("expr_type_id", "[elements]") {
+  using namespace sequant;
+  using type_id_t = Expr::type_id_type;
+  auto rank_of = [](type_id_t id) { return Expr::type_rank_of(id); };
+
+  SECTION("core types are ordered by rank") {
+    // touch in reverse order of rank first
+    const std::vector<type_id_t> ids_reverse = {
+        Expr::get_type_id<FNOperator>(), Expr::get_type_id<BNOperator>(),
+        Expr::get_type_id<FOperator>(),  Expr::get_type_id<BOperator>(),
+        Expr::get_type_id<Power>(),      Expr::get_type_id<Variable>(),
+        Expr::get_type_id<Sum>(),        Expr::get_type_id<Constant>(),
+        Expr::get_type_id<Product>(),    Expr::get_type_id<Tensor>()};
+    REQUIRE(std::is_sorted(ids_reverse.rbegin(), ids_reverse.rend()));
+    REQUIRE(std::adjacent_find(ids_reverse.begin(), ids_reverse.end()) ==
+            ids_reverse.end());
+    namespace r = expr_type_rank;
+    const std::vector<int> ranks = {
+        r::fnoperator, r::bnoperator, r::foperator, r::boperator, r::power,
+        r::variable,   r::sum,        r::constant,  r::product,   r::tensor};
+    for (std::size_t i = 0; i != ids_reverse.size(); ++i)
+      REQUIRE(rank_of(ids_reverse[i]) == ranks[i]);
+  }
+
+  SECTION("ids are computed from rank and name") {
+    REQUIRE(Expr::get_type_id<Tensor>() ==
+            Expr::make_type_id(Tensor::type_rank, Tensor::static_type_name()));
+    REQUIRE(Expr::get_type_id<FNOperator>() ==
+            Expr::make_type_id(FNOperator::type_rank,
+                               FNOperator::static_type_name()));
+    // names are usable in constant expressions
+    static_assert(Tensor::static_type_name() == "sequant::Tensor");
+    static_assert(FNOperator::static_type_name() ==
+                  "sequant::NormalOperator<FermiDirac>");
+    static_assert(FNOperator::static_type_name() !=
+                  BNOperator::static_type_name());
+    static_assert(type_name_of<Tensor>() == "sequant::Tensor");
+    static_assert(type_name_of<DeclaredExpr>() == "test::DeclaredExpr");
+    static_assert(
+        Expr::make_type_id(Tensor::type_rank, Tensor::static_type_name()) ==
+        0x0a0890014be052abull);
+    // pin the portable values
+    REQUIRE(detail::fnv1a_64("") == 0xcbf29ce484222325ull);
+    REQUIRE(detail::fnv1a_64("a") == 0xaf63dc4c8601ec8cull);
+    REQUIRE(Expr::get_type_id<Tensor>() == 0x0a0890014be052abull);
+    REQUIRE(Expr::get_type_id<FNOperator>() == 0xfdda063c04d1d2adull);
+  }
+
+  SECTION("template instantiations") {
+    REQUIRE(Expr::get_type_id<BOperator>() < Expr::get_type_id<FOperator>());
+    REQUIRE(Expr::get_type_id<FOperator>() < Expr::get_type_id<BNOperator>());
+    REQUIRE(Expr::get_type_id<BNOperator>() < Expr::get_type_id<FNOperator>());
+    REQUIRE(Expr::get_type_id<FNOperatorSeq>() !=
+            Expr::get_type_id<BNOperatorSeq>());
+    REQUIRE(rank_of(Expr::get_type_id<FNOperatorSeq>()) ==
+            Expr::default_type_rank);
+  }
+
+  SECTION("types declared outside SeQuant") {
+    const auto dummy = Expr::get_type_id<Dummy>();
+    REQUIRE(rank_of(dummy) == Expr::default_type_rank);
+    for (const auto id :
+         {Expr::get_type_id<Tensor>(), Expr::get_type_id<Product>(),
+          Expr::get_type_id<Constant>(), Expr::get_type_id<Sum>(),
+          Expr::get_type_id<Variable>(), Expr::get_type_id<Power>(),
+          Expr::get_type_id<BOperator>(), Expr::get_type_id<FOperator>(),
+          Expr::get_type_id<BNOperator>(), Expr::get_type_id<FNOperator>(),
+          Expr::get_type_id<BNOperatorSeq>(),
+          Expr::get_type_id<FNOperatorSeq>()})
+      REQUIRE(id != dummy);
+    REQUIRE(Expr::get_type_id<Power>() < dummy);
+    REQUIRE(dummy < Expr::get_type_id<BOperator>());
+
+    REQUIRE(Expr::get_type_id<DeclaredExpr>() ==
+            Expr::make_type_id(77, "test::DeclaredExpr"));
+  }
+
+  SECTION("colliding declarations throw") {
+    REQUIRE_NOTHROW(Expr::get_type_id<TwinExpr1>());
+    REQUIRE_THROWS_AS(Expr::get_type_id<TwinExpr2>(), Exception);
+    // the failed computation is retried, and fails again
+    std::string what;
+    try {
+      Expr::get_type_id<TwinExpr2>();
+    } catch (const Exception &e) {
+      what = e.what();
+    }
+    REQUIRE(what.find("static_type_name()") != std::string::npos);
+  }
+
+  SECTION("derived types") {
+    REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<CProduct>());
+    REQUIRE(Expr::get_type_id<Product>() != Expr::get_type_id<NCProduct>());
+    REQUIRE(Expr::get_type_id<CProduct>() != Expr::get_type_id<NCProduct>());
+    REQUIRE_NOTHROW(ex<Constant>(1)->is<CProduct>());
+    REQUIRE_NOTHROW(ex<Constant>(1)->is<NCProduct>());
+    static_assert(type_name_of<CProduct>() == "sequant::CProduct");
+
+    // a derived type that declares no name keeps its base's rank but not its
+    // name
+    static_assert(type_name_of<DerivedFromDeclaredExpr>() ==
+                  detail::compiler_type_name<DerivedFromDeclaredExpr>());
+    REQUIRE_NOTHROW(Expr::get_type_id<DerivedFromDeclaredExpr>());
+    REQUIRE(Expr::get_type_id<DerivedFromDeclaredExpr>() !=
+            Expr::get_type_id<DeclaredExpr>());
+    REQUIRE(rank_of(Expr::get_type_id<DerivedFromDeclaredExpr>()) ==
+            DeclaredExpr::type_rank);
+  }
+
+  SECTION("operator< orders unlike types by rank") {
+    const auto c = ex<Constant>(1);
+    const auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_1"});
+    const auto op = ex<FNOperator>(cre({L"i_1"}), ann({L"a_1"}));
+    REQUIRE(*t < *c);
+    REQUIRE(!(*c < *t));
+    REQUIRE(*t < *op);
+    REQUIRE(!(*op < *t));
+    REQUIRE(*c < *op);
+  }
+}
+
+TEST_CASE("canonical_mark", "[elements]") {
+  using namespace sequant;
+
+  const auto opts = CanonicalizeOptions::default_options().copy_and_set(
+      CanonicalizationMethod::Complete);
+  const auto rapid_opts = opts.copy_and_set(CanonicalizationMethod::Rapid);
+
+  auto make_product = [] {
+    return ex<Constant>(rational{1, 2}) *
+           ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}) *
+           ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+  };
+  auto make_sum = [&] {
+    return make_product() + ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"}) +
+           ex<Constant>(3);
+  };
+
+  SECTION("unmarked by default") {
+    REQUIRE(!make_product()->is_canonical(opts));
+    REQUIRE(!make_sum()->is_canonical(opts));
+  }
+
+  SECTION("marking") {
+    auto e = make_sum();
+    e->mark_canonical(opts);
+    REQUIRE(e->is_canonical(opts));
+    // the mark is only valid for the options it was recorded under ...
+    REQUIRE(!e->is_canonical(
+        opts.copy_and_set(CanonicalizeOptions::IgnoreNamedIndexLabel::No)));
+    REQUIRE(!e->is_canonical(
+        opts.copy_and_set(container::set<Index>{Index{L"i_1"}})));
+    // ... and never for rapid canonicalization
+    REQUIRE(!e->is_canonical(rapid_opts));
+    // only full canonicalization marks
+    auto r = make_sum();
+    r->mark_canonical(rapid_opts);
+    REQUIRE(!r->is_canonical(rapid_opts));
+    REQUIRE(!r->is_canonical(opts));
+    // the subexpressions are not marked
+    REQUIRE(!(*e)[0]->is_canonical(opts));
+  }
+
+  SECTION("changing the contexts in effect invalidates") {
+    auto e = make_sum();
+    e->mark_canonical(opts);
+    REQUIRE(e->is_canonical(opts));
+    {
+      // a copy given its own registry, which is a configuration of its own
+      auto changed = get_default_context();
+      changed.set(IndexSpaceRegistry(*changed.index_space_registry()));
+      auto resetter = set_scoped_default_context(changed);
+      REQUIRE(!e->is_canonical(opts));
+    }
+    // ... for as long as they are in effect
+    REQUIRE(e->is_canonical(opts));
+  }
+
+  SECTION("mutations of Product invalidate") {
+    auto check = [&](auto &&mutate) {
+      auto e = make_product();
+      e->mark_canonical(opts);
+      REQUIRE(e->is_canonical(opts));
+      // memoize the hashes, which in-place mutation of a subexpression leaves
+      // stale in its ancestors
+      e->hash_value();
+      mutate(e);
+      return e->is_canonical(opts);
+    };
+    CHECK(!check([](ExprPtr &e) {
+      e->as<Product>().append(1, ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+    }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>().scale(2); }));
+    CHECK(!check(
+        [](ExprPtr &e) { e->as<Product>().append(2, ex<Constant>(3)); }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>() *= Constant(3); }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>().add_identical(e); }));
+    CHECK(!check([](ExprPtr &e) { e->adjoint(); }));
+    // replacing or reordering factors
+    CHECK(!check([](ExprPtr &e) {
+      (*e)[0] = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    }));
+    CHECK(!check([](ExprPtr &e) { std::swap((*e)[0], (*e)[1]); }));
+    CHECK(!check([](ExprPtr &e) {
+      e->as<Product>().factors().push_back(ex<Variable>(L"x"));
+    }));
+    // mutating a factor in place, also via a pointer obtained without
+    // mutable access to the Product
+    CHECK(!check([](ExprPtr &e) {
+      const auto &t = e->as<Product>().factor(0);
+      t->as<Tensor>().transform_indices(
+          container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_3"}}});
+    }));
+    CHECK(!check([](ExprPtr &e) { e->as<Product>().factor(1)->adjoint(); }));
+    // non-mutating access does not invalidate
+    CHECK(check([](ExprPtr &e) {
+      for ([[maybe_unused]] auto &factor : *e) {
+      }
+      [[maybe_unused]] auto &factors = e->as<Product>().factors();
+      e->visit([](ExprPtr &) {});
+    }));
+  }
+
+  SECTION("mutations of operators invalidate") {
+    auto e = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+             ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+    e->mark_canonical(opts);
+    REQUIRE(e->is_canonical(opts));
+    e->as<Product>().factor(1)->as<FNOperator>()[0] = fcre(L"a_7");
+    REQUIRE(!e->is_canonical(opts));
+
+    auto s = ex<FNOperatorSeq>(FNOperator(cre({L"a_1"}), ann({L"i_1"})),
+                               FNOperator(cre({L"a_2"}), ann({L"i_2"})));
+    s->mark_canonical(opts);
+    REQUIRE(s->is_canonical(opts));
+    s->as<FNOperatorSeq>()[1] = FNOperator(cre({L"a_3"}), ann({L"i_3"}));
+    REQUIRE(!s->is_canonical(opts));
+  }
+
+  SECTION("mutations of Sum invalidate") {
+    auto check = [&](auto &&mutate) {
+      auto e = make_sum();
+      e->mark_canonical(opts);
+      REQUIRE(e->is_canonical(opts));
+      // memoize the hashes, which in-place mutation of a subexpression leaves
+      // stale in its ancestors
+      e->hash_value();
+      mutate(e);
+      return e->is_canonical(opts);
+    };
+    CHECK(!check([](ExprPtr &e) {
+      e->as<Sum>().append(ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+    }));
+    CHECK(!check([](ExprPtr &e) { e->as<Sum>().append(ex<Constant>(1)); }));
+    CHECK(!check([](ExprPtr &e) { e += ex<Variable>(L"x"); }));
+    CHECK(!check([](ExprPtr &e) { (*e)[1] = ex<Variable>(L"x"); }));
+    CHECK(!check([](ExprPtr &e) { std::swap((*e)[0], (*e)[1]); }));
+    // a deep mutation, via a pointer to the subexpression
+    CHECK(!check([](ExprPtr &e) {
+      const auto &product = e->as<Sum>().summand(0);
+      product->as<Product>().factor(0)->as<Tensor>().transform_indices(
+          container::map<Index, Index>{{Index{L"a_1"}, Index{L"a_3"}}});
+    }));
+    CHECK(!check(
+        [](ExprPtr &e) { e->as<Sum>().summand(0)->as<Product>().scale(2); }));
+    CHECK(check([](ExprPtr &e) {
+      for ([[maybe_unused]] auto &summand : *e) {
+      }
+      e->visit([](ExprPtr &) {});
+    }));
+  }
+
+  SECTION("clone keeps the mark") {
+    for (auto e : {make_product(), make_sum()}) {
+      e->mark_canonical(opts);
+      auto c = e->clone();
+      REQUIRE(c->is_canonical(opts));
+      // mutating the clone does not affect the original, or vice versa
+      c->adjoint();
+      REQUIRE(!c->is_canonical(opts));
+      REQUIRE(e->is_canonical(opts));
+      auto c2 = e->clone();
+      e->adjoint();
+      REQUIRE(c2->is_canonical(opts));
+    }
+    auto t = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"});
+    t->mark_canonical(opts);
+    REQUIRE(t->clone()->is_canonical(opts));
+    auto c = ex<Constant>(2);
+    c->mark_canonical(opts);
+    REQUIRE(c->clone()->is_canonical(opts));
+  }
+
+  SECTION("moving out invalidates the source") {
+    auto e = make_product();
+    e->mark_canonical(opts);
+    Product moved(std::move(e->as<Product>()));
+    REQUIRE(!e->is_canonical(opts));
   }
 }

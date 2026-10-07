@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EXPRESSIONS_EXPR_HPP
 #define SEQUANT_EXPRESSIONS_EXPR_HPP
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
@@ -10,11 +11,18 @@
 #include <boost/core/demangle.hpp>
 
 #include <atomic>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <typeindex>
+#include <typeinfo>
+#include <utility>
 
 namespace sequant {
 
@@ -37,6 +45,96 @@ inline void toggle_adjoint_label(std::wstring &label) {
     label.pop_back();
   else
     label.push_back(adjoint_label);
+}
+
+namespace detail {
+
+/// @return the 64-bit FNV-1a hash of @p str
+constexpr std::uint64_t fnv1a_64(std::string_view str) {
+  std::uint64_t hash = 0xcbf29ce484222325ull;
+  for (const char c : str) {
+    hash ^= static_cast<unsigned char>(c);
+    hash *= 0x100000001b3ull;
+  }
+  return hash;
+}
+
+/// @return the decimal representation of @p n , for composing Expr type names
+constexpr std::string uint_to_string(std::uint64_t n) {
+  std::string result;
+  do {
+    result.insert(result.begin(), static_cast<char>('0' + n % 10));
+    n /= 10;
+  } while (n != 0);
+  return result;
+}
+
+/// @return the signature of this function as spelled by the compiler, which
+/// names @c T ; deterministic for a given compiler, but not portable across
+/// compilers
+template <typename T>
+constexpr std::string compiler_type_name() {
+#if defined(_MSC_VER)
+  return __FUNCSIG__;
+#else
+  return __PRETTY_FUNCTION__;
+#endif
+}
+
+/// the canonical mark of an Expr (see Expr::is_canonical()); copying copies
+/// it, moving moves it out of the source
+struct CanonicalMark {
+  /// identifies the state of the own data of an Expr (not of its
+  /// subexpressions) since its last mutation; 0 if not assigned
+  std::atomic<std::uint64_t> stamp{0};
+  /// if nonzero, the digest of the validity key of the canonicalization that
+  /// produced the Expr and of the stamps of its subtree
+  std::atomic<std::size_t> seal{0};
+
+  CanonicalMark() = default;
+  CanonicalMark(const CanonicalMark &other) noexcept { *this = other; }
+  CanonicalMark(CanonicalMark &&other) noexcept { *this = std::move(other); }
+  CanonicalMark &operator=(const CanonicalMark &other) noexcept {
+    stamp.store(other.stamp.load(std::memory_order_relaxed),
+                std::memory_order_relaxed);
+    seal.store(other.seal.load(std::memory_order_relaxed),
+               std::memory_order_relaxed);
+    return *this;
+  }
+  CanonicalMark &operator=(CanonicalMark &&other) noexcept {
+    if (this != &other) {
+      *this = static_cast<const CanonicalMark &>(other);
+      other.reset();
+    }
+    return *this;
+  }
+
+  void reset() noexcept {
+    stamp.store(0, std::memory_order_relaxed);
+    seal.store(0, std::memory_order_relaxed);
+  }
+};
+
+}  // namespace detail
+
+/// @return `T::static_type_name(std::type_identity<T>{})` if @c T declares
+/// it, else a name derived from the compiler (see detail::compiler_type_name)
+/// @note this is the name used by Expr::get_type_id ; a class template that
+/// declares `static_type_name` composes it from the names of its template
+/// arguments via this function
+/// @note the `std::type_identity<T>` parameter, which does not convert to
+/// `std::type_identity` of a base, keeps a derived class from picking up the
+/// name its base declares
+template <typename T>
+constexpr std::string type_name_of() {
+  if constexpr (requires {
+                  {
+                    T::static_type_name(std::type_identity<T>{})
+                  } -> std::convertible_to<std::string>;
+                })
+    return std::string(T::static_type_name(std::type_identity<T>{}));
+  else
+    return detail::compiler_type_name<T>();
 }
 
 /// @brief Base expression class
@@ -81,7 +179,12 @@ inline void toggle_adjoint_label(std::wstring &label) {
 class Expr : public std::enable_shared_from_this<Expr> {
  public:
   using hash_type = std::size_t;
-  using type_id_type = int;  // to speed up comparisons
+  using type_id_type = std::uint64_t;
+  using type_rank_type = std::uint8_t;
+
+  /// rank of an Expr type that does not declare `type_rank`
+  /// @sa Expr::get_type_id
+  static constexpr type_rank_type default_type_rank = 128;
 
   Expr() = default;
   virtual ~Expr() = default;
@@ -140,6 +243,31 @@ class Expr : public std::enable_shared_from_this<Expr> {
           CanonicalizationMethod::Rapid)) {
     return this->canonicalize({.method = CanonicalizationMethod::Rapid});
   }
+
+  /// @param opts the canonicalization options
+  /// @return true if this is the full canonical form that canonicalization
+  /// with @p opts produced, and since then neither this nor any of its
+  /// subexpressions has been mutated or replaced, nor have the contexts in
+  /// effect changed (see current_contexts_version())
+  /// @note always false if @p opts does not request Complete canonicalization,
+  /// the only method whose result is the same for every spelling of an
+  /// expression
+  bool is_canonical(const CanonicalizeOptions &opts =
+                        CanonicalizeOptions::default_options()) const;
+
+  /// records that this, with its subexpressions as they are now, is the full
+  /// canonical form for @p opts, so that is_canonical(opts) holds until this
+  /// or any of its subexpressions is mutated or replaced, or the contexts in
+  /// effect change
+  /// @param opts the canonicalization options
+  /// @param contexts_version the value of current_contexts_version() when the
+  /// canonicalization started; if it has changed since, the mark is not valid
+  /// @note no-op if @p opts does not request Complete canonicalization
+  /// @warning only to be called with the result of canonicalization with
+  /// @p opts: canonicalization leaves an expression marked as canonical alone
+  void mark_canonical(
+      const CanonicalizeOptions &opts,
+      std::uint64_t contexts_version = current_contexts_version()) const;
 
   // clang-format off
   /// recursively visit this expression, i.e. call visitor on each subexpression
@@ -285,19 +413,51 @@ class Expr : public std::enable_shared_from_this<Expr> {
     }
   }
 
-  /// @return (unique) type id of class T
-  template <typename T>
-  static type_id_type get_type_id() {
-    return type_id_accessor<T>();
+  /// @return the type id of a type of rank @p rank named @p name : @p rank in
+  /// the top 8 bits, the top 56 bits of `fnv1a_64(name)` below them
+  static constexpr type_id_type make_type_id(type_rank_type rank,
+                                             std::string_view name) {
+    return (static_cast<type_id_type>(rank) << 56) |
+           (detail::fnv1a_64(name) >> 8);
   }
 
-  /// sets (unique) type id of class T
-  /// @param id the value of type id of class T
-  /// @note since get_type_id does not check for duplicates, it's user's
-  /// responsiblity to make sure that there are no collisions between type ids
+  /// @return the rank encoded in type id @p id
+  /// @sa Expr::make_type_id
+  static constexpr type_rank_type type_rank_of(type_id_type id) {
+    return static_cast<type_rank_type>(id >> 56);
+  }
+
+  /// @return the (unique) type id of class T
+  /// @details The id is `make_type_id(rank, name)`, where `rank` is
+  /// `T::type_rank` (a `static constexpr Expr::type_rank_type`) if
+  /// @c T declares it, else Expr::default_type_rank , and `name` is
+  /// `sequant::type_name_of<T>()`. Hence Expr::operator< orders unlike types by
+  /// rank first. A type whose relative order must not depend on the compiler
+  /// declares `static constexpr std::string
+  /// static_type_name(std::type_identity<Self> = {})`; `constexpr` makes it
+  /// usable in constant expressions, but is not required. A derived class
+  /// inherits its base's `type_rank` but not its name, so unless it declares
+  /// its own name it gets the compiler-derived one. A type in an unnamed
+  /// namespace declares a name if another translation unit may define one of
+  /// the same name, since types are told apart by mangled name and such a pair
+  /// would silently share an id.
+  /// @throw sequant::Exception if a type of another mangled name already has
+  /// this id
   template <typename T>
-  static void set_type_id(type_id_type id) {
-    type_id_accessor<T>() = id;
+  static type_id_type get_type_id() {
+    static const type_id_type id = [] {
+      const std::string name = sequant::type_name_of<T>();
+      type_rank_type rank = default_type_rank;
+      if constexpr (requires { T::type_rank; }) {
+        static_assert(std::in_range<type_rank_type>(T::type_rank),
+                      "type_rank must fit in Expr::type_rank_type");
+        rank = static_cast<type_rank_type>(T::type_rank);
+      }
+      const type_id_type result = make_type_id(rank, name);
+      register_type_id(result, name, typeid(T));
+      return result;
+    }();
+    return id;
   }
 
   /// @tparam T an Expr type
@@ -431,7 +591,25 @@ class Expr : public std::enable_shared_from_this<Expr> {
     else
       return default_hash_value;
   }
-  virtual void reset_hash_value() const { hash_value_.reset(); }
+  /// invalidates the memoized hash and the canonical mark
+  /// @note to be called by every mutation of this object's own data
+  virtual void reset_hash_value() const {
+    hash_value_.reset();
+    reset_canonical_mark();
+  }
+
+  /// invalidates the canonical mark, see is_canonical()
+  /// @note to be called by every mutation of this object's own data that does
+  /// not call reset_hash_value() (mutations of subexpressions, and their
+  /// replacement, are detected without it)
+  void reset_canonical_mark() const { canonical_mark_.reset(); }
+
+  /// copies the canonical mark of @p other
+  /// @pre the own data of @c *this is identical to that of @p other , and its
+  /// subexpressions are copies (or clones) of those of @p other
+  void copy_canonical_mark(const Expr &other) const {
+    canonical_mark_ = other.canonical_mark_;
+  }
 
   /// @param that an Expr object
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
@@ -459,20 +637,37 @@ class Expr : public std::enable_shared_from_this<Expr> {
   }
 
  private:
-  /// @return returns next type id in the grand class list
-  static type_id_type get_next_type_id() {
-    static std::atomic<type_id_type> grand_type_id = 0;
-    return ++grand_type_id;
-  }
+  /// records that type @p type , named @p name , has type id @p id
+  /// @throw sequant::Exception if @p id is already recorded for a type of
+  /// another mangled name
+  static void register_type_id(type_id_type id, const std::string &name,
+                               std::type_index type);
+  mutable detail::CanonicalMark canonical_mark_;
 
-  /// sets (unique) type id of class T
-  /// @param id the value of type id of class T
-  template <typename T>
-  static type_id_type &type_id_accessor() {
-    static type_id_type type_id = get_next_type_id();
-    return type_id;
-  }
+  /// assigns a stamp to every node of this subtree that lacks one
+  void stamp_canonical_subtree() const;
+
+  /// @return the digest of the stamps of this subtree, or null if any of its
+  /// nodes lacks a stamp
+  std::optional<std::size_t> canonical_subtree_digest() const;
 };  // class Expr
+
+/// ranks (`type_rank`) of SeQuant's own Expr types; Expr::operator< orders
+/// unlike types by rank first, so this is their order. Spaced so that a new
+/// type can be inserted between them; types of Expr::default_type_rank sort
+/// between `power` and `boperator`.
+namespace expr_type_rank {
+inline constexpr Expr::type_rank_type tensor = 10;
+inline constexpr Expr::type_rank_type product = 20;
+inline constexpr Expr::type_rank_type constant = 30;
+inline constexpr Expr::type_rank_type sum = 40;
+inline constexpr Expr::type_rank_type variable = 50;
+inline constexpr Expr::type_rank_type power = 60;
+inline constexpr Expr::type_rank_type boperator = 250;
+inline constexpr Expr::type_rank_type foperator = 251;
+inline constexpr Expr::type_rank_type bnoperator = 252;
+inline constexpr Expr::type_rank_type fnoperator = 253;
+}  // namespace expr_type_rank
 
 static_assert(std::ranges::sized_range<Expr>);
 static_assert(std::ranges::bidirectional_range<Expr>);

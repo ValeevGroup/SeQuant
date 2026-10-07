@@ -888,7 +888,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     abort();  // unreachable
   }
 
-  /// @note this performs rapid canonicalization only
+  /// @note a tensor in which an index occurs more than once, protoindices
+  /// included, is a tensor network and is canonicalized as one, with the
+  /// given options; any other is canonicalized by the default tensor
+  /// canonicalizer
   ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
   /// @brief adjoint of a Tensor swaps its bra and ket
@@ -906,6 +909,12 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     });
     if (mutated) this->reset_hash_value();
     return mutated;
+  }
+
+  static constexpr type_rank_type type_rank = expr_type_rank::tensor;
+  static constexpr std::string static_type_name(
+      std::type_identity<Tensor> = {}) {
+    return "sequant::Tensor";
   }
 
   type_id_type type_id() const override { return get_type_id<Tensor>(); };

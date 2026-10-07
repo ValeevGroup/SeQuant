@@ -2,14 +2,31 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_iterator.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tree_index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
+#include <boost/core/demangle.hpp>
+
+#include <atomic>
+#include <cstdint>
+#include <cstring>
+#include <map>
+#include <mutex>
+#include <optional>
 #include <sstream>
+#include <string>
+#include <typeindex>
+#include <utility>
 
 namespace sequant {
 
@@ -80,8 +97,111 @@ ExprPtr &Expr::back() { return at(size() - 1); }
 
 const ExprPtr &Expr::back() const { return at(size() - 1); }
 
+namespace {
+
+/// only the topological stage followed by the lexicographic one produces a
+/// form that is the same for every spelling of an expression
+bool is_full(const CanonicalizeOptions &opts) {
+  return (opts.method & CanonicalizationMethod::Complete) ==
+         CanonicalizationMethod::Complete;
+}
+
+/// @return the digest of everything other than the expression itself that
+/// canonical form depends on
+std::size_t canonicalization_key(const CanonicalizeOptions &opts,
+                                 std::uint64_t contexts_version) {
+  auto key = hash::value(contexts_version);
+  hash::combine(key, static_cast<int>(opts.method));
+  hash::combine(key, static_cast<bool>(opts.ignore_named_index_labels));
+  hash::combine(key, opts.named_indices.has_value());
+  if (opts.named_indices) {
+    hash::combine(key, opts.named_indices->size());
+    for (const auto &idx : *opts.named_indices) hash::combine(key, idx);
+  }
+  return key;
+}
+
+std::uint64_t next_canonical_stamp() {
+  static std::atomic<std::uint64_t> counter{0};
+  return ++counter;
+}
+
+}  // namespace
+
+bool Expr::is_canonical(const CanonicalizeOptions &opts) const {
+  if (!is_full(opts)) return false;
+  const auto seal = canonical_mark_.seal.load(std::memory_order_relaxed);
+  if (seal == 0) return false;
+  const auto digest = canonical_subtree_digest();
+  if (!digest) return false;
+  auto expected_seal = canonicalization_key(opts, current_contexts_version());
+  hash::combine(expected_seal, *digest);
+  return seal == expected_seal;
+}
+
+void Expr::mark_canonical(const CanonicalizeOptions &opts,
+                          std::uint64_t contexts_version) const {
+  if (!is_full(opts)) return;
+  stamp_canonical_subtree();
+  const auto digest = canonical_subtree_digest();
+  if (!digest) return;
+  auto seal = canonicalization_key(opts, contexts_version);
+  hash::combine(seal, *digest);
+  canonical_mark_.seal.store(seal, std::memory_order_relaxed);
+}
+
+void Expr::stamp_canonical_subtree() const {
+  std::uint64_t unstamped = 0;
+  if (canonical_mark_.stamp.load(std::memory_order_relaxed) == unstamped)
+    canonical_mark_.stamp.compare_exchange_strong(
+        unstamped, next_canonical_stamp(), std::memory_order_relaxed);
+  for (const auto &subexpr : *this) subexpr->stamp_canonical_subtree();
+}
+
+std::optional<std::size_t> Expr::canonical_subtree_digest() const {
+  const auto stamp = canonical_mark_.stamp.load(std::memory_order_relaxed);
+  if (stamp == 0) return std::nullopt;
+  // a mutation of a leaf that does not reset its stamp does not reset its
+  // memoized hash either, which memoizing_hash() checks when assertions are
+  // enabled; N.B. the memoized hash of a non-leaf is legitimately stale after
+  // in-place mutation of a subexpression
+  if constexpr (assert_enabled()) {
+    if (hash_value_ && size() == 0) memoizing_hash();
+  }
+  auto digest = hash::value(stamp);
+  hash::combine(digest, size());
+  for (const auto &subexpr : *this) {
+    const auto subdigest = subexpr->canonical_subtree_digest();
+    if (!subdigest) return std::nullopt;
+    hash::combine(digest, *subdigest);
+  }
+  return digest;
+}
+
 std::wstring Expr::to_latex() const {
   throw Exception("to_latex not implemented for " + type_name());
+}
+
+void Expr::register_type_id(type_id_type id, const std::string &name,
+                            std::type_index type) {
+  // destroyed at exit like any function-local static: computing a type id for
+  // the first time from a static destructor that runs after them is undefined
+  // behavior (ids computed earlier are cached by get_type_id and stay usable)
+  static std::mutex mutex;
+  static std::map<type_id_type, std::pair<std::string, std::type_index>>
+      registry;
+  std::scoped_lock lock(mutex);
+  const auto [it, inserted] = registry.try_emplace(id, name, type);
+  // compare by mangled name, not by type_index: a shared object built with
+  // hidden visibility has its own type_info for the same type, which libc++
+  // compares by address
+  if (!inserted && std::strcmp(it->second.second.name(), type.name()) != 0)
+    throw Exception("Expr types " +
+                    boost::core::demangle(it->second.second.name()) +
+                    " (name \"" + it->second.first + "\") and " +
+                    boost::core::demangle(type.name()) + " (name \"" + name +
+                    "\") have the same type id " + std::to_string(id) +
+                    "; declare a distinct static_type_name() for one of them");
 }
 
 Expr &Expr::operator[](const TreeIndex &idx) { return idx.select_from(*this); }

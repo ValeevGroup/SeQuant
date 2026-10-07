@@ -20,8 +20,11 @@ enum class CanonicalizationMethod {
   /// expensive.
   /// @note Canonicalization of tensor networks must take into account the
   ///       topology of the TN; this enables the use of canonical graph
-  ///       sort of all TN elements to produces complete
-  ///       canonicalization. The result may be aesthetically poor.
+  ///       sort of all TN elements. By itself it leaves the order of named
+  ///       indices in (anti)symmetric slots to the graph, so its result
+  ///       depends on how an expression is spelled (e.g. a lone tensor vs the
+  ///       same tensor scaled) and may be aesthetically poor; Complete
+  ///       canonicalization does not.
   Topological = 0b01,
   /// Enables the use of rapid canonicalization based on lexicographic sort.
   /// @note for TN this performs lexicographic sort of tensors, slots and
@@ -60,11 +63,13 @@ struct CanonicalizeOptions {
   /// deduced to be named, but this may be misleading if e.g. single
   /// summed-over dummy index appears in an expression
   std::optional<container::set<Index>> named_indices = std::nullopt;
-  /// whether to ignore the labels of named indices. Setting
-  /// to false will cause named indices to be treated as equivalent slots, which
-  /// the result to be independent of their labels. This does not make sense in
-  /// contexts where labels are meaningful, e.g. when canonicalizing sum of
-  /// tensor networks and will be therefore ignored.
+  /// whether the graph-based canonicalization ignores the labels of named
+  /// indices, so that the structure of the result does not depend on them;
+  /// named indices that an automorphism of the network can exchange are then
+  /// placed in the order of their labels, as the context's index comparer
+  /// orders them; the result is determined only if that comparer orders every
+  /// two named indices of the network. A Sum canonicalizes its summands with
+  /// labels distinguished regardless.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
 
   static CanonicalizeOptions default_options();

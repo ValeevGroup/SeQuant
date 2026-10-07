@@ -5,7 +5,6 @@
 #include <iostream>
 
 #include <tiledarray.h>
-#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
@@ -77,7 +76,6 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
   auto& world = TA::initialize(argc, argv);
   using namespace sequant;
-  detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
       {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
@@ -89,7 +87,8 @@ int main(int argc, char* argv[]) {
 
   // for optimization tests, set occupied and unoccupied index extents
   {
-    auto reg = get_default_context().mutable_index_space_registry();
+    auto reg = std::make_shared<IndexSpaceRegistry>(
+        *get_default_context().index_space_registry());
     auto occ = reg->retrieve_ptr(L"i");
     auto uocc = reg->retrieve_ptr(L"a");
     SEQUANT_ASSERT(occ);
@@ -97,6 +96,7 @@ int main(int argc, char* argv[]) {
     occ->approximate_size(10);
     uocc->approximate_size(100);
     SEQUANT_ASSERT(uocc->approximate_size() == 100);
+    set_default_context(get_default_context_snapshot().set(reg));
   }
 
   std::string calc_config = argc > 1 ? argv[1] : "calc.inp";

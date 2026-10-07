@@ -2,20 +2,16 @@
 // Created by Eduard Valeyev on 2019-03-24.
 //
 
-#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
-#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
-#include <memory>
-#include <mutex>
 #include <type_traits>
 #include <vector>
 
-#include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/lexicographical_compare.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -169,147 +165,20 @@ struct TensorIndexComparer {
 
 TensorCanonicalizer::~TensorCanonicalizer() = default;
 
-std::pair<container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>*,
-          std::unique_lock<std::recursive_mutex>>
-TensorCanonicalizer::instance_map_accessor() {
-  static container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>
-      map_;
-  static std::recursive_mutex mtx_;
-  static bool initialized_ = false;
-
-  std::unique_lock lock(mtx_);
-  if (!initialized_) {
-    // Ensure DefaultTensorCanonicalizer is installed as the default
-    // canonicalizer by default
-    map_.emplace(L"", std::make_shared<DefaultTensorCanonicalizer>());
-    initialized_ = true;
-  }
-
-  return std::make_pair(&map_, std::move(lock));
+TensorCanonicalizer::index_comparer_t
+TensorCanonicalizer::default_index_comparer() {
+  return TensorIndexComparer{};
 }
-
-container::vector<std::wstring>&
-TensorCanonicalizer::default_cardinal_tensor_labels_accessor() {
-  // {antisymm_label, symm_label, transposition_label} is the default
-  static container::vector<std::wstring> default_ctlabels_{
-      reserved::antisymm_label(), reserved::symm_label(),
-      reserved::transposition_label()};
-  return default_ctlabels_;
-}
-
-container::vector<std::wstring>&
-TensorCanonicalizer::cardinal_tensor_labels_accessor() {
-  static container::vector<std::wstring> ctlabels_ =
-      default_cardinal_tensor_labels_accessor();
-  return ctlabels_;
-}
-
-void TensorCanonicalizer::set_cardinal_tensor_labels(
-    const container::vector<std::wstring>& labels) {
-  // check for duplicates
-  if constexpr (assert_enabled()) {
-    // check for duplicates within user provided labels
-    SEQUANT_ASSERT(!has_duplicates(labels) &&
-                   "cardinal tensor labels must not contain duplicates");
-
-    // check if any label conflicts with existing ones
-    const auto& existing = cardinal_tensor_labels_accessor();
-    for (const auto& label : labels) {
-      [[maybe_unused]] auto conflict = ranges::find(existing, label);
-      SEQUANT_ASSERT(conflict == existing.end() &&
-                     "cardinal tensor labels must not contain duplicates");
-    }
-  }
-  auto& ctlabels = cardinal_tensor_labels_accessor();
-  // get defaults
-  ctlabels = default_cardinal_tensor_labels_accessor();
-  // append
-  ctlabels.insert(ctlabels.end(), labels.begin(), labels.end());
-}
-
-void TensorCanonicalizer::reset_cardinal_tensor_labels() {
-  cardinal_tensor_labels_accessor() = default_cardinal_tensor_labels_accessor();
-}
-
-void TensorCanonicalizer::clear_all_cardinal_tensor_labels() {
-  cardinal_tensor_labels_accessor().clear();
-}
-
-std::shared_ptr<TensorCanonicalizer>
-TensorCanonicalizer::nondefault_instance_ptr(std::wstring_view label) {
-  auto&& [map_ptr, lock] = instance_map_accessor();
-  // look for label-specific canonicalizer
-  auto it = map_ptr->find(std::wstring{label});
-  if (it != map_ptr->end()) {
-    return it->second;
-  } else
-    return {};
-}
-
-std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance_ptr(
-    std::wstring_view label) {
-  auto result = nondefault_instance_ptr(label);
-  if (!result)  // not found? look for default
-    result = nondefault_instance_ptr(L"");
-  return result;
-}
-
-std::shared_ptr<TensorCanonicalizer> TensorCanonicalizer::instance(
-    std::wstring_view label) {
-  auto inst_ptr = instance_ptr(label);
-  if (!inst_ptr)
-    throw Exception(
-        "must first register canonicalizer via "
-        "TensorCanonicalizer::register_instance(...)");
-  return inst_ptr;
-}
-
-void TensorCanonicalizer::register_instance(
-    std::shared_ptr<TensorCanonicalizer> can, std::wstring_view label) {
-  auto&& [map_ptr, lock] = instance_map_accessor();
-  (*map_ptr)[std::wstring{label}] = can;
-}
-
-bool TensorCanonicalizer::try_register_instance(
-    std::shared_ptr<TensorCanonicalizer> can, std::wstring_view label) {
-  auto&& [map_ptr, lock] = instance_map_accessor();
-  if (!map_ptr->contains(std::wstring{label})) {
-    (*map_ptr)[std::wstring{label}] = can;
-    return true;
-  } else
-    return false;
-}
-
-void TensorCanonicalizer::deregister_instance(std::wstring_view label) {
-  auto&& [map_ptr, lock] = instance_map_accessor();
-  auto it = map_ptr->find(std::wstring{label});
-  if (it != map_ptr->end()) {
-    map_ptr->erase(it);
-  }
-}
-
-TensorCanonicalizer::index_comparer_t TensorCanonicalizer::index_comparer_ =
-    TensorIndexComparer{};
 
 TensorCanonicalizer::index_pair_comparer_t
-    TensorCanonicalizer::index_pair_comparer_ = TensorIndexComparer{};
-
-const TensorCanonicalizer::index_comparer_t&
-TensorCanonicalizer::index_comparer() {
-  return index_comparer_;
+TensorCanonicalizer::default_index_pair_comparer() {
+  return TensorIndexComparer{};
 }
 
-void TensorCanonicalizer::index_comparer(index_comparer_t comparer) {
-  index_comparer_ = std::move(comparer);
-}
-
-const TensorCanonicalizer::index_pair_comparer_t&
-TensorCanonicalizer::index_pair_comparer() {
-  return index_pair_comparer_;
-}
-
-void TensorCanonicalizer::index_pair_comparer(index_pair_comparer_t comparer) {
-  index_pair_comparer_ = std::move(comparer);
+const std::shared_ptr<NullTensorCanonicalizer>&
+NullTensorCanonicalizer::instance() {
+  static const auto result = std::make_shared<NullTensorCanonicalizer>();
+  return result;
 }
 
 ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) const { return {}; }
@@ -368,8 +237,8 @@ ExprPtr DefaultTensorCanonicalizer::apply(AbstractTensor& t) const {
 
   canonicalize_braket(t);
 
-  auto result =
-      this->apply(t, this->index_comparer_, this->index_pair_comparer_);
+  const auto ctx = get_default_context_snapshot();
+  auto result = this->apply(t, ctx.index_comparer(), ctx.index_pair_comparer());
 
   reset_tags(t);
 

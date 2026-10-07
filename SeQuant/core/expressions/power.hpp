@@ -7,6 +7,9 @@
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/rational.hpp>
 
+#include <string>
+#include <type_traits>
+
 namespace sequant {
 
 /// @brief Represents base^exponent where base is a scalar (Constant or
@@ -75,6 +78,12 @@ class Power : public Expr {
   /// case needed in practice right now). Extending to general n-th roots only
   /// requires replacing the integer-square-root step with an integer n-th-root.
   static void flatten(ExprPtr& expr);
+
+  static constexpr type_rank_type type_rank = expr_type_rank::power;
+  static constexpr std::string static_type_name(
+      std::type_identity<Power> = {}) {
+    return "sequant::Power";
+  }
 
   type_id_type type_id() const override;
 

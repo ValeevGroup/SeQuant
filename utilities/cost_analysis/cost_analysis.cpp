@@ -153,7 +153,7 @@ void setup_context(const Config& cfg) {
     sp->approximate_size(size);
   }
 
-  auto ctx = get_default_context();
+  auto ctx = get_default_context_snapshot();
   auto copts = CanonicalizeOptions::default_options().copy_and_set(
       CanonicalizationMethod::Complete);
   ctx.set(Vacuum::SingleProduct)
@@ -183,7 +183,8 @@ ObjectiveFunction objective_of(const std::string& s) {
 std::string space_signature(const EvalExpr& ev) {
   if (!ev.is_tensor()) return "scalar";
   const auto& t = ev.as_tensor();
-  const auto& reg = *get_default_context().index_space_registry();
+  const auto reg_ptr = get_default_context().index_space_registry();
+  const auto& reg = *reg_ptr;
   const auto hole = reg.hole_space(/*nulltype_ok=*/true);
   const auto particle = reg.particle_space(/*nulltype_ok=*/true);
   std::string result;
@@ -356,7 +357,6 @@ std::string read_file(const std::filesystem::path& p) {
 
 int main(int argc, char** argv) {
   set_locale();
-  sequant::detail::OpIdRegistrar op_id_registrar;
 
   CLI::App app("SeQuant expression cost/factorization analysis");
   argv = app.ensure_utf8(argv);

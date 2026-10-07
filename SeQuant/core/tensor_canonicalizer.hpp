@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor_canonicalizer_fwd.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm/for_each.hpp>
@@ -15,105 +16,33 @@
 #include <range/v3/view/take.hpp>
 #include <range/v3/view/zip.hpp>
 
-#include <functional>
 #include <memory>
-#include <string_view>
 
 namespace sequant {
 
 /// @brief Base class for Tensor canonicalizers
-/// To make custom canonicalizer make a derived class and register an instance
-/// of that class with TensorCanonicalizer::register_instance
+/// To make custom canonicalizer make a derived class and install an instance
+/// of that class in a Context (see Context::set_tensor_canonicalizer())
 class TensorCanonicalizer {
  public:
-  using index_comparer_t = std::function<bool(const Index&, const Index&)>;
-  using index_pair_t = std::pair<const Index, const Index>;
-  using index_pair_comparer_t =
-      std::function<bool(const index_pair_t&, const index_pair_t)>;
+  using index_comparer_t = tensor_index_comparer_t;
+  using index_pair_t = tensor_index_pair_t;
+  using index_pair_comparer_t = tensor_index_pair_comparer_t;
 
   virtual ~TensorCanonicalizer();
 
-  /// @return ptr to the TensorCanonicalizer object, if any, that had been
-  /// previously registered via TensorCanonicalizer::register_instance()
-  /// with @c label , or to the default canonicalizer, if any
-  static std::shared_ptr<TensorCanonicalizer> instance_ptr(
-      std::wstring_view label = L"");
+  /// @return the default index comparer
+  static index_comparer_t default_index_comparer();
 
-  /// @return ptr to the TensorCanonicalizer object, if any, that had been
-  /// previously registered via TensorCanonicalizer::register_instance()
-  /// with @c label
-  /// @sa instance_ptr
-  static std::shared_ptr<TensorCanonicalizer> nondefault_instance_ptr(
-      std::wstring_view label);
-
-  /// @return a TensorCanonicalizer previously registered via
-  /// TensorCanonicalizer::register_instance() with @c label or to the default
-  /// canonicalizer
-  /// @throw Exception if no canonicalizer has been registered
-  static std::shared_ptr<TensorCanonicalizer> instance(
-      std::wstring_view label = L"");
-
-  /// registers @c canonicalizer to be applied to Tensor objects with label
-  /// @c label ; leave the label empty if @c canonicalizer is to apply to Tensor
-  /// objects with any label
-  /// @note if a canonicalizer registered with label @c label exists, it is
-  /// replaced
-  static void register_instance(
-      std::shared_ptr<TensorCanonicalizer> canonicalizer,
-      std::wstring_view label = L"");
-
-  /// tries to register @c canonicalizer to be applied to Tensor objects
-  /// with label @c label ; leave the label empty if @c canonicalizer is to
-  /// apply to Tensor objects with any label
-  /// @return false if there is already a canonicalizer registered with @c label
-  /// @sa regiter_instance
-  static bool try_register_instance(
-      std::shared_ptr<TensorCanonicalizer> canonicalizer,
-      std::wstring_view label = L"");
-
-  /// deregisters canonicalizer (if any) registered previously
-  /// to be applied to tensors with label @c label
-  static void deregister_instance(std::wstring_view label = L"");
-
-  /// @return a list of Tensor labels with lexicographic preference (in order)
-  static const auto& cardinal_tensor_labels() {
-    return cardinal_tensor_labels_accessor();
-  }
-
-  /// @brief Sets cardinal tensor labels by appending to defaults
-  /// @param labels a list of additional Tensor labels with lexicographic
-  /// preference (in order)
-  /// @note The default labels are always prepended to the provided labels
-  /// @note To restore defaults only, use reset_cardinal_tensor_labels()
-  static void set_cardinal_tensor_labels(
-      const container::vector<std::wstring>& labels);
-
-  /// @brief Resets cardinal tensor labels to default values only
-  static void reset_cardinal_tensor_labels();
-
-  /// @brief Clears all cardinal tensor labels including defaults (sets to empty
-  /// list)
-  static void clear_all_cardinal_tensor_labels();
+  /// @return the default index pair comparer
+  static index_pair_comparer_t default_index_pair_comparer();
 
   /// @return a side effect of canonicalization (e.g. phase), or nullptr if none
   /// @internal what should be returned if canonicalization requires
   /// complex conjugation? Special ExprPtr type (e.g. ConjOp)? Or the actual
   /// return of the canonicalization?
-  /// @note canonicalization compared indices returned by index_comparer
   // TODO generalize for complex tensors
   virtual ExprPtr apply(AbstractTensor&) const = 0;
-
-  /// @return reference to the object used to compare Index objects
-  static const index_comparer_t& index_comparer();
-
-  /// @param comparer the compare object to be used by this
-  static void index_comparer(index_comparer_t comparer);
-
-  /// @return reference to the object used to compare Index objects
-  static const index_pair_comparer_t& index_pair_comparer();
-
-  /// @param comparer the compare object to be used by this
-  static void index_pair_comparer(index_pair_comparer_t comparer);
 
  protected:
   static inline auto mutable_bra_range(AbstractTensor& t) {
@@ -125,26 +54,17 @@ class TensorCanonicalizer {
   static inline auto mutable_aux_range(AbstractTensor& t) {
     return t._aux_mutable();
   }
-
-  /// the object used to compare indices
-  static index_comparer_t index_comparer_;
-  /// the object used to compare pairs of indices
-  static index_pair_comparer_t index_pair_comparer_;
-
- private:
-  static std::pair<
-      container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>*,
-      std::unique_lock<std::recursive_mutex>>
-  instance_map_accessor();  // map* + locked recursive mutex
-  static container::vector<std::wstring>& cardinal_tensor_labels_accessor();
-  static container::vector<std::wstring>&
-  default_cardinal_tensor_labels_accessor();
 };
 
 /// @brief null Tensor canonicalizer does nothing
 class NullTensorCanonicalizer : public TensorCanonicalizer {
  public:
   virtual ~NullTensorCanonicalizer() = default;
+
+  /// @return the process-wide instance; Context::version() compares
+  /// canonicalizers by identity, so contexts that install this one rather than
+  /// a new one each share a version
+  static const std::shared_ptr<NullTensorCanonicalizer>& instance();
 
   ExprPtr apply(AbstractTensor&) const override;
 };

@@ -131,6 +131,7 @@ class Product : public Expr {
   template <typename T>
   Product &scale(T scalar) {
     scalar_ *= scalar;
+    reset_canonical_mark();
     return *this;
   }
 
@@ -144,6 +145,7 @@ class Product : public Expr {
                   Flatten flatten_tag = Flatten::Yes) {
     SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
+    reset_canonical_mark();
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
         auto factor_constant = factor->as<Constant>();
@@ -215,6 +217,7 @@ class Product : public Expr {
                    Flatten flatten_tag = Flatten::Yes) {
     SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
+    reset_canonical_mark();
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
         auto factor_constant = std::static_pointer_cast<Constant>(factor);
@@ -304,6 +307,12 @@ class Product : public Expr {
   /// @param[in] negate if true, scalar will be before conversion
   std::wstring to_latex(bool negate) const;
 
+  static constexpr type_rank_type type_rank = expr_type_rank::product;
+  static constexpr std::string static_type_name(
+      std::type_identity<Product> = {}) {
+    return "sequant::Product";
+  }
+
   type_id_type type_id() const override;
 
   /// @return an identical clone of this Product (a deep copy allocated on the
@@ -364,6 +373,14 @@ class CProduct : public Product {
   CProduct(const Product &other);
   CProduct(Product &&other);
 
+  /// objects of this type report Product's type_id(); this name keeps
+  /// `Expr::get_type_id<CProduct>()`, which Expr::is uses, independent of the
+  /// compiler
+  static constexpr std::string static_type_name(
+      std::type_identity<CProduct> = {}) {
+    return "sequant::CProduct";
+  }
+
   bool is_commutative() const override;
 
   /// @return an identical clone of this CProduct
@@ -386,6 +403,14 @@ class NCProduct : public Product {
   using Product::Product;
   NCProduct(const Product &other);
   NCProduct(Product &&other);
+
+  /// objects of this type report Product's type_id(); this name keeps
+  /// `Expr::get_type_id<NCProduct>()`, which Expr::is uses, independent of the
+  /// compiler
+  static constexpr std::string static_type_name(
+      std::type_identity<NCProduct> = {}) {
+    return "sequant::NCProduct";
+  }
 
   bool is_commutative() const override;
 

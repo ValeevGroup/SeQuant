@@ -2,7 +2,6 @@
 #include <SeQuant/version.hpp>
 
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -275,7 +274,6 @@ int main(int argc, char* argv[]) {
   std::cout << "scalar field: "
             << (field_override == Field::Real ? "real" : "complex") << "\n";
 
-  sequant::detail::OpIdRegistrar op_id_registrar;
   auto sr_reg = make_min_sr_spaces(SpinConvention::None);
   apply_field(*sr_reg, field_override);
   // Under Field::Real, Hermitian integrals become bra↔ket-symmetric and the

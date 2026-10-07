@@ -18,6 +18,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <optional>
+#include <string>
 #include <type_traits>
 
 namespace sequant {
@@ -124,6 +125,11 @@ class Sum : public Expr {
   std::size_t size() const;
 
   std::wstring to_latex() const override;
+
+  static constexpr type_rank_type type_rank = expr_type_rank::sum;
+  static constexpr std::string static_type_name(std::type_identity<Sum> = {}) {
+    return "sequant::Sum";
+  }
 
   Expr::type_id_type type_id() const override;
 

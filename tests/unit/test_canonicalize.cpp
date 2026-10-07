@@ -3,9 +3,11 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -24,6 +26,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -139,13 +142,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
               "Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
     }
     {  // Azam's example:
-      // two intermediates that are equivalent modulo permutation of columns of
-      // named indices. as of https://github.com/ValeevGroup/SeQuant/pull/349
-      // canonicalization does not recognize them as identical because by
-      // default named index labels are ignored (this is done to make canonical
-      // TNs to be independent of external index renamings). However in
-      // the context of a sum external index labels are meaningful and should be
-      // accounted.
+      // two spellings of one product, which differ by permutations of the
+      // columns of its column-symmetric tensors; they canonicalize alike
+      // whether or not named index labels are ignored
       for (auto ignore_named_index_labels : {true, false}) {
         auto input1 =
             deserialize(L"1/2 t{a3,a1,a2;i4,i5,i2}:N-C-S g{i4,i5;i3,i1}:N-C-S");
@@ -165,10 +164,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
              .ignore_named_index_labels =
                  static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
                      ignore_named_index_labels)});
-        if (ignore_named_index_labels)
-          REQUIRE(input1 != input2);
-        else
-          REQUIRE(input1 == input2);
+        REQUIRE(input1 == input2);
       }
     }
 
@@ -544,7 +540,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
                          Symmetry::Antisymm);
       canonicalize(input);
-      REQUIRE(input->size() == 1);
+      // the summands merge into one term, which canonicalization returns
+      REQUIRE(input->is<Product>());
       REQUIRE_THAT(input,
                    EquivalentTo("g{i3,i4;i1,a3}:A t{a2;i3} t{a1,a3;i2,i4}:A"));
     }
@@ -566,7 +563,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
                          particle_symmetric);
 
       canonicalize(input);
-      REQUIRE(input->size() == 1);
+      // the summands merge into one term, which canonicalization returns
+      REQUIRE(input->is<Product>());
       REQUIRE_THAT(input,
                    EquivalentTo("g{i3,i4;i1,a3} t{a2;i4} t{a1,a3;i3,i2}"));
     }
@@ -682,7 +680,7 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
     auto e = deserialize(spec);
     ExprPtrList tl{e};
     TensorNetwork tn(tl);
-    return tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+    return tn.canonicalize_slots(get_default_context().cardinal_tensor_labels())
         .hash_value();
   };
 
@@ -693,4 +691,643 @@ TEST_CASE("braket_symmetric_half_tensor_canonicalization", "[algorithms]") {
   CHECK(canon_hash(L"X{a1;;i1}:N-S-N") == canon_hash(L"X{;a1;i1}:N-S-N"));
   // Without braket symmetry the two forms must remain distinct.
   CHECK(canon_hash(L"X{a1;;i1}:N-N-N") != canon_hash(L"X{;a1;i1}:N-N-N"));
+}
+
+TEST_CASE("context_tensor_canonicalizers", "[algorithms]") {
+  using namespace sequant;
+
+  auto Q = [](std::initializer_list<std::wstring_view> b,
+              std::initializer_list<std::wstring_view> k) {
+    return ex<Tensor>(L"Q", bra(b), ket(k), Symmetry::Antisymm);
+  };
+
+  SECTION("Tensor::canonicalize uses the context's default canonicalizer") {
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(
+                  L"", std::make_shared<NullTensorCanonicalizer>()));
+      auto q = Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"});
+      CHECK(q->as<Tensor>().canonicalize() == nullptr);
+      CHECK(*q == *Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"}));
+    }
+    auto q = Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"});
+    const auto bp = q->as<Tensor>().canonicalize();
+    REQUIRE(bp);
+    CHECK(bp->as<Constant>().value<int>() == -1);
+    CHECK(*q == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+  }
+
+  SECTION("TN canonicalization uses the context's label canonicalizer") {
+    auto canonicalized = [&Q] {
+      TensorNetwork tn(ExprPtrList{Q({L"i_2", L"i_1"}, {L"a_1", L"a_2"})});
+      const auto byproduct =
+          tn.canonicalize(get_default_context().cardinal_tensor_labels(),
+                          {.method = CanonicalizationMethod::Complete});
+      const int phase = byproduct ? byproduct->as<Constant>().value<int>() : 1;
+      return std::make_pair(std::dynamic_pointer_cast<Expr>(tn.tensors().at(0)),
+                            phase);
+    };
+    {
+      // a canonicalizer registered for label Q, which leaves Q as is and
+      // counts its uses
+      struct CountingCanonicalizer : NullTensorCanonicalizer {
+        std::shared_ptr<int> calls = std::make_shared<int>(0);
+        ExprPtr apply(AbstractTensor&) const override {
+          ++*calls;
+          return {};
+        }
+      };
+      const auto counting = std::make_shared<CountingCanonicalizer>();
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(L"Q", counting));
+      const auto [tensor, phase] = canonicalized();
+      CHECK(*counting->calls > 0);
+      // the graph-based pass alone places the named indices in label order
+      CHECK(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+      CHECK(phase == -1);
+    }
+    const auto [tensor, phase] = canonicalized();
+    CHECK(*tensor == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+    CHECK(phase == -1);
+  }
+
+  SECTION("DefaultTensorCanonicalizer uses the context's index comparer") {
+    const auto default_cmp = TensorCanonicalizer::default_index_comparer();
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context())
+              .set_index_comparer(
+                  [default_cmp](const Index& idx1, const Index& idx2) {
+                    return default_cmp(idx2, idx1);
+                  }));
+      auto q = Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"});
+      q->as<Tensor>().canonicalize();
+      CHECK(*q == *Q({L"i_2", L"i_1"}, {L"a_2", L"a_1"}));
+    }
+    auto q = Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"});
+    CHECK(q->as<Tensor>().canonicalize() == nullptr);
+    CHECK(*q == *Q({L"i_1", L"i_2"}, {L"a_1", L"a_2"}));
+  }
+
+  SECTION("Product canonicalization follows the context's cardinal labels") {
+    auto canonical_labels = [] {
+      auto product = ex<Tensor>(L"Z", bra{L"i_1"}, ket{L"a_1"}) *
+                     ex<Tensor>(L"Y", bra{L"a_1"}, ket{L"i_1"});
+      canonicalize(product, {.method = CanonicalizationMethod::Complete});
+      REQUIRE(product->is<Product>());
+      std::vector<std::wstring> labels;
+      for (const auto& factor : product->as<Product>().factors())
+        labels.emplace_back(factor->as<Tensor>().label());
+      return labels;
+    };
+    const std::vector<std::wstring> y_first{L"Y", L"Z"};
+    const std::vector<std::wstring> z_first{L"Z", L"Y"};
+    CHECK(canonical_labels() == y_first);
+    {
+      auto scoped = set_scoped_default_context(
+          Context(get_default_context()).set_cardinal_tensor_labels({L"Z"}));
+      CHECK(canonical_labels() == z_first);
+    }
+    CHECK(canonical_labels() == y_first);
+  }
+}
+
+TEST_CASE("canonicalization_zero_by_symmetry", "[algorithms][canonicalize]") {
+  using namespace sequant;
+
+  auto isr = sequant::mbpt::make_legacy_spaces();
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  auto ctx_resetter = set_scoped_default_context(ctx);
+
+  auto is_zero = [](const ExprPtr& expr) {
+    return expr->is<Constant>() && expr->as<Constant>().is_zero();
+  };
+
+  // a1<->a2 is an automorphism; it permutes the (symmetric) bra of t and
+  // the (antisymmetric) creators of the operator, so the term equals minus
+  // itself
+  SECTION("symmetric tensor contracted with fermionic operator") {
+    auto make = [](Symmetry symm) {
+      return ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"}, symm) *
+             ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+    };
+    auto zero = make(Symmetry::Symm);
+    canonicalize(zero);
+    REQUIRE(zero->is_zero());
+    // a zero product keeps no factors, so zeros of different inputs agree
+    REQUIRE(zero->as<Product>().factors().empty());
+    {
+      ExprPtr other_zero =
+          ex<Tensor>(L"t", bra{L"a_2", L"a_1"}, ket{L"i_2", L"i_1"},
+                     Symmetry::Symm) *
+          ex<FNOperator>(cre({L"a_2", L"a_1"}), ann({L"i_1", L"i_2"}));
+      canonicalize(other_zero);
+      REQUIRE(*other_zero == *zero);
+      REQUIRE(other_zero->hash_value() == zero->hash_value());
+    }
+    simplify(zero);
+    REQUIRE(is_zero(zero));
+
+    auto nonzero = make(Symmetry::Antisymm);
+    simplify(nonzero);
+    REQUIRE(!nonzero->is_zero());
+  }
+
+  SECTION("symmetric tensor contracted with antisymmetric tensor") {
+    // dummy indices only
+    {
+      auto expr = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"h", bra{L"p_3", L"p_4"}, ket{L"p_1", L"p_2"},
+                             Symmetry::Symm);
+      simplify(expr);
+      REQUIRE(is_zero(expr));
+    }
+    // named indices are not permuted, the contracted pair is
+    {
+      auto make = [] {
+        return ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                          Symmetry::Antisymm) *
+               ex<Tensor>(L"s", bra{L"p_5", L"p_6"}, ket{L"p_1", L"p_2"},
+                          Symmetry::Symm);
+      };
+      auto expr = make();
+      simplify(expr);
+      REQUIRE(is_zero(expr));
+
+      // in a sum named index labels are meaningful
+      auto sum = make() + ex<Tensor>(L"f", bra{L"p_3", L"p_4"},
+                                     ket{L"p_5", L"p_6"}, Symmetry::Antisymm);
+      simplify(sum);
+      REQUIRE_THAT(sum, EquivalentTo("f{p3,p4;p5,p6}:A"));
+    }
+  }
+
+  SECTION("nonzero terms are unchanged") {
+    // swapping identical antisymmetric tensors (with their slots) is even
+    {
+      auto expr = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                             Symmetry::Antisymm);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo("t{a1,a2;i1,i2}:A t{i1,i2;a1,a2}:A"));
+    }
+    // CCD quadratic term: nontrivial automorphisms, all of them even
+    {
+      auto expr = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_1", L"i_2"},
+                             Symmetry::Antisymm) *
+                  ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_3", L"i_4"},
+                             Symmetry::Antisymm);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo("g{i3,i4;a3,a4}:A t{a3,a4;i1,i2}:A "
+                                      "t{a1,a2;i3,i4}:A"));
+    }
+    // a lone antisymmetric tensor: swapping its named indices is not a
+    // symmetry of the term
+    {
+      auto expr = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                             Symmetry::Antisymm);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo("g{p1,p2;p3,p4}:A"));
+    }
+    // automorphisms permuting antisymmetric bundles of unequal or odd size
+    // in pairs are even
+    for (std::wstring spec :
+         {L"t{a1,a2;i1}:A u{;a1,a2}:A", L"X{a1,a2,a3;i1}:A Y{;a1,a2,a3}:A"}) {
+      auto expr = deserialize(spec);
+      simplify(expr);
+      REQUIRE(!expr->is_zero());
+      REQUIRE_THAT(expr, EquivalentTo(spec));
+    }
+    {
+      auto sum = deserialize(L"t{a1,a2;i1}:A u{;a1,a2}:A + w{;i1}:A");
+      simplify(sum);
+      REQUIRE(sum->is<Sum>());
+      REQUIRE(sum->size() == 2);
+    }
+  }
+
+  // a bra<->ket symmetric tensor's bra bundle can map onto its ket bundle:
+  // p1<->p3, p2<->p4 maps g onto itself (+1) and is odd on u
+  SECTION("automorphism exchanging the bra and ket of a tensor") {
+    auto make = [](Symmetry w_symm) {
+      return ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"}, aux{},
+                        Symmetry::Antisymm, BraKetSymmetry::Symm) *
+             ex<Tensor>(L"u", bra{L"p_1", L"p_3"}, ket{}, Symmetry::Antisymm) *
+             ex<Tensor>(L"w", bra{L"p_2", L"p_4"}, ket{}, w_symm);
+    };
+    auto zero = make(Symmetry::Symm);
+    simplify(zero);
+    REQUIRE(is_zero(zero));
+
+    // w antisymmetric too: the exchange is even
+    auto nonzero = make(Symmetry::Antisymm);
+    simplify(nonzero);
+    REQUIRE(!nonzero->is_zero());
+  }
+
+  // only topological canonicalization looks for automorphisms
+  SECTION("rapid canonicalization does not detect a zero") {
+    auto expr = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                           Symmetry::Symm) *
+                ex<FNOperator>(cre({L"a_1", L"a_2"}), ann({L"i_1", L"i_2"}));
+    expr->canonicalize(CanonicalizeOptions::default_options().copy_and_set(
+        CanonicalizationMethod::Rapid));
+    REQUIRE(!expr->is_zero());
+    canonicalize(expr);
+    REQUIRE(expr->is_zero());
+  }
+
+  // odd-size bundles: antisymmetric in a1,a2,a3 against symmetric
+  SECTION("odd-size antisymmetric bundle contracted with symmetric one") {
+    auto expr = deserialize(L"X{a1,a2,a3;i1}:A Y{;a1,a2,a3}:S");
+    simplify(expr);
+    REQUIRE(is_zero(expr));
+  }
+}
+
+TEST_CASE("canonicalize_named_index_automorphisms", "[algorithms]") {
+  using namespace sequant;
+
+  // Topological canonicalization with named index labels ignored: automorphisms
+  // of the network that permute named indices leave their placement to the
+  // labels, so that every spelling of an expression canonicalizes alike and
+  // canonicalizing again changes nothing (#666)
+  const CanonicalizeOptions opts{
+      .method = CanonicalizationMethod::Topological,
+      .ignore_named_index_labels =
+          CanonicalizeOptions::IgnoreNamedIndexLabel::Yes};
+  // pairs of spellings of one expression
+  for (const auto& [x, y] :
+       std::initializer_list<std::pair<std::wstring_view, std::wstring_view>>{
+           // identical tensors
+           {L"X{i_1;a_1} * X{i_2;a_2}", L"X{i_2;a_2} * X{i_1;a_1}"},
+           {L"X{i_1;a_1} * X{i_2;a_2} * Y{i_3;a_3}",
+            L"Y{i_3;a_3} * X{i_2;a_2} * X{i_1;a_1}"},
+           // antisymmetric slots, dummies renamed
+           {L"g{i_1,i_2;a_3,a_4}:A * t{a_3,a_4;i_3,i_4}:A",
+            L"t{a_5,a_6;i_3,i_4}:A * g{i_1,i_2;a_5,a_6}:A"},
+           {L"f{i_1;a_3} * t{a_3,a_1;i_2,i_3}:A",
+            L"-1 f{i_1;a_5} * t{a_1,a_5;i_2,i_3}:A"},
+           // columns of a column-symmetric tensor
+           {L"X{i_3,i_5;a_1,a_2}:N-N-S", L"X{i_5,i_3;a_2,a_1}:N-N-S"},
+           {L"X{i_3,i_5,i_6;a_1,a_2,a_4}:A-N-S",
+            L"X{i_6,i_3,i_5;a_4,a_1,a_2}:A-N-S"}}) {
+    auto canonicalized = [&opts](std::wstring_view input) {
+      ExprPtr e = deserialize(input);
+      // a lone tensor is canonicalized as a network only within a Product
+      if (!e->is<Product>()) e = ex<Product>(ExprPtrList{e});
+      canonicalize(e, opts);
+      return e;
+    };
+    const auto cx = canonicalized(x);
+    CAPTURE(x, y, serialize(cx));
+    REQUIRE(cx == canonicalized(y));
+    auto again = cx->clone();
+    canonicalize(again, opts);
+    REQUIRE(again == cx);
+  }
+}
+
+TEST_CASE("current_contexts_version", "[algorithms]") {
+  using namespace sequant;
+  const auto version = current_contexts_version();
+
+  // any change to the canonicalization configuration of the context in
+  // effect for any Statistics changes the version, for as long as it is in
+  // effect
+  auto changed_by = [&](auto&& modify, Statistics s = Statistics::Arbitrary) {
+    Context ctx(get_default_context(s));
+    modify(ctx);
+    auto resetter = set_scoped_default_context({{s, ctx}});
+    return current_contexts_version() != version;
+  };
+  CHECK(
+      changed_by([](Context& ctx) { ctx.set_cardinal_tensor_labels({L"Z"}); }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_tensor_canonicalizer(L"version_test",
+                                 std::make_shared<NullTensorCanonicalizer>());
+  }));
+  CHECK(changed_by([](Context& ctx) {
+    ctx.set_index_comparer(TensorCanonicalizer::default_index_comparer());
+  }));
+  for (auto s : {Statistics::FermiDirac, Statistics::BoseEinstein,
+                 Statistics::Arbitrary}) {
+    CHECK(changed_by(
+        [](Context& ctx) {
+          ctx.set_cardinal_tensor_labels(container::vector<std::wstring>{L"Z"});
+        },
+        s));
+  }
+  // settings that canonicalization does not read do not change it
+  CHECK(!changed_by([](Context& ctx) {
+    ctx.set(ctx.vacuum() == Vacuum::Physical ? Vacuum::SingleProduct
+                                             : Vacuum::Physical);
+  }));
+  // the scoped contexts have ended
+  CHECK(current_contexts_version() == version);
+
+  // an unmodified copy of a context keeps the version
+  CHECK(!changed_by([](Context&) {}));
+
+  // a change of the default context changes it until the default is restored
+  const auto bose_einstein = get_default_context(Statistics::BoseEinstein);
+  // a copy given its own registry, which is a configuration of its own
+  auto changed = bose_einstein;
+  changed.set(IndexSpaceRegistry(*bose_einstein.index_space_registry()));
+  set_default_context(changed, Statistics::BoseEinstein);
+  CHECK(current_contexts_version() != version);
+  set_default_context(bose_einstein, Statistics::BoseEinstein);
+  CHECK(current_contexts_version() == version);
+}
+
+TEST_CASE("canonicalize_canonical", "[algorithms]") {
+  using namespace sequant;
+
+  // only Complete canonicalization marks its result
+  auto complete_ctx = get_default_context();
+  complete_ctx.set(
+      CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto complete_resetter = set_scoped_default_context(complete_ctx);
+
+  auto make_product = [] {
+    return ex<Constant>(rational{1, 2}) *
+           ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                      Symmetry::Antisymm) *
+           ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_1"},
+                      Symmetry::Antisymm);
+  };
+  auto make_sum = [&] {
+    return make_product() +
+           ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) *
+               ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) +
+           ex<Constant>(3);
+  };
+  const auto opts = CanonicalizeOptions::default_options();
+
+  SECTION("canonicalize marks its result") {
+    for (auto e : {make_product(), make_sum()}) {
+      canonicalize(e);
+      REQUIRE(e->is_canonical());
+      REQUIRE(e->is_canonical(opts));
+    }
+    // also when the byproduct is absorbed into a new Product
+    auto t = ex<Tensor>(L"g", bra{L"i_2", L"i_1"}, ket{L"a_1", L"a_2"},
+                        Symmetry::Antisymm);
+    canonicalize(t);
+    REQUIRE(t.is<Product>());
+    REQUIRE(t->is_canonical());
+    REQUIRE(t->as<Product>().factor(0)->is_canonical());
+  }
+
+  SECTION("rapid canonicalization does not mark") {
+    auto e = make_sum();
+    canonicalize(e, opts.copy_and_set(CanonicalizationMethod::Rapid));
+    REQUIRE(!e->is_canonical());
+    e->rapid_canonicalize();
+    REQUIRE(!e->is_canonical());
+    // and invalidates the mark
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    e->rapid_canonicalize();
+    REQUIRE(!e->is_canonical());
+  }
+
+  SECTION("mutation invalidates, canonicalize marks again") {
+    auto e = make_product();
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    e->as<Product>().append(1, ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_4"}));
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    e->as<Product>().scale(2);
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    // in-place mutation of a factor leaves the memoized hash of the Product
+    // stale, but must neither throw nor leave the mark valid
+    e->hash_value();
+    auto& t = e->as<Product>().factor(1)->as<Tensor>();
+    t.transform_indices(
+        container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_5"}}});
+    t.reset_tags();
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+  }
+
+  SECTION("in-place mutation of a summand's factor invalidates") {
+    auto e = make_sum();
+    canonicalize(e);
+    e->hash_value();
+    // the first summand that is a Product, wherever canonical order puts it
+    auto product = ranges::find_if(e->as<Sum>().summands(), [](const auto& s) {
+      return s->template is<Product>();
+    });
+    REQUIRE(product != ranges::end(e->as<Sum>().summands()));
+    auto& t = (*product)->as<Product>().factor(0)->as<Tensor>();
+    t.transform_indices(
+        container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_5"}}});
+    t.reset_tags();
+    REQUIRE(!e->is_canonical());
+    REQUIRE_NOTHROW(canonicalize(e));
+    REQUIRE(e->is_canonical());
+  }
+
+  SECTION("canonicalizing a canonical expression is a no-op") {
+    for (auto e : {make_product(), make_sum()}) {
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) > 0);
+      const auto* ptr = e.get();
+      const auto latex = to_latex(e);
+      const auto hash = e->hash_value();
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) == 0);
+      REQUIRE(count_product_canonicalizations([&] { e->canonicalize(); }) == 0);
+      REQUIRE(e.get() == ptr);
+      REQUIRE(to_latex(e) == latex);
+      REQUIRE(e->hash_value() == hash);
+    }
+    // simplify() canonicalizes, so a simplified expression is not
+    // canonicalized again
+    auto e = make_sum();
+    simplify(e);
+    REQUIRE(e->is_canonical());
+    REQUIRE(count_product_canonicalizations([&] { simplify(e); }) == 0);
+  }
+
+  SECTION("Topological canonicalization alone does not mark") {
+    auto topological_ctx = get_default_context();
+    topological_ctx.set(
+        CanonicalizeOptions{.method = CanonicalizationMethod::Topological});
+    auto topological_resetter = set_scoped_default_context(topological_ctx);
+    // a lone tensor and the same tensor scaled are spelled differently by
+    // Topological canonicalization alone, so a summand it leaves behind must
+    // still merge with a fresh copy
+    ExprPtr z = deserialize(L"X{i_1;a_1} - X{i_6,i_3,i_5;a_1,a_2,a_4}:A-C-S");
+    simplify(z);
+    REQUIRE(!z->is_canonical());
+    ExprPtr d = z - deserialize(serialize(z));
+    REQUIRE(simplify(d) == ex<Constant>(0));
+  }
+
+  SECTION("canonicalizing a Sum leaves its canonical summands alone") {
+    auto e = make_sum();
+    canonicalize(e);
+    const auto extra = ex<Tensor>(L"h", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
+    e->as<Sum>().append(extra);
+    REQUIRE(!e->is_canonical());
+    // only the new summand is canonicalized, in the rapid and in the full pass
+    REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) == 2);
+    REQUIRE(e->is_canonical());
+    // the result is that of canonicalizing from scratch
+    auto reference = make_sum() + extra->clone();
+    canonicalize(reference);
+    REQUIRE(to_latex(e) == to_latex(reference));
+  }
+
+  SECTION("a change of global state invalidates") {
+    auto e = make_sum();
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+    {
+      auto ctx = get_default_context();
+      auto labels = ctx.cardinal_tensor_labels();
+      labels.push_back(L"canonical_test");
+      ctx.set_cardinal_tensor_labels(std::move(labels));
+      auto _ = set_scoped_default_context(ctx);
+      REQUIRE(!e->is_canonical());
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(e); }) > 0);
+      REQUIRE(e->is_canonical());
+    }
+    REQUIRE(!e->is_canonical());
+    canonicalize(e);
+    REQUIRE(e->is_canonical());
+
+    {
+      auto _ = set_scoped_default_context(
+          Context(get_default_context())
+              .set_tensor_canonicalizer(
+                  L"canonical_test",
+                  std::make_shared<DefaultTensorCanonicalizer>()));
+      REQUIRE(!e->is_canonical());
+      canonicalize(e);
+      REQUIRE(e->is_canonical());
+    }
+    REQUIRE(!e->is_canonical());
+
+    // a setting canonicalization does not read does not invalidate
+    canonicalize(e);
+    {
+      auto ctx = get_default_context();
+      ctx.set(ctx.vacuum() == Vacuum::Physical ? Vacuum::SingleProduct
+                                               : Vacuum::Physical);
+      auto _ = set_scoped_default_context(ctx);
+      REQUIRE(e->is_canonical());
+    }
+  }
+
+  SECTION("different options invalidate") {
+    auto e = make_sum();
+    canonicalize(e);
+    const auto other_opts =
+        opts.copy_and_set(container::set<Index>{Index{L"i_1"}});
+    REQUIRE(!e->is_canonical(other_opts));
+    REQUIRE(count_product_canonicalizations(
+                [&] { canonicalize(e, other_opts); }) > 0);
+    REQUIRE(e->is_canonical(other_opts));
+    REQUIRE(!e->is_canonical(opts));
+  }
+
+  SECTION("a clone of a canonical expression is canonical") {
+    for (auto e : {make_product(), make_sum()}) {
+      canonicalize(e);
+      auto c = e->clone();
+      REQUIRE(c->is_canonical());
+      REQUIRE(count_product_canonicalizations([&] { canonicalize(c); }) == 0);
+      REQUIRE(c == e);
+    }
+  }
+}
+
+TEST_CASE("canonicalize_tensor_with_repeated_index", "[algorithms]") {
+  using namespace sequant;
+
+  for (const auto method : {CanonicalizationMethod::Topological,
+                            CanonicalizationMethod::Complete}) {
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = method});
+    auto resetter = set_scoped_default_context(ctx);
+
+    // two spellings of one tensor network, differing in dummy names
+    auto require_equal = [](const ExprPtr& x, const ExprPtr& y) {
+      REQUIRE(simplify(x - y) == ex<Constant>(0));
+    };
+    // a slot index repeated in bra and ket
+    require_equal(ex<Tensor>(L"h", bra{L"i_7"}, ket{L"i_7"}),
+                  ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"}));
+    // ... next to a named index
+    require_equal(ex<Tensor>(L"h", bra{L"i_7", L"i_2"}, ket{L"i_7", L"a_1"}),
+                  ex<Tensor>(L"h", bra{L"i_1", L"i_2"}, ket{L"i_1", L"a_1"}));
+    // a repeated index carrying protoindices
+    require_equal(ex<Tensor>(L"X", bra{Index(L"a_1", {L"i_1"})},
+                             ket{Index(L"a_1", {L"i_1"})}),
+                  ex<Tensor>(L"X", bra{Index(L"a_2", {L"i_1"})},
+                             ket{Index(L"a_2", {L"i_1"})}));
+    // an index repeated only as a protoindex: its lone and scaled spellings
+    // merge
+    {
+      auto x = [] {
+        return ex<Tensor>(L"X", bra{Index(L"a_1", {L"i_1"})},
+                          ket{Index(L"a_2", {L"i_1"})});
+      };
+      REQUIRE(simplify(x() - ex<Constant>(2) * x()) ==
+              simplify(ex<Constant>(-1) * x()));
+    }
+    // a lone and a scaled spelling merge
+    REQUIRE(simplify(ex<Tensor>(L"h", bra{L"i_7"}, ket{L"i_7"}) -
+                     ex<Constant>(2) *
+                         ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"})) ==
+            simplify(ex<Constant>(-1) *
+                     ex<Tensor>(L"h", bra{L"i_1"}, ket{L"i_1"})));
+  }
+}
+
+TEST_CASE("canonicalize_lone_term", "[algorithms]") {
+  using namespace sequant;
+
+  for (const auto method : {CanonicalizationMethod::Topological,
+                            CanonicalizationMethod::Complete}) {
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = method});
+    auto resetter = set_scoped_default_context(ctx);
+
+    auto x = [](std::initializer_list<const wchar_t*> bra_idxs) {
+      return ex<Tensor>(L"X", bra(bra_idxs), ket{L"a_1", L"a_2", L"a_4"},
+                        Symmetry::Antisymm, BraKetSymmetry::Conjugate,
+                        ColumnSymmetry::Symm);
+    };
+    // the summands of a Sum that merge into one term, and a Product of one
+    // factor with a unit scalar, are canonicalized as that term
+    for (auto input :
+         {x({L"i_6", L"i_3", L"i_5"}) +
+              ex<Constant>(2) * x({L"i_3", L"i_6", L"i_5"}),
+          ex<Product>(1, ExprPtrList{x({L"i_6", L"i_3", L"i_5"})}),
+          ex<Product>(-1, ExprPtrList{x({L"i_6", L"i_3", L"i_5"})})}) {
+      simplify(input);
+      REQUIRE(!input->is<Sum>());
+      const auto once = serialize(input);
+      simplify(input);
+      REQUIRE(serialize(input) == once);
+    }
+  }
 }

@@ -21,6 +21,7 @@
 #include <boost/hana.hpp>
 #include <boost/hana/ext/std/integral_constant.hpp>
 
+#include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <mutex>
@@ -57,13 +58,12 @@ constexpr auto is_particle = IsParticle{};
 /// cover all possible IndexSpace objects that can be generated in their
 /// program.
 ///
-/// Registry contains 2 parts: set of IndexSpace objects (managed by a
-/// `std::shared_ptr`, see IndexSpaceRegistry::spaces()) and specification of
-/// various spaces (vacuum, reference, complete, etc.). Copy semantics is thus
-/// partially shallow, with spaces shared between copies. This allows to have
-/// multiple registries share same set of spaces but have different
-/// specifications of vacuum, reference, etc.; this is useful for providing
-/// different contexts for fermions and bosons, for example.
+/// Registry contains 2 parts: set of IndexSpace objects (see
+/// IndexSpaceRegistry::spaces()) and specification of various spaces (vacuum,
+/// reference, complete, etc.). Registries can be constructed from the same set
+/// of spaces but have different specifications of vacuum, reference, etc.;
+/// this is useful for providing different contexts for fermions and bosons,
+/// for example.
 ///
 /// Spaces that can be occupied by physical particles need to be
 /// introspected for their structure, occupancy, etc. The registry provides the
@@ -94,18 +94,14 @@ class IndexSpaceRegistry {
   /// default constructor creates a registry containing only IndexSpace::null
   /// @note null space is registered so we don't have to handle it as a corner
   /// case in retrieve() and other methods
-  IndexSpaceRegistry()
-      : spaces_(std::make_shared<
-                container::set<IndexSpace, IndexSpace::KeyCompare>>()) {
+  IndexSpaceRegistry() {
     // register nullspace
     this->add(IndexSpace::null);
   }
 
   /// constructs an IndexSpaceRegistry from an existing set of IndexSpace
   /// objects
-  IndexSpaceRegistry(
-      std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>>
-          spaces)
+  IndexSpaceRegistry(container::set<IndexSpace, IndexSpace::KeyCompare> spaces)
       : spaces_(std::move(spaces)) {}
 
   /// copy constructor
@@ -128,7 +124,10 @@ class IndexSpaceRegistry {
         refocc_(std::move(other.refocc_)),
         complete_(std::move(other.complete_)),
         hole_space_(std::move(other.hole_space_)),
-        particle_space_(std::move(other.particle_space_)) {}
+        particle_space_(std::move(other.particle_space_)) {
+    // what other has memoized describes the spaces it gave up
+    other.clear_memoized_data_and_return_this();
+  }
 
   /// copy assignment operator
   IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
@@ -139,7 +138,7 @@ class IndexSpaceRegistry {
     complete_ = other.complete_;
     hole_space_ = other.hole_space_;
     particle_space_ = other.particle_space_;
-    return *this;
+    return clear_memoized_data_and_return_this();
   }
 
   /// move assignment operator
@@ -152,16 +151,15 @@ class IndexSpaceRegistry {
     complete_ = std::move(other.complete_);
     hole_space_ = std::move(other.hole_space_);
     particle_space_ = std::move(other.particle_space_);
-    return *this;
+    // what other has memoized describes the spaces it gave up
+    other.clear_memoized_data_and_return_this();
+    return clear_memoized_data_and_return_this();
   }
-
-  /// deep copy of this object, creates a copy of its spaces
-  IndexSpaceRegistry clone() const;
 
   const auto& spaces() const { return spaces_; }
 
-  decltype(auto) begin() const { return spaces_->cbegin(); }
-  decltype(auto) end() const { return spaces_->cend(); }
+  decltype(auto) begin() const { return spaces_.cbegin(); }
+  decltype(auto) end() const { return spaces_.cend(); }
 
   /// @brief retrieve a pointer to IndexSpace from the registry by the label
   /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
@@ -170,9 +168,8 @@ class IndexSpaceRegistry {
   /// found
   template <basic_string_convertible S>
   const IndexSpace* retrieve_ptr(S&& label) const {
-    auto it =
-        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
-    return it != spaces_->end() ? &(*it) : nullptr;
+    auto it = spaces_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    return it != spaces_.end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve a pointer to IndexSpace from the registry by the label
@@ -182,9 +179,8 @@ class IndexSpaceRegistry {
   /// found
   template <basic_string_convertible S>
   IndexSpace* retrieve_ptr(S&& label) {
-    auto it =
-        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
-    return it != spaces_->end() ? &(*it) : nullptr;
+    auto it = spaces_.find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    return it != spaces_.end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by the label
@@ -208,10 +204,10 @@ class IndexSpaceRegistry {
   /// not found
   const IndexSpace* retrieve_ptr(const IndexSpace::Type& type,
                                  const IndexSpace::QuantumNumbers& qns) const {
-    auto it = std::find_if(
-        spaces_->begin(), spaces_->end(),
-        [&](const auto& is) { return is.type() == type && is.qns() == qns; });
-    return it != spaces_->end() ? &(*it) : nullptr;
+    auto it = std::find_if(spaces_.begin(), spaces_.end(), [&](const auto& is) {
+      return is.type() == type && is.qns() == qns;
+    });
+    return it != spaces_.end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by its type and quantum
@@ -238,9 +234,9 @@ class IndexSpaceRegistry {
   /// not found
   const IndexSpace* retrieve_ptr(const IndexSpace::Attr& space_attr) const {
     auto it = std::find_if(
-        spaces_->begin(), spaces_->end(),
+        spaces_.begin(), spaces_.end(),
         [&space_attr](const IndexSpace& s) { return s.attr() == space_attr; });
-    return it != spaces_->end() ? &(*it) : nullptr;
+    return it != spaces_.end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by the IndexSpace::Attr
@@ -296,8 +292,8 @@ class IndexSpaceRegistry {
   /// @throw Exception if `IS.base_key()` or `IS.attr()` matches
   /// an already registered IndexSpace
   IndexSpaceRegistry& add(const IndexSpace& IS) {
-    auto it = spaces_->find(IS.base_key());
-    if (it != spaces_->end()) {
+    auto it = spaces_.find(IS.base_key());
+    if (it != spaces_.end()) {
       throw Exception(
           (std::string("IndexSpaceRegistry::add(index_space): space with "
                        "index_space.base_key()=") +
@@ -308,7 +304,7 @@ class IndexSpaceRegistry {
     } else {
       // make sure there are no duplicate IndexSpaces whose attribute is
       // IS.attr()
-      if (ranges::any_of(*spaces_,
+      if (ranges::any_of(spaces_,
                          [&IS](auto&& is) { return IS.attr() == is.attr(); })) {
         throw Exception(
             (std::string("IndexSpaceRegistry::add(index_space): space with "
@@ -318,7 +314,7 @@ class IndexSpaceRegistry {
              "IndexSpace use "
              "IndexSpaceRegistry::replace(is)"));
       }
-      spaces_->emplace(IS);
+      spaces_.emplace(IS);
     }
 
     return clear_memoized_data_and_return_this();
@@ -536,9 +532,9 @@ class IndexSpaceRegistry {
   /// @param IS an IndexSpace
   /// @return reference to `this`
   IndexSpaceRegistry& remove(const IndexSpace& IS) {
-    auto it = spaces_->find(IS.base_key());
-    if (it != spaces_->end()) {
-      spaces_->erase(IS);
+    auto it = spaces_.find(IS.base_key());
+    if (it != spaces_.end()) {
+      spaces_.erase(IS);
     }
     return clear_memoized_data_and_return_this();
   }
@@ -806,17 +802,16 @@ class IndexSpaceRegistry {
   /// @return (memoized) set of base IndexSpace::Type objects, sorted in
   /// increasing order
   const std::vector<IndexSpace::Type>& base_space_types() const {
+    std::scoped_lock guard{mtx_memoized_};
     if (!base_space_types_) {
-      auto types = *spaces_ | ranges::views::transform([](const auto& s) {
-        return s.type();
-      }) | ranges::views::filter([](const auto& t) { return is_base(t); }) |
-                   ranges::views::unique | ranges::to_vector;
+      auto types =
+          spaces_ |
+          ranges::views::transform([](const auto& s) { return s.type(); }) |
+          ranges::views::filter([](const auto& t) { return is_base(t); }) |
+          ranges::views::unique | ranges::to_vector;
       ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
-      std::scoped_lock guard{mtx_memoized_};
-      if (!base_space_types_) {
-        base_space_types_ =
-            std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
-      }
+      base_space_types_ =
+          std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
     }
     return *base_space_types_;
   }
@@ -828,18 +823,16 @@ class IndexSpaceRegistry {
   /// @return (memoized) set of base IndexSpace objects, sorted in the order of
   /// increasing type()
   const std::vector<IndexSpace>& base_spaces() const {
+    std::scoped_lock guard{mtx_memoized_};
     if (!base_spaces_) {
-      auto spaces = *spaces_ | ranges::views::filter([this](const auto& s) {
-        return this->is_base(s);
-      }) | ranges::views::unique |
-                    ranges::to_vector;
+      auto spaces = spaces_ | ranges::views::filter([this](const auto& s) {
+                      return this->is_base(s);
+                    }) |
+                    ranges::views::unique | ranges::to_vector;
       ranges::sort(spaces,
                    [](auto s1, auto s2) { return s1.type() < s2.type(); });
-      std::scoped_lock guard{mtx_memoized_};
-      if (!base_spaces_) {
-        base_spaces_ =
-            std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
-      }
+      base_spaces_ =
+          std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
     }
     return *base_spaces_;
   }
@@ -1342,7 +1335,7 @@ class IndexSpaceRegistry {
 
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
-  std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
+  container::set<IndexSpace, IndexSpace::KeyCompare> spaces_;
 
   bitset_t physical_particle_attribute_mask_ = bitset::null;
 
@@ -1350,7 +1343,7 @@ class IndexSpaceRegistry {
   mutable std::shared_ptr<std::vector<IndexSpace::Type>> base_space_types_;
   mutable std::shared_ptr<std::vector<IndexSpace>> base_spaces_;
   mutable std::recursive_mutex
-      mtx_memoized_;  // used to update the memoized data
+      mtx_memoized_;  // guards every access to the memoized data
   IndexSpaceRegistry& clear_memoized_data_and_return_this() {
     std::scoped_lock guard{mtx_memoized_};
     base_space_types_.reset();
@@ -1435,7 +1428,7 @@ class IndexSpaceRegistry {
   // same as above, but ignoring qn
   void throw_if_missing(const IndexSpace::Type& t,
                         std::string call_context = "") {
-    for (auto&& space : *spaces_) {
+    for (auto&& space : spaces_) {
       if (space.type() == t) {
         return;
       }
@@ -1448,7 +1441,7 @@ class IndexSpaceRegistry {
                                                  IndexSpace::Type>& qn2type,
                             std::string call_context = "") {
     container::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type_found;
-    for (auto&& space : *spaces_) {
+    for (auto&& space : spaces_) {
       for (auto&& [qn, t] : qn2type) {
         if (space.type() == t && space.qns() == qn) {
           [[maybe_unused]] auto [it, inserted] =
@@ -1547,7 +1540,7 @@ class IndexSpaceRegistry {
       // compute_approximate_size is used when populating the registry
       // so don't use base_spaces() here
       unsigned long size = ranges::accumulate(
-          *spaces_ | ranges::views::filter([this, &space_attr](auto& s) {
+          spaces_ | ranges::views::filter([this, &space_attr](auto& s) {
             return s.qns() == space_attr.qns() && this->is_base(s.type()) &&
                    space_attr.type().intersection(s.type());
           }),
@@ -1567,7 +1560,7 @@ class IndexSpaceRegistry {
     // so don't use base_spaces() here
 
     bool contains_complex = std::ranges::any_of(
-        *spaces_ | std::ranges::views::filter([this, &space_attr](auto& s) {
+        spaces_ | std::ranges::views::filter([this, &space_attr](auto& s) {
           return s.qns() == space_attr.qns() && this->is_base(s.type()) &&
                  space_attr.type().intersection(s.type());
         }),
@@ -1576,9 +1569,25 @@ class IndexSpaceRegistry {
     return contains_complex ? Field::Complex : Field::Real;
   }
 
+  /// registries are equal if they have equal spaces, of equal approximate
+  /// size and field, and specify the same physical-particle attributes and
+  /// vacuum-occupied, reference-occupied, complete, hole and particle spaces
   friend bool operator==(const IndexSpaceRegistry& isr1,
                          const IndexSpaceRegistry& isr2) {
-    return *isr1.spaces_ == *isr2.spaces_;
+    // IndexSpace equality ignores the approximate size and the field
+    return std::ranges::equal(isr1.spaces_, isr2.spaces_,
+                              [](const IndexSpace& s1, const IndexSpace& s2) {
+                                return s1 == s2 &&
+                                       s1.approximate_size() ==
+                                           s2.approximate_size() &&
+                                       s1.field() == s2.field();
+                              }) &&
+           isr1.physical_particle_attribute_mask_ ==
+               isr2.physical_particle_attribute_mask_ &&
+           isr1.vacocc_ == isr2.vacocc_ && isr1.refocc_ == isr2.refocc_ &&
+           isr1.complete_ == isr2.complete_ &&
+           isr1.hole_space_ == isr2.hole_space_ &&
+           isr1.particle_space_ == isr2.particle_space_;
   }
 };  // class IndexSpaceRegistry
 

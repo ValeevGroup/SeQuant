@@ -471,7 +471,7 @@ TEST_CASE("peak-profile anchor: static sweep vs metered replay co-resident sum",
   // a forest with NO batching at all, where every home_scope is empty on both
   // sides and every value sizes FULL. This forest has zero node_slice_mask
   // loops.
-  auto ctx = sequant::get_default_context().clone();
+  auto ctx = sequant::get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = sequant::set_scoped_default_context(std::move(ctx));
 

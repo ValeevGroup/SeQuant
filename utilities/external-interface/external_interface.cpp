@@ -597,8 +597,9 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
 
 void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
                          std::size_t version) {
-  IndexSpaceRegistry &registry =
-      *get_default_context().mutable_index_space_registry();
+  const auto registry_ptr = std::make_shared<IndexSpaceRegistry>(
+      *get_default_context().index_space_registry());
+  IndexSpaceRegistry &registry = *registry_ptr;
 
   std::vector<std::pair<std::wstring, IndexSpaceMeta::Entry>> spaceList;
   spaceList.reserve(spaces.size());
@@ -630,6 +631,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta,
   }
 
   mbpt::add_fermi_spin(registry);
+  set_default_context(get_default_context_snapshot().set(registry_ptr));
 
   for (auto &[label, entry] : spaceList) {
     meta.registerSpace(Index(label + L"_1").space(), std::move(entry));
@@ -672,11 +674,6 @@ void process(const json &driver, IndexSpaceMeta &spaceMeta) {
   }
 }
 
-void generalSetup() {
-  TensorCanonicalizer::set_cardinal_tensor_labels(
-      mbpt::cardinal_tensor_labels());
-}
-
 }  // namespace sequant::util::extint
 
 int main(int argc, char **argv) {
@@ -690,8 +687,8 @@ int main(int argc, char **argv) {
   // indices are tracked externally (e.g. ResultExpr) as those won't get updated
   // to use the new names.
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  ctx.set_cardinal_tensor_labels(mbpt::cardinal_tensor_labels());
   set_default_context(ctx);
-  util::extint::generalSetup();
 
   CLI::App app(
       "Interface for reading in equations generated outside of SeQuant");

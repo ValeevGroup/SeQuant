@@ -32,9 +32,17 @@ to a permutation the network's declared symmetries allow. Concretely:
 Computing the canonical form
 ---------------------------------
 
-The static ``TensorNetworkV3::canonicalize_graph(const Graph&)`` hands the constructed graph to bliss's ``canonical_form()`` (with the
-``shs_fsm`` splitting heuristic), which returns a permutation of vertex ordinals that is invariant under the graph's automorphism group —
-this permutation *is* the canonical form; two isomorphic networks (under the coloring/topology rules above) always produce the same one.
+The static ``TensorNetworkV3::canonicalize_graph(const Graph&, aut_hook)`` hands the constructed graph to bliss's ``canonical_form()``
+(with the ``shs_fsm`` splitting heuristic), which returns a canonical labeling: a permutation of vertex ordinals that maps every network
+isomorphic to this one (under the coloring/topology rules above) onto the same canonical graph. The labeling itself is determined only
+up to the automorphisms of the graph, and which one bliss returns depends on the numbering of the input vertices. That is immaterial for
+anonymous indices, which are renamed in canonical order below, but not for named ones: with ``ignore_named_index_labels`` all named
+indices of a space share a color, an automorphism may exchange them, and the labeling would place their labels by input numbering
+(`#666 <https://github.com/ValeevGroup/SeQuant/issues/666>`_). So, with labels ignored, the member ``canonicalize_graph`` selects among
+the labelings the automorphisms allow: position by position in canonical order, each named-index position gets the index with the
+smallest label (by the context's index comparer, as tensor canonicalizers order indices) that an automorphism fixing the positions
+before it can bring there. The automorphisms fixing given vertices are found by rerunning bliss's automorphism search with those
+vertices given colors of their own. The structure of the result does not depend on the labels; where the labels go does.
 
 Translating that permutation back into an actual relabeling is the job of the (differently overloaded, same-named) *member* function
 ``canonicalize_graph(named_indices, ...)``. It walks the graph's vertices in canonical-rank order and, from each ``TensorBra``/
@@ -52,6 +60,18 @@ The by-product of all this sign bookkeeping is returned as ``nullptr`` (no sign 
 ``canonicalize_slots()``, builds and canonicalizes the same graph but stops short of physically reordering anything — it instead returns
 ``SlotCanonicalizationMetadata`` (a canonical named-index ordering plus the underlying ``bliss::Graph``, comparable via graph isomorphism)
 for callers that only need to test two networks for equivalence, such as term matching or :doc:`Wick's theorem <wick>`.
+
+The bliss call of the member ``canonicalize_graph`` also reports the generators of the automorphism group, which detect networks that
+vanish by symmetry. An automorphism maps the network onto itself up to a phase, ``TensorNetworkV3::Graph::automorphism_phase()``: the
+product, over the bra and ket bundles of every antisymmetric tensor (including fermionic normal operators), of the parity of the slot
+permutation it induces. If that phase is -1 the network equals minus itself, so it is zero; e.g. in ``t{a1,a2;i1,i2}:S ã{a1,a2;i1,i2}``
+the swap :math:`a_1 \leftrightarrow a_2` has phase :math:`(+1)(-1)`. Since the phase is a homomorphism of the group to
+:math:`\{\pm 1\}`, a scored generator of phase -1 is enough to detect a zero. Generators that move a tensor, a named or external index, a
+protoindex bundle, or an aux slot are not scored, so a zero can go undetected but is never invented. The phase is computed from the
+graph alone: ``create_graph`` records, as it emits them, the slot vertices of each antisymmetric bundle, the index of each index vertex
+and the vertices an automorphism must fix. When a generator of phase -1 is found the member ``canonicalize_graph`` returns
+``ex<Constant>(0)`` and leaves the tensors as they were. :doc:`Wick's theorem <wick>` applies the same test to the input of its topology
+analysis.
 
 Topological vs. lexicographic canonicalization
 ----------------------------------------------------
@@ -77,11 +97,51 @@ Subtleties for contributors
   ``DefaultTensorCanonicalizer::apply`` (marked with a ``TODO`` in both places).
 - ``TensorNetworkV3::factorize()`` is unimplemented (aborts).
 - Canonicalizing a *single* tensor's own bra/ket order — as opposed to a whole network — is a separate, deliberately pluggable concern:
-  :class:`sequant::TensorCanonicalizer` is a registry base class (``register_instance``/``instance_ptr``, keyed by tensor label) that a
-  contributor can implement against to customize how one tensor's slots get ordered, without touching the network-wide bliss machinery
-  above. ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort
-  (rather than using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee
-  about using swaps to get there.
+  :class:`sequant::TensorCanonicalizer` is a base class that a contributor can implement against to customize how one tensor's slots get
+  ordered, without touching the network-wide bliss machinery above. Instances are owned by the :class:`sequant::Context`, keyed by tensor
+  label. Inside network canonicalization (``TensorNetworkV3::do_individual_canonicalization``) a tensor uses
+  ``nondefault_tensor_canonicalizer_ptr(label)`` of a :func:`sequant::get_default_context_snapshot` taken once per network, i.e. the
+  entry for exactly its own label, and otherwise the network's own canonicalizer (``DefaultTensorCanonicalizer`` or
+  ``TensorBlockCanonicalizer``); the entry for the empty label is consulted only by ``Tensor::canonicalize()`` on a lone tensor in which
+  no index occurs more than once (a lone tensor with a repeated index, protoindices included, is a tensor network and is canonicalized as
+  one). Since the lookup goes through the current context, a scoped context (see :doc:`/user/guide/context`) overrides it for the
+  scope's duration, on the threads that see that scope.
+  ``DefaultTensorCanonicalizer::apply`` is the reference implementation; it deliberately reimplements sort as a bubble sort (rather than
+  using ``std::sort``) because it needs to count the transposition parity, and the standard sort algorithms make no guarantee about
+  using swaps to get there.
+
+Recorded canonical form
+----------------------------
+
+A fully canonicalized expression carries a mark that makes canonicalizing it again a no-op, so callers can request full
+canonicalization without tracking whether it was already done. The free ``canonicalize()``, as well as ``Product::canonicalize()``,
+``Sum::canonicalize()`` and ``Tensor::canonicalize()``, record their result with ``Expr::mark_canonical(opts)`` and return at once, with
+no byproduct, for an expression that ``Expr::is_canonical(opts)``. Only ``Complete`` canonicalization marks: ``Lexicographic`` alone is
+incomplete, and ``Topological`` alone leaves the order of named indices in (anti)symmetric slots to the graph, so that, e.g., a lone
+tensor and the same tensor scaled end up spelled differently. Since the
+summands of a ``Sum`` are marked by their own canonicalization, re-canonicalizing a ``Sum`` after some of its summands changed
+canonicalizes only those.
+
+A mark is valid only for the ``CanonicalizeOptions`` it was recorded under (named indices included) and only while the contexts in
+effect canonicalize as they did when it was recorded, as reported by ``current_contexts_version()`` (``SeQuant/core/context.hpp``): it
+combines the versions of the contexts in effect on the calling thread for all statistics. A context's version identifies its
+canonicalization configuration (tensor canonicalizers, index comparers, cardinal tensor labels, canonicalization options, the index
+space registry and the SP basis), so the value changes when a different configuration takes effect -- a default context is set or reset, a scoped one begins
+or ends, or a setter of one of those runs -- but not for settings canonicalization does not read, and contexts with the same
+configuration share it. It is a function of the contexts, not a counter, so marks recorded before a scoped context are valid again once
+it ends, and marks recorded in the scope of one top-level ``WickTheorem`` are valid in that of the next. Canonicalization seals its result
+with the value at which it started, so a change of the contexts while it runs leaves the result unmarked. In-place changes of a
+canonicalizer or comparer object are not tracked (see ``Context::version()``).
+
+The contract with ``Expr`` types is that every mutation of a node's own data clears its mark: ``Expr::reset_hash_value()`` does so, and
+mutations that do not reset the hash, such as those of the ``Product`` scalar, call ``Expr::reset_canonical_mark()``; a new ``Expr``
+type must do the same in each of its mutators. ``Operator`` and ``NormalOperatorSequence``, which are vectors of their elements, honor
+it by resetting in their mutable element accessors and mutators (``operator[]``, ``at``, ``begin``, ``end``, ``rbegin``, ``rend``,
+``push_back``, ``emplace_back``, ``pop_back``, ``insert``, ``erase``, ``clear``, ``resize``).
+Mutation or replacement of a subexpression needs no such call: each node carries a stamp of its own data, and a mark digests the stamps
+of the whole subtree, so merely iterating mutably, as ``visit()`` and ``expand()`` do, leaves marks intact. With assertions enabled,
+checking a mark also revalidates the memoized hash of each leaf, which catches a leaf mutator that resets neither (the memoized hash
+of a non-leaf is legitimately stale after in-place mutation of a subexpression). ``clone()`` keeps the mark.
 
 Debugging and tests
 ------------------------

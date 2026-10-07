@@ -356,11 +356,105 @@ bool can_contract(const Op<S> &left, const Op<S> &right,
 template <Statistics S = Statistics::FermiDirac>
 class NormalOperator;
 
+namespace detail {
+/// @return the name of @p S , for composing Expr type names
+constexpr std::string statistics_name(Statistics S) {
+  switch (S) {
+    case Statistics::FermiDirac:
+      return "FermiDirac";
+    case Statistics::BoseEinstein:
+      return "BoseEinstein";
+    case Statistics::Arbitrary:
+      return "Arbitrary";
+  }
+  SEQUANT_UNREACHABLE;
+}
+
+/// element access to an Expr @p Derived that is a @p Vector : the mutable
+/// accessors invalidate the memoized hash of @p Derived , which must befriend
+/// this class
+/// @note declares no member types, which would make those of @p Vector
+/// ambiguous in @p Derived
+template <typename Derived, typename Vector>
+class VectorExprAccess {
+ public:
+  const typename Vector::value_type &operator[](std::size_t i) const {
+    return vector()[i];
+  }
+  typename Vector::value_type &operator[](std::size_t i) {
+    return mutable_vector()[i];
+  }
+  const typename Vector::value_type &at(std::size_t i) const {
+    return vector().at(i);
+  }
+  typename Vector::value_type &at(std::size_t i) {
+    return mutable_vector().at(i);
+  }
+  auto begin() const { return vector().begin(); }
+  auto begin() { return mutable_vector().begin(); }
+  auto end() const { return vector().end(); }
+  auto end() { return mutable_vector().end(); }
+  auto rbegin() const { return vector().rbegin(); }
+  auto rbegin() { return mutable_vector().rbegin(); }
+  auto rend() const { return vector().rend(); }
+  auto rend() { return mutable_vector().rend(); }
+  void push_back(const typename Vector::value_type &value) {
+    mutable_vector().push_back(value);
+  }
+  void push_back(typename Vector::value_type &&value) {
+    mutable_vector().push_back(std::move(value));
+  }
+  template <typename... Args>
+  typename Vector::value_type &emplace_back(Args &&...args) {
+    return mutable_vector().emplace_back(std::forward<Args>(args)...);
+  }
+  void pop_back() { mutable_vector().pop_back(); }
+  template <typename... Args>
+  auto insert(typename Vector::const_iterator pos, Args &&...args) {
+    return mutable_vector().insert(pos, std::forward<Args>(args)...);
+  }
+  auto insert(typename Vector::const_iterator pos,
+              std::initializer_list<typename Vector::value_type> values) {
+    return mutable_vector().insert(pos, values);
+  }
+  auto erase(typename Vector::const_iterator pos) {
+    return mutable_vector().erase(pos);
+  }
+  auto erase(typename Vector::const_iterator first,
+             typename Vector::const_iterator last) {
+    return mutable_vector().erase(first, last);
+  }
+  void clear() { mutable_vector().clear(); }
+  template <typename... Args>
+  void resize(Args &&...args) {
+    mutable_vector().resize(std::forward<Args>(args)...);
+  }
+
+ private:
+  const Vector &vector() const {
+    return static_cast<const Vector &>(static_cast<const Derived &>(*this));
+  }
+  Vector &mutable_vector() {
+    auto &derived = static_cast<Derived &>(*this);
+    derived.reset_hash_value();
+    return static_cast<Vector &>(derived);
+  }
+};
+
+}  // namespace detail
+
 /// @brief Operator is a sequence of Op objects
 ///
 /// @tparam S specifies the particle statistics
 template <Statistics S = Statistics::FermiDirac>
-class Operator : public container::svector<Op<S>>, public Expr {
+class Operator
+    : public container::svector<Op<S>>,
+      public Expr,
+      public detail::VectorExprAccess<Operator<S>, container::svector<Op<S>>> {
+  using access_type =
+      detail::VectorExprAccess<Operator<S>, container::svector<Op<S>>>;
+  friend access_type;
+
  public:
   using base_type = container::svector<Op<S>>;
   static constexpr Statistics statistics = S;
@@ -369,14 +463,23 @@ class Operator : public container::svector<Op<S>>, public Expr {
   using iterator = typename base_type::iterator;
   using const_iterator = typename base_type::const_iterator;
 
-  using base_type::at;
-  using base_type::begin;
+  using access_type::at;
+  using access_type::begin;
+  using access_type::clear;
+  using access_type::emplace_back;
+  using access_type::end;
+  using access_type::erase;
+  using access_type::insert;
+  using access_type::pop_back;
+  using access_type::push_back;
+  using access_type::rbegin;
+  using access_type::rend;
+  using access_type::resize;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
-  using base_type::end;
   using base_type::size;
-  using base_type::operator[];
+  using access_type::operator[];
 
   Operator() = default;
   explicit Operator(std::initializer_list<Op<S>> ops) : base_type(ops) {}
@@ -403,6 +506,15 @@ class Operator : public container::svector<Op<S>>, public Expr {
     for (const auto &o : *this) result += o.to_latex();
     result += L"}";
     return result;
+  }
+
+  static constexpr type_rank_type type_rank =
+      S == Statistics::FermiDirac     ? expr_type_rank::foperator
+      : S == Statistics::BoseEinstein ? expr_type_rank::boperator
+                                      : default_type_rank;
+  static constexpr std::string static_type_name(
+      std::type_identity<Operator> = {}) {
+    return "sequant::Operator<" + detail::statistics_name(S) + ">";
   }
 
   type_id_type type_id() const override { return get_type_id<Operator>(); };
@@ -522,8 +634,10 @@ class NormalOperator : public Operator<S>,
   using base_type::begin;
   using base_type::cbegin;
   using base_type::cend;
+  using base_type::emplace_back;
   using base_type::empty;
   using base_type::end;
+  using base_type::push_back;
   using base_type::size;
   using base_type::operator[];
 
@@ -713,6 +827,7 @@ class NormalOperator : public Operator<S>,
   iterator erase(const_iterator it) {
     if (it->action() == Action::Create) --ncreators_;
     if (hug_) hug_->erase(it - begin(), *it);
+    this->reset_hash_value();
     return Operator<S>::erase(it);
   }
 
@@ -722,7 +837,17 @@ class NormalOperator : public Operator<S>,
     if (value.action() == Action::Create) ++ncreators_;
     auto result = Operator<S>::insert(it, std::forward<T>(value));
     if (hug_) hug_->insert(result - begin(), *result);
+    this->reset_hash_value();
     return result;
+  }
+
+  static constexpr Expr::type_rank_type type_rank =
+      S == Statistics::FermiDirac     ? expr_type_rank::fnoperator
+      : S == Statistics::BoseEinstein ? expr_type_rank::bnoperator
+                                      : Expr::default_type_rank;
+  static constexpr std::string static_type_name(
+      std::type_identity<NormalOperator> = {}) {
+    return "sequant::NormalOperator<" + detail::statistics_name(S) + ">";
   }
 
   Expr::type_id_type type_id() const override {
@@ -750,7 +875,9 @@ class NormalOperator : public Operator<S>,
             typename... Args>
   bool transform_indices(const Map<Index, Index, Args...> &index_map) {
     bool mutated = false;
-    ranges::for_each(*this, [&](auto &&op) {
+    // iterated as the vector: the mutable begin()/end() would reset the hash
+    // even if no index changes
+    ranges::for_each(static_cast<vector_type &>(*this), [&](auto &&op) {
       if (op.index().transform(index_map)) mutated = true;
     });
     if (mutated) this->reset_hash_value();
@@ -998,20 +1125,37 @@ bool NormalOperator<S>::static_equal(const Expr &that) const {
 ///
 /// @tparam S specifies the particle statistics
 template <Statistics S = Statistics::FermiDirac>
-class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
-                               public Expr {
+class NormalOperatorSequence
+    : public container::svector<NormalOperator<S>>,
+      public Expr,
+      public detail::VectorExprAccess<NormalOperatorSequence<S>,
+                                      container::svector<NormalOperator<S>>> {
+  using access_type =
+      detail::VectorExprAccess<NormalOperatorSequence<S>,
+                               container::svector<NormalOperator<S>>>;
+  friend access_type;
+
  public:
   using base_type = container::svector<NormalOperator<S>>;
   static constexpr Statistics statistics = S;
 
-  using base_type::at;
-  using base_type::begin;
+  using access_type::at;
+  using access_type::begin;
+  using access_type::clear;
+  using access_type::emplace_back;
+  using access_type::end;
+  using access_type::erase;
+  using access_type::insert;
+  using access_type::pop_back;
+  using access_type::push_back;
+  using access_type::rbegin;
+  using access_type::rend;
+  using access_type::resize;
   using base_type::cbegin;
   using base_type::cend;
   using base_type::empty;
-  using base_type::end;
   using base_type::size;
-  using base_type::operator[];
+  using access_type::operator[];
 
   /// constructs an empty sequence
   NormalOperatorSequence() { check_vacuum(); }
@@ -1068,6 +1212,13 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     for (const auto &op : *this) result += op.to_latex();
     result += L"}";
     return result;
+  }
+
+  static constexpr Expr::type_rank_type type_rank = Expr::default_type_rank;
+  static constexpr std::string static_type_name(
+      std::type_identity<NormalOperatorSequence> = {}) {
+    return "sequant::NormalOperatorSequence<" + detail::statistics_name(S) +
+           ">";
   }
 
   Expr::type_id_type type_id() const override {
@@ -1135,12 +1286,6 @@ template <typename... Attr>
 inline ExprPtr fannx(Index i, Attr &&...attr) {
   return ex<FNOperator>(cre(), ann({fann(i, std::forward<Attr>(attr)...)}));
 }
-
-namespace detail {
-struct OpIdRegistrar {
-  OpIdRegistrar();
-};
-}  // namespace detail
 
 /// converts NormalOperatorSequence to NormalOperator
 /// @tparam S Statistics
