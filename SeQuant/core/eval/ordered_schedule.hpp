@@ -597,7 +597,8 @@ inline OrderedScheduleDepGraph ordered_schedule_dep_graph(
 /// least one consumer is lifted to max(base, min over its direct consumers'
 /// passes), so a value whose readers all sit later is built with them; a
 /// value with readers in several passes keeps its base (and is materialized
-/// by the builder's rule 4 when a later same-nest reader needs it).
+/// by the builder's materialization rule when a later same-nest reader needs
+/// it).
 ///
 /// Every dependency edge points to an equal or earlier pass. With only
 /// LoopCarried bumps present (no Reduction-source bump fires) the passes
@@ -1238,8 +1239,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       }
   }
 
-  // Legality record by value id, for reader lookups in rule 4 and (below)
-  // for the pass levels' \c inside predicate.
+  // Legality record by value id, for reader lookups in the materialization rule
+  // and (below) for the pass levels' \c inside predicate.
   std::unordered_map<std::size_t, CellLegality const*> cl_by_vid;
   cl_by_vid.reserve(legality.cells.size());
   for (CellLegality const& c2 : legality.cells) {
@@ -1291,21 +1292,21 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     return target;
   };
 
-  // The DAG-scope nest a value is produced inside, for rule-4 reader
-  // classification: the deepest depth any of its own per_axis modes (any
+  // The DAG-scope nest a value is produced inside, for materialization-rule
+  // reader classification: the deepest depth any of its own per_axis modes (any
   // role, not just LoopLocal) resolves to. A value with only carried/
   // reduction roles -- a forest root delivered in full, or a carried value
   // of a later pass -- is still produced per batch inside its own nest (its
   // production is the accumulation folded into its escape bucket), so
   // testing only LoopLocal modes (local_home_depth) would report such a
-  // value as homed at root: rule 4 would then neither fire the mixed-pass
-  // materialization for a value it reads, nor guard the tripwire against
-  // it. production_depth instead considers every per_axis mode regardless
-  // of role. A mode whose fusion slot does not resolve (\c fusion_slot
-  // returns -1) is skipped rather than guessed at slot 0 -- a guessed slot
-  // can land in the wrong nest (fusion_slot's own doc comment), and this
-  // result feeds the outside-its-nest tripwire below, where a wrong nest
-  // decides whether to throw. Nullopt = no mode resolves at all, whether
+  // value as homed at root: the materialization rule would then neither fire
+  // the mixed-pass materialization for a value it reads, nor guard the tripwire
+  // against it. production_depth instead considers every per_axis mode
+  // regardless of role. A mode whose fusion slot does not resolve (\c
+  // fusion_slot returns -1) is skipped rather than guessed at slot 0 -- a
+  // guessed slot can land in the wrong nest (fusion_slot's own doc comment),
+  // and this result feeds the outside-its-nest tripwire below, where a wrong
+  // nest decides whether to throw. Nullopt = no mode resolves at all, whether
   // because the value is genuinely unbatched (root) or because every one of
   // its modes has an unresolvable fusion slot -- the two are
   // indistinguishable here; the table validator's visibility rule is the
@@ -1522,10 +1523,10 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     bool materialized_across_split = false;
     std::optional<std::size_t> const home_depth = local_home_depth(cl);
     // Whether this value has a LoopLocal instance of its own nest that is
-    // not covered by a role-driven escape (before rule 4 adds anything) --
-    // the invariant the outside-nest tripwire below actually needs. A
-    // per-batch-only instance like that is never delivered to root, so a
-    // later-pass reader outside the nest contradicts legality regardless of
+    // not covered by a role-driven escape (before the materialization rule adds
+    // anything) -- the invariant the outside-nest tripwire below actually
+    // needs. A per-batch-only instance like that is never delivered to root, so
+    // a later-pass reader outside the nest contradicts legality regardless of
     // whether some other instance of this same value happens to be
     // role-escaped elsewhere, at a different depth (a coarser gate on
     // "any role escape at all" would miss exactly this two-different-depth
@@ -1570,9 +1571,9 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       std::size_t const nest = type_cluster[*home_depth];
       auto const readers = later_same_nest_readers(nest);
       if (!readers.empty()) {
-        // Rule 4 (section 7.3): escape every instance of this nest the
-        // value is loop-local on and not already escaped by a role as a
-        // Scatter; a role escape already scattering (LoopCarried) that
+        // Materialization rule (section 7.3): escape every instance of this
+        // nest the value is loop-local on and not already escaped by a role as
+        // a Scatter; a role escape already scattering (LoopCarried) that
         // instance is left as-is, a role escape summing it (Reduction) is
         // upgraded to a Scatter (a loop-local mode's batches are disjoint,
         // so summing them across a depth it also shares with a reduced mode
@@ -1613,19 +1614,19 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       } else if (unescaped_local_instance) {
         // Tripwire (controller ruling I3; reader test corrected by ruling
         // I4): a value with an unescaped LoopLocal instance of its own nest
-        // (checked before rule 4 above ran, via unescaped_local_instance)
-        // has a per-batch-only form of that instance that is never
-        // delivered to root -- and there is no same-nest later-pass reader
-        // to trigger rule 4 above and fix it (this is the `readers.empty()`
-        // branch). A direct later-pass reader whose production site
-        // resolves to a nest other than this one is the reader's location,
-        // not this value's escapes: it cannot see the per-batch home form,
-        // and legality and the schedule disagree, regardless of whether
-        // some other instance of this value happens to be role-escaped
-        // elsewhere. A value whose every LoopLocal instance of its own nest
-        // is already role-escaped is exempt: each such escape already
-        // assembles a full form with root residency (rule 4's own
-        // scatter-dominance above ensures no instance is left half-summed),
+        // (checked before the materialization rule above ran, via
+        // unescaped_local_instance) has a per-batch-only form of that instance
+        // that is never delivered to root -- and there is no same-nest
+        // later-pass reader to trigger the materialization rule above and fix
+        // it (this is the `readers.empty()` branch). A direct later-pass reader
+        // whose production site resolves to a nest other than this one is the
+        // reader's location, not this value's escapes: it cannot see the
+        // per-batch home form, and legality and the schedule disagree,
+        // regardless of whether some other instance of this value happens to be
+        // role-escaped elsewhere. A value whose every LoopLocal instance of its
+        // own nest is already role-escaped is exempt: each such escape already
+        // assembles a full form with root residency (the materialization rule's
+        // own scatter-dominance above ensures no instance is left half-summed),
         // which any later-pass reader, in any nest, can see.
         // "Produced outside this nest" is decided by production_depth, not
         // by local_home_depth: a reader with only carried/reduction roles --
@@ -1674,9 +1675,8 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
     // (below) and its escape chain reaches deeper than that -- a role
     // escape nested inside the LoopLocal home (a Reduction axis, say) --
     // in which case the deepest site on that chain is the true production
-    // site and home's rule-4 escape is pure forwarding, like any other link
-    // in the chain.
-    // Completeness invariant (design section 9.2): a value
+    // site and home's materialization escape is pure forwarding, like any other
+    // link in the chain. Completeness invariant (design section 9.2): a value
     // reduced over a loop instance (an AccumulateSum escape at depth d) is
     // complete only after that loop closes; a reader produced inside that
     // instance (production depth at or below d in the same nest) in the
@@ -1715,13 +1715,13 @@ inline bool mode_is_external(RichSchedule const& rich, Index const& mode) {
       // production is the accumulation itself, at the deepest escape site
       // (the multi-level chain's bottom-up assembly: raw production at the
       // deepest site, pure forwarding at every shallower one). One
-      // materialized across the split by rule 4 above is different: it is
-      // produced, at the deepest site of its full chain (role escapes and
-      // the rule-4 scatter together), which same-pass consumers read inside
-      // its own nest, per batch. It keeps its BuildStep there, so that
-      // block both builds it (for its same-pass in-nest readers, and as the
-      // per-batch input of the rest of its chain) and lists it as an output
-      // (for the later-pass reader). `well_formed` admits exactly this
+      // materialized across the split by the materialization rule above is
+      // different: it is produced, at the deepest site of its full chain (role
+      // escapes and the materialization scatter together), which same-pass
+      // consumers read inside its own nest, per batch. It keeps its BuildStep
+      // there, so that block both builds it (for its same-pass in-nest readers,
+      // and as the per-batch input of the rest of its chain) and lists it as an
+      // output (for the later-pass reader). `well_formed` admits exactly this
       // shape: every block that lists a value in `outputs` either holds its
       // BuildStep or is an ancestor of the one that does -- always true
       // here since the BuildStep sits at the chain's deepest site and every

@@ -1817,12 +1817,12 @@ TEST_CASE(
   CHECK(b_lats == std::vector<int>{0, 1});
 
   // V (id 3) is built in nest B's latitude-0 block (at its inner depth) and
-  // scattered at both of nest B's levels -- rule 4 fires because X (id 5),
-  // though it has no LoopLocal axis of its own (it is a fully LoopCarried
-  // forest root, like C), is still PRODUCED inside nest B in pass 1
+  // scattered at both of nest B's levels -- the materialization rule fires
+  // because X (id 5), though it has no LoopLocal axis of its own (it is a fully
+  // LoopCarried forest root, like C), is still PRODUCED inside nest B in pass 1
   // (production_depth, not local_home_depth, decides nest membership for a
-  // rule-4 reader). C (id 2) and P (id 4) are each scattered (no BuildStep)
-  // in latitude 0; X is scattered (no BuildStep) in latitude 1.
+  // materialization-rule reader). C (id 2) and P (id 4) are each scattered (no
+  // BuildStep) in latitude 0; X is scattered (no BuildStep) in latitude 1.
   sequant::eval::ScopeBlock const* b0 = nullptr;
   sequant::eval::ScopeBlock const* b1 = nullptr;
   for (std::size_t k = 0; k < roots.size(); ++k) {
@@ -1928,13 +1928,13 @@ TEST_CASE("per-nest split: a carried chain gives three pass blocks",
 // pass)" shape the two-nest test above uses for its V) is added so the
 // reverse-sweep min keeps V's pass strictly below X's, giving a genuine
 // later-pass reader while V itself (LoopLocal on i_2, slot 1 only) is
-// invariant to its nest's outer level (i_1, slot 0): rule 4 (section 7.3)
-// skips that level and scatters V only at the inner one it is loop-local on,
-// so V's assembled form still reaches root. X is LoopCarried on both axes
-// (not LoopLocal): it is a genuine forest root with no consumer of its own
-// in this fixture, and the table validator's life rule admits a zero-read
-// cell only at root scope, which only a fully escaped (LoopCarried) value
-// reaches -- the same pattern the two-nest fixture above uses for its own
+// invariant to its nest's outer level (i_1, slot 0): the materialization rule
+// (section 7.3) skips that level and scatters V only at the inner one it is
+// loop-local on, so V's assembled form still reaches root. X is LoopCarried on
+// both axes (not LoopLocal): it is a genuine forest root with no consumer of
+// its own in this fixture, and the table validator's life rule admits a
+// zero-read cell only at root scope, which only a fully escaped (LoopCarried)
+// value reaches -- the same pattern the two-nest fixture above uses for its own
 // zero-consumer roots.
 TEST_CASE(
     "per-nest split: a member loop-local on the inner instance only is "
@@ -2005,11 +2005,11 @@ TEST_CASE(
 // later-pass reader is ever detected. A same-pass second reader P is added
 // for the same reason as in the invariant-outer fixture above. V is
 // Reduction on i_2 (the inner instance, slot 1) and LoopLocal on i_1 (the
-// outer instance, slot 0): rule 4 (section 7.3) leaves the already-summed
-// inner instance as-is and adds a scatter at the outer one, chaining a sum
-// then a scatter so V's assembled form reaches root. X is LoopCarried on
-// both axes (not LoopLocal), for the same zero-consumer/root-residency
-// reason as the invariant-outer fixture above.
+// outer instance, slot 0): the materialization rule (section 7.3) leaves the
+// already-summed inner instance as-is and adds a scatter at the outer one,
+// chaining a sum then a scatter so V's assembled form reaches root. X is
+// LoopCarried on both axes (not LoopLocal), for the same
+// zero-consumer/root-residency reason as the invariant-outer fixture above.
 TEST_CASE(
     "per-nest split: a member reduced over the inner instance chains a "
     "sum then a scatter to root",
@@ -2104,10 +2104,10 @@ TEST_CASE(
 // shape as the inner-escape fixture above, except V's Reduction mode (i_2)
 // resolves through reduced_slot to the SAME fusion slot as its own LoopLocal
 // mode (i_1, slot 0) instead of a distinct inner slot, so both land at ONE
-// depth. Rule 4 must upgrade that depth's escape from AccumulateSum (the
-// role loop's own reduction escape) to AccumulateScatter: the loop-local
-// mode's batches are disjoint, so summing them would silently combine
-// values that must stay separate.
+// depth. The materialization rule must upgrade that depth's escape from
+// AccumulateSum (the role loop's own reduction escape) to AccumulateScatter:
+// the loop-local mode's batches are disjoint, so summing them would silently
+// combine values that must stay separate.
 TEST_CASE(
     "per-nest split: a loop-local mode sharing a depth with a reduced mode "
     "upgrades the escape to a scatter",
@@ -2169,13 +2169,13 @@ TEST_CASE(
 }
 
 // Review fix round 1, Important 2: the outside-nest tripwire fires only when
-// the value has NO role-driven escape (checked BEFORE rule 4 runs); a value
-// that DOES have one is exempt, since that escape already assembles a full
-// form with root residency that any later-pass reader, in any nest, can see.
-// This pins the POSITIVE case (mirrors the existing [levels] "straddling
-// passes" fixture, but checks the exact throw message under this task's own
-// tag): V is LoopLocal only (no role escape) in nest A (i_4, i_5), feeds C
-// (LoopCarried on i_4, same pass -- makes "i" genuine) and is ALSO read
+// the value has NO role-driven escape (checked BEFORE the materialization rule
+// runs); a value that DOES have one is exempt, since that escape already
+// assembles a full form with root residency that any later-pass reader, in any
+// nest, can see. This pins the POSITIVE case (mirrors the existing [levels]
+// "straddling passes" fixture, but checks the exact throw message under this
+// task's own tag): V is LoopLocal only (no role escape) in nest A (i_4, i_5),
+// feeds C (LoopCarried on i_4, same pass -- makes "i" genuine) and is ALSO read
 // directly by X, LoopLocal on the disjoint i_6 (its own nest B), at a later
 // pass -- V's own nest never opens for X, so legality and the schedule
 // disagree.
@@ -2272,9 +2272,9 @@ TEST_CASE(
 // had no role escape at all. V has i_1 (LoopLocal, its own home) and i_2
 // (Reduction, escaped via reduced_slot) at TWO DIFFERENT depths of one nest;
 // X reads V from a disjoint nest at a later pass, with no same-nest later-
-// pass reader to trigger rule 4 for i_1's own instance -- so i_1's per-batch
-// form is never delivered to root, and legality and the schedule disagree,
-// even though i_2 IS role-escaped.
+// pass reader to trigger the materialization rule for i_1's own instance -- so
+// i_1's per-batch form is never delivered to root, and legality and the
+// schedule disagree, even though i_2 IS role-escaped.
 TEST_CASE(
     "per-nest split: a value with one escaped and one unescaped loop-local "
     "instance in one nest, read later from a different nest, throws",

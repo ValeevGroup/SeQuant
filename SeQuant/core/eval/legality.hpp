@@ -389,8 +389,9 @@ struct LegalitySchedule {
 /// \par No fixpoint: a value read across a forced split is not demoted here
 /// A value \c LoopLocal on a forced-split axis \c L that is read by a
 /// later-pass reader is handled entirely by the sequencer (\c
-/// build_ordered_schedule's per-nest pass placement, rule 4), which
-/// materializes such a value across the pass boundary at schedule-build time
+/// build_ordered_schedule's per-nest pass placement, materialization rule),
+/// which materializes such a value across the pass boundary at schedule-build
+/// time
 /// -- "used across the split" is a property of the ordered pass structure the
 /// sequencer builds, not of the DAG this function sees, so classification here
 /// needs to react to it. \c analyze_legality is therefore a single

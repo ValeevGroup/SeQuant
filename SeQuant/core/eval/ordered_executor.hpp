@@ -654,7 +654,7 @@ template <typename ValueMap, typename Rich>
 /// broken by first use), not simply ascending by pass -- a later pass's
 /// block is only guaranteed to follow an earlier pass's block of the same
 /// nest where it actually reads that earlier block's production (every case
-/// that matters: a rule-4 materialization, or a carried value's assembled
+/// that matters: a materialization-rule escape, or a carried value's assembled
 /// form); two pass blocks with no such dependency between them may come out
 /// in either order, which is harmless since their scopes and cells are
 /// distinct. A later pass's reads name an earlier pass's assembled cell
