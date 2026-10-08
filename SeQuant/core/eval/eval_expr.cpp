@@ -729,11 +729,19 @@ EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract,
       // the other untransposed.
       auto const& frame = left.canon_indices();
       auto in_canon_order = [&frame](auto const& group) {
-        Index::index_vector ordered;
-        for (auto const& ix : frame)
-          if (std::find(group.begin(), group.end(), ix) != group.end())
-            ordered.emplace_back(ix);
-        SEQUANT_ASSERT(ordered.size() == ranges::size(group));
+        // the frame holds the indices only, so an empty slot (a null index)
+        // keeps its position and the indices fill the others in frame order
+        Index::index_vector ordered(group.begin(), group.end());
+        auto slot = ordered.begin();
+        for (auto const& ix : frame) {
+          if (std::find(group.begin(), group.end(), ix) == group.end())
+            continue;
+          while (slot != ordered.end() && !slot->nonnull()) ++slot;
+          SEQUANT_ASSERT(slot != ordered.end());
+          *slot++ = ix;
+        }
+        SEQUANT_ASSERT(std::none_of(
+            slot, ordered.end(), [](auto const& ix) { return ix.nonnull(); }));
         return ordered;
       };
       // the layout is part of the value's identity (see layout_fingerprint):

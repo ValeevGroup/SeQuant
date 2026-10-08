@@ -57,6 +57,25 @@ sequant::Index idx(std::wstring_view label, sequant::Field field) {
 }
 }  // namespace
 
+// a summand with an empty slot: the Sum's placeholder keeps the slot (and
+// hence the summand's layout) rather than dropping it with the null index
+TEST_CASE("eval_expr_sum_keeps_empty_slots", "[EvalExpr]") {
+  using namespace sequant;
+  auto make = [](std::wstring_view label) {
+    return ex<Tensor>(label, bra{Index{L"a_1"}, Index{L"a_2"}},
+                      ket{Index{L"i_1"}, Index{}}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Nonsymm, ColumnSymmetry::Symm);
+  };
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  auto node = binarize(make(L"X") + make(L"Y"));
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  REQUIRE(node->is_sum());
+  auto const& t = node->as_tensor();
+  REQUIRE(t.bra().size() == 2);
+  REQUIRE(t.ket().size() == 2);
+  REQUIRE(t.ket_net_rank() == 1);
+}
+
 TEST_CASE("eval_expr", "[EvalExpr]") {
   using namespace std::string_literals;
   using sequant::EvalExpr;
