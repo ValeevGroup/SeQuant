@@ -381,4 +381,37 @@ TEST_CASE("basis-wick-extended", "[algorithms][wick][basis]") {
       CHECK(standing_metrics(r) == (ket_instance == 1 ? 0 : 1));
     }
   }
+
+  SECTION("η = δ - γ between two instances is an overlap minus γ") {
+    for (IndexBasis::instance_type bra_instance : {1, 2}) {
+      CAPTURE(bra_instance);
+      const auto u1 = Index(L"u_1").replace_basis_instance(1);
+      const auto u2 = Index(L"u_2").replace_basis_instance(bra_instance);
+      const auto expr =
+          ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
+      FWickTheorem wick{expr};
+      wick.eta_as_delta_minus_gamma(true);
+      ExprPtr r;
+      REQUIRE_NOTHROW(r = wick.compute());
+      CHECK(!has_delta_across_instances(r));
+      CHECK(standing_metrics(r) == (bra_instance == 1 ? 0 : 1));
+      CHECK(tensors_labelled(r, reserved::rdm_label()).size() == 1);
+    }
+  }
+
+  SECTION("η = δ - γ under a non-unit metric is an overlap minus γ") {
+    auto metric_ctx = get_default_context();
+    metric_ctx.set(IndexSpaceMetric::General);
+    auto metric_resetter = set_scoped_default_context(metric_ctx);
+    const Index u1(L"u_1"), u2(L"u_2");
+    const auto expr =
+        ex<FNOperator>(cre{}, ann{u2}) * ex<FNOperator>(cre{u1}, ann{});
+    FWickTheorem wick{expr};
+    wick.eta_as_delta_minus_gamma(true);
+    ExprPtr r;
+    REQUIRE_NOTHROW(r = wick.compute());
+    CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+    CHECK(tensors_labelled(r, reserved::overlap_label()).size() == 1);
+    CHECK(tensors_labelled(r, reserved::rdm_label()).size() == 1);
+  }
 }

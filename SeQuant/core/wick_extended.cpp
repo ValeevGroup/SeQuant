@@ -497,17 +497,18 @@ ExprPtr apply_dummy_deltas(const ExprPtr &expr) {
   return result;
 }
 
-/// rewrites every 1-body η of @p expr, a Sum, as δ - γ; a multi-body η (an
-/// input tensor, since the theorem only produces 1-body ones) is kept
-void rewrite_eta(ExprPtr &expr) {
+/// rewrites every 1-body η of @p expr, a Sum, as the identity between its
+/// indices (see make_identity) minus γ; a multi-body η (an input tensor, since
+/// the theorem only produces 1-body ones) is kept
+void rewrite_eta(ExprPtr &expr, IndexSpaceMetric metric) {
   expr->visit(
-      [](ExprPtr &e) {
+      [metric](ExprPtr &e) {
         if (e->is<Tensor>() &&
             e->as<Tensor>().label() == density::hole_rdm_label() &&
             e->as<Tensor>().rank() == 1) {
           const auto &t = e->as<Tensor>();
           const Index &b = t.bra()[0], &k = t.ket()[0];
-          e = make_kronecker(b, k) - density::make_rdm(b, k);
+          e = make_identity(b, k, metric) - density::make_rdm(b, k);
         }
       },
       /*atoms_only=*/true);
@@ -723,7 +724,7 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
     result->append(per_term(input));
   }
   ExprPtr out = result;
-  if (opts.eta_as_delta_minus_gamma) rewrite_eta(out);
+  if (opts.eta_as_delta_minus_gamma) rewrite_eta(out, ctx.metric());
   out = apply_dummy_deltas<S>(out);
   simplify(out);
   if (out->is<Sum>() && out->as<Sum>().empty()) return ex<Constant>(0);
