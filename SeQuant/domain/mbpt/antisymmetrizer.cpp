@@ -98,7 +98,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
           auto new_tensor = ex<Tensor>(
               label, bra(std::move(new_bras)), ket(std::move(new_kets)),
               TensorSymmetries{.perm = old_tensor.symmetry(),
-                               .hermiticity = old_tensor.hermiticity(),
+                               .braket = old_tensor.braket_symmetry(),
                                .column = old_tensor.column_symmetry()});
           new_product = new_tensor * new_product;
           new_product->canonicalize(canon_opts);
@@ -321,7 +321,7 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
                          ket(std::move(current_upper)),
                          TensorSymmetries{
                              .perm = Symmetry::Nonsymm,
-                             .hermiticity = factor->as<Tensor>().hermiticity(),
+                             .braket = factor->as<Tensor>().braket_symmetry(),
                              .column = ColumnSymmetry::Symm});
         }
       } else if (factor->is<FNOperator>()) {
