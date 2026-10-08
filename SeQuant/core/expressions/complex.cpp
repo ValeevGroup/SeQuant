@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 
 namespace sequant {
 
@@ -41,8 +42,19 @@ ExprPtr strip_scalar(const Product& prod) {
 }
 }  // namespace detail
 
-ExprPtr real_part(ExprPtr expr) {
+namespace {
+/// Re/Im are defined here for c-number content only: the wrappers are
+/// real-valued by convention, which an operator-valued inner would not be
+void require_cnumber(const ExprPtr& expr, const char* builder) {
   SEQUANT_ASSERT(expr);
+  if (!expr->is_cnumber())
+    throw Exception(std::string(builder) +
+                    ": Re/Im of operator-valued content is not defined");
+}
+}  // namespace
+
+ExprPtr real_part(ExprPtr expr) {
+  require_cnumber(expr, "real_part");
   if (expr->is<Constant>())
     return ex<Constant>(expr->as<Constant>().value().real());
   if (expr->is<RealPart>() || expr->is<ImagPart>()) return expr;
@@ -59,7 +71,7 @@ ExprPtr real_part(ExprPtr expr) {
 }
 
 ExprPtr imaginary_part(ExprPtr expr) {
-  SEQUANT_ASSERT(expr);
+  require_cnumber(expr, "imaginary_part");
   if (expr->is<Constant>())
     return ex<Constant>(expr->as<Constant>().value().imag());
   if (expr->is<RealPart>() || expr->is<ImagPart>()) return ex<Constant>(0);

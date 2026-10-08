@@ -1102,4 +1102,7 @@ TEST_CASE("deserialize rejects what it cannot spell", "[parse]") {
   REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"inf t{a_1;i_1}"),
                     SerializationError);
   REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"nan"), SerializationError);
+  // Re/Im wrap c-number content only
+  REQUIRE_THROWS_AS(deserialize<ExprPtr>(L"Re[ã{i_1;i_2}]"),
+                    SerializationError);
 }

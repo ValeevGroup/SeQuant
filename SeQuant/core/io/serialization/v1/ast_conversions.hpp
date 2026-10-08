@@ -559,9 +559,14 @@ struct Transformer {
     // the smart builders apply the eager composition rules, so what comes
     // back can be the inner expression itself (`Re[Re[x]]`), a constant
     // (`Re[3]`) or a scaled wrapper (`Re[1/2 x]`), exactly as a programmatic
-    // real_part()/imaginary_part() call would give
-    return part.imaginary ? imaginary_part(std::move(inner))
-                          : real_part(std::move(inner));
+    // real_part()/imaginary_part() call would give; what they refuse
+    // (operator content) is reported at the wrapper
+    try {
+      return part.imaginary ? imaginary_part(std::move(inner))
+                            : real_part(std::move(inner));
+    } catch (const Exception &e) {
+      throw_at(part, e.what());
+    }
   }
 
   ExprPtr operator()(const io::serialization::v1::ast::Power &power) const {
