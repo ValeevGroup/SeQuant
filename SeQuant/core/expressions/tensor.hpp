@@ -865,14 +865,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///        (see reserved::density_labels()) and this lacks its defining
   ///        symmetries; in either case the tensor is left as the call found it
   void set_label(std::wstring label) override {
-    const auto before = std::tuple{std::move(label_), adjointed_, kconjugated_};
+    // the normalization of a refused mark may have exchanged the bundles
+    // before it reported the sign, so the whole slot state is restored
+    auto label_before = std::move(label_);
+    auto slots_before = slot_snapshot();
     label_ = std::move(label);
     try {
       adopt_marks();
       if (ranges::contains(reserved::density_labels(), label_))
         check_density_symmetries();
     } catch (...) {
-      std::tie(label_, adjointed_, kconjugated_) = std::move(before);
+      label_ = std::move(label_before);
+      restore_slots(std::move(slots_before));
       throw;
     }
     reset_hash_value();
@@ -1352,6 +1356,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   ///         only a refusal has anything to undo
   std::optional<SlotSnapshot> slot_snapshot_if_stateful() const {
     if (!adjointed_ && !kconjugated_) return std::nullopt;
+    return slot_snapshot();
+  }
+
+  /// @return the slot-decided state of this tensor
+  SlotSnapshot slot_snapshot() const {
     return SlotSnapshot{bra_,
                         ket_,
                         aux_,

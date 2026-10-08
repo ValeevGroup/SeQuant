@@ -128,6 +128,19 @@ TEST_CASE("set_label_marks", "[conjugation]") {
   REQUIRE(t.kconjugated());
   REQUIRE_FALSE(t.adjointed());
   REQUIRE(t.hash_value() == hash_before);
+  // over a real basis the normalization of a refused mark exchanges the
+  // bundles before it reports the sign; the refusal puts them back
+  {
+    auto real_basis = sequant::tests::scoped_real_basis();
+    Tensor r(L"r", bra{L"a_1"}, ket{L"i_1"},
+             TensorSymmetries{.hermiticity = Hermiticity::AntiHermitian});
+    REQUIRE_THROWS_AS(r.set_label(L"s꙳"), Exception);
+    REQUIRE(r.label() == L"r");
+    REQUIRE(r.bra()[0].label() == L"a_1");
+    REQUIRE(r.ket()[0].label() == L"i_1");
+    REQUIRE_FALSE(r.kconjugated());
+    REQUIRE_FALSE(r.adjointed());
+  }
   // marks in the label replace the states
   t.set_label(L"w");
   REQUIRE(t.kconjugated());
