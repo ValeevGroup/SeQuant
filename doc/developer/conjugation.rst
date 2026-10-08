@@ -36,12 +36,14 @@ Normalization by the traits
 -------------------------------
 
 Normalization against the traits runs at construction, in ``set_states()``, ``adjoint()``, ``kconjugate()``,
-``set_label()`` / ``adopt_marks()``, ``with_slots()``, and the slot-mutating ``transform_indices()``, ``set_bra()``,
-``set_ket()`` and ``set_aux()``, so a state set through any of those always denotes a genuinely distinct array. A slot
+``set_label()`` / ``adopt_marks()``, ``with_slots()``, and the slot-mutating ``transform_indices()``, ``set_bra()``
+and ``set_ket()``, so a state set through any of those always denotes a genuinely distinct array. A slot
 mutation can put the tensor on a basis of another field, where the coset rule identifies ``⁺`` with ``꙳`` and a
-definite trait consumes the mark outright, so a slot mutation derives ``BraKetSymmetry`` and the elementwise
-``ConjugationSymmetry`` again from the traits and the new slots' field and then normalizes the states against them: a
-mutated tensor is the tensor a construction over those slots would have given. The ``AbstractTensor`` primitives
+definite trait consumes the mark outright, so a slot mutation that changes the slots' field, or removes the last bra
+or ket slot, derives ``BraKetSymmetry`` and the elementwise ``ConjugationSymmetry`` again from the traits and the new
+slots' field and then normalizes the states against them: a mutated tensor is the tensor a construction over those
+slots would have given. A relabeling within one field changes none of these and skips the step; ``set_aux()`` never
+needs it, the aux bundle being no part of the field or the ranks. The ``AbstractTensor`` primitives
 ``_swap_bra_ket()`` and ``_bra_mutable()`` / ``_ket_mutable()`` reconcile nothing; normalization and the
 tensor-network machinery drive them themselves. The sign consumed is returned to the caller; ``sequant::adjoint`` /
 ``kconjugate(const ExprPtr&)`` turn it into a scalar factor, while a constructor, ``with_slots()`` and a slot mutation
