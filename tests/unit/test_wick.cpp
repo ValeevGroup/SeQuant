@@ -1318,7 +1318,7 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   // protoindices they are, so it is applied; between two unpaired dummies
   // (see the previous section) it is a trace and stands
   SECTION("reduce applies a Kronecker-equivalent overlap") {
-    const Index i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1", {i1}}, a2{L"a_2", {i1}};
+    const Index i1{L"i_1"}, a1{L"a_1", {i1}}, a2{L"a_2", {i1}};
     // a_1<i_1> and a_2<i_1> are paired and noncovariant (they carry i_1, which
     // is noncovariant as a protoindex): their overlap is applied
     auto product = ex<Tensor>(L"f", bra{i1}, ket{a1}) * make_overlap(a1, a2) *
@@ -1337,10 +1337,11 @@ TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
     REQUIRE(t);
     REQUIRE(f->ket()[0] == t->bra()[0]);
     REQUIRE(f->ket()[0].proto_indices() == a1.proto_indices());
-    // the same between indices of disjoint spaces is zero
-    const Index a3{L"a_3", {a2}};
-    product = ex<Tensor>(L"f", bra{i2}, ket{a2}) * make_overlap(i2, a2) *
-              ex<Tensor>(L"t", bra{a1}, ket{a3});
+    // the same between paired indices of disjoint spaces, i_3<i_1> and
+    // a_2<i_1>, is zero
+    const Index i3{L"i_3", {i1}};
+    product = ex<Tensor>(L"f", bra{i1}, ket{i3}) * make_overlap(i3, a2) *
+              ex<Tensor>(L"t", bra{a2}, ket{i1});
     FWickTheorem{product}.reduce(product);
     REQUIRE(product == ex<Constant>(0));
   }
