@@ -307,18 +307,12 @@ class CC {
   /// @return the `LSTOptions` this engine uses for every `mbpt::lst()` call
   /// @note Non-unitary paths use connected products only when the reference is
   /// the Wick vacuum; see hbar_connections().
-  [[nodiscard]] LSTOptions lst_options() const {
-    return {.unitary = unitary(),
-            .use_connected_form = !unitary() && detail::reference_is_vacuum()};
-  }
+  [[nodiscard]] LSTOptions lst_options() const;
 
   /// @return the connectivity that makes the connected products of
   /// lst_options() equal to commutators: default_op_connections() when they
   /// are used, empty otherwise
-  [[nodiscard]] OpConnections<std::wstring> hbar_connections() const {
-    return lst_options().use_connected_form ? default_op_connections()
-                                            : OpConnections<std::wstring>{};
-  }
+  [[nodiscard]] OpConnections<std::wstring> hbar_connections() const;
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`

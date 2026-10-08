@@ -105,6 +105,16 @@ bool CC::screen() const { return opts_.screen; }
 
 bool CC::use_topology() const { return opts_.use_topology; }
 
+LSTOptions CC::lst_options() const {
+  return {.unitary = unitary(),
+          .use_connected_form = !unitary() && detail::reference_is_vacuum()};
+}
+
+OpConnections<std::wstring> CC::hbar_connections() const {
+  return lst_options().use_connected_form ? default_op_connections()
+                                          : OpConnections<std::wstring>{};
+}
+
 ExprPtr CC::hbar(std::optional<size_t> truncation_rank) const {
   const auto truncation =
       truncation_rank.value_or(opts_.hbar_comm_rank.value_or(4));
