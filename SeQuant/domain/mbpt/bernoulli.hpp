@@ -19,7 +19,7 @@ namespace sequant::mbpt::bernoulli {
 /// `mbpt::op` operators, and nothing is screened out of it, so the caller
 /// projects every term.
 ///
-/// @warning Single-reference only, and nothing checks for it. The N/R split
+/// @warning Single-reference only. The N/R split
 /// expands general indices over the hole and particle spaces alone (see
 /// detail::expand_to_blocks) and classifies each one as wholly occupied or
 /// wholly unoccupied relative to the single-product vacuum. That classification
@@ -33,6 +33,7 @@ namespace sequant::mbpt::bernoulli {
 /// @param N cluster/excitation rank (also the N/R rank cutoff)
 /// @param rank highest Bernoulli order @f$\bar{H}^{k}@f$ to include
 /// @param skip1 exclude singles from T
+/// @pre the reference is the Wick vacuum (enforced in every build)
 /// @throw Exception if CSV is enabled
 ExprPtr hbar(std::size_t N, std::size_t rank, bool skip1);
 

@@ -91,7 +91,7 @@ Useful CMake Variables
      - Enables building of the documentation. See :ref:`documentation-guide` for detailed information.
    * - SEQUANT_PYTHON
      - OFF
-     - Enables building of Python bindings.
+     - Enables building of Python bindings. Changes the default of ``SEQUANT_ASSERT_BEHAVIOR`` to ``THROW`` (see below).
    * - SEQUANT_USE_SYSTEM_BOOST_HASH
      - ON
      - Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable
@@ -109,9 +109,14 @@ Useful CMake Variables
      - ON
      - If set to `OFF` the default context must be initialized and manipulated from single thread only (most users will want to do this).
    * - SEQUANT_ASSERT_BEHAVIOR
-     - ``IGNORE`` in ``Release`` and ``MinSizeRel`` mode, ``ABORT`` otherwise
+     - ``THROW`` if ``SEQUANT_PYTHON=ON``; otherwise ``IGNORE`` in ``Release`` and ``MinSizeRel`` mode, ``ABORT`` otherwise
      - Controls how assertions within SeQuant's code are handled. Valid options are ``ABORT``, ``THROW`` and ``IGNORE``. The latter disables
        assertions, whereas the former keep them active and either abort the program or throw an exception on violation respectively.
+       ``SEQUANT_ENFORCE`` checks remain active in all three modes: they follow the configured assertion behavior, except that
+       ``IGNORE`` makes them throw ``sequant::Exception`` on failure.
+       Failure diagnostics include the checked condition, source file, line number, and enclosing function.
+       The Python bindings need ``THROW`` so that a failed check raises a Python exception instead of aborting the interpreter
+       or going unnoticed; configuring with ``SEQUANT_PYTHON=ON`` and any other value emits a warning.
        On the first configure of a build directory this also seeds the corresponding option of the dependencies SeQuant builds
        from source: ``TA_ASSERT_POLICY`` of TiledArray (which in turn seeds ``BTAS_ASSERT_POLICY`` of the BTAS it builds), or
        ``BTAS_ASSERT_POLICY`` of BTAS when SeQuant builds BTAS itself (``SEQUANT_TILEDARRAY=OFF``). As with any cached option,

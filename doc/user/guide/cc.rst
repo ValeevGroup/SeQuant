@@ -32,6 +32,9 @@ The :class:`CC <sequant::mbpt::CC>` class can be used to derive:
 
 Expressions are generated in spin-orbital basis and can be post-processed using SeQuant's spin-tracing capabilities. See :ref:`cc-spin-tracing` for more details.
 
+Multireference contexts are not fully supported yet: only ``hbar()``, ``energy()`` and ``t()`` are available, and only
+with the BCH expansion.
+
 
 Ansatz Options
 --------------
@@ -151,34 +154,26 @@ For unitary BCH expansions, ``Options::hbar_singles_comm_rank`` applies an addit
 Using :math:`\bar{H}` outside the CC class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz the expression it returns is **not** self-contained: each commutator is written as a connected product (see :ref:`mbpt-lst`), which only equals the commutator once you connect the operators when taking the expectation value. The class always does this for you — every non-unitary path passes ``default_op_connections()`` (or a superset) to ``ref_av``. A caller who does not will silently retain the disconnected terms:
+:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but the form of the expression it returns depends on the ansatz
+and on the reference. For a non-unitary ansatz with the reference equal to the Wick vacuum, each commutator is written as
+a connected product (see :ref:`mbpt-lst`), which equals the commutator only once the operators are connected when taking
+the expectation value; evaluated with empty connectivity it retains disconnected terms. For a unitary ansatz, or when the
+reference differs from the Wick vacuum (where ``ref_av`` requires empty ``connect`` and ``do_not_connect`` lists), H̄ is
+built from explicit commutators and is self-contained; imposing connectivity on it would drop terms that must survive.
 
-.. code-block:: cpp
+:func:`CC::hbar_connections() <sequant::mbpt::CC::hbar_connections>` returns the connectivity that matches the form H̄
+was built with, ``default_op_connections()`` or empty, and the class uses it (or a superset) for its own equations. Pass
+it whenever you evaluate ``CC::hbar()`` yourself:
 
-   using namespace sequant::mbpt;
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-6
+   :end-before: end-snippet-6
+   :dedent: 2
 
-   CC cc{2};
-
-   // correct: op::ref_av defaults to default_op_connections()
-   auto eqs = op::ref_av(op::P(nₚ(2)) * cc.hbar());
-
-   // WRONG: empty connectivity keeps terms the commutator would have cancelled
-   auto bad = op::ref_av(op::P(nₚ(2)) * cc.hbar(), {.connect = {}});
-
-   // also correct: ask lst for the explicit commutator form, which needs
-   // no connectivity
-   auto hbar = lst(op::H(), op::T(2), 4);
-
-Note that ``op::ref_av(expr)`` and ``op::ref_av(expr, {})`` are *not* the same call: the connectivity defaults to ``default_op_connections()`` only when the argument is omitted entirely, since ``EVOptions::connect`` is itself empty by default.
-
-For a unitary ansatz, the roles of the two ``ref_av`` calls above swap: :func:`CC::hbar() <sequant::mbpt::CC::hbar>` already returns explicit commutators, and imposing connectivity on top of them would drop terms that must survive; a caller must therefore pass empty connections explicitly, as the class does internally:
-
-.. code-block:: cpp
-
-   CC ucc{2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 3}};
-
-   // correct for a unitary ansatz: hbar is already self-contained
-   auto ueqs = op::ref_av(op::P(nₚ(2)) * ucc.hbar(), {.connect = {}});
+The public operator-level and tensor-level ``ref_av`` and ``vac_av`` functions default to empty connectivity constraints;
+omitting the options argument is equivalent to passing ``{}``. Alternatively, build H̄ with explicit commutators using
+``mbpt::lst`` with its default options, which needs no connectivity.
 
 .. _cc-spin-tracing:
 

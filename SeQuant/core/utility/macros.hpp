@@ -115,12 +115,30 @@ constexpr AssertBehavior assert_behavior() {
 void assert_failed(
     const std::string &errmsg,
     std::source_location location = std::source_location::current());
+
+[[noreturn]] void throw_failure(
+    const std::string &errmsg,
+    std::source_location location = std::source_location::current());
+
+/// Reports a failed SEQUANT_ENFORCE check: via assert_failed() when assertions
+/// are enabled, else by throwing sequant::Exception. Call it directly to
+/// report a precondition failure at a location other than the current one.
+/// @param errmsg the failure message
+/// @param location the location to report; by default, the caller's
+[[noreturn]] void enforce_failed(
+    const std::string &errmsg,
+    std::source_location location = std::source_location::current());
 }  // namespace sequant
 
-#ifdef SEQUANT_ASSERT_ENABLED
-#define SEQUANT_ASSERT_MESSAGE(EXPR, ...)                          \
-  "SEQUANT_ASSERT(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
+// The optional message of SEQUANT_ASSERT and SEQUANT_ENFORCE must be a string
+// literal.
+#define SEQUANT_CHECK_MESSAGE(NAME, EXPR, ...)             \
+  #NAME "(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
       " with message '" __VA_ARGS__ "'")
+
+#ifdef SEQUANT_ASSERT_ENABLED
+#define SEQUANT_ASSERT_MESSAGE(EXPR, ...) \
+  SEQUANT_CHECK_MESSAGE(SEQUANT_ASSERT, EXPR, __VA_ARGS__)
 
 #define SEQUANT_ASSERT(EXPR, ...)                                        \
   do {                                                                   \
@@ -133,6 +151,16 @@ void assert_failed(
   do {                      \
   } while (0)
 #endif
+
+/// Checks EXPR even when assertions are disabled. Uses the configured assertion
+/// behavior when enabled; otherwise throws sequant::Exception on failure.
+#define SEQUANT_ENFORCE(EXPR, ...)                                    \
+  do {                                                                \
+    if (!(EXPR)) {                                                    \
+      sequant::enforce_failed(                                        \
+          SEQUANT_CHECK_MESSAGE(SEQUANT_ENFORCE, EXPR, __VA_ARGS__)); \
+    }                                                                 \
+  } while (0)
 
 namespace sequant {
 [[noreturn]] void abort_msg(
