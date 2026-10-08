@@ -596,6 +596,9 @@ class ResultTensorTA final : public Result {
   /// stored mode perm[m] (empty perm = identity). Applied inside the TA
   /// expression that consumes the view (sum, plain contraction, dot, scale)
   /// or materialized on demand (get<>(), operations that need the array).
+  /// Materialization replaces the stored array from a const read path and is
+  /// unsynchronized: a Result is read and mutated by one thread at a time,
+  /// which the evaluation engine guarantees.
   struct View {
     std::int8_t phase = 1;
     bool conj = false;
