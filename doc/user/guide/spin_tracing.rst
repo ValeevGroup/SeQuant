@@ -43,6 +43,8 @@ Specialized variants exist for the more demanding cases that arise in practice:
 - :func:`sequant::mbpt::closed_shell_CC_singlet_spintrace` additionally transforms the traced result into *biorthogonal* form, the
   representation typically wanted for closed-shell coupled-cluster equations (see :doc:`cc`); it also factors out and re-applies
   the necessary (anti)symmetrizers.
+- :func:`sequant::mbpt::closed_shell_CC_triplet_spintrace` is its counterpart for the closed-shell triplet (:math:`M_S = 0`)
+  state of EOM-CC excited states.
 - :func:`sequant::mbpt::open_shell_spintrace` and :func:`sequant::mbpt::open_shell_CC_spintrace` produce, instead of a single spin-free
   result, one expression per distinct spin case, appropriate for an unrestricted (open-shell) reference.
 

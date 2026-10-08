@@ -2425,14 +2425,14 @@ TEST_CASE("triplet_triples_spintrace", "[spin][triplet]") {
                                L"R{i_1,i_2,i_3;a_4,a_2,a_3}"),
                   {.def_perm_symm = Symmetry::Nonsymm});
 
-  const auto st = closed_shell_EOM_triplet_spintrace(expr, {.compact = false});
+  const auto st = closed_shell_CC_triplet_spintrace(expr, {.compact = false});
   REQUIRE(st);
   REQUIRE(st->is<Sum>());
   REQUIRE(st->size() > 0);
 
-  REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(expr));
+  REQUIRE_THROWS(closed_shell_CC_triplet_spintrace(expr));
 
-  REQUIRE_THROWS(closed_shell_EOM_triplet_spintrace(
+  REQUIRE_THROWS(closed_shell_CC_triplet_spintrace(
       expr, {.residual = TripletResidualKind::BareTE}));
 }
 

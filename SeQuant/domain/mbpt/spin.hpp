@@ -322,7 +322,7 @@ enum class TripletResidualKind {
 };
 
 /// controls behavior of closed-shell triplet EOM spin-tracing
-struct ClosedShellEOMTripletSpintraceOptions {
+struct ClosedShellCCTripletSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// compact the residual to one representative slot permutation per
   /// tensor-network group via triplet_maxcoeff_compact (doubles: the -3c member
@@ -351,8 +351,8 @@ struct ClosedShellEOMTripletSpintraceOptions {
 ///        TripletResidualKind::BareTE with a triples projection, or if the
 ///        equations contain amplitudes beyond triples
 // clang-format on
-ExprPtr closed_shell_EOM_triplet_spintrace(
-    ExprPtr const& expr, ClosedShellEOMTripletSpintraceOptions options = {});
+ExprPtr closed_shell_CC_triplet_spintrace(
+    ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options = {});
 
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
@@ -468,7 +468,7 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 ///        (as returned by `external_indices`)
 /// @param triplet_R if true, the EOM amplitude tensors (R) are spin-adapted
 ///        to the explicitly spin-coupled triplet (M_S = 0) manifold instead
-///        of the singlet one (see closed_shell_EOM_triplet_spintrace);
+///        of the singlet one (see closed_shell_CC_triplet_spintrace);
 ///        supported for singles, doubles and triples R amplitudes only
 /// @return one (label, spin-free expression) pair per external spin string,
 ///         ordered by the bit pattern over groups (αα.., βα.., .., ββ..).
