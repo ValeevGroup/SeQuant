@@ -852,21 +852,24 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
-  /// @param label the new label; trailing marks (`⁺`, `꙳`) in @p label are
-  ///        adopted into the states, exactly as in the constructors; callers
-  ///        that only rename must not pass a label ending in a mark.
-  /// @throw Exception if the bare label is a reserved density label (see
-  ///        reserved::density_labels()) and this lacks its defining symmetries
+  /// @param label the new label; trailing marks (`⁺`, `꙳`) in @p label
+  ///        replace the states, exactly as in the constructors, while a label
+  ///        without marks keeps them; callers that only rename must not pass
+  ///        a label ending in a mark.
+  /// @throw Exception if the marks' normalization consumes a sign (see
+  ///        adopt_marks()), or if the bare label is a reserved density label
+  ///        (see reserved::density_labels()) and this lacks its defining
+  ///        symmetries; in either case the tensor is left as the call found it
   void set_label(std::wstring label) override {
-    const auto previous = std::exchange(label_, std::move(label));
-    adopt_marks();
-    if (ranges::contains(reserved::density_labels(), label_)) {
-      try {
+    const auto before = std::tuple{std::move(label_), adjointed_, kconjugated_};
+    label_ = std::move(label);
+    try {
+      adopt_marks();
+      if (ranges::contains(reserved::density_labels(), label_))
         check_density_symmetries();
-      } catch (...) {
-        label_ = previous;
-        throw;
-      }
+    } catch (...) {
+      std::tie(label_, adjointed_, kconjugated_) = std::move(before);
+      throw;
     }
     reset_hash_value();
   }
@@ -1480,6 +1483,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// adopts trailing marks of label_ (`⁺`, `꙳`, either order, at most one
   /// each) into the states and normalizes; a mark whose normalization carries
   /// −1 names minus a tensor, which no Tensor can hold, and is refused
+  /// @note on a throw the label has been stripped of its marks and the states
+  ///       set; the caller restores what it needs
   void adopt_marks() {
     bool adj = false, kconj = false;
     while (!label_.empty()) {
