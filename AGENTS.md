@@ -139,7 +139,9 @@ For checks that must survive `IGNORE`, such as rejecting invalid caller input,
 use `SEQUANT_ENFORCE`. It follows `SEQUANT_ASSERT_BEHAVIOR` when asserts are
 enabled, so it aborts under `ABORT`, and throws `sequant::Exception` under
 `IGNORE`. Tests that expect it to throw must skip when
-`assert_behavior() == AssertBehavior::Abort`.
+`assert_behavior() == AssertBehavior::Abort`. The Python bindings need
+`THROW` so that a failed check raises a Python exception: `SEQUANT_PYTHON=ON`
+makes it the default, and any other value warns at configure time.
 
 ## Check includes with a non-unity build
 

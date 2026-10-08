@@ -144,6 +144,11 @@ add_feature_info(SEQUANT_EVAL_TAPP SEQUANT_TAPP "Enable TAPP eval backend")
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
+# N.B. declared here, ahead of SEQUANT_ASSERT_BEHAVIOR, since it changes that
+#      option's default
+option(SEQUANT_PYTHON "Build SeQuant python module" OFF)
+add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
+
 # SEQUANT_ASSERT
 # N.B. the build-type partition matches TiledArray's TA_ASSERT_POLICY default
 #      (asserts are only disabled in the optimized-and-not-debuggable build
@@ -164,18 +169,25 @@ option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors"
 #      in: a multi-config Release build pays for assertion checks it may not
 #      have wanted, rather than a Debug build silently losing them; pass an
 #      explicit -DSEQUANT_ASSERT_BEHAVIOR=IGNORE to opt out per build tree.
-if (CMAKE_BUILD_TYPE STREQUAL Release OR
-    CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
+# N.B. the Python module needs THROW: a failed check must surface as a Python
+#      exception rather than abort the interpreter or go unnoticed
+if (SEQUANT_PYTHON)
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT THROW)
+elseif (CMAKE_BUILD_TYPE STREQUAL Release OR
+        CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
     set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
 else ()
     set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
 endif()
-set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op; the default is IGNORE for Release and MinSizeRel builds, ABORT otherwise")
+set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op; the default is THROW if SEQUANT_PYTHON=ON, else IGNORE for Release and MinSizeRel builds and ABORT otherwise")
 set_property(
         CACHE SEQUANT_ASSERT_BEHAVIOR PROPERTY
         STRINGS THROW ABORT IGNORE)
 if (NOT ($CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL THROW OR $CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL ABORT OR $CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL IGNORE))
     message(FATAL_ERROR "SEQUANT_ASSERT_BEHAVIOR is set to $CACHE{SEQUANT_ASSERT_BEHAVIOR} but must be one of THROW, ABORT, or IGNORE")
+endif()
+if (SEQUANT_PYTHON AND NOT $CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL THROW)
+    message(WARNING "SEQUANT_PYTHON=ON but SEQUANT_ASSERT_BEHAVIOR=$CACHE{SEQUANT_ASSERT_BEHAVIOR}: a failed SEQUANT_ASSERT or SEQUANT_ENFORCE check will abort the Python interpreter (ABORT) or be skipped (IGNORE) instead of raising an exception; configure with -DSEQUANT_ASSERT_BEHAVIOR=THROW")
 endif()
 
 ##########################
@@ -184,9 +196,6 @@ endif()
 
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++'s parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++'s parallel STL")
-
-option(SEQUANT_PYTHON "Build SeQuant python module" OFF)
-add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 
 option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
 add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
