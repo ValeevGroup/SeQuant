@@ -83,4 +83,11 @@ std::wstring Index::registry_label_or_base_key(const IndexBasis& basis) {
   return basis.space().base_key();
 }
 
+IndexBasis Index::registry_resolved(const IndexBasis& basis) {
+  if (!basis.has_basis_instance()) return basis;
+  if (auto registry = get_default_index_space_registry())
+    return registry->resolve(basis);
+  return basis;
+}
+
 }  // namespace sequant

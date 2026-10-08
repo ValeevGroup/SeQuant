@@ -182,6 +182,12 @@ TEST_CASE("pao-named-basis-equivalence", "[mbpt][csv][basis][valgrind_skip]") {
     CHECK(Index(pao, 3).full_label() == L"μ̃_3");
     CHECK(Index(pao, 3).basis_key() == L"μ̃");
     CHECK(Index(pao, 3).space().approximate_size() == n_pao);
+    // a temporary minted from the bare (space, instance) pair, as operator
+    // grants and the integral projection do, is the basis as registered
+    const IndexBasis bare{ctx_new.index_space_registry()->retrieve(L"a"),
+                          pao.basis_instance()};
+    REQUIRE(bare.space().approximate_size() != n_pao);
+    CHECK(Index::make_tmp_index(bare).space().approximate_size() == n_pao);
     CHECK(ctx_new.index_space_registry()->retrieve(L"a").approximate_size() !=
           n_pao);
     CHECK_THROWS_AS(ctx_new.index_space_registry()->retrieve(L"μ̃"),
