@@ -587,6 +587,9 @@ ExprPtr extended_wick(ExprPtr input, const ExtendedWickOptions &opts,
       partitions = WickTheorem<S>::analyze_topology(
           term->as<Product>(),
           copts && copts->named_indices ? &*copts->named_indices : nullptr);
+      // pruning by its topology would not preserve that the term is zero by
+      // symmetry
+      if (partitions->zero) return ex<Constant>(0);
     }
     // a summed index shared by two operators is two indices bound by a δ,
     // which multiplies the result so that it does not count as a connection

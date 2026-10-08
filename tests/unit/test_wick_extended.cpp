@@ -749,6 +749,24 @@ TEST_CASE("wick_extended", "[algorithms][wick][valgrind_skip]") {
       REQUIRE(attempted_on < attempted_off);
     }
 
+    // an input that vanishes by symmetry (a symmetric tensor contracted with
+    // the antisymmetric creators of an operator) is returned as zero with no
+    // contraction attempted, as under the other vacua; the exhaustive
+    // enumeration produces terms that each vanish by their own symmetry,
+    // which the canonicalizer does not yet recognize
+    {
+      auto zero = ex<Tensor>(L"X", bra{L"u_1", L"u_2"}, ket{L"u_3", L"u_4"},
+                             Symmetry::Symm, BraKetSymmetry::Nonsymm,
+                             ColumnSymmetry::Symm) *
+                  ex<FNOperator>(cre({L"u_1", L"u_2"}), ann({L"u_3", L"u_4"}));
+      for (const bool full : {true, false}) {
+        INFO("full=" << full);
+        const auto [on, attempted_on] = run(zero * t_op, full, true);
+        REQUIRE(on == ex<Constant>(0));
+        REQUIRE(attempted_on == 0);
+      }
+    }
+
     // a†_u1 and a†_u2 are only equivalent together with the tensors they
     // are attached to, so nothing is pruned
     auto X = [](std::wstring_view b, std::wstring_view k) {
