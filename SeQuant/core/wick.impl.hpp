@@ -112,7 +112,7 @@ class index_repl_dst_t {
 /// @param noncovariant_indices the noncovariant indices, including those made
 /// so by a Kronecker delta (or an overlap equivalent to one) with another
 /// @param unpaired_indices the internal indices that do not appear exactly
-/// twice in nonproto slots
+/// twice in nonproto slots, i.e. appear once or more than twice
 /// @param metric the metric of the index spaces
 template <Statistics S>
 std::optional<std::pair<container::map<Index, Index>, bool>>
@@ -581,16 +581,8 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
     container::set<Index> all_noncovariant_indices;
     container::set<Index> unpaired_indices;
     if (have_noncovariant_indices) {
-      // see WickTheorem::noncovariant_indices
-      all_noncovariant_indices =
-          idx_counter |
-          ranges::views::filter([&external_indices](const auto &v) {
-            return (v.first.has_proto_indices() == true ||
-                    v.second.proto != 0 || v.second.nonproto() != 2) &&
-                   !external_indices.contains(v.first);
-          }) |
-          ranges::views::transform([](const auto &v) { return v.first; }) |
-          ranges::to<container::set<Index>>;
+      // see WickTheorem::noncovariant_indices: an unpaired index is
+      // noncovariant, as is one that has or is a protoindex
       unpaired_indices =
           idx_counter |
           ranges::views::filter([&external_indices](const auto &v) {
@@ -599,6 +591,16 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
           }) |
           ranges::views::transform([](const auto &v) { return v.first; }) |
           ranges::to<container::set<Index>>;
+      all_noncovariant_indices =
+          idx_counter |
+          ranges::views::filter([&external_indices](const auto &v) {
+            return (v.first.has_proto_indices() || v.second.proto != 0) &&
+                   !external_indices.contains(v.first);
+          }) |
+          ranges::views::transform([](const auto &v) { return v.first; }) |
+          ranges::to<container::set<Index>>;
+      all_noncovariant_indices.insert(unpaired_indices.begin(),
+                                      unpaired_indices.end());
       // augment list of noncovariant indices:
       // - any index with protoindices is noncovariant
       // - if kronecker delta has a noncovariant index, the other index is also
