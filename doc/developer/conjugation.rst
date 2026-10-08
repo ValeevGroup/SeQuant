@@ -42,8 +42,9 @@ mutation can put the tensor on a basis of another field, where the coset rule id
 definite trait consumes the mark outright, so a slot mutation that changes the slots' field, or removes the last bra
 or ket slot, derives ``BraKetSymmetry`` and the elementwise ``ConjugationSymmetry`` again from the traits and the new
 slots' field and then normalizes the states against them: a mutated tensor is the tensor a construction over those
-slots would have given. A relabeling within one field changes none of these and skips the step; ``set_aux()`` never
-needs it, the aux bundle being no part of the field or the ranks. The ``AbstractTensor`` primitives
+slots would have given, which may spell the bundles the other way round (a ``⁺`` moved onto a real basis is traded for
+a ``꙳`` with bra and ket swapped back). A relabeling within one field changes none of these and skips the step;
+``set_aux()`` never needs it, the aux bundle being no part of the field or the ranks. The ``AbstractTensor`` primitives
 ``_swap_bra_ket()`` and ``_bra_mutable()`` / ``_ket_mutable()`` reconcile nothing; normalization and the
 tensor-network machinery drive them themselves. The sign consumed is returned to the caller; ``sequant::adjoint`` /
 ``kconjugate(const ExprPtr&)`` turn it into a scalar factor, while a constructor, ``with_slots()`` and a slot mutation
@@ -232,6 +233,9 @@ own slot hash. ``decode_leaf_states`` is exhaustive over the two states in three
 ``{conj, braket_swap}``. The decoded spelling is then block-canonicalized with ``fold_signed_braket`` off -- indices
 are reordered within each bundle, the ``Symm`` bra/ket swap is the only exchange, and a leaf keeps its as-written
 orientation -- and that sign composes into the same transform, which is applied once on the way out of the leaf fetch.
+A leaf over a mixed basis, one real and one complex slot, is a complex-basis leaf (``base_field()`` is complex when
+any slot is), so its ``꙳`` stays on the stored spelling and the leaf evaluator is asked for the array ``t꙳`` by that
+name; over an all-real basis the same spelling is served from ``t`` through a ``{conj}`` transform.
 A tensor-of-tensors leaf, one with proto indices, runs that same normalization and then, in addition, takes its slot
 hash and a further phase from ``TensorNetwork::canonicalize_slots``. ``denoted_expr()`` inverts the decoding,
 respelling the stored array as written. ``binarize(Tensor)`` is therefore a plain leaf in every case.

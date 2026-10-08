@@ -1410,7 +1410,11 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @note a mutation can put the tensor on a basis of another field, where the
   ///       coset rule identifies `⁺` with `꙳` and a definite trait consumes the
   ///       mark outright, so a state left as written would name a different
-  ///       array
+  ///       array. The normalization may then exchange the bundles: a `⁺`
+  ///       moved onto a real basis is traded for a `꙳` with bra and ket
+  ///       swapped back, so a caller that reads bra() after set_bra() on a
+  ///       marked tensor across a field change finds its indices in the ket.
+  ///       The value is the same; the spelling is the normalized one.
   /// @throw Exception if the normalization consumes a −1: that names minus a
   ///        tensor, which no Tensor can hold, exactly as in with_slots(). The
   ///        tensor is restored to what @p before recorded first, so a refused
