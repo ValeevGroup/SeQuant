@@ -624,7 +624,8 @@ class WickTheorem {
   /// @return the pairs given to set_nop_connections (@p mask =
   /// nop_connections_, @p cache = nop_connections_input_) or to
   /// set_nop_avoided_connections, whether or not they were recorded in
-  /// @p mask yet
+  /// @p mask yet; set_nop_pair_mask records a pair {i,j} by clearing bit j of
+  /// mask[i] and bit i of mask[j]
   static container::svector<std::pair<std::size_t, std::size_t>> nop_pairs(
       const container::svector<std::bitset<max_input_size>> &mask,
       const container::svector<std::pair<size_t, size_t>> &cache) {
