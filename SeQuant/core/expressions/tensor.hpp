@@ -1242,7 +1242,8 @@ inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
 
 /// @return true if an overlap between @p bra and @p ket is a Kronecker delta:
 /// @p metric is unit and the indices are in one basis, i.e. have the same
-/// protoindices
+/// protoindices (compared in order, as by Index::operator==; symmetric ones
+/// are kept sorted)
 inline bool is_kronecker_equivalent(const Index &bra, const Index &ket,
                                     IndexSpaceMetric metric) {
   return metric == IndexSpaceMetric::Unit &&
