@@ -45,6 +45,7 @@ Specialized variants exist for the more demanding cases that arise in practice:
   the necessary (anti)symmetrizers.
 - :func:`sequant::mbpt::closed_shell_CC_triplet_spintrace` is its counterpart for the closed-shell triplet (:math:`M_S = 0`)
   state of EOM-CC excited states.
+- :func:`sequant::mbpt::closed_shell_CC_spintrace` selects one of these two by the spin multiplicity of the target state.
 - :func:`sequant::mbpt::open_shell_spintrace` and :func:`sequant::mbpt::open_shell_CC_spintrace` produce, instead of a single spin-free
   result, one expression per distinct spin case, appropriate for an unrestricted (open-shell) reference.
 

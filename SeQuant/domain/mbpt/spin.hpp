@@ -360,6 +360,26 @@ struct ClosedShellCCTripletSpintraceOptions {
 ExprPtr closed_shell_CC_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options = {});
 
+/// spin multiplicity of the closed-shell spin-tracing state
+enum class SpinMultiplicity { Singlet, Triplet };
+
+/// controls the behavior of closed_shell_CC_spintrace
+struct ClosedShellCCSpintraceOptions {
+  SEQUANT_DESIGNATED_INIT_ONLY;
+  // set the default to singlet state
+  SpinMultiplicity multiplicity = SpinMultiplicity::Singlet;
+  /// singlet: true selects BiorthogonalizationMethod::V2, false V1;
+  /// triplet: see ClosedShellCCTripletSpintraceOptions::compact
+  bool compact = true;
+};
+
+/// @brief closed-shell spin trace of CC equations for the singlet or triplet
+///        state; dispatches to closed_shell_CC_singlet_spintrace or
+///        closed_shell_CC_triplet_spintrace
+/// @throw Exception if @p options has an invalid multiplicity
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                  ClosedShellCCSpintraceOptions options = {});
+
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
 

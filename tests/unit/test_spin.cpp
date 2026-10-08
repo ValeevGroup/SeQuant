@@ -2324,6 +2324,37 @@ SECTION("triplet_residual_kind") {
   simplify(diff);
   REQUIRE(diff->size() == 0);
 }
+SECTION("closed_shell_CC_spintrace") {
+  // 2h2p EOM-like residual term: f contracted with R2
+  auto expr = deserialize(
+      std::wstring(L"Â{i_1,i_2;a_1,a_2} * f{a_1;a_3} * R{a_3,a_2;i_1,i_2}"),
+      {.def_perm_symm = Symmetry::Nonsymm});
+
+  auto require_equal = [](ExprPtr lhs, ExprPtr rhs) {
+    ExprPtr diff = lhs - rhs;
+    canonicalize(diff);
+    simplify(diff);
+    REQUIRE(diff->size() == 0);
+  };
+
+  require_equal(closed_shell_CC_spintrace(expr),
+                closed_shell_CC_singlet_spintrace_v2(expr));
+  require_equal(closed_shell_CC_spintrace(expr, {.compact = false}),
+                closed_shell_CC_singlet_spintrace_v1(expr));
+  require_equal(
+      closed_shell_CC_spintrace(
+          expr, {.multiplicity = SpinMultiplicity::Triplet, .compact = false}),
+      closed_shell_CC_triplet_spintrace(expr, {.compact = false}));
+  // a single term cannot be compacted, so compaction throws
+  REQUIRE_THROWS_AS(closed_shell_CC_spintrace(
+                        expr, {.multiplicity = SpinMultiplicity::Triplet}),
+                    Exception);
+
+  REQUIRE_THROWS_AS(
+      closed_shell_CC_spintrace(
+          expr, {.multiplicity = static_cast<SpinMultiplicity>(2)}),
+      Exception);
+}
 }
 
 TEST_CASE("triplet_doubles_compact", "[spin][triplet]") {

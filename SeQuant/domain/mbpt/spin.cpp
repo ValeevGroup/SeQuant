@@ -2305,6 +2305,20 @@ ExprPtr closed_shell_CC_triplet_spintrace(
   return triplet;
 }
 
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                  ClosedShellCCSpintraceOptions options) {
+  switch (options.multiplicity) {
+    case SpinMultiplicity::Singlet:
+      return closed_shell_CC_singlet_spintrace(
+          expr, {.method = options.compact ? BiorthogonalizationMethod::V2
+                                           : BiorthogonalizationMethod::V1});
+    case SpinMultiplicity::Triplet:
+      return closed_shell_CC_triplet_spintrace(expr,
+                                               {.compact = options.compact});
+  }
+  throw Exception("closed_shell_CC_spintrace: invalid multiplicity");
+}
+
 container::svector<std::pair<std::wstring, ExprPtr>> spintrace_by_sector(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
