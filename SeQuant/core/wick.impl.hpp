@@ -18,6 +18,8 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <algorithm>
+
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
@@ -104,6 +106,12 @@ class index_repl_dst_t {
 ///   - if space of J includes space of I, replace J with I, !!remove delta!!
 ///   - if space of J is a subset of space of I, replace J with a new internal
 ///     index representing intersection of spaces of I and J, !!keep the delta!!
+/// A basis instance (IndexBasis) is reduced like a subspace: an index without
+/// one is in its space's own basis, which includes every instance of the
+/// space, and a delta or overlap between two different instances yields no
+/// rule. With a basis instance present the deltas are applied first, then the
+/// overlaps, those between two indices without one last, so that the rules do
+/// not depend on the order of the factors.
 /// @return index replacement map + whether found any kronecker tensors or
 /// overlaps equivalent to them; the
 /// former may be empty even if the latter is true, if, e.g., contain trivial
@@ -115,6 +123,8 @@ class index_repl_dst_t {
 /// @param unpaired_indices the internal indices that do not appear exactly
 /// twice in nonproto slots, i.e. appear once or more than twice
 /// @param metric the metric of the index spaces
+/// @throw Exception if a Kronecker delta binds indices of intersecting spaces
+/// whose bases resolve to different basis instances
 template <Statistics S>
 std::optional<std::pair<container::map<Index, Index>, bool>>
 compute_index_replacement_rules(
@@ -129,9 +139,6 @@ compute_index_replacement_rules(
   auto zero_result = [&zero_result_status]() -> void {
     zero_result_status = true;
   };
-#define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(x) \
-  { x; }                                                          \
-  if (zero_result_status) return {};
 #define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT(x) \
   { x; }                                                               \
   if (zero_result_status) return;
@@ -405,92 +412,138 @@ compute_index_replacement_rules(
 
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
-  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
-    const auto &factor = *it;
-    if (factor.is<Tensor>()) {
-      const auto &tensor = factor.as<Tensor>();
-      const auto is_overlap = tensor.label() == overlap_label();
-      const auto is_kronecker = tensor.label() == kronecker_label();
-      if (is_overlap || is_kronecker) {
-        have_kroneckers = true;
-        SEQUANT_ASSERT(tensor.bra().size() == 1);
-        SEQUANT_ASSERT(tensor.ket().size() == 1);
-        const auto &bra = tensor.bra().at(0);
-        const auto &ket = tensor.ket().at(0);
+  enum class Outcome { Done, Deferred, Zero };
+#define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(x) \
+  { x; }                                                                  \
+  if (zero_result_status) return Outcome::Zero;
+  // adds the rule(s) a delta or overlap implies. With @p defer_generic_overlaps
+  // an overlap between two indices that resolve to no basis instance is not
+  // applied (Outcome::Deferred): it is an identity only if both ends are in
+  // the same basis, which is known only once every delta and every overlap
+  // with a specific index has been applied
+  auto process = [&](const Tensor &tensor,
+                     bool defer_generic_overlaps) -> Outcome {
+    const auto is_overlap = tensor.label() == overlap_label();
+    const auto is_kronecker = tensor.label() == kronecker_label();
+    SEQUANT_ASSERT(is_overlap || is_kronecker);
+    SEQUANT_ASSERT(tensor.bra().size() == 1);
+    SEQUANT_ASSERT(tensor.ket().size() == 1);
+    const auto &bra = tensor.bra().at(0);
+    const auto &ket = tensor.ket().at(0);
 
-        // skip if
-        // - self-kronecker (will be replaced by 1 already)
-        bool do_skip = bra == ket;
-        // - nontrivial overlap between 2 noncovariant modes
-        if (is_overlap) {
-          // N.B. noncovariant bra or ket is OK because we can always rotate it
-          // to match the basis of the other. An overlap equivalent to a
-          // Kronecker delta (its indices in one basis) is one, whatever makes
-          // its indices noncovariant, so only unpaired indices keep it
-          const bool kronecker_equivalent =
-              is_kronecker_equivalent(bra, ket, metric);
-          auto keeps_overlap = [&](const Index &idx) {
-            return kronecker_equivalent ? unpaired_indices.contains(idx)
-                                        : noncovariant_indices.contains(idx);
-          };
-          do_skip = do_skip || (keeps_overlap(bra) && keeps_overlap(ket));
-        }
-        // - overlap between 2 different basis instances: not an identity, the
-        //   overlap stands. A Kronecker delta between them is an error: basis
-        //   functions of different bases cannot be compared for equality
-        const auto bra_basis = resolved_basis(bra);
-        const auto ket_basis = resolved_basis(ket);
-        if (bra_basis.has_basis_instance() && ket_basis.has_basis_instance() &&
-            bra_basis.basis_instance() != ket_basis.basis_instance()) {
-          if (is_kronecker)
-            throw Exception(
-                "WickTheorem::reduce: Kronecker delta between " +
-                toUtf8(bra.full_label()) + " and " + toUtf8(ket.full_label()) +
-                ", which are in different basis instances (" +
-                std::to_string(*bra_basis.basis_instance()) + " and " +
-                std::to_string(*ket_basis.basis_instance()) + ")");
-          do_skip = true;
-        }
-        if (!do_skip) {
-          const auto bra_is_ext = ranges::find(external_indices, bra) !=
-                                  ranges::end(external_indices);
-          const auto ket_is_ext = ranges::find(external_indices, ket) !=
-                                  ranges::end(external_indices);
+    // skip if
+    // - self-kronecker (will be replaced by 1 already)
+    bool do_skip = bra == ket;
+    // - nontrivial overlap between 2 noncovariant modes
+    if (is_overlap) {
+      // N.B. noncovariant bra or ket is OK because we can always rotate it
+      // to match the basis of the other. An overlap equivalent to a
+      // Kronecker delta (its indices in one basis) is one, whatever makes
+      // its indices noncovariant, so only unpaired indices keep it
+      const bool kronecker_equivalent =
+          is_kronecker_equivalent(bra, ket, metric);
+      auto keeps_overlap = [&](const Index &idx) {
+        return kronecker_equivalent ? unpaired_indices.contains(idx)
+                                    : noncovariant_indices.contains(idx);
+      };
+      do_skip = do_skip || (keeps_overlap(bra) && keeps_overlap(ket));
+    }
+    // - overlap between 2 different basis instances: not an identity, the
+    //   overlap stands. A Kronecker delta between them is an error: basis
+    //   functions of different bases cannot be compared for equality
+    const auto bra_basis = resolved_basis(bra);
+    const auto ket_basis = resolved_basis(ket);
+    if (bra_basis.has_basis_instance() && ket_basis.has_basis_instance() &&
+        bra_basis.basis_instance() != ket_basis.basis_instance()) {
+      if (is_kronecker)
+        throw Exception("WickTheorem::reduce: Kronecker delta between " +
+                        toUtf8(bra.full_label()) + " and " +
+                        toUtf8(ket.full_label()) +
+                        ", which are in different basis instances (" +
+                        std::to_string(*bra_basis.basis_instance()) + " and " +
+                        std::to_string(*ket_basis.basis_instance()) + ")");
+      do_skip = true;
+    }
+    if (do_skip) return Outcome::Done;
+    if (defer_generic_overlaps && is_overlap &&
+        !bra_basis.has_basis_instance() && !ket_basis.has_basis_instance())
+      return Outcome::Deferred;
 
-          const auto intersection_basis = intersection(bra_basis, ket_basis);
+    const auto bra_is_ext =
+        ranges::find(external_indices, bra) != ranges::end(external_indices);
+    const auto ket_is_ext =
+        ranges::find(external_indices, ket) != ranges::end(external_indices);
 
-          // if overlap's indices are from non-overlapping spaces, return zero
-          if (!intersection_basis.space()) {
-            return std::nullopt;
-          }
+    const auto intersection_basis = intersection(bra_basis, ket_basis);
 
-          if (!bra_is_ext && !ket_is_ext) {
-            // int + int
-            const auto new_dummy = idxfac.make(intersection_basis);
-            SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
-                add_or_update_rules(bra, ket, new_dummy));
-          } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-            if (includes(ket_basis, bra_basis)) {
-              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
-                  add_or_update_rule(ket, bra));
-            } else {
-              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
-                  add_or_update_rule(ket, idxfac.make(intersection_basis)));
-            }
-          } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-            if (includes(bra_basis, ket_basis)) {
-              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
-                  add_or_update_rule(bra, ket));
-            } else {
-              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
-                  add_or_update_rule(bra, idxfac.make(intersection_basis)));
-            }
-          }
-          // ext + ext => leave overlap as is
-        }
+    // if overlap's indices are from non-overlapping spaces, return zero
+    if (!intersection_basis.space()) return Outcome::Zero;
+
+    if (!bra_is_ext && !ket_is_ext) {
+      // int + int
+      const auto new_dummy = idxfac.make(intersection_basis);
+      SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(
+          add_or_update_rules(bra, ket, new_dummy));
+    } else if (bra_is_ext && !ket_is_ext) {  // ext + int
+      if (includes(ket_basis, bra_basis)) {
+        SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(
+            add_or_update_rule(ket, bra));
+      } else {
+        SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(
+            add_or_update_rule(ket, idxfac.make(intersection_basis)));
+      }
+    } else if (!bra_is_ext && ket_is_ext) {  // int + ext
+      if (includes(bra_basis, ket_basis)) {
+        SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(
+            add_or_update_rule(bra, ket));
+      } else {
+        SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT(
+            add_or_update_rule(bra, idxfac.make(intersection_basis)));
       }
     }
+    // ext + ext => leave overlap as is
+    return Outcome::Done;
+  };
+#undef SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_OUTCOME_IF_ZERO_RESULT
+
+  // the deltas and overlaps, in product order; with a basis instance among
+  // their indices the deltas (hard identities) go first, then the overlaps,
+  // of which those between two generic indices are applied last, so that the
+  // rules do not depend on the order of the factors
+  container::svector<const Tensor *> worklist;
+  bool has_instances = false;
+  for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
+    const auto &factor = *it;
+    if (!factor.template is<Tensor>()) continue;
+    const auto &tensor = factor.template as<Tensor>();
+    if (tensor.label() != overlap_label() &&
+        tensor.label() != kronecker_label())
+      continue;
+    worklist.push_back(&tensor);
+    has_instances = has_instances ||
+                    tensor.bra().at(0).basis().has_basis_instance() ||
+                    tensor.ket().at(0).basis().has_basis_instance();
   }
+  have_kroneckers = !worklist.empty();
+  if (has_instances)
+    std::stable_partition(
+        worklist.begin(), worklist.end(),
+        [](const Tensor *t) { return t->label() == kronecker_label(); });
+
+  container::svector<const Tensor *> deferred;
+  for (const Tensor *tensor : worklist) {
+    switch (process(*tensor, has_instances)) {
+      case Outcome::Zero:
+        return std::nullopt;
+      case Outcome::Deferred:
+        deferred.push_back(tensor);
+        break;
+      case Outcome::Done:
+        break;
+    }
+  }
+  for (const Tensor *tensor : deferred)
+    if (process(*tensor, false) == Outcome::Zero) return std::nullopt;
 
   // make 1-to-1 version of src->dst
   container::map<Index /* src */, Index /* dst */> result;
@@ -499,7 +552,6 @@ compute_index_replacement_rules(
   }
   return std::make_pair(result, have_kroneckers);
 
-#undef SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT
 #undef SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT
 }
 

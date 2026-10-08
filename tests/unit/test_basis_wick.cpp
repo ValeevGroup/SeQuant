@@ -29,6 +29,7 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
   using namespace sequant::mbpt;
   using sequant::tests::csv::message_contains;
   using sequant::tests::csv::standing_metrics;
+  using sequant::tests::csv::tensors_labelled;
   using sequant::tests::csv::with_leg_instance;
   namespace t = op::tensor;
 
@@ -97,6 +98,31 @@ TEST_CASE("basis-wick-contractions", "[algorithms][wick][basis]") {
                  : L"1/4 t{a_1<;1>,a_2<;1>;i_1,i_2}:A-N-S * "
                    L"λ{i_1,i_2;a_1<;1>,a_2<;1>}:A-N-S"));
     }
+  }
+
+  SECTION("K6: general-space legs of two families contract to one overlap") {
+    // neither leg is pure, so the contraction is s{q;q'} δ{p_1<;1>;q}
+    // δ{q';p_2<;2>} with fresh generic q, q': one overlap between the two
+    // families must stand, and nothing may throw
+    const Index i1(L"i_1"), i2(L"i_2");
+    const auto p1 = Index(L"p_1").replace_basis_instance(1);
+    const auto p2 = Index(L"p_2").replace_basis_instance(2);
+    const auto expr = ex<Tensor>(L"t", bra{i1}, ket{p1}, Symmetry::Nonsymm) *
+                      ex<FNOperator>(cre{i1}, ann{p1}) *
+                      ex<Tensor>(L"u", bra{p2}, ket{i2}, Symmetry::Nonsymm) *
+                      ex<FNOperator>(cre{p2}, ann{i2});
+    Index::reset_tmp_index();
+    ExprPtr r;
+    REQUIRE_NOTHROW(r = FWickTheorem{expr}.full_contractions(true).compute());
+    CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+    const auto metrics = tensors_labelled(r, reserved::overlap_label());
+    REQUIRE(metrics.size() == 1);
+    container::svector<IndexBasis::optional_instance> instances;
+    for (auto const& idx : metrics[0]->_slots())
+      instances.push_back(idx.basis().basis_instance());
+    CHECK(
+        (instances == container::svector<IndexBasis::optional_instance>{1, 2} ||
+         instances == container::svector<IndexBasis::optional_instance>{2, 1}));
   }
 
   SECTION("K0: no instance anywhere") {
@@ -197,6 +223,33 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
       CHECK(instances(*gs[0]) ==
             container::svector<IndexBasis::optional_instance>{1, 2, {}, {}});
       // the overlap connects g's two virtual slots
+      const auto g_slots = slots(*gs[0]);
+      const auto m_slots = slots(*metrics[0]);
+      CHECK(((m_slots[0] == g_slots[0] && m_slots[1] == g_slots[1]) ||
+             (m_slots[0] == g_slots[1] && m_slots[1] == g_slots[0])));
+    }
+  }
+
+  SECTION("an overlap between two generic indices is resolved last") {
+    // δ{a_1<;1>;p_1} s{p_1;p_2} δ{p_2;a_2<;2>} g{a_1<;1>,a_2<;2>;i_1,i_2}: the
+    // deltas identify p_1 and p_2 with indices of two families, so the overlap
+    // between the generic indices is <a_1<;1>|a_2<;2>> and stands, whichever
+    // factor comes first (Wick itself emits the overlap first)
+    const auto d1 = make_kronecker(a1_1, p1), s = make_overlap(p1, q1),
+               d2 = make_kronecker(q1, a2_2);
+    for (auto const& product :
+         {d1 * d2 * s * g(a1_1, a2_2), d1 * s * d2 * g(a1_1, a2_2),
+          s * d1 * d2 * g(a1_1, a2_2)}) {
+      INFO(toUtf8(serialize(product)));
+      ExprPtr r;
+      REQUIRE_NOTHROW(r = reduce(product));
+      CHECK(tensors_labelled(r, reserved::kronecker_label()).empty());
+      const auto metrics = tensors_labelled(r, reserved::overlap_label());
+      REQUIRE(metrics.size() == 1);
+      const auto gs = tensors_labelled(r, L"g");
+      REQUIRE(gs.size() == 1);
+      CHECK(instances(*gs[0]) ==
+            container::svector<IndexBasis::optional_instance>{1, 2, {}, {}});
       const auto g_slots = slots(*gs[0]);
       const auto m_slots = slots(*metrics[0]);
       CHECK(((m_slots[0] == g_slots[0] && m_slots[1] == g_slots[1]) ||
