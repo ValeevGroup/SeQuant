@@ -169,6 +169,23 @@ TEST_CASE("index-basis", "[elements][index][basis]") {
     CHECK(dummy.full_label() == L"a_1");
     CHECK(dummy.basis() == IndexBasis{uocc});
   }
+  // ... also between temporary indices, e.g. fresh from Wick: the dummy keeps
+  // the temporary ordinal
+  {
+    const Index s_bra = Index::make_tmp_index(IndexBasis{uocc, 1},
+                                              container::vector<Index>{i1});
+    const Index s_ket = Index::make_tmp_index(IndexBasis{uocc, 1},
+                                              container::vector<Index>{i1, i2});
+    ExprPtr ct;
+    REQUIRE_NOTHROW(ct = mbpt::csv_transform(make_overlap(s_bra, s_ket), uocc));
+    REQUIRE(ct->is<Product>());
+    REQUIRE(ct->as<Product>().factors().size() == 2);
+    const Index dummy = ct->as<Product>().factor(0)->as<Tensor>().ket().at(0);
+    CHECK(dummy == ct->as<Product>().factor(1)->as<Tensor>().bra().at(0));
+    CHECK(dummy.basis() == IndexBasis{uocc});
+    CHECK(!dummy.has_proto_indices());
+    CHECK(dummy.ordinal() == s_bra.ordinal());
+  }
 
   // labels: label() never shows the instance
   CHECK(x.label() == L"a_1");
