@@ -377,6 +377,20 @@ TEST_CASE("serialization", "[serialization]") {
             conjugated->as<Product>().factor(0)->as<Variable>().conjugated());
       }
 
+      SECTION(
+          "a number abutting a tensor named i is not an imaginary literal") {
+        // to_string writes a Product's scalar right against its first factor
+        auto two_i =
+            ex<Constant>(2) * ex<Tensor>(L"i", bra{L"a_1"}, ket{L"i_1"});
+        REQUIRE(*deserialize<ExprPtr>(serialize(two_i)) == *two_i);
+        auto parsed = deserialize<ExprPtr>(L"2i{a_1;i_1}");
+        REQUIRE(parsed->is<Product>());
+        REQUIRE(parsed->as<Product>().scalar() == 2);
+        REQUIRE(parsed->as<Product>().factor(0)->as<Tensor>().label() == L"i");
+        auto caret = deserialize<ExprPtr>(L"2i^{i_1}_{a_1}");
+        REQUIRE(*caret == *parsed);
+      }
+
       SECTION("a general complex constant is a real plus an imaginary term") {
         auto c = deserialize<ExprPtr>(L"1 + 2i");
         REQUIRE(c->is<Constant>());
