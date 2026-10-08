@@ -47,12 +47,12 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexBasis& csv_basis,
 ///
 /// \param expr The expression to be CSV-transformed.
 /// \param csv_basis the basis in terms of which the CSVs are expanded
-/// \param coeff_tensor_label The label of the CSV-tranformation tensors that
+/// \param coeff_tensor_label The label of the CSV-transformation tensors that
 ///                           will be introduced.
 /// \param tensor_labels The labels of the tensors that will be
 ///                    transformed
 /// \return The CSV-transformed expression if CSV-tensors with labels present
-///         in @c csv_tensors appear in @c expr. Otherwise returns the input
+///         in @c tensor_labels appear in @c expr. Otherwise returns the input
 ///         expression itself.
 ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
                       std::wstring const& coeff_tensor_label = L"C",
