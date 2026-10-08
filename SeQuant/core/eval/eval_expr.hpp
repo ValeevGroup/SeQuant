@@ -137,7 +137,11 @@ class EvalExpr {
   [[nodiscard]] size_t hash_value() const noexcept;
 
   ///
-  /// \return The ExprPtr object that this EvalExpr object holds.
+  /// \return The ExprPtr object that this EvalExpr object holds: for a leaf
+  ///         the _stored_ spelling, whose states the decoder took off into
+  ///         canon_transform() (a `t⁺{i;a}` leaf holds `t{a;i}`), for an
+  ///         internal node its placeholder. See denoted_expr() for the
+  ///         spelling the node denotes.
   ///
   [[nodiscard]] ExprPtr expr() const noexcept;
 
@@ -205,7 +209,9 @@ class EvalExpr {
   ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
   ///
-  /// \return Tensor const&
+  /// \return Tensor const&, the stored spelling (see expr()); a leaf's bra
+  ///         and ket may be the exchanged ones, so a reader that needs the
+  ///         denoted layout uses denoted_expr()
   ///
   [[nodiscard]] Tensor const& as_tensor() const;
 

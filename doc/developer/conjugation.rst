@@ -150,7 +150,8 @@ Vocabulary
      - the same
      - throws ``sequant::Exception`` (an operator has no value)
    * - ``kconjugate(e)``
-     - toggles ``꙳``, slots in place, normalizes by the parity; factor order kept
+     - toggles ``꙳`` and normalizes it: the parity consumes it at a sign, and over a real basis (the coset rule) a definite
+       hermiticity consumes it with the bundles exchanged; otherwise the slots stay in place. Factor order kept
      - the same
      - the identity on the string; throws if a ``NormalOperator``/``NormalOperatorSequence`` index (proto indices included) is over a space ``K`` does not close, i.e. not a real-field space; ``Operator<S>`` and ``mbpt::Operator`` are not checked
 
