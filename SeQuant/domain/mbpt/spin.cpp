@@ -1155,8 +1155,8 @@ container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
       full_expansion);
 }
 
-ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
-                                     ClosedShellCCSpintraceOptions options) {
+ExprPtr closed_shell_CC_singlet_spintrace_v1(
+    ExprPtr const& expr, ClosedShellCCSingletSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V1);
   using ranges::views::transform;
 
@@ -1190,8 +1190,8 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
   return st_expr;
 }
 
-ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
-                                     ClosedShellCCSpintraceOptions options) {
+ExprPtr closed_shell_CC_singlet_spintrace_v2(
+    ExprPtr const& expr, ClosedShellCCSingletSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
   using ranges::views::transform;
   auto const ext_idxs = external_indices(expr);
@@ -1220,13 +1220,13 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   return st_expr;
 }
 
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
-                                  ClosedShellCCSpintraceOptions options) {
+ExprPtr closed_shell_CC_singlet_spintrace(
+    ExprPtr const& expr, ClosedShellCCSingletSpintraceOptions options) {
   switch (options.method) {
     case BiorthogonalizationMethod::V1:
-      return closed_shell_CC_spintrace_v1(expr, options);
+      return closed_shell_CC_singlet_spintrace_v1(expr, options);
     case BiorthogonalizationMethod::V2:
-      return closed_shell_CC_spintrace_v2(expr, options);
+      return closed_shell_CC_singlet_spintrace_v2(expr, options);
   }
 
   SEQUANT_UNREACHABLE;

@@ -258,8 +258,8 @@ enum class BiorthogonalizationMethod {
 };
 // clang-format on
 
-/// controls behavior of biorthogonal closed-shell spin-tracing
-struct ClosedShellCCSpintraceOptions {
+/// controls behavior of biorthogonal closed-shell singlet spin-tracing
+struct ClosedShellCCSingletSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   BiorthogonalizationMethod method = BiorthogonalizationMethod::V2;
   /// set to true to use sequant::spintrace which does not assume closed-shell
@@ -269,7 +269,7 @@ struct ClosedShellCCSpintraceOptions {
 };
 
 // clang-format off
-/// @brief like closed_shell_spintrace but transforms spin-free moments to biorthogonal form
+/// @brief like closed_shell_spintrace but transforms spin-free moments to biorthogonal form (singlet state)
 /// The algorithm (most steps are the same in V1 and V2):
 /// - factor out symmetrizer from the antisymmetrizer,
 ///   "set it aside" (remove from the expression), and
@@ -293,19 +293,19 @@ struct ClosedShellCCSpintraceOptions {
 ///                other traits; the default is to use
 ///                the V2 method
 // clang-format on
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
-                                  ClosedShellCCSpintraceOptions options = {});
+ExprPtr closed_shell_CC_singlet_spintrace(
+    ExprPtr const& expr, ClosedShellCCSingletSpintraceOptions options = {});
 
-/// @sa closed_shell_CC_spintrace
-ExprPtr closed_shell_CC_spintrace_v1(
+/// @sa closed_shell_CC_singlet_spintrace
+ExprPtr closed_shell_CC_singlet_spintrace_v1(
     ExprPtr const& expr,
-    ClosedShellCCSpintraceOptions options = {
+    ClosedShellCCSingletSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V1, .naive_spintrace = false});
 
-/// @sa closed_shell_CC_spintrace
-ExprPtr closed_shell_CC_spintrace_v2(
+/// @sa closed_shell_CC_singlet_spintrace
+ExprPtr closed_shell_CC_singlet_spintrace_v2(
     ExprPtr const& expr,
-    ClosedShellCCSpintraceOptions options = {
+    ClosedShellCCSingletSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
 /// closed-shell triplet (M_S = 0) EOM residual variants

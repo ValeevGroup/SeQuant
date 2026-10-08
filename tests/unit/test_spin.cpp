@@ -18,6 +18,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>  // mbpt::Spin
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -853,7 +854,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto input =
           deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
                       {.def_perm_symm = Symmetry::Antisymm});
-      auto result = closed_shell_CC_spintrace_v1(input);
+      auto result = closed_shell_CC_singlet_spintrace_v1(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
@@ -863,7 +864,7 @@ SECTION("Closed-shell spintrace CCD") {
           ExprPtrList{deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
                                   {.def_perm_symm = Symmetry::Antisymm})});
 
-      auto result = closed_shell_CC_spintrace_v2(input);
+      auto result = closed_shell_CC_singlet_spintrace_v2(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
@@ -877,7 +878,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto pno_ccd_energy_so_as_sum =
           ex<Sum>(ExprPtrList{pno_ccd_energy_so});
       auto pno_ccd_energy_sf =
-          closed_shell_CC_spintrace_v1(pno_ccd_energy_so_as_sum);
+          closed_shell_CC_singlet_spintrace_v1(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-N - "
@@ -893,7 +894,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto pno_ccd_energy_so_as_sum =
           ex<Sum>(ExprPtrList{pno_ccd_energy_so});
       auto pno_ccd_energy_sf =
-          closed_shell_CC_spintrace_v2(pno_ccd_energy_so_as_sum);
+          closed_shell_CC_singlet_spintrace_v2(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-N - "
@@ -1114,40 +1115,40 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
     auto expr1 = sequant::deserialize(L"-ω Â{i1,i2;a1,a2} t{a1,a2;i1,i2}",
                                       {.def_perm_symm = Symmetry::Antisymm});
 
-    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    auto result_v1 = mbpt::closed_shell_CC_singlet_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"-ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
 
-    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    auto result_v2 = mbpt::closed_shell_CC_singlet_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2, EquivalentTo(L"-ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
   }
   {  // test a single variable
     auto expr1 = sequant::deserialize(L"ω");
 
-    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    auto result_v1 = mbpt::closed_shell_CC_singlet_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"ω"));
 
-    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    auto result_v2 = mbpt::closed_shell_CC_singlet_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2, EquivalentTo(L"ω"));
   }
   {  // test a single constant
     auto expr1 = sequant::deserialize(L"1/4");
 
-    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    auto result_v1 = mbpt::closed_shell_CC_singlet_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"1/4"));
 
-    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    auto result_v2 = mbpt::closed_shell_CC_singlet_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2, EquivalentTo(L"1/4"));
   }
   {  // test a product of tensors
     const auto input = deserialize(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
                                    {.def_perm_symm = Symmetry::Antisymm});
 
-    auto result_v1 = closed_shell_CC_spintrace_v1(input);
+    auto result_v1 = closed_shell_CC_singlet_spintrace_v1(input);
     REQUIRE_THAT(result_v1,
                  EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                               L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
 
-    auto result_v2 = closed_shell_CC_spintrace_v2(input);
+    auto result_v2 = closed_shell_CC_singlet_spintrace_v2(input);
     REQUIRE_THAT(result_v2,
                  EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                               L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
@@ -1227,7 +1228,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
     // the new efficient method, does spintracing with partial expansion, then
     // expanding by S_map (this method is used in
-    // closed_shell_CC_spintrace_v2)
+    // closed_shell_CC_singlet_spintrace_v2)
     auto result_2 = closed_shell_spintrace(
         input,
         IdxGroupList{{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
@@ -1265,7 +1266,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                     L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
                     {.def_perm_symm = Symmetry::Antisymm})});
 
-    auto result = closed_shell_CC_spintrace_v2(input);
+    auto result = closed_shell_CC_singlet_spintrace_v2(input);
     REQUIRE_THAT(
         result,
         EquivalentTo(
@@ -1279,7 +1280,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                     "t{a_3,a_4,a_5;i_1,i_2,i_3}",
                     {.def_perm_symm = Symmetry::Antisymm})});
 
-    auto result = closed_shell_CC_spintrace_v1(input);
+    auto result = closed_shell_CC_singlet_spintrace_v1(input);
     REQUIRE(result->size() == 4);
     REQUIRE_THAT(
         result,

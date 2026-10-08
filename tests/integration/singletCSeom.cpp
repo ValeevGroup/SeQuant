@@ -133,7 +133,8 @@ class compute_eomcc_closedshell {
       }
 
       const auto tstart = std::chrono::high_resolution_clock::now();
-      auto st = closed_shell_CC_spintrace(eqvec[i], {.method = biorth_method});
+      auto st = closed_shell_CC_singlet_spintrace(eqvec[i],
+                                                  {.method = biorth_method});
       // if (i > 1) {
       //   st = S_maps(st);
       //   simplify(st);
