@@ -457,7 +457,7 @@ compute_index_replacement_rules(
         throw Exception("WickTheorem::reduce: Kronecker delta between " +
                         toUtf8(bra.full_label()) + " and " +
                         toUtf8(ket.full_label()) +
-                        ", which are in different basis instances (" +
+                        ", whose bases resolve to different basis instances (" +
                         std::to_string(*bra_basis.basis_instance()) + " and " +
                         std::to_string(*ket_basis.basis_instance()) + ")");
       do_skip = true;
