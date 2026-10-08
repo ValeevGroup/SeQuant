@@ -716,6 +716,9 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
       std::numeric_limits<IndexBasis::instance_type>::max();
   isr->add(L"μ̃", IndexBasis{uocc, P},
            120ul);  // before the Context adopts the registry (#665)
+  // an orthonormal unoccupied basis other than the canonical one, e.g.
+  // localized virtuals
+  isr->add(L"ã", IndexBasis{uocc, 2});
   auto ctx = set_scoped_default_context(
       Context({.index_space_registry_shared_ptr = std::move(isr),
                .vacuum = Vacuum::SingleProduct}));
@@ -757,6 +760,38 @@ TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
         registry.retrieve_basis(L"μ̃"), false);
     REQUIRE(s->is<Product>());
     CHECK(s->as<Product>().factors().size() == 3);
+  }
+  SECTION("named orthonormal target: the overlap's dummy is in that basis") {
+    const ExprPtr s = mbpt::csv_transform(
+        make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),
+        registry.retrieve_basis(L"ã"), /*orthonormal=*/true);
+    REQUIRE(s->is<Product>());
+    REQUIRE(s->as<Product>().factors().size() == 2);  // C C
+    const Index dummy = s->as<Product>().factor(0)->as<Tensor>().ket().at(0);
+    CHECK(dummy == s->as<Product>().factor(1)->as<Tensor>().bra().at(0));
+    CHECK(dummy.basis() == IndexBasis{uocc, 2});
+    CHECK(dummy.basis_key() == L"ã");
+    CHECK(!dummy.has_proto_indices());
+  }
+  SECTION("spin-resolved legs, as an open-shell spintrace leaves them") {
+    const IndexSpace occ_a = registry.retrieve(L"i↑"),
+                     uocc_a = registry.retrieve(L"a↑");
+    const Index ia1(occ_a, 1), ia2(occ_a, 2);
+    const ExprPtr s_a =
+        make_overlap(Index(uocc_a, 1, {ia1, ia2}).replace_basis_instance(0),
+                     Index(uocc_a, 3, {ia1}).replace_basis_instance(0));
+    // a space target: the dummy keeps the legs' spin
+    const ExprPtr out = mbpt::csv_transform(s_a, uocc);
+    REQUIRE(out->is<Product>());
+    REQUIRE(out->as<Product>().factors().size() == 2);  // C C
+    const Index dummy = out->as<Product>().factor(0)->as<Tensor>().ket().at(0);
+    CHECK(dummy == out->as<Product>().factor(1)->as<Tensor>().bra().at(0));
+    CHECK(dummy.space() == uocc_a);
+    CHECK(dummy.basis() == IndexBasis{uocc_a});
+    // a named target in the spin-free space is not supported
+    CHECK_THROWS_AS(
+        mbpt::csv_transform(s_a, registry.retrieve_basis(L"ã"), true),
+        Exception);
   }
   SECTION("an unnamed instance basis as target throws") {
     CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}, false),

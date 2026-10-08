@@ -56,7 +56,19 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexBasis& csv_basis,
 
     if (bra_has_proto_indices && ket_has_proto_indices) {
       const Index& end = ordinal_compare(bra_idx, ket_idx) ? bra_idx : ket_idx;
-      auto dummy_idx = end.drop_proto_indices().replace_basis_instance({});
+      // a basis instance is registered in one space, so a dummy in it cannot
+      // keep the legs' space (e.g. their spin)
+      if (csv_basis.has_basis_instance() && end.space() != csv_basis.space())
+        throw Exception("csv_transform: the CSV overlap's legs are in space " +
+                        toUtf8(end.space().base_key()) +
+                        ", not in the target basis instance's space " +
+                        toUtf8(csv_basis.space().base_key()));
+      auto dummy_idx =
+          csv_basis.has_basis_instance()
+              ? end.drop_proto_indices()
+                    .replace_space(csv_basis.space())
+                    .replace_basis_instance(csv_basis.basis_instance())
+              : end.drop_proto_indices().replace_basis_instance({});
 
       return ex<Product>(
           1,
