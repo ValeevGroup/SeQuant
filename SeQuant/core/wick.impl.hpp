@@ -400,14 +400,14 @@ compute_index_replacement_rules(
           // N.B. noncovariant bra or ket is OK because we can always rotate it
           // to match the basis of the other. An overlap equivalent to a
           // Kronecker delta (its indices in one basis) is one, whatever makes
-          // its indices noncovariant, unless both are unpaired
+          // its indices noncovariant, so only unpaired indices keep it
           const bool kronecker_equivalent =
               is_kronecker_equivalent(bra, ket, metric);
-          auto is_noncovariant = [&](const Index &idx) {
+          auto keeps_overlap = [&](const Index &idx) {
             return kronecker_equivalent ? unpaired_indices.contains(idx)
                                         : noncovariant_indices.contains(idx);
           };
-          do_skip = do_skip || (is_noncovariant(bra) && is_noncovariant(ket));
+          do_skip = do_skip || (keeps_overlap(bra) && keeps_overlap(ket));
         }
         if (!do_skip) {
           const auto bra_is_ext = ranges::find(external_indices, bra) !=
