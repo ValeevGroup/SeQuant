@@ -686,3 +686,36 @@ TEST_CASE("csv-pno-projection-lambda-canonicalizes",
     }
   }
 }
+
+TEST_CASE("csv-pno-projection-nested-sum-then-sibling", "[mbpt][csv]") {
+  using namespace sequant;
+  using namespace sequant::tests::csv;
+  using namespace sequant::tests::csv_rules;
+
+  ScopedCsvContext scoped;
+  // an integral after a nested sum of integrals that move the same leg: the
+  // sum's replacement is not reused, so no minted index occurs more than twice
+  // in a term
+  const auto g = [](std::wstring const& s) { return deserialize<ExprPtr>(s); };
+  const auto g_foreign = L"g{i_3,i_4;a_3<i_1,i_2>,a_4<i_1,i_2>}";
+  const ExprPtr sum = g(g_foreign) + g(L"g{i_4,i_3;a_3<i_1,i_2>,a_4<i_1,i_2>}");
+  const ExprPtr term = ex<Product>(
+      ExprPtrList{g(L"Ŝ{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}"), sum, g(g_foreign),
+                  g(L"t{a_3<i_1,i_2>,a_4<i_1,i_2>;i_1,i_2}"),
+                  g(L"t{a_5<i_3,i_4>,a_6<i_3,i_4>;i_3,i_4}")});
+  auto out = project(term, own_pair(ProjectionTerms::All));
+  REQUIRE(out.get() != term.get());
+  expand(out);
+  REQUIRE(out->is<Sum>());
+  for (auto const& summand : *out) {
+    CAPTURE(toUtf8(serialize(summand)));
+    container::map<Index, std::size_t> counts;
+    for (AbstractTensor const* t : tensors_labelled(summand, L"g"))
+      for (Index const& idx : t->_slots()) ++counts[idx];
+    for (AbstractTensor const* t :
+         tensors_labelled(summand, reserved::overlap_label()))
+      for (Index const& idx : t->_slots()) ++counts[idx];
+    for (auto const& [idx, n] : counts)
+      if (idx.ordinal() >= Index::min_tmp_index()) CHECK(n <= 2);
+  }
+}

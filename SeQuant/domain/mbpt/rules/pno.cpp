@@ -59,11 +59,9 @@ struct projection_scope {
   container::svector<Index> externals = {};
   /// moved leg -> its replacement, shared by sibling summands' integrals
   container::map<Index, Index> moved = {};
-  /// the legs the enclosing products' integrals have moved so far: another
-  /// integral of the same product holding one moves it to a fresh index
+  /// the legs the integrals of this summand have moved so far, nested sums
+  /// included: another integral of it holding one moves it to a fresh index
   container::set<Index> moved_here = {};
-  /// the flat product being rewritten, null inside a Sum's summands
-  Product const* product = nullptr;
 };
 
 /// @p sum with each summand replaced by @p f of it; @p sum itself if no
@@ -151,7 +149,7 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
                                       target_pair,
                                       own_pair || x.symmetric_proto_indices());
     if (it == scope.moved.end()) scope.moved.emplace(x, replacement);
-    if (scope.product) scope.moved_here.insert(x);
+    scope.moved_here.insert(x);
     replacements.emplace(x, replacement);
     // keeps x' and x each in one bra and one ket
     overlaps.push_back(bra_leg ? make_overlap(x, replacement)
@@ -169,19 +167,23 @@ ExprPtr projection_move_legs(ExprPtr const& node, projection_scope& scope) {
 /// sums and products included; @p x itself if nothing changed
 ExprPtr projection_rewrite(ExprPtr const& x, projection_scope& scope) {
   if (x->is<AbstractTensor>()) return projection_move_legs(x, scope);
-  Product const* const enclosing = scope.product;
   if (x->is<Sum>()) {
-    scope.product = nullptr;
-    auto result = projection_per_summand(
-        x, [&scope](ExprPtr const& s) { return projection_rewrite(s, scope); });
-    scope.product = enclosing;
+    // each summand starts from the legs moved before the sum; the factors
+    // after it see the legs moved in any summand
+    const auto moved_before = scope.moved_here;
+    auto moved_after = moved_before;
+    auto result = projection_per_summand(x, [&](ExprPtr const& s) {
+      scope.moved_here = moved_before;
+      auto rewritten = projection_rewrite(s, scope);
+      moved_after.insert(scope.moved_here.begin(), scope.moved_here.end());
+      return rewritten;
+    });
+    scope.moved_here = std::move(moved_after);
     return result;
   }
   if (!x->is<Product>()) return x;
 
   auto const& prod = x->as<Product>();
-  scope.product = &prod;
-  const auto moved_before = scope.moved_here;
   auto result = std::make_shared<Product>();
   result->scale(prod.scalar());
   bool changed = false;
@@ -195,8 +197,6 @@ ExprPtr projection_rewrite(ExprPtr const& x, projection_scope& scope) {
                        ? Product::Flatten::Once
                        : Product::Flatten::No);
   }
-  scope.product = enclosing;
-  scope.moved_here = moved_before;
   return changed ? result : x;
 }
 
