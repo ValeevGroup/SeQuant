@@ -59,11 +59,24 @@ namespace {
        .op_registry = std::move(reg)});
 }
 
+/// @return the index that stands for @p idx, one of @p externals, in the base
+/// space @p base; its ordinal is below those of temporary indices and above
+/// those the tests spell
+sequant::Index external_in_base(
+    const sequant::Index& idx, const sequant::IndexSpace& base,
+    const sequant::container::set<sequant::Index>& externals) {
+  const auto k = std::distance(externals.begin(), externals.find(idx));
+  return sequant::Index(base.base_key() + L"_" + std::to_wstring(50 + k), base);
+}
+
 /// @return @p expr spelled so that two reference expectation values that
 /// differ only in how they write the same sums compare equal: every η is
 /// δ - γ, every δ over a dummy is applied, and every index in a non-base
-/// space (e.g. E, or O) is split into a sum over the base spaces it spans
-sequant::ExprPtr in_base_spaces(sequant::ExprPtr expr) {
+/// space (e.g. E, or O) is split into a sum over the base spaces it spans,
+/// one of @p externals into indices named by external_in_base()
+sequant::ExprPtr in_base_spaces(
+    sequant::ExprPtr expr,
+    const sequant::container::set<sequant::Index>& externals = {}) {
   using namespace sequant;
   const auto isr = get_default_context().index_space_registry();
   auto terms_of = [](const ExprPtr& e) {
@@ -103,8 +116,10 @@ sequant::ExprPtr in_base_spaces(sequant::ExprPtr expr) {
       for (const auto& base : isr->base_spaces())
         if (base.qns() == idx->space().qns() &&
             idx->space().type().includes(base.type()))
-          result->append(
-              transform_expr(term, {{*idx, Index::make_tmp_index(base)}}));
+          result->append(transform_expr(
+              term, {{*idx, externals.contains(*idx)
+                                ? external_in_base(*idx, base, externals)
+                                : Index::make_tmp_index(base)}}));
     }
     expr = result;
     expand(expr);
@@ -1618,7 +1633,16 @@ SECTION("MRSO-MultiProduct") {
       std::iota(all.begin(), all.end(), 0);
       return gno(gno, all);
     };
-    auto check = [&](std::initializer_list<Legs> strings) {
+    // a leg over a union of base spaces (e.g. I = i ∪ u) is split into them on
+    // the core-vacuum side, whose averages take base-space legs; every density
+    // leg of the MultiProduct result must be active
+    const auto isr = get_default_context().index_space_registry();
+    auto check = [&](std::initializer_list<Legs> strings_il) {
+      container::svector<Legs> strings(strings_il);
+      container::set<Index> externals;
+      for (const auto& legs : strings)
+        for (const auto& l : legs)
+          if (!isr->is_base(l.index.space())) externals.insert(l.index);
       ExprPtr mp_input = ex<Constant>(1);
       for (const auto& legs : strings) {
         container::svector<Index> cre_idxs, ann_idxs;
@@ -1631,27 +1655,59 @@ SECTION("MRSO-MultiProduct") {
       }
       const auto mp = mbpt::decompositions::cumulants_to_densities(
           FWickTheorem{mp_input}.compute());
+      // all base-space assignments of the legs
+      container::svector<container::svector<Legs>> assignments{strings};
+      for (std::size_t s_i = 0; s_i != strings.size(); ++s_i)
+        for (std::size_t l_i = 0; l_i != strings[s_i].size(); ++l_i) {
+          const auto& idx = strings[s_i][l_i].index;
+          if (isr->is_base(idx.space())) continue;
+          decltype(assignments) next;
+          for (const auto& asg : assignments)
+            for (const auto& base : isr->base_spaces())
+              if (base.qns() == idx.space().qns() &&
+                  idx.space().type().includes(base.type())) {
+                auto a2 = asg;
+                a2[s_i][l_i].index = external_in_base(idx, base, externals);
+                next.push_back(a2);
+              }
+          assignments = std::move(next);
+        }
       ExprPtr sp = ex<Constant>(0);
       {
         auto sp_ctx = get_default_context();
         sp_ctx.set(Vacuum::SingleProduct);
         auto sp_resetter = set_scoped_default_context(sp_ctx);
-        Expansion product{{ex<Constant>(1), Legs{}}};
-        for (const auto& legs : strings) {
-          Expansion next;
-          for (const auto& [c1, s1] : product)
-            for (const auto& [c2, s2] : gno_from_core_vacuum(legs)) {
-              Legs s = s1;
-              s.insert(s.end(), s2.begin(), s2.end());
-              next.emplace_back(c1->clone() * c2->clone(), std::move(s));
-            }
-          product = std::move(next);
+        for (const auto& asg : assignments) {
+          Expansion product{{ex<Constant>(1), Legs{}}};
+          for (const auto& legs : asg) {
+            Expansion next;
+            for (const auto& [c1, s1] : product)
+              for (const auto& [c2, s2] : gno_from_core_vacuum(legs)) {
+                Legs st = s1;
+                st.insert(st.end(), s2.begin(), s2.end());
+                next.emplace_back(c1->clone() * c2->clone(), std::move(st));
+              }
+            product = std::move(next);
+          }
+          for (const auto& [c, st] : product)
+            sp = sp + c->clone() * core_vacuum_average(st);
         }
-        for (const auto& [c, s] : product)
-          sp = sp + c->clone() * core_vacuum_average(s);
       }
-      REQUIRE(simplify(in_base_spaces(mp) - in_base_spaces(sp)) ==
-              ex<Constant>(0));
+      // every density leg of the MultiProduct result is active
+      bool active_only = true;
+      mp->visit(
+          [&](const ExprPtr& e) {
+            if (!e->is<Tensor>()) return;
+            const auto& t = e->as<Tensor>();
+            if (t.label() == L"γ" || t.label() == L"η" || t.label() == L"κ")
+              for (const auto& idx : t.const_braket())
+                active_only = active_only && idx.space() == isr->retrieve(L"u");
+          },
+          /*atoms_only=*/true);
+      CHECK(active_only);
+      INFO("mp: " << toUtf8(to_latex(mp)));
+      REQUIRE(simplify(in_base_spaces(mp, externals) -
+                       in_base_spaces(sp, externals)) == ex<Constant>(0));
     };
     const Index u1{L"u_1"}, u2{L"u_2"}, u3{L"u_3"}, u4{L"u_4"}, u5{L"u_5"},
         u6{L"u_6"}, i1{L"i_1"}, i2{L"i_2"}, a1{L"a_1"}, a2{L"a_2"};
@@ -1670,6 +1726,18 @@ SECTION("MRSO-MultiProduct") {
     // up to κ₃; the 2-body string's own κ₂ enters its definition
     check({gno_string({u1, u2}, {u4, u3}), gno_string({u5}, {u6})});
     check({gno_string({u1, u2}, {u3}), gno_string({u4}, {u6, u5})});
+    // legs over unions of the active space with others
+    const Index I1{L"I_1"}, I2{L"I_2"}, A1{L"A_1"}, A2{L"A_2"}, M1{L"M_1"},
+        M2{L"M_2"}, E1{L"E_1"}, E2{L"E_2"}, p1{L"p_1"}, p2{L"p_2"}, p3{L"p_3"},
+        p4{L"p_4"};
+    check({gno_string({I1}, {A1}), gno_string({A2}, {I2})});
+    check({gno_string({M1}, {E1}), gno_string({E2}, {M2})});
+    check({gno_string({M1}, {M2}), gno_string({E1}, {E2})});
+    check({gno_string({p1}, {p2}), gno_string({p3}, {p4})});
+    // with a κ₃
+    check({gno_string({I1, A1}, {I2, A2}), gno_string({u5}, {u6})});
+    // non-conserving
+    check({gno_string({M1, E1}, {I1}), gno_string({}, {A1})});
 
     // partial contractions are operator-valued, so the two paths are compared
     // in a common normal form: the GNO remainders of the MultiProduct result
