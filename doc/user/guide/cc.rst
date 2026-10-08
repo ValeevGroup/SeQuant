@@ -154,23 +154,26 @@ For unitary BCH expansions, ``Options::hbar_singles_comm_rank`` applies an addit
 Using :math:`\bar{H}` outside the CC class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For BCH expansions, ``CC::hbar()`` uses explicit commutators when the reference differs from the Wick vacuum, since
-``ref_av`` requires empty ``connect`` and ``do_not_connect`` lists. The class supplies empty lists in this case.
-The connectivity rules below apply when the reference is the Wick vacuum.
+:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but the form of the expression it returns depends on the ansatz
+and on the reference. For a non-unitary ansatz with the reference equal to the Wick vacuum, each commutator is written as
+a connected product (see :ref:`mbpt-lst`), which equals the commutator only once the operators are connected when taking
+the expectation value; evaluated with empty connectivity it retains disconnected terms. For a unitary ansatz, or when the
+reference differs from the Wick vacuum (where ``ref_av`` requires empty ``connect`` and ``do_not_connect`` lists), H̄ is
+built from explicit commutators and is self-contained; imposing connectivity on it would drop terms that must survive.
 
-:func:`CC::hbar() <sequant::mbpt::CC::hbar>` is public, but for a non-unitary ansatz with the reference equal to the Wick
-vacuum, the expression it returns is **not** self-contained: each commutator is written as a connected product
-(see :ref:`mbpt-lst`), which only equals the commutator once you connect the operators when taking the expectation value.
-The class supplies ``default_op_connections()`` (or a superset) internally for its non-unitary equations.
+:func:`CC::hbar_connections() <sequant::mbpt::CC::hbar_connections>` returns the connectivity that matches the form H̄
+was built with, ``default_op_connections()`` or empty, and the class uses it (or a superset) for its own equations. Pass
+it whenever you evaluate ``CC::hbar()`` yourself:
 
-The public operator-level and tensor-level ``ref_av`` and ``vac_av`` functions default to empty connectivity constraints.
-When evaluating a non-unitary ``CC::hbar()`` expression outside the class, explicitly set ``EVOptions::connect`` to
-``default_op_connections()``; otherwise disconnected terms survive. Alternatively, build H̄ with explicit commutators using
-``mbpt::lst`` with its default options. Omitting the expectation-value options argument is equivalent to passing ``{}``.
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-6
+   :end-before: end-snippet-6
+   :dedent: 2
 
-For BCH expansions with a unitary ansatz or a differing reference, ``CC::hbar()`` returns explicit commutators. The public
-expectation-value functions' empty connectivity defaults are appropriate; imposing connectivity on a unitary expansion
-would drop terms that must survive.
+The public operator-level and tensor-level ``ref_av`` and ``vac_av`` functions default to empty connectivity constraints;
+omitting the options argument is equivalent to passing ``{}``. Alternatively, build H̄ with explicit commutators using
+``mbpt::lst`` with its default options, which needs no connectivity.
 
 .. _cc-spin-tracing:
 

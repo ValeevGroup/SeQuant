@@ -139,19 +139,25 @@ class CC {
   ///     with `op::tensor` projectors and `op::tensor::ref_av`. It never
   ///     reaches `CC::ref_av`, so `screen` and `use_topology` have no effect.
   /// @pre for `HbarExpansion::Bernoulli`, the reference is the Wick vacuum
-  /// @warning A connected-product H̄ is not self-contained.
-  ///   Evaluating it with empty connectivity, e.g.
-  ///   `op::ref_av(P(nₚ(2)) * cc.hbar(), {.connect = {}})`,
-  ///   retains disconnected terms. Pass `default_op_connections()` explicitly
-  ///   in EVOptions::connect, or build H̄ with an explicit
-  ///   commutator `mbpt::lst(..., {})` call. A unitary H̄, or a non-unitary
-  ///   H̄ when the reference differs from the Wick vacuum, is self-contained,
-  ///   so its connectivity must be empty. See the "Using H̄ outside the CC
-  ///   class" section of the user guide.
+  /// @warning A connected-product H̄ is not self-contained: evaluated with
+  ///   empty connectivity, e.g. `op::ref_av(P(nₚ(2)) * cc.hbar())`, it retains
+  ///   disconnected terms. An explicit-commutator H̄ (unitary ansatz, or a
+  ///   reference that differs from the Wick vacuum) is self-contained, and
+  ///   imposing connectivity on it drops terms that must survive. Pass
+  ///   `hbar_connections()` as `EVOptions::connect`; it is correct for every
+  ///   ansatz and reference. See the "Using H̄ outside the CC class" section
+  ///   of the user guide.
   /// @note ref_av requires empty connect and do_not_connect when the reference
   ///   differs from the Wick vacuum.
   [[nodiscard]] ExprPtr hbar(
       std::optional<size_t> truncation_rank = std::nullopt) const;
+
+  /// @return the connectivity that, passed as `EVOptions::connect` to
+  /// `ref_av`/`vac_av`, makes `hbar()` equal to the commutator expansion:
+  /// `default_op_connections()` when H̄ is built from connected products
+  /// (non-unitary ansatz, reference equal to the Wick vacuum), empty otherwise.
+  /// The class uses it, or a superset, for its own equations.
+  [[nodiscard]] OpConnections<std::wstring> hbar_connections() const;
 
   /// @brief derives the CC energy expression \f$ \langle 0|\bar{H}|0 \rangle
   /// \f$ at the requested commutator truncation, WITHOUT deriving the
@@ -308,11 +314,6 @@ class CC {
   /// @note Non-unitary paths use connected products only when the reference is
   /// the Wick vacuum; see hbar_connections().
   [[nodiscard]] LSTOptions lst_options() const;
-
-  /// @return the connectivity that makes the connected products of
-  /// lst_options() equal to commutators: default_op_connections() when they
-  /// are used, empty otherwise
-  [[nodiscard]] OpConnections<std::wstring> hbar_connections() const;
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
