@@ -308,42 +308,20 @@ ExprPtr closed_shell_CC_singlet_spintrace_v2(
     ClosedShellCCSingletSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
-/// closed-shell triplet (M_S = 0) EOM residual variants
-enum class TripletResidualKind {
-  /// A combination of T and E operators with their permutations
-  /// [Kohn's triplet paper](http://dx.doi.org/10.1063/1.1457434)
-  /// (see triplet_combined_residual)
-  Combined,
-  /// EOM triplet doubles: the bare TE primitive only, i.e.
-  /// (1/4)*TE instead of (3*TE - TE_ps)/16; drops the pair-swap
-  /// TE_ps. Doubles only (for now); the singles residual is the Combined one,
-  /// triples throw.
-  BareTE
-};
-
-/// @brief the triplet residual path built for the given
-///        particle rank: Combined for singles and triples, BareTE for doubles.
-/// @throw Exception if @p rank is not 1, 2 or 3
-TripletResidualKind triplet_residual_kind(std::size_t rank);
-
 /// controls behavior of closed-shell triplet EOM spin-tracing
 struct ClosedShellCCTripletSpintraceOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
   /// compact the residual to one representative slot permutation per
-  /// tensor-network group via triplet_maxcoeff_compact (doubles: the -3c member
-  /// of each {c,c,c,-3c} group, 135 terms for 2h2p; triples: one
-  /// stabilizer-scaled member per 36 slot perms); the dropped terms are
-  /// recovered on evaluation by triplet_nns_project.
-  /// Combined with TripletResidualKind::BareTE it instead compacts the bareTE
-  /// residual, whose groups are {c, c, -2c} (405 -> 135 terms for 2h2p); the
-  /// kept -2c representative is expanded by triplet_te_nns_project
-  /// ({1,-1/2,-1/2,0}).
+  /// tensor-network group via triplet_maxcoeff_compact (doubles: the -2c
+  /// member of each {c, c, -2c} group of the bare-TE residual, 405 -> 135
+  /// terms for 2h2p, expanded on evaluation by triplet_te_nns_project;
+  /// (doubles on the combined path, now unreachable directly: the -3c
+  /// member of each {c,c,c,-3c} group, 540 -> 135 terms);
+  /// triples: one stabilizer-scaled member per 36 slot perms, recovered on
+  /// evaluation by triplet_nns_project).
   /// On by default; false gives the full residual, which is used only as a
   /// reference in tests.
   bool compact = true;
-  /// which residual variant to build; unset selects
-  /// triplet_residual_kind of the projection rank
-  std::optional<TripletResidualKind> residual = std::nullopt;
 };
 
 // clang-format off
@@ -352,9 +330,9 @@ struct ClosedShellCCTripletSpintraceOptions {
 ///        one to three external index groups (singles, doubles or triples
 ///        projection)
 /// @param options triplet spin-tracing options
-/// @return the triplet spin-trace residual (see triplet_combined_residual)
-/// @throw Exception for projection manifolds beyond triples, for
-///        TripletResidualKind::BareTE with a triples projection, or if the
+/// @return the triplet spin-trace residual (see triplet_combined_residual);
+///         the bare-TE for doubles (see detail::triplet_bare_te)
+/// @throw Exception for projection manifolds beyond triples, or if the
 ///        equations contain amplitudes beyond triples
 // clang-format on
 ExprPtr closed_shell_CC_triplet_spintrace(

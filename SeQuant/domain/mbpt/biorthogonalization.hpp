@@ -455,6 +455,12 @@ template <typename T>
   return row;
 }
 
+/// \brief Whether the closed-shell triplet residual for \p n_particles uses
+/// bare-TE (doubles) instead of Combined (singles, triples).
+///
+/// \throw Exception unless \p n_particles is 1, 2 or 3
+bool triplet_bare_te(std::size_t n_particles);
+
 }  // namespace detail
 
 #if defined(SEQUANT_HAS_TILEDARRAY)

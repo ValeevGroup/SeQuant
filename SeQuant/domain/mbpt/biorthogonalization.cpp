@@ -958,6 +958,14 @@ container::svector<size_t> compute_permuted_indices_bra_ket(
   return ords;
 }
 
+bool triplet_bare_te(std::size_t n_particles) {
+  if (n_particles == 0 || n_particles > 3)
+    throw Exception(
+        "the closed-shell triplet residual is implemented for singles, "
+        "doubles and triples");
+  return n_particles == 2;
+}
+
 }  // namespace detail
 
 }  // namespace sequant::mbpt

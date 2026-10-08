@@ -2,12 +2,9 @@
 
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/exception.hpp>
-#include <SeQuant/core/utility/expr.hpp>
-#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -140,9 +137,8 @@ class compute_eomcc_closedshell_triplet {
       if (eqvec[i] == nullptr) continue;
 
       auto tstart = std::chrono::high_resolution_clock::now();
-      const auto st = closed_shell_CC_triplet_spintrace(
-          eqvec[i],
-          {.compact = false, .residual = TripletResidualKind::Combined});
+      const auto st =
+          closed_shell_CC_triplet_spintrace(eqvec[i], {.compact = false});
       auto tstop = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> dt = tstop - tstart;
       std::wcout << "R[" << i << "] size: " << term_count(st)
@@ -152,19 +148,18 @@ class compute_eomcc_closedshell_triplet {
       const auto n_st = term_count(st);
       if (N == 2 && type == EqnType::right && np == 2 && nh == 2) {
         if (i == 1) runtime_assert(n_st == 42);
-        if (i == 2) runtime_assert(n_st == 540);
+        if (i == 2) runtime_assert(n_st == 405);
       }
       if (N == 3 && type == EqnType::right && np == 3 && nh == 3) {
         if (i == 1) runtime_assert(n_st == 54);
-        if (i == 2) runtime_assert(n_st == 920);
+        if (i == 2) runtime_assert(n_st == 690);
         if (i == 3) runtime_assert(n_st == 11592);
       }
 
       // compact residual (the production form)
       tstart = std::chrono::high_resolution_clock::now();
-      const auto compact = closed_shell_CC_triplet_spintrace(
-          eqvec[i],
-          {.compact = true, .residual = TripletResidualKind::Combined});
+      const auto compact =
+          closed_shell_CC_triplet_spintrace(eqvec[i], {.compact = true});
       tstop = std::chrono::high_resolution_clock::now();
       dt = tstop - tstart;
       std::wcout << "R[" << i << "] compact size: " << term_count(compact)
@@ -180,34 +175,6 @@ class compute_eomcc_closedshell_triplet {
         if (i == 1) runtime_assert(n_compact == 54);
         if (i == 2) runtime_assert(n_compact == 230);
         if (i == 3) runtime_assert(n_compact == 429);
-      }
-
-      // bare-TE residual (doubles only): rebuilding the full residual from it
-      // via Omega = te + (1/4)(bra_swap(te) + ket_swap(te)) must be exact
-      const auto ext_idxs = external_indices(eqvec[i]);
-      if (ext_idxs.size() == 2 && N <= 2) {
-        auto te = closed_shell_CC_triplet_spintrace(
-            eqvec[i],
-            {.compact = false, .residual = TripletResidualKind::BareTE});
-        simplify(te);
-
-        const Index b0 = get_bra_idx(ext_idxs.at(0));
-        const Index b1 = get_bra_idx(ext_idxs.at(1));
-        const Index k0 = get_ket_idx(ext_idxs.at(0));
-        const Index k1 = get_ket_idx(ext_idxs.at(1));
-        const container::map<Index, Index> bra_swap{{b0, b1}, {b1, b0}};
-        const container::map<Index, Index> ket_swap{{k0, k1}, {k1, k0}};
-
-        ExprPtr diff =
-            st->clone() - (te->clone() + ex<Constant>(ratio(1, 4)) *
-                                             (transform_expr(te, bra_swap) +
-                                              transform_expr(te, ket_swap)));
-        canonicalize(diff);
-        simplify(diff);
-        std::wcout << "R[" << i
-                   << "] bare-TE reconstruction - full: " << term_count(diff)
-                   << " terms (expect 0)\n";
-        runtime_assert(term_count(diff) == 0);
       }
 
       if (print) {

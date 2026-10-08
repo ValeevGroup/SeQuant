@@ -2239,20 +2239,6 @@ ExprPtr triplet_adapt_amplitudes(const ExprPtr& spin_labeled) {
 
 }  // namespace
 
-TripletResidualKind triplet_residual_kind(std::size_t rank) {
-  switch (rank) {
-    case 1:
-    case 3:
-      return TripletResidualKind::Combined;
-    case 2:
-      return TripletResidualKind::BareTE;
-    default:
-      throw Exception(
-          "triplet_residual_kind: the triplet residual is implemented for "
-          "singles, doubles and triples");
-  }
-}
-
 ExprPtr closed_shell_CC_triplet_spintrace(
     ExprPtr const& expr, ClosedShellCCTripletSpintraceOptions options) {
   container::svector<container::svector<Index>> ext_groups;
@@ -2265,10 +2251,7 @@ ExprPtr closed_shell_CC_triplet_spintrace(
   }
 
   const auto n_ext = ext_idxs.size();
-  if (n_ext == 0 || n_ext > 3)
-    throw Exception(
-        "closed_shell_CC_triplet_spintrace: the explicitly spin-coupled "
-        "triplet manifold is implemented for singles, doubles and triples");
+  const bool bare_te = detail::triplet_bare_te(n_ext);
 
   // spintrace_by_sector already removed spin (with collision relabeling) from
   // each sector.
@@ -2287,13 +2270,6 @@ ExprPtr closed_shell_CC_triplet_spintrace(
   canonicalize(triplet);
   simplify(triplet);
 
-  const auto residual = options.residual.value_or(triplet_residual_kind(n_ext));
-  if (residual == TripletResidualKind::BareTE && n_ext == 3)
-    throw Exception(
-        "closed_shell_CC_triplet_spintrace: BareTE is a doubles-only "
-        "experiment, not implemented beyond doubles");
-  // BareTE only changes the doubles residual; singles use the Combined one
-  const bool bare_te = residual == TripletResidualKind::BareTE && n_ext == 2;
   SEQUANT_ASSERT(std::all_of(ext_idxs.begin(), ext_idxs.end(),
                              [](const auto& g) { return g.size() == 2; }));
 
