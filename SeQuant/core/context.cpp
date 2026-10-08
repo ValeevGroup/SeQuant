@@ -225,14 +225,15 @@ const Context& get_default_context(Statistics s) {
     return get_default_context(Statistics::Arbitrary);
 }
 
-Context get_default_context_snapshot(Statistics s) {
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
-  // a scoped context is thread-local, hence needs no lock
-  if (detail::implicit_context_overlay<container::map<Statistics, Context>>())
-    return get_default_context(s);
-  // snapshots are taken concurrently on hot paths, where a lock per read
-  // serializes the threads, so this thread holds the published contexts and
-  // takes the lock only to fetch them anew after they changed
+/// @return the process-wide Context for Statistics @p s (else for
+/// Statistics::Arbitrary) in this thread's copy of the published contexts,
+/// refreshed first if they changed since this thread's previous read; valid
+/// until this thread's next call
+static const Context& cached_default_context(Statistics s) {
+  // read concurrently on hot paths, where a lock per read serializes the
+  // threads, so this thread holds the published contexts and takes the lock
+  // only to fetch them anew after they changed
   struct Cache {
     std::uint64_t generation = 0;
     std::shared_ptr<const container::map<Statistics, Context>> contexts;
@@ -251,8 +252,29 @@ Context get_default_context_snapshot(Statistics s) {
     it = cache.contexts->find(Statistics::Arbitrary);
   SEQUANT_ASSERT(it != cache.contexts->end());
   return it->second;
+}
+#endif
+
+Context get_default_context_snapshot(Statistics s) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  // a scoped context is thread-local, hence needs no lock
+  if (detail::implicit_context_overlay<container::map<Statistics, Context>>())
+    return get_default_context(s);
+  return cached_default_context(s);
 #else
   return get_default_context(s);
+#endif
+}
+
+std::shared_ptr<const IndexSpaceRegistry> get_default_index_space_registry(
+    Statistics s) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  // a scoped context is thread-local, hence needs no lock
+  if (detail::implicit_context_overlay<container::map<Statistics, Context>>())
+    return get_default_context(s).index_space_registry();
+  return cached_default_context(s).index_space_registry();
+#else
+  return get_default_context(s).index_space_registry();
 #endif
 }
 

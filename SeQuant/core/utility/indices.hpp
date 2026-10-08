@@ -468,7 +468,8 @@ inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
 /// their full labels.
 ///   eg. [a_1^{i_1,i_2},a_2^{i_2,i_3}] -> "a_1i_1i_2,a_2i_2i_3"
 ///   eg. [i_1, i_2] -> "i_1,i_2"
-/// A basis instance N appends "#N" to its index's label:
+/// A basis instance N appends "#N" to its index's label, unless it is
+/// registered under a name (then it is part of the label):
 ///   eg. [a_1<i_1<;5>, i_2<;5>;7>] -> "a_1i_1#5i_2#5#7"
 ///
 std::string csv_labels(meta::range_of<Index> auto&& idxs) {
@@ -477,9 +478,8 @@ std::string csv_labels(meta::range_of<Index> auto&& idxs) {
   using ranges::views::transform;
 
   auto instance_suffix = [](Index const& i) {
-    return i.basis().has_basis_instance()
-               ? L"#" + std::to_wstring(*i.basis().basis_instance())
-               : std::wstring{};
+    auto instance = i.unnamed_basis_instance();
+    return instance ? L"#" + std::to_wstring(*instance) : std::wstring{};
   };
   auto str = [&instance_suffix](Index const& i) {
     std::wstring result(i.label());

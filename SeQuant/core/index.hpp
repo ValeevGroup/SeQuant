@@ -78,6 +78,9 @@ concept range_of_castables_to_index =
 /// index space registry Index still supports this mode. In such mode all Index objects
 /// created from strings will use the same index space (see Index::default_space_attr)
 /// with the base label stored into its space's base_key (ordinal, if any, is used as usual).
+/// A basis instance registered under a name in that registry is printed by that name
+/// (Index::basis_key()); the name is resolved when the label is first needed -- at minting
+/// for factory-made indices -- and kept by copies.
 ///
 /// @note Index and other SeQuant classes currently use wide characters to
 /// represent labels and other strings; this goes against some popular
@@ -145,13 +148,19 @@ class Index : public Taggable {
   const static Index null;
 
   /// copy constructor
-  /// @warning memoized data (label, full_label) is not copied
+  /// @note memoized data (label, full_label) is copied only if @p idx has a
+  /// basis instance, whose label is resolved through the default registry
   Index(const Index &idx) noexcept
       : Taggable(idx),
         basis_(idx.basis_),
         ordinal_(idx.ordinal_),
         proto_indices_(idx.proto_indices_),
-        symmetric_proto_indices_(idx.symmetric_proto_indices_) {}
+        symmetric_proto_indices_(idx.symmetric_proto_indices_) {
+    if (basis_.has_basis_instance()) {
+      label_ = idx.label_;
+      full_label_ = idx.full_label_;
+    }
+  }
 
   /// move constructor
   /// @param[in,out] idx on output: null Index
@@ -173,17 +182,22 @@ class Index : public Taggable {
   }
 
   /// copy assignment
-  /// @warning memoized data (label, full_label) is not copied
+  /// @note memoized data (label, full_label) is copied only if @p idx has a
+  /// basis instance, whose label is resolved through the default registry
   Index &operator=(const Index &idx) {
     Taggable::operator=(idx);
     basis_ = idx.basis_;
     ordinal_ = idx.ordinal_;
     proto_indices_ = idx.proto_indices_;
     symmetric_proto_indices_ = idx.symmetric_proto_indices_;
-    // We might not copy memoized data, but we do have to reset it or else it
-    // might end up being wrong
-    label_.reset();
-    full_label_.reset();
+    // memoized data that is not copied must be reset or it might be wrong
+    if (basis_.has_basis_instance()) {
+      label_ = idx.label_;
+      full_label_ = idx.full_label_;
+    } else {
+      label_.reset();
+      full_label_.reset();
+    }
     return *this;
   }
 
@@ -346,9 +360,10 @@ class Index : public Taggable {
   template <basic_string_convertible String>
   Index(String &&label)
       : Index(obtain_default_index_registry()
-                  ? obtain_default_index_registry()->retrieve(label)
-                  : IndexSpace{base_label(label), IndexSpace::Type::reserved,
-                               IndexSpace::QuantumNumbers::reserved},
+                  ? obtain_default_index_registry()->retrieve_basis(label)
+                  : IndexBasis{IndexSpace{
+                        base_label(label), IndexSpace::Type::reserved,
+                        IndexSpace::QuantumNumbers::reserved}},
               to_ordinal(label), {}) {
     check_nonreserved();
     if constexpr (std::is_same_v<String, std::wstring>) {
@@ -502,7 +517,9 @@ class Index : public Taggable {
   /// @return a unique temporary index in @c space_or_basis
   template <space_or_basis SpaceOrBasis = IndexSpace>
   static Index make_tmp_index(const SpaceOrBasis &space_or_basis) {
-    return Index(space_or_basis, next_tmp_index(), IndexFactoryTag{});
+    Index result(space_or_basis, next_tmp_index(), IndexFactoryTag{});
+    if (result.basis_.has_basis_instance()) (void)result.label();
+    return result;
   }
 
   /// creates a globaly-unique temporary index in space @c space . The label of
@@ -533,6 +550,7 @@ class Index : public Taggable {
     result.symmetric_proto_indices_ = symmetric_proto_indices;
     result.canonicalize_proto_indices();
     result.validate_proto_indices();
+    if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
 
@@ -597,12 +615,13 @@ class Index : public Taggable {
   }
 
   /// @return the memoized label as a UTF-8 encoded wide-character string
-  /// @note label format is `base` or `base_ordinal`
+  /// @note label format is `base` or `base_ordinal`, `base` being basis_key()
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const {
     if (!label_) {
-      label_ = space().base_key();
+      label_ = basis_.has_basis_instance() ? registry_label_or_base_key(basis_)
+                                           : std::wstring(space().base_key());
       if (ordinal_) {
         *label_ += L'_';
         *label_ += std::to_wstring(*ordinal_);
@@ -634,7 +653,7 @@ class Index : public Taggable {
   /// @warning this includes the proto index labels (if any), use
   /// Index::label() instead if only want the label
   std::wstring_view full_label() const {
-    if (!has_proto_indices() && !basis_.has_basis_instance()) return label();
+    if (!has_proto_indices() && !unnamed_basis_instance()) return label();
     if (full_label_) return *full_label_;
     std::wstring result(label());
     result += L"<";
@@ -645,7 +664,7 @@ class Index : public Taggable {
                                    return idx.full_label();
                                  }) |
         ranges::views::join(L", "sv) | ranges::to<std::wstring>();
-    result += basis_.instance_suffix();
+    if (unnamed_basis_instance()) result += basis_.instance_suffix();
     result += L">";
     full_label_ = result;
     return *full_label_;
@@ -755,12 +774,34 @@ class Index : public Taggable {
   /// @return the IndexBasis object (the space plus the basis instance, if any)
   const IndexBasis &basis() const noexcept { return basis_; }
 
+  /// @return the registry label of basis(): space().base_key() for a null or
+  /// unnamed basis instance, the name the basis instance is registered under
+  /// in the default context's registry otherwise; a view into this object
+  /// (the space's key, or the memoized label()), valid as long as this Index
+  /// is not transformed, assigned to, moved from, or destroyed
+  std::wstring_view basis_key() const {
+    if (!basis_.has_basis_instance()) return space().base_key();
+    const auto lbl = label();
+    return lbl.substr(0, static_cast<std::size_t>(
+                             std::distance(lbl.begin(), base_label_end(lbl))));
+  }
+
+  /// @return the basis instance unless it is registered under a name (then it
+  /// is part of label())
+  IndexBasis::optional_instance unnamed_basis_instance() const {
+    if (!basis_.has_basis_instance()) return std::nullopt;
+    return basis_key() == space().base_key() ? basis_.basis_instance()
+                                             : std::nullopt;
+  }
+
   /// @return a copy of this Index (same label, proto indices and their
   /// symmetry) with basis instance @p basis_instance
   [[nodiscard]] Index replace_basis_instance(
       IndexBasis::optional_instance basis_instance) const {
     Index result(*this);
     result.basis_ = IndexBasis(space(), basis_instance);
+    result.label_.reset();
+    result.full_label_.reset();
     return result;
   }
 
@@ -908,14 +949,14 @@ class Index : public Taggable {
     if (mutated) {
       label_.reset();
       full_label_.reset();
+      if (basis_.has_basis_instance()) (void)label();
     }
     return mutated;
   }
 
-  /// compares Index objects using their labels
-  /// @note since label is defined by the space and ordinal only
-  /// (i.e. protoindices and tags are ignored)
-  /// comparison uses them directly for efficiency
+  /// compares Index objects by space and ordinal (the label up to the basis
+  /// name); protoindices, tags and the basis instance, named or not, are
+  /// ignored
   /// @sa Index::label()
   struct LabelCompare {
     bool operator()(const Index &first, const Index &second) const {
@@ -1102,6 +1143,11 @@ class Index : public Taggable {
   static std::shared_ptr<const IndexSpaceRegistry>
   obtain_default_index_registry();
 
+  /// @return the name @p basis is registered under in the effective default
+  /// registry (the thread's scoped overlay, else the process-wide default),
+  /// else its space's base_key()
+  static std::wstring registry_label_or_base_key(const IndexBasis &basis);
+
 };  // class Index
 
 using IndexSet = container::set<Index, Index::FullLabelCompare>;
@@ -1201,6 +1247,7 @@ class IndexFactory {
                      Index::IndexFactoryTag{});
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
+    if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
 
@@ -1232,6 +1279,7 @@ class IndexFactory {
           idx.proto_indices(), idx.symmetric_proto_indices());
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
+    if (result.basis_.has_basis_instance()) (void)result.label();
     return result;
   }
 

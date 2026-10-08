@@ -82,6 +82,10 @@ void v3() {
       std::ranges::count_if(registry.spaces(), [](const IndexSpace& s) {
         return s.base_key() == L"i";
       }) == 1);
+  // indices in a named basis are constructed from and printed by that label
+  SEQUANT_ASSERT(Index(L"ĩ_1") == loc1);
+  SEQUANT_ASSERT(loc1.full_label() == L"ĩ_1");  // not i_1<;1>
+  SEQUANT_ASSERT(loc1.basis_key() == L"ĩ");
   // end-snippet-3
 }
 

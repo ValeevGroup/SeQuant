@@ -134,11 +134,12 @@ expands such CSV-dependent tensors into an explicit basis (standard unoccupieds,
 Several bases of one space can meet in an expression: the canonical and the localized orbitals of a perturbation theory,
 the cluster-specific virtuals of the ground-state and of the perturbed amplitudes, and so on. An :class:`sequant::Index`
 can therefore carry an optional *basis instance*, an opaque integer written after its proto indices, ``a_1<i_1,i_2;1>``
-(``a_1<;1>`` without proto indices); an index without one is in its space's own basis, as before. Instances are granted
-per operator label and leg space with
-:func:`sequant::mbpt::OpRegistry::grant_basis`, :class:`sequant::mbpt::OpMaker` mints a granted operator's legs with
-them, and the projectors of the :doc:`CC <cc>` equations carry the grants of the amplitude being solved for. Integrals
-are never granted: in Wick's theorem their legs take the instance of the leg they are contracted with.
+(``a_1<;1>`` without proto indices), unless the instance is registered under a name, which is then printed in place of
+the space's label (:doc:`../getting_started/index_spaces`); an index without one is in its space's own basis, as before.
+Instances are granted per operator label and leg space with :func:`sequant::mbpt::OpRegistry::grant_basis`,
+:class:`sequant::mbpt::OpMaker` mints a granted operator's legs with them, and the projectors of the :doc:`CC <cc>`
+equations carry the grants of the amplitude being solved for. Integrals are never granted: in Wick's theorem their legs
+take the instance of the leg they are contracted with.
 
 .. literalinclude:: /examples/user/context.cpp
    :language: cpp
@@ -191,6 +192,7 @@ reference. Code that keeps the context beyond a brief read, as the canonicalizer
 copy made by :func:`sequant::get_default_context_snapshot` instead. The copy reflects every change of the process-wide default
 completed before the call and is cheap: it shares the index space registry and the canonicalizer configuration with its source, and
 takes the lock that guards the process-wide default only if that changed since the previous snapshot on the same thread.
+:func:`sequant::get_default_index_space_registry` reads only the index space registry in the same way, without copying the context.
 
 Code that reads the contexts at several points of one operation, as :func:`sequant::canonicalize`, :func:`sequant::simplify` and
 ``WickTheorem::compute()`` do, pins them instead with :func:`sequant::pin_default_contexts`: on a thread without scoped contexts the

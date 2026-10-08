@@ -15,12 +15,15 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/rules/csv.hpp>
 
+#include <atomic>
 #include <compare>
 #include <cstddef>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <set>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -37,6 +40,19 @@ auto scoped_min_sr_context(CanonicalizeOptions canonicalization_options =
                .vacuum = Vacuum::SingleProduct,
                .spbasis = SPBasis::Spinor,
                .canonicalization_options = canonicalization_options}));
+}
+
+// μ̃ = {a, INT32_MAX} registered by name: the PAO basis of ibr-spec.md §3.3
+auto scoped_pao_context() {
+  auto isr = mbpt::make_min_sr_spaces();
+  const IndexSpace uocc = isr->retrieve(L"a");
+  constexpr IndexBasis::instance_type P =
+      std::numeric_limits<IndexBasis::instance_type>::max();
+  isr->add(L"μ̃", IndexBasis{uocc, P},
+           120ul);  // before the Context adopts the registry (#665)
+  return set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
 }
 
 }  // namespace
@@ -402,4 +418,187 @@ TEST_CASE("index-move-into-space-resets-label", "[elements][index]") {
   const Index moved_pno(std::move(pno), uocc_alpha);
   CHECK(moved_pno.label() == L"a↑_4");
   CHECK(moved_pno.full_label() == L"a↑_4<i_1>");
+}
+
+TEST_CASE("index-basis-named", "[elements][index][basis]") {
+  auto ctx = scoped_pao_context();
+  const auto& isr = get_default_context().index_space_registry();
+  const IndexSpace uocc = isr->retrieve(L"a");
+  const IndexBasis pao = isr->retrieve_basis(L"μ̃");
+  const IndexBasis::instance_type P = *pao.basis_instance();
+
+  // labels: the name, no instance suffix anywhere
+  const Index m3(pao, 3);
+  CHECK(m3.label() == L"μ̃_3");
+  CHECK(m3.full_label() == L"μ̃_3");
+  CHECK(m3.to_latex() == L"{\\tilde{\\mu}_3}");
+  CHECK(m3.to_string() == "μ̃_3");
+  CHECK(m3.basis_key() == L"μ̃");
+  CHECK_FALSE(m3.unnamed_basis_instance());
+  CHECK(csv_labels(ranges::views::single(m3)) == "μ̃_3");
+  // an unnamed instance (a CSV::No-granted leg) prints as before
+  const Index y = Index(uocc, 7).replace_basis_instance(1);
+  CHECK(y.label() == L"a_7");
+  CHECK(y.full_label() == L"a_7<;1>");
+  CHECK(y.to_latex() == L"{a_7^{;1}}");
+  CHECK(y.basis_key() == L"a");
+  CHECK(y.unnamed_basis_instance() == 1);
+  CHECK(csv_labels(ranges::views::single(y)) == "a_7#1");
+  // a null instance is untouched, and its basis_key is the space key with no
+  // memo involved
+  CHECK(Index(uocc, 2).basis_key() == L"a");
+  CHECK(Index(L"a_2").basis_key() == L"a");
+  CHECK_FALSE(Index(uocc, 2).unnamed_basis_instance());
+
+  // identity is untouched
+  CHECK(m3 == Index(uocc, 3).replace_basis_instance(P));
+  CHECK(m3 != Index(uocc, 3));
+  CHECK(hash_value(m3) == hash_value(Index(uocc, 3).replace_basis_instance(P)));
+  CHECK((Index(uocc, 3) < m3 && Index(uocc, 3).replace_basis_instance(0) < m3));
+
+  // from a label: the named basis with the entry's metadata
+  const Index parsed(L"μ̃_3");
+  CHECK(parsed == m3);
+  CHECK(parsed.basis() == pao);
+  CHECK(parsed.space().approximate_size() == 120);
+  CHECK(parsed.label() == L"μ̃_3");
+  CHECK(m3.space().approximate_size() == 120);
+  CHECK(Index(L"a_3").space().approximate_size() == uocc.approximate_size());
+  CHECK_THROWS_AS(IndexSpace(L"μ̃"), IndexBasisRegistry::not_a_space);
+
+  // copies of an instance-bearing index keep the memoized label; a basis change
+  // resets it
+  {
+    Index memo(m3);
+    (void)memo.full_label();
+    Index copied(memo), assigned;
+    assigned = memo;
+    CHECK(copied.label() == L"μ̃_3");
+    CHECK(assigned.full_label() == L"μ̃_3");
+    CHECK(memo.replace_basis_instance(std::nullopt).full_label() == L"a_3");
+    CHECK(memo.replace_basis_instance(1).full_label() == L"a_3<;1>");
+  }
+
+  // review-focus 3: the name is the default registry's; a copy made after the
+  // context changed keeps the memoized name, a fresh index finds none (the
+  // nested scope is a thread-local overlay, #655)
+  {
+    Index memo(m3);
+    (void)memo.label();
+    auto plain = set_scoped_default_context(
+        Context({.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+                 .vacuum = Vacuum::SingleProduct}));
+    CHECK(Index(memo).label() == L"μ̃_3");
+    CHECK(Index(pao, 3).full_label() == L"a_3<;2147483647>");
+    CHECK(Index(pao, 3).basis_key() == L"a");
+  }
+}
+
+// a named basis is resolved when an index is minted or renamed (ibr-spec.md
+// §6.1): a copy made after the context switched to a registry without the name
+// still prints it
+TEST_CASE("index-basis-named-at-minting", "[elements][index][basis]") {
+  auto ctx = scoped_pao_context();
+  const auto& isr = get_default_context().index_space_registry();
+  const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a");
+  const IndexBasis pao = isr->retrieve_basis(L"μ̃");
+  const Index i1(occ, 1), i2(occ, 2);
+
+  // minted, never labelled here
+  IndexFactory factory;
+  const Index from_basis = factory.make(pao);
+  const Index from_index = factory.make(Index(pao, 3));
+  const Index tmp = Index::make_tmp_index(pao);
+
+  // renamed by the canonicalizer: the PAO Fock coupling of a CSV R2 term,
+  // C{a<i_1,i_2;0>;μ̃} f{μ̃;μ̃} C{μ̃;c<i_1,i_2;0>} t{c,b;i_1,i_2}, with the μ̃
+  // dummies numbered off the canonical order
+  const Index a1 = Index(uocc, 1, {i1, i2}).replace_basis_instance(0);
+  const Index c2 = Index(uocc, 2, {i1, i2}).replace_basis_instance(0);
+  const Index b3 = Index(uocc, 3, {i1, i2}).replace_basis_instance(0);
+  const Index m7(pao, 7), m8(pao, 8);
+  ExprPtr term = ex<Tensor>(L"C", bra{a1}, ket{m7}, Symmetry::Nonsymm) *
+                 ex<Tensor>(L"f", bra{m7}, ket{m8}, Symmetry::Nonsymm) *
+                 ex<Tensor>(L"C", bra{m8}, ket{c2}, Symmetry::Nonsymm) *
+                 ex<Tensor>(L"t", bra{c2, b3}, ket{i1, i2}, Symmetry::Antisymm);
+  simplify(term);
+  std::vector<Index> renamed;
+  for (const Index& idx : get_used_indices(term))
+    if (idx.basis() == pao) renamed.push_back(idx);
+  REQUIRE(renamed.size() == 2);
+  REQUIRE((renamed[0].ordinal() != 7 || renamed[1].ordinal() != 8));
+
+  auto plain = scoped_min_sr_context();
+  auto named = [](Index copy) { return copy.label().starts_with(L"μ̃_"); };
+  CHECK(named(from_basis));
+  CHECK(named(from_index));
+  CHECK(named(tmp));
+  for (const Index& idx : renamed) CHECK(named(idx));
+  // the check is meaningful: an unlabelled index resolves under this context
+  CHECK(Index(pao, 3).label() == L"a_3");
+}
+
+// several threads copy one index and read its label at once, each labelling its
+// own copy; factory-minted instance-bearing indices carry their label memo, so
+// this only reads a settled value (ibr-spec.md §6.1); the CSV composite
+// a<i_1,i_2;0> is what OpMaker mints, μ̃ the PAO basis. The std::threads below
+// see the process-wide context, not this test's scoped overlay (#655), whose
+// registry lacks μ̃: a probe whose memo was not settled at minting prints a_N
+// there
+TEST_CASE("index-basis-copy-while-labelling", "[elements][index][basis]") {
+  auto ctx = scoped_pao_context();
+  const auto& isr = get_default_context().index_space_registry();
+  const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a");
+  const IndexBasis pao = isr->retrieve_basis(L"μ̃");
+  const Index i1(occ, 1), i2(occ, 2);
+  IndexFactory factory;
+  const std::vector<Index> minted = {
+      Index::make_tmp_index(IndexBasis{uocc, 0},
+                            container::vector<Index>{i1, i2}),
+      Index::make_tmp_index(IndexBasis{uocc, 0}),
+      factory.make(IndexBasis{uocc, 0}),
+      factory.make(Index(uocc, 1, {i1, i2}).replace_basis_instance(0)),
+      Index::make_tmp_index(pao),
+      factory.make(pao),
+      factory.make(Index(pao, 3))};
+  // an index renamed by the canonicalizer (Index::transform re-populates the
+  // memo it resets): the CSV R1 term of the "index-basis-canonicalization"
+  // case, simplified
+  const Index a1 = Index(uocc, 1, {i1}).replace_basis_instance(1);
+  const Index ad = Index(uocc, 2, {i1, i2}).replace_basis_instance(1);
+  const Index bd = Index(uocc, 3, {i1, i2}).replace_basis_instance(1);
+  ExprPtr term = ex<Tensor>(L"Â", bra{i1}, ket{a1}, Symmetry::Antisymm) *
+                 ex<Tensor>(L"f", bra{i2}, ket{ad}, Symmetry::Nonsymm) *
+                 make_overlap(a1, bd) *
+                 ex<Tensor>(L"t", bra{ad, bd}, ket{i1, i2}, Symmetry::Antisymm);
+  simplify(term);
+  std::vector<Index> canonicalized;
+  for (const Index& idx : get_used_indices(term))
+    if (idx.basis().has_basis_instance()) canonicalized.push_back(idx);
+  REQUIRE_FALSE(canonicalized.empty());
+
+  std::vector<Index> probes = minted;
+  probes.insert(probes.end(), canonicalized.begin(), canonicalized.end());
+  for (const Index& m : probes) {
+    // expected labels from an index rebuilt without m's memo, so that m is
+    // never labelled on this thread
+    const Index rebuilt(m.drop_proto_indices(), m.proto_indices(),
+                        m.symmetric_proto_indices());
+    REQUIRE(rebuilt == m);
+    const std::wstring expected_full(rebuilt.full_label()),
+        expected(rebuilt.label());
+    std::vector<std::thread> threads;
+    std::atomic<int> mismatches{0};
+    for (int t = 0; t < 8; ++t)
+      threads.emplace_back([&m, &expected_full, &expected, &mismatches] {
+        for (int k = 0; k < 1000; ++k) {
+          Index copy(m);
+          if (copy.full_label() != expected_full || copy.label() != expected ||
+              m.label() != expected)
+            ++mismatches;
+        }
+      });
+    for (auto& th : threads) th.join();
+    CHECK(mismatches == 0);
+  }
 }

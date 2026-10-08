@@ -515,6 +515,18 @@ const Context& get_default_context(Statistics s = Statistics::Arbitrary);
 /// changed since the previous snapshot on this thread
 Context get_default_context_snapshot(Statistics s = Statistics::Arbitrary);
 
+/// @brief the index space registry of the default Context for the given
+/// Statistics
+/// @param s Statistics
+/// @return `get_default_context(s).index_space_registry()`, read like
+/// get_default_context_snapshot() reads the context: from the calling thread's
+/// innermost scoped context if it has one, else from this thread's copy of the
+/// published process-wide contexts, so the lock that guards them is taken only
+/// when they changed since the previous read on this thread; costs one
+/// shared_ptr copy and no Context copy. Null if that context has no registry
+std::shared_ptr<const IndexSpaceRegistry> get_default_index_space_registry(
+    Statistics s = Statistics::Arbitrary);
+
 /// @brief sets default Context for the given Statistics
 /// @param ctx Context object
 /// @param s Statistics

@@ -22,10 +22,11 @@ void Index::reset_tmp_index() noexcept {
 
 std::wstring Index::to_latex() const noexcept {
   std::wstring protos{};
-  if (has_proto_indices() || basis_.has_basis_instance()) {
+  const auto instance = unnamed_basis_instance();
+  if (has_proto_indices() || instance) {
     protos += L"^{";
     for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
-    protos += basis_.instance_suffix();
+    if (instance) protos += basis_.instance_suffix();
     protos += L"}";
   }
   std::wstring sfx;
@@ -33,8 +34,8 @@ std::wstring Index::to_latex() const noexcept {
     sfx =
         std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
                                            : std::format(L"{{{}}}", *ordinal_));
-  return std::format(L"{{{}{}{}}}",
-                     io::latex::utf_to_string(space().base_key()), sfx, protos);
+  return std::format(L"{{{}{}{}}}", io::latex::utf_to_string(basis_key()), sfx,
+                     protos);
 }
 
 std::string Index::ascii_label() const {
@@ -73,6 +74,13 @@ std::string Index::to_string() const { return toUtf8(this->label()); }
 std::shared_ptr<const IndexSpaceRegistry>
 Index::obtain_default_index_registry() {
   return get_default_context().index_space_registry();
+}
+
+std::wstring Index::registry_label_or_base_key(const IndexBasis& basis) {
+  // no lock and no Context copy on this hot path
+  if (auto registry = get_default_index_space_registry())
+    if (auto name = registry->basis_label(basis)) return std::wstring(*name);
+  return basis.space().base_key();
 }
 
 }  // namespace sequant
