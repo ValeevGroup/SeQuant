@@ -37,6 +37,14 @@ IndexFactory fresh_index_factory(const Expr &expr) {
   });
 }
 
+/// @return a fresh index in @p sp in the basis of @p idx, i.e. with its
+/// protoindices
+Index make_in_basis_of(IndexFactory &idxfac, const IndexSpace &sp,
+                       const Index &idx) {
+  return idxfac.make(
+      Index(sp, idx.proto_indices(), idx.symmetric_proto_indices()));
+}
+
 /// @return the identity between @p bra and @p ket: their Kronecker delta if
 /// their overlap is one, else their overlap
 ExprPtr make_identity(const Index &bra, const Index &ket,
@@ -285,8 +293,7 @@ std::optional<Alternatives> split_density(const IndexSpaceRegistry &isr,
   Alternatives result;
   for (const auto &sp : registered_pieces(
            isr, common.type().intersection(inactive), common.qns())) {
-    const auto d = idxfac.make(
-        Index(sp, bra.proto_indices(), bra.symmetric_proto_indices()));
+    const auto d = make_in_basis_of(idxfac, sp, bra);
     result.push_back({make_kronecker(bra, d), make_identity(d, ket, metric)});
   }
   if (const auto active = common.type().intersection(parts.active)) {
@@ -333,7 +340,7 @@ Alternatives split_survivors(const IndexSpaceRegistry &isr,
         continue;
       }
       for (const auto &sp : targets) {
-        const auto j = idxfac.make(Index(sp, idx.proto_indices()));
+        const auto j = make_in_basis_of(idxfac, sp, idx);
         auto &[ops2, deltas2] = next.emplace_back(ops, deltas);
         ops2.emplace_back(j, op.action());
         deltas2.push_back(op.action() == Action::Create
