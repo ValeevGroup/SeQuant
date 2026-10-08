@@ -257,6 +257,20 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     }
   }
 
+  SECTION("an overlap between two instances is not a Kronecker delta") {
+    const auto unit = IndexSpaceMetric::Unit;
+    CHECK_FALSE(is_kronecker_equivalent(a1_1, a2_2, unit));
+    CHECK(is_kronecker_equivalent(a1_1, a2_1, unit));
+    CHECK(is_kronecker_equivalent(a1, a2_2, unit));
+    // f{i_1;a_1<;1>} s{a_1<;1>;a_2<;2>} t{a_2<;2>;i_1}: the overlap stands
+    const auto r =
+        reduce(ex<Tensor>(L"f", bra{i1}, ket{a1_1}) * make_overlap(a1_1, a2_2) *
+               ex<Tensor>(L"t", bra{a2_2}, ket{i1}));
+    const auto metrics = tensors_labelled(r, reserved::overlap_label());
+    REQUIRE(metrics.size() == 1);
+    CHECK(slots(*metrics[0]) == container::svector<Index>{a1_1, a2_2});
+  }
+
   SECTION("a Kronecker delta between two instances is an error") {
     CHECK_THROWS_MATCHES(
         reduce(make_kronecker(a1_1, a2_2) * g(a1_1, a2_2)), Exception,
