@@ -195,7 +195,8 @@ space's own basis, which includes every instance of the space, so a delta or ove
 replaces the generic one by the specific one, and a specific index is never replaced by a generic one. Two different
 instances are not related by an identity: an overlap between them (or between indices that the rules collected so far
 reduce to different instances) stands and yields no rule, and a Kronecker delta between them throws
-:class:`sequant::Exception`, since basis functions of different bases cannot be compared for equality. When a basis
+:class:`sequant::Exception`, since basis functions of different bases cannot be compared for equality; either is zero
+if the spaces of its indices (as narrowed by the rules collected so far) are disjoint, whatever the bases. When a basis
 instance is present the deltas are applied first, then the overlaps, and an overlap between two generic indices last,
 once every index that will be specific is, so the result does not depend on the order of the factors.
 

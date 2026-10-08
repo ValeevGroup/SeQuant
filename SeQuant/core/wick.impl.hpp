@@ -201,6 +201,13 @@ compute_index_replacement_rules(
                           : it->second->dst().basis().basis_instance());
   };
 
+  // the space of idx as far as the rules collected so far go: that of its
+  // current destination, which a rule only ever narrows
+  auto resolved_space = [&src2dst](const Index &idx) -> const IndexSpace & {
+    auto it = src2dst.find(idx);
+    return it == src2dst.end() ? idx.space() : it->second->dst().space();
+  };
+
   // adds src->dst, optionally assigning proto indices from protosrc
   auto add_src_to_existing_dst = [&src2dst](const Index &src, auto srd2dst_it) {
     SEQUANT_ASSERT(srd2dst_it != ranges::end(src2dst));
@@ -449,10 +456,14 @@ compute_index_replacement_rules(
     }
     // - overlap between 2 different basis instances: not an identity, the
     //   overlap stands. A Kronecker delta between them is an error: basis
-    //   functions of different bases cannot be compared for equality
+    //   functions of different bases cannot be compared for equality. Either
+    //   is zero if their spaces are disjoint, whatever the bases
     const auto bra_basis = resolved_basis(bra);
     const auto ket_basis = resolved_basis(ket);
     if (different_instances(bra_basis, ket_basis)) {
+      if (!do_skip &&
+          !isr->intersection(resolved_space(bra), resolved_space(ket)))
+        return Outcome::Zero;
       if (is_kronecker)
         throw Exception("WickTheorem::reduce: Kronecker delta between " +
                         toUtf8(bra.full_label()) + " and " +

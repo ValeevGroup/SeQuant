@@ -272,6 +272,19 @@ TEST_CASE("basis-wick-reduce", "[algorithms][wick][basis]") {
     CHECK(slots(*metrics[0]) == container::svector<Index>{a1_1, a2_2});
   }
 
+  SECTION("a delta or overlap between disjoint spaces is zero in any bases") {
+    const auto i1_1 = i1.replace_basis_instance(1);
+    const auto a1_2 = a1.replace_basis_instance(2);
+    auto t = [&] { return ex<Tensor>(L"t", bra{a1_2}, ket{i1_1}); };
+    CHECK(reduce(make_overlap(i1_1, a1_2) * t()) == ex<Constant>(0));
+    CHECK(reduce(make_kronecker(i1_1, a1_2) * t()) == ex<Constant>(0));
+    // also when the spaces become disjoint through a rule
+    CHECK(reduce(make_kronecker(p1, i1_1) * make_overlap(p1, a1_2) * t()) ==
+          ex<Constant>(0));
+    CHECK(reduce(make_overlap(p1, a1_2) * make_kronecker(p1, i1_1) * t()) ==
+          ex<Constant>(0));
+  }
+
   SECTION("a Kronecker delta between two instances is an error") {
     CHECK_THROWS_MATCHES(
         reduce(make_kronecker(a1_1, a2_2) * g(a1_1, a2_2)), Exception,
