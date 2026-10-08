@@ -113,6 +113,7 @@ class index_repl_dst_t {
 /// so by a Kronecker delta (or an overlap equivalent to one) with another
 /// @param unpaired_indices the internal indices that do not appear exactly
 /// twice in nonproto slots
+/// @param metric the metric of the index spaces
 template <Statistics S>
 std::optional<std::pair<container::map<Index, Index>, bool>>
 compute_index_replacement_rules(
@@ -121,8 +122,8 @@ compute_index_replacement_rules(
     const container::set<Index> &noncovariant_indices,
     const container::set<Index> &unpaired_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
-    const std::shared_ptr<const IndexSpaceRegistry> &isr =
-        get_default_context(S).index_space_registry()) {
+    const std::shared_ptr<const IndexSpaceRegistry> &isr,
+    IndexSpaceMetric metric) {
   bool zero_result_status = false;
   auto zero_result = [&zero_result_status]() -> void {
     zero_result_status = true;
@@ -400,12 +401,11 @@ compute_index_replacement_rules(
           // to match the basis of the other. An overlap equivalent to a
           // Kronecker delta (its indices in one basis) is one, whatever makes
           // its indices noncovariant, unless both are unpaired
-          const bool is_kronecker_equivalent =
-              get_default_context().metric() == IndexSpaceMetric::Unit &&
-              bra.proto_indices() == ket.proto_indices();
+          const bool kronecker_equivalent =
+              is_kronecker_equivalent(bra, ket, metric);
           auto is_noncovariant = [&](const Index &idx) {
-            return is_kronecker_equivalent ? unpaired_indices.contains(idx)
-                                           : noncovariant_indices.contains(idx);
+            return kronecker_equivalent ? unpaired_indices.contains(idx)
+                                        : noncovariant_indices.contains(idx);
           };
           do_skip = do_skip || (is_noncovariant(bra) && is_noncovariant(ket));
         }
@@ -548,6 +548,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
   // if have noncovariant indices, will need to update them at the beginning of
   // every pass
   const auto have_noncovariant_indices = !noncovariant_indices.empty();
+  const auto metric = ctx.metric();
 
   using sequant::reserved::kronecker_label;
   using sequant::reserved::overlap_label;
@@ -602,7 +603,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
       // - any index with protoindices is noncovariant
       // - if kronecker delta has a noncovariant index, the other index is also
       // noncovariant
-      expr->visit([&all_noncovariant_indices](const ExprPtr &ex) {
+      expr->visit([&all_noncovariant_indices, metric](const ExprPtr &ex) {
         if (ex.is<AbstractTensor>()) {
           auto &t = ex.template as<AbstractTensor>();
           for (auto &idx : slots(t)) {
@@ -612,8 +613,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
           const auto is_kronecker =
               tlabel == kronecker_label() ||
               (tlabel == overlap_label() &&
-               get_default_context().metric() == IndexSpaceMetric::Unit &&
-               t._bra()[0].proto_indices() == t._ket()[0].proto_indices());
+               is_kronecker_equivalent(t._bra()[0], t._ket()[0], metric));
           if (is_kronecker) {
             SEQUANT_ASSERT(t._bra_rank() == 1);
             Index b = t._bra()[0];
@@ -644,7 +644,7 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
 
     auto nonnull_result_opt = compute_index_replacement_rules<S>(
         expr, external_indices, all_noncovariant_indices, unpaired_indices,
-        all_indices, ctx.index_space_registry());
+        all_indices, ctx.index_space_registry(), metric);
     if (!nonnull_result_opt) return false;
     const auto &[replacement_rules, found_kroneckers] = *nonnull_result_opt;
 
