@@ -238,7 +238,11 @@ respelling the stored array as written. ``binarize(Tensor)`` is therefore a plai
 A transform hoists out of a product or a sum exactly when it is a pure conjugation (``hoistable``: ``conj`` without
 ``braket_swap``), because elementwise conjugation distributes over contraction and addition while a bra/ket exchange
 respells the node's own result. A transform carrying an exchange salts the parent's hash instead, so the adjoint of a
-contraction keeps a slot of its own.
+contraction keeps a slot of its own. Only the real-basis arm of the decoder produces a pure conjugation: over a complex
+basis the value conjugate is spelled ``t⁺{q;p}``, which decodes to ``{conj, braket_swap}``, and a kept ``꙳`` is an
+array of its own with a trivial transform, so over complex orbitals no leaf transform hoists and ``(A·B)⁺`` is
+recomputed rather than served from ``A·B``'s slot. Lifting that (hoisting on a uniform ``conj`` and treating the
+exchange as a per-factor layout matter of the hoisting node) is open.
 
 The leaf hash keys an array by bare label, slot layout, the states left on the stored spelling and an ``AntiSymm``
 conjugation symmetry, not by the other traits. It is label-blind, so a flat Hermitian tensor's two orientations share
@@ -275,6 +279,9 @@ What a user meets
 - ``t꙳`` on a default-parity tensor is ``t``; declare ``ConjugationParity::None`` to keep it. A marked tensor is an
   array of its own to the exporters, named ``t_adj`` / ``t_conj``; at evaluation its states decode into the retrieval
   transform as described above.
+- ``simplify()`` folds a conjugate pair of scalar-valued summands into ``2 Re[...]`` / ``2i Im[...]`` only when the
+  context's ``CanonicalizeOptions::fold_conjugate_pairs`` is ``Yes``; by default the pair is left standing, since spin
+  tracing and export accept no ``Re``/``Im`` node.
 - Over real orbitals ``adjoint`` and ``conjugate`` spell a star with the slots in place; over complex orbitals, ``t⁺``
   with bra and ket exchanged.
 - The canonicalizer keeps the orientation of a Hermitian (``Conjugate``) tensor: ``t{i;a}`` and ``t{a;i}`` are two
