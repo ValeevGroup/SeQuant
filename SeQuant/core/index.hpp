@@ -1146,8 +1146,8 @@ class IndexFactory {
     return result;
   }
 
-  /// creates a temporary index that inherits the space and protoindices of @c
-  /// idx . The label of the resulting index =
+  /// creates a temporary index that inherits the space and protoindices
+  /// (and whether they are symmetric) of @c idx . The label of the resulting index =
   /// @c IndexSpace::base_key(space) + '_' + temporary counter.
   /// Each call increments the current tmp counter (see next_tmp_index() ) .
   /// @param idx an Index object
@@ -1170,7 +1170,7 @@ class IndexFactory {
       }
       result =
           Index(Index(space, ++(counter_it->second), Index::IndexFactoryTag{}),
-                idx.proto_indices());
+                idx.proto_indices(), idx.symmetric_proto_indices());
       valid = validator_ ? validator_(result) : true;
     } while (!valid);
     return result;
