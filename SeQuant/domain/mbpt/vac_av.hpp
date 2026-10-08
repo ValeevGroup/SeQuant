@@ -69,7 +69,7 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// @param[in] expr input expression
 /// @param[in] opts controls the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
-/// @pre When the reference differs from the Wick vacuum, opts.connect and
+/// @pre When the reference differs from the Wick vacuum and the vacuum is not MultiProduct, opts.connect and
 ///      opts.do_not_connect must both be empty.
 // clang-format on
 ExprPtr ref_av(ExprPtr expr, EVOptions<std::wstring> opts = {});

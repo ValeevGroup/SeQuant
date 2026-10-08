@@ -166,7 +166,8 @@ descends from exactly one partial-contraction term (the one carrying its pair co
 Spin-free evaluation is not supported for this vacuum (``WickTheorem::compute`` throws); the hooks for it are
 ``WickTheorem::contraction_value`` and ``detail::block_value``/``detail::term_weight`` in ``SeQuant/core/wick_extended.hpp``.
 
-``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions. There the mbpt operators (``ã``) are
+``mbpt::ref_av`` has no branch of its own for this vacuum, only forcing full contractions and so accepting connectivity
+lists, under which a density or cumulant carrying indices of two operators connects them. There the mbpt operators (``ã``) are
 normal-ordered relative to the reference, so it evaluates a different quantity than the ``SingleProduct`` path, which
 normal-orders them relative to the core; the two agree for products of elementary operators, which the tests verify for results
 with cumulants up to :math:`\kappa_4`. :func:`sequant::mbpt::decompositions::cumulants_to_densities` converts cumulants of

@@ -525,18 +525,22 @@ using OpConnections = std::vector<std::pair<T, T>>;
 /// Defines the behavior of expectation value methods.
 /// The struct is used by both tensor and operator level methods, but there are
 /// parameters in here which are only meaningful at the operator level.
-/// @pre When used with ref_av and the reference differs from the Wick vacuum,
-///      connect and do_not_connect must both be empty.
+/// Two operators are connected in a term if a factor that Wick's theorem
+/// produces carries indices of both: a contraction or, under a MultiProduct
+/// vacuum, also a density or a cumulant.
+/// @pre When used with ref_av, the reference differs from the Wick vacuum and
+///      the vacuum is not MultiProduct, connect and do_not_connect must both
+///      be empty.
 template <typename T>
 struct EVOptions {
   SEQUANT_DESIGNATED_INIT_ONLY;
-  /// Pairs of operators that must be directly contracted. Operator-level calls
-  /// use labels: `{opL,opR}` applies to every matching pair with `opL` to the
+  /// Pairs of operators that must be connected. Operator-level calls use
+  /// labels: `{opL,opR}` applies to every matching pair with `opL` to the
   /// left of `opR`. Tensor-level calls use zero-based normal-operator
   /// positions.
   OpConnections<T> connect = {};
-  /// Pairs of operators that must not be directly contracted, using the same
-  /// label or position convention as connect.
+  /// Pairs of operators that must not be connected, using the same label or
+  /// position convention as connect.
   OpConnections<T> do_not_connect = {};
   /// If true, expressions are screened before lowering to Tensor level and
   /// calling WickTheorem. Only valid in Operator level calls
@@ -552,8 +556,8 @@ namespace tensor {
 /// @param expr input expression
 /// @param opts defines the behavior, @see EVOptions
 /// @note Connectivity constraints are empty by default.
-/// @pre When the reference differs from the Wick vacuum, opts.connect and
-///      opts.do_not_connect must both be empty.
+/// @pre When the reference differs from the Wick vacuum and the vacuum is not
+///      MultiProduct, opts.connect and opts.do_not_connect must both be empty.
 ExprPtr ref_av(ExprPtr expr, EVOptions<int> opts = {});
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
@@ -1431,10 +1435,15 @@ inline bool ref_av_full_contractions() {
 }
 
 /// @brief Rejects connectivity constraints that ref_av cannot honor
-/// @details The connectivity lists constrain direct contractions only. With
-/// partial contractions, operators can also be connected through the RDMs
-/// (cumulants) of the residual operators, which the lists cannot express, so
-/// they are rejected rather than given a partial meaning.
+/// @details ref_av honors the constraints when it takes full contractions
+/// only, see ref_av_full_contractions(). Otherwise it contracts partially and
+/// the residual operators become RDMs after Wick's theorem has run. An RDM of
+/// rank above one contains both connected and disconnected contributions (its
+/// cumulant and products of lower-rank cumulants), and the residual operators
+/// of a term can form an RDM of any rank, so whether the operators feeding it
+/// are connected is not a property of a term; neither connect nor
+/// do_not_connect can be given the meaning defined in EVOptions, and both are
+/// rejected.
 /// @param opts the options passed to ref_av
 /// @param full_contractions true if ref_av takes full contractions only, see
 ///        ref_av_full_contractions()
