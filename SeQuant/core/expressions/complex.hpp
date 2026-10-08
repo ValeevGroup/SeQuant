@@ -33,112 +33,125 @@
 
 namespace sequant {
 
-/// @brief Symbolic real-part wrapper: `RealPart(E)` = `Re(E)` for a
-///        scalar-valued Expr `E`.
-class RealPart : public Expr {
+namespace detail {
+
+/// canonicalizes @p inner in place (rapidly if @p rapid), folds a Constant
+/// byproduct back into it and hoists a real scalar out of it
+/// @return the hoisted real scalar as a Constant, or nullptr
+[[nodiscard]] ExprPtr canonicalize_projected(ExprPtr& inner,
+                                             CanonicalizeOptions opts,
+                                             bool rapid);
+
+/// @brief the common implementation of RealPart and ImagPart: a real-valued
+///        projection of a scalar-valued Expr, hence self-adjoint and
+///        conjugation-invariant. `Derived` supplies the LaTeX name and the
+///        hash salt that tell the two apart.
+template <typename Derived>
+class ProjectionExpr : public Expr {
  public:
-  RealPart() = delete;
-  RealPart(const RealPart&) = default;
-  RealPart(RealPart&&) = default;
-  ~RealPart() override = default;
+  ProjectionExpr() = delete;
+  ProjectionExpr(const ProjectionExpr&) = default;
+  ProjectionExpr(ProjectionExpr&&) = default;
+  ~ProjectionExpr() override = default;
 
   /// @pre @p inner is non-null and scalar-valued
   ///
   /// We do not enforce `Expr::is_scalar()` because Tensor (an atom)
   /// returns false unconditionally and a closed-contraction Product of
   /// two Tensors inherits the same answer -- the typical inner here.
-  explicit RealPart(ExprPtr inner) : inner_{std::move(inner)} {
+  explicit ProjectionExpr(ExprPtr inner) : inner_{std::move(inner)} {
     SEQUANT_ASSERT(inner_);
   }
 
   const ExprPtr& inner() const { return inner_; }
   bool is_scalar() const override { return true; }
-  type_id_type type_id() const override { return get_type_id<RealPart>(); }
-  ExprPtr clone() const override;
-  std::int8_t adjoint() override { return 1; }  // Re(E) is real, self-adjoint
-  std::int8_t kconjugate() override { return 1; }  // Re(E) is real
-  std::wstring to_latex() const override;
+  type_id_type type_id() const override { return get_type_id<Derived>(); }
+  ExprPtr clone() const override { return ex<Derived>(inner_->clone()); }
+  std::int8_t adjoint() override { return 1; }     // real, self-adjoint
+  std::int8_t kconjugate() override { return 1; }  // real
+  std::wstring to_latex() const override {
+    return std::wstring(Derived::latex_name) + L"\\left[" + inner_->to_latex() +
+           L"\\right]";
+  }
 
   /// canonicalizes the wrapped expression in place, then re-applies the eager
-  /// hoist, so that no canonical `Re()` wraps a Product with a real scalar
+  /// hoist, so that no canonical wrapper wraps a Product with a real scalar
   /// @return the hoisted real scalar as a Constant, or nullptr when there is
   ///         none. A byproduct of the inner canonicalization is folded back
-  ///         into the wrapped expression first: `Re()` is not linear over a
-  ///         complex scalar, so only a real one can leave the wrapper
+  ///         into the wrapped expression first: the wrapper is not linear
+  ///         over a complex scalar, so only a real one can leave it
   ExprPtr canonicalize(CanonicalizeOptions opts =
-                           CanonicalizeOptions::default_options()) override;
+                           CanonicalizeOptions::default_options()) override {
+    auto hoisted = canonicalize_projected(inner_, opts, /*rapid=*/false);
+    reset_hash_value();
+    return hoisted;
+  }
 
   /// @copydoc canonicalize()
   ExprPtr rapid_canonicalize(
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid)) override;
+              CanonicalizationMethod::Rapid)) override {
+    SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
+    auto hoisted = canonicalize_projected(inner_, opts, /*rapid=*/true);
+    reset_hash_value();
+    return hoisted;
+  }
 
   /// the wrapped expression is this node's only subexpression, so that
   /// Expr::visit(), index transforms and relabeling reach it
-  ExprIterator begin_subexpr() override;
-  ExprIterator end_subexpr() override;
-  ConstExprIterator begin_subexpr() const override;
-  ConstExprIterator end_subexpr() const override;
+  ExprIterator begin_subexpr() override {
+    // N.B. a mutable iterator into inner_ invalidates the memoized hash
+    reset_hash_value();
+    return ExprIterator{&inner_};
+  }
+  ExprIterator end_subexpr() override {
+    reset_hash_value();
+    return ExprIterator{&inner_ + 1};
+  }
+  ConstExprIterator begin_subexpr() const override {
+    return ConstExprIterator{&inner_};
+  }
+  ConstExprIterator end_subexpr() const override {
+    return ConstExprIterator{&inner_ + 1};
+  }
 
  private:
   ExprPtr inner_;
 
-  hash_type memoizing_hash() const override;
-  bool static_equal(const Expr& that) const override;
-  bool static_less_than(const Expr& that) const override;
+  hash_type memoizing_hash() const override {
+    if (!hash_value_) {
+      auto v = hash::value(*inner_);
+      hash::combine(v, Derived::hash_salt);
+      hash_value_ = v;
+    }
+    return *hash_value_;
+  }
+  bool static_equal(const Expr& that) const override {
+    return *inner_ == *static_cast<const ProjectionExpr&>(that).inner_;
+  }
+  bool static_less_than(const Expr& that) const override {
+    return *inner_ < *static_cast<const ProjectionExpr&>(that).inner_;
+  }
+};
+
+}  // namespace detail
+
+/// @brief Symbolic real-part wrapper: `RealPart(E)` = `Re(E)` for a
+///        scalar-valued Expr `E`.
+class RealPart : public detail::ProjectionExpr<RealPart> {
+ public:
+  using ProjectionExpr::ProjectionExpr;
+  static constexpr const wchar_t* latex_name = L"\\Re";
+  static constexpr std::size_t hash_salt = 0xC0FFEE01ull;
 };
 
 /// @brief Symbolic imaginary-part wrapper: `ImagPart(E)` = `Im(E)`.
-class ImagPart : public Expr {
+class ImagPart : public detail::ProjectionExpr<ImagPart> {
  public:
-  ImagPart() = delete;
-  ImagPart(const ImagPart&) = default;
-  ImagPart(ImagPart&&) = default;
-  ~ImagPart() override = default;
-
-  /// @pre @p inner is non-null and scalar-valued (see RealPart for why
-  ///      we don't use `Expr::is_scalar()` as the precondition)
-  explicit ImagPart(ExprPtr inner) : inner_{std::move(inner)} {
-    SEQUANT_ASSERT(inner_);
-  }
-
-  const ExprPtr& inner() const { return inner_; }
-  bool is_scalar() const override { return true; }
-  type_id_type type_id() const override { return get_type_id<ImagPart>(); }
-  ExprPtr clone() const override;
-  std::int8_t adjoint() override { return 1; }  // Im(E) is real, self-adjoint
-  std::int8_t kconjugate() override { return 1; }  // Im(E) is real
-  std::wstring to_latex() const override;
-
-  /// canonicalizes the wrapped expression in place, then re-applies the eager
-  /// hoist, so that no canonical `Im()` wraps a Product with a real scalar
-  /// @return the hoisted real scalar as a Constant, or nullptr when there is
-  ///         none. A byproduct of the inner canonicalization is folded back
-  ///         into the wrapped expression first: `Im()` is not linear over a
-  ///         complex scalar, so only a real one can leave the wrapper
-  ExprPtr canonicalize(CanonicalizeOptions opts =
-                           CanonicalizeOptions::default_options()) override;
-
-  /// @copydoc canonicalize()
-  ExprPtr rapid_canonicalize(
-      CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set(
-              CanonicalizationMethod::Rapid)) override;
-
-  /// the wrapped expression is this node's only subexpression, so that
-  /// Expr::visit(), index transforms and relabeling reach it
-  ExprIterator begin_subexpr() override;
-  ExprIterator end_subexpr() override;
-  ConstExprIterator begin_subexpr() const override;
-  ConstExprIterator end_subexpr() const override;
-
- private:
-  ExprPtr inner_;
-
-  hash_type memoizing_hash() const override;
-  bool static_equal(const Expr& that) const override;
-  bool static_less_than(const Expr& that) const override;
+  using ProjectionExpr::ProjectionExpr;
+  static constexpr const wchar_t* latex_name = L"\\Im";
+  static constexpr std::size_t hash_salt = 0xC0FFEE02ull;
 };
 
 namespace detail {
