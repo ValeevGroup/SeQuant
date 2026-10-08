@@ -1423,7 +1423,8 @@ inline void enforce_reference_is_vacuum(
 
 /// @return true if ref_av takes full contractions only: the reference is the
 /// Wick vacuum, or the vacuum is MultiProduct, relative to which WickTheorem
-/// expresses the reference expectation value in γ, η and κ
+/// expresses the reference expectation value in γ, η and κ (a partial
+/// contraction relative to it is not proportional to that value)
 inline bool ref_av_full_contractions() {
   return reference_is_vacuum() ||
          get_default_context().vacuum() == Vacuum::MultiProduct;

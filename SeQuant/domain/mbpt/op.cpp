@@ -1338,9 +1338,7 @@ ExprPtr expectation_value_impl(ExprPtr expr, OpConnections<int> connect,
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(connect);
   if (!avoid.empty()) wick.set_nop_avoided_connections(avoid);
-  // a partial contraction relative to a MultiProduct vacuum is not
-  // proportional to the reference expectation value
-  wick.full_contractions(multiproduct || full_contractions);
+  wick.full_contractions(full_contractions);
   auto result = wick.compute(/* count_only = */ false,
                              /* skip_input_canonicalization? true since already
                                 did simplification above */
