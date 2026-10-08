@@ -6,6 +6,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
 #include <SeQuant/core/tree_index.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/core/demangle.hpp>
@@ -26,8 +27,12 @@
 
 namespace sequant {
 
-/// @brief the wchar used for labeling adjoints, i.e. the superscript + sign
-static const wchar_t adjoint_label = L'\u207A';
+/// the trailing label mark of the adjointed state, `t⁺{...}`
+inline constexpr wchar_t adjoint_label = L'⁺';
+/// the trailing label mark of the K-conjugated state, `t꙳{...}`, and of a
+/// conjugated Variable, `x꙳` (U+A673 SLAVONIC ASTERISK: Unicode has no
+/// spacing superscript asterisk; LaTeX renders it as `^{*}`)
+inline constexpr wchar_t conjugate_label = L'꙳';
 
 /// @return true if @p label ends with the adjoint marker ::adjoint_label
 inline bool is_adjoint_label(std::wstring_view label) {
@@ -45,6 +50,29 @@ inline void toggle_adjoint_label(std::wstring &label) {
     label.pop_back();
   else
     label.push_back(adjoint_label);
+}
+
+/// strips the trailing state marks off @p label: ::adjoint_label and
+/// ::conjugate_label, in either order and at most one of each
+/// @param[in,out] label the name; on return without its marks
+/// @return whether an adjoint mark and whether a conjugation mark was found
+/// @throw Exception if a mark is repeated
+inline std::pair<bool, bool> split_state_marks(std::wstring &label) {
+  bool adjointed = false, kconjugated = false;
+  while (!label.empty()) {
+    const wchar_t c = label.back();
+    if (c == adjoint_label) {
+      if (adjointed) throw Exception("repeated adjoint mark in the name");
+      adjointed = true;
+    } else if (c == conjugate_label) {
+      if (kconjugated) throw Exception("repeated conjugation mark in the name");
+      kconjugated = true;
+    } else {
+      break;
+    }
+    label.pop_back();
+  }
+  return {adjointed, kconjugated};
 }
 
 namespace detail {
@@ -375,8 +403,20 @@ class Expr : public std::enable_shared_from_this<Expr> {
     return result;
   }
 
-  /// @brief changes this to its adjoint
-  virtual void adjoint() = 0;
+  /// @brief changes this to its adjoint and returns the sign byproduct: +1,
+  /// or −1 when the adjoint is minus the resulting object (an anti-Hermitian
+  /// Tensor); like canonicalize()'s byproduct it must be applied by the
+  /// caller, see sequant::adjoint(const ExprPtr&)
+  [[nodiscard]] virtual std::int8_t adjoint() = 0;
+
+  /// @brief complex conjugation of the represented operator, `K O K⁻¹`, with
+  /// `K` complex conjugation in the coordinate representation: on a scalar
+  /// the complex conjugate, on a Tensor the K-conjugated state (see
+  /// Tensor::kconjugate), on an operator string the identity (the
+  /// conjugation acts through the coefficients). Not the conjugate of a
+  /// matrix element's value, which is adjoint() with the slots exchanged.
+  /// @return the sign to apply, as for adjoint()
+  [[nodiscard]] virtual std::int8_t kconjugate() = 0;
 
   /// Computes and returns the hash value. If default @p hasher is used then the
   /// value will be memoized, otherwise @p hasher will be used to compute the

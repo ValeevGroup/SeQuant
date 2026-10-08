@@ -65,6 +65,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -389,15 +391,7 @@ bool is_df_batchable(Index const& ix) {
 TEST_CASE("is_valid accepts a CSV proto-indexed residual",
           "[utilities][is_valid][csv]") {
   using namespace sequant;
-  auto ctx0 = get_default_context_snapshot();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx0.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -431,15 +425,7 @@ TEST_CASE("is_valid accepts a CSV proto-indexed residual",
 TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
           "[optimize][batch][term_batch_axes]") {
   using namespace sequant;
-  auto ctx0 = get_default_context_snapshot();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx0.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -529,15 +515,7 @@ TEST_CASE("optimize_result keys batch annotations onto the whole Sum",
 TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
           "[optimize][batch][r1-offbyone]") {
   using namespace sequant;
-  auto ctx0 = get_default_context_snapshot();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx0.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto prod =
       deserialize<ExprPtr>("f{μ̃_1094;i_1}:N-S-S * C{a_1<i_1>;μ̃_1094}:N-S-S");
@@ -603,15 +581,7 @@ TEST_CASE("optimizer node_axes match binarize on the water-20 R1 f*C summand",
 TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
           "[.][ordered-key-c60-m]") {
   using namespace sequant;
-  auto ctx0 = get_default_context_snapshot();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx0.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -664,15 +634,7 @@ TEST_CASE("ordered-key C60 giant: does order_aware engage (m vs cap)?",
 TEST_CASE("C60 residual peak per summand under the recommended batching",
           "[.][occ-driver-scan]") {
   using namespace sequant;
-  auto ctx0 = get_default_context_snapshot();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx0.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -768,15 +730,7 @@ TEST_CASE("C60 residual peak per summand under the recommended batching",
 TEST_CASE("no 4-PAO integral with correct composite sizing (C60 giant)",
           "[.][roofline-4pao]") {
   using namespace sequant;
-  auto ctx0 = get_default_context_snapshot();
-  ctx0.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx0.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx0.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx0.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx0));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -842,15 +796,7 @@ TEST_CASE("dryrun POST-transform PAO/K batch-mode verdict", "[.][dryrun-df]") {
   // Augment the default mbpt registry with PAO (mu~) and DF-aux (K) so the
   // post-transform fixture deserializes; raise the dummy-ordinal ceiling for
   // mpqc's high internal ordinals (mu~_1152, a_21674, ...).
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -1561,10 +1507,9 @@ TEST_CASE("dryrun axis_batches tiles the axis space extent",
 TEST_CASE("dryrun make_zeros builds a full-extent flat scatter destination",
           "[dryrun-result][pre-sized]") {
   // The runtime External-mode scatter builds its destination from the node's
-  // OWN (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
-  // its space's FULL extent (a structural fact queryable immediately via
-  // size_in_bytes()). Replaces the old carrier-widening
-  // pre_sized_zeros_over_mode: no block partial, no carrier.
+  // own (unsliced) index list via BackendArrayOps::make_zeros -- every mode at
+  // its space's full extent, a structural fact queryable immediately via
+  // size_in_bytes(); neither a block partial nor a carrier takes part in it.
   auto r = backend_test_regime();
   auto cm = std::make_shared<CostModel const>(r);
   Index i1{L"i_1"}, a3{L"a_3"};
@@ -1784,23 +1729,16 @@ TEST_CASE("dryrun leaf yielder builds a sized token from a tensor leaf",
 TEST_CASE(
     "dryrun external-mode scatter replay models the sliced footprint (D3.1)",
     "[dryrun-extmode][eval]") {
-  // D3.1 regression: the runtime External-mode scatter branch in
-  // make_batched_custom_evaluator (eval.hpp) calls, on the first block,
-  // part->pre_sized_zeros_over_mode(dest_mode, carrier_full, carrier_mode),
-  // then dest->write_into_slice(...) for every block. Before this task the
-  // dry-run Result classes did not override pre_sized_zeros_over_mode, so
-  // the replay hit the base class's `throw
-  // detail::unimplemented_method("pre_sized_zeros_over_mode")` the moment an
-  // External mode was stamped -- the witness could not measure external
-  // batching at all (as-built design
-  // doc/dev/specs/2026-09-12-batched-array-dag-eval-as-built.md, section 4.2).
-  // This test drives the SAME scatter branch the TA
-  // regression `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp)
-  // exercises, on the dry-run backend: a small forest carrying the occupied
-  // index ONLY as a protoindex of a composite PNO leg (canonicalization
-  // promotes it to a plain outer canon index, so index_position locates it
-  // directly -- no proto-aware locator needed, exactly as that TA test
-  // documents).
+  // The runtime External-mode scatter branch in make_batched_custom_evaluator
+  // (eval.hpp) builds its destination once via BackendArrayOps::make_zeros and
+  // then calls dest->write_into_slice(...) for every block; the dry-run Result
+  // classes model both, so the witness measures external batching. This test
+  // drives that same scatter branch the TA regression
+  // `batched_eval_external_proto_occ_scatter` (test_eval_ta.cpp) exercises, on
+  // the dry-run backend: a small forest carrying the occupied index only as a
+  // protoindex of a composite PNO leg (canonicalization promotes it to a plain
+  // outer canon index, so index_position locates it directly -- no proto-aware
+  // locator needed, exactly as that TA test documents).
   auto ctx = get_default_context_snapshot();
   ctx.set_first_dummy_index_ordinal(1000000);
   auto ctx_resetter = set_scoped_default_context(std::move(ctx));
@@ -1888,22 +1826,19 @@ TEST_CASE(
     what = e.what();
   }
 
-  // GREEN (after D3.1): the replay completes. RED (before D3.1): this threw
-  // std::logic_error(".. pre_sized_zeros_over_mode ..") the first time the
-  // scatter branch called part->pre_sized_zeros_over_mode() on a dry-run
-  // Result that did not override it.
+  // the replay completes: the scatter branch finds every Result method it
+  // needs modeled on the dry-run backend
   INFO("evaluate() threw: " << what);
   REQUIRE_FALSE(threw);
   REQUIRE(result);
 
-  // The assembled result's mode-th index is widened back to the FULL
-  // (unsliced) extent: the scattered result reconstructs the same modeled
-  // size as the unbatched reference. (The per-block modeled size's
-  // ~block/extent scaling -- the sliced footprint the scatter buys per
-  // block -- is asserted directly against the cost model by the two
-  // pre_sized_zeros_over_mode unit tests above; this end-to-end replay
-  // additionally confirms the runtime genuinely reassembles them via the
-  // scatter branch rather than, say, silently no-op'ing.)
+  // The assembled result's mode-th index spans the full (unsliced) extent:
+  // the scattered result reconstructs the same modeled size as the unbatched
+  // reference. (The per-block modeled size's ~block/extent scaling -- the
+  // sliced footprint the scatter buys per block -- is asserted directly
+  // against the cost model by the two make_zeros unit tests above; this
+  // end-to-end replay additionally confirms the runtime genuinely reassembles
+  // them via the scatter branch rather than, say, silently no-op'ing.)
   CHECK(result->size_in_bytes() == ref_bytes);
 
   // The scatter genuinely fired over the occ: > 1 block (occ extent 10,
@@ -1930,15 +1865,7 @@ TEST_CASE(
     "dryrun eval backend replays the post-transform giant term through the "
     "real batched runtime",
     "[dryrun-eval]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2275,15 +2202,7 @@ TEST_CASE(
     "dryrun perf-first never forms the 4-PAO AO integral and peaks on the "
     "genuine 4-PNO W node (C60 giant)",
     "[dryrun-objective]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2577,15 +2496,7 @@ TEST_CASE(
 TEST_CASE(
     "dryrun external-mode seeding lowers the DP-reported peak of the C60 giant",
     "[dryrun-extmode]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2703,7 +2614,7 @@ TEST_CASE(
   // Flag ON: External stamped, and ONLY on an external occ (space "i") -- the
   // chosen seed modes -- never on a contracted DF-aux/PAO mode (emit follows
   // selection). BOTH external occ (i_1 and i_2) must be stamped (joint seed).
-  auto occ_space = isr->retrieve(L"i");
+  auto occ_space = get_default_context().index_space_registry()->retrieve(L"i");
   std::set<std::wstring> external_labels;
   for (auto const& axs : ax_on)
     for (auto const& e : axs.axes)
@@ -2734,15 +2645,7 @@ TEST_CASE(
 TEST_CASE(
     "dryrun external-occ slicing shrinks the PPL W footprint (P1 sizing gate)",
     "[.][dryrun-occ-sizing]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -2934,15 +2837,7 @@ TEST_CASE(
     "dryrun external occ is recognized as a batchable mode (P1 recognition "
     "gate)",
     "[.][dryrun-occ-recognize]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3107,15 +3002,7 @@ TEST_CASE(
 //   ./tests/unit/unit_tests-sequant "[dryrun-c60-batchability-audit]"
 TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
           "[.][dryrun-c60-batchability-audit]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3455,15 +3342,7 @@ TEST_CASE("dryrun C60 per-term perf-first batchability audit (P4 go/no-go)",
 // Minutes-long under ASan/valgrind; see tests/unit/CMakeLists.txt.
 #ifndef SEQUANT_SKIP_LONG_TESTS
 TEST_CASE("dryrun scratch-fold captures batched peak", "[dryrun][peak]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3743,15 +3622,7 @@ TEST_CASE("dryrun peak is co-resident sum", "[dryrun][peak]") {
 // alive cached bytes and is confounded by batched-inner scratch -- see the
 // [dryrun-objective] INTERPRETATION notes).
 TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);  // mu~
-  sequant::mbpt::add_df_spaces(isr);                             // K
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -3938,15 +3809,7 @@ TEST_CASE("dryrun gated cache footprint-gates the giant", "[dryrun][cache]") {
 // is not pricing the runtime recompute").
 TEST_CASE("dryrun water-20 aux-batch fragmentation: gC composites priced rf==1",
           "[.][dryrun-water-frag]") {
-  auto ctx = get_default_context_snapshot();
-  ctx.set_first_dummy_index_ordinal(1000000);
-  REQUIRE(ctx.index_space_registry() != nullptr);
-  auto isr = std::make_shared<sequant::IndexSpaceRegistry>(
-      *ctx.index_space_registry());
-  sequant::mbpt::add_pao_spaces(isr, sequant::mbpt::Spin::any);
-  sequant::mbpt::add_df_spaces(isr);
-  ctx.set(isr);
-  auto ctx_resetter = set_scoped_default_context(std::move(ctx));
+  auto ctx_resetter = sequant::tests::scoped_csv_ccsd_context();
 
   auto const body = slurp(std::string(SEQUANT_UNIT_TESTS_SOURCE_DIR) +
                           "/data/csv_ccsd_doubles_residual_df.txt");
@@ -4411,4 +4274,33 @@ TEST_CASE(
   CHECK(fd_report.peak_bytes > 0.0);
   CHECK(fd_report.builds_total > 0);
   CHECK(fd_report.scheduler == sequant::BatchScheduler::forest_descent);
+}
+
+TEST_CASE("range evaluate does not accumulate into a cached result",
+          "[eval][cache]") {
+  // evaluate(nodes, ...) sums the nodes' results in place into the _first_
+  // node's result. When that node is cached (it recurs among the nodes, or
+  // elsewhere in the block) the first result IS the cache's own buffer, so the
+  // in-place adds corrupt the cache: every later use of the node reads the
+  // running block sum. Measured on HSeOH PNS-MP1 (2026-09-05): a residual
+  // block whose first term became a cache twin of a later term (after the
+  // brackets were optimized) came out with |R| 0.579 instead of 0.293 while
+  // every term evaluated individually was exact.
+  using namespace sequant;
+  using node_t = sequant::eval::dryrun::EvalNodeDryRun;
+  auto const expr = deserialize(L"α * β");
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_BEGIN
+  node_t node = binarize<sequant::eval::dryrun::EvalExprDryRun>(expr);
+  SEQUANT_PRAGMA_IGNORE_DEPRECATED_END
+  std::vector<node_t> nodes{node, node, node};
+  auto yield = [](node_t const& n) -> ResultPtr {
+    REQUIRE(n.leaf());
+    return eval_result<ResultScalar<double>>(2.0);
+  };
+  auto cache = cache_manager(nodes);  // the product node recurs -> cached
+  auto sum = evaluate(nodes, yield, cache);
+  REQUIRE(sum->is<ResultScalar<double>>());
+  // 3 * (2 * 2); with the cache buffer used as the accumulator the third use
+  // reads the partial sum (2A) and the total comes out 4A = 16
+  REQUIRE(sum->get<double>() == Catch::Approx(12.0));
 }

@@ -37,20 +37,22 @@ struct Index : boost::spirit::x3::position_tagged {
 struct Number : boost::spirit::x3::position_tagged {
   double numerator;
   double denominator;
+  /// whether an `i` abutted the digits, i.e. the literal sits on the
+  /// imaginary axis (`2i`, `1/2i`)
+  bool imaginary;
 
-  Number(double numerator = {}, double denominator = 1)
-      : numerator(numerator), denominator(denominator) {}
+  Number(double numerator = {}, double denominator = 1, bool imaginary = false)
+      : numerator(numerator), denominator(denominator), imaginary(imaginary) {}
 };
 
 struct Variable : boost::spirit::x3::position_tagged {
+  /// the name as written, a trailing conjugation mark included
   std::wstring name;
-  bool conjugated;
 
-  Variable(std::wstring name = {}, bool conjugated = false)
-      : name(std::move(name)), conjugated(conjugated) {}
-
-  // Required to use as a container
-  using value_type = decltype(name)::value_type;
+  /// @note not explicit, and the struct is not a fusion sequence: the
+  ///       variable rule's attribute is the bare name, which x3 assigns
+  ///       through this conversion
+  Variable(std::wstring name = {}) : name(std::move(name)) {}
 };
 
 struct IndexGroups : boost::spirit::x3::position_tagged {
@@ -72,10 +74,13 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
   char perm_symm = unspecified;
   char braket_symm = unspecified;
   char column_symm = unspecified;
+  char conjugation_parity = unspecified;
 };
 
 // represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
+  /// the name as written, trailing state marks (`⁺`, `꙳`) included; the
+  /// conversion to Tensor splits them off
   std::wstring name;
   IndexGroups indices;
   boost::optional<SymmetrySpec> symmetry;
@@ -89,6 +94,7 @@ struct Tensor : boost::spirit::x3::position_tagged {
 
 struct Product;
 struct Sum;
+struct RealImagPart;
 
 struct Power : boost::spirit::x3::position_tagged {
   boost::variant<Number, Variable> base;
@@ -104,7 +110,7 @@ struct Power : boost::spirit::x3::position_tagged {
 };
 
 using NullaryValue =
-    boost::variant<Number, Tensor, Variable, Power, Product, Sum>;
+    boost::variant<Number, Tensor, Variable, Power, Product, Sum, RealImagPart>;
 
 struct Product : boost::spirit::x3::position_tagged {
   std::vector<NullaryValue> factors;
@@ -134,6 +140,18 @@ struct Sum : boost::spirit::x3::position_tagged {
 template <typename T>
 Product::Product(T value) : factors({std::move(value)}) {}
 
+/// the real or the imaginary part of a wrapped expression, spelled `Re[...]`
+/// or `Im[...]`
+struct RealImagPart : boost::spirit::x3::position_tagged {
+  /// false spells `Re`, true spells `Im`
+  bool imaginary;
+  Sum inner;
+
+  RealImagPart() noexcept : imaginary(false) {}
+  RealImagPart(bool imaginary, Sum inner)
+      : imaginary(imaginary), inner(std::move(inner)) {}
+};
+
 struct ResultExpr : boost::spirit::x3::position_tagged {
   std::variant<Tensor, Variable> lhs;
   Sum rhs;
@@ -152,17 +170,19 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexLabel,
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Index, label,
                           protoLabels);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Number,
-                          numerator, denominator);
-BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Variable, name,
-                          conjugated);
+                          numerator, denominator, imaginary);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
                           ket, auxiliaries, reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
-                          perm_symm, braket_symm, column_symm);
+                          perm_symm, braket_symm, column_symm,
+                          conjugation_parity);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
                           indices, symmetry);
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Power, base,
                           exponent, conjugated);
+
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::RealImagPart,
+                          imaginary, inner);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Product,
                           factors);

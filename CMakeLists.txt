@@ -342,6 +342,8 @@ set(SeQuant_symb_src
         SeQuant/core/context.hpp
         SeQuant/core/expressions/abstract_tensor.cpp
         SeQuant/core/expressions/abstract_tensor.hpp
+        SeQuant/core/expressions/complex.cpp
+        SeQuant/core/expressions/complex.hpp
         SeQuant/core/expressions/constant.cpp
         SeQuant/core/expressions/constant.hpp
         SeQuant/core/expressions/expr.cpp
@@ -473,6 +475,7 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/rules/csv.cpp
         SeQuant/domain/mbpt/rules/csv.hpp
         SeQuant/domain/mbpt/rules/df.cpp
+        SeQuant/domain/mbpt/rules/conjugated.hpp
         SeQuant/domain/mbpt/rules/df.hpp
         SeQuant/domain/mbpt/rules/thc.cpp
         SeQuant/domain/mbpt/rules/thc.hpp
@@ -551,6 +554,7 @@ set(SeQuant_export_src
         SeQuant/core/export/julia_tensor_kit.hpp
         SeQuant/core/export/julia_tensor_operations.cpp
         SeQuant/core/export/julia_tensor_operations.hpp
+        SeQuant/core/export/marked_name.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
         SeQuant/core/export/text_generator.hpp

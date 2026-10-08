@@ -80,8 +80,8 @@ V1
    Known limitations:
 
    - No support for second-quantized (normal-ordered) operators
-   - No support for complex numbers
    - No support for representing operators (e.g. symmetrizers) explicitly
+   - A number is a rational (or a floating-point value converted to one); there is no irrational or transcendental literal
 
 .. table::
    :widths: auto
@@ -93,8 +93,9 @@ V1
    Expression      Sum?                                                            
    Sum             Product ( ('+' | '-') Product)*                                 
    Product         Nullary ( '*'? Nullary )*                                        Explict '*' use is optional
-   Nullary         '(' Sum ')' | Number | Tensor | Variable                        
-   Number                                                                           Integer, Floating point or fraction
+   Nullary         '(' Sum ')' | Number | Tensor | Variable | RealImagPart     
+   RealImagPart    ('Re' | 'Im') '[' Sum ']'                                        Real/imaginary part of the wrapped expression
+   Number          Rational 'i'?                                                    Integer, floating point or fraction; a trailing 'i' (no space) makes it imaginary
    Tensor          Name IndexGroup SymmetrySpec?                                   
    IndexGroup      | '{' IndexList? ( ';' IndexList? ( ';' IndexList? )? )? '}'     | Meaning is {<bra>;<ket>;<aux>}
                    | '^{' IndexList? '}_{' IndexList '}'                            | Meaning is ^{<ket>}_{<bra>} (no aux)
@@ -102,16 +103,34 @@ V1
    IndexList       Index ( ',' Index )?
    Index           IndexSpaceName '_'? Integer
    IndexSpaceName                                                                    Name but no underscore allowed
-   SymmetrySpec    ':' ( [ASN] ( '-' [SCN] ( '-' [SN] )? )? )                        :<Symmetry>-<BraKetSymmetry>-<ColumnSymmetry>
+   SymmetrySpec    ':' ( [ASN] ( '-' [SCNHA] ( '-' [SN] ( '-' [EON] )? )? )? )      :<Symmetry>-<BraKetSymmetry or Hermiticity>-<ColumnSymmetry>-<ConjugationParity>
    Variable        Name
    Name                                                                              Single word (may include Unicode chars)
    ==============  ===============================================================  ===========================================
 
+A ``Number`` whose digits are immediately followed by ``i`` is imaginary: ``2i``, ``1/2i`` (which is *(1/2)i*, not *1/(2i)*), ``-3i``.
+The ``i`` has to abut the digits and must not begin a longer name, so a bare ``i`` is an ordinary :class:`Variable <sequant::Variable>`,
+``2 i`` is a product of a number and that variable, and ``2i_1`` is ``2`` times the variable ``i_1``. A general complex constant is
+written as its real part plus (or minus) its imaginary one — ``1 + 2i``, ``1 - 2i`` — and is parenthesized wherever a factor is
+expected, since juxtaposition binds tighter than ``+``: ``(1 + 2i) t{i_1;a_1}``. A purely real constant is spelled exactly as before.
+
 The single-letter codes in ``SymmetrySpec`` abbreviate the corresponding enumerators, one letter per field: ``[ASN]`` is the tensor's
-permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = Symm, ``N`` = Nonsymm); ``[SCN]`` is its
-:class:`BraKetSymmetry <sequant::BraKetSymmetry>` (``S`` = Symm, ``C`` = Conjugate, ``N`` = Nonsymm); and the final ``[SN]`` is its
-:class:`ColumnSymmetry <sequant::ColumnSymmetry>` (``S`` = Symm, ``N`` = Nonsymm — this field has no Conjugate case). A tensor's trailing
-``:A-C-S`` in the example below therefore reads "antisymmetric, conjugate bra-ket symmetric, symmetric column".
+permutational :class:`Symmetry <sequant::Symmetry>` (``A`` = Antisymm, ``S`` = Symm, ``N`` = Nonsymm); ``[SCNHA]`` is either its
+:class:`BraKetSymmetry <sequant::BraKetSymmetry>` (``S`` = Symm, ``C`` = Conjugate, ``N`` = Nonsymm) or its
+:class:`Hermiticity <sequant::Hermiticity>` trait (``H`` = Hermitian, ``A`` = AntiHermitian), from which the bra-ket symmetry is derived
+over the indices' basis; ``[SN]`` is its :class:`ColumnSymmetry <sequant::ColumnSymmetry>` (``S`` = Symm, ``N`` = Nonsymm — this field
+has no Conjugate case); and the optional ``[EON]`` is its :class:`ConjugationParity <sequant::ConjugationParity>` (``E`` = Even,
+``O`` = Odd, ``N`` = None), which the serializer writes only where the parser would not back-fill it. A tensor's trailing ``:A-C-S`` in
+the example below therefore reads "antisymmetric, conjugate bra-ket symmetric, symmetric column"; a serializer writes the trait it holds,
+so a Hermitian tensor comes back as ``:A-H-S``.
+
+``RealImagPart`` spells the :class:`RealPart <sequant::RealPart>` and :class:`ImagPart <sequant::ImagPart>` expression nodes, which
+:func:`simplify() <sequant::simplify>` emits when it folds a pair of complex-conjugate summands (``A + A*`` becomes ``2 Re[A]``,
+``A - A*`` becomes ``2i Im[A]``). The square brackets follow the LaTeX these nodes render as (``\Re\left[...\right]``) and are what
+keeps the spelling apart from a tensor or a variable named ``Re``/``Im``: neither of those admits a ``[``, so ``Re{i_1;a_1}`` is a
+tensor, ``Re`` alone is a variable, and only ``Re[`` opens a real part. Deserialization goes through the same eager composition rules
+as the :func:`real_part() <sequant::real_part>` / :func:`imaginary_part() <sequant::imaginary_part>` builders, so ``Re[Re[x]]`` yields
+``Re[x]``, ``Im[Re[x]]`` yields ``0``, and a real scalar prefactor hoists out of the brackets (``Re[1/2 x]`` yields ``1/2 Re[x]``).
 
 :func:`sequant::io::serialization::from_string<ExprPtr>` will start at rule :code:`Expression`, whereas
 :func:`sequant::io::serialization::from_string<ResultExpr>` will start at :code:`Result`.
@@ -127,3 +146,15 @@ scaled by the constant ``1/2``:
 
    R1{u1;i1} = f{u1;i1} - Ym1{u1;u2} f{u2;i1} - Ym1{u3;u2} * g{u1,u2;u3,i1} + 1/2 Ym2{u1,u4;u_2,u_3} g{u2,u3;u4,i1}:A-C-S
 
+The following parses the real part of a fully contracted product, scaled by ``2`` -- the shape :func:`simplify() <sequant::simplify>`
+leaves a folded conjugate pair in when the context's ``CanonicalizeOptions::fold_conjugate_pairs`` is on:
+
+::
+
+   2 Re[h{i_1;a_1} * t{a_1;i_1}]
+
+The ``Im`` half of the same fold carries a purely imaginary coefficient:
+
+::
+
+   2i Im[h{i_1;a_1} * t{a_1;i_1}]

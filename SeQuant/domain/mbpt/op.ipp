@@ -142,7 +142,7 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
 }
 
 template <typename QuantumNumbers, Statistics S>
-void Operator<QuantumNumbers, S>::adjoint() {
+std::int8_t Operator<QuantumNumbers, S>::adjoint() {
   const auto dN = (*this)(QuantumNumbers{});
   using qnc_t = std::decay_t<decltype(dN)>;
   static_assert(std::is_same_v<QuantumNumbers, qnc_t>,
@@ -176,6 +176,15 @@ void Operator<QuantumNumbers, S>::adjoint() {
   // restore original order and batch_ordinals
   this->order_ = saved_order;
   this->batch_ordinals_ = saved_batch_ordinals;
+
+  // the tensor form is built through sequant::adjoint, which absorbs a sign
+  // of its own into a scalar factor
+  return 1;
+}
+
+template <typename QuantumNumbers, Statistics S>
+std::int8_t Operator<QuantumNumbers, S>::kconjugate() {
+  return 1;
 }
 
 template <typename QuantumNumbers, Statistics S>
@@ -203,7 +212,7 @@ ExprPtr Operator<QuantumNumbers, S>::clone() const {
 // indicates where the quasiparticle is going to and the second position
 // indicates where it comes from. for the case of adjoint operators, the adjoint
 // is represented by the symbol ⁺ and superscripting the quasi-particle numbers.
-// for example: hat{R⁺}^{1,2}} For operators in which one or more
+// for example: {{\hat{R}^{\dagger}}^{1,2}} For operators in which one or more
 // quasi-particles has only partial coverage in the particle_space or
 // hole_space, this notation is unsuitable, and we default to level printing of
 // the operator.

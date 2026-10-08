@@ -8,6 +8,7 @@
 
 #include <compare>
 #include <cstddef>
+#include <cstdint>
 #include <unordered_map>
 #include <utility>
 
@@ -108,8 +109,8 @@ std::strong_ordering canonical_operand_cmp(TreeNode const &a,
 /// left/right the DP emitted.
 ///
 /// Meaningful for a commutative (Product) node; callers use the emitted order
-/// for everything else (a Sum's left child is the in-place accumulator, an
-/// Adjoint's right child is a sentinel), so this is not applied there.
+/// for everything else (a Sum's left child is the in-place accumulator), so
+/// this is not applied there.
 ///
 /// \param n a non-leaf node
 /// \pre \p n is not a leaf
@@ -190,6 +191,27 @@ struct TreeNodeEqualityComparator {
         return false;
       }
 
+      // NB the canonicalization transform (phase / conjugation / bra-ket
+      // swap) is deliberately _not_ part of the identity: a slot holds the
+      // canonical value and every consumer applies its own transform on
+      // retrieval (apply_canon_transform), so +T / -T / T꙳ share one slot --
+      // and the hash-keyed value maps of the ordered (DAG) executor must
+      // agree with this comparator on what is one value.
+
+      // The two nodes must lay their result modes out the same way.
+      //
+      // The hash and the connectivity comparison identify nodes across index
+      // renamings and across bra<->ket orientation -- that is what makes a
+      // subexpression shareable -- and CanonTransform carries the residual
+      // phase / conjugation / bra-ket swap, but nothing carries a permutation
+      // of the result modes. Two same-space external indices of an isomorphic
+      // network can be ordered either way, since bliss breaks an automorphic
+      // orbit by input vertex order, and a cached buffer served under the
+      // other ordering is a transposed value.
+      if (lhs->layout_fingerprint() != rhs->layout_fingerprint()) {
+        return false;
+      }
+
       if (lhs->is_constant() || lhs->is_variable() || lhs->is_power()) {
         if (*lhs->expr() != *rhs->expr()) {
           return false;
@@ -265,14 +287,13 @@ struct TreeNodeEqualityComparator {
         return (*this)(lfirst, rfirst) && (*this)(lsecond, rsecond);
       }
 
-      // Non-Product internal node (Sum, scalar*tensor product, adjoint): its
+      // Non-Product internal node (Sum, scalar*tensor product): its
       // left/right assignment is canonical (e.g. the in-place Sum tree is
-      // left-folded; an Adjoint's right child is a sentinel), so operand order
-      // carries meaning and the children are compared in order. The right
-      // child (a single summand / the scalar factor / the adjoint sentinel) is
-      // bounded in depth and compared recursively; the left child is the deep
-      // spine, so rather than recurse into it the loop starts over with it as
-      // the new (lhs, rhs), unwinding the spine iteratively.
+      // left-folded), so operand order carries meaning and the children are
+      // compared in order. The right child (a single summand / the scalar
+      // factor) is bounded in depth and compared recursively; the left child
+      // is the deep spine, so rather than recurse into it the loop starts
+      // over with it as the new (lhs, rhs), unwinding the spine iteratively.
       if (!(*this)(lhs.right(), rhs.right())) {
         return false;
       }
@@ -285,29 +306,93 @@ struct TreeNodeEqualityComparator {
   IndexSpecificTensorBlockEqualComparator block_comparator_;
 };
 
+/// \brief The identity of a symbolic common subexpression: the slot identity
+///        (TreeNodeHasher) plus the conjugation the node's transform carries.
+///
+/// \details A uniformly conjugated product or sum hashes onto its
+/// unconjugated twin's slot (the hoisted conjugation is stripped from the
+/// slot hash and applied on retrieval), which is right for a value cache.
+/// A symbolic intermediate is different: it is defined by the spelling it
+/// denotes (to_expr) and used by name, and no generator applies a conjugation
+/// to an intermediate it computed, so the conjugated node and its twin are
+/// two intermediates here. The phase stays outside the identity, as in the
+/// slot identity: it is a scalar the use multiplies in. A bra<->ket exchange
+/// already salts the slot hash and needs no term.
+template <typename TreeNode, bool force_hash_collisions = false>
+struct SubexpressionHasher {
+  using is_transparent = void;
+
+  std::size_t operator()(const TreeNode *node) const { return (*this)(*node); }
+
+  std::size_t operator()(const TreeNode &node) const {
+    if constexpr (force_hash_collisions) {
+      return 0;
+    }
+    std::size_t h = TreeNodeHasher<TreeNode, force_hash_collisions>{}(node);
+    if (node->canon_transform().conj) hash::combine(h, std::size_t{1});
+    return h;
+  }
+};
+
+/// Equality for SubexpressionHasher: the slot equality with the conjugation
+/// bit compared as well
+template <typename TreeNode>
+struct SubexpressionEqualityComparator {
+  using is_transparent = void;
+
+  SubexpressionEqualityComparator() = default;
+  SubexpressionEqualityComparator(std::vector<Index> indices)
+      : slot_(std::move(indices)) {}
+
+  bool operator()(const TreeNode *lhs, const TreeNode *rhs) const {
+    return (*this)(*lhs, *rhs);
+  }
+  bool operator()(const TreeNode &lhs, const TreeNode *rhs) const {
+    return (*this)(lhs, *rhs);
+  }
+  bool operator()(const TreeNode *lhs, const TreeNode &rhs) const {
+    return (*this)(*lhs, rhs);
+  }
+  bool operator()(const TreeNode &lhs, const TreeNode &rhs) const {
+    return lhs->canon_transform().conj == rhs->canon_transform().conj &&
+           slot_(lhs, rhs);
+  }
+
+ private:
+  TreeNodeEqualityComparator<TreeNode> slot_;
+};
+
 /// A map between (sub)tree hashes and how often they have been found
 /// This is identical to SubexpressionUsageCounts except that we store node
 /// pointers here (lower memory footprint but higher risk of dangling pointers)
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionHashCollector =
     std::unordered_map<const TreeNode *, std::size_t,
-                       TreeNodeHasher<TreeNode, force_hash_collisions>,
-                       TreeNodeEqualityComparator<TreeNode>>;
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
 
 /// A map between (sub)trees and how often they have been found
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionUsageCounts =
     std::unordered_map<TreeNode, std::size_t,
-                       TreeNodeHasher<TreeNode, force_hash_collisions>,
-                       TreeNodeEqualityComparator<TreeNode>>;
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
 
 /// A map between (sub)trees and the name chosen to represent the associated
 /// intermediate
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionNames =
     std::unordered_map<TreeNode, std::wstring,
-                       TreeNodeHasher<TreeNode, force_hash_collisions>,
-                       TreeNodeEqualityComparator<TreeNode>>;
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
+
+/// A map between (sub)trees and the phase of the occurrence that defines the
+/// associated intermediate (see SubexpressionReplacer)
+template <typename TreeNode, bool force_hash_collisions = false>
+using SubexpressionPhases =
+    std::unordered_map<TreeNode, std::int8_t,
+                       SubexpressionHasher<TreeNode, force_hash_collisions>,
+                       SubexpressionEqualityComparator<TreeNode>>;
 
 }  // namespace sequant
 

@@ -96,26 +96,35 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t3.column_symmetry() == ColumnSymmetry::Nonsymm);
     REQUIRE(t3.label() == L"N");
 
-    REQUIRE_NOTHROW(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                           ket{Index{L"i_3"}, Index{L"i_4"}},
-                           aux{Index{L"i_5"}}, Symmetry::Nonsymm,
-                           BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm));
-    auto t4 = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                     ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
-                     Symmetry::Nonsymm, BraKetSymmetry::Symm,
-                     ColumnSymmetry::Nonsymm);
-    REQUIRE(t4);
-    REQUIRE(t4.bra_rank() == 2);
-    REQUIRE(t4.ket_rank() == 2);
-    REQUIRE(t4.aux_rank() == 1);
-    REQUIRE(t4.rank() == 2);
-    REQUIRE(ranges::size(t4.const_braketaux()) == 5);
-    REQUIRE(ranges::size(t4.const_slots()) == 5);
-    REQUIRE(t4.num_slots() == 5);
-    REQUIRE(t4.symmetry() == Symmetry::Nonsymm);
-    REQUIRE(t4.braket_symmetry() == BraKetSymmetry::Symm);
-    REQUIRE(t4.column_symmetry() == ColumnSymmetry::Nonsymm);
-    REQUIRE(t4.label() == L"g");
+    // an explicit Symm bra/ket exchange is derivable only over a real basis
+    REQUIRE_THROWS_AS(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
+                             ket{Index{L"i_3"}, Index{L"i_4"}},
+                             aux{Index{L"i_5"}}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm),
+                      Exception);
+    {
+      auto real_basis = scoped_real_basis();
+      REQUIRE_NOTHROW(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
+                             ket{Index{L"i_3"}, Index{L"i_4"}},
+                             aux{Index{L"i_5"}}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm));
+      auto t4 = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
+                       ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
+                       Symmetry::Nonsymm, BraKetSymmetry::Symm,
+                       ColumnSymmetry::Nonsymm);
+      REQUIRE(t4);
+      REQUIRE(t4.bra_rank() == 2);
+      REQUIRE(t4.ket_rank() == 2);
+      REQUIRE(t4.aux_rank() == 1);
+      REQUIRE(t4.rank() == 2);
+      REQUIRE(ranges::size(t4.const_braketaux()) == 5);
+      REQUIRE(ranges::size(t4.const_slots()) == 5);
+      REQUIRE(t4.num_slots() == 5);
+      REQUIRE(t4.symmetry() == Symmetry::Nonsymm);
+      REQUIRE(t4.braket_symmetry() == BraKetSymmetry::Symm);
+      REQUIRE(t4.column_symmetry() == ColumnSymmetry::Nonsymm);
+      REQUIRE(t4.label() == L"g");
+    }
 
     SECTION("null indices") {
       // null indices ok in asymmetric bra or ket
@@ -443,21 +452,21 @@ TEST_CASE("tensor", "[elements]") {
     auto f1 = Tensor(L"F", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"});
     REQUIRE_NOTHROW(f1.adjoint());
     // F is now non-Hermitian by default (braket Nonsymm), so its adjoint is
-    // marked with the conjugation superscript
-    REQUIRE(to_latex(f1) == L"{F⁺^{{i_1}{i_2}}_{{i_3}{i_4}}}");
+    // typeset with the dagger superscript
+    REQUIRE(to_latex(f1) == L"{{F^{\\dagger}}^{{i_1}{i_2}}_{{i_3}{i_4}}}");
 
     auto t1 = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
                      BraKetSymmetry::Nonsymm);
     REQUIRE_NOTHROW(t1.adjoint());
-    REQUIRE(to_latex(t1) == L"{t⁺^{{a_1}}_{{i_1}}}");
-    t1.adjoint();
+    REQUIRE(to_latex(t1) == L"{{t^{\\dagger}}^{{a_1}}_{{i_1}}}");
+    REQUIRE(t1.adjoint() == 1);
     REQUIRE(to_latex(t1) == L"{t^{{i_1}}_{{a_1}}}");
 
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre{L"i_1"}, ann{L"i_2"});
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
-            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{F⁺^{{i_1}}_{{i_2}}}}");
+            L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{{F^{\\dagger}}^{{i_1}}_{{i_2}}}}");
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
@@ -477,15 +486,59 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
             BraKetSymmetry::Nonsymm);
     REQUIRE(to_braket_symmetry(Hermiticity::NonHermitian, Field::Complex) ==
             BraKetSymmetry::Nonsymm);
-    // AntiHermitian cannot yet be represented in BraKetSymmetry -> Nonsymm
+    // signed derivations
+    using CP = ConjugationParity;
     REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, Field::Real) ==
-            BraKetSymmetry::Nonsymm);
+            BraKetSymmetry::Antisymm);
+    REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, Field::Complex) ==
+            BraKetSymmetry::AntiConjugate);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, CP::Odd, Field::Real) ==
+            BraKetSymmetry::Antisymm);
+    REQUIRE(to_braket_symmetry(Hermiticity::AntiHermitian, CP::Odd,
+                               Field::Real) == BraKetSymmetry::Symm);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, CP::None, Field::Real) ==
+            BraKetSymmetry::Conjugate);
+    REQUIRE(to_braket_symmetry(Hermiticity::Hermitian, CP::Odd,
+                               Field::Complex) == BraKetSymmetry::Conjugate);
+    REQUIRE(to_conjugation_symmetry(CP::Even, Field::Real) ==
+            ConjugationSymmetry::Symm);
+    REQUIRE(to_conjugation_symmetry(CP::Odd, Field::Real) ==
+            ConjugationSymmetry::Antisymm);
+    REQUIRE(to_conjugation_symmetry(CP::None, Field::Real) ==
+            ConjugationSymmetry::Nonsymm);
+    REQUIRE(to_conjugation_symmetry(CP::Even, Field::Complex) ==
+            ConjugationSymmetry::Nonsymm);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Antisymm) ==
+            Hermiticity::AntiHermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Antisymm, CP::Odd) ==
+            Hermiticity::Hermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::Symm, CP::Odd) ==
+            Hermiticity::AntiHermitian);
+    REQUIRE(to_hermiticity(BraKetSymmetry::AntiConjugate) ==
+            Hermiticity::AntiHermitian);
+    REQUIRE(braket_swap_sign(BraKetSymmetry::Antisymm) == -1);
+    REQUIRE_FALSE(braket_swap_sign(BraKetSymmetry::Conjugate).has_value());
+    REQUIRE(braket_conjugate_swap_sign(BraKetSymmetry::AntiConjugate) == -1);
+    REQUIRE(conjugation_sign(ConjugationSymmetry::Antisymm) == -1);
+    REQUIRE(braket_swap_sign(BraKetSymmetry::Symm) == 1);
+    REQUIRE_FALSE(braket_swap_sign(BraKetSymmetry::Nonsymm).has_value());
+    REQUIRE(braket_conjugate_swap_sign(BraKetSymmetry::Conjugate) == 1);
+    REQUIRE(conjugation_sign(ConjugationSymmetry::Symm) == 1);
 
     REQUIRE(to_hermiticity(BraKetSymmetry::Symm) == Hermiticity::Hermitian);
     REQUIRE(to_hermiticity(BraKetSymmetry::Conjugate) ==
             Hermiticity::Hermitian);
     REQUIRE(to_hermiticity(BraKetSymmetry::Nonsymm) ==
             Hermiticity::NonHermitian);
+
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::Conjugate, Field::Real) ==
+            CP::None);
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::AntiConjugate, Field::Real) ==
+            CP::None);
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::Conjugate, Field::Complex) ==
+            CP::Even);
+    REQUIRE(to_conjugation_parity(BraKetSymmetry::Symm, Field::Real) ==
+            CP::Even);
   }
 
   SECTION("braket_symmetry is derived from Hermiticity + base_field") {
@@ -531,21 +584,30 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
       REQUIRE(g.base_field() == Field::Complex);
       REQUIRE(g.braket_symmetry() == BraKetSymmetry::Conjugate);
     }
-    // AntiHermitian is recorded but currently derives to Nonsymm
+    // AntiHermitian over a real field derives the signed Antisymm state (its
+    // even-parity default: T{q;p} = -T{p;q})
     {
       auto w = Tensor(L"w", bra{idx(L"i_1", Field::Real)},
                       ket{idx(L"i_2", Field::Real)}, Symmetry::Nonsymm,
                       Hermiticity::AntiHermitian);
       REQUIRE(w.hermiticity() == Hermiticity::AntiHermitian);
-      REQUIRE(w.braket_symmetry() == BraKetSymmetry::Nonsymm);
+      REQUIRE(w.braket_symmetry() == BraKetSymmetry::Antisymm);
     }
   }
 
   SECTION("legacy BraKetSymmetry ctor back-fills Hermiticity") {
-    auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
-                    BraKetSymmetry::Symm);
-    REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
-    REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    // Symm is what a Hermitian tensor derives over a real basis; over the
+    // default complex basis, where the exchange conjugates, it is refused
+    REQUIRE_THROWS_AS(Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                             BraKetSymmetry::Symm),
+                      Exception);
+    {
+      auto real_basis = scoped_real_basis();
+      auto g = Tensor(L"g", bra{L"i_1"}, ket{L"i_2"}, Symmetry::Nonsymm,
+                      BraKetSymmetry::Symm);
+      REQUIRE(g.braket_symmetry() == BraKetSymmetry::Symm);
+      REQUIRE(g.hermiticity() == Hermiticity::Hermitian);
+    }
     auto t = Tensor(L"t", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Nonsymm,
                     BraKetSymmetry::Nonsymm);
     REQUIRE(t.hermiticity() == Hermiticity::NonHermitian);
@@ -581,17 +643,21 @@ TEST_CASE("tensor_hermiticity", "[elements]") {
 
   SECTION("braket and hermiticity must agree when both are given") {
     // the two spell the same underlying trait, so a contradicting pair is a
-    // caller error rather than something to silently resolve one way
-    REQUIRE_THROWS_AS(
-        Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm,
-                                .hermiticity = Hermiticity::NonHermitian}),
-        Exception);
-    // AntiHermitian is the one trait BraKetSymmetry cannot represent, so
-    // pinning it alongside its (Nonsymm) braket must stay legal
+    // caller error rather than something to silently resolve one way (over a
+    // real basis, where Symm by itself is derivable)
+    {
+      auto real_basis = scoped_real_basis();
+      REQUIRE_THROWS_AS(
+          Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
+                 TensorSymmetries{.braket = BraKetSymmetry::Symm,
+                                  .hermiticity = Hermiticity::NonHermitian}),
+          Exception);
+    }
+    // AntiHermitian over the default (complex) field derives AntiConjugate;
+    // pinning it alongside its correctly-derived braket symmetry stays legal
     REQUIRE_NOTHROW(
         Tensor(L"g", bra{L"i_1"}, ket{L"a_1"},
-               TensorSymmetries{.braket = BraKetSymmetry::Nonsymm,
+               TensorSymmetries{.braket = BraKetSymmetry::AntiConjugate,
                                 .hermiticity = Hermiticity::AntiHermitian}));
   }
 
@@ -674,11 +740,16 @@ TEST_CASE("(anti)symmetrizer factories", "[elements]") {
 
   SECTION("ctor rejects contradicting symmetries") {
     // braket symmetry, like column symmetry below, is a defining property of a
-    // reserved (anti)symmetrizer, not a free parameter
-    REQUIRE_THROWS_AS(
-        Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-               TensorSymmetries{.braket = BraKetSymmetry::Symm}),
-        Exception);
+    // reserved (anti)symmetrizer, not a free parameter (over a real basis,
+    // where Symm by itself is derivable)
+    {
+      auto real_basis = scoped_real_basis();
+      REQUIRE_THROWS_AS(
+          Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"},
+                 TensorSymmetries{.braket = BraKetSymmetry::Symm}),
+          Exception);
+    }
     REQUIRE_THROWS_AS(
         Tensor(reserved::symm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                TensorSymmetries{.column = ColumnSymmetry::Nonsymm}),
@@ -834,5 +905,106 @@ TEST_CASE("density labels", "[elements]") {
          {density::make_rdm(Index(L"i_1"), Index(L"i_2")),
           density::make_cumulant(bra{L"i_1", L"i_3"}, ket{L"i_2", L"i_4"})})
       REQUIRE(*deserialize<ExprPtr>(serialize(d)) == *d);
+  }
+}
+
+TEST_CASE("tensor_conjugation", "[elements][conjugate]") {
+  using namespace sequant;
+
+  // for a tensor of indefinite parity the K-conjugated state is a first-class
+  // atom (no slot reordering), spelled after the label
+
+  auto t =
+      Tensor(L"t", bra{L"i_1"}, ket{L"a_1"},
+             TensorSymmetries{.braket = BraKetSymmetry::Conjugate,
+                              .conjugation_parity = ConjugationParity::None,
+                              .column = ColumnSymmetry::Symm});
+
+  SECTION("toggle, identity, ordering") {
+    REQUIRE(!t.kconjugated());
+    const auto h0 = t.hash_value();
+    const auto latex0 = t.to_latex();
+
+    Tensor tc{t};
+    REQUIRE(tc.kconjugate() == 1);
+    REQUIRE(tc.kconjugated());
+    REQUIRE(tc.hash_value() != h0);  // conj is first-class identity
+    REQUIRE(!(t == tc));             // not equal to the bare tensor
+    REQUIRE(t < tc);                 // T orders before conj(T)
+    REQUIRE(tc.to_latex().find(L"^{*}") != std::wstring::npos);
+    REQUIRE(latex0.find(L"^{*}") == std::wstring::npos);
+
+    // toggling back restores everything bit-for-bit
+    REQUIRE(tc.kconjugate() == 1);
+    REQUIRE(!tc.kconjugated());
+    REQUIRE(tc.hash_value() == h0);
+    REQUIRE(t == tc);
+  }
+
+  SECTION("clone preserves the state") {
+    Tensor tc{t};
+    REQUIRE(tc.kconjugate() == 1);
+    auto cloned = tc.clone();
+    REQUIRE(cloned->as<Tensor>().kconjugated());
+    REQUIRE(cloned->as<Tensor>() == tc);
+  }
+
+  SECTION("serialization spells label꙳") {
+    Tensor tc{t};
+    REQUIRE(tc.kconjugate() == 1);
+    auto s = serialize(tc);
+    REQUIRE(s.find(L"t꙳{") == 0);  // mark directly after the label
+    REQUIRE(serialize(Tensor{t}).find(L"꙳") == std::wstring::npos);
+  }
+
+  SECTION("adjoint commutes with the K state for Conjugate braket symmetry") {
+    // for BraKetSymmetry::Conjugate, adjoint() is a pure bra<->ket swap (the
+    // adjointed state normalizes away), so it must leave the K state alone
+    Tensor tc{t};
+    REQUIRE(tc.kconjugate() == 1);
+    REQUIRE(tc.adjoint() == 1);
+    REQUIRE(tc.kconjugated());
+    REQUIRE(tc.bra().at(0).label() == L"a_1");  // swapped
+  }
+
+  SECTION("adjoint and the K state commute (Klein four-group)") {
+    // the two states commute, so kconjugate() and adjoint() commute on the
+    // spelling too. For Conjugate braket symmetry adjoint() is a pure
+    // bra<->ket swap and leaves the K state alone; for Nonsymm, adjoint()
+    // sets the adjointed state, so kconjugate(adjoint(u)) is u⁺꙳, a state
+    // distinct from both u꙳ and u⁺.
+    for (auto bks : {BraKetSymmetry::Conjugate, BraKetSymmetry::Nonsymm}) {
+      auto u =
+          Tensor(L"u", bra{L"i_1"}, ket{L"a_1"},
+                 TensorSymmetries{.braket = bks,
+                                  .conjugation_parity = ConjugationParity::None,
+                                  .column = ColumnSymmetry::Nonsymm});
+      // conj then adjoint
+      Tensor ca{u};
+      REQUIRE(ca.kconjugate() == 1);
+      REQUIRE(ca.adjoint() == 1);
+      // adjoint then conj
+      Tensor ac{u};
+      REQUIRE(ac.adjoint() == 1);
+      REQUIRE(ac.kconjugate() == 1);
+      REQUIRE(ca == ac);  // the K state commutes with adjoint()
+      REQUIRE(ca.bra().at(0).label() == L"a_1");  // swapped
+      if (bks == BraKetSymmetry::Conjugate) {
+        REQUIRE(ca.kconjugated());
+        REQUIRE_FALSE(ca.adjointed());
+      } else {
+        REQUIRE(ca.kconjugated());
+        REQUIRE(ca.adjointed());
+        REQUIRE(ca.label() == L"u");
+        REQUIRE(ca.decorated_label() == L"u⁺꙳");
+      }
+      // adjoint is an involution that leaves the K state as it found it
+      REQUIRE(ca.adjoint() == 1);
+      REQUIRE(ca.kconjugated());
+      REQUIRE(ca.bra().at(0).label() == L"i_1");
+      Tensor uc{u};
+      REQUIRE(uc.kconjugate() == 1);
+      REQUIRE(ca == uc);
+    }
   }
 }

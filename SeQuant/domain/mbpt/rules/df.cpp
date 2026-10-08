@@ -4,8 +4,11 @@
 
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 
+#include <SeQuant/domain/mbpt/rules/conjugated.hpp>
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/operations.hpp>
@@ -20,6 +23,12 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
+  // the factors below are built from tnsr's slots, so a tensor carrying a core
+  // state is factorized as the bare array and the factorization conjugated
+  if (tnsr.adjointed() || tnsr.kconjugated())
+    return detail::factorize_conjugated(tnsr, [&](const Tensor& bare) {
+      return density_fit_impl(bare, aux_idx, factor_label);
+    });
 
   // The 3-center DF factor (pq|X) is a matrix element of a (real, symmetric)
   // Coulomb metric and is therefore Hermitian in its p<->q (bra<->ket) pair --
@@ -49,10 +58,12 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
                          ket({ranges::back(tnsr.ket())}), aux({aux_idx}),
                          Symmetry::Nonsymm, Hermiticity::Hermitian,
                          ColumnSymmetry::Symm);
-    return t1 * t2 - t3 * t4;
+    ExprPtr result = t1 * t2 - t3 * t4;
+    return result;
   }
 
-  return t1 * t2;
+  ExprPtr result = t1 * t2;
+  return result;
 }
 
 ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,

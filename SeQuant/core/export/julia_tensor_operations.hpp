@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/marked_name.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -274,10 +275,26 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
  protected:
   std::string m_generated;
 
+  /// @return @p leaf rendered in a value position
+  template <typename T>
+  std::string stringify_leaf(const T &leaf, const Context &ctx) const {
+    return represent(leaf, ctx);
+  }
+
+  /// @return @p variable rendered in a value position
+  /// @note represent() names the variable; in a value position its conjugation
+  ///       has to be spelled out, because the name does not carry it
+  std::string stringify_leaf(const Variable &variable,
+                             const Context &ctx) const {
+    std::string repr = represent(variable, ctx);
+    if (variable.conjugated()) repr = wrap_conj(std::move(repr));
+    return repr;
+  }
+
   std::string to_julia_expr(const Expr &expr, const Context &ctx) const {
     return detail::stringify_expr(
         expr, " * ",
-        [this, &ctx](const auto &e) { return this->represent(e, ctx); },
+        [this, &ctx](const auto &e) { return this->stringify_leaf(e, ctx); },
         "to_julia_expr");
   }
 
@@ -330,7 +347,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
-    std::string representation = toUtf8(tensor.label());
+    std::string representation = export_name(tensor);
 
     representation += "_";
     representation += ctx.get_tags(tensor);

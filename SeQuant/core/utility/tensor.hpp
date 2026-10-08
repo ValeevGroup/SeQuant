@@ -6,6 +6,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <vector>
 
@@ -19,6 +20,10 @@ namespace sequant {
 /// will lead to t{a1,i1} comparing equal to e.g. t{;a1,i1;}. The assumption
 /// here is that the bra/ket/aux is not important at the level where tensor
 /// blocks are relevant (e.g. during numerical evaluation).
+/// The bare label alone does not name the array: the two core states are
+/// compared right after it (Tensor::states_code()), so a marked and an
+/// unmarked tensor over the same slots are different blocks: `t`, `t⁺`, `t꙳`
+/// and `t⁺꙳` are four, ordered `t < t⁺ < t꙳ < t⁺꙳`.
 template <template <class> class Comparator, template <class> class Selector,
           bool fallback>
 struct TensorBlockComparator {
@@ -26,6 +31,13 @@ struct TensorBlockComparator {
     if (lhs.label() != rhs.label()) {
       Comparator<decltype(lhs.label())> cmp;
       return cmp(lhs.label(), rhs.label());
+    }
+
+    const std::uint8_t lhs_states = lhs.states_code();
+    const std::uint8_t rhs_states = rhs.states_code();
+    if (lhs_states != rhs_states) {
+      Comparator<std::uint8_t> cmp;
+      return cmp(lhs_states, rhs_states);
     }
 
     if (lhs.num_slots() != rhs.num_slots()) {
@@ -84,6 +96,9 @@ using TensorBlockLessThanComparator =
 /// Similar to TensorBlockComparator but in case of tensors that compare equal
 /// based on their tensor blocks (slots), they are compared on if and where they
 /// have specific indices (compared the usual way, including ordinals).
+/// The core states are seen through TensorBlockComparator, which this one
+/// consults first, so a marked and an unmarked tensor never reach the
+/// index-specific tie-break.
 template <template <class> class Comparator, template <class> class Selector,
           bool fallback>
 struct IndexSpecificTensorBlockComparator {

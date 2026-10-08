@@ -21,10 +21,13 @@ ExprPtr Constant::clone() const {
   return result;
 }
 
-void Constant::adjoint() {
+std::int8_t Constant::adjoint() {
   value_ = conj(value_);
   reset_hash_value();
+  return 1;
 }
+
+std::int8_t Constant::kconjugate() { return adjoint(); }
 
 Constant &Constant::operator*=(const Expr &that) {
   if (that.is<Constant>()) {

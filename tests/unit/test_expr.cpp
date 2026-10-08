@@ -42,7 +42,8 @@ struct Dummy : public sequant::Expr {
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
-  void adjoint() override {}
+  std::int8_t adjoint() override { return 1; }
+  std::int8_t kconjugate() override { return 1; }
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
@@ -74,7 +75,9 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
 
   type_id_type type_id() const override { return get_type_id<VecExpr<T>>(); };
 
-  void adjoint() override {}
+  std::int8_t adjoint() override { return 1; }
+
+  std::int8_t kconjugate() override { return 1; }
 
   sequant::ConstExprIterator begin_subexpr() const override {
     if constexpr (sequant::Expr::is_shared_ptr_of_expr<T>::value) {
@@ -133,7 +136,12 @@ struct Adjointable : public sequant::Expr {
   bool static_equal(const sequant::Expr &that) const override {
     return v == that.as<Adjointable>().v;
   }
-  void adjoint() override { v = -v; };
+  std::int8_t adjoint() override {
+    v = -v;
+    return 1;
+  };
+
+  std::int8_t kconjugate() override { return 1; };
 
   int v = 1;
 };
@@ -149,7 +157,7 @@ template <typename Derived>
 struct MinimalExpr : public sequant::Expr {
   type_id_type type_id() const override { return get_type_id<Derived>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Derived>(); }
-  void adjoint() override {}
+  std::int8_t adjoint() override { return 1; }
   bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
@@ -609,12 +617,12 @@ TEST_CASE("expr", "[elements]") {
     {  // Power: adjoint flips the conjugation flag; base/exponent unchanged
       Power pv(ex<Variable>(L"z"), rational{1, 2});
       REQUIRE(!pv.conjugated());
-      pv.adjoint();
+      REQUIRE(pv.adjoint() == 1);
       REQUIRE(pv.conjugated());
       REQUIRE(!pv.base()->as<Variable>().conjugated());
       REQUIRE(pv.exponent() == rational{1, 2});
       // double adjoint is identity
-      pv.adjoint();
+      REQUIRE(pv.adjoint() == 1);
       REQUIRE(!pv.conjugated());
 
       using scalar_type = Constant::scalar_type;
@@ -627,7 +635,7 @@ TEST_CASE("expr", "[elements]") {
       // (1+i)^{2} = 2i; ((1+i)^{2})* = -2i
       auto one_plus_i = ex<Constant>(scalar_type{1, 1});  // (1+i)
       auto square = ex<Power>(one_plus_i, 2);             // (1+i)^{2}
-      square->as<Power>().adjoint();
+      REQUIRE(square->as<Power>().adjoint() == 1);
       REQUIRE(square->as<Power>().conjugated());
       Power::flatten(square);
       REQUIRE(square->is<Constant>());
@@ -673,7 +681,7 @@ TEST_CASE("expr", "[elements]") {
       const auto e = std::make_shared<Variable>(L"q");
       REQUIRE(e->to_latex() == L"{q}");
       REQUIRE_NOTHROW(e->adjoint());
-      REQUIRE(e->to_latex() == L"{{q}^*}");
+      REQUIRE(e->to_latex() == L"{{q}^{*}}");
       REQUIRE_NOTHROW(e->adjoint());
       REQUIRE(e->to_latex() == L"{q}");
     }
@@ -689,6 +697,17 @@ TEST_CASE("expr", "[elements]") {
 
       Power pv(ex<Variable>(L"x"), rational{2, 1});
       REQUIRE(to_latex(pv) == L"{x}^{2}");
+
+      // a conjugated Power braces the power before its own superscript, so
+      // no group ends up carrying two of them, not even over a base that
+      // already has one
+      auto xc = ex<Variable>(L"x");
+      REQUIRE_NOTHROW(xc->adjoint());
+      REQUIRE(xc->to_latex() == L"{{x}^{*}}");
+      Power pvc(xc, rational{2, 1});
+      REQUIRE(to_latex(pvc) == L"{{x}^{*}}^{2}");
+      pvc.conjugate();
+      REQUIRE(to_latex(pvc) == L"{{{{x}^{*}}^{2}}^{*}}");
     }
 
     Product sp0{};
@@ -1344,6 +1363,8 @@ TEST_CASE("expr", "[elements]") {
       REQUIRE_THAT(expr, EquivalentTo("R1{a1;i1} = 2 t{a1,i1}:A"));
     }
     SECTION("braket-symmetry") {
+      // the `S` braket letter is derivable only over a real basis
+      auto real_basis = sequant::tests::scoped_real_basis();
       auto expr = deserialize<ResultExpr>(
           "R1{a1;i1} = f{a1;i1}:A-S-S + f{i1;a1}:A-S-S");
 
@@ -1622,7 +1643,7 @@ TEST_CASE("canonical_mark", "[elements]") {
         [](ExprPtr &e) { e->as<Product>().append(2, ex<Constant>(3)); }));
     CHECK(!check([](ExprPtr &e) { e->as<Product>() *= Constant(3); }));
     CHECK(!check([](ExprPtr &e) { e->as<Product>().add_identical(e); }));
-    CHECK(!check([](ExprPtr &e) { e->adjoint(); }));
+    CHECK(!check([](ExprPtr &e) { (void)e->adjoint(); }));
     // replacing or reordering factors
     CHECK(!check([](ExprPtr &e) {
       (*e)[0] = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
@@ -1638,7 +1659,8 @@ TEST_CASE("canonical_mark", "[elements]") {
       t->as<Tensor>().transform_indices(
           container::map<Index, Index>{{Index{L"i_1"}, Index{L"i_3"}}});
     }));
-    CHECK(!check([](ExprPtr &e) { e->as<Product>().factor(1)->adjoint(); }));
+    CHECK(!check(
+        [](ExprPtr &e) { (void)e->as<Product>().factor(1)->adjoint(); }));
     // non-mutating access does not invalidate
     CHECK(check([](ExprPtr &e) {
       for ([[maybe_unused]] auto &factor : *e) {
@@ -1703,11 +1725,11 @@ TEST_CASE("canonical_mark", "[elements]") {
       auto c = e->clone();
       REQUIRE(c->is_canonical(opts));
       // mutating the clone does not affect the original, or vice versa
-      c->adjoint();
+      (void)c->adjoint();
       REQUIRE(!c->is_canonical(opts));
       REQUIRE(e->is_canonical(opts));
       auto c2 = e->clone();
-      e->adjoint();
+      (void)e->adjoint();
       REQUIRE(c2->is_canonical(opts));
     }
     auto t = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"i_1"});
@@ -1724,4 +1746,41 @@ TEST_CASE("canonical_mark", "[elements]") {
     Product moved(std::move(e->as<Product>()));
     REQUIRE(!e->is_canonical(opts));
   }
+}
+
+TEST_CASE("kconjugate on scalars and operators", "[expr]") {
+  using namespace sequant;
+  // a scalar's K-conjugate is its complex conjugate: same flag as adjoint()
+  Variable v(L"z");
+  REQUIRE(v.kconjugate() == 1);
+  REQUIRE(v.conjugated());
+  REQUIRE(v.kconjugate() == 1);
+  REQUIRE_FALSE(v.conjugated());
+  Constant c(Constant::scalar_type{1, 2});
+  REQUIRE(c.kconjugate() == 1);
+  REQUIRE(c.value() == Constant::scalar_type{1, -2});
+  Power p(ex<Variable>(L"z"), rational{1, 2});
+  REQUIRE(p.kconjugate() == 1);
+  REQUIRE(p.conjugated());
+  // an operator string is unchanged: K acts through the coefficients
+  FNOperator op(cre({L"p_1"}), ann({L"p_2"}));
+  const FNOperator before = op;
+  REQUIRE(op.kconjugate() == 1);
+  REQUIRE(op == before);
+  // the free function clones, conjugates the scalar and recurses into the
+  // factors without reversing them
+  const auto prod =
+      ex<Product>(Constant::scalar_type{0, 1},
+                  ExprPtrList{ex<Variable>(L"x"), ex<Variable>(L"y")});
+  const auto kprod = kconjugate(prod);
+  const auto &kp = kprod->as<Product>();
+  REQUIRE(kp.scalar() == Constant::scalar_type{0, -1});
+  REQUIRE(kp.factor(0)->as<Variable>().label() == L"x");
+  REQUIRE(kp.factor(0)->as<Variable>().conjugated());
+  REQUIRE(kp.factor(1)->as<Variable>().label() == L"y");
+  REQUIRE(kp.factor(1)->as<Variable>().conjugated());
+  REQUIRE_FALSE(prod->as<Product>().factor(0)->as<Variable>().conjugated());
+  // the marks
+  REQUIRE(sequant::adjoint_label == L'⁺');
+  REQUIRE(sequant::conjugate_label == L'꙳');
 }

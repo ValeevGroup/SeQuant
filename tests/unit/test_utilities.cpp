@@ -509,6 +509,14 @@ TEST_CASE("utilities", "[utilities]") {
           {L"t{a1;i1}", L"t{a1;i1}", true},
           {L"t{a4;i3;p2}", L"t{a2;i1;p6}", true},
           {L"I{;;a2,i2}", L"I{;;a1,i1}", true},
+          // the core states are part of the block: t, t⁺, t꙳ and
+          // t⁺꙳ name four different arrays over the same slots
+          {L"t⁺{a1;i1}", L"t{a1;i1}", false},
+          {L"t⁺{a1;i1}", L"t⁺{a2;i2}", true},
+          {L"t꙳{a1;i1}:N-N-N-N", L"t{a1;i1}", false},
+          {L"t꙳{a1;i1}:N-N-N-N", L"t⁺{a1;i1}", false},
+          {L"t⁺꙳{a1;i1}:N-N-N-N", L"t⁺{a1;i1}", false},
+          {L"t⁺꙳{a1;i1}:N-N-N-N", L"t⁺꙳{a2;i2}:N-N-N-N", true},
       };
 
       for (const auto& [lhs, rhs, equal] : test_cases) {
@@ -540,6 +548,13 @@ TEST_CASE("utilities", "[utilities]") {
           {L"t{a1;i1}", L"t{a1;i1}", false},
           {L"t{a4;i3;p2}", L"t{a2;i1;p6}", false},
           {L"I{;;a2,i2}", L"I{;a1;i1}", false},
+          // the states order t < t⁺ < t꙳ < t⁺꙳, after the
+          // bare label and ahead of the slots
+          {L"t{a1;i1}", L"t⁺{a1;i1}", true},
+          {L"t⁺{a1;i1}", L"t꙳{a1;i1}:N-N-N-N", true},
+          {L"t꙳{a1;i1}:N-N-N-N", L"t⁺꙳{a1;i1}:N-N-N-N", true},
+          {L"t⁺{a1;p1}", L"t{a1;i1}", false},
+          {L"t⁺{a1;i1}", L"u{a1;i1}", true},
       };
 
       for (const auto& [lhs, rhs, less] : test_cases) {
@@ -557,6 +572,46 @@ TEST_CASE("utilities", "[utilities]") {
           REQUIRE(cmp(rhs_tensor, lhs_tensor) == !less);
         }
       }
+    }
+
+    SECTION("the core states are part of the block") {
+      // the mark lives in the states, not in the label, so a comparator that
+      // reads label() alone sees one block where there are four
+      const Tensor plain = deserialize(L"t{a1;i1}")->as<Tensor>();
+      const Tensor adj = deserialize(L"t⁺{a1;i1}")->as<Tensor>();
+      const Tensor conj = deserialize(L"t꙳{a1;i1}:N-N-N-N")->as<Tensor>();
+      const Tensor both = deserialize(L"t⁺꙳{a1;i1}:N-N-N-N")->as<Tensor>();
+      for (const Tensor& t : {plain, adj, conj, both})
+        REQUIRE(t.label() == L"t");  // the bare label is the same for all four
+      REQUIRE_FALSE(plain.adjointed());
+      REQUIRE_FALSE(plain.kconjugated());
+      REQUIRE(adj.adjointed());
+      REQUIRE_FALSE(adj.kconjugated());
+      REQUIRE_FALSE(conj.adjointed());
+      REQUIRE(conj.kconjugated());
+      REQUIRE(both.adjointed());
+      REQUIRE(both.kconjugated());
+
+      const std::vector<Tensor> ordered{plain, adj, conj, both};
+      const TensorBlockEqualComparator equal_cmp;
+      const TensorBlockLessThanComparator less_cmp;
+      const IndexSpecificTensorBlockEqualComparator ix_equal_cmp;
+      const IndexSpecificTensorBlockLessThanComparator ix_less_cmp;
+      for (std::size_t i = 0; i < ordered.size(); ++i) {
+        for (std::size_t j = 0; j < ordered.size(); ++j) {
+          CAPTURE(i, j);
+          const Tensor& l = ordered[i];
+          const Tensor& r = ordered[j];
+          REQUIRE(equal_cmp(l, r) == (i == j));
+          REQUIRE(ix_equal_cmp(l, r) == (i == j));
+          REQUIRE(less_cmp(l, r) == (i < j));
+          REQUIRE(ix_less_cmp(l, r) == (i < j));
+        }
+      }
+      // a marked tensor is still ordered by its bare label first
+      const Tensor other = deserialize(L"u{a1;i1}")->as<Tensor>();
+      REQUIRE(less_cmp(both, other));
+      REQUIRE_FALSE(less_cmp(other, both));
     }
   }
 
@@ -617,6 +672,8 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(m1 != c2);
         REQUIRE((m1 < var) == !var_is_less);
         REQUIRE((m1 > var) == var_is_less);
+        // the cross comparison mirrors the Expr ordering, whichever way the
+        // type ids happen to order Variable and Constant in this run
         REQUIRE((var < m1) == var_is_less);
         REQUIRE((var > m1) == !var_is_less);
 

@@ -4,8 +4,11 @@
 
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 
+#include <SeQuant/domain/mbpt/rules/conjugated.hpp>
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/operations.hpp>
@@ -28,6 +31,13 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
   SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
                  && tnsr.ket_rank() == 2  //
                  && tnsr.aux_rank() == 0);
+  // the factors below are built from tnsr's slots, so a tensor carrying a core
+  // state is factorized as the bare array and the factorization conjugated
+  if (tnsr.adjointed() || tnsr.kconjugated())
+    return detail::factorize_conjugated(tnsr, [&](const Tensor& bare) {
+      return tensor_hypercontract_impl(bare, aux_idx_1, aux_idx_2, factor_label,
+                                       aux_label);
+    });
 
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
                        aux({aux_idx_1}), particle_symmetric);
@@ -46,10 +56,12 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
     auto t3a = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}), ket(),
                           aux({aux_idx_2}), particle_symmetric);
 
-    return (t1 * t2 * z * t3 * t4) - (t1a * t2 * z * t3a * t4);
+    ExprPtr result = (t1 * t2 * z * t3 * t4) - (t1a * t2 * z * t3a * t4);
+    return result;
   }
 
-  return t1 * t2 * z * t3 * t4;
+  ExprPtr result = t1 * t2 * z * t3 * t4;
+  return result;
 }
 
 ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
