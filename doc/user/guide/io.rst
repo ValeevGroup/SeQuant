@@ -101,9 +101,9 @@ V1
                    | '_{' IndexList? '}^{' IndexList '}'                            | Meaning is _{<bra>}^{<ket>} (no aux)
    IndexList       Index ( ',' Index )?
    Index           IndexSpaceName '_'? Integer IndexDomain?
-   IndexDomain     '<' (ProtoLabel (',' ProtoLabel)*)? (';' Integer)? '>'           ';Integer' names a non-default index basis instance
-   ProtoLabel      IndexSpaceName '_'? Integer ( '<' ';' Integer '>' )?             May carry only a domainless instance (no nested protos)
-   IndexSpaceName                                                                    Name but no underscore allowed
+   IndexDomain     '<' (ProtoLabel (',' ProtoLabel)*)? (';' Integer)? '>'           ';Integer' names a non-default index basis instance; absent when IndexSpaceName is itself the label of a registered basis instance
+   ProtoLabel      IndexSpaceName '_'? Integer ( '<' ';' Integer '>' )?             May carry only a domainless instance (no nested protos); same rule for a named basis
+   IndexSpaceName                                                                    Name but no underscore allowed; the label of a registered IndexSpace or of a registered basis instance
    SymmetrySpec    ':' ( [ASN] ( '-' [SCN] ( '-' [SN] )? )? )                        :<Symmetry>-<BraKetSymmetry>-<ColumnSymmetry>
    Variable        Name
    Name                                                                              Single word (may include Unicode chars)

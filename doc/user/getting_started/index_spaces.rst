@@ -40,9 +40,9 @@ An :class:`sequant::Index` can run over a specific *basis instance* of its space
 basis instance can be registered under a label of its own with :func:`sequant::IndexBasisRegistry::add`; the entry
 carries its own extent and field. The space views (:func:`sequant::IndexBasisRegistry::spaces`) and the set algebra
 see spaces only; :func:`sequant::IndexBasisRegistry::retrieve` throws on such a label, use
-:func:`sequant::IndexBasisRegistry::retrieve_basis`. Indices in a named basis are printed by that label and can be
-constructed from it, and code that keys an axis by label tells them apart from the space's own basis by
-:func:`sequant::Index::basis_key`.
+:func:`sequant::IndexBasisRegistry::retrieve_basis`. Indices in a named basis are printed, serialized and deserialized
+by that label, and constructed from it; code that keys an axis by label tells them apart from the space's own
+basis by :func:`sequant::Index::basis_key`.
 
 .. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
    :language: cpp

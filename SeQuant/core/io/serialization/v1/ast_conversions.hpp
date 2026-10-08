@@ -45,6 +45,29 @@ std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
           std::distance(range.begin(), range.end())};
 }
 
+/// @return the basis that @p label, with the optional explicit @p instance,
+/// denotes; a label that names a basis instance takes no explicit instance
+/// @throw IndexSpace::bad_key if @p label is not registered
+/// @throw SerializationError if @p label names a basis instance and
+/// @p instance is given
+template <typename LabelAST, typename PositionCache, typename Iterator>
+IndexBasis to_basis(const LabelAST &label_ast, const std::wstring &label,
+                    const boost::optional<IndexBasis::instance_type> &instance,
+                    const PositionCache &position_cache,
+                    const Iterator &begin) {
+  const auto registry = get_default_context().index_space_registry();
+  const IndexBasis &basis = registry->retrieve_basis(label);
+  if (!instance) return basis;
+  if (basis.has_basis_instance()) {
+    auto [offset, length] = get_pos(label_ast, position_cache, begin);
+    throw SerializationError(
+        offset, length,
+        "label '" + toUtf8(label) +
+            "' names a basis instance; an explicit ';N' is not allowed");
+  }
+  return registry->resolve(IndexBasis{basis.space(), *instance});
+}
+
 template <typename PositionCache, typename Iterator>
 Index to_index(const io::serialization::v1::ast::Index &index,
                const PositionCache &position_cache, const Iterator &begin) {
@@ -62,15 +85,13 @@ Index to_index(const io::serialization::v1::ast::Index &index,
   for (const io::serialization::v1::ast::ProtoLabel &current :
        domain.protoLabels) {
     try {
-      std::wstring label =
-          current.label.label + L"_" + std::to_wstring(current.label.id);
-      IndexSpace space =
-          get_default_context().index_space_registry()->retrieve(label);
-      IndexBasis::optional_instance inst =
-          current.instance ? IndexBasis::optional_instance(*current.instance)
-                           : std::nullopt;
-      protoIndices.push_back(
-          Index(IndexBasis{std::move(space), inst}, current.label.id));
+      Index proto(to_basis(current.label, current.label.label, current.instance,
+                           position_cache, begin),
+                  current.label.id);
+      if (proto.basis().has_basis_instance()) (void)proto.label();
+      protoIndices.push_back(std::move(proto));
+    } catch (const SerializationError &) {
+      throw;
     } catch (const IndexSpace::bad_key &) {
       auto [offset, length] = get_pos(current.label, position_cache, begin);
       throw SerializationError(offset, length,
@@ -87,13 +108,13 @@ Index to_index(const io::serialization::v1::ast::Index &index,
   }
 
   try {
-    IndexSpace space = get_default_context().index_space_registry()->retrieve(
-        index.label.label);
-    IndexBasis::optional_instance inst =
-        domain.instance ? IndexBasis::optional_instance(*domain.instance)
-                        : std::nullopt;
-    return Index(IndexBasis{std::move(space), inst}, index.label.id,
-                 std::move(protoIndices));
+    Index idx(to_basis(index.label, index.label.label, domain.instance,
+                       position_cache, begin),
+              index.label.id, std::move(protoIndices));
+    if (idx.basis().has_basis_instance()) (void)idx.label();
+    return idx;
+  } catch (const SerializationError &) {
+    throw;
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
     throw SerializationError(offset, length,

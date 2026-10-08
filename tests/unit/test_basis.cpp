@@ -23,6 +23,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -393,6 +394,81 @@ TEST_CASE("index-basis-serialization", "[serialization][basis]") {
       CHECK(std::string(e.what()).find("empty index domain") !=
             std::string::npos);
     }
+  }
+
+  SECTION("a named basis instance round-trips by its label") {
+    auto isr = mbpt::make_min_sr_spaces();
+    mbpt::add_df_spaces(isr);
+    const IndexSpace a = isr->retrieve(L"a"), i = isr->retrieve(L"i");
+    constexpr IndexBasis::instance_type P =
+        std::numeric_limits<IndexBasis::instance_type>::max();
+    isr->add(L"μ̃", IndexBasis{a, P}, 120ul);
+    // a named occupied basis (localized occupieds), so a proto can be named
+    // too; written with the combining tilde U+0303 the v1 index_name alphabet
+    // admits
+    isr->add(L"ĩ", IndexBasis{i, 1});
+    // a copy shares the registry until set() moves the populated one in
+    auto named = get_default_context_snapshot();
+    named.set(std::move(isr));
+    // fixtures and tmp indices carry ordinals >= 100
+    named.set_first_dummy_index_ordinal(1000000);
+    auto named_ctx = set_scoped_default_context(std::move(named));
+    for (const std::wstring& current :
+         {std::wstring(L"C{μ̃_1;a_1<i_1,i_2;0>}:N-C-S"),
+          std::wstring(L"g{μ̃_1;i_1;Κ_1}:N-C-S"),
+          std::wstring(L"g{μ̃_1;μ̃_2;Κ_1}:N-C-S"),
+          std::wstring(L"t{a_1<ĩ_1>;ĩ_1}:N-C-S"),
+          std::wstring(L"C{μ̃_1152;a_1<i_1,i_2;0>}:N-C-S")}) {
+      ExprPtr e = deserialize<ExprPtr>(current);
+      REQUIRE(serialize(e, {.annot_symm = true}) == current);
+      CHECK(deserialize<ExprPtr>(serialize(e)) == e);
+    }
+    const ExprPtr c_named = deserialize<ExprPtr>(L"C{μ̃_1;a_1<i_1,i_2;0>}");
+    const Index mu = c_named->as<Tensor>().bra().at(0);
+    CHECK(mu.basis() == IndexBasis{a, P});
+    CHECK(mu.space().approximate_size() == 120);
+    // the generic spelling of the same basis parses to the named entry's
+    // metadata and prints by name
+    const ExprPtr c_generic =
+        deserialize<ExprPtr>(L"C{a_1<;2147483647>;a_2<i_1,i_2;0>}");
+    const Index generic = c_generic->as<Tensor>().bra().at(0);
+    CHECK(generic == mu);
+    CHECK(generic.space().approximate_size() == 120);
+    CHECK(generic.full_label() == L"μ̃_1");
+    // one spelling per basis: a name with an explicit instance is an error,
+    // also as a proto, reported as such and not wrapped as an invalid index
+    const auto names_an_instance = [](std::wstring_view input) {
+      try {
+        deserialize<ExprPtr>(input);
+      } catch (const io::serialization::SerializationError& e) {
+        const std::string what = e.what();
+        return what.find("names a basis instance") != std::string::npos &&
+               what.find("Invalid index") == std::string::npos;
+      }
+      return false;
+    };
+    CHECK(names_an_instance(L"C{μ̃_1<;3>;a_1<i_1,i_2;0>}"));
+    CHECK(names_an_instance(L"C{μ̃_1<;2147483647>;a_1<i_1,i_2;0>}"));
+    CHECK(names_an_instance(L"t{a_1<ĩ_1<;3>>;ĩ_1}"));
+    // parsed indices carry their names, also under a registry without them
+    {
+      const ExprPtr named_c = deserialize<ExprPtr>(L"C{μ̃_1;a_1<i_1,i_2;0>}");
+      const ExprPtr generic_c =
+          deserialize<ExprPtr>(L"C{a_1<;2147483647>;a_2<i_1,i_2;0>}");
+      const ExprPtr t = deserialize<ExprPtr>(L"t{a_1<ĩ_1>;ĩ_1}");
+      const Index named_mu = named_c->as<Tensor>().bra().at(0),
+                  generic_mu = generic_c->as<Tensor>().bra().at(0),
+                  with_named_proto = t->as<Tensor>().bra().at(0),
+                  named_loc = t->as<Tensor>().ket().at(0);
+      auto plain = scoped_min_sr_context();
+      CHECK(named_mu.full_label() == L"μ̃_1");
+      CHECK(generic_mu.full_label() == L"μ̃_1");
+      CHECK(with_named_proto.full_label() == L"a_1<ĩ_1>");
+      CHECK(named_loc.full_label() == L"ĩ_1");
+    }
+    // an unnamed instance still prints as ;N
+    CHECK(serialize(deserialize<ExprPtr>(L"t{a_1<;1>;i_1}:N-C-S"),
+                    {.annot_symm = true}) == L"t{a_1<;1>;i_1}:N-C-S");
   }
 }
 

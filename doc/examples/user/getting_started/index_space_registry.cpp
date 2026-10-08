@@ -1,6 +1,8 @@
 #include <SeQuant/core/basis.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/space_qns.hpp>
@@ -82,10 +84,13 @@ void v3() {
       std::ranges::count_if(registry.spaces(), [](const IndexSpace& s) {
         return s.base_key() == L"i";
       }) == 1);
-  // indices in a named basis are constructed from and printed by that label
+  // indices in a named basis are printed, serialized and deserialized by that
+  // label, and constructed from it
   SEQUANT_ASSERT(Index(L"ĩ_1") == loc1);
   SEQUANT_ASSERT(loc1.full_label() == L"ĩ_1");  // not i_1<;1>
   SEQUANT_ASSERT(loc1.basis_key() == L"ĩ");
+  SEQUANT_ASSERT(serialize(deserialize(L"t{ĩ_1;i_1}"), {.annot_symm = false}) ==
+                 L"t{ĩ_1;i_1}");
   // end-snippet-3
 }
 
