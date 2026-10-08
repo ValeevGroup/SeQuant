@@ -678,3 +678,109 @@ TEST_CASE("index-basis-copy-while-labelling", "[elements][index][basis]") {
     CHECK(mismatches == 0);
   }
 }
+
+namespace {
+
+template <typename Basis, typename... Args>
+concept csv_transform_callable = requires(ExprPtr e, Basis b, Args... args) {
+  mbpt::csv_transform(e, b, args...);
+};
+
+template <typename Basis>
+concept csv_transform_takes_label_literal =
+    requires(ExprPtr e, Basis b) { mbpt::csv_transform(e, b, L"C"); };
+
+// a label in the orthonormal slot would convert to true
+static_assert(!csv_transform_takes_label_literal<IndexBasis>);
+static_assert(csv_transform_takes_label_literal<IndexSpace>);
+static_assert(!csv_transform_callable<IndexBasis, const wchar_t*>);
+static_assert(!csv_transform_callable<IndexBasis, wchar_t*>);
+static_assert(!csv_transform_callable<IndexBasis, const char*>);
+static_assert(csv_transform_callable<IndexBasis, bool>);
+static_assert(csv_transform_callable<IndexBasis, bool, const wchar_t*>);
+static_assert(csv_transform_callable<IndexBasis, bool, wchar_t*>);
+static_assert(csv_transform_callable<IndexBasis, bool, std::wstring,
+                                     container::svector<std::wstring>>);
+static_assert(csv_transform_callable<IndexSpace>);
+static_assert(csv_transform_callable<IndexSpace, const wchar_t*>);
+static_assert(csv_transform_callable<IndexSpace, wchar_t*>);
+static_assert(csv_transform_callable<IndexSpace, const wchar_t*,
+                                     container::svector<std::wstring>>);
+
+}  // namespace
+
+TEST_CASE("csv-transform-named-basis", "[mbpt][csv][basis]") {
+  auto isr = mbpt::make_min_sr_spaces();
+  const IndexSpace occ = isr->retrieve(L"i"), uocc = isr->retrieve(L"a");
+  constexpr IndexBasis::instance_type P =
+      std::numeric_limits<IndexBasis::instance_type>::max();
+  isr->add(L"μ̃", IndexBasis{uocc, P},
+           120ul);  // before the Context adopts the registry (#665)
+  auto ctx = set_scoped_default_context(
+      Context({.index_space_registry_shared_ptr = std::move(isr),
+               .vacuum = Vacuum::SingleProduct}));
+  const auto& registry = *get_default_context().index_space_registry();
+  const Index i1(occ, 1), i2(occ, 2);
+  const Index x =
+      Index(uocc, 1, {i1, i2})
+          .replace_basis_instance(0);  // the R2 leg of CSV-CCSD, t granted 0
+  const auto f = ex<Tensor>(
+      L"f", bra{x}, ket{Index(uocc, 2, {i1, i2}).replace_basis_instance(0)});
+
+  SECTION("PAO target: non-orthonormal, minted from the registry entry") {
+    Index::reset_tmp_index();
+    const ExprPtr out = mbpt::csv_transform(f, registry.retrieve_basis(L"μ̃"),
+                                            /*orthonormal=*/false);
+    REQUIRE(out->is<Product>());
+    const auto& prod = out->as<Product>();
+    REQUIRE(prod.factors().size() == 3);  // f{μ̃;μ̃} C C
+    const Tensor ft = prod.factor(0)->as<Tensor>();
+    for (const Index& idx : ft.const_braket_indices()) {
+      CHECK(idx.basis() == IndexBasis{uocc, P});
+      CHECK(idx.basis_key() == L"μ̃");
+      CHECK(idx.space().approximate_size() == 120);
+      CHECK(idx.full_label().find(L'<') == std::wstring::npos);
+    }
+    // a hand-built basis equal to the entry is resolved to the entry too
+    Index::reset_tmp_index();
+    const ExprPtr out2 = mbpt::csv_transform(f, IndexBasis{uocc, P}, false);
+    CHECK(out2->as<Product>()
+              .factor(0)
+              ->as<Tensor>()
+              .bra()
+              .at(0)
+              .space()
+              .approximate_size() == 120);
+    // the overlap stays (no orthonormal shortcut)
+    const ExprPtr s = mbpt::csv_transform(
+        make_overlap(x, Index(uocc, 3, {i1}).replace_basis_instance(0)),
+        registry.retrieve_basis(L"μ̃"), false);
+    REQUIRE(s->is<Product>());
+    CHECK(s->as<Product>().factors().size() == 3);
+  }
+  SECTION("an unnamed instance basis as target throws") {
+    CHECK_THROWS_AS(mbpt::csv_transform(f, IndexBasis{uocc, 5}, false),
+                    Exception);
+  }
+  SECTION(
+      "the IndexSpace overload forwards with orthonormality read from the qns "
+      "bits") {
+    auto isr2 =
+        mbpt::make_min_sr_spaces();  // a fresh registry: μ̃ is a space here
+    mbpt::add_pao_spaces(isr2, IndexSpace::QuantumNumbers{mbpt::Spin::any});
+    const IndexSpace occ2 = isr2->retrieve(L"i"), uocc2 = isr2->retrieve(L"a"),
+                     mu2 = isr2->retrieve(L"μ̃");
+    auto ctx2 = set_scoped_default_context(
+        Context({.index_space_registry_shared_ptr = std::move(isr2),
+                 .vacuum = Vacuum::SingleProduct}));
+    const Index p(occ2, 1), q(occ2, 2);
+    const Index xb = Index(uocc2, 1, {p, q}).replace_basis_instance(0);
+    const Index xk = Index(uocc2, 3, {p}).replace_basis_instance(0);
+    // PAO space: not orthonormal, the overlap stays (C s C); unoccupied MOs:
+    // the shortcut (C C)
+    const ExprPtr pao_out = mbpt::csv_transform(make_overlap(xb, xk), mu2);
+    const ExprPtr mo_out = mbpt::csv_transform(make_overlap(xb, xk), uocc2);
+    CHECK(pao_out->as<Product>().factors().size() == 3);
+    CHECK(mo_out->as<Product>().factors().size() == 2);
+  }
+}
