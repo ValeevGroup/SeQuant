@@ -54,9 +54,7 @@ std::size_t VertexPainter::to_hash_value(const AbstractTensor &tensor) const {
   // the two vertices, so a canonical labeling is free to swap them, and
   // C * C꙳ would collide with C꙳ * C under one shared hash and graph.
   if (ct && (ct->adjointed() || ct->kconjugated()))
-    hash::combine(
-        result, hash::value(static_cast<std::uint8_t>(
-                    (ct->adjointed() ? 1 : 0) | (ct->kconjugated() ? 2 : 0))));
+    hash::combine(result, hash::value(ct->states_code()));
   // a conjugation symmetry other than the one parity Even would give over this
   // tensor enters the shade: Even tensors add nothing in any field,
   // complex-field tensors, whose parity is unobservable, colour alike as they

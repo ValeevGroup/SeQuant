@@ -5,20 +5,16 @@
 
 namespace sequant {
 
-namespace {
-/// Takes a real scalar out of @p inner in place, as `Re(c X) = c Re(X)` and
-/// `Im(c X) = c Im(X)` allow for a real @c c. A complex scalar stays put:
-/// neither wrapper is linear over it.
-/// @return the scalar taken out, or nullptr if there was none to take
+namespace detail {
 ExprPtr hoist_real_scalar(ExprPtr& inner) {
   if (!inner->is<Product>()) return {};
   const auto& prod = inner->as<Product>();
   const auto scalar = prod.scalar();
   if (scalar.imag() != 0 || scalar.real() == 1) return {};
-  inner = detail::strip_scalar(prod);
+  inner = strip_scalar(prod);
   return ex<Constant>(scalar);
 }
-}  // namespace
+}  // namespace detail
 
 ExprPtr RealPart::clone() const { return ex<RealPart>(inner_->clone()); }
 
@@ -35,7 +31,7 @@ ExprPtr RealPart::canonicalize(CanonicalizeOptions opts) {
   if (auto byproduct = inner_->canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
-  ExprPtr hoisted = hoist_real_scalar(inner_);
+  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
   reset_hash_value();
   return hoisted;
 }
@@ -45,7 +41,7 @@ ExprPtr RealPart::rapid_canonicalize(CanonicalizeOptions opts) {
   if (auto byproduct = inner_->rapid_canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
-  ExprPtr hoisted = hoist_real_scalar(inner_);
+  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
   reset_hash_value();
   return hoisted;
 }
@@ -102,7 +98,7 @@ ExprPtr ImagPart::canonicalize(CanonicalizeOptions opts) {
   if (auto byproduct = inner_->canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
-  ExprPtr hoisted = hoist_real_scalar(inner_);
+  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
   reset_hash_value();
   return hoisted;
 }
@@ -112,7 +108,7 @@ ExprPtr ImagPart::rapid_canonicalize(CanonicalizeOptions opts) {
   if (auto byproduct = inner_->rapid_canonicalize(opts);
       byproduct && byproduct->is<Constant>())
     inner_ = byproduct * inner_;
-  ExprPtr hoisted = hoist_real_scalar(inner_);
+  ExprPtr hoisted = detail::hoist_real_scalar(inner_);
   reset_hash_value();
   return hoisted;
 }

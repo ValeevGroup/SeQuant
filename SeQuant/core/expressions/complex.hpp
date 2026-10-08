@@ -144,6 +144,12 @@ class ImagPart : public Expr {
 namespace detail {
 /// strips a Product's scalar: returns the same factors with scalar 1
 [[nodiscard]] ExprPtr strip_scalar(const Product& prod);
+
+/// Takes a real scalar out of @p inner in place, as `Re(c X) = c Re(X)` and
+/// `Im(c X) = c Im(X)` allow for a real @c c. A complex scalar stays put:
+/// neither wrapper is linear over it.
+/// @return the scalar taken out, or nullptr if there was none to take
+[[nodiscard]] ExprPtr hoist_real_scalar(ExprPtr& inner);
 }  // namespace detail
 
 /// @brief Wraps @p expr as `Re(expr)`, applying the eager rules.
