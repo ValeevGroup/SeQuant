@@ -314,7 +314,7 @@ struct ClosedShellCCTripletSpintraceOptions {
   /// compact the residual to one representative slot permutation per
   /// tensor-network group via triplet_maxcoeff_compact (doubles: the -2c
   /// member of each {c, c, -2c} group of the bare-TE residual, 405 -> 135
-  /// terms for 2h2p, expanded on evaluation by triplet_te_nns_project;
+  /// terms for 2h2p, recovered on evaluation by triplet_nns_project;
   /// (doubles on the combined path, now unreachable directly: the -3c
   /// member of each {c,c,c,-3c} group, 540 -> 135 terms);
   /// triples: one stabilizer-scaled member per 36 slot perms, recovered on

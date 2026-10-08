@@ -461,6 +461,21 @@ template <typename T>
 /// \throw Exception unless \p n_particles is 1, 2 or 3
 bool triplet_bare_te(std::size_t n_particles);
 
+/// \brief Provides the weights that rebuild the full closed-shell triplet
+/// residual from its compact form: the null-space row for the bare-TE
+/// residual (equal to triplet_te_nns_projection_weights followed by
+/// triplet_te_reconstruction_weights), the NNS row otherwise
+///
+/// \throw Exception unless \p n_particles is 2 or 3
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+[[nodiscard]] const std::vector<T>& triplet_residual_nns_weights(
+    std::size_t n_particles) {
+  return triplet_bare_te(n_particles)
+             ? triplet_nullspace_projection_weights<T>(n_particles)
+             : triplet_nns_projection_weights<T>(n_particles);
+}
+
 }  // namespace detail
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
@@ -767,15 +782,15 @@ auto triplet_nullspace_project(TA::DistArray<Args...> const& arr,
 
 /// \brief Metric NNS reconstruction for compact closed-shell triplet
 /// residuals: rebuilds the full residual from the representatives kept by
-/// triplet_maxcoeff_compact. Apply to the H*R residual when the compact
-/// equations were evaluated; no-op for singles (array rank 2), throws beyond
-/// triples (array rank 6).
+/// triplet_maxcoeff_compact (see detail::triplet_residual_nns_weights). Apply
+/// to the H*R residual when the compact equations were evaluated; no-op for
+/// singles (array rank 2), throws beyond triples (array rank 6).
 template <typename... Args>
 auto triplet_nns_project_ta(TA::DistArray<Args...> const& arr,
                             size_t bra_rank) {
   return detail::triplet_perm_project_ta(
       arr, bra_rank,
-      &detail::triplet_nns_projection_weights<
+      &detail::triplet_residual_nns_weights<
           typename TA::DistArray<Args...>::numeric_type>);
 }
 
@@ -884,7 +899,7 @@ auto triplet_nns_project_btas(btas::Tensor<Args...> const& arr,
                               size_t bra_rank) {
   return detail::triplet_perm_project_btas(
       arr, bra_rank,
-      &detail::triplet_nns_projection_weights<
+      &detail::triplet_residual_nns_weights<
           typename btas::Tensor<Args...>::numeric_type>);
 }
 
